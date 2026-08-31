@@ -1,0 +1,20 @@
+{
+  "name": "@civ/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "gamedata": "pwsh -File ../../tools/xlsx-to-json.ps1 -Xlsx ../../old-civ-rest/src/main/resources/assets/gamedata-faf-waw.xlsx -Out ./data/gamedata-faf-waw.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

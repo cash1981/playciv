@@ -1,0 +1,1727 @@
+{
+  "gameType": "WAW",
+  "source": "gamedata-faf-waw.xlsx",
+  "note": "Autogenerert av tools/xlsx-to-json.ps1. Rediger ikke manuelt.",
+  "sheets": {
+    "Civ": [
+      [
+        "Civilization",
+        "Starting Tech",
+        "Description"
+      ],
+      [
+        "Americans",
+        "Currency",
+        "The Americans start with a free random great person in their capital. Each time the Americans convert 3 trade into production, they receive 2 production instead of 1."
+      ],
+      [
+        "Arabs",
+        "Mathematics",
+        "The Arabs start the game with one of each resource from the market. For each resource token the Arabs spend for any reason, they gain 1 culture. Each time the Arabs invest a coin, they advance once space up the culture track for free"
+      ],
+      [
+        "Aztecs",
+        "Irrigation",
+        "Each time the Aztecs win a battle, they gain 3 trade. After the Aztecs fight a battle, they gain 1 culture for each unit that was killed in the battle. Each time the Aztecs gain a great person, they may build 2 unlocked units of their choice for free."
+      ],
+      [
+        "Chinese",
+        "Writing",
+        "The Chinese start with city walls in their capital. The Chinese gain 3 culture each time they explore a hut or conquer a village. The Chinese may save one of their killed unit after each battle, returning it to their standing force"
+      ],
+      [
+        "Egyptians",
+        "Construction",
+        "The Egyptians start with a free random ancient wonder in their capital. Once per turn, during City Management, the Egyptians may build an unlocked building for free by using an action."
+      ],
+      [
+        "England",
+        "Navy",
+        "English armies may gather icons and resources as though they where scouts. English figures may cross water, but may not end their movement in it."
+      ],
+      [
+        "French",
+        "Pottery",
+        "France start with +2 in combat bonus. The maximum number of social policies the French can adopt is increased by 1. The French starts with 1 extra social policy."
+      ],
+      [
+        "Germans",
+        "Metalworking",
+        "The Germans start with 2 extra infantry units. After setup, each time the Germans research a tech that upgrades or unlocked a unit, they build one of that unit for free and gain one resource of their choice from the market."
+      ],
+      [
+        "Greeks",
+        "Democracy",
+        "Each time the Greeks gain a great person, they draw one extra great person, keeping one and discarding the other. After the Greeks research or learn a tech, gain 1 culture for each player who does not currently know or is researching that tech"
+      ],
+      [
+        "Indians",
+        "Agriculture",
+        "The Indians start with a metropolis as their capital. When the Indians spend a resource, they may use it as incense, silk, iron or wheat. When the Indians devote a city to the arts, it produces 1 extra culture for each square containing a resource (silk, iron etc) in its outskirts."
+      ],
+      [
+        "Japanese",
+        "Chivalry",
+        "Japanese infantry units have +1 in strength. The Japanese require 3 less trade to research new techs of any level."
+      ],
+      [
+        "Mongols",
+        "Horseback Riding",
+        "The Mongols start with 2 extra mounted units. When attacking, if the Mongols gain loot, they gain 1 extra loot."
+      ],
+      [
+        "Romans",
+        "Code of Laws",
+        "The Romans advance one space on the culture track for free each time they build a wonder or city, and each time they conquer a city or village."
+      ],
+      [
+        "Russians",
+        "Communism",
+        "The Russians start with 2 armies, and their stacking limit is increased by 1. Once per turn, the Russians maybe move an army or scout into an enemy city and sacrifice that figure to research a tech known by that civilization for free. Armies sacrificed this way cannot be also attack."
+      ],
+      [
+        "Spanish",
+        "Navigation",
+        "The Spanish start with 2 scouts. The travel speed of the Spanish is increased by 1. When the Spanish discover an unexplored map tile, they may immediately build a basic (non-upgraded) building in any of their cities for free, even if they haven't unlocked that building."
+      ],
+      [
+        "Zulu",
+        "Animal Husbandry",
+        "The Zulu start with 2 extra artillery units. Zulu armies explore barbarian villages without a battle. The Zulu may build cities adjacent to huts, if they do, they may immediately explore those huts."
+      ]
+    ],
+    "Culture I": [
+      [
+        "Card Name",
+        "Description",
+        ""
+      ],
+      [
+        "A Gift from Afar",
+        "Any Time: Play this card as one of the following resources. Then, choose another player. That player adds a coin token to his civilization sheet. (Iron, Wheat, Spy, Silk)",
+        ""
+      ],
+      [
+        "A Gift from Afar",
+        "Any Time: Play this card as one of the following resources. Then, choose another player. That player adds a coin token to his civilization sheet. (Iron, Wheat, Spy, Silk)",
+        ""
+      ],
+      [
+        "A Gift from Afar",
+        "Any Time: Play this card as one of the following resources. Then, choose another player. That player adds a coin token to his civilization sheet. (Iron, Wheat, Spy, Silk)",
+        ""
+      ],
+      [
+        "Barbarian Encampment",
+        "Start of Turn : Choose an empty square not in the outskirts of a city. Place a village token on that square.",
+        ""
+      ],
+      [
+        "Barbarian Encampment",
+        "Start of Turn : Choose an empty square not in the outskirts of a city. Place a village token on that square.",
+        ""
+      ],
+      [
+        "Bread and Circuses",
+        "Any Time: Cancel a culture event targeting you, one of your figures, or any square or building in one of your cities.",
+        ""
+      ],
+      [
+        "Bread and Circuses",
+        "Any Time: Cancel a culture event targeting you, one of your figures, or any square or building in one of your cities.",
+        ""
+      ],
+      [
+        "Counterfeiters",
+        "Start of Turn: Choose another player. That player must discard one coin token of your choice. This cannot affect investments.",
+        ""
+      ],
+      [
+        "Counterfeiters",
+        "Start of Turn: Choose another player. That player must discard one coin token of your choice. This cannot affect investments.",
+        ""
+      ],
+      [
+        "Defection",
+        "Movement: Choose a figure within 4 squares (no diagonals) of one of your figures or cities. Kill the chosen figure. This may interrupt a figure's movement.",
+        ""
+      ],
+      [
+        "Defection",
+        "Movement: Choose a figure within 4 squares (no diagonals) of one of your figures or cities. Kill the chosen figure. This may interrupt a figure's movement.",
+        ""
+      ],
+      [
+        "Disoriented",
+        "City Management: Choose a square. Move all figures belonging to another player in that square up to two squares as a group (no diagonals or crossing water). Figures cannot be forced to start a battle.",
+        ""
+      ],
+      [
+        "Drought",
+        "Start of Turn: Choose a non-mountain square that does not contain any buildings or wonders. Place a disaster token on that square, desert side up. That square is a desert square for the rest of the game.",
+        ""
+      ],
+      [
+        "Drought",
+        "Start of Turn: Choose a non-mountain square that does not contain any buildings or wonders. Place a disaster token on that square, desert side up. That square is a desert square for the rest of the game.",
+        ""
+      ],
+      [
+        "Duty and Honor",
+        "Battle: Before drawing your battle force, build 1 unlocked unit for free.",
+        ""
+      ],
+      [
+        "Duty and Honor",
+        "Battle: Before drawing your battle force, build 1 unlocked unit for free.",
+        ""
+      ],
+      [
+        "Exchange of Ideas",
+        "Start of Turn: Choose another player. Learn a level I tech of your choice belonging to that player for free. That player then learns a level I tech of their choice belonging to you for free.",
+        ""
+      ],
+      [
+        "Exchange of Ideas",
+        "Start of Turn: Choose another player. Learn a level I tech of your choice belonging to that player for free. That player then learns a level I tech of their choice belonging to you for free.",
+        ""
+      ],
+      [
+        "Exchange of Ideas",
+        "Start of Turn: Choose another player. Learn a level I tech of your choice belonging to that player for free. That player then learns a level I tech of their choice belonging to you for free.",
+        ""
+      ],
+      [
+        "Migrants",
+        "City Management : Switch one of your social policies. / Movement : Move one of your figures up to 2 squares to an empty square.",
+        ""
+      ],
+      [
+        "Migrants",
+        "City Management : Switch one of your social policies. / Movement : Move one of your figures up to 2 squares to an empty square.",
+        ""
+      ],
+      [
+        "Sabotage",
+        "Start of Turn: Choose a building within 4 squares (no diagonals) of one of your figures or cities. Destroy the chosen building and return it to the market.",
+        ""
+      ],
+      [
+        "Sabotage",
+        "Start of Turn: Choose a building within 4 squares (no diagonals) of one of your figures or cities. Destroy the chosen building and return it to the market.",
+        ""
+      ],
+      [
+        "The Citizens are Revolting!",
+        "Start of Turn: Choose another player. That player's government changes to anarchy.",
+        ""
+      ],
+      [
+        "We Love the Despot Day!",
+        "City Management: Choose one of your cities. It produces 4 extra hammers this turn.",
+        ""
+      ],
+      [
+        "We Love the Despot Day!",
+        "City Management: Choose one of your cities. It produces 4 extra hammers this turn.",
+        ""
+      ],
+      [
+        "We Love the Despot Day!",
+        "City Management: Choose one of your cities. It produces 4 extra hammers this turn.",
+        ""
+      ]
+    ],
+    "Culture II": [
+      [
+        "Card Name",
+        "Description",
+        ""
+      ],
+      [
+        "A Generous Gift",
+        "Any Time: Play this card as one of the following resources. (Iron, Wheat, Spy, Silk)",
+        ""
+      ],
+      [
+        "A Generous Gift",
+        "Any Time: Play this card as one of the following resources. (Iron, Wheat, Spy, Silk)",
+        ""
+      ],
+      [
+        "A Generous Gift",
+        "Any Time: Play this card as one of the following resources. (Iron, Wheat, Spy, Silk)",
+        ""
+      ],
+      [
+        "Catastrophe",
+        "Start of Turn: Choose a building within 6 squares (no diagonals) of one of your figures or cities. Destroy the chosen building and return it to the market.",
+        ""
+      ],
+      [
+        "Colonists",
+        "City Management : Switch up to 2 of social policies. / Movement : Move one of your figures up to 4 squares to an empty square.",
+        ""
+      ],
+      [
+        "Colonists",
+        "City Management : Switch up to 2 of social policies. / Movement : Move one of your figures up to 4 squares to an empty square.",
+        ""
+      ],
+      [
+        "Deforestation",
+        "Start of Turn: Choose a forest square that does not contain any buildings or wonders. Place a disaster token on that square, grassland side up. That square is a grassland square for the rest of the game.",
+        ""
+      ],
+      [
+        "Deforestation",
+        "Start of Turn: Choose a forest square that does not contain any buildings or wonders. Place a disaster token on that square, grassland side up. That square is a grassland square for the rest of the game.",
+        ""
+      ],
+      [
+        "Depression",
+        "Start of Turn: Choose up to 2 other players. Each player must discard 1 coin token of your choice. This cannot affect investments.",
+        ""
+      ],
+      [
+        "Flooding",
+        "Start of Turn: Choose a non-mountain square that does not contain any figures or tokens. Place a disaster token on that square, water side up. That square is a water square for the rest of the game.",
+        ""
+      ],
+      [
+        "Jousting Tourney",
+        "Any Time: Cancel a culture event.",
+        ""
+      ],
+      [
+        "Jousting Tourney",
+        "Any Time: Cancel a culture event.",
+        ""
+      ],
+      [
+        "Knowledge Shared",
+        "Start of Turn: Choose another player. Learn a level I or II tech of your choice belonging to that player for free. That player then learns a level I or II tech of their choice belonging to you for free.",
+        ""
+      ],
+      [
+        "Knowledge Shared",
+        "Start of Turn: Choose another player. Learn a level I or II tech of your choice belonging to that player for free. That player then learns a level I or II tech of their choice belonging to you for free.",
+        ""
+      ],
+      [
+        "Knowledge Shared",
+        "Start of Turn: Choose another player. Learn a level I or II tech of your choice belonging to that player for free. That player then learns a level I or II tech of their choice belonging to you for free.",
+        ""
+      ],
+      [
+        "Lost",
+        "City Management: Choose a square. Move all figures belonging to another player in that square up to three squares as a group (no diagonals or crossing water). Figures cannot be forced to start a battle.",
+        ""
+      ],
+      [
+        "Mass Defection",
+        "Movement: Choose a square within 6 squares (no diagonals) of one of your figures or cities. Kill a great person or up to 2 figures in the chosen square. This may interrupt a figure's movement.",
+        ""
+      ],
+      [
+        "Mass Defection",
+        "Movement: Choose a square within 6 squares (no diagonals) of one of your figures or cities. Kill a great person or up to 2 figures in the chosen square. This may interrupt a figure's movement.",
+        ""
+      ],
+      [
+        "Nationalism",
+        "Battle: Before drawing your battle force, build up to 2 unlocked units for free.",
+        ""
+      ],
+      [
+        "Nationalism",
+        "Battle: Before drawing your battle force, build up to 2 unlocked units for free.",
+        ""
+      ],
+      [
+        "Roaming Horde",
+        "Movement : Choose an army figure or city token within four squares (no diagonals) of a village token or revealed village icon. That figure or city is immediately attacked by rank II barbarians.",
+        ""
+      ],
+      [
+        "Roaming Horde",
+        "Movement : Choose an army figure or city token within four squares (no diagonals) of a village token or revealed village icon. That figure or city is immediately attacked by rank II barbarians.",
+        ""
+      ],
+      [
+        "The Citizens are Revolting II!",
+        "Start of Turn: Choose another player. That player's government changes to anarchy.",
+        ""
+      ],
+      [
+        "We Love the Queen Day!",
+        "City Management: Choose one of your cities. It produces 6 extra hammers this turn.",
+        ""
+      ],
+      [
+        "We Love the Queen Day!",
+        "City Management: Choose one of your cities. It produces 6 extra hammers this turn.",
+        ""
+      ]
+    ],
+    "Culture III": [
+      [
+        "Card Name",
+        "Description",
+        ""
+      ],
+      [
+        "A Princely Gift",
+        "Any Time: Play this card as one of the following resources. (Iron, Uranium, Spy, Wheat, Silk)",
+        ""
+      ],
+      [
+        "A Princely Gift",
+        "Any Time: Play this card as one of the following resources. (Iron, Uranium, Spy, Wheat, Silk)",
+        ""
+      ],
+      [
+        "Bank Scandal",
+        "Start of Turn: Every player except you must discard 1 coin token of your choice. This cannot affect investments.",
+        ""
+      ],
+      [
+        "Disaster",
+        "Start of Turn: Destroy up to two buildings of your choice belonging to any other player or players and retun the destroyed buildings to the market.",
+        ""
+      ],
+      [
+        "Immigrants",
+        "City Management : Switch up to 3 of your social policies. / Movement : Move one of your figures up to 6 squares to an empty square.",
+        ""
+      ],
+      [
+        "Immigrants",
+        "City Management : Switch up to 3 of your social policies. / Movement : Move one of your figures up to 6 squares to an empty square.",
+        ""
+      ],
+      [
+        "Out of Position",
+        "City Management: Choose a square. Move all figures belonging to another player in that square up to four squares as a group (no diagonals or crossing water). Figures cannot be forced to start a battle.",
+        ""
+      ],
+      [
+        "Patriotism",
+        "Battle: Before drawing your battle force, build up to 3 unlocked units for free.",
+        ""
+      ],
+      [
+        "Primetime TV",
+        "Any Time: Cancel a culture event or a resource ability. If canceling a resource ability, the resources spent to activate the ability are lost.",
+        ""
+      ],
+      [
+        "Primetime TV",
+        "Any Time: Cancel a culture event or a resource ability. If canceling a resource ability, the resources spent to activate the ability are lost.",
+        ""
+      ],
+      [
+        "Supply Drop",
+        "Start of Turn : Gain 7 trades. / City Management : Take an additional action with one of your non-capital cities.",
+        ""
+      ],
+      [
+        "Supply Drop",
+        "Start of Turn : Gain 7 trades. / City Management : Take an additional action with one of your non-capital cities.",
+        ""
+      ],
+      [
+        "Think Tank",
+        "Start of Turn: Choose another player. Learn a level III or less tech of your choice belonging to that player for free. That player then learns a level III or less tech of their choice belonging to you for free.",
+        ""
+      ],
+      [
+        "Think Tank",
+        "Start of Turn: Choose another player. Learn a level III or less tech of your choice belonging to that player for free. That player then learns a level III or less tech of their choice belonging to you for free.",
+        ""
+      ],
+      [
+        "We Love the President Day!",
+        "City Management: Choose one of your cities. It produces 8 extra hammers this turn.",
+        ""
+      ],
+      [
+        "Wholesale Defection",
+        "Movement: Choose a square. Kill a great person or up to 2 figures in the chosen square. This may interrupt a figure's movement.",
+        ""
+      ],
+      [
+        "Wholesale Defection",
+        "Movement: Choose a square. Kill a great person or up to 2 figures in the chosen square. This may interrupt a figure's movement.",
+        ""
+      ]
+    ],
+    "Great Person": [
+      [
+        "Person",
+        "Tile",
+        "Description",
+        ""
+      ],
+      [
+        "Akira Kurosawa",
+        "Artist or Thinker",
+        "City Management: Each time another player devotes a city to the arts, you gain 1 culture.",
+        ""
+      ],
+      [
+        "Frida Kahlo",
+        "Artist or Thinker",
+        "Any Time: You may discard this card to discard any culture events you don't want and then draw enough culture events to fill your hand. Draw from the culture deck for the area on the culture track that your culture marker is in.",
+        ""
+      ],
+      [
+        "Jerry Garcia",
+        "Artist or Thinker",
+        "City Management: As your capital's city action, you may discard this card to devote all of your cities to the arts. This action cannot be canceled and your other cities may still take their actions.",
+        ""
+      ],
+      [
+        "Mark Twain",
+        "Artist or Thinker",
+        "Any Time: You may discard this card to cancel a city action, a resource ability, or a culture event. If you cancel a resource ability, the resources used to pay for it are lost.",
+        ""
+      ],
+      [
+        "Michelangelo",
+        "Artist or Thinker",
+        "City Management: You may discard this card to build a wonder for 5 hammers less than its normal cost. This stacks with other discounts.",
+        ""
+      ],
+      [
+        "Valmiki",
+        "Artist or Thinker",
+        "Your culture hand size is increased by 2.",
+        ""
+      ],
+      [
+        "William Shakespeare",
+        "Artist or Thinker",
+        "Any Time: When advancing on the culture track, you may skip any space that contains another player's marker. Only pay the cost and receive the reward for the space you land in.",
+        ""
+      ],
+      [
+        "Ada Lovelace",
+        "Builder or Inventor",
+        "City Management: You may discard this card to take an extra city action with one of your cities. This action cannot be canceled. You may use this to take an action with your capital during anarchy.",
+        ""
+      ],
+      [
+        "Archimedes",
+        "Builder or Inventor",
+        "Any Time: Gain 3 culture each time you research a tech that no other player knows or is researching that turn.",
+        ""
+      ],
+      [
+        "Frank Lloyd Wright",
+        "Builder or Inventor",
+        "City Management: You may discard this card to gain both trade and culture equal to the total number of buildings in all your cities.",
+        ""
+      ],
+      [
+        "Henry Ford",
+        "Builder or Inventor",
+        "Your travel speed is increased by 1.",
+        ""
+      ],
+      [
+        "Nikola Tesla",
+        "Builder or Inventor",
+        "Research: You may discard this card when adding a tech of level II, III, or IV to your tech pyramid to place it one level lower in the pyramid than normal.",
+        ""
+      ],
+      [
+        "Orville Wright",
+        "Builder or Inventor",
+        "Start of Turn: You may discard this card to build one aircraft unit for free, even if you haven't unlocked aircraft units.",
+        ""
+      ],
+      [
+        "Thomas Edison",
+        "Builder or Inventor",
+        "Start of Turn: You may discard this card to choose a tech that another player has learned and research it for free.",
+        ""
+      ],
+      [
+        "Georgy Zhukov",
+        "General",
+        "Battle: Each time one of your units is killed during a battle, deal 1 wound to an enemy unit of your choice.",
+        ""
+      ],
+      [
+        "Gustavus Adolphus",
+        "General",
+        "Battle: You may discard this card at the start of a battle to kill all units in your battle force (they cannot be saved) and build an equal number of unlocked units for free, immediately adding them to your battle force.",
+        ""
+      ],
+      [
+        "Hannibal",
+        "General",
+        "City Management: You may discard this card to choose a square. Move any or all of your figures in that square to any other square on the map containing at least on of your figures. You may not exceed your stacking limit.",
+        ""
+      ],
+      [
+        "Joan of Arc",
+        "General",
+        "Battle: You may discard this card at the start of a battle in which you are the defender to increase your combat bonus by an amount equal to your unspent culture. This lasts until the end of the battle.",
+        ""
+      ],
+      [
+        "Khalid ibn al-Walid",
+        "General",
+        "Start of Any Phase: You may discard this card to become the first player and place the first player marker in front of you. Next turn, the marker passes clockwise from you.",
+        ""
+      ],
+      [
+        "Leonidas",
+        "General",
+        "Battle: Each time you start a battle as defender with fewer units in your battle force than your opponent, your combat bonus is increased by 8 until the end of the battle.",
+        ""
+      ],
+      [
+        "Sun Tzu",
+        "General",
+        "Battle: Once per battle, you may spend 3 trade to pass your turn instead of playing a unit.",
+        ""
+      ],
+      [
+        "Dr. Martin Luther King",
+        "Humanitarian",
+        "Your city actions can't be canceled. In addition, you are immune to anarchy.",
+        ""
+      ],
+      [
+        "Florence Nightingale",
+        "Humanitarian",
+        "Battle: You may discard this card to save all of your killed units after a battle, returning them to your standing forces.",
+        ""
+      ],
+      [
+        "Jacques Cousteau",
+        "Humanitarian",
+        "Start of Turn: You may discard this card to build up to 3 Harbors in your cities for free, even if you have not unlocked Harbors.",
+        ""
+      ],
+      [
+        "Jim Henson",
+        "Humanitarian",
+        "City Management: Each time you build a wonder, place a wound marker on this card.\nStart of Turn: Gain culture and trade equal to the number of wound markers on this card.",
+        ""
+      ],
+      [
+        "Mother Teresa",
+        "Humanitarian",
+        "Start of Turn: Once per turn, you may give one of your coin tokens to another player, placing it on that player's civilization sheet. If you do so, advance one space on the culture track for free.",
+        ""
+      ],
+      [
+        "St. Francis of Assisi",
+        "Humanitarian",
+        "City Management: You may discard this card to gain 3 culture for every unbuilt army figure you have.",
+        ""
+      ],
+      [
+        "Susan B. Anthony",
+        "Humanitarian",
+        "All of your cities produce +2 hammers.",
+        ""
+      ],
+      [
+        "A. P. Giannini",
+        "Merchant or Explorer",
+        "Start of Turn: Each time you invest a coin, build an unlocked building in one of your cities for free.",
+        ""
+      ],
+      [
+        "Adam Smith",
+        "Merchant or Explorer",
+        "+1 coin.",
+        ""
+      ],
+      [
+        "Andrew Carnegie",
+        "Merchant or Explorer",
+        "City Management: You may discard this card to advance one space on the culture track for free for every 3 coins you have.",
+        ""
+      ],
+      [
+        "Captain James Cook",
+        "Merchant or Explorer",
+        "Movement: You may discard this card to double your travel speed until the end of the turn.",
+        ""
+      ],
+      [
+        "Lorenzo de' Medici",
+        "Merchant or Explorer",
+        "Start of Turn: Gain 1 culture for every 3 coins you have.",
+        ""
+      ],
+      [
+        "Marco Polo",
+        "Merchant or Explorer",
+        "Any Time: You may discard this card to gain 27 trade.",
+        ""
+      ],
+      [
+        "Zheng He",
+        "Merchant or Explorer",
+        "Any Time: You may discard this card to look under every hut and village token on the map and/or owned by other players.",
+        ""
+      ],
+      [
+        "Alan Turing",
+        "Scientist",
+        "Start of Turn: Gain 1 trade and 1 culture for every 2 unbuilt army figures you have.",
+        ""
+      ],
+      [
+        "Albert Einstein",
+        "Scientist",
+        "City Management: You may discard this card to spend any amount of trade to gain an equal amount of culture or spend any amount of unspent culture to gain an equal amount of trade.",
+        ""
+      ],
+      [
+        "Charles Darwin",
+        "Scientist",
+        "City Management: Once per turn, when you devote a city to the arts, you may change all of the culture produced by the city into trade on a 1-for-1 basis.",
+        ""
+      ],
+      [
+        "Galileo Galilei",
+        "Scientist",
+        "City Management: You may discard this card to choose a square on the outer edge of the map. Move your figures in that square to any empty square on the outer edge of the map. They cannot move again this turn.",
+        ""
+      ],
+      [
+        "Louis Pasteur",
+        "Scientist",
+        "Your stacking limit is increased by 1.",
+        ""
+      ],
+      [
+        "Marie Curie",
+        "Scientist",
+        "Any Time: You may discard this card when you would spend a uranium to spend a different resource instead.",
+        ""
+      ],
+      [
+        "Sir Isaac Newton",
+        "Scientist",
+        "Research: Before researching, you may place this card facedown in your tech pyramid as a blank tech card of level IV or less. It remains in your tech pyramid for the rest of the game, even if Newton dies.",
+        ""
+      ]
+    ],
+    "Infantry": [
+      [
+        "Spearman",
+        "Pikeman",
+        "Rifleman",
+        "Modern Infantry",
+        ""
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ]
+    ],
+    "Artillery": [
+      [
+        "Archer",
+        "Catapult",
+        "Cannon",
+        "Mobile Artillery",
+        ""
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ]
+    ],
+    "Mounted": [
+      [
+        "Horseman",
+        "Knight",
+        "Cavalry",
+        "Tank",
+        ""
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "1.3",
+        "2.4",
+        "3.5",
+        "4.6"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ],
+      [
+        "3.1",
+        "4.2",
+        "5.3",
+        "6.4"
+      ]
+    ],
+    "Aircraft": [
+      [
+        "Aircraft",
+        ""
+      ],
+      [
+        "5.7"
+      ],
+      [
+        "5.7"
+      ],
+      [
+        "6.6"
+      ],
+      [
+        "6.6"
+      ],
+      [
+        "6.6"
+      ],
+      [
+        "6.6"
+      ],
+      [
+        "7.5"
+      ],
+      [
+        "7.5"
+      ]
+    ],
+    "Villages": [
+      [
+        "Village",
+        ""
+      ],
+      [
+        "City-state"
+      ],
+      [
+        "City-state"
+      ],
+      [
+        "City-state"
+      ],
+      [
+        "Friendly Workers"
+      ],
+      [
+        "Great person"
+      ],
+      [
+        "Great person"
+      ],
+      [
+        "Iron"
+      ],
+      [
+        "Iron"
+      ],
+      [
+        "Iron"
+      ],
+      [
+        "Native Art (6)"
+      ],
+      [
+        "Spy"
+      ],
+      [
+        "Spy"
+      ],
+      [
+        "Spy"
+      ],
+      [
+        "Spy"
+      ],
+      [
+        "Uranium"
+      ],
+      [
+        "Uranium"
+      ],
+      [
+        "Uranium"
+      ],
+      [
+        "Uranium"
+      ],
+      [
+        "Wealth"
+      ],
+      [
+        "Wealth"
+      ]
+    ],
+    "Huts": [
+      [
+        "Hut",
+        ""
+      ],
+      [
+        "City-state"
+      ],
+      [
+        "City-state"
+      ],
+      [
+        "Friendly Barbarian"
+      ],
+      [
+        "Friendly Barbarian"
+      ],
+      [
+        "Incense"
+      ],
+      [
+        "Incense"
+      ],
+      [
+        "Incense"
+      ],
+      [
+        "Incense"
+      ],
+      [
+        "Incense"
+      ],
+      [
+        "Incense"
+      ],
+      [
+        "Iron"
+      ],
+      [
+        "Iron"
+      ],
+      [
+        "Iron"
+      ],
+      [
+        "Native Art (3)"
+      ],
+      [
+        "Silk"
+      ],
+      [
+        "Silk"
+      ],
+      [
+        "Silk"
+      ],
+      [
+        "Silk"
+      ],
+      [
+        "Silk"
+      ],
+      [
+        "Silk"
+      ],
+      [
+        "Spy"
+      ],
+      [
+        "Spy"
+      ],
+      [
+        "Spy"
+      ],
+      [
+        "Spy"
+      ],
+      [
+        "Spy"
+      ],
+      [
+        "Spy"
+      ],
+      [
+        "Teacher"
+      ],
+      [
+        "Uranium"
+      ],
+      [
+        "Wheat"
+      ],
+      [
+        "Wheat"
+      ],
+      [
+        "Wheat"
+      ],
+      [
+        "Wheat"
+      ],
+      [
+        "Wheat"
+      ],
+      [
+        "Wheat"
+      ],
+      [
+        "Wheat"
+      ]
+    ],
+    "Wonders": [
+      [
+        "Ancient Wonders",
+        "Description",
+        "Cost",
+        "Discount",
+        ""
+      ],
+      [
+        "Chichen Itza",
+        "City Management: Each of your cities produces an extra 3 hammers.",
+        "15.0",
+        "10 w/ Currency"
+      ],
+      [
+        "Statue of Zeus",
+        "Combat Bonus : +6",
+        "15.0"
+      ],
+      [
+        "Stonehenge",
+        "Start of Turn: Gain 1 culture.",
+        "10.0"
+      ],
+      [
+        "The Colossus",
+        "Start of Turn: Gain 3 trade.",
+        "15.0",
+        "10 w/ Metalworking"
+      ],
+      [
+        "The Great Lighthouse",
+        "Each empty water square in the outskirts of your cities generates 1 extra trade.",
+        "15.0",
+        "10 w/ Navigation"
+      ],
+      [
+        "The Great Wall",
+        "When you lose a battle, your opponent gains one less loot.\nStart of Turn: Build city walls in one of your cities for free.",
+        "15.0",
+        "10 w/ Masonry"
+      ],
+      [
+        "The Hanging Gardens",
+        "Start of Turn: Build a figure in the square containing the Hanging Gardens for free.",
+        "15.0",
+        "10 w/ Animal Husbandry"
+      ],
+      [
+        "The Oracle",
+        "Battle: Your opponent must play with his or her hand faceup for you to see.",
+        "15.0",
+        "10 w/ Code of Laws"
+      ],
+      [
+        "The Pyramids",
+        "Unlock all governments. You are immune to Anarchy. If obsoleted, revert to a government you've unlocked normally.",
+        "15.0",
+        "10 w/ Pottery"
+      ],
+      [
+        "Medieval Wonders",
+        "Description",
+        "Cost",
+        "Discount",
+        ""
+      ],
+      [
+        "Angkor Wat",
+        "City Management: Once per turn, as a city action, you may harvest twice with that city (even from the same square twice).",
+        "20.0",
+        "10 w/ Theology"
+      ],
+      [
+        "Brandenburg Gate",
+        "Enemy figures cannot end their movement in your cities' outskirts. Any enemies already in your city outskirts must move out when able.",
+        "15.0"
+      ],
+      [
+        "Himeji Samurai Castle",
+        "Battle: All of your units are +1 strength.",
+        "20.0",
+        "15 w/ Monarchy"
+      ],
+      [
+        "Leonardo's Workshop",
+        "City Management : Your unit cards never cost more than 5 hammers to build",
+        "20.0",
+        "15 w/ Mathematics"
+      ],
+      [
+        "Machu Pichu",
+        "Start of Turn: Once per turn, after you invest a coin, gain 1 resource of your choice from the market.",
+        "20.0",
+        "15 w/ Irrigation"
+      ],
+      [
+        "Notre-Dame",
+        "Research : When researching a tech, you may spend 6 extra trades to learn a second tech of the same level or lower.",
+        "20.0",
+        "15 w/ Education"
+      ],
+      [
+        "Porcelain Tower",
+        "Research: Techs cost you 5 less trade to research. You may still only research once per turn.",
+        "20.0",
+        "15 w/ Construction"
+      ],
+      [
+        "Taj Mahal",
+        "Start of Turn: Build a building you've unlocked in one of your cities for free.",
+        "20.0",
+        "15 w/ Chivalry"
+      ],
+      [
+        "The Louvre",
+        "Start of Turn: Gain 3 culture.",
+        "20.0",
+        "15 w/ Printing Press"
+      ],
+      [
+        "Modern Wonders",
+        "Description",
+        "Cost",
+        "Discount",
+        ""
+      ],
+      [
+        "Big Ben",
+        "Start of Turn: Gain one of every resource in the market.",
+        "25.0",
+        "20 w/ Banking"
+      ],
+      [
+        "Cristo Redentor",
+        "Your culture hand size is increased by 4.\nStart of Turn: Draw two culture events from the deck of your choice.",
+        "25.0",
+        "15 w/ Mass Media"
+      ],
+      [
+        "Panama Canal",
+        "Start of Turn: Add 1 coin token to this wonder.",
+        "25.0",
+        "20 w/ Engineering"
+      ],
+      [
+        "Statue of Liberty",
+        "Start of Turn: Research one tech known by any other player for free. You may still research normally this turn.",
+        "25.0",
+        "20 w/ Metal Casting"
+      ],
+      [
+        "Sydney Opera House",
+        "Start of Turn: Advance one space on the culture track for free.",
+        "25.0"
+      ],
+      [
+        "The Internet",
+        "The maximum number of coins you can add to each of your techs is increased by 2.",
+        "25.0",
+        "15 w/ Computers"
+      ],
+      [
+        "The Kremlin",
+        "Any Time: Once per turn, you may spend any two resources instead of a spy.",
+        "25.0",
+        "20 w/ Communism"
+      ],
+      [
+        "The Pentagon",
+        "Battle : Your units cannot be trumped.",
+        "25.0",
+        "15 w/ Ballistics"
+      ],
+      [
+        "United Nations",
+        "Any Time: Culture events cannot target you against your will.",
+        "20.0"
+      ]
+    ],
+    "Tiles": [
+      [
+        "Tile",
+        ""
+      ],
+      [
+        "1.0"
+      ],
+      [
+        "2.0"
+      ],
+      [
+        "3.0"
+      ],
+      [
+        "4.0"
+      ],
+      [
+        "5.0"
+      ],
+      [
+        "6.0"
+      ],
+      [
+        "7.0"
+      ],
+      [
+        "8.0"
+      ],
+      [
+        "9.0"
+      ],
+      [
+        "10.0"
+      ],
+      [
+        "11.0"
+      ],
+      [
+        "12.0"
+      ],
+      [
+        "13.0"
+      ],
+      [
+        "14.0"
+      ],
+      [
+        "15.0"
+      ],
+      [
+        "16.0"
+      ],
+      [
+        "17.0"
+      ],
+      [
+        "18.0"
+      ],
+      [
+        "19.0"
+      ],
+      [
+        "20.0"
+      ],
+      [
+        "21.0"
+      ],
+      [
+        "22.0"
+      ],
+      [
+        "23.0"
+      ],
+      [
+        "24.0"
+      ],
+      [
+        "25.0"
+      ],
+      [
+        "26.0"
+      ],
+      [
+        "27.0"
+      ]
+    ],
+    "City-states": [
+      [
+        "City-States",
+        "Description"
+      ],
+      [
+        "3 Trades.",
+        "cs1"
+      ],
+      [
+        "3 Cultures.",
+        "cs2"
+      ],
+      [
+        "1 Coin & 1 Hammer.",
+        "cs3"
+      ],
+      [
+        "1 Culture & +2 Combat bonus.",
+        "cs4"
+      ],
+      [
+        "1 Random Resource & 1 Hammer & 1 Trade.",
+        "cs5"
+      ],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    "Level 1 Tech": [
+      [
+        "Name",
+        "Description"
+      ],
+      [
+        "Animal Husbandry"
+      ],
+      [
+        "Agriculture"
+      ],
+      [
+        "Code of Laws"
+      ],
+      [
+        "Currency"
+      ],
+      [
+        "Horseback Riding"
+      ],
+      [
+        "Masonry"
+      ],
+      [
+        "Metalworking"
+      ],
+      [
+        "Navigation"
+      ],
+      [
+        "Philosophy"
+      ],
+      [
+        "Pottery"
+      ],
+      [
+        "Writing"
+      ],
+      [
+        "Navy"
+      ]
+    ],
+    "Level 2 Tech": [
+      [
+        "Name",
+        "Description"
+      ],
+      [
+        "Civil Service"
+      ],
+      [
+        "Chivalry"
+      ],
+      [
+        "Construction"
+      ],
+      [
+        "Democracy"
+      ],
+      [
+        "Engineering"
+      ],
+      [
+        "Irrigation"
+      ],
+      [
+        "Mathematics"
+      ],
+      [
+        "Monarchy"
+      ],
+      [
+        "Mysticism"
+      ],
+      [
+        "Printing Press"
+      ],
+      [
+        "Sailing"
+      ],
+      [
+        "Logistics"
+      ],
+      [
+        "Bureaucracy"
+      ]
+    ],
+    "Level 3 Tech": [
+      [
+        "Name",
+        "Description"
+      ],
+      [
+        "Banking"
+      ],
+      [
+        "Biology"
+      ],
+      [
+        "Communism"
+      ],
+      [
+        "Ecology"
+      ],
+      [
+        "Gunpowder"
+      ],
+      [
+        "Metal Casting"
+      ],
+      [
+        "Military Science"
+      ],
+      [
+        "Railroad"
+      ],
+      [
+        "Steam Power"
+      ],
+      [
+        "Theology"
+      ],
+      [
+        "Education"
+      ]
+    ],
+    "Level 4 Tech": [
+      [
+        "Name",
+        "Description"
+      ],
+      [
+        "Atomic Theory"
+      ],
+      [
+        "Ballistics"
+      ],
+      [
+        "Combustion"
+      ],
+      [
+        "Computers"
+      ],
+      [
+        "Flight"
+      ],
+      [
+        "Mass Media"
+      ],
+      [
+        "Plastics"
+      ],
+      [
+        "Replacement Parts"
+      ],
+      [],
+      []
+    ],
+    "Social Policy": [
+      [
+        "Name",
+        "Description",
+        "Flipside"
+      ],
+      [
+        "Rationalism",
+        "Start of turn: Spend 6 trade to learn a level 1 tech. Start of turn: Spend 11 trade to learn a level 2 tech.",
+        "Patronage"
+      ],
+      [
+        "Natural Religion",
+        "Each of your army figures has +1 travel speed when it is not moving as part of a group.",
+        "Organized Religion"
+      ],
+      [
+        "Expansionsim",
+        "Start of turn: Gain 1 trade for each of your cities and 1 trade for each of your city-states.",
+        "Urban Development"
+      ],
+      [
+        "Pacifism",
+        "Your scouts can explore huts (but not villages). Start of turn: Gain 1 culture and 1 culture if you have a scout on the map.",
+        "Military Tradition"
+      ],
+      [
+        "Patronage",
+        "Start of turn: Spend 1 culture to draw a culture event card of the level of your current position on the culture track.",
+        "Rationalism"
+      ],
+      [
+        "Organized Religion",
+        "+1 coin. Each time you gain a great person, draw an extra great person, keeping one and discarding the other.",
+        "Natural Religion"
+      ],
+      [
+        "Urban Development",
+        "Each of your cities with at least 2 different building and/or wonder tiles in your outskirts produce an extra 3 production and generates an extra 2 culture when devotes to the arts.",
+        "Expansionsim"
+      ],
+      [
+        "Military Tradition",
+        "The first time you build and army each turn, build an unlocked military unit of your choice for free.",
+        "Patronage"
+      ]
+    ]
+  }
+}

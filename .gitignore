@@ -1,0 +1,12 @@
+# Legacy repos — har egen git-historikk, migreres bort fra
+/old-civ-rest/
+/old-civ-web/
+
+# Referansemateriale: store binærfiler (PDF/ODP/PPTX/PNG) + mongo-dump
+/Civilization/
+
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.DS_Store
