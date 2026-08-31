@@ -54,7 +54,13 @@ kilde.
 | `src/log.ts` | `GameLog.java`, `GameLogAction.java` |
 | `src/gamedata.ts` | `excel/ItemReader.java`, uten Apache POI |
 | `src/create-game.ts` | `PBFTestAction.createNewGame` |
+| `src/turn.ts` | `PlayerTurn.java` (og `TurnKey.java`, som aldri virket) |
+| `src/undo.ts` | `Undo.java` |
 | `src/actions/draw.ts` | `action/DrawAction.java` |
+| `src/actions/player.ts` | `action/PlayerAction.java` |
+| `src/actions/undo.ts` | `action/UndoAction.java` |
+| `src/actions/turn.ts` | `action/TurnAction.java` |
+| `src/actions/game.ts` | spilldelen av `action/GameAction.java` |
 | `src/random.ts` | erstatter `Collections.shuffle` + `RandomUtils` |
 
 ### `packages/server`, `packages/web`
@@ -137,19 +143,64 @@ Java-semantikken trengs.
 **Space Flight er ikke en singleton.** Java hadde `Tech.SPACE_FLIGHT` som
 statisk felt — delt muterbar tilstand mellom alle spill i samme JVM.
 
+**Undo dispatcher på `logType`, ikke på delstrenger i loggteksten.**
+`UndoAction.putDrawnItemBackInPBF` avgjorde hva som skulle skje ved å lete etter
+`"discarded"`, `"drew"` og `"barbarian"` i logglinjen. Loggposten har en
+`logType` som bærer samme informasjon. Javas barbar-gren var uansett død kode:
+den krevde `"drew"`, men barbarlogger skriver `"has drawn"`, og de har heller
+ikke noe item knyttet til seg, så undo kunne aldri initieres for dem.
+
+**Fem turfase-metoder ble én.** `updateSOT`, `updateTrade`, `updateCM`,
+`updateMovement` og `updateResearch` skilte seg bare i e-postteksten og
+logtypen. Fasen sto allerede i DTO-en, så `updateSOT` med `phase: "trade"`
+skrev til handelsfasen men logget SOT. `updateTurn` tar fasen som argument.
+
+**Lesinger muterer ikke lenger.** `getRemaingTechsForPlayer` gjorde
+`techs.removeAll(...)` på listen fra Mongo, og `getAllPublicTurns` strippet
+historikk ved å endre de lagrede objektene. Begge er nå rene projeksjoner.
+
+**`addNewTurn` lagrer.** Java glemte `pbfCollection.updateById`, så den nye
+turen forsvant ved neste lesing.
+
+**Sosialpolitikk beholder sitt `itemNumber`.** Java lagde et nytt objekt med bare
+navn og bakside, som ga `itemNumber` 0. Logglinjen bruker nummeret til å gi hver
+spiller sitt eget referansenummer, så med 0 fikk alle kort samme nummer og
+funksjonen var virkningsløs.
+
+**Fargevalg er deterministisk.** `chooseColorForPlayer` tok første element ut av
+et `HashSet`, altså i uspesifisert rekkefølge. Nå følges rekkefølgen Green,
+Yellow, Purple, Red, Blue.
+
+**`endTurn` lar fortsatt hvem som helst avslutte turen.** Java fant spilleren som
+har turen og ga den videre uten å se på hvem som kalte. Det er portert som-er,
+siden autorisasjonen lå i ressurslaget; server-pakken må håndheve det.
+
 ## Utsatt
 
-Ikke portert i denne runden, i grov prioritetsrekkefølge:
+Motoren er ferdig portert. Det som gjenstår er ikke domenelogikk:
 
-- `PlayerAction` — velg civ, velg tech, avslør, kast, handel mellom spillere
-- `UndoAction` — avstemning om undo
-- `TurnAction`, `PlayerTurn`, `TurnKey` — turfaser
-- `GameAction` — opprett spill, bli med, trekk seg, vinner
-- `TournamentAction`, highscore
-- Chat
-- Persistens (`packages/server`) og autentisering
-- Klient (`packages/web`)
-- Hex-brett og grafikk
+- **`packages/server`** — HTTP, persistens, autentisering, e-postvarsling og
+  mapping fra `EngineError` til statuskoder. Java-motstykker: `resource/*`,
+  `application/*`, `email/SendEmail`, `CivAuthenticator`.
+- **`packages/web`** — klienten. Java-motstykke: AngularJS-appen i `old-civ-web`.
+- **Chat** — `GameAction.chat` og `Chat.java`. Meldinger uten spillregler, så de
+  hører i server-pakken og ikke i en ren motor.
+- **Highscore og turneringer** — `GameAction.getCivHighscore`,
+  `getPlayerHighScore`, `TournamentAction`. Spør på tvers av spill og trenger et
+  datalag.
+- **Kontoadministrasjon** — `createPlayer`, `newPassword`, `verifyPassword`,
+  `AdminAction`.
+- **Hex-brett og grafikk.**
+
+### Krever en beslutning
+
+`revealItem` for en sivilisasjon trekker startenheter gjennom
+`DrawAction.draw`, som krever at det er spillerens tur. Konsekvensen i Java er at
+bare spilleren som har turen kan avsløre sin sivilisasjon — de tre andre får 403
+under oppsettet. Det ser ut som en feil, men er portert som-er fordi Java er
+fasit og ingen gammel test dekker det. Dokumentert i
+`test/player-action.test.ts`, testen «en spiller som ikke har turen kan ikke
+avsløre sin sivilisasjon».
 
 Referansemateriale — regelbøker, kart i ODP/PPTX, kortgrafikk og en kopi av
 Mongo-databasen — ligger i `Civilization/`, som er utenfor git.
