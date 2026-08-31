@@ -27,6 +27,36 @@ export type EngineError =
   | { readonly kind: 'NOTHING_TO_LOOT'; readonly playerId: string }
   /** Java: 406 "Item is not lootable" */
   | { readonly kind: 'ITEM_NOT_LOOTABLE'; readonly itemId: string }
+  /** Java: `SecurityCheck.hasUserAccess` var false — 403 */
+  | { readonly kind: 'NO_ACCESS'; readonly playerId: string }
+  /** Java loggførte en warning og returnerte null */
+  | { readonly kind: 'TECH_ALREADY_CHOSEN'; readonly techName: string }
+  /** Java loggførte en warning og returnerte null */
+  | { readonly kind: 'SOCIAL_POLICY_ALREADY_CHOSEN'; readonly name: string }
+  /** Java: 400 — man kan ikke ha begge sider av samme kort */
+  | { readonly kind: 'SOCIAL_POLICY_FLIPSIDE_TAKEN'; readonly name: string; readonly flipside: string }
+  /** Java: 304 Not Modified "Item already revealed" */
+  | { readonly kind: 'ITEM_ALREADY_REVEALED'; readonly name: string }
+  /** Java: 400 "Civilization already chosen" */
+  | { readonly kind: 'CIVILIZATION_ALREADY_CHOSEN'; readonly playerId: string }
+  | { readonly kind: 'LOG_ENTRY_NOT_FOUND'; readonly logId: string }
+  /** Java: 400 "Cannot initiate a undo. Its already been initiated" */
+  | { readonly kind: 'UNDO_ALREADY_INITIATED'; readonly logId: string }
+  /** Java: 412 "This item cannot be undone. Nothing to undo." */
+  | { readonly kind: 'UNDO_NOT_INITIATED'; readonly logId: string }
+  /** Loggposten har ingen item, så det finnes ikke noe å angre */
+  | { readonly kind: 'NOTHING_TO_UNDO'; readonly logId: string }
+  /** Java: 400 "Cannot join the game. Its full!" */
+  | { readonly kind: 'GAME_IS_FULL'; readonly numOfPlayers: number }
+  /** Java: 400 "Cannot join the game. You have already joined!" */
+  | { readonly kind: 'ALREADY_JOINED'; readonly playerId: string }
+  /** Java: 403 "As game creator, you must end game not withdraw from it" */
+  | { readonly kind: 'GAME_CREATOR_MUST_END_GAME'; readonly playerId: string }
+  /** Java: 403 "Only game creator can end game" */
+  | { readonly kind: 'ONLY_GAME_CREATOR_CAN_END_GAME'; readonly playerId: string }
+  | { readonly kind: 'TURN_NOT_FOUND'; readonly turnNumber: number }
+  /** Alle farger er i bruk */
+  | { readonly kind: 'NO_COLOR_AVAILABLE' }
 
 export function describeError(error: EngineError): string {
   switch (error.kind) {
@@ -48,5 +78,37 @@ export function describeError(error: EngineError): string {
       return 'You have nothing to draw'
     case 'ITEM_NOT_LOOTABLE':
       return 'Item is not lootable'
+    case 'NO_ACCESS':
+      return 'User is not player of this game'
+    case 'TECH_ALREADY_CHOSEN':
+      return `Player tried to add same tech as they had: ${error.techName}`
+    case 'SOCIAL_POLICY_ALREADY_CHOSEN':
+      return `Player tried to add same social policy as they had: ${error.name}`
+    case 'SOCIAL_POLICY_FLIPSIDE_TAKEN':
+      return `Player tried to add a social policy on same flipside: ${error.flipside}`
+    case 'ITEM_ALREADY_REVEALED':
+      return 'Item already revealed'
+    case 'CIVILIZATION_ALREADY_CHOSEN':
+      return 'Civilization already chosen'
+    case 'LOG_ENTRY_NOT_FOUND':
+      return 'Could not find game log entry'
+    case 'UNDO_ALREADY_INITIATED':
+      return 'Cannot initiate a undo. Its already been initiated'
+    case 'UNDO_NOT_INITIATED':
+      return 'This item cannot be undone. Nothing to undo.'
+    case 'NOTHING_TO_UNDO':
+      return 'The log entry has no item to undo'
+    case 'GAME_IS_FULL':
+      return 'Cannot join the game. Its full!'
+    case 'ALREADY_JOINED':
+      return 'Cannot join the game. You have already joined!'
+    case 'GAME_CREATOR_MUST_END_GAME':
+      return 'As game creator, you must end game not withdraw from it'
+    case 'ONLY_GAME_CREATOR_CAN_END_GAME':
+      return 'Only game creator can end game'
+    case 'TURN_NOT_FOUND':
+      return `Could not find turn ${error.turnNumber}`
+    case 'NO_COLOR_AVAILABLE':
+      return 'No colors left to assign'
   }
 }

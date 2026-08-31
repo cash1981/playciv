@@ -53,6 +53,8 @@ export function emptyPlayerhand(player: NewPlayer, playernumber: number): Player
     barbarians: [],
     battlehand: [],
     socialPolicies: [],
+    playerTurns: [],
+    gamenote: null,
   }
 }
 
@@ -111,6 +113,8 @@ export function createGame(options: CreateGameOptions): GameState {
     winner: null,
     items: numberedItems,
     discardedItems: [],
+    withdrawnPlayers: [],
+    publicTurns: {},
     players: (options.players ?? []).map((player, index) =>
       emptyPlayerhand(player, index + 1),
     ),

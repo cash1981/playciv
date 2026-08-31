@@ -154,8 +154,39 @@ export function appendLog(state: GameState, options: AppendOptions): GameState {
     publicLog: options.publicLog ?? '',
     item: options.item ?? null,
     playerId: options.playerId ?? null,
+    undo: null,
   }
   return { ...state, rng, log: [...state.log, entry] }
+}
+
+/** Java: `GameLogAction.createUndoLog` — logges som avsender "System". */
+export function appendUndoLog(
+  state: GameState,
+  message: string,
+  itemNumber: number,
+): GameState {
+  const text = `System: ${message}. Item number #${itemNumber}`
+  return appendLog(state, { username: 'System', privateLog: text, publicLog: text })
+}
+
+/**
+ * Java: `GameLogAction.createGameLog(Draw, pbfId, username, vote)` — logglinjen
+ * for en avgitt undo-stemme. Merk at den avslører `revealPublic` av itemet.
+ */
+export function appendVoteLog(
+  state: GameState,
+  username: string,
+  playerId: string,
+  itemPublicName: string,
+  itemNumber: number,
+  vote: boolean,
+): GameState {
+  return appendLog(state, {
+    username,
+    playerId,
+    logType: 'VOTE',
+    publicLog: `${username} has voted ${vote ? 'yes' : 'no'} to undo ${itemPublicName} with item number ${itemNumber}`,
+  })
 }
 
 /** Java: `GameLogAction.createGameLog(Draw, LogType)`. */
