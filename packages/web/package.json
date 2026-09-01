@@ -4,10 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"(@civ/web: ingen tester ennå)\""
+    "preview": "vite preview",
+    "test": "echo \"(@civ/web: dekkes av server-testene og manuell kjøring)\""
   },
-  "dependencies": { "@civ/engine": "workspace:*" },
-  "devDependencies": { "typescript": "^5.9.3" }
+  "dependencies": {
+    "@civ/engine": "workspace:*",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9"
+  }
 }

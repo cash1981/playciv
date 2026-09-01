@@ -1,0 +1,56 @@
+/**
+ * Fastify-appen. Java: `CivilizationApplication` med Dropwizard.
+ */
+
+import cors from '@fastify/cors'
+import Fastify from 'fastify'
+import type { FastifyInstance } from 'fastify'
+
+import { TokenSigner } from './auth.js'
+import type { AppContext } from './context.js'
+import { registerAuthRoutes } from './routes/auth.js'
+import { registerGameRoutes } from './routes/games.js'
+import { registerPlayRoutes } from './routes/play.js'
+import { JsonFileRepository } from './store/json-file.js'
+import type { Repository } from './store/types.js'
+
+export interface CreateAppOptions {
+  readonly repo: Repository
+  readonly tokenSecret: string
+  readonly logger?: boolean
+  /** Origins klienten kan kalle fra. `true` slipper alle gjennom. */
+  // Ikke readonly string[]: @fastify/cors krever et muterbart array
+  readonly corsOrigin?: string | string[] | true
+}
+
+export async function createApp(options: CreateAppOptions): Promise<FastifyInstance> {
+  const app = Fastify({ logger: options.logger ?? false })
+
+  await app.register(cors, {
+    origin: options.corsOrigin ?? true,
+    credentials: true,
+  })
+
+  const context: AppContext = {
+    repo: options.repo,
+    tokens: new TokenSigner(options.tokenSecret),
+  }
+
+  app.get('/api/health', async () => ({ status: 'ok' }))
+
+  registerAuthRoutes(app, context)
+  registerGameRoutes(app, context)
+  registerPlayRoutes(app, context)
+
+  return app
+}
+
+/** Bekvemmelighet for tester: app med rent minne-repo, ingen fil. */
+export async function createTestApp(): Promise<{
+  app: FastifyInstance
+  repo: JsonFileRepository
+}> {
+  const repo = new JsonFileRepository({ filePath: null })
+  const app = await createApp({ repo, tokenSecret: 'test-secret', logger: false })
+  return { app, repo }
+}

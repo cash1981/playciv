@@ -15,17 +15,36 @@ Den gamle løsningen kjørte på playciv.com og viste brettet gjennom en Google
 Presentation og et Google Spreadsheet i iframe (`mapLink` / `assetLink`). Det er
 borte, og er ikke portert. Et ekte hex-brett kommer senere.
 
-## Oppsett
+## Kjøre appen
+
+Krever Node 20 eller nyere og pnpm.
 
 ```bash
 pnpm install
 ```
 
+Start API-et i ett terminalvindu:
+
+```bash
+pnpm --filter @civ/server dev
+```
+
+Og klienten i et annet:
+
+```bash
+pnpm --filter @civ/web dev
+```
+
+Klienten ligger på http://localhost:5173 og proxyer `/api` til serveren på
+port 8787. Registrer en bruker, opprett et spill, og la de andre spillerne bli
+med — spillet starter av seg selv når siste plass er fylt.
+
+Sett `TOKEN_SECRET` før du starter serveren hvis innloggingene skal overleve en
+omstart. Uten den lages en tilfeldig hemmelighet per oppstart.
+
 ```bash
 pnpm -r test
 ```
-
-Krever Node 20 eller nyere og pnpm.
 
 ## Pakker
 
@@ -63,9 +82,47 @@ kilde.
 | `src/actions/game.ts` | spilldelen av `action/GameAction.java` |
 | `src/random.ts` | erstatter `Collections.shuffle` + `RandomUtils` |
 
-### `packages/server`, `packages/web`
+### `packages/server`
 
-Tomme placeholders. Ikke startet.
+Fastify over motoren. Java-motstykke: `resource/*` og `application/*` under
+Dropwizard.
+
+| Fil | Ansvar |
+| --- | --- |
+| `src/routes/auth.ts` | `AuthResource` — registrering og innlogging |
+| `src/routes/games.ts` | `GameResource` — opprett, list, bli med, trekk seg, avslutt, logg, chat |
+| `src/routes/play.ts` | `DrawResource` + `PlayerResource` — trekk, kamp, tech, avsløring, handel, tur, undo |
+| `src/errors.ts` | `EngineError` → HTTP-status |
+| `src/auth.ts` | scrypt-passord og HMAC-signerte bearer-tokens |
+| `src/store/` | lagringsgrensesnittet og JSON-fil-implementasjonen |
+
+Serveren har ingen spillregler. Hver rute henter tilstanden, kaller én ren
+funksjon fra motoren, lagrer resultatet og svarer med `toPlayerView(state, deg)`.
+En rute kan derfor ikke lekke andres hånd selv om den ville.
+
+Miljøvariabler: `PORT` (8787), `HOST`, `DATA_FILE`, `TOKEN_SECRET`, `CORS_ORIGIN`.
+
+### `packages/web`
+
+React + Vite. Erstatter AngularJS-appen i `old-civ-web`. Bevisst nøktern —
+grafikken kommer senere. Dekker innlogging, spillisten, og spillsiden med hånd,
+trekk, kamp, teknologi, sosialpolitikk, turordrer, logg, undo-avstemning og chat.
+
+Klienten importerer typene sine fra `@civ/engine`, så den kan ikke komme i
+utakt med hva serveren faktisk sender.
+
+## Lagring i stedet for MongoDB
+
+`packages/server/src/store/types.ts` definerer et `Repository`. Den eneste
+implementasjonen i dag er `JsonFileRepository`: alt ligger i `Map`-er i minnet og
+speiles til `packages/server/data/civ.json` etter hver endring — debounced, og
+atomisk via en midlertidig fil som byttes inn.
+
+Det holder til å spille lokalt, og spill overlever en omstart. Det er ikke en
+database: ingen indekser, ingen samtidighetskontroll, ingen spørringer. En
+Mongo-implementasjon kan legges ved siden av uten at rutene endres.
+
+Slett `packages/server/data/civ.json` for å nullstille alt.
 
 ## Spilldata
 
@@ -177,20 +234,26 @@ siden autorisasjonen lå i ressurslaget; server-pakken må håndheve det.
 
 ## Utsatt
 
-Motoren er ferdig portert. Det som gjenstår er ikke domenelogikk:
-
-- **`packages/server`** — HTTP, persistens, autentisering, e-postvarsling og
-  mapping fra `EngineError` til statuskoder. Java-motstykker: `resource/*`,
-  `application/*`, `email/SendEmail`, `CivAuthenticator`.
-- **`packages/web`** — klienten. Java-motstykke: AngularJS-appen i `old-civ-web`.
-- **Chat** — `GameAction.chat` og `Chat.java`. Meldinger uten spillregler, så de
-  hører i server-pakken og ikke i en ren motor.
+- **Ekte MongoDB.** Erstattet av JSON-fil bak `Repository`, se over.
+- **Grafikk og hex-brett.** Klienten er tekst og knapper. Kortbildene under
+  `Civilization/Moderator/` er ikke tatt i bruk; `itemImage()` i motoren gir
+  allerede filnavnene.
 - **Highscore og turneringer** — `GameAction.getCivHighscore`,
   `getPlayerHighScore`, `TournamentAction`. Spør på tvers av spill og trenger et
-  datalag.
-- **Kontoadministrasjon** — `createPlayer`, `newPassword`, `verifyPassword`,
-  `AdminAction`.
-- **Hex-brett og grafikk.**
+  ordentlig datalag.
+- **E-postvarsling** — `email/SendEmail`, samt `/newpassword` og
+  `/verify/{playerId}` i `AuthResource`. Java startet en rå `new Thread(...)` per
+  varsel.
+- **`AdminAction`** — bytt bruker i et spill, slett spill, masseutsending.
+- **Sanntid.** Klienten henter på nytt etter hver handling; ingen websocket.
+  `todo.txt` i old-civ-rest ønsket seg det for chat.
+
+### Sikkerhet
+
+Autentiseringen er på utviklingsnivå: scrypt-hashede passord og HMAC-signerte
+bearer-tokens som ikke kan trekkes tilbake før de utløper. Java brukte usaltet
+SHA-1 og HTTP Basic, så det er en forbedring, men det er ikke gjennomgått for
+produksjon.
 
 ### Krever en beslutning
 
