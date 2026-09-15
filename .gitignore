@@ -11,5 +11,7 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 
+.idea
+
 # Lokal spilltilstand fra @civ/server
 /packages/server/data/

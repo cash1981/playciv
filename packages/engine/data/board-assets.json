@@ -1,0 +1,598 @@
+{
+  "note": "Autogenerert av tools/board-assets.ps1. Rediger ikke manuelt.",
+  "source": "Civilization/Moderator",
+  "assets": [
+    {
+      "id": "figures/bluearmy",
+      "category": "figure",
+      "path": "figures/bluearmy.png",
+      "label": "Blue army",
+      "width": 33,
+      "height": 51
+    },
+    {
+      "id": "figures/bluescout",
+      "category": "figure",
+      "path": "figures/bluescout.png",
+      "label": "Blue scout",
+      "width": 51,
+      "height": 34
+    },
+    {
+      "id": "figures/greenarmy",
+      "category": "figure",
+      "path": "figures/greenarmy.png",
+      "label": "Green army",
+      "width": 33,
+      "height": 51
+    },
+    {
+      "id": "figures/greenscout",
+      "category": "figure",
+      "path": "figures/greenscout.png",
+      "label": "Green scout",
+      "width": 51,
+      "height": 34
+    },
+    {
+      "id": "figures/purplearmy",
+      "category": "figure",
+      "path": "figures/purplearmy.png",
+      "label": "Purple army",
+      "width": 33,
+      "height": 51
+    },
+    {
+      "id": "figures/purplescout",
+      "category": "figure",
+      "path": "figures/purplescout.png",
+      "label": "Purple scout",
+      "width": 51,
+      "height": 34
+    },
+    {
+      "id": "figures/redarmy",
+      "category": "figure",
+      "path": "figures/redarmy.png",
+      "label": "Red army",
+      "width": 33,
+      "height": 51
+    },
+    {
+      "id": "figures/redscout",
+      "category": "figure",
+      "path": "figures/redscout.png",
+      "label": "Red scout",
+      "width": 51,
+      "height": 34
+    },
+    {
+      "id": "figures/whitearmy",
+      "category": "figure",
+      "path": "figures/whitearmy.png",
+      "label": "White army",
+      "width": 36,
+      "height": 51
+    },
+    {
+      "id": "figures/yellowarmy",
+      "category": "figure",
+      "path": "figures/yellowarmy.png",
+      "label": "Yellow army",
+      "width": 33,
+      "height": 51
+    },
+    {
+      "id": "figures/yellowscout",
+      "category": "figure",
+      "path": "figures/yellowscout.png",
+      "label": "Yellow scout",
+      "width": 51,
+      "height": 34
+    },
+    {
+      "id": "resources/hut",
+      "category": "resource",
+      "path": "resources/hut.png",
+      "label": "Hut",
+      "width": 57,
+      "height": 56
+    },
+    {
+      "id": "resources/incense",
+      "category": "resource",
+      "path": "resources/incense.png",
+      "label": "Incense",
+      "width": 57,
+      "height": 56
+    },
+    {
+      "id": "resources/iron",
+      "category": "resource",
+      "path": "resources/iron.png",
+      "label": "Iron",
+      "width": 57,
+      "height": 56
+    },
+    {
+      "id": "resources/silk",
+      "category": "resource",
+      "path": "resources/silk.png",
+      "label": "Silk",
+      "width": 57,
+      "height": 56
+    },
+    {
+      "id": "resources/village",
+      "category": "resource",
+      "path": "resources/village.png",
+      "label": "Village",
+      "width": 57,
+      "height": 56
+    },
+    {
+      "id": "resources/wheat",
+      "category": "resource",
+      "path": "resources/wheat.png",
+      "label": "Wheat",
+      "width": 57,
+      "height": 56
+    },
+    {
+      "id": "markers/Building Program",
+      "category": "marker",
+      "path": "markers/Building Program.png",
+      "label": "Building Program",
+      "width": 58,
+      "height": 53
+    },
+    {
+      "id": "markers/caravan",
+      "category": "marker",
+      "path": "markers/caravan.png",
+      "label": "Caravan",
+      "width": 54,
+      "height": 34
+    },
+    {
+      "id": "markers/coin",
+      "category": "marker",
+      "path": "markers/coin.png",
+      "label": "Coin",
+      "width": 38,
+      "height": 38
+    },
+    {
+      "id": "markers/coin1",
+      "category": "marker",
+      "path": "markers/coin1.png",
+      "label": "Coin 1",
+      "width": 19,
+      "height": 19
+    },
+    {
+      "id": "markers/coin2",
+      "category": "marker",
+      "path": "markers/coin2.png",
+      "label": "Coin 2",
+      "width": 29,
+      "height": 19
+    },
+    {
+      "id": "markers/coin3",
+      "category": "marker",
+      "path": "markers/coin3.png",
+      "label": "Coin 3",
+      "width": 39,
+      "height": 19
+    },
+    {
+      "id": "markers/coin4",
+      "category": "marker",
+      "path": "markers/coin4.png",
+      "label": "Coin 4",
+      "width": 49,
+      "height": 19
+    },
+    {
+      "id": "markers/culture",
+      "category": "marker",
+      "path": "markers/culture.png",
+      "label": "Culture",
+      "width": 35,
+      "height": 29
+    },
+    {
+      "id": "markers/fortification",
+      "category": "marker",
+      "path": "markers/fortification.png",
+      "label": "Fortification",
+      "width": 54,
+      "height": 36
+    },
+    {
+      "id": "markers/startplayer_100_100",
+      "category": "marker",
+      "path": "markers/startplayer_100_100.png",
+      "label": "Startplayer_100_100",
+      "width": 100,
+      "height": 100
+    },
+    {
+      "id": "markers/startplayer",
+      "category": "marker",
+      "path": "markers/startplayer.png",
+      "label": "Startplayer",
+      "width": 145,
+      "height": 145
+    },
+    {
+      "id": "markers/wound",
+      "category": "marker",
+      "path": "markers/wound.png",
+      "label": "Wound",
+      "width": 58,
+      "height": 59
+    },
+    {
+      "id": "cities/bluecapital2",
+      "category": "city",
+      "path": "cities/bluecapital2.png",
+      "label": "Blue capital",
+      "width": 85,
+      "height": 85
+    },
+    {
+      "id": "cities/bluecapitalwalled2",
+      "category": "city",
+      "path": "cities/bluecapitalwalled2.png",
+      "label": "Blue capital (walled)",
+      "width": 84,
+      "height": 83
+    },
+    {
+      "id": "cities/bluecity2",
+      "category": "city",
+      "path": "cities/bluecity2.png",
+      "label": "Blue city",
+      "width": 86,
+      "height": 83
+    },
+    {
+      "id": "cities/bluecitywalled2",
+      "category": "city",
+      "path": "cities/bluecitywalled2.png",
+      "label": "Blue city (walled)",
+      "width": 84,
+      "height": 83
+    },
+    {
+      "id": "cities/bluemetropolis2",
+      "category": "city",
+      "path": "cities/bluemetropolis2.png",
+      "label": "Blue metropolis",
+      "width": 165,
+      "height": 78
+    },
+    {
+      "id": "cities/bluemetropoliswalled2",
+      "category": "city",
+      "path": "cities/bluemetropoliswalled2.png",
+      "label": "Blue metropolis (walled)",
+      "width": 166,
+      "height": 80
+    },
+    {
+      "id": "cities/greencapital2",
+      "category": "city",
+      "path": "cities/greencapital2.png",
+      "label": "Green capital",
+      "width": 85,
+      "height": 85
+    },
+    {
+      "id": "cities/greencapitalwalled2",
+      "category": "city",
+      "path": "cities/greencapitalwalled2.png",
+      "label": "Green capital (walled)",
+      "width": 85,
+      "height": 85
+    },
+    {
+      "id": "cities/greencity2",
+      "category": "city",
+      "path": "cities/greencity2.png",
+      "label": "Green city",
+      "width": 85,
+      "height": 85
+    },
+    {
+      "id": "cities/greencitywalled2",
+      "category": "city",
+      "path": "cities/greencitywalled2.png",
+      "label": "Green city (walled)",
+      "width": 86,
+      "height": 86
+    },
+    {
+      "id": "cities/greenmetropolis2",
+      "category": "city",
+      "path": "cities/greenmetropolis2.png",
+      "label": "Green metropolis",
+      "width": 166,
+      "height": 82
+    },
+    {
+      "id": "cities/greenmetropoliswalled2",
+      "category": "city",
+      "path": "cities/greenmetropoliswalled2.png",
+      "label": "Green metropolis (walled)",
+      "width": 167,
+      "height": 82
+    },
+    {
+      "id": "cities/purplecapital2",
+      "category": "city",
+      "path": "cities/purplecapital2.png",
+      "label": "Purple capital",
+      "width": 85,
+      "height": 85
+    },
+    {
+      "id": "cities/purplecapitalwalled2",
+      "category": "city",
+      "path": "cities/purplecapitalwalled2.png",
+      "label": "Purple capital (walled)",
+      "width": 85,
+      "height": 85
+    },
+    {
+      "id": "cities/purplecity2",
+      "category": "city",
+      "path": "cities/purplecity2.png",
+      "label": "Purple city",
+      "width": 85,
+      "height": 85
+    },
+    {
+      "id": "cities/purplecitywalled2",
+      "category": "city",
+      "path": "cities/purplecitywalled2.png",
+      "label": "Purple city (walled)",
+      "width": 86,
+      "height": 86
+    },
+    {
+      "id": "cities/purplemetropolis2",
+      "category": "city",
+      "path": "cities/purplemetropolis2.png",
+      "label": "Purple metropolis",
+      "width": 166,
+      "height": 82
+    },
+    {
+      "id": "cities/purplemetropoliswalled2",
+      "category": "city",
+      "path": "cities/purplemetropoliswalled2.png",
+      "label": "Purple metropolis (walled)",
+      "width": 166,
+      "height": 83
+    },
+    {
+      "id": "cities/redcapital2",
+      "category": "city",
+      "path": "cities/redcapital2.png",
+      "label": "Red capital",
+      "width": 85,
+      "height": 84
+    },
+    {
+      "id": "cities/redcapitalwalled2",
+      "category": "city",
+      "path": "cities/redcapitalwalled2.png",
+      "label": "Red capital (walled)",
+      "width": 86,
+      "height": 85
+    },
+    {
+      "id": "cities/redcity2",
+      "category": "city",
+      "path": "cities/redcity2.png",
+      "label": "Red city",
+      "width": 85,
+      "height": 83
+    },
+    {
+      "id": "cities/redcitywalled2",
+      "category": "city",
+      "path": "cities/redcitywalled2.png",
+      "label": "Red city (walled)",
+      "width": 85,
+      "height": 83
+    },
+    {
+      "id": "cities/redmetropolis2",
+      "category": "city",
+      "path": "cities/redmetropolis2.png",
+      "label": "Red metropolis",
+      "width": 166,
+      "height": 82
+    },
+    {
+      "id": "cities/redmetropoliswalled2",
+      "category": "city",
+      "path": "cities/redmetropoliswalled2.png",
+      "label": "Red metropolis (walled)",
+      "width": 168,
+      "height": 82
+    },
+    {
+      "id": "cities/yellowcapital2",
+      "category": "city",
+      "path": "cities/yellowcapital2.png",
+      "label": "Yellow capital",
+      "width": 85,
+      "height": 83
+    },
+    {
+      "id": "cities/yellowcapitalwalled2",
+      "category": "city",
+      "path": "cities/yellowcapitalwalled2.png",
+      "label": "Yellow capital (walled)",
+      "width": 86,
+      "height": 84
+    },
+    {
+      "id": "cities/yellowcity2",
+      "category": "city",
+      "path": "cities/yellowcity2.png",
+      "label": "Yellow city",
+      "width": 85,
+      "height": 84
+    },
+    {
+      "id": "cities/yellowcitywalled2",
+      "category": "city",
+      "path": "cities/yellowcitywalled2.png",
+      "label": "Yellow city (walled)",
+      "width": 85,
+      "height": 85
+    },
+    {
+      "id": "cities/yellowmetropolis2",
+      "category": "city",
+      "path": "cities/yellowmetropolis2.png",
+      "label": "Yellow metropolis",
+      "width": 166,
+      "height": 81
+    },
+    {
+      "id": "cities/yellowmetropoliswalled2",
+      "category": "city",
+      "path": "cities/yellowmetropoliswalled2.png",
+      "label": "Yellow metropolis (walled)",
+      "width": 166,
+      "height": 82
+    },
+    {
+      "id": "buildings/academy",
+      "category": "building",
+      "path": "buildings/academy.png",
+      "label": "Academy",
+      "width": 87,
+      "height": 85
+    },
+    {
+      "id": "buildings/aqueduct",
+      "category": "building",
+      "path": "buildings/aqueduct.png",
+      "label": "Aqueduct",
+      "width": 86,
+      "height": 86
+    },
+    {
+      "id": "buildings/bank",
+      "category": "building",
+      "path": "buildings/bank.png",
+      "label": "Bank",
+      "width": 86,
+      "height": 86
+    },
+    {
+      "id": "buildings/barracks",
+      "category": "building",
+      "path": "buildings/barracks.png",
+      "label": "Barracks",
+      "width": 83,
+      "height": 85
+    },
+    {
+      "id": "buildings/cathedral",
+      "category": "building",
+      "path": "buildings/cathedral.png",
+      "label": "Cathedral",
+      "width": 86,
+      "height": 84
+    },
+    {
+      "id": "buildings/granary",
+      "category": "building",
+      "path": "buildings/granary.png",
+      "label": "Granary",
+      "width": 84,
+      "height": 86
+    },
+    {
+      "id": "buildings/harbor",
+      "category": "building",
+      "path": "buildings/harbor.png",
+      "label": "Harbor",
+      "width": 84,
+      "height": 84
+    },
+    {
+      "id": "buildings/ironmine",
+      "category": "building",
+      "path": "buildings/ironmine.png",
+      "label": "Ironmine",
+      "width": 86,
+      "height": 82
+    },
+    {
+      "id": "buildings/library",
+      "category": "building",
+      "path": "buildings/library.png",
+      "label": "Library",
+      "width": 86,
+      "height": 85
+    },
+    {
+      "id": "buildings/market",
+      "category": "building",
+      "path": "buildings/market.png",
+      "label": "Market",
+      "width": 85,
+      "height": 85
+    },
+    {
+      "id": "buildings/shipyard",
+      "category": "building",
+      "path": "buildings/shipyard.png",
+      "label": "Shipyard",
+      "width": 108,
+      "height": 108
+    },
+    {
+      "id": "buildings/temple",
+      "category": "building",
+      "path": "buildings/temple.png",
+      "label": "Temple",
+      "width": 86,
+      "height": 85
+    },
+    {
+      "id": "buildings/tradingpost",
+      "category": "building",
+      "path": "buildings/tradingpost.png",
+      "label": "Tradingpost",
+      "width": 85,
+      "height": 85
+    },
+    {
+      "id": "buildings/university",
+      "category": "building",
+      "path": "buildings/university.png",
+      "label": "University",
+      "width": 86,
+      "height": 85
+    },
+    {
+      "id": "buildings/workshop",
+      "category": "building",
+      "path": "buildings/workshop.png",
+      "label": "Workshop",
+      "width": 84,
+      "height": 83
+    }
+  ]
+}

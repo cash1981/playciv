@@ -244,3 +244,161 @@ ul.list > li:last-child {
   max-width: 26rem;
   margin: 4rem auto;
 }
+
+/* --- Brettet ------------------------------------------------------------- */
+
+.board-panel {
+  /* Brettet skal få bruke full bredde, ikke stå i grid-en med resten */
+  grid-column: 1 / -1;
+}
+
+.board-layout {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-top: 0.6rem;
+}
+
+.board-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  background: #0f1115;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.5rem;
+}
+
+/* Rammen gir plass til koordinatmerkingen på alle fire sider */
+.board-frame {
+  position: relative;
+  padding: 14px;
+}
+
+.board-surface {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background-color: #1f2a20;
+  /* Rutenettet som bakgrunn i stedet for 256 DOM-noder */
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.11) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.11) 1px, transparent 1px);
+  outline: 1px solid var(--line);
+}
+
+.board-piece {
+  position: absolute;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-drag: none;
+  touch-action: none;
+}
+
+.board-piece:active {
+  cursor: grabbing;
+}
+
+.board-piece.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.board-labels {
+  position: absolute;
+  display: flex;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 14px;
+  user-select: none;
+}
+
+.board-labels span {
+  display: inline-block;
+  text-align: center;
+}
+
+.board-labels.columns {
+  left: 14px;
+  height: 14px;
+}
+
+.board-labels.columns.top {
+  top: 0;
+}
+
+.board-labels.columns.bottom {
+  bottom: 0;
+}
+
+.board-labels.rows {
+  top: 14px;
+  width: 14px;
+  flex-direction: column;
+}
+
+.board-labels.rows span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.board-labels.rows.left {
+  left: 0;
+}
+
+.board-labels.rows.right {
+  right: 0;
+}
+
+.board-palette {
+  width: 17rem;
+  flex: none;
+}
+
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+  gap: 0.35rem;
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.palette-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.3rem 0.15rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: grab;
+  text-align: center;
+}
+
+.palette-item:hover {
+  border-color: var(--accent);
+}
+
+.palette-item img {
+  max-width: 2.6rem;
+  max-height: 2.6rem;
+  object-fit: contain;
+}
+
+.palette-item span {
+  font-size: 0.65rem;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+@media (max-width: 900px) {
+  .board-layout {
+    flex-direction: column;
+  }
+
+  .board-palette {
+    width: 100%;
+  }
+}

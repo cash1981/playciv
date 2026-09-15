@@ -6,6 +6,9 @@
  */
 
 import type {
+  Board,
+  BoardAsset,
+  BoardPiece,
   Item,
   PlayerTurn,
   PlayerView,
@@ -14,7 +17,17 @@ import type {
   TechItem,
 } from '@civ/engine'
 
-export type { Item, PlayerTurn, PlayerView, SheetName, SocialPolicyItem, TechItem }
+export type {
+  Board,
+  BoardAsset,
+  BoardPiece,
+  Item,
+  PlayerTurn,
+  PlayerView,
+  SheetName,
+  SocialPolicyItem,
+  TechItem,
+}
 
 export interface PlayerDto {
   readonly id: string
@@ -218,6 +231,19 @@ export const api = {
   voteUndo: (gameId: string, logId: string, vote: boolean) =>
     post<PlayerView>(`/api/games/${gameId}/undo/${logId}/vote`, { vote }),
   pendingUndos: (gameId: string) => get<PendingUndoDto[]>(`/api/games/${gameId}/undo/pending`),
+
+  boardAssets: () => get<BoardAsset[]>('/api/board/assets'),
+  placePiece: (gameId: string, assetId: string, x: number, y: number) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces`, { assetId, x, y }),
+  movePiece: (gameId: string, pieceId: string, x: number, y: number) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/move`, { x, y }),
+  pieceToFront: (gameId: string, pieceId: string) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/front`),
+  pieceToBack: (gameId: string, pieceId: string) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/back`),
+  removePiece: (gameId: string, pieceId: string) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/remove`),
+  clearBoard: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/board/clear`),
 
   chat: (gameId: string) => get<ChatMessageDto[]>(`/api/games/${gameId}/chat`),
   sendChat: (gameId: string, message: string) =>

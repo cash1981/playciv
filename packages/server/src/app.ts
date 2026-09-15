@@ -9,6 +9,7 @@ import type { FastifyInstance } from 'fastify'
 import { TokenSigner } from './auth.js'
 import type { AppContext } from './context.js'
 import { registerAuthRoutes } from './routes/auth.js'
+import { registerBoardRoutes } from './routes/board.js'
 import { registerGameRoutes } from './routes/games.js'
 import { registerPlayRoutes } from './routes/play.js'
 import { JsonFileRepository } from './store/json-file.js'
@@ -41,6 +42,7 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
   registerAuthRoutes(app, context)
   registerGameRoutes(app, context)
   registerPlayRoutes(app, context)
+  registerBoardRoutes(app, context)
 
   return app
 }

@@ -111,6 +111,47 @@ trekk, kamp, teknologi, sosialpolitikk, turordrer, logg, undo-avstemning og chat
 Klienten importerer typene sine fra `@civ/engine`, så den kan ikke komme i
 utakt med hva serveren faktisk sender.
 
+## Brettet
+
+Øverst på spillsiden ligger et interaktivt brett som erstatter
+Google Presentation-lysbildet `PBF.mapLink` pekte på.
+
+Geometrien er hentet fra `Civilization/Moderator/4v4 Map Template.pptx`:
+16 × 16 ruter merket A–P og 1–16, satt sammen av 4 × 4 map-tiles på 375 × 375
+piksler. Det gir en rute på 94 piksler, som er nøyaktig størrelsen på by-,
+bygnings- og bystatbrikkene i samme mappe.
+
+Brikker plasseres **fritt i pikselkoordinater**, ikke låst til ruter. Det er
+hvordan PowerPoint-malen ble brukt, og det er nødvendig for å kunne stable flere
+brikker i samme rute. Rekkefølgen i `board.pieces` ER z-rekkefølgen, så «legg
+forrest» er bare en flytting bakerst i listen — ingen z-indeks å holde styr på.
+Brettet viser likevel hvilken rute en brikke står i, regnet ut fra midtpunktet.
+
+Alle spillere ser og kan flytte alle brikker, som ved et fysisk bord.
+
+Paletten har fem kategorier, generert fra bildene på disk:
+
+| Kategori | Antall | Fra |
+| --- | --- | --- |
+| Figurer | 11 | army og scout i fem farger, pluss hvit barbarhær |
+| Ressurser | 6 | hut, village, wheat, iron, silk, incense |
+| Markører | 12 | mynt, kultur, karavane, fortifikasjon, wound, startspiller |
+| Byer | 30 | capital/city/metropolis, med og uten mur, per farge |
+| Bygninger | 15 | market, temple, library, … |
+
+```bash
+pnpm --filter @civ/engine board-assets
+```
+
+`tools/board-assets.ps1` kopierer PNG-ene til `packages/web/public/board/` og
+skriver `packages/engine/data/board-assets.json` med reelle bildestørrelser.
+Manifestet ligger i **motoren**, ikke i klienten, fordi serveren må kunne avvise
+en brikke som peker på en ukjent fil — uten det kunne en klient sendt hvilken som
+helst streng som bildereferanse.
+
+Flytting logges ikke. En tur består av mange små justeringer, og loggen ville
+druknet. Brettet er sin egen dokumentasjon.
+
 ## Lagring i stedet for MongoDB
 
 `packages/server/src/store/types.ts` definerer et `Repository`. Den eneste
@@ -235,9 +276,14 @@ siden autorisasjonen lå i ressurslaget; server-pakken må håndheve det.
 ## Utsatt
 
 - **Ekte MongoDB.** Erstattet av JSON-fil bak `Repository`, se over.
-- **Grafikk og hex-brett.** Klienten er tekst og knapper. Kortbildene under
-  `Civilization/Moderator/` er ikke tatt i bruk; `itemImage()` i motoren gir
-  allerede filnavnene.
+- **Map-tiles på brettet.** Brettflaten og brikkene er på plass, men de 44
+  tile-bildene (21 MB) er ikke kopiert inn, og et trukket tile havner ikke på
+  brettet ennå. Se «Krever en beslutning» under.
+- **Kortgrafikk.** Hånden vises som tekst. `itemImage()` i motoren gir allerede
+  filnavnene under `Civilization/Moderator/`.
+- **Spillerpanelene** rundt brettet i malen — farget felt per spiller med byer,
+  bygninger og flagg. Alt innholdet finnes i `PlayerView`, det er bare ikke
+  tegnet opp rundt brettet ennå.
 - **Highscore og turneringer** — `GameAction.getCivHighscore`,
   `getPlayerHighScore`, `TournamentAction`. Spør på tvers av spill og trenger et
   ordentlig datalag.
@@ -256,6 +302,14 @@ SHA-1 og HTTP Basic, så det er en forbedring, men det er ikke gjennomgått for
 produksjon.
 
 ### Krever en beslutning
+
+**Hvor skal et trukket map-tile legge seg?** Ønsket er at tiles dukker opp
+automatisk på brettet når de trekkes, men regelen for posisjon mangler. Java har
+ingenting å porte fra — den gamle løsningen lot en moderator plassere tiles for
+hånd i et Google-lysbilde. Aktuelle spørsmål: legges tiles i den første ledige
+av de seksten 4 × 4-lukene, eller i en bestemt rekkefølge? Og skal
+sivilisasjonens starttile havne i et hjørne gitt av `playernumber` — 1 øverst til
+venstre, 2 øverst til høyre, og så videre, slik eksempelbildet viser?
 
 `revealItem` for en sivilisasjon trekker startenheter gjennom
 `DrawAction.draw`, som krever at det er spillerens tur. Konsekvensen i Java er at

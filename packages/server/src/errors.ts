@@ -16,7 +16,11 @@ export function statusFor(error: EngineError): number {
     case 'LOG_ENTRY_NOT_FOUND':
     case 'TURN_NOT_FOUND':
     case 'NOTHING_TO_LOOT':
+    case 'BOARD_PIECE_NOT_FOUND':
       return 404
+    // Klienten ba om en brikketype som ikke finnes i manifestet
+    case 'BOARD_ASSET_NOT_FOUND':
+      return 400
     case 'NOT_YOUR_TURN':
     case 'NO_ACCESS':
     case 'GAME_CREATOR_MUST_END_GAME':

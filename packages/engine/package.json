@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "board-assets": "pwsh -File ../../tools/board-assets.ps1",
     "gamedata": "pwsh -File ../../tools/xlsx-to-json.ps1 -Xlsx ../../old-civ-rest/src/main/resources/assets/gamedata-faf-waw.xlsx -Out ./data/gamedata-faf-waw.json"
   },
   "devDependencies": {

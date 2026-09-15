@@ -13,6 +13,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 import type { GameState } from '@civ/engine'
+import { migrateGameState } from '@civ/engine'
 
 import type { ChatMessage, Repository, StoredPlayer } from './types.js'
 
@@ -60,7 +61,8 @@ export class JsonFileRepository implements Repository {
 
     const snapshot = JSON.parse(raw) as Snapshot
     for (const player of snapshot.players) this.players.set(player.id, player)
-    for (const game of snapshot.games) this.games.set(game.id, game)
+    // Spill lagret før et felt ble innført må fylles ut før de brukes
+    for (const game of snapshot.games) this.games.set(game.id, migrateGameState(game))
     this.chat = [...snapshot.chat]
   }
 

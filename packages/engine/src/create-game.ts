@@ -9,6 +9,7 @@
 
 import gamedataWaw from '../data/gamedata-faf-waw.json' with { type: 'json' }
 
+import { createBoard } from './board.js'
 import type { GameDataFile } from './gamedata.js'
 import { readDeck } from './gamedata.js'
 import type { Item, SocialPolicyItem, TechItem } from './item.js'
@@ -115,6 +116,7 @@ export function createGame(options: CreateGameOptions): GameState {
     discardedItems: [],
     withdrawnPlayers: [],
     publicTurns: {},
+    board: createBoard(),
     players: (options.players ?? []).map((player, index) =>
       emptyPlayerhand(player, index + 1),
     ),

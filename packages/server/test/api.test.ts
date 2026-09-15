@@ -536,3 +536,129 @@ describe('en hel runde', () => {
     expect(state?.winner).toBe('Itchi')
   })
 })
+
+/** Brettet. Nytt i denne runden — Java hadde ingen brettmodell. */
+describe('brett', () => {
+  it('katalogen over brikketyper er tilgjengelig', async () => {
+    const token = await register('brettkatalog')
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/board/assets',
+      headers: bearer(token),
+    })
+
+    const assets = response.json() as { id: string; category: string }[]
+    expect(response.statusCode).toBe(200)
+    expect(assets.length).toBeGreaterThan(50)
+    expect(assets.some((asset) => asset.id === 'figures/redarmy')).toBe(true)
+    expect(assets.some((asset) => asset.id === 'resources/wheat')).toBe(true)
+  })
+
+  it('et nytt spill har et tomt 16 x 16 brett', async () => {
+    const { gameId, starter } = await startedGame('Brettspill')
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/games/${gameId}/board`,
+      headers: bearer(starter),
+    })
+
+    expect(response.json()).toEqual({
+      columns: 16,
+      rows: 16,
+      squareSize: 94,
+      pieces: [],
+    })
+  })
+
+  it('legger ut en brikke og gir den tilbake i spillerens syn', async () => {
+    const { gameId, starter } = await startedGame('Brikkespill')
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces`,
+      headers: bearer(starter),
+      payload: { assetId: 'figures/redarmy', x: 200, y: 300 },
+    })
+
+    expect(response.statusCode).toBe(200)
+    const view = response.json() as { board: { pieces: { label: string; x: number }[] } }
+    expect(view.board.pieces).toHaveLength(1)
+    expect(view.board.pieces[0]?.label).toBe('Red army')
+    expect(view.board.pieces[0]?.x).toBe(200)
+  })
+
+  it('avviser en brikketype som ikke finnes', async () => {
+    const { gameId, starter } = await startedGame('Ukjentbrikke')
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces`,
+      headers: bearer(starter),
+      payload: { assetId: '../../../etc/passwd', x: 0, y: 0 },
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect((response.json() as { error: string }).error).toBe('BOARD_ASSET_NOT_FOUND')
+  })
+
+  it('begge spillere ser det samme brettet', async () => {
+    const { gameId, starter, waiting } = await startedGame('Deltbrett')
+    await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces`,
+      headers: bearer(starter),
+      payload: { assetId: 'cities/redcity2', x: 500, y: 500 },
+    })
+
+    const theirs = await app.inject({
+      method: 'GET',
+      url: `/api/games/${gameId}/board`,
+      headers: bearer(waiting),
+    })
+    expect((theirs.json() as { pieces: unknown[] }).pieces).toHaveLength(1)
+  })
+
+  it('den andre spilleren kan flytte en brikke, og den havner øverst', async () => {
+    const { gameId, starter, waiting } = await startedGame('Flyttbrett')
+    for (const assetId of ['figures/redarmy', 'figures/bluearmy']) {
+      await app.inject({
+        method: 'POST',
+        url: `/api/games/${gameId}/board/pieces`,
+        headers: bearer(starter),
+        payload: { assetId, x: 100, y: 100 },
+      })
+    }
+
+    const board = await repo.findGame(gameId)
+    const bottom = board?.board.pieces[0]
+    if (bottom === undefined) throw new Error('ingen brikke')
+
+    const moved = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${bottom.id}/move`,
+      headers: bearer(waiting),
+      payload: { x: 700, y: 800 },
+    })
+
+    expect(moved.statusCode).toBe(200)
+    const view = moved.json() as { board: { pieces: { id: string; x: number }[] } }
+    expect(view.board.pieces.at(-1)?.id).toBe(bottom.id)
+    expect(view.board.pieces.at(-1)?.x).toBe(700)
+  })
+
+  it('tømmer brettet', async () => {
+    const { gameId, starter } = await startedGame('Tombrett')
+    await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces`,
+      headers: bearer(starter),
+      payload: { assetId: 'markers/coin', x: 10, y: 10 },
+    })
+
+    const cleared = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/board/clear`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect((cleared.json() as { board: { pieces: unknown[] } }).board.pieces).toHaveLength(0)
+  })
+})

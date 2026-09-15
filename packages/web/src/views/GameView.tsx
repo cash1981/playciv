@@ -14,6 +14,7 @@ import { errorMessage, isUnauthorized } from '../App.js'
 import { api } from '../lib/api.js'
 import type { PlayerDto, PlayerView } from '../lib/api.js'
 
+import { BoardView } from './BoardView.js'
 import { LogPanel } from './LogPanel.js'
 import { TechPanel } from './TechPanel.js'
 import { TurnPanel } from './TurnPanel.js'
@@ -158,6 +159,9 @@ export function GameView({ gameId, player, onUnauthorized }: Props): React.JSX.E
       </div>
 
       {error !== null && <div className="error">{error}</div>}
+
+      {/* Brettet ligger over alt annet, som bedt om */}
+      <BoardView gameId={gameId} board={view.board} busy={busy} run={run} />
 
       <div className="grid">
         <DrawPanel gameId={gameId} busy={busy} yourTurn={yourTurn} run={run} view={view} />

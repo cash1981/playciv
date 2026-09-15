@@ -8,6 +8,7 @@
 
 import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem } from './item.js'
 import type { Rng } from './random.js'
+import type { Board } from './board.js'
 import type { PlayerTurn } from './turn.js'
 import type { Undo } from './undo.js'
 
@@ -116,6 +117,8 @@ export interface GameState {
    */
   readonly publicTurns: Readonly<Record<string, PlayerTurn>>
   readonly log: readonly GameLogEntry[]
+  /** Brettet med brikkene som ligger på det. Alle spillere ser hele brettet. */
+  readonly board: Board
   readonly rng: Rng
   /** Neste `itemNumber`. Java: `ItemReader.itemCounter`, en global AtomicInteger. */
   readonly itemCounter: number
@@ -255,6 +258,8 @@ export interface PlayerView {
   readonly you: Playerhand | null
   readonly opponents: readonly OpaquePlayerhand[]
   readonly techs: readonly TechItem[]
+  /** Brettet er offentlig — alle ser de samme brikkene. */
+  readonly board: Board
   readonly log: readonly (PublicLogEntry | GameLogEntry)[]
 }
 
@@ -274,6 +279,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
       .filter((player) => player.playerId !== viewerId)
       .map((player) => opaque(state, player)),
     techs: state.techs,
+    board: state.board,
     log: state.log.map((entry) =>
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),

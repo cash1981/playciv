@@ -57,6 +57,9 @@ export type EngineError =
   | { readonly kind: 'TURN_NOT_FOUND'; readonly turnNumber: number }
   /** Alle farger er i bruk */
   | { readonly kind: 'NO_COLOR_AVAILABLE' }
+  /** Brikketypen finnes ikke i board-assets.json */
+  | { readonly kind: 'BOARD_ASSET_NOT_FOUND'; readonly assetId: string }
+  | { readonly kind: 'BOARD_PIECE_NOT_FOUND'; readonly pieceId: string }
 
 export function describeError(error: EngineError): string {
   switch (error.kind) {
@@ -110,5 +113,9 @@ export function describeError(error: EngineError): string {
       return `Could not find turn ${error.turnNumber}`
     case 'NO_COLOR_AVAILABLE':
       return 'No colors left to assign'
+    case 'BOARD_ASSET_NOT_FOUND':
+      return `Unknown board piece: ${error.assetId}`
+    case 'BOARD_PIECE_NOT_FOUND':
+      return `No piece on the board with id ${error.pieceId}`
   }
 }
