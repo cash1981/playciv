@@ -1,12 +1,12 @@
 /**
- * In-memory-repo som speiler seg til en JSON-fil.
+ * An in-memory repository that mirrors itself to a JSON file.
  *
- * Dette står i stedet for MongoDB. Alt ligger i Map-er, og hele innholdet
- * skrives til disk etter hver endring — debounced, og atomisk via en midlertidig
- * fil som byttes inn. Det holder til utvikling og til å spille en runde lokalt.
- * Ingen indekser, ingen samtidighetskontroll, ingen spørrespråk.
+ * This stands in for MongoDB. Everything lives in Maps, and the whole lot is
+ * written to disk after each change — debounced, and atomically through a
+ * temporary file that is swapped in. Good enough for development and for
+ * playing a round locally. No indexes, no concurrency control, no queries.
  *
- * Sett `filePath` til `null` for et rent minne-repo, slik testene bruker.
+ * Set `filePath` to `null` for a pure in-memory repository, as the tests do.
  */
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
@@ -25,9 +25,9 @@ interface Snapshot {
 }
 
 export interface JsonFileRepositoryOptions {
-  /** Filen tilstanden speiles til. `null` gir et rent minne-repo. */
+  /** The file state is mirrored to. `null` keeps everything in memory. */
   readonly filePath: string | null
-  /** Millisekunder å vente før skriving, så en serie endringer blir én skriving. */
+  /** Milliseconds to wait before writing, so a burst of changes is one write. */
   readonly debounceMs?: number
 }
 
@@ -46,7 +46,7 @@ export class JsonFileRepository implements Repository {
     this.debounceMs = options.debounceMs ?? 250
   }
 
-  /** Leser inn eksisterende fil hvis den finnes. Kalles én gang ved oppstart. */
+  /** Reads an existing file when there is one. Called once at startup. */
   async load(): Promise<void> {
     if (this.filePath === null) return
 
@@ -54,14 +54,14 @@ export class JsonFileRepository implements Repository {
     try {
       raw = await readFile(this.filePath, 'utf8')
     } catch (error) {
-      // Første oppstart, ingen fil ennå
+      // First start, no file yet
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
       throw error
     }
 
     const snapshot = JSON.parse(raw) as Snapshot
     for (const player of snapshot.players) this.players.set(player.id, player)
-    // Spill lagret før et felt ble innført må fylles ut før de brukes
+    // Games saved before a field existed must be filled in before use
     for (const game of snapshot.games) this.games.set(game.id, migrateGameState(game))
     this.chat = [...snapshot.chat]
   }
@@ -130,7 +130,7 @@ export class JsonFileRepository implements Repository {
       this.timer = undefined
       void this.write()
     }, this.debounceMs)
-    // Ikke hold prosessen i live for en ventende skriving
+    // Do not keep the process alive for a pending write
     this.timer.unref?.()
   }
 
@@ -145,12 +145,12 @@ export class JsonFileRepository implements Repository {
       chat: this.chat,
     }
 
-    // Serialiser skrivingene, så to raske endringer ikke overlapper
+    // Serialise the writes, so two quick changes cannot overlap
     this.writing = this.writing.then(async () => {
       await mkdir(dirname(path), { recursive: true })
       const temporary = `${path}.tmp`
       await writeFile(temporary, JSON.stringify(snapshot, null, 2), 'utf8')
-      // Bytt inn atomisk, så en avbrutt skriving ikke ødelegger filen
+      // Swap in atomically, so an interrupted write cannot corrupt the file
       await rename(temporary, path)
     })
 

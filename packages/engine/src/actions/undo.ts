@@ -1,15 +1,15 @@
 /**
- * Port av `no.asgari.civilization.server.action.UndoAction`.
+ * Port of `no.asgari.civilization.server.action.UndoAction`.
  *
- * Én bevisst endring: Java avgjorde HVORDAN et item skulle legges tilbake ved å
- * lete etter delstrenger i logglinjen — `privateLog.contains("discarded")`,
- * `contains("drew")`, `contains("barbarian")`. Loggposten har en `logType`, som
- * er den samme informasjonen uten strengmatching, og den brukes her i stedet.
+ * One deliberate change: Java decided HOW to put an item back by searching for
+ * substrings in the log line — `privateLog.contains("discarded")`,
+ * `contains("drew")`, `contains("barbarian")`. The log entry carries a
+ * `logType`, which is the same information without string matching, and that
+ * is used here instead.
  *
- * Javas barbar-gren var for øvrig død kode: den krevde at logglinjen inneholdt
- * «drew», men barbarlogger skriver «has drawn». Barbarlogger har heller ikke
- * noe item knyttet til seg, så et undo av dem kunne aldri initieres. Grenen er
- * ikke portert.
+ * Java's barbarian branch was dead code anyway: it required the log line to
+ * contain "drew", but barbarian logs say "has drawn". Barbarian logs also carry
+ * no item, so an undo of one could never be started. The branch is not ported.
  */
 
 import type { EngineError } from '../errors.js'
@@ -38,8 +38,8 @@ export interface InitiateUndoInput {
 }
 
 /**
- * Java: `UndoAction.initiateUndo` — starter en avstemning. Den som ber om undo
- * har stemt ja i det avstemningen opprettes.
+ * Java: `UndoAction.initiateUndo` — starts a vote. Whoever asks for the undo
+ * has voted yes the moment the vote is created.
  */
 export function initiateUndo(state: GameState, input: InitiateUndoInput): ActionResult {
   const entry = findLogEntry(state, input.logId)
@@ -70,10 +70,10 @@ export interface VoteInput {
 /**
  * Java: `UndoAction.vote`.
  *
- * Når alle har stemt og ingen stemte nei, utføres undoet med én gang. Én
- * nei-stemme gjør at avstemningen avsluttes uten at noe legges tilbake, men
- * Java satte da heller ikke `done`, så posten blir liggende som aktiv. Den
- * oppførselen er beholdt.
+ * Once everyone has voted and nobody said no, the undo runs immediately. A
+ * single no ends the vote without putting anything back, but Java did not set
+ * `done` in that case either, so the entry stays marked as active. That
+ * behaviour is kept.
  */
 export function vote(state: GameState, input: VoteInput): ActionResult {
   const entry = findLogEntry(state, input.logId)
@@ -100,7 +100,7 @@ export function vote(state: GameState, input: VoteInput): ActionResult {
 
   if (!accepted) return ok(next)
 
-  // Java: eieren av itemet er den undoet gjelder, ikke den som stemte sist
+  // Java: the undo belongs to the owner of the item, not the last voter
   const ownerId = entry.item.ownerId ?? entry.playerId
   if (ownerId === null) return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
 
@@ -108,9 +108,9 @@ export function vote(state: GameState, input: VoteInput): ActionResult {
 }
 
 /**
- * Java: `putDrawnItemBackInPBF`. Hvor itemet skal tilbake avhenger av hva som
- * skjedde: et trekk går tilbake i stokken og stokken blandes, en kasting går
- * tilbake i hånden.
+ * Java: `putDrawnItemBackInPBF`. Where the item goes back to depends on what
+ * happened: a draw goes back into the deck and the deck is shuffled, a discard
+ * goes back into the hand.
  */
 function putItemBack(
   state: GameState,
@@ -127,17 +127,17 @@ function putItemBack(
   const inDiscard = state.discardedItems.some((candidate) => candidate.id === item.id)
   const inDeck = state.items.some((candidate) => candidate.id === item.id)
 
-  // Et kastet item skal tilbake i hånden
+  // A discarded item goes back into the hand
   if (logType === 'DISCARD' && inDiscard) {
     return ok(returnToHand(state, player, item))
   }
 
-  // Et trukket item skal tilbake i stokken
+  // A drawn item goes back into the deck
   if (logType === 'ITEM' && (inHand || inDiscard)) {
     return ok(returnToDeck(state, player, item))
   }
 
-  // Java hadde en fallback for de tilfellene der itemet allerede lå i stokken
+  // Java had a fallback for the cases where the item was already in the deck
   if (inDeck) {
     const withoutFromDeck: GameState = {
       ...state,
@@ -163,7 +163,7 @@ function putItemBack(
   return err({ kind: 'ITEM_NOT_FOUND', sheetName: item.sheetName })
 }
 
-/** Java: teknologi-grenen i `putDrawnItemBackInPBF`. */
+/** Java: the tech branch in `putDrawnItemBackInPBF`. */
 function putTechBack(state: GameState, player: Playerhand, tech: TechItem): ActionResult {
   const chosen = player.techsChosen.some((candidate) => candidate.name === tech.name)
   if (chosen) {
@@ -203,7 +203,7 @@ function putTechBack(state: GameState, player: Playerhand, tech: TechItem): Acti
   return err({ kind: 'ITEM_NOT_FOUND', sheetName: tech.sheetName })
 }
 
-/** Fjerner itemet fra hånd eller kastebunke og legger det i stokken. */
+/** Takes the item out of the hand or discard pile and puts it in the deck. */
 function returnToDeck(state: GameState, player: Playerhand, item: Item): GameState {
   const hidden: Item = { ...item, hidden: true, ownerId: null }
 
@@ -225,7 +225,7 @@ function returnToDeck(state: GameState, player: Playerhand, item: Item): GameSta
   )
 }
 
-/** Flytter itemet fra kastebunken tilbake i spillerens hånd. */
+/** Moves the item from the discard pile back into the player's hand. */
 function returnToHand(state: GameState, player: Playerhand, item: Item): GameState {
   const hidden: Item = { ...item, hidden: true }
 
@@ -245,9 +245,9 @@ function returnToHand(state: GameState, player: Playerhand, item: Item): GameSta
 }
 
 /**
- * Java: `shufflePBFTwice` blandet hele stokken to ganger med
- * `new Random(System.nanoTime())`. To blandinger er ikke bedre enn én, men
- * antall trekk fra tilfeldighetskilden er bevart så seedforbruket stemmer.
+ * Java: `shufflePBFTwice` shuffled the whole deck twice with
+ * `new Random(System.nanoTime())`. Two shuffles are no better than one, but the
+ * number of draws from the random source is kept so the seed advances the same.
  */
 function shuffleDeckTwice(state: GameState): GameState {
   const [once, rngAfterFirst] = shuffle(state.items, state.rng)
@@ -256,7 +256,7 @@ function shuffleDeckTwice(state: GameState): GameState {
 }
 
 // ---------------------------------------------------------------------------
-// Spilleren legger selv et item tilbake
+// The player puts an item back themselves
 // ---------------------------------------------------------------------------
 
 export interface PutBackInput {
@@ -266,8 +266,8 @@ export interface PutBackInput {
 }
 
 /**
- * Java: `UndoAction.playerPutsItemBackInDeck` — ingen avstemning, spilleren
- * legger noe fra egen hånd tilbake i stokken.
+ * Java: `UndoAction.playerPutsItemBackInDeck` — no vote, the player just puts
+ * something from their own hand back into the deck.
  */
 export function playerPutsItemBackInDeck(
   state: GameState,
@@ -289,15 +289,15 @@ export function playerPutsItemBackInDeck(
 }
 
 // ---------------------------------------------------------------------------
-// Oppslag
+// Lookups
 // ---------------------------------------------------------------------------
 
-/** Java: `getAllActiveUndos` — avstemninger som ikke er gjennomført. */
+/** Java: `getAllActiveUndos` — votes that have not been carried out. */
 export function activeUndos(state: GameState): readonly GameLogEntry[] {
   return state.log.filter((entry) => entry.undo !== null && !entry.undo.done)
 }
 
-/** Java: `getPlayersActiveUndoes` — filtrert på brukernavn. */
+/** Java: `getPlayersActiveUndoes` — filtered on username. */
 export function playersActiveUndos(
   state: GameState,
   username: string,

@@ -1,14 +1,14 @@
 /**
- * Lagringsgrensesnittet.
+ * The storage interface.
  *
- * Java brukte MongoJack med tre samlinger: `player`, `pbf` og `gamelog`, pluss
- * `chat`. Loggen ligger nå inne i `GameState`, så det som gjenstår er spillere,
- * spill og chat.
+ * Java used MongoJack with three collections — `player`, `pbf` and `gamelog` —
+ * plus `chat`. The log now lives inside `GameState`, so what remains is
+ * players, games and chat.
  *
- * Grensesnittet finnes for å holde Mongo ute av rutene. Den eneste
- * implementasjonen i dag er `JsonFileRepository`, som holder alt i minnet og
- * speiler det til en JSON-fil. En Mongo-implementasjon kan legges ved siden av
- * uten at rutene endres.
+ * The interface exists to keep Mongo out of the routes. The only implementation
+ * today is `JsonFileRepository`, which holds everything in memory and mirrors
+ * it to a JSON file. A Mongo implementation can sit beside it without the
+ * routes changing.
  */
 
 import type { GameState } from '@civ/engine'
@@ -17,7 +17,7 @@ export interface StoredPlayer {
   readonly id: string
   readonly username: string
   readonly email: string | null
-  /** scrypt-hash på formen `salt:hash`. Java brukte usaltet SHA-1. */
+  /** A scrypt hash of the form `salt:hash`. Java used unsalted SHA-1. */
   readonly passwordHash: string
   readonly createdAt: string
 }
@@ -44,6 +44,6 @@ export interface Repository {
   appendChat(message: ChatMessage): Promise<void>
   chatFor(gameId: string | null): Promise<readonly ChatMessage[]>
 
-  /** Skriver ventende endringer til disk. Ingen effekt uten fillagring. */
+  /** Flushes pending changes to disk. A no-op without file storage. */
   flush(): Promise<void>
 }

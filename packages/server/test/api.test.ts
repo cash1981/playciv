@@ -1,9 +1,10 @@
 /**
- * API-tester som kjører mot appen i minnet via `fastify.inject`, uten nettverk.
+ * API tests that run against the app in memory through `fastify.inject`, with
+ * no network involved.
  *
- * Den siste testen spiller gjennom en hel runde: fire spillere registrerer seg,
- * oppretter og blir med i et spill, trekker kort, velger teknologi, skriver
- * turordrer, stemmer over et undo og avslutter spillet.
+ * The last test plays a whole round: four players register, create and join a
+ * game, draw cards, choose a technology, write turn orders, vote on an undo and
+ * end the game.
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -45,11 +46,11 @@ async function createGame(token: string, name: string, numOfPlayers = 4): Promis
 }
 
 /**
- * Et startet tospillerspill, og tokenet til den som fikk turen.
+ * A started two-player game, and the token of whoever got the turn.
  *
- * Java tillater 2 til 5 spillere (`@Min(2) @Max(5)`), og hvem som begynner
- * avgjøres av en stokking når siste spiller blir med — derfor må starteren
- * slås opp og kan ikke antas.
+ * Java allows 2 to 5 players (`@Min(2) @Max(5)`), and who begins is settled by
+ * a shuffle when the last player joins — so the starter has to be looked up
+ * rather than assumed.
  */
 async function startedGame(
   name: string,
@@ -73,15 +74,15 @@ async function startedGame(
   return { gameId, starter, waiting: starter === creator ? other : creator }
 }
 
-describe('helse', () => {
-  it('svarer ok', async () => {
+describe('health', () => {
+  it('answers ok', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/health' })
     expect(response.json()).toEqual({ status: 'ok' })
   })
 })
 
 describe('auth', () => {
-  it('registrerer og logger inn', async () => {
+  it('registers and logs in', async () => {
     await register('cash1981')
 
     const login = await app.inject({
@@ -93,7 +94,7 @@ describe('auth', () => {
     expect((login.json() as { player: { username: string } }).player.username).toBe('cash1981')
   })
 
-  it('avviser feil passord', async () => {
+  it('refuses a wrong password', async () => {
     await register('cash1981')
     const login = await app.inject({
       method: 'POST',
@@ -103,7 +104,7 @@ describe('auth', () => {
     expect(login.statusCode).toBe(401)
   })
 
-  it('avviser ukjent bruker med samme svar som feil passord', async () => {
+  it('refuses an unknown user with the same answer as a wrong password', async () => {
     const login = await app.inject({
       method: 'POST',
       url: '/api/auth/login',
@@ -112,7 +113,7 @@ describe('auth', () => {
     expect(login.statusCode).toBe(401)
   })
 
-  it('samme brukernavn kan ikke tas to ganger', async () => {
+  it('the same username cannot be taken twice', async () => {
     await register('cash1981')
     const again = await app.inject({
       method: 'POST',
@@ -122,7 +123,7 @@ describe('auth', () => {
     expect(again.statusCode).toBe(409)
   })
 
-  it('lagrer aldri passordet i klartekst, og sender aldri hashen ut', async () => {
+  it('never stores the password in the clear, and never sends the hash out', async () => {
     const token = await register('cash1981')
     const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(token) })
 
@@ -133,12 +134,12 @@ describe('auth', () => {
     expect(stored?.passwordHash).not.toContain('hemmelig')
   })
 
-  it('ruter uten token gir 401', async () => {
+  it('routes without a token give 401', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/games' })
     expect(response.statusCode).toBe(401)
   })
 
-  it('ugyldig token gir 401', async () => {
+  it('an invalid token gives 401', async () => {
     const response = await app.inject({
       method: 'GET',
       url: '/api/games',
@@ -148,10 +149,10 @@ describe('auth', () => {
   })
 })
 
-describe('spill', () => {
-  it('oppretteren blir første spiller', async () => {
+describe('games', () => {
+  it('the creator becomes the first player', async () => {
     const token = await register('cash1981')
-    const gameId = await createGame(token, 'Første spill')
+    const gameId = await createGame(token, 'First game')
 
     const game = await app.inject({
       method: 'GET',
@@ -163,7 +164,7 @@ describe('spill', () => {
     expect(view.you?.gameCreator).toBe(true)
   })
 
-  it('to spill kan ikke ha samme navn', async () => {
+  it('two games cannot share a name', async () => {
     const token = await register('cash1981')
     await createGame(token, 'Duplikat')
     const again = await app.inject({
@@ -175,7 +176,7 @@ describe('spill', () => {
     expect(again.statusCode).toBe(409)
   })
 
-  it('spillet starter når siste spiller blir med', async () => {
+  it('the game starts when the last player joins', async () => {
     const creator = await register('cash1981')
     const gameId = await createGame(creator, 'Startspill', 2)
 
@@ -192,7 +193,7 @@ describe('spill', () => {
     expect(state?.players.filter((player) => player.yourTurn)).toHaveLength(1)
   })
 
-  it('et fullt spill avviser flere', async () => {
+  it('a full game turns further players away', async () => {
     const creator = await register('cash1981')
     const gameId = await createGame(creator, 'Fullt', 2)
     await app.inject({
@@ -213,8 +214,8 @@ describe('spill', () => {
   })
 })
 
-describe('trekk', () => {
-  it('den som har turen kan trekke, og kortet havner skjult i hånden', async () => {
+describe('draws', () => {
+  it('whoever has the turn may draw, and the card lands hidden in the hand', async () => {
     const creator = await register('cash1981')
     const gameId = await createGame(creator, 'Trekkspill', 2)
     const other = await register('Karandras1')
@@ -243,7 +244,7 @@ describe('trekk', () => {
     expect(view.you.items[0]?.hidden).toBe(true)
   })
 
-  it('den som ikke har turen får 403', async () => {
+  it('whoever does not have the turn gets 403', async () => {
     const creator = await register('cash1981')
     const gameId = await createGame(creator, 'Turspill', 2)
     const other = await register('Karandras1')
@@ -268,7 +269,7 @@ describe('trekk', () => {
     expect((drawn.json() as { error: string }).error).toBe('NOT_YOUR_TURN')
   })
 
-  it('ukjent arknavn gir 400', async () => {
+  it('an unknown sheet name gives 400', async () => {
     const { gameId, starter: token } = await startedGame('Arkspill')
     const drawn = await app.inject({
       method: 'POST',
@@ -279,7 +280,7 @@ describe('trekk', () => {
     expect(drawn.statusCode).toBe(400)
   })
 
-  it('teknologier kan ikke trekkes', async () => {
+  it('technologies cannot be drawn', async () => {
     const { gameId, starter: token } = await startedGame('Techspill')
     const drawn = await app.inject({
       method: 'POST',
@@ -292,8 +293,8 @@ describe('trekk', () => {
   })
 })
 
-describe('skjult informasjon over HTTP', () => {
-  it('en motspiller ser antall kort, ikke innholdet', async () => {
+describe('hidden information over HTTP', () => {
+  it('an opponent sees the number of cards, not their contents', async () => {
     const creator = await register('cash1981')
     const gameId = await createGame(creator, 'Skjultspill', 2)
     const other = await register('Karandras1')
@@ -316,7 +317,7 @@ describe('skjult informasjon over HTTP', () => {
       payload: {},
     })
 
-    // Hva den som trakk ser
+    // What the player who drew sees
     const own = await app.inject({
       method: 'GET',
       url: `/api/games/${gameId}`,
@@ -326,7 +327,7 @@ describe('skjult informasjon over HTTP', () => {
     const cardName = ownView.you.items[0]?.name
     expect(cardName).toBeDefined()
 
-    // Hva motspilleren ser
+    // What the opponent sees
     const theirs = await app.inject({
       method: 'GET',
       url: `/api/games/${gameId}`,
@@ -341,7 +342,7 @@ describe('skjult informasjon over HTTP', () => {
     expect(theirView.opponents[0]?.numberOfItemsInHand).toBe(1)
   })
 
-  it('den offentlige loggen avslører ikke kortet', async () => {
+  it('the public log does not give the card away', async () => {
     const { gameId, starter: token } = await startedGame('Loggspill')
     await app.inject({
       method: 'POST',
@@ -364,11 +365,11 @@ describe('skjult informasjon over HTTP', () => {
   })
 })
 
-describe('lagring', () => {
-  it('spill overlever en ny app mot samme repo', async () => {
+describe('storage', () => {
+  it('games survive a new app against the same repository', async () => {
     const { gameId, starter: token } = await startedGame('Lagringsspill')
 
-    // Ny Fastify-instans, samme repo — som en omstart med samme datafil
+    // A fresh Fastify instance against the same repository, like a restart on the same data file
     const { createApp } = await import('../src/app.js')
     const restarted = await createApp({ repo, tokenSecret: 'test-secret' })
 
@@ -382,9 +383,9 @@ describe('lagring', () => {
   })
 })
 
-/** En full runde gjennom API-et, som en røyktest for hele stakken. */
-describe('en hel runde', () => {
-  it('fire spillere spiller gjennom oppsett, trekk, tur og undo', async () => {
+/** A whole round through the API, as a smoke test for the entire stack. */
+describe('a whole round', () => {
+  it('four players play through setup, draws, turns and an undo', async () => {
     const tokens: Record<string, string> = {}
     for (const username of ['cash1981', 'Karandras1', 'Itchi', 'Chul']) {
       tokens[username] = await register(username)
@@ -402,12 +403,12 @@ describe('en hel runde', () => {
       expect(join.statusCode).toBe(200)
     }
 
-    // Hvem som starter er tilfeldig, så finn det ut
+    // Who starts is random, so find out
     let state = await repo.findGame(gameId)
     const starterName = state?.players.find((player) => player.yourTurn)?.username as string
     const starter = tokens[starterName] as string
 
-    // Trekk et civ-kort og avslør det
+    // Draw a civ card and reveal it
     const drawn = await app.inject({
       method: 'POST',
       url: `/api/games/${gameId}/draw/CIV`,
@@ -430,14 +431,14 @@ describe('en hel runde', () => {
     })
     expect(revealed.statusCode).toBe(200)
 
-    // Sivilisasjonen gir startenheter og en startteknologi
+    // The civilization gives starting units and a starting technology
     state = await repo.findGame(gameId)
     const hand = state?.players.find((player) => player.username === starterName)
     expect(hand?.civilization).not.toBeNull()
     expect(hand?.techsChosen.length).toBeGreaterThan(0)
     expect(hand?.items.filter((item) => item.kind === 'infantry').length).toBeGreaterThan(0)
 
-    // Velg en teknologi
+    // Choose a technology
     const available = await app.inject({
       method: 'GET',
       url: `/api/games/${gameId}/techs/available`,
@@ -452,12 +453,12 @@ describe('en hel runde', () => {
     })
     expect(chosen.statusCode).toBe(200)
 
-    // Skriv en turordre
+    // Write a turn order
     const turn = await app.inject({
       method: 'POST',
       url: `/api/games/${gameId}/turns/update`,
       headers: bearer(starter),
-      payload: { turnNumber: 1, phase: 'SOT', order: 'Bygg by på L4' },
+      payload: { turnNumber: 1, phase: 'SOT', order: 'Build city at L4' },
     })
     expect(turn.statusCode).toBe(200)
 
@@ -466,23 +467,23 @@ describe('en hel runde', () => {
       url: `/api/games/${gameId}/turns/public`,
       headers: bearer(tokens['Chul'] as string),
     })
-    expect(publicTurns.body).toContain('Bygg by på L4')
+    expect(publicTurns.body).toContain('Build city at L4')
 
     // Chat
     await app.inject({
       method: 'POST',
       url: `/api/games/${gameId}/chat`,
       headers: bearer(starter),
-      payload: { message: 'god tur' },
+      payload: { message: 'good luck' },
     })
     const chat = await app.inject({
       method: 'GET',
       url: `/api/games/${gameId}/chat`,
       headers: bearer(tokens['Itchi'] as string),
     })
-    expect((chat.json() as { message: string }[])[0]?.message).toBe('god tur')
+    expect((chat.json() as { message: string }[])[0]?.message).toBe('good luck')
 
-    // Undo av tech-valget: initier og la alle stemme ja
+    // Undo of the tech choice: start it and let everyone vote yes
     state = await repo.findGame(gameId)
     const techLog = state?.log.find((entry) => entry.logType === 'TECH')
     expect(techLog).toBeDefined()
@@ -508,10 +509,10 @@ describe('en hel runde', () => {
 
     state = await repo.findGame(gameId)
     const afterUndo = state?.players.find((player) => player.username === starterName)
-    // Bare startteknologien fra sivilisasjonen er igjen
+    // Only the starting technology from the civilization is left
     expect(afterUndo?.techsChosen.map((tech) => tech.name)).not.toContain(firstTech)
 
-    // Avslutt turen
+    // End the turn
     const ended = await app.inject({
       method: 'POST',
       url: `/api/games/${gameId}/endturn`,
@@ -522,7 +523,7 @@ describe('en hel runde', () => {
     state = await repo.findGame(gameId)
     expect(state?.players.find((player) => player.yourTurn)?.username).not.toBe(starterName)
 
-    // Avslutt spillet
+    // End the game
     const finished = await app.inject({
       method: 'POST',
       url: `/api/games/${gameId}/end`,
@@ -537,9 +538,9 @@ describe('en hel runde', () => {
   })
 })
 
-/** Brettet. Nytt i denne runden — Java hadde ingen brettmodell. */
-describe('brett', () => {
-  it('katalogen over brikketyper er tilgjengelig', async () => {
+/** The board. New in this port — Java had no board model. */
+describe('board', () => {
+  it('the catalogue of piece types is available', async () => {
     const token = await register('brettkatalog')
     const response = await app.inject({
       method: 'GET',
@@ -554,7 +555,7 @@ describe('brett', () => {
     expect(assets.some((asset) => asset.id === 'resources/wheat')).toBe(true)
   })
 
-  it('et nytt spill har et tomt 16 x 16 brett', async () => {
+  it('a new game has an empty 16 by 16 board', async () => {
     const { gameId, starter } = await startedGame('Brettspill')
     const response = await app.inject({
       method: 'GET',
@@ -566,11 +567,13 @@ describe('brett', () => {
       columns: 16,
       rows: 16,
       squareSize: 94,
+      areaRows: 4,
       pieces: [],
+      history: [],
     })
   })
 
-  it('legger ut en brikke og gir den tilbake i spillerens syn', async () => {
+  it('places a piece and gives it back in the view of the player', async () => {
     const { gameId, starter } = await startedGame('Brikkespill')
     const response = await app.inject({
       method: 'POST',
@@ -586,7 +589,7 @@ describe('brett', () => {
     expect(view.board.pieces[0]?.x).toBe(200)
   })
 
-  it('avviser en brikketype som ikke finnes', async () => {
+  it('refuses a piece type that does not exist', async () => {
     const { gameId, starter } = await startedGame('Ukjentbrikke')
     const response = await app.inject({
       method: 'POST',
@@ -599,7 +602,7 @@ describe('brett', () => {
     expect((response.json() as { error: string }).error).toBe('BOARD_ASSET_NOT_FOUND')
   })
 
-  it('begge spillere ser det samme brettet', async () => {
+  it('both players see the same board', async () => {
     const { gameId, starter, waiting } = await startedGame('Deltbrett')
     await app.inject({
       method: 'POST',
@@ -616,7 +619,7 @@ describe('brett', () => {
     expect((theirs.json() as { pieces: unknown[] }).pieces).toHaveLength(1)
   })
 
-  it('den andre spilleren kan flytte en brikke, og den havner øverst', async () => {
+  it('the other player can move a piece, and it ends up on top', async () => {
     const { gameId, starter, waiting } = await startedGame('Flyttbrett')
     for (const assetId of ['figures/redarmy', 'figures/bluearmy']) {
       await app.inject({
@@ -629,7 +632,7 @@ describe('brett', () => {
 
     const board = await repo.findGame(gameId)
     const bottom = board?.board.pieces[0]
-    if (bottom === undefined) throw new Error('ingen brikke')
+    if (bottom === undefined) throw new Error('no piece')
 
     const moved = await app.inject({
       method: 'POST',
@@ -644,7 +647,7 @@ describe('brett', () => {
     expect(view.board.pieces.at(-1)?.x).toBe(700)
   })
 
-  it('tømmer brettet', async () => {
+  it('clears the board', async () => {
     const { gameId, starter } = await startedGame('Tombrett')
     await app.inject({
       method: 'POST',

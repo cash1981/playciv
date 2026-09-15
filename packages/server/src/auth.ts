@@ -1,12 +1,12 @@
 /**
- * Autentisering.
+ * Authentication.
  *
- * Java brukte HTTP Basic med usaltet SHA-1 (`DigestUtils.sha1Hex`) og en
- * Guava-cache foran Mongo. Her er det scrypt med salt for passord, og en
- * HMAC-signert bearer-token i stedet for Basic på hver forespørsel.
+ * Java used HTTP Basic with unsalted SHA-1 (`DigestUtils.sha1Hex`) and a Guava
+ * cache in front of Mongo. Here passwords are salted scrypt hashes, and an
+ * HMAC-signed bearer token stands in for Basic on every request.
  *
- * Dette er utviklingsnivå: tokenet er ikke revokerbart, og hemmeligheten faller
- * tilbake på en tilfeldig verdi per oppstart hvis den ikke er satt.
+ * This is development grade: the token cannot be revoked, and the secret falls
+ * back to a random value per start when it is not set.
  */
 
 import { createHmac, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto'

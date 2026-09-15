@@ -1,6 +1,6 @@
 /**
- * Port av `MiscTest`-delene som handler om `SheetName.find`, pluss dekning av
- * de seks EnumSet-ene.
+ * Port of the parts of `MiscTest` that cover `SheetName.find`, plus coverage
+ * of the six EnumSets.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -19,46 +19,46 @@ import {
 } from '../src/sheet-name.js'
 
 describe('findSheetName', () => {
-  it('finner via etikett, uten hensyn til store bokstaver', () => {
+  it('finds by label, ignoring case', () => {
     expect(findSheetName('CIV')).toBe('CIV')
     expect(findSheetName('civ')).toBe('CIV')
     expect(findSheetName('Civ')).toBe('CIV')
   })
 
-  it('finner via etikett med mellomrom fjernet', () => {
+  it('finds by label with the spaces stripped', () => {
     expect(findSheetName('Great Person')).toBe('GREAT_PERSON')
     expect(findSheetName('GreatPerson')).toBe('GREAT_PERSON')
     expect(findSheetName('greatperson')).toBe('GREAT_PERSON')
     expect(findSheetName('Ancient Wonders')).toBe('ANCIENT_WONDERS')
   })
 
-  it('faller tilbake på enum-navnet når etiketten ikke treffer', () => {
-    // "Culture I" med mellomrom fjernet blir "CultureI", som ikke matcher
-    // "CULTURE_1". Java falt da tilbake på valueOf().
+  it('falls back on the enum name when the label misses', () => {
+    // "Culture I" with spaces stripped becomes "CultureI", which does not
+    // match "CULTURE_1". Java then fell back on valueOf().
     expect(findSheetName('CULTURE_1')).toBe('CULTURE_1')
     expect(findSheetName('culture_3')).toBe('CULTURE_3')
     expect(findSheetName('LEVEL_5_TECH')).toBe('LEVEL_5_TECH')
   })
 
-  it('gir undefined for ukjente navn', () => {
+  it('gives undefined for unknown names', () => {
     expect(findSheetName('Sjakkbrikker')).toBeUndefined()
     expect(findSheetName('')).toBeUndefined()
   })
 
-  it('finner alle ark via sin egen etikett', () => {
+  it('finds every sheet by its own label', () => {
     for (const sheet of SHEET_NAME_ORDER) {
       expect(findSheetName(SHEET_LABEL[sheet])).toBe(sheet)
     }
   })
 })
 
-describe('mengdene', () => {
-  it('SHEETS er hele enumet', () => {
+describe('the sets', () => {
+  it('SHEETS is the whole enum', () => {
     expect(SHEETS.size).toBe(SHEET_NAME_ORDER.length)
     expect(SHEET_NAME_ORDER).toHaveLength(23)
   })
 
-  it('TECHS er de fem tech-nivåene', () => {
+  it('TECHS is the five tech levels', () => {
     expect([...TECHS].sort()).toEqual([
       'LEVEL_1_TECH',
       'LEVEL_2_TECH',
@@ -68,15 +68,15 @@ describe('mengdene', () => {
     ])
   })
 
-  it('UNITS er de fire unittypene', () => {
+  it('UNITS is the four unit types', () => {
     expect([...UNITS].sort()).toEqual(['AIRCRAFT', 'ARTILLERY', 'INFANTRY', 'MOUNTED'])
   })
 
-  it('CULTURE_CARD er de tre kulturnivåene', () => {
+  it('CULTURE_CARD is the three culture levels', () => {
     expect([...CULTURE_CARD].sort()).toEqual(['CULTURE_1', 'CULTURE_2', 'CULTURE_3'])
   })
 
-  it('ALL_WONDERS er de tre epokene, ikke WONDERS-arket selv', () => {
+  it('ALL_WONDERS is the three eras, not the WONDERS sheet itself', () => {
     expect([...ALL_WONDERS].sort()).toEqual([
       'ANCIENT_WONDERS',
       'MEDIEVAL_WONDERS',
@@ -85,7 +85,7 @@ describe('mengdene', () => {
     expect(ALL_WONDERS.has('WONDERS')).toBe(false)
   })
 
-  it('SHUFFLABLE_ITEMS er units, great person, kulturkort og civ', () => {
+  it('SHUFFLABLE_ITEMS is units, great person, culture cards and civ', () => {
     expect([...SHUFFLABLE_ITEMS].sort()).toEqual([
       'AIRCRAFT',
       'ARTILLERY',
@@ -99,9 +99,9 @@ describe('mengdene', () => {
     ])
   })
 
-  it('huts, villages, tiles, bystater og wonders kan ikke reshuffles', () => {
-    // Dokumenterer avviket mot briefen for denne portingen: den antok at
-    // huts og villages hentes tilbake fra spillernes hender. Java gjør ikke det.
+  it('huts, villages, tiles, city-states and wonders cannot be reshuffled', () => {
+    // Documents where this port differs from the brief, which assumed huts
+    // and villages come back from the players' hands. Java does no such thing.
     for (const sheet of [
       'HUTS',
       'VILLAGES',
@@ -117,7 +117,7 @@ describe('mengdene', () => {
 })
 
 describe('sheetOrdinal', () => {
-  it('følger rekkefølgen i Java-enumet, som compareTo bygget på', () => {
+  it('follows the order of the Java enum, which compareTo was built on', () => {
     expect(sheetOrdinal('CIV')).toBe(0)
     expect(sheetOrdinal('CULTURE_1')).toBe(1)
     expect(sheetOrdinal('SOCIAL_POLICY')).toBe(22)

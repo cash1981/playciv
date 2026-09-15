@@ -1,6 +1,6 @@
 /**
- * Fellesfunksjoner rutene bygger på: innlogget spiller, henting og lagring av
- * spill, og innpakning av motorens `Result` i et HTTP-svar.
+ * The bits every route builds on: the signed-in player, loading and saving a
+ * game, and wrapping the engine `Result` in an HTTP response.
  */
 
 import type { EngineError, GameState, PlayerView } from '@civ/engine'
@@ -18,12 +18,12 @@ export interface AppContext {
 
 declare module 'fastify' {
   interface FastifyRequest {
-    /** Satt av `authenticate` når Authorization-hodet holder mål. */
+    /** Set by `authenticate` once the Authorization header checks out. */
     player?: StoredPlayer
   }
 }
 
-/** Krever et gyldig bearer-token og legger spilleren på forespørselen. */
+/** Requires a valid bearer token and puts the player on the request. */
 export function authenticateWith(context: AppContext) {
   return async function authenticate(
     request: FastifyRequest,
@@ -51,18 +51,18 @@ export function authenticateWith(context: AppContext) {
   }
 }
 
-/** Den innloggede spilleren. Kall kun i ruter som kjører `authenticate`. */
+/** The signed-in player. Only call this from routes running `authenticate`. */
 export function currentPlayer(request: FastifyRequest): StoredPlayer {
   const player = request.player
   if (player === undefined) {
-    throw new Error('currentPlayer kalt uten authenticate-preHandler')
+    throw new Error('currentPlayer called without the authenticate preHandler')
   }
   return player
 }
 
 /**
- * Kjører en motorhandling mot et lagret spill: hent, kall, lagre, svar med
- * spillerens eget syn på den nye tilstanden.
+ * Runs an engine action against a stored game: load, call, save, and answer
+ * with the player's own view of the new state.
  */
 export async function applyToGame(
   context: AppContext,
@@ -83,7 +83,7 @@ export async function applyToGame(
   return reply.send(toPlayerView(result.value, currentPlayer(request).id))
 }
 
-/** Leser et spill og svarer med spillerens syn, uten å endre noe. */
+/** Reads a game and answers with the player's view, changing nothing. */
 export async function readGame(
   context: AppContext,
   request: FastifyRequest,
@@ -101,7 +101,7 @@ export async function readGame(
 export type { PlayerView }
 
 // ---------------------------------------------------------------------------
-// Små valideringshjelpere, så rutene slipper skjemaer
+// Small validation helpers, so the routes need no schemas
 // ---------------------------------------------------------------------------
 
 export function asRecord(value: unknown): Record<string, unknown> {

@@ -1,9 +1,9 @@
 /**
- * Port av `resource/AuthResource.java`.
+ * Port of `resource/AuthResource.java`.
  *
- * Ikke portert: `/newpassword` og `/verify/{playerId}`, som sendte e-post med
- * en verifiseringslenke. Det krever en e-posttjeneste og hører til når
- * utsending er på plass igjen.
+ * Not ported: `/newpassword` and `/verify/{playerId}`, which emailed a
+ * verification link. That needs a mail service and belongs with the rest of
+ * the notification work.
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -14,7 +14,7 @@ import { asRecord, authenticateWith, currentPlayer, requireString } from '../con
 import { sendError } from '../errors.js'
 import type { StoredPlayer } from '../store/types.js'
 
-/** Spilleren slik klienten ser den. Passordhashen forlater aldri serveren. */
+/** The player as the client sees it. The password hash never leaves the server. */
 export interface PlayerDto {
   readonly id: string
   readonly username: string
@@ -43,7 +43,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AppContext): v
       return sendError(reply, 400, 'BAD_REQUEST', 'password must be at least 4 characters')
     }
 
-    // Java: PlayerExistException, som ble til 409 Conflict
+    // Java: PlayerExistException, which became a 409 Conflict
     if ((await context.repo.findPlayerByUsername(username)) !== undefined) {
       return sendError(reply, 409, 'PLAYER_EXISTS', `Username ${username} is taken`)
     }
@@ -73,7 +73,8 @@ export function registerAuthRoutes(app: FastifyInstance, context: AppContext): v
     }
 
     const player = await context.repo.findPlayerByUsername(username)
-    // Sjekk passordet uansett, så svartiden ikke røper om brukeren finnes
+    // Check the password either way, so the timing does not reveal whether
+    // the user exists
     const stored = player?.passwordHash ?? (await hashPassword('placeholder'))
     const valid = await verifyPassword(password, stored)
 

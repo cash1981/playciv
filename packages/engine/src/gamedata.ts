@@ -1,20 +1,21 @@
 /**
- * Port av `no.asgari.civilization.server.excel.ItemReader`, uten Apache POI.
+ * Port of `no.asgari.civilization.server.excel.ItemReader`, without Apache POI.
  *
- * Inndata er `data/gamedata-faf-waw.json`, som `tools/xlsx-to-json.ps1` lager
- * fra det opprinnelige regnearket. JSON-en er en rå celle-dump som gjengir
- * POIs `Cell.toString()`, nettopp så filtrene under kan porteres ordrett.
+ * The input is `data/gamedata-faf-waw.json`, which `tools/xlsx-to-json.ps1`
+ * builds from the original spreadsheet. The JSON is a raw cell dump that
+ * reproduces POI's `Cell.toString()`, precisely so the filters below can be
+ * ported word for word.
  *
  * De fire filtrene i Java var:
- *   notEmptyPredicate        — cellen er ikke tom
- *   notRandomPredicate       — cellen er ikke formelen RAND()
- *   rowNotZeroPredicate      — hopp over overskriftsraden
- *   columnIndexZeroPredicate — kun kolonne A
+ *   notEmptyPredicate        — the cell is not empty
+ *   notRandomPredicate       — the cell is not the RAND() formula
+ *   rowNotZeroPredicate      — skip the header row
+ *   columnIndexZeroPredicate — column A only
  *
- * Java flatet ut ALLE celler i arket først og filtrerte deretter på
- * kolonneindeks. Det betyr at hver kolonne komprimeres uavhengig: mangler en
- * rad beskrivelse, forskyves beskrivelseslisten i forhold til navnelisten.
- * `column()` under gjengir den oppførselen, ikke en radvis paring.
+ * Java flattened EVERY cell in the sheet first and only then filtered on
+ * column index. That compacts each column independently: if a row has no
+ * description, the description list slips against the name list. `column()`
+ * below reproduces that behaviour rather than pairing row by row.
  */
 
 import type {
@@ -42,7 +43,7 @@ import type { Rng } from './random.js'
 import { nextId, shuffle } from './random.js'
 import { SHEET_LABEL } from './sheet-name.js'
 
-/** Formen på JSON-filen tools/xlsx-to-json.ps1 skriver. */
+/** The shape of the JSON file tools/xlsx-to-json.ps1 writes. */
 export interface GameDataFile {
   readonly gameType: string
   readonly source: string
@@ -52,9 +53,10 @@ export interface GameDataFile {
 const RAND = 'RAND()'
 
 /**
- * Kolonne `index` fra et ark, uten overskriftsrad, tomme celler og RAND().
- * `trim` gjelder wonders-arket, der Java brukte `!p.toString().trim().isEmpty()`
- * mens de andre arkene brukte `!cell.toString().isEmpty()`.
+ * Column `index` from a sheet, without the header row, empty cells and RAND().
+ * `trim` applies to the wonders sheet, where Java used
+ * `!p.toString().trim().isEmpty()` while the other sheets used
+ * `!cell.toString().isEmpty()`.
  */
 function column(
   sheet: readonly (readonly string[])[],
@@ -78,24 +80,24 @@ function sheetOf(data: GameDataFile, label: string): readonly (readonly string[]
 }
 
 /**
- * Java: `ItemReader.split` — `Splitter.onPattern(",|\\.")`. Cellen "1.3" kommer
- * fra POI som strengen "1.3" (numerisk celle), og splittes til angrep 1,
- * helse 3.
+ * Java: `ItemReader.split` — `Splitter.onPattern(",|\\.")`. POI hands the cell
+ * "1.3" over as the string "1.3" (a numeric cell), which splits into attack 1
+ * and health 3.
  */
 function splitAttackHealth(text: string): readonly [attack: number, health: number] {
   const parts = text.split(/[,.]/).map((part) => part.trim()).filter((part) => part !== '')
   const attack = Number(parts[0])
   const health = Number(parts[1])
   if (!Number.isFinite(attack) || !Number.isFinite(health)) {
-    throw new Error(`Kunne ikke lese angrep/helse fra "${text}"`)
+    throw new Error(`Could not read attack and health from "${text}"`)
   }
   return [attack, health]
 }
 
 /**
- * Bygger items og deler ut id og itemNumber. `itemNumber` er et løpenummer med
- * tilfeldig startoffset per spill, som i Java (`RandomUtils.nextInt(1, 20)`),
- * slik at nummeret ikke avslører hvilket kort det er.
+ * Builds items and hands out ids and itemNumbers. `itemNumber` is a running
+ * number with a random start offset per game, as in Java
+ * (`RandomUtils.nextInt(1, 20)`), so the number does not give the card away.
  */
 class ItemBuilder {
   private rng: Rng
@@ -129,7 +131,7 @@ class ItemBuilder {
   }
 }
 
-/** Alt som leses ut av regnearket, stokket. Java: feltene på `ItemReader`. */
+/** Everything read out of the spreadsheet, shuffled. Java: the `ItemReader` fields. */
 export interface Deck {
   readonly civs: readonly CivItem[]
   readonly cultureI: readonly CultureIItem[]
@@ -161,7 +163,7 @@ const TECH_SHEET_BY_LEVEL = {
   5: 'LEVEL_5_TECH',
 } as const
 
-/** Java: `Tech.getSheetName()` — arknavnet følger av nivået. */
+/** Java: `Tech.getSheetName()` — the sheet name follows from the level. */
 export function techSheetName(level: 1 | 2 | 3 | 4 | 5): TechItem['sheetName'] {
   return TECH_SHEET_BY_LEVEL[level]
 }
@@ -175,12 +177,12 @@ export function readDeck(data: GameDataFile, rng: Rng, startCounter: number): De
     sheetName,
     description,
     used: false,
-    // Java: alle items starter skjult
+    // Java: every item starts hidden
     hidden: true,
     ownerId: null,
   })
 
-  // --- Civ: kolonne A navn, B starting tech, C beskrivelse ---
+  // --- Civ: column A name, B starting tech, C description ---
   const civSheet = sheetOf(data, SHEET_LABEL.CIV)
   const civNames = column(civSheet, 0)
   const civStartingTechs = column(civSheet, 1)
@@ -192,8 +194,8 @@ export function readDeck(data: GameDataFile, rng: Rng, startCounter: number): De
       kind: 'civ',
       name,
       type: null,
-      // Java: startteknologien får sitt itemNumber her, og overskrives ikke
-      // senere fordi den ikke ligger i pbf.items
+      // Java: the starting tech gets its itemNumber here and is not overwritten
+      // later, because it does not sit in pbf.items
       startingTech: {
         id: build.nextId(),
         itemNumber: build.nextItemNumber(),
@@ -210,7 +212,7 @@ export function readDeck(data: GameDataFile, rng: Rng, startCounter: number): De
     })),
   )
 
-  // --- Kulturkort: kolonne A navn, B beskrivelse ---
+  // --- Culture cards: column A name, B description ---
   const cultureISheet = sheetOf(data, SHEET_LABEL.CULTURE_1)
   const cultureIDescriptions = column(cultureISheet, 1)
   const cultureI = build.shuffle(
@@ -247,7 +249,7 @@ export function readDeck(data: GameDataFile, rng: Rng, startCounter: number): De
     })),
   )
 
-  // --- Great Person: kolonne A navn, B brikketype, C beskrivelse ---
+  // --- Great Person: column A name, B token kind, C description ---
   const gpSheet = sheetOf(data, SHEET_LABEL.GREAT_PERSON)
   const gpTypes = column(gpSheet, 1)
   const gpDescriptions = column(gpSheet, 2)
@@ -261,7 +263,7 @@ export function readDeck(data: GameDataFile, rng: Rng, startCounter: number): De
     })),
   )
 
-  // --- Huts og Villages: kun kolonne A, ingen beskrivelse ---
+  // --- Huts and Villages: column A only, no description ---
   const huts = build.shuffle(
     column(sheetOf(data, SHEET_LABEL.HUTS), 0).map((name): HutItem => ({
       ...base('HUTS', null),
@@ -282,7 +284,7 @@ export function readDeck(data: GameDataFile, rng: Rng, startCounter: number): De
     })),
   )
 
-  // --- Tiles: numeriske celler, "1.0" blir "1" ---
+  // --- Tiles: numeric cells, so "1.0" becomes "1" ---
   const tiles = build.shuffle(
     column(sheetOf(data, SHEET_LABEL.TILES), 0).map((text): TileItem => ({
       ...base('TILES', null),
@@ -293,7 +295,7 @@ export function readDeck(data: GameDataFile, rng: Rng, startCounter: number): De
     })),
   )
 
-  // --- City-states: kolonne A er effekten, B er bildereferansen ("cs1") ---
+  // --- City-states: column A is the effect, B the image reference ("cs1") ---
   const csSheet = sheetOf(data, SHEET_LABEL.CITY_STATES)
   const csDescriptions = column(csSheet, 1)
   const cityStates = build.shuffle(
@@ -306,12 +308,12 @@ export function readDeck(data: GameDataFile, rng: Rng, startCounter: number): De
     })),
   )
 
-  // --- Wonders: ett ark med tre blokker, delt av rader som selv heter
-  //     "Medieval Wonders" / "Modern Wonders" ---
+  // --- Wonders: one sheet in three blocks, separated by rows that are
+  //     themselves called "Medieval Wonders" and "Modern Wonders" ---
   const wonders = readWonders(data, build, base)
 
-  // --- Units: kun kolonne A. Kolonne B-D er statistikk for oppgraderte
-  //     nivåer, og Java leser dem ikke ---
+  // --- Units: column A only. Columns B to D hold the stats for upgraded
+  //     levels, and Java never reads them ---
   const readUnits = <T extends UnitItem>(
     label: string,
     sheetName: T['sheetName'],
@@ -326,7 +328,7 @@ export function readDeck(data: GameDataFile, rng: Rng, startCounter: number): De
           kind,
           attack,
           health,
-          // Java kaller aldri setLevel, så alle units starter på nivå 0
+          // Java never calls setLevel, so every unit starts at level 0
           level: 0,
           killed: false,
           inBattle: false,
@@ -339,10 +341,10 @@ export function readDeck(data: GameDataFile, rng: Rng, startCounter: number): De
   const mounted = readUnits<MountedItem>(SHEET_LABEL.MOUNTED, 'MOUNTED', 'mounted')
   const aircraft = readUnits<AircraftItem>(SHEET_LABEL.AIRCRAFT, 'AIRCRAFT', 'aircraft')
 
-  // --- Tech: nivå 1-4 fra ark, nivå 5 er kun Space Flight, lagt til i kode ---
+  // --- Techs: levels 1-4 from sheets; level 5 is Space Flight alone, added in code ---
   const techs = readTechs(data, base)
 
-  // --- Social Policy: kolonne A navn, B beskrivelse, C bakside ---
+  // --- Social Policy: column A name, B description, C flipside ---
   const spSheet = sheetOf(data, SHEET_LABEL.SOCIAL_POLICY)
   const spDescriptions = column(spSheet, 1)
   const spFlipsides = column(spSheet, 2)
@@ -391,10 +393,10 @@ type BaseFn = (sheetName: Item['sheetName'], description: string | null) => {
 }
 
 /**
- * Java: `extractShuffledWondersFromExcel`. Arket har ni ancient wonders, så en
- * rad som heter "Medieval Wonders", ni medieval, en rad "Modern Wonders", og
- * ni modern. Java polled navn til det traff et navn som inneholder "wonders",
- * og forkastet både det navnet og beskrivelsen på samme posisjon.
+ * Java: `extractShuffledWondersFromExcel`. The sheet holds nine ancient
+ * wonders, then a row called "Medieval Wonders", nine medieval, a row "Modern
+ * Wonders", and nine modern. Java polled names until it hit one containing
+ * "wonders", discarding both that name and the description beside it.
  */
 function readWonders(
   data: GameDataFile,
@@ -432,16 +434,16 @@ function readWonders(
   return {
     ancientWonders: takeBlock('Ancient', 'ANCIENT_WONDERS', true),
     medievalWonders: takeBlock('Medieval', 'MEDIEVAL_WONDERS', true),
-    // Java tok resten uten å se etter skilletegn
+    // Java took the rest without looking for a separator
     modernWonders: takeBlock('Modern', 'MODERN_WONDERS', false),
   }
 }
 
 /**
- * Java: `getTechsFromExcel`. Teknologier stokkes ikke — spilleren velger selv —
- * men sorteres på nivå. Nivå 5 finnes ikke som ark; Java la til Space Flight
- * som en statisk singleton, noe som betød delt muterbar tilstand mellom spill.
- * Her lages en ny instans per spill.
+ * Java: `getTechsFromExcel`. Techs are not shuffled — the player picks — but
+ * they are sorted by level. Level 5 has no sheet; Java added Space Flight as a
+ * static singleton, which meant shared mutable state between games. Here a
+ * fresh instance is made per game.
  */
 function readTechs(data: GameDataFile, base: BaseFn): TechItem[] {
   const levels: readonly (1 | 2 | 3 | 4)[] = [1, 2, 3, 4]
@@ -470,6 +472,6 @@ function readTechs(data: GameDataFile, base: BaseFn): TechItem[] {
     level: LEVEL_5,
   })
 
-  // Java: Collections.sort er stabil, så rekkefølgen innen et nivå beholdes
+  // Java: Collections.sort is stable, so the order within a level is kept
   return techs.sort((a, b) => a.level - b.level)
 }

@@ -1,9 +1,9 @@
 /**
- * Port av `no.asgari.civilization.server.action.DrawAction`.
+ * Port of `no.asgari.civilization.server.action.DrawAction`.
  *
- * Alt er rene funksjoner: `(state, action) => Result<GameState, EngineError>`.
- * Java muterte pbf-objektet og skrev til Mongo underveis; her returneres ny
- * tilstand, og feil er verdier istedenfor `WebApplicationException`.
+ * Everything is a pure function: `(state, action) => Result<GameState, EngineError>`.
+ * Java mutated the pbf object and wrote to Mongo as it went; here new state is
+ * returned, and errors are values rather than `WebApplicationException`.
  */
 
 import { firstFreeBlock, tileAssetIdForNumber } from '../board.js'
@@ -52,9 +52,9 @@ export interface DrawInput {
 /**
  * Java: `DrawAction.draw`.
  *
- * Trekker første item av angitt type fra stokken, legger det i spillerens hånd
- * og logger. Er stokken tom for typen, reshuffles den fra `discardedItems` og
- * trekket forsøkes én gang på nytt.
+ * Takes the first item of the given type off the deck, puts it in the player's
+ * hand, and logs it. If the deck has none of that type left it is reshuffled
+ * from `discardedItems` and the draw is tried once more.
  */
 export function draw(state: GameState, input: DrawInput): DrawResult {
   const found = requirePlayer(state, input.playerId)
@@ -63,7 +63,7 @@ export function draw(state: GameState, input: DrawInput): DrawResult {
   if (!turn.ok) return turn
   const player = turn.value
 
-  // Java loggførte en warning og returnerte Optional.empty() her
+  // Java logged a warning and returned Optional.empty() here
   if (TECHS.has(input.sheetName)) {
     return err({ kind: 'TECHS_ARE_CHOSEN_NOT_DRAWN', sheetName: input.sheetName })
   }
@@ -73,7 +73,7 @@ export function draw(state: GameState, input: DrawInput): DrawResult {
     return ok(takeFromDeck(state, player, index))
   }
 
-  // Stokken er tom for denne typen. Java reshufflet og kalte draw() på nytt.
+  // The deck has none of this type. Java reshuffled and called draw() again.
   const reshuffled = reshuffleItems(state, input.sheetName)
   if (!reshuffled.ok) return reshuffled
 
@@ -81,16 +81,16 @@ export function draw(state: GameState, input: DrawInput): DrawResult {
     (item) => item.sheetName === input.sheetName,
   )
   if (retryIndex < 0) {
-    // Kan ikke skje: reshuffle feiler hvis det ikke fant noe å legge tilbake
+    // Cannot happen: reshuffle fails when it finds nothing to put back
     return err({ kind: 'ITEM_NOT_FOUND', sheetName: input.sheetName })
   }
   return ok(takeFromDeck(reshuffled.value, player, retryIndex))
 }
 
 /**
- * Flytter itemet på `index` fra stokken til spillerens hånd og logger trekket.
- * Java satte `hidden = true` i `createDraw` — items er allerede skjulte fra
- * ItemReader, så det er bare en bekreftelse.
+ * Moves the item at `index` from the deck into the player's hand and logs the
+ * draw. Java set `hidden = true` in `createDraw` — items come out of
+ * ItemReader hidden already, so it is only a confirmation.
  */
 function takeFromDeck(state: GameState, player: Playerhand, index: number): GameState {
   const item = state.items[index] as Item
@@ -110,15 +110,15 @@ function takeFromDeck(state: GameState, player: Playerhand, index: number): Game
 }
 
 /**
- * Et trukket utforskningsbrett legger seg på brettet med en gang.
+ * A drawn exploration tile lands on the board straight away.
  *
- * Systemet vet ikke hvilket område spilleren utforsker, så brettet havner i
- * første ledige 4 × 4-luke og dras og snus på plass derfra. Det er en
- * bekvemmelighet, ikke en spillregel.
+ * The system does not know which area the player is exploring, so the tile ends
+ * up in the first free 4 x 4 slot and is dragged and turned into place from
+ * there. That is a convenience, not a game rule.
  */
 function placeExploredTile(state: GameState, playerId: string, tile: Item): GameState {
   if (tile.kind !== 'tile') return state
-  // Tile-kortene heter "1" til "27"; bildene heter tile01, tile15a, Tile26b …
+  // Tile cards are named "1" to "27"; the images are tile01, tile15a, Tile26b …
   const assetId = tileAssetIdForNumber(Number(tile.name))
   if (assetId === undefined) return state
 
@@ -129,11 +129,11 @@ function placeExploredTile(state: GameState, playerId: string, tile: Item): Game
 /**
  * Java: `DrawAction.reshuffleItems`.
  *
- * Merk hva denne IKKE gjør: den henter ingenting tilbake fra spillernes hender.
- * Kun `discardedItems` legges tilbake i stokken. `ItemReader.redrawableItems`
- * var bygget for å gjøre det, men ble aldri brukt noe sted i old-civ-rest.
- * Typer utenfor SHUFFLABLE_ITEMS — huts, villages, tiles, bystater og wonders —
- * kan ikke reshuffles i det hele tatt, og gir NOT_SHUFFLABLE.
+ * Note what this does NOT do: it takes nothing back from the players' hands.
+ * Only `discardedItems` go back into the deck. `ItemReader.redrawableItems` was
+ * built to do that but was never used anywhere in old-civ-rest. Types outside
+ * SHUFFLABLE_ITEMS — huts, villages, tiles, city-states and wonders — cannot be
+ * reshuffled at all, and give NOT_SHUFFLABLE.
  */
 export function reshuffleItems(state: GameState, sheetName: SheetName): DrawResult {
   if (!SHUFFLABLE_ITEMS.has(sheetName)) {
@@ -169,9 +169,9 @@ export interface BattlehandInput {
 /**
  * Java: `DrawAction.drawUnitsFromBattlehandForBattle`.
  *
- * Tømmer battlehand, plukker inntil `numberOfDraws` tilfeldige units fra
- * hånden og legger dem i battlehand. Har spilleren færre units enn ønsket
- * antall, brukes alle.
+ * Empties the battlehand, picks up to `numberOfDraws` random units from the
+ * hand and puts them in it. If the player has fewer units than asked for, all
+ * of them are used.
  */
 export function drawUnitsForBattle(state: GameState, input: BattlehandInput): DrawResult {
   const found = requirePlayer(state, input.playerId)
@@ -186,8 +186,8 @@ export function drawUnitsForBattle(state: GameState, input: BattlehandInput): Dr
 
   if (unitsInHand.length <= input.numberOfDraws) {
     const next = withPlayer(state, { ...player, battlehand: unitsInHand })
-    // Java skrev «units his battlehand» her og «units from his battlehand»
-    // under. Skrivefeilen er beholdt fordi loggene er sammenlignbare data.
+    // Java wrote "units his battlehand" here and "units from his battlehand"
+    // below. The typo is kept because the logs are comparable data.
     return ok(
       appendPublicLog(
         next,
@@ -215,8 +215,8 @@ export function drawUnitsForBattle(state: GameState, input: BattlehandInput): Dr
 /**
  * Java: `DrawAction.revealAndDiscardBattlehand`.
  *
- * Navnet lyver litt: units kastes ikke til `discardedItems`, battlehand tømmes
- * bare. Unitene ligger fortsatt i spillerens hånd.
+ * The name overstates it: units are not discarded to `discardedItems`, the
+ * battlehand is only emptied. The units are still in the hand.
  */
 export function revealAndDiscardBattlehand(
   state: GameState,
@@ -241,7 +241,7 @@ export function revealAndDiscardBattlehand(
   )
 }
 
-/** Java: `DrawAction.endBattle` — nullstiller `inBattle` på alle units i hånden. */
+/** Java: `DrawAction.endBattle` — clears `inBattle` on every unit in hand. */
 export function endBattle(state: GameState, playerId: string): DrawResult {
   const found = requirePlayer(state, playerId)
   if (!found.ok) return found
@@ -258,10 +258,10 @@ export function endBattle(state: GameState, playerId: string): DrawResult {
 }
 
 // ---------------------------------------------------------------------------
-// Barbarer
+// Barbarians
 // ---------------------------------------------------------------------------
 
-/** Rekkefølgen Java trakk barbarer i, og hvilke typer den faller tilbake på. */
+/** The order Java drew barbarians in, and the types it falls back on. */
 const BARBARIAN_ORDER: readonly {
   readonly sheet: SheetName
   readonly fallbacks: readonly SheetName[]
@@ -272,9 +272,9 @@ const BARBARIAN_ORDER: readonly {
 ]
 
 /**
- * Java: `DrawAction.drawBarbarians` — trekker inntil tre barbarenheter, én av
- * hver type. Er en type tom, forsøkes reshuffle; går ikke det, trekkes en annen
- * type i stedet, i den rekkefølgen Java brukte.
+ * Java: `DrawAction.drawBarbarians` — draws up to three barbarian units, one
+ * of each type. If a type is empty a reshuffle is tried; failing that, another
+ * type is drawn instead, in the order Java used.
  */
 export function drawBarbarians(state: GameState, playerId: string): DrawResult {
   const found = requirePlayer(state, playerId)
@@ -319,7 +319,7 @@ function drawOneBarbarian(
     if (afterReshuffle !== null) return ok(afterReshuffle)
   }
 
-  // Java: fant den ikke noe å reshuffle, forsøkte den en annen unittype
+  // Java: when there was nothing to reshuffle, it tried another unit type
   for (const fallback of fallbacks) {
     const substituted = addBarbarian(state, playerId, fallback)
     if (substituted !== null) {
@@ -339,7 +339,7 @@ function drawOneBarbarian(
   return err({ kind: 'NO_MORE_ITEMS', what: 'units' })
 }
 
-/** Java: `DrawAction.addBarbarian`. Returnerer null når stokken er tom. */
+/** Java: `DrawAction.addBarbarian`. Returns null when the deck is empty. */
 function addBarbarian(
   state: GameState,
   playerId: string,
@@ -365,8 +365,8 @@ function addBarbarian(
 }
 
 /**
- * Java: `DrawAction.discardBarbarians` — legger barbarene i `discardedItems`,
- * nullstiller eier og avslører dem offentlig.
+ * Java: `DrawAction.discardBarbarians` — puts the barbarians in
+ * `discardedItems`, clears their owner and reveals them publicly.
  */
 export function discardBarbarians(state: GameState, playerId: string): DrawResult {
   const found = requirePlayer(state, playerId)
@@ -398,20 +398,20 @@ export function discardBarbarians(state: GameState, playerId: string): DrawResul
 // ---------------------------------------------------------------------------
 
 export interface LootInput {
-  /** Spilleren det tas fra. */
+  /** The player it is taken from. */
   readonly playerId: string
-  /** Spilleren som mottar. */
+  /** The player receiving it. */
   readonly targetPlayerId: string
   readonly sheetNames: ReadonlySet<SheetName>
 }
 
 /**
- * Java: `DrawAction.loot` — trekker et tilfeldig item av gitt type fra én
- * spillers hånd og gir det til en annen.
+ * Java: `DrawAction.loot` — takes a random item of a given type from one
+ * player's hand and gives it to another.
  *
- * Java sjekket at itemet er `Tradable` på element 0 av den USORTERTE listen, og
- * stokket først etterpå. Det er bevart: i praksis er alle items av samme
- * arktype like tradable, så sjekken er uansett homogen.
+ * Java checked that the item is `Tradable` on element 0 of the UNSHUFFLED list
+ * and only shuffled afterwards. That is kept: in practice every item of the
+ * same sheet type is equally tradable, so the check is homogeneous anyway.
  */
 export function loot(state: GameState, input: LootInput): DrawResult {
   const from = requirePlayer(state, input.playerId)

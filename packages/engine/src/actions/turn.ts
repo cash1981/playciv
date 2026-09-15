@@ -1,15 +1,15 @@
 /**
- * Port av `no.asgari.civilization.server.action.TurnAction`.
+ * Port of `no.asgari.civilization.server.action.TurnAction`.
  *
- * Java hadde fem nesten identiske metoder — `updateSOT`, `updateTrade`,
- * `updateCM`, `updateMovement`, `updateResearch` — som skilte seg bare i
- * e-postteksten og logtypen. Fasen sto ALLEREDE i DTO-en, så hvilken metode man
- * kalte og hvilken fase man oppdaterte kunne komme i utakt: `updateSOT` med
- * `phase: "trade"` skrev til handelsfasen men logget SOT. Her er det én
- * funksjon som tar fasen som argument.
+ * Java had five nearly identical methods — `updateSOT`, `updateTrade`,
+ * `updateCM`, `updateMovement`, `updateResearch` — differing only in the email
+ * text and the log type. The phase was ALREADY in the DTO, so which method you
+ * called and which phase you updated could drift apart: `updateSOT` with
+ * `phase: "trade"` wrote to the trade phase but logged SOT. Here there is one
+ * function taking the phase as an argument.
  *
- * E-postutsendingen er ikke portert. Java startet en rå `new Thread(...)` per
- * oppdatering; varsling hører i server-pakken.
+ * The email sending is not ported. Java started a raw `new Thread(...)` per
+ * update; notification belongs in the server package.
  */
 
 import type { EngineError } from '../errors.js'
@@ -30,7 +30,7 @@ import {
 
 type ActionResult = Result<GameState, EngineError>
 
-/** Fasene kartlagt til logtypene Java brukte. */
+/** The phases mapped to the log types Java used. */
 const PHASE_LOG_TYPE: Readonly<Record<TurnPhase, LogType>> = {
   SOT: 'SOT',
   TRADE: 'TRADE',
@@ -59,9 +59,9 @@ export interface UpdateTurnInput {
 /**
  * Java: `updateTurn` + `updatePrivatePlayerturn` + `addTurnInPBF`.
  *
- * Ordren lagres både på spillerens private turliste og i `publicTurns`, som er
- * det alle kan se. Det er ikke skjult informasjon — turordrer er poenget med et
- * play-by-forum-spill.
+ * The order is stored both on the player's private turn list and in
+ * `publicTurns`, which is what everyone sees. It is not hidden information —
+ * turn orders are the point of a play-by-forum game.
  */
 export function updateTurn(state: GameState, input: UpdateTurnInput): ActionResult {
   const access = requireAccess(state, input.playerId)
@@ -70,7 +70,7 @@ export function updateTurn(state: GameState, input: UpdateTurnInput): ActionResu
 
   const existing = player.playerTurns.find((turn) => turn.turnNumber === input.turnNumber)
   const base = existing ?? createPlayerTurn(player.username, input.turnNumber)
-  // Java satte brukernavnet på nytt, i tilfelle spilleren var byttet ut
+  // Java set the username again, in case the player had been replaced
   const updated = withOrder({ ...base, username: player.username }, input.phase, input.order)
 
   const playerTurns = existing === undefined
@@ -95,8 +95,8 @@ export interface AddTurnInput {
 }
 
 /**
- * Java: `addNewTurn`. Java glemte å lagre etterpå, så den nye turen forsvant
- * ved neste lesing fra Mongo. Her returneres ny tilstand, så den blir bevart.
+ * Java: `addNewTurn`. Java forgot to save afterwards, so the new turn vanished
+ * on the next read from Mongo. Here new state is returned, so it survives.
  */
 export function addNewTurn(state: GameState, input: AddTurnInput): ActionResult {
   const access = requireAccess(state, input.playerId)
@@ -124,7 +124,7 @@ export interface LockTurnInput {
   readonly locked: boolean
 }
 
-/** Java: `lockOrUnlockTurn` — låser turen så ordrene ikke kan endres videre. */
+/** Java: `lockOrUnlockTurn` — locks the turn so the orders stop changing. */
 export function lockOrUnlockTurn(state: GameState, input: LockTurnInput): ActionResult {
   const access = requireAccess(state, input.playerId)
   if (!access.ok) return access
@@ -141,7 +141,7 @@ export function lockOrUnlockTurn(state: GameState, input: LockTurnInput): Action
         sameTurn(candidate, updated) ? updated : candidate,
       ),
     }),
-    // Hold den offentlige kopien i takt; Java oppdaterte bare den private
+    // Keep the public copy in step; Java only updated the private one
     publicTurns: Object.prototype.hasOwnProperty.call(
       state.publicTurns,
       publicTurnKey(updated),
@@ -158,9 +158,9 @@ export function lockOrUnlockTurn(state: GameState, input: LockTurnInput): Action
 }
 
 /**
- * Java: `getAllPublicTurns`. Java fjernet den gjeldende ordren fra historikken
- * ved å mutere de lagrede objektene — en lesing som ødela data. Her er det en
- * ren projeksjon.
+ * Java: `getAllPublicTurns`. Java stripped the current order from the history
+ * by mutating the stored objects — a read that corrupted data. Here it is a
+ * pure projection.
  */
 export function allPublicTurns(state: GameState): readonly PlayerTurn[] {
   return Object.values(state.publicTurns)
@@ -169,9 +169,9 @@ export function allPublicTurns(state: GameState): readonly PlayerTurn[] {
 }
 
 /**
- * Java: `getPlayersTurns` opprettet tur 1 hvis listen var tom, og lagret som
- * bieffekt av en lesing. Her er det en ren lesing — bruk `addNewTurn` for å
- * opprette en tur.
+ * Java: `getPlayersTurns` created turn 1 when the list was empty, saving as a
+ * side effect of a read. Here it is a pure read — use `addNewTurn` to create
+ * a turn.
  */
 export function playersTurns(state: GameState, playerId: string): readonly PlayerTurn[] {
   return [...(findPlayer(state, playerId)?.playerTurns ?? [])].sort(compareTurns)

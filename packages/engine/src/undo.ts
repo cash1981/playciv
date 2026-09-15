@@ -1,21 +1,20 @@
 /**
- * Port av `no.asgari.civilization.server.model.Undo`.
+ * Port of `no.asgari.civilization.server.model.Undo`.
  *
- * Et undo er en avstemning. Den som ber om undo stemmer ja automatisk, og alle
- * spillere må ha stemt før resultatet er kjent. Én nei-stemme er nok til at
- * undoet avslås.
+ * An undo is a vote. Whoever asks for it votes yes automatically, and every
+ * player has to vote before the result is known. One no is enough to refuse it.
  */
 
 export interface Undo {
-  /** Satt når avstemningen er gjennomført og undoet faktisk er utført. */
+  /** Set once the vote has run and the undo has actually been carried out. */
   readonly done: boolean
-  /** Java: `numberOfVotesRequired`, satt til antall spillere i spillet. */
+  /** Java: `numberOfVotesRequired`, set to the number of players in the game. */
   readonly numberOfVotesRequired: number
-  /** playerId til ja/nei. */
+  /** playerId to yes or no. */
   readonly votes: Readonly<Record<string, boolean>>
 }
 
-/** Java: `new Undo(numberOfVotesRequired, playerId)` — initiator stemmer ja. */
+/** Java: `new Undo(numberOfVotesRequired, playerId)` — the initiator votes yes. */
 export function createUndo(numberOfVotesRequired: number, playerId: string): Undo {
   return { done: false, numberOfVotesRequired, votes: { [playerId]: true } }
 }
@@ -24,13 +23,13 @@ export function numberOfVotesPerformed(undo: Undo): number {
   return Object.keys(undo.votes).length
 }
 
-/** Java brukte `Math.abs`, så en overtelling gir avstand og ikke negativt tall. */
+/** Java used `Math.abs`, so an overcount gives a distance, not a negative. */
 export function votesRemaining(undo: Undo): number {
   return Math.abs(numberOfVotesPerformed(undo) - undo.numberOfVotesRequired)
 }
 
 /**
- * Java: `getResultOfVotes()` — `undefined` betyr at avstemningen ikke er ferdig.
+ * Java: `getResultOfVotes()` — `undefined` means the vote is not finished.
  */
 export function resultOfVotes(undo: Undo): boolean | undefined {
   if (votesRemaining(undo) !== 0) return undefined

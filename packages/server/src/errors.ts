@@ -1,8 +1,9 @@
 /**
- * Oversetter `EngineError` til HTTP.
+ * Translates `EngineError` into HTTP.
  *
- * Statuskodene er de Java brukte da den kastet `WebApplicationException` rett
- * fra domenelogikken. Nå ligger valget her, der det hører hjemme.
+ * The status codes are the ones Java used when it threw
+ * `WebApplicationException` straight from the domain logic. The choice now
+ * lives here, where it belongs.
  */
 
 import type { EngineError } from '@civ/engine'
@@ -18,7 +19,10 @@ export function statusFor(error: EngineError): number {
     case 'NOTHING_TO_LOOT':
     case 'BOARD_PIECE_NOT_FOUND':
       return 404
-    // Klienten ba om en brikketype som ikke finnes i manifestet
+    // Nothing on the board to take back
+    case 'NOTHING_TO_UNDO_ON_BOARD':
+      return 412
+    // The client asked for a piece that is not in the manifest
     case 'BOARD_ASSET_NOT_FOUND':
       return 400
     case 'NOT_YOUR_TURN':
@@ -34,7 +38,7 @@ export function statusFor(error: EngineError): number {
     case 'BARBARIANS_NOT_DISCARDED':
     case 'UNDO_NOT_INITIATED':
       return 412
-    // Java: 410 Gone — stokken er tom og kan ikke fylles
+    // Java: 410 Gone — the deck is empty and cannot be refilled
     case 'NO_MORE_ITEMS':
       return 410
     case 'TECHS_ARE_CHOSEN_NOT_DRAWN':
@@ -52,7 +56,7 @@ export function statusFor(error: EngineError): number {
   }
 }
 
-/** Svarformatet klienten forholder seg til for alle feil. */
+/** The shape the client sees for every error. */
 export interface ErrorBody {
   readonly error: string
   readonly message: string

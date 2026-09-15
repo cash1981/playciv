@@ -1,9 +1,9 @@
 /**
- * Port av `no.asgari.civilization.server.action.UndoActionTest`.
+ * Port of `no.asgari.civilization.server.action.UndoActionTest`.
  *
- * Java-testene navigerte gjennom Mongo og var avhengige av rekkefølgen testene
- * kjørte i (`@Before` som bare gjorde noe hvis samlingen var tom). Her er hver
- * test selvstendig, men scenarioene er de samme.
+ * The Java tests navigated through Mongo and depended on the order they ran in
+ * (a `@Before` that only did anything when the collection was empty). Each test
+ * here stands on its own, but the scenarios are the same.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -33,14 +33,14 @@ const handOf = (state: GameState, playerId: string) =>
 function drawCivAndInitiateUndo(): { state: GameState; logId: string } {
   const drawn = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CIV' }))
   const logId = drawn.log.at(-1)?.id
-  if (logId === undefined) throw new Error('ingen loggpost')
+  if (logId === undefined) throw new Error('no log entry')
 
   const state = unwrap(initiateUndo(drawn, { logId, playerId: CASH1981 }))
   return { state, logId }
 }
 
 describe('initiateUndo', () => {
-  it('oppretter en avstemning der initiator har stemt ja', () => {
+  it('creates a vote where the initiator has voted yes', () => {
     const { state, logId } = drawCivAndInitiateUndo()
     const entry = state.log.find((candidate) => candidate.id === logId)
 
@@ -51,41 +51,41 @@ describe('initiateUndo', () => {
     expect(entry?.undo?.numberOfVotesRequired).toBe(4)
   })
 
-  it('logger UNDO-forespørselen', () => {
+  it('logs the undo request', () => {
     const { state } = drawCivAndInitiateUndo()
     expect(state.log.at(-1)?.logType).toBe('UNDO')
     expect(state.log.at(-1)?.publicLog).toContain('has requested undo of')
   })
 
-  it('kan ikke initieres to ganger', () => {
+  it('cannot be started twice', () => {
     const { state, logId } = drawCivAndInitiateUndo()
     const error = unwrapErr(initiateUndo(state, { logId, playerId: KARANDRAS1 }))
     expect(error).toEqual({ kind: 'UNDO_ALREADY_INITIATED', logId })
   })
 
-  it('en loggpost uten item kan ikke angres', () => {
-    // Java: barbarlogger har ingen draw, så Preconditions.checkNotNull feilet.
-    // Det er derfor barbarer aldri kunne angres.
+  it('a log entry with no item cannot be undone', () => {
+    // Java: barbarian logs carry no draw, so Preconditions.checkNotNull failed.
+    // That is why barbarians could never be undone.
     const state = firstCivGame()
-    const logId = 'finnes-ikke'
+    const logId = 'no-such-entry'
     expect(unwrapErr(initiateUndo(state, { logId, playerId: CASH1981 }))).toEqual({
       kind: 'LOG_ENTRY_NOT_FOUND',
       logId,
     })
   })
 
-  it('en spiller utenfor spillet kan ikke initiere undo', () => {
+  it('a player outside the game cannot start an undo', () => {
     const drawn = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CIV' }))
     const logId = drawn.log.at(-1)?.id as string
-    expect(unwrapErr(initiateUndo(drawn, { logId, playerId: 'ingen' })).kind).toBe(
+    expect(unwrapErr(initiateUndo(drawn, { logId, playerId: 'nobody' })).kind).toBe(
       'PLAYER_NOT_FOUND',
     )
   })
 })
 
-/** Java: `performAVoteAndCheckIt` og `voteAndCountRemaingVotes`. */
+/** Java: `performAVoteAndCheckIt` and `voteAndCountRemaingVotes`. */
 describe('vote', () => {
-  it('en stemme til gir to registrerte stemmer', () => {
+  it('one more vote makes two recorded votes', () => {
     const { state, logId } = drawCivAndInitiateUndo()
     const after = unwrap(vote(state, { logId, playerId: KARANDRAS1, vote: true }))
     const entry = after.log.find((candidate) => candidate.id === logId)
@@ -94,16 +94,16 @@ describe('vote', () => {
     expect(entry?.undo?.done).toBe(false)
   })
 
-  it('votesRemaining teller ned mot antall spillere', () => {
+  it('votesRemaining counts down towards the number of players', () => {
     const { state, logId } = drawCivAndInitiateUndo()
     const after = unwrap(vote(state, { logId, playerId: ITCHI, vote: true }))
     const entry = after.log.find((candidate) => candidate.id === logId)
 
-    // Java: 4 spillere, 2 stemmer avgitt
+    // Java: four players, two votes cast
     expect(entry?.undo && votesRemaining(entry.undo)).toBe(2)
   })
 
-  it('logger stemmen offentlig med itemets offentlige navn', () => {
+  it('logs the vote publicly with the public name of the item', () => {
     const { state, logId } = drawCivAndInitiateUndo()
     const after = unwrap(vote(state, { logId, playerId: KARANDRAS1, vote: true }))
 
@@ -114,7 +114,7 @@ describe('vote', () => {
     )
   })
 
-  it('avstemning uten initiering avvises', () => {
+  it('voting without a started undo is refused', () => {
     const drawn = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CIV' }))
     const logId = drawn.log.at(-1)?.id as string
     expect(unwrapErr(vote(drawn, { logId, playerId: CASH1981, vote: true }))).toEqual({
@@ -125,7 +125,7 @@ describe('vote', () => {
 })
 
 /** Java: `allPlayersVoteYesThenPerformUndo`. */
-describe('alle stemmer ja', () => {
+describe('everyone votes yes', () => {
   const voteAllYes = (start: GameState, logId: string): GameState => {
     let state = start
     for (const playerId of [KARANDRAS1, ITCHI, CHUL]) {
@@ -134,10 +134,10 @@ describe('alle stemmer ja', () => {
     return state
   }
 
-  it('legger det trukne itemet tilbake i stokken', () => {
+  it('puts the drawn item back into the deck', () => {
     const { state: initiated, logId } = drawCivAndInitiateUndo()
     const item = initiated.log.find((candidate) => candidate.id === logId)?.item
-    if (item == null) throw new Error('ingen item')
+    if (item == null) throw new Error('no item')
 
     expect(handOf(initiated, CASH1981).map((i) => i.id)).toContain(item.id)
     expect(initiated.items.some((i) => i.id === item.id)).toBe(false)
@@ -149,7 +149,7 @@ describe('alle stemmer ja', () => {
     expect(state.items.find((i) => i.id === item.id)?.ownerId).toBeNull()
   })
 
-  it('markerer undoet som ferdig', () => {
+  it('marks the undo as done', () => {
     const { state: initiated, logId } = drawCivAndInitiateUndo()
     const state = voteAllYes(initiated, logId)
     const entry = state.log.find((candidate) => candidate.id === logId)
@@ -159,7 +159,7 @@ describe('alle stemmer ja', () => {
     expect(Object.values(entry?.undo?.votes ?? {})).not.toContain(false)
   })
 
-  it('logger at stokken er blandet på nytt', () => {
+  it('logs that the deck was reshuffled', () => {
     const { state: initiated, logId } = drawCivAndInitiateUndo()
     const state = voteAllYes(initiated, logId)
 
@@ -170,10 +170,10 @@ describe('alle stemmer ja', () => {
     ).toBe(true)
   })
 
-  it('én nei-stemme gjør at itemet blir liggende i hånden', () => {
+  it('a single no leaves the item in the hand', () => {
     const { state: initiated, logId } = drawCivAndInitiateUndo()
     const item = initiated.log.find((candidate) => candidate.id === logId)?.item
-    if (item == null) throw new Error('ingen item')
+    if (item == null) throw new Error('no item')
 
     let state = unwrap(vote(initiated, { logId, playerId: KARANDRAS1, vote: false }))
     state = unwrap(vote(state, { logId, playerId: ITCHI, vote: true }))
@@ -187,8 +187,8 @@ describe('alle stemmer ja', () => {
 })
 
 /** Java: `checkThatYouCanUndoTech`. */
-describe('undo av teknologi', () => {
-  it('kan initieres på et tech-valg', () => {
+describe('undoing a tech', () => {
+  it('can be started on a tech choice', () => {
     const chosen = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
     const logId = chosen.log.at(-1)?.id as string
 
@@ -196,7 +196,7 @@ describe('undo av teknologi', () => {
     expect(state.log.find((entry) => entry.id === logId)?.undo).not.toBeNull()
   })
 
-  it('fjerner teknologien fra hånden når alle har stemt ja', () => {
+  it('removes the tech from the hand once everyone has voted yes', () => {
     const chosen = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
     const logId = chosen.log.at(-1)?.id as string
 
@@ -210,12 +210,12 @@ describe('undo av teknologi', () => {
   })
 })
 
-/** Undo av en kasting skal legge itemet tilbake i hånden, ikke i stokken. */
-describe('undo av kasting', () => {
-  it('gir kortet tilbake til spilleren', () => {
+/** Undoing a discard puts the item back in the hand, not in the deck. */
+describe('undoing a discard', () => {
+  it('gives the card back to the player', () => {
     let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CULTURE_1' }))
     const card = handOf(state, CASH1981)[0]
-    if (card === undefined) throw new Error('ingen kulturkort')
+    if (card === undefined) throw new Error('no culture card')
 
     state = unwrap(
       discardItem(state, {
@@ -238,12 +238,12 @@ describe('undo av kasting', () => {
   })
 })
 
-/** Java: `UndoAction.playerPutsItemBackInDeck` — ingen avstemning. */
+/** Java: `UndoAction.playerPutsItemBackInDeck` — no vote. */
 describe('playerPutsItemBackInDeck', () => {
-  it('legger et item fra hånden tilbake i stokken', () => {
+  it('puts an item from the hand back into the deck', () => {
     const drawn = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'HUTS' }))
     const hut = handOf(drawn, CASH1981)[0]
-    if (hut === undefined) throw new Error('ingen hut')
+    if (hut === undefined) throw new Error('no hut')
 
     const state = unwrap(
       playerPutsItemBackInDeck(drawn, {
@@ -257,7 +257,7 @@ describe('playerPutsItemBackInDeck', () => {
     expect(state.items.some((item) => item.id === hut.id)).toBe(true)
   })
 
-  it('et item spilleren ikke har gir ITEM_NOT_FOUND', () => {
+  it('an item the player does not hold gives ITEM_NOT_FOUND', () => {
     const error = unwrapErr(
       playerPutsItemBackInDeck(firstCivGame(), {
         playerId: CASH1981,
@@ -270,14 +270,14 @@ describe('playerPutsItemBackInDeck', () => {
 })
 
 /** Java: `getAllActiveUndos`, `getPlayersActiveUndoes`, `getAllFinishedUndos`. */
-describe('oppslag', () => {
-  it('aktive undos er de som ikke er gjennomført', () => {
+describe('lookups', () => {
+  it('active undos are the ones not yet carried out', () => {
     const { state } = drawCivAndInitiateUndo()
     expect(activeUndos(state)).toHaveLength(1)
     expect(finishedUndos(state)).toHaveLength(0)
   })
 
-  it('ferdige undos er de som er gjennomført', () => {
+  it('finished undos are the ones carried out', () => {
     const { state: initiated, logId } = drawCivAndInitiateUndo()
     let state = initiated
     for (const playerId of [KARANDRAS1, ITCHI, CHUL]) {
@@ -288,15 +288,15 @@ describe('oppslag', () => {
     expect(activeUndos(state)).toHaveLength(0)
   })
 
-  it('en spillers aktive undos filtreres på brukernavn', () => {
+  it('the active undos of a player are filtered on username', () => {
     const { state } = drawCivAndInitiateUndo()
     expect(playersActiveUndos(state, 'cash1981')).toHaveLength(1)
     expect(playersActiveUndos(state, 'Itchi')).toHaveLength(0)
   })
 })
 
-describe('renhet', () => {
-  it('vote muterer ikke inn-tilstanden', () => {
+describe('purity', () => {
+  it('vote does not mutate the input state', () => {
     const { state, logId } = drawCivAndInitiateUndo()
     const snapshot = JSON.stringify(state)
 

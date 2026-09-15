@@ -1,5 +1,5 @@
 /**
- * Fastify-appen. Java: `CivilizationApplication` med Dropwizard.
+ * The Fastify app. Java: `CivilizationApplication` under Dropwizard.
  */
 
 import cors from '@fastify/cors'
@@ -19,8 +19,8 @@ export interface CreateAppOptions {
   readonly repo: Repository
   readonly tokenSecret: string
   readonly logger?: boolean
-  /** Origins klienten kan kalle fra. `true` slipper alle gjennom. */
-  // Ikke readonly string[]: @fastify/cors krever et muterbart array
+  /** Origins the client may call from. `true` lets everything through. */
+  // Not readonly string[]: @fastify/cors wants a mutable array
   readonly corsOrigin?: string | string[] | true
 }
 
@@ -47,7 +47,7 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
   return app
 }
 
-/** Bekvemmelighet for tester: app med rent minne-repo, ingen fil. */
+/** Convenience for tests: an app backed by memory alone, with no file. */
 export async function createTestApp(): Promise<{
   app: FastifyInstance
   repo: JsonFileRepository

@@ -1,14 +1,12 @@
 <#
-Kopierer brikkegrafikken fra Civilization/Moderator inn i web-pakken, og skriver
-et manifest med reelle bildestørrelser.
+Copies the piece artwork from Civilization/Moderator into the web package and
+writes a manifest with the real image sizes.
 
-Manifestet havner i motoren, ikke i klienten, fordi serveren må kunne validere
-at en brikke som legges ut faktisk peker på en kjent fil. Uten det kunne en
-klient sende hvilken som helst streng som bildereferanse.
+The manifest goes in the engine rather than the client, because the server has
+to be able to check that a piece being placed really points at a known file.
+Without it a client could send any string at all as an image reference.
 
-Selve PNG-ene havner i packages/web/public/board/ slik at Vite serverer dem.
-
-Map-tiles er ikke med her — de er 21 MB og håndteres for seg.
+The PNGs themselves land in packages/web/public/board/ so Vite serves them.
 #>
 param(
     [string] $Source = (Join-Path $PSScriptRoot '..\Civilization\Moderator'),
@@ -19,8 +17,8 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
-# Kildemappe -> kategori i paletten. Tiles deles i to fordi de brukes ulikt:
-# civtile er sivilisasjonenes startbrett, tile er de nummererte utforskningene.
+# Source folder -> palette category. Tiles split in two because they are used
+# differently: civtile is a starting tile, tile is a numbered exploration tile.
 $categories = [ordered] @{
     'figures'   = 'figure'
     'resources' = 'resource'
@@ -30,11 +28,11 @@ $categories = [ordered] @{
     'tiles'     = 'tile'
 }
 
-# Et map-tile dekker 4 x 4 ruter a 94 piksler. Kildebildene er 375 x 375, altså
-# én piksel for smale; de skaleres til 376 så de flukter med rutenettet.
+# A map tile covers 4 x 4 squares of 94 pixels. The source images are 375 x 375,
+# so one pixel narrow; they are scaled to 376 to line up with the grid.
 $TILE_PIXELS = 376
 
-# Sivilisasjonenes startbrett. Resten av filene i tiles/ er utforskningsbrett.
+# The civilisations starting tiles. The rest of tiles/ are exploration tiles.
 $civTiles = @(
     'america', 'arabia', 'Aztec', 'china', 'egypt', 'England', 'France', 'germany',
     'greece', 'india', 'japan', 'mongolia', 'rome', 'russia', 'spain', 'Zulu'
@@ -46,7 +44,7 @@ function Get-Label([string] $category, [string] $baseName) {
     $name = $baseName
 
     if ($category -eq 'figure' -or $category -eq 'city') {
-        # "redcapitalwalled2" -> farge + resten
+        # "redcapitalwalled2" -> colour plus the rest
         $colour = $colours | Where-Object { $name.StartsWith($_) } | Select-Object -First 1
         if ($null -ne $colour) {
             $rest = $name.Substring($colour.Length) -replace '\d+$', ''
@@ -58,7 +56,7 @@ function Get-Label([string] $category, [string] $baseName) {
         }
     }
 
-    # "Building Program" og "coin1" -> "Building Program", "Coin 1"
+    # "Building Program" and "coin1" -> "Building Program", "Coin 1"
     $spaced = ($name -creplace '([a-z])([A-Z0-9])', '$1 $2')
     return (Get-Culture).TextInfo.ToTitleCase($spaced.ToLower()) -replace '\s+', ' '
 }
@@ -68,12 +66,12 @@ $assets = @()
 foreach ($folder in $categories.Keys) {
     $category = $categories[$folder]
     $from = Join-Path $Source $folder
-    if (-not (Test-Path $from)) { throw "Fant ikke $from" }
+    if (-not (Test-Path $from)) { throw "Could not find $from" }
 
     $to = Join-Path $WebPublic $folder
     New-Item -ItemType Directory -Path $to -Force | Out-Null
 
-    # -Include krever wildcard i stien, så filtrer på Extension i stedet
+    # -Include needs a wildcard in the path, so filter on Extension instead
     $files = Get-ChildItem $from -File | Where-Object { $_.Extension -in '.png', '.jpg' }
     foreach ($file in $files) {
         Copy-Item $file.FullName (Join-Path $to $file.Name) -Force
@@ -86,7 +84,7 @@ foreach ($folder in $categories.Keys) {
 
             if ($category -eq 'tile') {
                 if ($civTiles -contains $file.BaseName) { $thisCategory = 'civtile' }
-                # Alle map-tiles dekker nøyaktig 4 x 4 ruter uansett kildeoppløsning
+                # Every map tile covers exactly 4 x 4 squares whatever its source size
                 $width = $TILE_PIXELS
                 $height = $TILE_PIXELS
             }
@@ -94,7 +92,7 @@ foreach ($folder in $categories.Keys) {
             $assets += [ordered] @{
                 id       = "$folder/$($file.BaseName)"
                 category = $thisCategory
-                # Stien klienten laster fra, relativt til /board/
+                # The path the client loads from, relative to /board/
                 path     = "$folder/$($file.Name)"
                 label    = Get-Label $thisCategory $file.BaseName
                 width    = $width
@@ -105,11 +103,11 @@ foreach ($folder in $categories.Keys) {
         }
     }
 
-    Write-Host ("  {0,-10} {1,3} filer" -f $folder, (Get-ChildItem $to -File).Count)
+    Write-Host ("  {0,-10} {1,3} files" -f $folder, (Get-ChildItem $to -File).Count)
 }
 
 $payload = [ordered] @{
-    note   = 'Autogenerert av tools/board-assets.ps1. Rediger ikke manuelt.'
+    note   = 'Generated by tools/board-assets.ps1. Do not edit by hand.'
     source = 'Civilization/Moderator'
     assets = $assets
 }
@@ -121,4 +119,4 @@ $json = $payload | ConvertTo-Json -Depth 6
     $json + "`n",
     (New-Object System.Text.UTF8Encoding($false)))
 
-Write-Host "`nSkrev $($assets.Count) brikker til $Manifest"
+Write-Host "`nWrote $($assets.Count) pieces to $Manifest"

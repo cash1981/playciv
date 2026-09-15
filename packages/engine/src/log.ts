@@ -1,10 +1,10 @@
 /**
- * Port av `GameLog.createAndSetLog` og `GameLogAction`.
+ * Port of `GameLog.createAndSetLog` and `GameLogAction`.
  *
- * Tekstene er gjengitt tegn for tegn, doble mellomrom inkludert. Java skrev
- * `username + " drew " + DELIM + ...` med `DELIM = " - "`, som ga
- * «cash1981 drew  - Civ : Americans». De porterte testene matcher på disse
- * strengene, så de er ikke ryddet opp i.
+ * The texts are reproduced character for character, double spaces included.
+ * Java wrote `username + " drew " + DELIM + ...` with `DELIM = " - "`, giving
+ * "cash1981 drew  - Civ : Americans". The ported tests match on these strings,
+ * so they have not been tidied up.
  */
 
 import type { Item } from './item.js'
@@ -15,17 +15,17 @@ import { nextId } from './random.js'
 const DELIM = ' - '
 
 /**
- * Java: `GameLog.uniqueItemNumber` — brukes for tech og sosialpolitikk, der
- * itemet ikke skal kunne kryssrefereres mellom spillere. Nummeret forskyves med
- * de tre første sifrene av `username.hashCode()`, så samme kort får
- * forskjellig nummer for hver spiller.
+ * Java: `GameLog.uniqueItemNumber` — used for techs and social policy, where
+ * the item must not be cross-referenced between players. The number is offset
+ * by the first three digits of `username.hashCode()`, so the same card gets a
+ * different number for each player.
  */
 export function uniqueItemNumber(username: string, itemNumber: number): string {
   const offset = Number(String(Math.abs(javaStringHashCode(username))).slice(0, 3))
   return `. Item number #${offset + itemNumber}`
 }
 
-/** Javas `String.hashCode()`, som 32-bits heltall. */
+/** Java's `String.hashCode()`, as a 32-bit integer. */
 export function javaStringHashCode(text: string): number {
   let hash = 0
   for (let i = 0; i < text.length; i++) {
@@ -42,9 +42,9 @@ export interface LogTexts {
 /**
  * Java: `GameLog.createAndSetLog(LogType, int)`.
  *
- * Merk hvilke typer som skjuler innholdet offentlig: SOCIAL_POLICY, TECH og
- * REMOVED_TECH. De øvrige avslører `revealPublic()`, som for de fleste typer
- * bare er klassenavnet.
+ * Note which types hide their contents publicly: SOCIAL_POLICY, TECH and
+ * REMOVED_TECH. The rest reveal `revealPublic()`, which for most types is just
+ * the class name.
  */
 export function createLogTexts(
   logType: LogType,
@@ -88,7 +88,7 @@ export function createLogTexts(
         privateLog: `${username} has removed ${DELIM}${all}${uniqueText}`,
         publicLog: `${username} has removed a hidden technology${uniqueText}`,
       }
-    // Java: DISCARD avslører alt også offentlig — kortet er ute av spill
+    // Java: DISCARD reveals everything publicly too — the card is out of play
     case 'DISCARD':
       return {
         privateLog: `${username} has discarded ${DELIM}${all}${itemNumberText}`,
@@ -115,7 +115,7 @@ export function createLogTexts(
       return phase(username, 'movement')
     case 'RESEARCH':
       return phase(username, 'research')
-    // Java satte ingen tekst for disse i createAndSetLog
+    // Java set no text for these in createAndSetLog
     case 'SHUFFLE':
     case 'WITHDRAW':
     case 'JOIN':
@@ -143,7 +143,7 @@ interface AppendOptions {
   readonly playerId?: string
 }
 
-/** Legger til én loggpost og returnerer ny tilstand. */
+/** Appends one log entry and returns the new state. */
 export function appendLog(state: GameState, options: AppendOptions): GameState {
   const [id, rng] = nextId(state.rng)
   const entry: GameLogEntry = {
@@ -159,7 +159,7 @@ export function appendLog(state: GameState, options: AppendOptions): GameState {
   return { ...state, rng, log: [...state.log, entry] }
 }
 
-/** Java: `GameLogAction.createUndoLog` — logges som avsender "System". */
+/** Java: `GameLogAction.createUndoLog` — logged as coming from "System". */
 export function appendUndoLog(
   state: GameState,
   message: string,
@@ -171,7 +171,7 @@ export function appendUndoLog(
 
 /**
  * Java: `GameLogAction.createGameLog(Draw, pbfId, username, vote)` — logglinjen
- * for en avgitt undo-stemme. Merk at den avslører `revealPublic` av itemet.
+ * for a cast undo vote. Note that it reveals `revealPublic` of the item.
  */
 export function appendVoteLog(
   state: GameState,
@@ -201,7 +201,7 @@ export function appendItemLog(
   return appendLog(state, { username, logType, item, playerId, ...texts })
 }
 
-/** Java: `GameLogAction.createCommonPublicLog` — prefikser med brukernavn. */
+/** Java: `GameLogAction.createCommonPublicLog` — prefixes the username. */
 export function appendPublicLog(
   state: GameState,
   username: string,
@@ -246,7 +246,7 @@ export function appendPrivatePublicLog(
   })
 }
 
-/** Java: `DrawAction.logShuffle` — logges som avsender "System". */
+/** Java: `DrawAction.logShuffle` — logged as coming from "System". */
 export function appendShuffleLog(state: GameState, sheetLabel: string): GameState {
   return appendLog(state, {
     username: 'System',

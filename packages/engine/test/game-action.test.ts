@@ -1,8 +1,8 @@
 /**
- * Tester for spilldelen av `GameAction`.
+ * Tests for the game part of `GameAction`.
  *
- * Java testet dette via `GameResourceTest` over HTTP. Testene her går rett på
- * domenelogikken, med Java-metoden navngitt.
+ * Java tested this through `GameResourceTest` over HTTP. These go straight at
+ * the domain logic, naming the Java method each time.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -25,7 +25,7 @@ import { findPlayer, findPlayerByUsername } from '../src/state.js'
 
 import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
 
-/** Et spill der bare oppretteren har blitt med, så det ikke er startet. */
+/** A game only the creator has joined, so it has not started. */
 function newGameWithCreator(): GameState {
   return createGame({
     name: 'Fourth civ game',
@@ -38,7 +38,7 @@ function newGameWithCreator(): GameState {
 }
 
 describe('joinGame', () => {
-  it('legger til spilleren med neste ledige farge og logger det', () => {
+  it('adds the player with the next free colour and logs it', () => {
     const state = unwrap(
       joinGame(newGameWithCreator(), { playerId: KARANDRAS1, username: 'Karandras1' }),
     )
@@ -50,7 +50,7 @@ describe('joinGame', () => {
     )
   })
 
-  it('respekterer en ønsket farge', () => {
+  it('respects a requested colour', () => {
     const state = unwrap(
       joinGame(newGameWithCreator(), {
         playerId: KARANDRAS1,
@@ -61,19 +61,19 @@ describe('joinGame', () => {
     expect(findPlayer(state, KARANDRAS1)?.color).toBe('Blue')
   })
 
-  it('samme spiller kan ikke bli med to ganger', () => {
+  it('the same player cannot join twice', () => {
     const error = unwrapErr(
       joinGame(newGameWithCreator(), { playerId: CASH1981, username: 'cash1981' }),
     )
     expect(error).toEqual({ kind: 'ALREADY_JOINED', playerId: CASH1981 })
   })
 
-  it('et fullt spill avviser flere spillere', () => {
-    const error = unwrapErr(joinGame(firstCivGame(), { playerId: 'ny', username: 'Ny' }))
+  it('a full game turns further players away', () => {
+    const error = unwrapErr(joinGame(firstCivGame(), { playerId: 'newcomer', username: 'Newcomer' }))
     expect(error).toEqual({ kind: 'GAME_IS_FULL', numOfPlayers: 4 })
   })
 
-  it('siste spiller starter spillet', () => {
+  it('the last player starts the game', () => {
     let state = newGameWithCreator()
     for (const [index, username] of ['Karandras1', 'Itchi', 'Chul'].entries()) {
       state = unwrap(joinGame(state, { playerId: `p${index}`, username }))
@@ -86,35 +86,35 @@ describe('joinGame', () => {
     expect(state.log.some((e) => e.publicLog.includes('player is'))).toBe(true)
   })
 
-  it('en ny spiller overtar hånden til en som har trukket seg', () => {
-    // Java: joinGame plukket withdrawnPlayers.remove(0) og skrev om loggen
+  it('a new player takes over the hand of someone who withdrew', () => {
+    // Java: joinGame took withdrawnPlayers.remove(0) and rewrote the log
     let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'HUTS' }))
     const handSize = findPlayer(state, CASH1981)?.items.length
 
     state = unwrap(withdrawFromGame(state, KARANDRAS1))
     expect(state.withdrawnPlayers).toHaveLength(1)
 
-    state = unwrap(joinGame(state, { playerId: 'ny', username: 'Nykommer' }))
+    state = unwrap(joinGame(state, { playerId: 'newcomer', username: 'Newcomer' }))
 
     expect(state.withdrawnPlayers).toHaveLength(0)
-    expect(findPlayer(state, 'ny')?.username).toBe('Nykommer')
-    // Karandras1 hadde ingen items, så hånden er tom, men fargen følger med
-    expect(findPlayer(state, 'ny')?.color).toBe('Red')
-    // Loggpostene til den som trakk seg skrives om
+    expect(findPlayer(state, 'newcomer')?.username).toBe('Newcomer')
+    // Karandras1 held no items, so the hand is empty, but the colour follows
+    expect(findPlayer(state, 'newcomer')?.color).toBe('Red')
+    // The log entries of whoever withdrew are rewritten
     expect(state.log.some((entry) => entry.username === 'Karandras1')).toBe(false)
-    // cash1981 sin hånd er urørt
+    // cash1981's hand is untouched
     expect(findPlayer(state, CASH1981)?.items).toHaveLength(handSize ?? 0)
   })
 })
 
 describe('nextAvailableColor', () => {
-  it('følger rekkefølgen Green, Yellow, Purple, Red, Blue', () => {
-    let state = createGame({ name: 'farger', numOfPlayers: 5, seed: 'farger', players: [] })
+  it('follows the order Green, Yellow, Purple, Red, Blue', () => {
+    let state = createGame({ name: 'colors', numOfPlayers: 5, seed: 'colors', players: [] })
     const picked: string[] = []
 
     for (let i = 0; i < 5; i++) {
       const color = nextAvailableColor(state)
-      if (color === undefined) throw new Error('ingen farge')
+      if (color === undefined) throw new Error('no color')
       picked.push(color)
       state = unwrap(joinGame(state, { playerId: `p${i}`, username: `P${i}`, color }))
     }
@@ -122,8 +122,8 @@ describe('nextAvailableColor', () => {
     expect(picked).toEqual(['Green', 'Yellow', 'Purple', 'Red', 'Blue'])
   })
 
-  it('gir undefined når alle fem er tatt', () => {
-    let state = createGame({ name: 'farger', numOfPlayers: 6, seed: 'farger', players: [] })
+  it('gives undefined once all five are taken', () => {
+    let state = createGame({ name: 'colors', numOfPlayers: 6, seed: 'colors', players: [] })
     for (let i = 0; i < 5; i++) {
       state = unwrap(joinGame(state, { playerId: `p${i}`, username: `P${i}` }))
     }
@@ -132,19 +132,19 @@ describe('nextAvailableColor', () => {
 })
 
 describe('startIfAllPlayers', () => {
-  it('gjør ingenting når spillet allerede er i gang', () => {
+  it('does nothing when the game is already under way', () => {
     const before = firstCivGame()
     expect(startIfAllPlayers(before)).toBe(before)
   })
 
-  it('gjør ingenting når det mangler spillere', () => {
+  it('does nothing while players are still missing', () => {
     const before = newGameWithCreator()
     expect(startIfAllPlayers(before)).toBe(before)
   })
 })
 
 describe('withdrawFromGame', () => {
-  it('flytter spilleren til withdrawnPlayers og logger det', () => {
+  it('moves the player to withdrawnPlayers and logs it', () => {
     const state = unwrap(withdrawFromGame(firstCivGame(), KARANDRAS1))
 
     expect(state.players).toHaveLength(3)
@@ -152,26 +152,26 @@ describe('withdrawFromGame', () => {
     expect(state.log.at(-1)?.publicLog).toBe('Karandras1 withdrew from game')
   })
 
-  it('spilloppretteren gir rollen videre', () => {
+  it('the game creator passes the role on', () => {
     const state = unwrap(withdrawFromGame(firstCivGame(), CASH1981))
 
     expect(state.players.filter((player) => player.gameCreator)).toHaveLength(1)
     expect(state.log.some((entry) => entry.publicLog.includes('Is now game creator'))).toBe(true)
   })
 
-  it('siste spiller, som er oppretter, må avslutte spillet i stedet', () => {
+  it('the last player, being the creator, has to end the game instead', () => {
     const error = unwrapErr(withdrawFromGame(newGameWithCreator(), CASH1981))
     expect(error).toEqual({ kind: 'GAME_CREATOR_MUST_END_GAME', playerId: CASH1981 })
   })
 
-  it('en spiller utenfor spillet avvises', () => {
-    const error = unwrapErr(withdrawFromGame(firstCivGame(), 'ingen'))
-    expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'ingen' })
+  it('a player outside the game is refused', () => {
+    const error = unwrapErr(withdrawFromGame(firstCivGame(), 'outsider'))
+    expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'outsider' })
   })
 })
 
 describe('endGame', () => {
-  it('spilloppretteren avslutter spillet med vinner', () => {
+  it('the game creator ends the game with a winner', () => {
     const state = unwrap(
       endGame(firstCivGame(), { playerId: CASH1981, username: 'cash1981', winner: 'Itchi' }),
     )
@@ -182,40 +182,40 @@ describe('endGame', () => {
     expect(state.log.at(-1)?.publicLog).toBe('System: cash1981 Ended this game')
   })
 
-  it('kan avsluttes uten vinner', () => {
+  it('can be ended without a winner', () => {
     const state = unwrap(endGame(firstCivGame(), { playerId: CASH1981, username: 'cash1981' }))
     expect(state.active).toBe(false)
     expect(state.winner).toBeNull()
   })
 
-  it('bare spilloppretteren kan avslutte', () => {
+  it('only the game creator can end it', () => {
     const error = unwrapErr(
       endGame(firstCivGame(), { playerId: KARANDRAS1, username: 'Karandras1' }),
     )
     expect(error).toEqual({ kind: 'ONLY_GAME_CREATOR_CAN_END_GAME', playerId: KARANDRAS1 })
   })
 
-  it('admin kan avslutte uten å være med i spillet', () => {
+  it('admin can end a game without being in it', () => {
     const state = unwrap(endGame(firstCivGame(), { playerId: 'admin-id', username: 'admin' }))
     expect(state.active).toBe(false)
   })
 
-  it('en vinner som ikke er med i spillet avvises', () => {
+  it('a winner who is not in the game is refused', () => {
     const error = unwrapErr(
-      endGame(firstCivGame(), { playerId: CASH1981, username: 'cash1981', winner: 'Ukjent' }),
+      endGame(firstCivGame(), { playerId: CASH1981, username: 'cash1981', winner: 'Unknown' }),
     )
-    expect(error).toEqual({ kind: 'PLAYER_NOT_FOUND', playerId: 'Ukjent' })
-    expect(findPlayerByUsername(firstCivGame(), 'Ukjent')).toBeUndefined()
+    expect(error).toEqual({ kind: 'PLAYER_NOT_FOUND', playerId: 'Unknown' })
+    expect(findPlayerByUsername(firstCivGame(), 'Unknown')).toBeUndefined()
   })
 })
 
-/** Java: `GameAction.getAllRevealedItems` — det regnearket i iframe viste. */
+/** Java: `GameAction.getAllRevealedItems` — what the iframe spreadsheet showed. */
 describe('allRevealedItems', () => {
-  it('er tom i et nystartet spill', () => {
+  it('is empty in a freshly started game', () => {
     expect(allRevealedItems(firstCivGame())).toHaveLength(0)
   })
 
-  it('inneholder kastede og avslørte items, men ikke skjulte', () => {
+  it('holds discarded and revealed items, but not hidden ones', () => {
     let state = firstCivGame()
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'HUTS' }))
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CULTURE_1' }))
@@ -224,7 +224,7 @@ describe('allRevealedItems', () => {
     const card = findPlayer(state, CASH1981)?.items.find(
       (item) => item.sheetName === 'CULTURE_1',
     )
-    if (hut === undefined || card === undefined) throw new Error('mangler items')
+    if (hut === undefined || card === undefined) throw new Error('missing items')
 
     state = unwrap(
       revealItem(state, { playerId: CASH1981, sheetName: 'HUTS', itemNumber: hut.itemNumber }),

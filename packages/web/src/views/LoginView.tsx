@@ -1,4 +1,4 @@
-/** Innlogging og registrering. Java: `AuthResource` + AngularJS-loginsiden. */
+/** Signing in and registering. Java: `AuthResource` and the AngularJS login page. */
 
 import { useState } from 'react'
 
@@ -39,13 +39,13 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
   return (
     <div className="center">
       <h1>Civilization</h1>
-      <p className="muted">Play by forum. Logg inn for å fortsette.</p>
+      <p className="muted">Play by forum. Sign in to continue.</p>
 
       {error !== null && <div className="error">{error}</div>}
 
       <form className="panel" onSubmit={submit}>
         <label>
-          Brukernavn
+          Username
           <input
             value={username}
             onChange={(event) => setUsername(event.target.value)}
@@ -55,7 +55,7 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
         </label>
 
         <label>
-          Passord
+          Password
           <input
             type="password"
             value={password}
@@ -67,7 +67,7 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
 
         {mode === 'register' && (
           <label>
-            E-post
+            Email
             <input
               type="email"
               value={email}
@@ -79,7 +79,7 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
 
         <div className="row">
           <button className="primary" type="submit" disabled={busy}>
-            {mode === 'login' ? 'Logg inn' : 'Registrer'}
+            {mode === 'login' ? 'Sign in' : 'Register'}
           </button>
           <button
             type="button"
@@ -88,7 +88,7 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
               setError(null)
             }}
           >
-            {mode === 'login' ? 'Lag ny bruker' : 'Jeg har bruker'}
+            {mode === 'login' ? 'Create an account' : 'I have an account'}
           </button>
         </div>
       </form>

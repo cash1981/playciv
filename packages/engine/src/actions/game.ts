@@ -1,16 +1,16 @@
 /**
- * Port av spilldelen av `no.asgari.civilization.server.action.GameAction`.
+ * Port of the game part of `no.asgari.civilization.server.action.GameAction`.
  *
- * Ikke portert hit, med vilje:
+ * Deliberately not ported here:
  *
- * - `createNewGame` — ligger i `create-game.ts`, portert fra `PBFTestAction`
- * - `addMapLink` / `addAssetLink` — pekte på Google Presentation og Spreadsheet
- *   i iframe, som skal dø
- * - `chat` / `getChat` / `getPublicChat` — meldinger uten spillregler, hører i
- *   server-pakken
- * - highscore, turneringer, `sendMailToAll`, `deleteGame`, e-postinnstillinger —
- *   spør på tvers av spill eller er infrastruktur
- * - DTO-mapping (`mapGameDTO`, `createPbfDTO`) — erstattet av `toPlayerView`
+ * - `createNewGame` — lives in `create-game.ts`, ported from `PBFTestAction`
+ * - `addMapLink` / `addAssetLink` — pointed at a Google Presentation and
+ *   Spreadsheet in an iframe, which are going away
+ * - `chat` / `getChat` / `getPublicChat` — messages without game rules, so they
+ *   belong in the server package
+ * - highscores, tournaments, `sendMailToAll`, `deleteGame`, email settings —
+ *   these query across games or are infrastructure
+ * - DTO mapping (`mapGameDTO`, `createPbfDTO`) — replaced by `toPlayerView`
  */
 
 import type { EngineError } from '../errors.js'
@@ -40,9 +40,9 @@ export interface JoinGameInput {
 /**
  * Java: `GameAction.joinGame`.
  *
- * Har noen trukket seg, overtar den nye spilleren hånden deres og alle
- * loggpostene deres skrives om til det nye brukernavnet. Ellers opprettes en ny
- * hånd med neste ledige farge.
+ * If someone has withdrawn, the new player takes over their hand and all their
+ * log entries are rewritten to the new username. Otherwise a fresh hand is
+ * created with the next free colour.
  */
 export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
   if (state.numOfPlayers === state.players.length) {
@@ -58,7 +58,7 @@ export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
   let joined: Playerhand
 
   if (withdrawn !== undefined) {
-    // Java: overtar hånden og oppdaterer loggposter til nytt brukernavn
+    // Java: takes over the hand and rewrites log entries to the new username
     joined = {
       ...withdrawn,
       playerId: input.playerId,
@@ -108,9 +108,9 @@ export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
 }
 
 /**
- * Java: `chooseColorForPlayer` brukte `Sets.difference` og tok første element av
- * et HashSet, altså i uspesifisert rekkefølge. Her følges rekkefølgen i
- * `PLAYER_COLORS`, slik at samme spill gir samme farger.
+ * Java: `chooseColorForPlayer` used `Sets.difference` and took the first
+ * element of a HashSet, so in unspecified order. Here the order in
+ * `PLAYER_COLORS` is followed, so the same game gives the same colours.
  */
 export function nextAvailableColor(state: GameState): string | undefined {
   const taken = new Set(state.players.map((player) => player.color))
@@ -120,9 +120,9 @@ export function nextAvailableColor(state: GameState): string | undefined {
 /**
  * Java: `GameAction.startIfAllPlayers`.
  *
- * Når siste plass er fylt, stokkes spillerne, den første får turen, og alle får
- * et spillernummer. Har noen allerede turen, er spillet i gang og ingenting
- * skjer.
+ * When the last seat is filled the players are shuffled, the first one takes
+ * the turn, and everyone gets a player number. If someone already has the turn
+ * the game is under way and nothing happens.
  */
 export function startIfAllPlayers(state: GameState): GameState {
   if (state.players.some((player) => player.yourTurn)) return state
@@ -150,8 +150,8 @@ const ORDINAL_NAMES = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth'] a
 /**
  * Java: `GameAction.withdrawFromGame`.
  *
- * Er den som trekker seg spilloppretter, gis rollen videre til en tilfeldig
- * annen spiller. Er det ingen andre, må spillet avsluttes i stedet.
+ * If the one withdrawing is the game creator, the role passes to a random
+ * other player. If there is nobody else, the game has to be ended instead.
  */
 export function withdrawFromGame(state: GameState, playerId: string): ActionResult {
   if (!hasUserAccess(state, playerId)) return err({ kind: 'NO_ACCESS', playerId })
@@ -197,15 +197,15 @@ export function withdrawFromGame(state: GameState, playerId: string): ActionResu
 export interface EndGameInput {
   readonly playerId: string
   readonly username: string
-  /** Brukernavnet til vinneren. Utelates hvis spillet avsluttes uten vinner. */
+  /** The winner's username. Left out when the game ends without one. */
   readonly winner?: string
 }
 
 /**
  * Java: `GameAction.endGame`.
  *
- * Bare spilloppretteren, eller brukeren «admin», kan avslutte et spill.
- * Javas siste logglinje om donasjon til playciv.com er ikke portert.
+ * Only the game creator, or the user "admin", can end a game.
+ * Java's last log line asking for donations to playciv.com is not ported.
  */
 export function endGame(state: GameState, input: EndGameInput): ActionResult {
   if (input.username !== 'admin') {
@@ -234,8 +234,8 @@ export function endGame(state: GameState, input: EndGameInput): ActionResult {
 }
 
 /**
- * Java: `GameAction.getAllRevealedItems` — kastede items pluss alt spillerne
- * har avslørt. Dette er hva regnearket i iframe pleide å vise.
+ * Java: `GameAction.getAllRevealedItems` — discarded items plus everything the players
+ * has revealed. This is what the spreadsheet in the iframe used to show.
  */
 export function allRevealedItems(state: GameState): readonly Item[] {
   const discarded = [...state.discardedItems].sort(compareItems)

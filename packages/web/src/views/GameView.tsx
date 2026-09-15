@@ -1,8 +1,9 @@
 /**
- * Selve spillet. Erstatter game-siden i old-civ-web.
+ * The game itself. Replaces the game page in old-civ-web.
  *
- * All tilstand hentes som `PlayerView`, altså spillerens eget syn. Innholdet i
- * andres hender finnes ikke i svaret, så klienten kan ikke lekke det ved uhell.
+ * All state arrives as a `PlayerView`, that is the player's own view. The
+ * contents of other hands are not in the response, so the client cannot leak
+ * them by accident.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -25,7 +26,7 @@ interface Props {
   readonly onUnauthorized: () => void
 }
 
-/** Det man kan trekke. Teknologier velges og står derfor ikke her. */
+/** What can be drawn. Techs are chosen, so they are not listed here. */
 const DRAWABLE: readonly { readonly sheet: SheetName; readonly label: string }[] = [
   { sheet: 'CIV', label: 'Civ' },
   { sheet: 'CULTURE_1', label: 'Culture I' },
@@ -66,9 +67,8 @@ export function GameView({ gameId, player, onUnauthorized }: Props): React.JSX.E
   }, [reload])
 
   /**
-   * Kjører en handling og setter det nye synet fra svaret. Alle skrivende
-   * endepunkter svarer med oppdatert `PlayerView`, så det trengs ingen ny
-   * henting.
+   * Runs an action and takes the new view from the response. Every writing
+   * endpoint answers with an updated `PlayerView`, so no extra fetch is needed.
    */
   const run = useCallback(
     async (action: () => Promise<PlayerView | unknown>) => {
@@ -96,7 +96,7 @@ export function GameView({ gameId, player, onUnauthorized }: Props): React.JSX.E
     return (
       <>
         {error !== null && <div className="error">{error}</div>}
-        <p className="muted">Laster spillet …</p>
+        <p className="muted">Loading the game …</p>
       </>
     )
   }
@@ -104,13 +104,21 @@ export function GameView({ gameId, player, onUnauthorized }: Props): React.JSX.E
   const you = view.you
   const yourTurn = you?.yourTurn === true
 
+  /**
+   * The public log, flattened for the board's replay view. Private entries
+   * carry `privateLog` as well, but the board shows only what everyone can see.
+   */
+  const boardLog = view.log
+    .map((entry) => ({ id: entry.id, message: entry.publicLog }))
+    .filter((entry) => entry.message !== '')
+
   return (
     <>
       <div className="panel">
         <div className="row">
           <h1 style={{ margin: 0 }}>{view.name}</h1>
-          {!view.active && <span className="tag">avsluttet</span>}
-          {view.winner !== null && <span className="tag revealed">{view.winner} vant</span>}
+          {!view.active && <span className="tag">ended</span>}
+          {view.winner !== null && <span className="tag revealed">{view.winner} won</span>}
           {you?.civilization != null && (
             <span className="tag revealed">{you.civilization.name}</span>
           )}
@@ -122,20 +130,20 @@ export function GameView({ gameId, player, onUnauthorized }: Props): React.JSX.E
           )}
           <span style={{ flex: 1 }} />
           {yourTurn ? (
-            <span className="tag turn">Din tur</span>
+            <span className="tag turn">Your turn</span>
           ) : (
             <span className="muted">
-              {view.opponents.find((opponent) => opponent.yourTurn)?.username ?? 'ingen'} sin tur
+              {view.opponents.find((opponent) => opponent.yourTurn)?.username ?? 'nobody'}’s turn
             </span>
           )}
         </div>
 
         <div className="row" style={{ marginTop: '0.6rem' }}>
           <button disabled={busy || !yourTurn} onClick={() => void run(() => api.endTurn(gameId))}>
-            Avslutt tur
+            End turn
           </button>
           <button disabled={busy || yourTurn} onClick={() => void run(() => api.takeTurn(gameId))}>
-            Ta turen
+            Take the turn
           </button>
           <span style={{ flex: 1 }} />
           <button
@@ -143,25 +151,32 @@ export function GameView({ gameId, player, onUnauthorized }: Props): React.JSX.E
             disabled={busy || !view.active}
             onClick={() => void run(() => api.withdraw(gameId))}
           >
-            Trekk deg
+            Withdraw
           </button>
           <button
             className="danger"
             disabled={busy || !view.active || you?.gameCreator !== true}
             onClick={() => {
-              const winner = window.prompt('Brukernavn på vinneren (tomt = ingen vinner)') ?? ''
+              const winner = window.prompt('Username of the winner (empty for no winner)') ?? ''
               void run(() => api.endGame(gameId, winner === '' ? undefined : winner))
             }}
           >
-            Avslutt spillet
+            End the game
           </button>
         </div>
       </div>
 
       {error !== null && <div className="error">{error}</div>}
 
-      {/* Brettet ligger over alt annet, som bedt om */}
-      <BoardView gameId={gameId} board={view.board} busy={busy} run={run} />
+      {/* The board sits above everything else */}
+      <BoardView
+        gameId={gameId}
+        board={view.board}
+        areas={view.boardAreas}
+        busy={busy}
+        run={run}
+        log={boardLog}
+      />
 
       <div className="grid">
         <DrawPanel gameId={gameId} busy={busy} yourTurn={yourTurn} run={run} view={view} />
@@ -201,9 +216,9 @@ function DrawPanel({
 }: PanelProps & { readonly yourTurn: boolean }): React.JSX.Element {
   return (
     <section className="panel">
-      <h2>Trekk</h2>
+      <h2>Draw</h2>
       <p className="muted" style={{ marginTop: 0 }}>
-        {yourTurn ? 'Det er din tur.' : 'Du kan bare trekke når det er din tur.'}
+        {yourTurn ? 'It is your turn.' : 'You can only draw on your own turn.'}
       </p>
       <div className="row">
         {DRAWABLE.map(({ sheet, label }) => (
@@ -227,8 +242,8 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
 
   return (
     <section className="panel">
-      <h2>Hånden din ({items.length})</h2>
-      {items.length === 0 && <p className="muted">Tom.</p>}
+      <h2>Your hand ({items.length})</h2>
+      {items.length === 0 && <p className="muted">Empty.</p>}
       <ul className="list scroll">
         {items.map((item) => (
           <HandItem
@@ -264,7 +279,7 @@ function HandItem({
     <li>
       <span>{revealAll(item)}</span>
       <span className={item.hidden ? 'tag hidden' : 'tag revealed'}>
-        {item.hidden ? 'skjult' : 'avslørt'}
+        {item.hidden ? 'hidden' : 'revealed'}
       </span>
       <span className="muted">#{item.itemNumber}</span>
       <span style={{ flex: 1 }} />
@@ -274,7 +289,7 @@ function HandItem({
           disabled={busy}
           onClick={() => void run(() => api.revealItem(gameId, item.sheetName, item.itemNumber))}
         >
-          Avslør
+          Reveal
         </button>
       )}
       <button
@@ -284,21 +299,21 @@ function HandItem({
           void run(() => api.discardItem(gameId, item.sheetName, item.itemNumber, itemName(item)))
         }
       >
-        Kast
+        Discard
       </button>
       <button
         className="small"
         disabled={busy}
         onClick={() => void run(() => api.itemBackToDeck(gameId, item.sheetName, itemName(item)))}
       >
-        Til stokken
+        Back to deck
       </button>
       <select
         value={target}
         onChange={(event) => setTarget(event.target.value)}
         style={{ width: 'auto' }}
       >
-        <option value="">gi til …</option>
+        <option value="">give to …</option>
         {opponents.map((opponent) => (
           <option key={opponent.playerId} value={opponent.playerId}>
             {opponent.username}
@@ -314,7 +329,7 @@ function HandItem({
           )
         }
       >
-        Gi
+        Give
       </button>
     </li>
   )
@@ -327,7 +342,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
 
   return (
     <section className="panel">
-      <h2>Kamp</h2>
+      <h2>Battle</h2>
 
       <div className="row">
         <input
@@ -342,16 +357,16 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
           disabled={busy}
           onClick={() => void run(() => api.drawBattlehand(gameId, count))}
         >
-          Trekk battlehand
+          Draw battlehand
         </button>
         <button
           disabled={busy || battlehand.length === 0}
           onClick={() => void run(() => api.revealBattlehand(gameId))}
         >
-          Avslør
+          Reveal
         </button>
         <button disabled={busy} onClick={() => void run(() => api.endBattle(gameId))}>
-          Avslutt kamp
+          End battle
         </button>
       </div>
 
@@ -360,22 +375,22 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
         {battlehand.map((unit) => (
           <li key={unit.id}>{revealAll(unit)}</li>
         ))}
-        {battlehand.length === 0 && <li className="muted">Tom.</li>}
+        {battlehand.length === 0 && <li className="muted">Empty.</li>}
       </ul>
 
-      <h3 style={{ marginTop: '0.8rem' }}>Barbarer ({barbarians.length})</h3>
+      <h3 style={{ marginTop: '0.8rem' }}>Barbarians ({barbarians.length})</h3>
       <div className="row">
         <button
           disabled={busy || barbarians.length > 0}
           onClick={() => void run(() => api.drawBarbarians(gameId))}
         >
-          Trekk 3
+          Draw 3
         </button>
         <button
           disabled={busy || barbarians.length === 0}
           onClick={() => void run(() => api.discardBarbarians(gameId))}
         >
-          Kast
+          Discard
         </button>
       </div>
       <ul className="list">
@@ -390,7 +405,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
 function OpponentPanel({ view }: { readonly view: PlayerView }): React.JSX.Element {
   return (
     <section className="panel">
-      <h2>Motspillere</h2>
+      <h2>Opponents</h2>
       <ul className="list">
         {view.opponents.map((opponent) => (
           <li key={opponent.playerId}>
@@ -398,21 +413,21 @@ function OpponentPanel({ view }: { readonly view: PlayerView }): React.JSX.Eleme
               <span className="swatch" style={{ background: opponent.color.toLowerCase() }} />
             )}
             <strong>{opponent.username}</strong>
-            {opponent.yourTurn && <span className="tag turn">tur</span>}
+            {opponent.yourTurn && <span className="tag turn">turn</span>}
             {opponent.civilization != null && (
               <span className="tag revealed">{opponent.civilization.name}</span>
             )}
-            {/* Antall, ikke innhold — motorens projeksjon gir ikke mer */}
+            {/* Counts, not contents — the projection gives nothing more */}
             <span className="muted">
-              {opponent.numberOfItemsInHand} kort · {opponent.numberOfTechsChosen} tech ·{' '}
-              {opponent.numberOfSocialPolicies} politikk
+              {opponent.numberOfItemsInHand} cards · {opponent.numberOfTechsChosen} techs ·{' '}
+              {opponent.numberOfSocialPolicies} policies
             </span>
           </li>
         ))}
-        {view.opponents.length === 0 && <li className="muted">Ingen andre har blitt med ennå.</li>}
+        {view.opponents.length === 0 && <li className="muted">Nobody else has joined yet.</li>}
       </ul>
       <p className="muted" style={{ marginBottom: 0 }}>
-        Stokken: {view.numberOfItemsInDeck} kort · kastet: {view.numberOfDiscardedItems}
+        Deck: {view.numberOfItemsInDeck} cards · discarded: {view.numberOfDiscardedItems}
       </p>
     </section>
   )

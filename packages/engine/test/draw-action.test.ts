@@ -1,9 +1,10 @@
 /**
- * Port av `no.asgari.civilization.server.action.DrawActionTest`.
+ * Port of `no.asgari.civilization.server.action.DrawActionTest`.
  *
- * De gamle Java-testene er fasit. Hver test under navngir sin Java-motpart.
- * Der Java lente seg på verdi-likhet (`assertThat(list).doesNotContain(item)`),
- * sjekkes både id og verdi, siden porten la til stabil id per instans.
+ * The old Java tests are the reference. Every test below names its Java
+ * counterpart. Where Java leaned on value equality
+ * (`assertThat(list).doesNotContain(item)`), both id and value are checked,
+ * since the port added a stable id per instance.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -25,7 +26,7 @@ const countInDeck = (state: GameState, sheetName: SheetName): number =>
 
 const lastDrawn = (state: GameState): Item => {
   const entry = state.log.at(-1)
-  if (entry?.item == null) throw new Error('Siste loggpost har ikke noe item')
+  if (entry?.item == null) throw new Error('the last log entry carries no item')
   return entry.item
 }
 
@@ -33,10 +34,10 @@ const handOf = (state: GameState, playerId: string): readonly Item[] =>
   findPlayer(state, playerId)?.items ?? []
 
 /**
- * Java: de 17 `drawXAndMakeSureItsNoLongerInPBFCollection`-testene.
- * Alle har samme form, så de kjøres som en tabell.
+ * Java: the 17 `drawXAndMakeSureItsNoLongerInPBFCollection` tests.
+ * They all share one shape, so they run as a table.
  */
-describe('draw fjerner itemet fra stokken og gir det til spilleren', () => {
+describe('draw takes the item out of the deck and hands it to the player', () => {
   const cases: readonly { readonly sheetName: SheetName; readonly kind: ItemKind }[] = [
     { sheetName: 'CIV', kind: 'civ' },
     { sheetName: 'AIRCRAFT', kind: 'aircraft' },
@@ -57,7 +58,7 @@ describe('draw fjerner itemet fra stokken og gir det til spilleren', () => {
   ]
 
   for (const { sheetName, kind } of cases) {
-    it(`${sheetName} gir et item av typen ${kind}`, () => {
+    it(`${sheetName} gives an item of kind ${kind}`, () => {
       const before = firstCivGame()
       const countBefore = countInDeck(before, sheetName)
       expect(countBefore).toBeGreaterThan(0)
@@ -70,7 +71,7 @@ describe('draw fjerner itemet fra stokken og gir det til spilleren', () => {
       expect(countInDeck(after, sheetName)).toBe(countBefore - 1)
       // Java: assertThat(pbf.getItems()).doesNotContain(item)
       expect(after.items.some((deckItem) => deckItem.id === item.id)).toBe(false)
-      // Itemet ligger nå i spillerens hånd, skjult, med eier satt
+      // The item now sits in the hand of the player, hidden, with an owner
       expect(handOf(after, CASH1981).map((handItem) => handItem.id)).toContain(item.id)
       expect(item.hidden).toBe(true)
       expect(item.ownerId).toBe(CASH1981)
@@ -78,9 +79,9 @@ describe('draw fjerner itemet fra stokken og gir det til spilleren', () => {
   }
 })
 
-/** Java: `drawCivAndMakeSureItsNoLongerInPBFCollection` — loggkravene. */
+/** Java: `drawCivAndMakeSureItsNoLongerInPBFCollection` — the log requirements. */
 describe('drawCiv', () => {
-  it('logger privat og offentlig, og finner arket via find("CIV")', () => {
+  it('logs privately and publicly, and finds the sheet through find("CIV")', () => {
     const civ = findSheetName('CIV')
     expect(civ).toBe('CIV')
 
@@ -95,7 +96,7 @@ describe('drawCiv', () => {
     expect(entry?.publicLog).toMatch(/.+drew.*Civ..*/)
   })
 
-  it('avslører ikke sivilisasjonsnavnet i den offentlige loggen', () => {
+  it('keeps the name of the civilization out of the public log', () => {
     const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CIV' }))
     const entry = state.log.at(-1)
     const item = lastDrawn(state)
@@ -104,16 +105,16 @@ describe('drawCiv', () => {
     expect(entry?.publicLog).not.toContain(itemName(item))
   })
 
-  it('stokken inneholder ikke lenger et verdi-likt item', () => {
+  it('the deck no longer holds an item equal by value', () => {
     const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CIV' }))
     const item = lastDrawn(state)
     expect(state.items.some((deckItem) => itemValueEquals(deckItem, item))).toBe(false)
   })
 })
 
-/** Java: `drawArtilleryAndMakeSureItsNoLongerInPBFCollection` — bildesjekken. */
+/** Java: `drawArtilleryAndMakeSureItsNoLongerInPBFCollection` — the image check. */
 describe('drawArtillery', () => {
-  it('bildefilnavnet har ingen mellomrom og slutter på .png', () => {
+  it('the image filename has no spaces and ends in .png', () => {
     const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'ARTILLERY' }))
     const image = itemImage(lastDrawn(state))
 
@@ -125,7 +126,7 @@ describe('drawArtillery', () => {
 
 /** Java: `drawItemAndMakeSureLogsAreStored`. */
 describe('logging', () => {
-  it('hvert trekk legger til én loggpost', () => {
+  it('every draw adds one log entry', () => {
     const before = firstCivGame()
     const after = unwrap(draw(before, { playerId: CASH1981, sheetName: 'GREAT_PERSON' }))
     expect(after.log.length).toBe(before.log.length + 1)
@@ -134,10 +135,10 @@ describe('logging', () => {
 
 /**
  * Java: `makeSureSystemCorrectlyThrowsExceptionWhenNothingToShuffle`
- * (annotert `@Test(expected = NoMoreItemsException.class)`).
+ * (annotated `@Test(expected = NoMoreItemsException.class)`).
  */
 describe('reshuffle', () => {
-  it('tømmer man en stokk der ingenting er kastet, gir neste trekk NO_MORE_ITEMS', () => {
+  it('emptying a deck with nothing discarded makes the next draw NO_MORE_ITEMS', () => {
     let state = firstCivGame()
     const aircrafts = countInDeck(state, 'AIRCRAFT')
     expect(aircrafts).toBeGreaterThan(0)
@@ -151,7 +152,7 @@ describe('reshuffle', () => {
     expect(error).toEqual({ kind: 'NO_MORE_ITEMS', what: 'Aircraft' })
   })
 
-  it('kastede items legges tilbake i stokken og kan trekkes igjen', () => {
+  it('discarded items go back into the deck and can be drawn again', () => {
     let state = firstCivGame()
     const aircrafts = countInDeck(state, 'AIRCRAFT')
 
@@ -159,9 +160,9 @@ describe('reshuffle', () => {
       state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'AIRCRAFT' }))
     }
 
-    // Simuler at spilleren kaster fem fly, slik PlayerAction.discardItem gjør
+    // Mimic the player discarding five aircraft, the way PlayerAction.discardItem does
     const player = findPlayer(state, CASH1981)
-    if (player === undefined) throw new Error('mangler spiller')
+    if (player === undefined) throw new Error('missing player')
     const discarded = player.items.filter((item) => item.sheetName === 'AIRCRAFT').slice(0, 5)
     state = {
       ...state,
@@ -175,14 +176,14 @@ describe('reshuffle', () => {
 
     const after = unwrap(draw(state, { playerId: CASH1981, sheetName: 'AIRCRAFT' }))
 
-    // Fem lagt tilbake, ett trukket ut igjen
+    // Five put back, one drawn out again
     expect(countInDeck(after, 'AIRCRAFT')).toBe(4)
     expect(after.discardedItems).toHaveLength(0)
-    // Java: logShuffle skriver en System-post
+    // Java: logShuffle writes a System entry
     expect(after.log.some((e) => e.publicLog === 'Aircraft reshuffled and put back in the deck')).toBe(true)
   })
 
-  it('reshuffle rører ikke kastede items av andre typer', () => {
+  it('reshuffle leaves discarded items of other kinds alone', () => {
     let state = firstCivGame()
     const aircrafts = countInDeck(state, 'AIRCRAFT')
     for (let i = 0; i < aircrafts; i++) {
@@ -190,11 +191,11 @@ describe('reshuffle', () => {
     }
 
     const player = findPlayer(state, CASH1981)
-    if (player === undefined) throw new Error('mangler spiller')
+    if (player === undefined) throw new Error('missing player')
     const oneAircraft = player.items.find((item) => item.sheetName === 'AIRCRAFT')
-    if (oneAircraft === undefined) throw new Error('mangler fly')
+    if (oneAircraft === undefined) throw new Error('missing aircraft')
     const someHut = state.items.find((item) => item.sheetName === 'HUTS')
-    if (someHut === undefined) throw new Error('mangler hut')
+    if (someHut === undefined) throw new Error('missing hut')
 
     state = { ...state, discardedItems: [oneAircraft, someHut] }
     const after = unwrap(draw(state, { playerId: CASH1981, sheetName: 'AIRCRAFT' }))
@@ -202,10 +203,10 @@ describe('reshuffle', () => {
     expect(after.discardedItems.map((i) => i.id)).toEqual([someHut.id])
   })
 
-  it('typer utenfor SHUFFLABLE_ITEMS kan ikke reshuffles', () => {
-    // Java: reshuffleItems kaster IllegalArgumentException for huts og villages.
-    // Briefen for denne portingen antok at de hentes tilbake fra hendene;
-    // det gjør Java ikke, og Java er fasit.
+  it('kinds outside SHUFFLABLE_ITEMS cannot be reshuffled', () => {
+    // Java: reshuffleItems throws IllegalArgumentException for huts and
+    // villages. The brief for this port assumed they are collected back from
+    // the hands; Java does no such thing, and Java is the reference.
     let state = firstCivGame()
     const huts = countInDeck(state, 'HUTS')
     for (let i = 0; i < huts; i++) {
@@ -218,8 +219,8 @@ describe('reshuffle', () => {
 })
 
 /** Java: `drawUnitForBattle`. */
-describe('battlehand', () => {
-  it('trekker riktig antall units, og tømmes ved reveal', () => {
+describe('battle hand', () => {
+  it('draws the right number of units, and empties on reveal', () => {
     let state = firstCivGame()
     for (const sheetName of ['INFANTRY', 'ARTILLERY', 'ARTILLERY', 'MOUNTED', 'MOUNTED'] as const) {
       state = unwrap(draw(state, { playerId: CASH1981, sheetName }))
@@ -228,7 +229,7 @@ describe('battlehand', () => {
     state = unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 5 }))
     expect(findPlayer(state, CASH1981)?.battlehand).toHaveLength(5)
 
-    // Java: ber man om 99 units og har 5, får man 5
+    // Java: ask for 99 units with 5 available and you get 5
     state = unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 99 }))
     expect(findPlayer(state, CASH1981)?.battlehand).toHaveLength(5)
 
@@ -237,14 +238,14 @@ describe('battlehand', () => {
 
     state = unwrap(revealAndDiscardBattlehand(state, CASH1981))
     expect(findPlayer(state, CASH1981)?.battlehand).toHaveLength(0)
-    // Unitene ligger fortsatt i hånden — Java flytter dem ikke til discard
+    // The units stay in the hand — Java does not move them to the discard pile
     expect(handOf(state, CASH1981).filter(isUnit)).toHaveLength(5)
   })
 })
 
 /** Java: `drawAndDiscardBarbarians`. */
-describe('barbarer', () => {
-  it('trekker tre og kaster dem til discardedItems', () => {
+describe('barbarians', () => {
+  it('draws three and discards them to discardedItems', () => {
     let state = firstCivGame()
     expect(findPlayer(state, CASH1981)?.barbarians).toHaveLength(0)
 
@@ -259,7 +260,7 @@ describe('barbarer', () => {
     expect(state.discardedItems.every((item) => item.ownerId === null)).toBe(true)
   })
 
-  it('kan ikke trekke flere før de er kastet', () => {
+  it('cannot draw more until they have been discarded', () => {
     const state = unwrap(drawBarbarians(firstCivGame(), CASH1981))
     const error = unwrapErr(drawBarbarians(state, CASH1981))
     expect(error).toEqual({ kind: 'BARBARIANS_NOT_DISCARDED', playerId: CASH1981 })
@@ -268,7 +269,7 @@ describe('barbarer', () => {
 
 /** Java: `simulateLoot`. */
 describe('loot', () => {
-  it('flytter en landsby fra én spiller til en annen', () => {
+  it('moves a village from one player to another', () => {
     let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'VILLAGES' }))
 
     const villagesOf = (playerId: string): number =>
@@ -290,7 +291,7 @@ describe('loot', () => {
     expect(villagesOf(KARANDRAS1)).toBe(toBefore + 1)
   })
 
-  it('gir NOTHING_TO_LOOT når spilleren ikke har noe av typen', () => {
+  it('gives NOTHING_TO_LOOT when the player holds nothing of that kind', () => {
     const error = unwrapErr(
       loot(firstCivGame(), {
         playerId: CASH1981,
@@ -301,9 +302,9 @@ describe('loot', () => {
     expect(error).toEqual({ kind: 'NOTHING_TO_LOOT', playerId: CASH1981 })
   })
 
-  it('gir ITEM_NOT_LOOTABLE for items som ikke er Tradable', () => {
-    // Java: kun CultureI/II/III, Hut og Village implementerer Tradable.
-    // Wonders gjør det ikke.
+  it('gives ITEM_NOT_LOOTABLE for items that are not Tradable', () => {
+    // Java: only CultureI/II/III, Hut and Village implement Tradable.
+    // Wonders do not.
     const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'ANCIENT_WONDERS' }))
     const result = loot(state, {
       playerId: CASH1981,
@@ -314,26 +315,26 @@ describe('loot', () => {
   })
 })
 
-/** Java: `DrawAction.draw` sjekket tur og nektet trekk av teknologier. */
-describe('forutsetninger for trekk', () => {
-  it('bare spilleren som har turen kan trekke', () => {
+/** Java: `DrawAction.draw` checked the turn and refused to draw technologies. */
+describe('preconditions for drawing', () => {
+  it('only the player whose turn it is may draw', () => {
     const error = unwrapErr(draw(firstCivGame(), { playerId: KARANDRAS1, sheetName: 'CIV' }))
     expect(error).toEqual({ kind: 'NOT_YOUR_TURN', playerId: KARANDRAS1 })
   })
 
-  it('teknologier kan ikke trekkes, de skal velges', () => {
+  it('technologies cannot be drawn, they are chosen', () => {
     const error = unwrapErr(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'LEVEL_1_TECH' }))
     expect(error).toEqual({ kind: 'TECHS_ARE_CHOSEN_NOT_DRAWN', sheetName: 'LEVEL_1_TECH' })
   })
 
-  it('ukjent spiller gir PLAYER_NOT_FOUND', () => {
-    const error = unwrapErr(draw(firstCivGame(), { playerId: 'ingen', sheetName: 'CIV' }))
-    expect(error).toEqual({ kind: 'PLAYER_NOT_FOUND', playerId: 'ingen' })
+  it('an unknown player gives PLAYER_NOT_FOUND', () => {
+    const error = unwrapErr(draw(firstCivGame(), { playerId: 'outsider', sheetName: 'CIV' }))
+    expect(error).toEqual({ kind: 'PLAYER_NOT_FOUND', playerId: 'outsider' })
   })
 })
 
-describe('renhet', () => {
-  it('draw muterer ikke inn-tilstanden', () => {
+describe('purity', () => {
+  it('draw does not mutate the state it was given', () => {
     const before = firstCivGame()
     const snapshot = JSON.stringify(before)
 
@@ -342,15 +343,23 @@ describe('renhet', () => {
     expect(JSON.stringify(before)).toBe(snapshot)
   })
 
-  it('samme seed gir samme stokk', () => {
-    expect(firstCivGame('samme').items.map((i) => i.itemNumber)).toEqual(
-      firstCivGame('samme').items.map((i) => i.itemNumber),
+  it('the same seed gives the same deck', () => {
+    expect(firstCivGame('same').items.map((i) => i.itemNumber)).toEqual(
+      firstCivGame('same').items.map((i) => i.itemNumber),
     )
   })
 
-  it('forskjellig seed gir forskjellige itemNumber', () => {
-    const a = firstCivGame('spill-a')
-    const b = firstCivGame('spill-b')
-    expect(a.items[0]?.itemNumber).not.toBe(b.items[0]?.itemNumber)
+  it('a different seed gives a different deck order', () => {
+    const a = firstCivGame('game-a').items.map((item) => itemName(item))
+    const b = firstCivGame('game-b').items.map((item) => itemName(item))
+    expect(a).not.toEqual(b)
+  })
+
+  it('a different seed gives a different item number offset', () => {
+    // Java: RandomUtils.nextInt(1, 20), so only 19 offsets exist and two seeds
+    // can land on the same one. These two are picked because they differ.
+    expect(firstCivGame('game-a').items[0]?.itemNumber).not.toBe(
+      firstCivGame('game-c').items[0]?.itemNumber,
+    )
   })
 })

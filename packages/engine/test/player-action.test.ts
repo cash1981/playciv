@@ -1,9 +1,9 @@
 /**
- * Port av testene som dekket `PlayerAction`.
+ * Port of the tests that covered `PlayerAction`.
  *
- * Java hadde ingen egen `PlayerActionTest`; dekningen kom via
- * `PlayerResourceTest` og `UndoActionTest.checkThatYouCanUndoTech`. Testene her
- * er skrevet mot Java-kildens faktiske oppførsel, med Java-metoden navngitt.
+ * Java had no `PlayerActionTest` of its own; the coverage came through
+ * `PlayerResourceTest` and `UndoActionTest.checkThatYouCanUndoTech`. These are
+ * written against what the Java source actually does, naming the Java method.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -36,8 +36,8 @@ const handOf = (state: GameState, playerId: string) =>
   findPlayer(state, playerId)?.items ?? []
 
 /** Java: `PlayerAction.chooseTech` / `removeTech` / `revealTech`. */
-describe('teknologi', () => {
-  it('velger en teknologi og logger den skjult offentlig', () => {
+describe('technology', () => {
+  it('chooses a technology and logs it hidden in public', () => {
     const state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
     const player = findPlayer(state, CASH1981)
     const entry = state.log.at(-1)
@@ -50,25 +50,25 @@ describe('teknologi', () => {
     expect(entry?.publicLog).not.toContain('Navy')
   })
 
-  it('lar ikke state.techs bli forurenset av hvem som valgte hva', () => {
-    // Java muterte teknologien i pbf.techs og la samme referanse i hånden
+  it('keeps state.techs clean of who chose what', () => {
+    // Java mutated the technology in pbf.techs and put the same reference in the hand
     const state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
     const inCatalogue = state.techs.find((tech) => tech.name === 'Navy')
     expect(inCatalogue?.ownerId).toBeNull()
   })
 
-  it('samme teknologi to ganger avvises', () => {
+  it('the same technology twice is refused', () => {
     const state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
     const error = unwrapErr(chooseTech(state, { playerId: CASH1981, techName: 'Navy' }))
     expect(error).toEqual({ kind: 'TECH_ALREADY_CHOSEN', techName: 'Navy' })
   })
 
-  it('ukjent teknologi gir ITEM_NOT_FOUND', () => {
+  it('an unknown technology gives ITEM_NOT_FOUND', () => {
     const error = unwrapErr(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Warp Drive' }))
     expect(error).toEqual({ kind: 'ITEM_NOT_FOUND' })
   })
 
-  it('fjerner en valgt teknologi og logger REMOVED_TECH', () => {
+  it('removes a chosen technology and logs REMOVED_TECH', () => {
     let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
     state = unwrap(removeTech(state, { playerId: CASH1981, techName: 'Navy' }))
 
@@ -77,7 +77,7 @@ describe('teknologi', () => {
     expect(state.log.at(-1)?.publicLog).not.toContain('Navy')
   })
 
-  it('avslører en teknologi, som da blir synlig for alle', () => {
+  it('reveals a technology, which everyone then sees', () => {
     let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
     state = unwrap(revealTech(state, { playerId: CASH1981, techName: 'Navy' }))
 
@@ -86,7 +86,7 @@ describe('teknologi', () => {
     expect(revealedTechsForAllPlayers(state)).toEqual([])
   })
 
-  it('gjenstående teknologier utelater de valgte', () => {
+  it('the remaining technologies leave out the chosen ones', () => {
     const before = firstCivGame()
     const total = remainingTechsForPlayer(before, CASH1981).length
     const after = unwrap(chooseTech(before, { playerId: CASH1981, techName: 'Navy' }))
@@ -95,18 +95,18 @@ describe('teknologi', () => {
     expect(remainingTechsForPlayer(after, CASH1981).some((t) => t.name === 'Navy')).toBe(false)
   })
 
-  it('spiller uten tilgang avvises', () => {
-    const error = unwrapErr(chooseTech(firstCivGame(), { playerId: 'ingen', techName: 'Navy' }))
-    expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'ingen' })
+  it('a player without access is refused', () => {
+    const error = unwrapErr(chooseTech(firstCivGame(), { playerId: 'outsider', techName: 'Navy' }))
+    expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'outsider' })
   })
 })
 
 /** Java: `PlayerAction.revealItem`. */
-describe('avslør item', () => {
-  it('avslører en hut og logger innholdet offentlig', () => {
+describe('reveal item', () => {
+  it('reveals a hut and logs the contents publicly', () => {
     let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'HUTS' }))
     const hut = handOf(state, CASH1981)[0]
-    if (hut === undefined) throw new Error('ingen hut')
+    if (hut === undefined) throw new Error('no hut')
 
     state = unwrap(
       revealItem(state, { playerId: CASH1981, sheetName: 'HUTS', itemNumber: hut.itemNumber }),
@@ -116,10 +116,10 @@ describe('avslør item', () => {
     expect(state.log.at(-1)?.publicLog).toContain(itemName(hut))
   })
 
-  it('finner itemet på navn når itemNumber ikke er oppgitt', () => {
+  it('finds the item by name when no item number is given', () => {
     let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'VILLAGES' }))
     const village = handOf(state, CASH1981)[0]
-    if (village === undefined) throw new Error('ingen village')
+    if (village === undefined) throw new Error('no village')
 
     state = unwrap(
       revealItem(state, { playerId: CASH1981, sheetName: 'VILLAGES', name: itemName(village) }),
@@ -127,10 +127,10 @@ describe('avslør item', () => {
     expect(handOf(state, CASH1981)[0]?.hidden).toBe(false)
   })
 
-  it('å avsløre samme item to ganger gir ITEM_ALREADY_REVEALED', () => {
+  it('revealing the same item twice gives ITEM_ALREADY_REVEALED', () => {
     let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'HUTS' }))
     const hut = handOf(state, CASH1981)[0]
-    if (hut === undefined) throw new Error('ingen hut')
+    if (hut === undefined) throw new Error('no hut')
 
     state = unwrap(
       revealItem(state, { playerId: CASH1981, sheetName: 'HUTS', itemNumber: hut.itemNumber }),
@@ -143,24 +143,25 @@ describe('avslør item', () => {
 })
 
 /**
- * Java: sivilisasjonssekvensen i `revealItem`.
+ * Java: the civilization sequence in `revealItem`.
  *
- * Merk at `drawStartingItems` går gjennom `DrawAction.draw`, som krever at det
- * er spillerens tur. I Java betyr det at bare spilleren som har turen kan
- * avsløre sin sivilisasjon og få startenheter. Se testen nederst.
+ * Note that `drawStartingItems` goes through `DrawAction.draw`, which requires
+ * that it is the turn of the player. In Java that means only the player whose
+ * turn it is can reveal a civilization and get starting units. See the last
+ * test below.
  */
-describe('avslør sivilisasjon', () => {
+describe('reveal civilization', () => {
   const revealCivFor = (state: GameState, playerId: string) => {
-    // Java filtrerer på isHidden når itemet skal finnes, så et allerede
-    // avslørt civ-kort er usynlig for revealItem
+    // Java filters on isHidden when looking the item up, so a civ card that
+    // has already been revealed is invisible to revealItem
     const civ = handOf(state, playerId).find((item) => item.kind === 'civ' && item.hidden)
-    if (civ === undefined) throw new Error('ingen skjult civ i hånden')
+    if (civ === undefined) throw new Error('no hidden civ in the hand')
     return revealItem(state, { playerId, sheetName: 'CIV', itemNumber: civ.itemNumber })
   }
 
-  it('setter sivilisasjon, startteknologi og trekker startenheter', () => {
+  it('sets the civilization and starting technology, and draws starting units', () => {
     let state = firstCivGame()
-    // Java delte ut flere civ-kort som spilleren velger blant
+    // Java dealt several civ cards for the player to choose between
     for (let i = 0; i < 3; i++) {
       state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CIV' }))
     }
@@ -170,12 +171,12 @@ describe('avslør sivilisasjon', () => {
 
     const player = findPlayer(state, CASH1981)
     expect(player?.civilization?.name).toBe(chosen.name)
-    // Startteknologien avsløres, den er offentlig kjent fra civ-kortet
+    // The starting technology is revealed; the civ card makes it public anyway
     expect(player?.techsChosen.map((t) => t.name)).toEqual([chosen.startingTech.name])
     expect(player?.techsChosen[0]?.hidden).toBe(false)
   })
 
-  it('kaster de andre civ-kortene til discardedItems', () => {
+  it('discards the other civ cards to discardedItems', () => {
     let state = firstCivGame()
     for (let i = 0; i < 3; i++) {
       state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CIV' }))
@@ -187,7 +188,7 @@ describe('avslør sivilisasjon', () => {
     expect(state.discardedItems.every((item) => item.hidden)).toBe(true)
   })
 
-  it('trekker tre enheter for en sivilisasjon uten spesialregel', () => {
+  it('draws three units for a civilization with no special rule', () => {
     let state = firstCivGame()
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CIV' }))
     state = unwrap(revealCivFor(state, CASH1981))
@@ -205,42 +206,43 @@ describe('avslør sivilisasjon', () => {
     }
   })
 
-  it('å avsløre samme civ-kort igjen gir ITEM_ALREADY_REVEALED', () => {
+  it('revealing the same civ card again gives ITEM_ALREADY_REVEALED', () => {
     let state = firstCivGame()
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CIV' }))
     const civ = handOf(state, CASH1981).find((item) => item.kind === 'civ')
-    if (civ === undefined) throw new Error('ingen civ')
+    if (civ === undefined) throw new Error('no civ')
 
     state = unwrap(revealCivFor(state, CASH1981))
-    // Java leter bare blant skjulte items, så det avslørte kortet finnes ikke
+    // Java searches hidden items only, so the revealed card cannot be found
     const error = unwrapErr(
       revealItem(state, { playerId: CASH1981, sheetName: 'CIV', itemNumber: civ.itemNumber }),
     )
     expect(error.kind).toBe('ITEM_ALREADY_REVEALED')
   })
 
-  it('to sivilisasjoner kan ikke velges', () => {
+  it('two civilizations cannot be chosen', () => {
     let state = firstCivGame()
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CIV' }))
     state = unwrap(revealCivFor(state, CASH1981))
 
-    // Et nytt, skjult civ-kort kommer forbi hidden-filteret og treffer civ-sjekken
+    // A fresh, hidden civ card gets past the hidden filter and hits the civ check
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CIV' }))
     const error = unwrapErr(revealCivFor(state, CASH1981))
     expect(error).toEqual({ kind: 'CIVILIZATION_ALREADY_CHOSEN', playerId: CASH1981 })
   })
 
   /**
-   * Dette dokumenterer en reell begrensning arvet fra Java, ikke ønsket
-   * oppførsel: startenhetene trekkes via DrawAction.draw, som krever tur.
+   * This records a real limitation inherited from Java rather than desired
+   * behaviour: the starting units are drawn through DrawAction.draw, which
+   * requires the turn.
    */
-  it('en spiller som ikke har turen kan ikke avsløre sin sivilisasjon', () => {
+  it('a player whose turn it is not cannot reveal a civilization', () => {
     let state = firstCivGame()
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CIV' }))
 
-    // Gi Karandras1 et civ-kort ved å flytte det manuelt, siden hen ikke kan trekke
+    // Hand Karandras1 a civ card by moving it across, since drawing is not allowed
     const civ = state.items.find((item) => item.kind === 'civ')
-    if (civ === undefined) throw new Error('ingen civ i stokken')
+    if (civ === undefined) throw new Error('no civ in the deck')
     state = {
       ...state,
       items: state.items.filter((item) => item.id !== civ.id),
@@ -259,11 +261,11 @@ describe('avslør sivilisasjon', () => {
 })
 
 /** Java: `PlayerAction.chooseSocialPolicy`. */
-describe('sosialpolitikk', () => {
-  it('velger et kort og skjuler det offentlig', () => {
+describe('social policy', () => {
+  it('chooses a card and keeps it hidden in public', () => {
     const game = firstCivGame()
     const policy = game.socialPolicies[0]
-    if (policy === undefined) throw new Error('ingen sosialpolitikk')
+    if (policy === undefined) throw new Error('no social policy')
 
     const state = unwrap(chooseSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
 
@@ -272,35 +274,35 @@ describe('sosialpolitikk', () => {
     expect(state.log.at(-1)?.publicLog).not.toContain(policy.name)
   })
 
-  it('itemNumber følger kortet, så loggnummeret er ikke null', () => {
-    // Java lagde et nytt SocialPolicy-objekt, som ga itemNumber 0 og gjorde
-    // det spillerspesifikke loggnummeret virkningsløst.
+  it('the item number follows the card, so the log number is not zero', () => {
+    // Java built a new SocialPolicy object, which gave item number 0 and made
+    // the per-player log number pointless.
     const game = firstCivGame()
     const policy = game.socialPolicies[0]
-    if (policy === undefined) throw new Error('ingen sosialpolitikk')
+    if (policy === undefined) throw new Error('no social policy')
 
     const state = unwrap(chooseSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
     expect(findPlayer(state, CASH1981)?.socialPolicies[0]?.itemNumber).toBe(policy.itemNumber)
   })
 
-  it('samme kort to ganger avvises', () => {
+  it('the same card twice is refused', () => {
     const game = firstCivGame()
     const policy = game.socialPolicies[0]
-    if (policy === undefined) throw new Error('ingen sosialpolitikk')
+    if (policy === undefined) throw new Error('no social policy')
 
     const state = unwrap(chooseSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
     const error = unwrapErr(chooseSocialPolicy(state, { playerId: CASH1981, name: policy.name }))
     expect(error).toEqual({ kind: 'SOCIAL_POLICY_ALREADY_CHOSEN', name: policy.name })
   })
 
-  it('baksiden av et kort man har kan ikke velges', () => {
+  it('the flipside of a card you hold cannot be chosen', () => {
     const game = firstCivGame()
     const policy = game.socialPolicies.find(
       (candidate) =>
         candidate.flipside !== null &&
         game.socialPolicies.some((other) => other.name === candidate.flipside),
     )
-    if (policy?.flipside == null) throw new Error('fant ingen kortpar i datasettet')
+    if (policy?.flipside == null) throw new Error('found no card pair in the data set')
 
     const state = unwrap(chooseSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
     const error = unwrapErr(
@@ -311,11 +313,11 @@ describe('sosialpolitikk', () => {
 })
 
 /** Java: `PlayerAction.tradeToPlayer`. */
-describe('handel', () => {
-  it('gir et tradable item til en annen spiller og logger begge sider', () => {
+describe('trade', () => {
+  it('gives a tradable item to another player and logs both sides', () => {
     let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CULTURE_1' }))
     const card = handOf(state, CASH1981)[0]
-    if (card === undefined) throw new Error('ingen kulturkort')
+    if (card === undefined) throw new Error('no culture card')
 
     state = unwrap(
       tradeToPlayer(state, {
@@ -330,16 +332,16 @@ describe('handel', () => {
     expect(handOf(state, CASH1981)).toHaveLength(0)
     expect(handOf(state, ITCHI).map((item) => item.id)).toEqual([card.id])
     expect(handOf(state, ITCHI)[0]?.ownerId).toBe(ITCHI)
-    // Java: den første posten tilskrives mottakeren
+    // Java: the first entry is attributed to the receiver
     expect(state.log.at(-2)?.username).toBe('Itchi')
     expect(state.log.at(-1)?.username).toBe('cash1981')
     expect(state.log.at(-1)?.publicLog).toBe('')
   })
 
-  it('items som ikke er Tradable kan ikke handles', () => {
+  it('items that are not Tradable cannot be traded', () => {
     const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'ANCIENT_WONDERS' }))
     const wonder = handOf(state, CASH1981)[0]
-    if (wonder === undefined) throw new Error('ingen wonder')
+    if (wonder === undefined) throw new Error('no wonder')
 
     const error = unwrapErr(
       tradeToPlayer(state, {
@@ -354,11 +356,11 @@ describe('handel', () => {
 })
 
 /** Java: `PlayerAction.discardItem`. */
-describe('kasting', () => {
-  it('flytter itemet til discardedItems og skjuler det', () => {
+describe('discarding', () => {
+  it('moves the item to discardedItems and hides it', () => {
     let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CULTURE_1' }))
     const card = handOf(state, CASH1981)[0]
-    if (card === undefined) throw new Error('ingen kulturkort')
+    if (card === undefined) throw new Error('no culture card')
 
     state = unwrap(
       discardItem(state, {
@@ -372,14 +374,14 @@ describe('kasting', () => {
     expect(handOf(state, CASH1981)).toHaveLength(0)
     expect(state.discardedItems.map((item) => item.id)).toEqual([card.id])
     expect(state.discardedItems[0]?.hidden).toBe(true)
-    // Java: DISCARD avslører alt også offentlig, kortet er ute av spill
+    // Java: DISCARD reveals everything publicly too, the card is out of play
     expect(state.log.at(-1)?.publicLog).toContain(itemName(card))
   })
 })
 
-/** Java: `PlayerAction.endTurn` og `takeTurnButton`. */
-describe('turskifte', () => {
-  it('gir turen til neste spillernummer', () => {
+/** Java: `PlayerAction.endTurn` and `takeTurnButton`. */
+describe('changing turn', () => {
+  it('gives the turn to the next player number', () => {
     const before = firstCivGame()
     expect(isYourTurn(before, CASH1981)).toBe(true)
 
@@ -388,7 +390,7 @@ describe('turskifte', () => {
     expect(isYourTurn(after, KARANDRAS1)).toBe(true)
   })
 
-  it('går rundt til første spiller etter siste', () => {
+  it('wraps back to the first player after the last', () => {
     let state = firstCivGame()
     for (let i = 0; i < 4; i++) state = unwrap(endTurn(state))
 
@@ -396,7 +398,7 @@ describe('turskifte', () => {
     expect(state.players.filter((player) => player.yourTurn)).toHaveLength(1)
   })
 
-  it('takeTurn tar turen fra hvem som helst', () => {
+  it('takeTurn takes the turn from anyone', () => {
     const state = unwrap(takeTurn(firstCivGame(), CHUL))
 
     expect(isYourTurn(state, CHUL)).toBe(true)
@@ -405,12 +407,12 @@ describe('turskifte', () => {
   })
 })
 
-/** Java: `PlayerAction.saveNote` — notatet er privat. */
+/** Java: `PlayerAction.saveNote` — the note is private. */
 describe('gamenote', () => {
-  it('lagres på spillerens hånd og havner ikke i loggen', () => {
-    const state = unwrap(saveNote(firstCivGame(), CASH1981, 'husk å kjøpe bank'))
+  it('is stored on the hand of the player and stays out of the log', () => {
+    const state = unwrap(saveNote(firstCivGame(), CASH1981, 'remember to buy a bank'))
 
-    expect(findPlayer(state, CASH1981)?.gamenote).toBe('husk å kjøpe bank')
-    expect(JSON.stringify(state.log)).not.toContain('husk å kjøpe bank')
+    expect(findPlayer(state, CASH1981)?.gamenote).toBe('remember to buy a bank')
+    expect(JSON.stringify(state.log)).not.toContain('remember to buy a bank')
   })
 })

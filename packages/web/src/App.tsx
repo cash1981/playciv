@@ -1,8 +1,8 @@
 /**
- * Rot-komponenten. Erstatter AngularJS-appen i old-civ-web.
+ * The root component. Replaces the AngularJS app in old-civ-web.
  *
- * Tre skjermbilder: innlogging, spillisten og selve spillet. Ingen ruter-
- * bibliotek — tilstanden er liten nok til at en union holder.
+ * Three screens: sign-in, the game list and the game itself. No router library —
+ * the state is small enough for a union to carry it.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -20,7 +20,7 @@ export function App(): React.JSX.Element {
   const [checking, setChecking] = useState(true)
   const [screen, setScreen] = useState<Screen>({ name: 'lobby' })
 
-  // Et lagret token kan være utløpt, så det må prøves mot serveren
+  // A stored token may have expired, so it has to be tried against the server
   useEffect(() => {
     if (storedToken() === null) {
       setChecking(false)
@@ -42,7 +42,7 @@ export function App(): React.JSX.Element {
   if (checking) {
     return (
       <div className="app">
-        <p className="muted">Laster …</p>
+        <p className="muted">Loading …</p>
       </div>
     )
   }
@@ -62,10 +62,10 @@ export function App(): React.JSX.Element {
         <span className="muted">play by forum</span>
         <span className="spacer" />
         {screen.name === 'game' && (
-          <button onClick={() => setScreen({ name: 'lobby' })}>Til spillisten</button>
+          <button onClick={() => setScreen({ name: 'lobby' })}>Back to games</button>
         )}
         <span className="muted">{player.username}</span>
-        <button onClick={signOut}>Logg ut</button>
+        <button onClick={signOut}>Sign out</button>
       </header>
 
       {screen.name === 'lobby' ? (
@@ -81,7 +81,7 @@ export function App(): React.JSX.Element {
   )
 }
 
-/** Gjør en feil om til noe som kan vises. */
+/** Turns an error into something that can be shown. */
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message
   if (error instanceof Error) return error.message

@@ -1,10 +1,10 @@
 /**
- * Port av `PBFTestAction.createNewGame` — testfixturen som de gamle testene
- * kjørte mot, og derfor fasit for denne porten.
+ * Port of `PBFTestAction.createNewGame` — the fixture the old tests ran
+ * against, and therefore the reference for this port.
  *
- * `GameAction.createNewGame` i produksjonskoden legger de samme items i pbf.
- * Den eneste forskjellen er rekkefølgen de legges til i, som bare påvirker
- * hvilket `itemNumber` hvert item får. Rekkefølgen under følger PBFTestAction.
+ * `GameAction.createNewGame` in the production code puts the same items in the
+ * pbf. The only difference is the order they are added in, which only affects
+ * the `itemNumber` each item gets. The order below follows PBFTestAction.
  */
 
 import gamedataWaw from '../data/gamedata-faf-waw.json' with { type: 'json' }
@@ -34,7 +34,7 @@ export interface CreateGameOptions {
   readonly name: string
   readonly numOfPlayers: number
   readonly gameType?: GameType
-  /** Seed for stokking og itemNumber. En tekst gir samme spill hver gang. */
+  /** Seed for shuffling and itemNumber. A string gives the same game every time. */
   readonly seed: Rng | string
   readonly players?: readonly NewPlayer[]
 }
@@ -65,15 +65,15 @@ export function createGame(options: CreateGameOptions): GameState {
 
   const seed = typeof options.seed === 'string' ? seedFrom(options.seed) : options.seed
 
-  // Java: `itemCounter = new AtomicInteger(RandomUtils.nextInt(1, 20))`, en
-  // statisk teller med tilfeldig start. Startoffset holdes tilfeldig per spill
-  // så itemNumber ikke kan brukes til å gjette hvilket kort et annet spill fikk.
+  // Java: `itemCounter = new AtomicInteger(RandomUtils.nextInt(1, 20))`, a
+  // static counter with a random start. The offset stays random per game so
+  // itemNumber cannot be used to guess which card another game was dealt.
   const [startCounter, afterOffset] = nextIntBetween(seed, 1, 20)
   const [gameId, afterId] = nextId(afterOffset)
 
   const deck = readDeck(data, afterId, startCounter)
 
-  // Rekkefølgen her bestemmer itemNumber, og følger PBFTestAction
+  // This order decides the itemNumber, and follows PBFTestAction
   const items: Item[] = [
     ...deck.mounted,
     ...deck.aircraft,
@@ -93,7 +93,7 @@ export function createGame(options: CreateGameOptions): GameState {
     ...deck.modernWonders,
   ]
 
-  // Java: items, så techs, så socialPolicies — alle fra samme teller
+  // Java: items, then techs, then socialPolicies — all from the same counter
   let counter = deck.itemCounter
   const numbered = <T extends Item>(list: readonly T[]): T[] =>
     list.map((item) => {

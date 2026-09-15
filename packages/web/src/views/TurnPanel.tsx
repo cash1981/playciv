@@ -1,8 +1,8 @@
 /**
- * Turordrer. Java: `TurnAction` og turfanene i old-civ-web.
+ * Turn orders. Java: `TurnAction` and the turn tabs in old-civ-web.
  *
- * Ordrene er ikke skjult informasjon — hele poenget med play-by-forum er at
- * alle leser hverandres ordrer. Låsing markerer at man er ferdig med turen.
+ * Orders are not hidden information — the whole point of play by forum is that
+ * everyone reads each other's orders. Locking marks a turn as finished.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -45,8 +45,8 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
 
   const current = mine.find((turn) => turn.turnNumber === turnNumber)
 
-  // Lokale utkast overstyrer det lagrede, så skriving ikke overskrives av en
-  // henting midt i
+  // Local drafts win over what is stored, so a fetch in the middle cannot
+  // overwrite what you are typing
   const valueFor = (phase: TurnPhase): string =>
     drafts[`${turnNumber}:${phase}`] ?? current?.orders[phase] ?? ''
 
@@ -59,12 +59,12 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
 
   return (
     <section className="panel">
-      <h2>Turordrer</h2>
+      <h2>Turn orders</h2>
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="row">
         <label style={{ margin: 0 }}>
-          Tur
+          Turn
           <select
             value={turnNumber}
             onChange={(event) => setTurnNumber(Number(event.target.value))}
@@ -78,9 +78,9 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
           </select>
         </label>
         <button className="small" onClick={() => setTurnNumber(turnNumber + 1)}>
-          Ny tur
+          New turn
         </button>
-        {current?.disabled === true && <span className="tag">låst</span>}
+        {current?.disabled === true && <span className="tag">locked</span>}
         <span style={{ flex: 1 }} />
         <button
           className="small"
@@ -89,7 +89,7 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
             void run(() => api.lockTurn(gameId, turnNumber, current?.disabled !== true))
           }
         >
-          {current?.disabled === true ? 'Åpne igjen' : 'Lås turen'}
+          {current?.disabled === true ? 'Reopen' : 'Lock the turn'}
         </button>
       </div>
 
@@ -109,20 +109,20 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
               void run(() => api.updateTurn(gameId, turnNumber, phase, valueFor(phase)))
             }
           >
-            Lagre {TURN_PHASE_LABEL[phase]}
+            Save {TURN_PHASE_LABEL[phase]}
           </button>
         </label>
       ))}
 
-      <h3 style={{ marginTop: '1rem' }}>Alle ordrer</h3>
+      <h3 style={{ marginTop: '1rem' }}>All orders</h3>
       <ul className="list scroll">
         {publicTurns.map((turn) => (
           <li key={`${turn.turnNumber}-${turn.username}`} style={{ display: 'block' }}>
             <div className="row">
               <strong>
-                Tur {turn.turnNumber} — {turn.username}
+                Turn {turn.turnNumber} — {turn.username}
               </strong>
-              {turn.disabled && <span className="tag">låst</span>}
+              {turn.disabled && <span className="tag">locked</span>}
             </div>
             {TURN_PHASES.filter((phase) => turn.orders[phase] !== '').map((phase) => (
               <div key={phase} className="muted" style={{ fontSize: '0.85rem' }}>
@@ -131,7 +131,7 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
             ))}
           </li>
         ))}
-        {publicTurns.length === 0 && <li className="muted">Ingen ordrer skrevet ennå.</li>}
+        {publicTurns.length === 0 && <li className="muted">No orders written yet.</li>}
       </ul>
     </section>
   )

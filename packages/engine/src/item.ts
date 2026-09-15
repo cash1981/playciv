@@ -1,20 +1,20 @@
 /**
- * Port av Item-hierarkiet i `no.asgari.civilization.server.model`.
+ * Port of the Item hierarchy in `no.asgari.civilization.server.model`.
  *
- * Java brukte arv (Item -> Unit -> Infantry) med Jackson-polymorfi. Her er det
- * en diskriminert union på `kind`, med samme diskriminatorverdier som Jacksons
- * `@JsonTypeName`, slik at gamle Mongo-dokumenter kan leses senere.
+ * Java used inheritance (Item -> Unit -> Infantry) with Jackson polymorphism.
+ * Here it is a discriminated union on `kind`, with the same discriminator
+ * values as Jackson's `@JsonTypeName`, so old Mongo documents can be read later.
  *
- * `revealPublic` og `revealAll` er portert ordrett, inkludert særegenheter:
- * kulturkort avslører klassenavnet ("CultureI") og ikke arknavnet, GreatPerson
- * avslører typen sin, og Artillery avslører aldri nivånavnet slik Infantry og
- * Mounted gjør.
+ * `revealPublic` and `revealAll` are ported word for word, oddities included:
+ * culture cards reveal the class name ("CultureI") rather than the sheet name,
+ * GreatPerson reveals its type, and Artillery never reveals the level name the
+ * way Infantry and Mounted do.
  */
 
 import type { SheetName } from './sheet-name.js'
 import { SHEET_LABEL, sheetOrdinal } from './sheet-name.js'
 
-/** Java hadde `Level` med nivå 1-4 for units og 1-5 for tech. */
+/** Java had `Level` with levels 1-4 for units and 1-5 for techs. */
 export const LEVEL_1 = 1
 export const LEVEL_2 = 2
 export const LEVEL_3 = 3
@@ -23,25 +23,24 @@ export const LEVEL_5 = 5
 
 const PNG = '.png'
 
-/** Felter alle items deler. Java: `Item extends Spreadsheet, Type`. */
+/** Fields every item shares. Java: `Item extends Spreadsheet, Type`. */
 interface ItemBase {
   /**
-   * Stabil, ugjennomsiktig identitet per instans. Fantes ikke i Java, som
-   * identifiserte items med verdi-likhet — det gjorde at to identiske
-   * `Infantry 1.3` var «like», og `discardedItems.remove(item)` kunne fjerne
-   * feil instans.
+   * A stable, opaque identity per instance. Java had none: it identified items
+   * by value equality, which made two identical `Infantry 1.3` "equal", so
+   * `discardedItems.remove(item)` could take away the wrong one.
    */
   readonly id: string
   /**
-   * Java: `itemNumber`. Løpenummer med tilfeldig startoffset per spill, brukt i
-   * loggen så spillere kan referere til et kort uten å avsløre innholdet.
+   * Java: `itemNumber`. A running number with a random start offset per game,
+   * used in the log so players can refer to a card without revealing it.
    */
   readonly itemNumber: number
   readonly sheetName: SheetName
   readonly description: string | null
   readonly used: boolean
   readonly hidden: boolean
-  /** Java: `ownerId` — spilleren som eier itemet, null når det ligger i stokken. */
+  /** Java: `ownerId` — the owning player, null while the item is in the deck. */
   readonly ownerId: string | null
 }
 
@@ -78,7 +77,7 @@ export interface GreatPersonItem extends ItemBase {
   readonly kind: 'greatperson'
   readonly sheetName: 'GREAT_PERSON'
   readonly name: string
-  /** Java: `type` er brikketypen, f.eks. "Artist or Thinker". */
+  /** Java: `type` is the token kind, for example "Artist or Thinker". */
   readonly type: string | null
 }
 
@@ -131,18 +130,18 @@ export interface SocialPolicyItem extends ItemBase {
   readonly sheetName: 'SOCIAL_POLICY'
   readonly name: string
   readonly type: string | null
-  /** Java: `flipside` — navnet på baksiden av kortet. */
+  /** Java: `flipside` — the name on the back of the card. */
   readonly flipside: string | null
 }
 
-/** Java: `Unit` — abstrakt basisklasse med angrep, helse og nivå. */
+/** Java: `Unit` — an abstract base class with attack, health and level. */
 interface UnitBase extends ItemBase {
   readonly attack: number
   readonly health: number
   /**
-   * Java satte aldri dette; `setLevel` kalles ingen steder i old-civ-rest, så
-   * alle units i praksis har nivå 0. Feltet er portert fordi `revealPublic` og
-   * `revealAll` grener på det, og oppgradering av units er utsatt arbeid.
+   * Java never set this; `setLevel` is called nowhere in old-civ-rest, so in
+   * practice every unit is level 0. The field is ported because `revealPublic`
+   * and `revealAll` branch on it, and upgrading units is deferred work.
    */
   readonly level: 0 | 1 | 2 | 3 | 4
   readonly killed: boolean
@@ -189,7 +188,7 @@ export type Item =
 export type ItemKind = Item['kind']
 
 // ---------------------------------------------------------------------------
-// Typevakter
+// Type guards
 // ---------------------------------------------------------------------------
 
 const UNIT_KINDS = new Set<ItemKind>(['infantry', 'artillery', 'mounted', 'aircraft'])
@@ -199,8 +198,8 @@ export function isUnit(item: Item): item is UnitItem {
 }
 
 /**
- * Java: `Tradable` — et tomt markørgrensesnitt implementert av CultureI/II/III,
- * Hut og Village. Bare disse kan loot'es eller gis bort.
+ * Java: `Tradable` — an empty marker interface implemented by CultureI/II/III,
+ * Hut and Village. Only these can be looted or given away.
  */
 const TRADABLE_KINDS = new Set<ItemKind>(['cultureI', 'cultureII', 'cultureIII', 'hut', 'village'])
 
@@ -209,10 +208,10 @@ export function isTradable(item: Item): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Navn og typer
+// Names and types
 // ---------------------------------------------------------------------------
 
-/** Java: `Type.getType()` returnerte klassens enkle navn. */
+/** Java: `Type.getType()` returned the class's simple name. */
 export function itemType(item: Item): string {
   switch (item.kind) {
     case 'infantry':
@@ -228,7 +227,7 @@ export function itemType(item: Item): string {
   }
 }
 
-/** Java: klassens enkle navn, som `revealPublic` bruker for flere typer. */
+/** Java: the class's simple name, which `revealPublic` uses for several types. */
 function simpleName(kind: ItemKind): string {
   switch (kind) {
     case 'civ':
@@ -267,8 +266,8 @@ function simpleName(kind: ItemKind): string {
 }
 
 /**
- * Java: `Unit.getName()` overstyrte det lagrede navnet med
- * `getType() + " " + attack + "." + health`, f.eks. "Infantry 1.3".
+ * Java: `Unit.getName()` overrode the stored name with
+ * `getType() + " " + attack + "." + health`, for example "Infantry 1.3".
  */
 export function itemName(item: Item): string {
   if (isUnit(item)) return `${itemType(item)} ${item.attack}.${item.health}`
@@ -276,7 +275,7 @@ export function itemName(item: Item): string {
 }
 
 // ---------------------------------------------------------------------------
-// Nivånavn for units
+// Level names for units
 // ---------------------------------------------------------------------------
 
 const INFANTRY_LEVEL_NAMES = ['Infantry', 'Spearmen', 'Pikemen', 'Riflemen', 'Modern Infantry'] as const
@@ -297,9 +296,9 @@ function unitLevelNames(unit: UnitItem): readonly string[] | null {
 }
 
 /**
- * Java: `toString()` på Unit-subklassene. Statsbonusen er `level - 1`, som
- * følger av at Java skrev `attack + LEVEL_1` for nivå 2, `attack + LEVEL_2` for
- * nivå 3, og så videre.
+ * Java: `toString()` on the Unit subclasses. The stat bonus is `level - 1`,
+ * which follows from Java writing `attack + LEVEL_1` for level 2,
+ * `attack + LEVEL_2` for level 3, and so on.
  */
 function unitToString(unit: UnitItem): string {
   const names = unitLevelNames(unit)
@@ -311,17 +310,17 @@ function unitToString(unit: UnitItem): string {
 }
 
 // ---------------------------------------------------------------------------
-// Avsløring
+// Revealing
 // ---------------------------------------------------------------------------
 
 /**
- * Java: `Spreadsheet.revealPublic()` — «avslører skjult offentlig informasjon
- * om itemet. Avslører ikke innholdet, bare typen.»
+ * Java: `Spreadsheet.revealPublic()` — "used to reveal hidden public
+ * information about the item. Will not reveal the content, just the type."
  *
- * Advarsel: Wonder og SocialPolicy avslører navnet sitt her. Det er hva Java
- * gjør. For SocialPolicy kompenserte Java ved at logglinjen for valg av
- * sosialpolitikk aldri kalte `revealPublic`, men skrev «has chosen a hidden
- * social policy». Se `createAndSetLog` i log.ts.
+ * A warning: Wonder and SocialPolicy do reveal their name here. That is what
+ * Java does. For SocialPolicy, Java compensated by never calling
+ * `revealPublic` from the social-policy log line, writing "has chosen a hidden
+ * social policy" instead. See `createAndSetLog` in log.ts.
  */
 export function revealPublic(item: Item): string {
   switch (item.kind) {
@@ -348,14 +347,14 @@ export function revealPublic(item: Item): string {
       const names = unitLevelNames(item)
       return names?.[item.level] ?? itemType(item)
     }
-    // Java: Artillery og Aircraft returnerer bare getType(), uten nivåoppslag
+    // Java: Artillery and Aircraft just return getType(), with no level lookup
     case 'artillery':
     case 'aircraft':
       return itemType(item)
   }
 }
 
-/** Java: `Spreadsheet.revealAll()` — avslører alt om itemet. */
+/** Java: `Spreadsheet.revealAll()` — reveals everything about the item. */
 export function revealAll(item: Item): string {
   switch (item.kind) {
     case 'civ':
@@ -386,19 +385,19 @@ export function revealAll(item: Item): string {
 }
 
 // ---------------------------------------------------------------------------
-// Bilder
+// Images
 // ---------------------------------------------------------------------------
 
 /**
- * Java: `Image.getImage()`. Filnavnene peker på grafikken under
- * `Civilization/Moderator/`. Reglene er inkonsistente i Java (Civ fjerner ikke
- * mellomrom, kulturkort stripper utropstegn, GreatPerson prefikses med
- * "klein", bystater bruker `description` og ikke `name`), og er portert som de
- * er fordi filnavnene på disk følger dem.
+ * Java: `Image.getImage()`. The file names point at the artwork under
+ * `Civilization/Moderator/`. The rules are inconsistent in Java — Civ does not
+ * strip spaces, culture cards strip exclamation marks, GreatPerson is prefixed
+ * with "klein", and city-states use `description` rather than `name` — and are
+ * ported as they are because the files on disk follow them.
  */
 export function itemImage(item: Item): string | null {
   switch (item.kind) {
-    // Java: Civ fjerner ikke mellomrom. Ingen civ-navn har mellomrom i dag.
+    // Java: Civ does not strip spaces. No civ name has one today.
     case 'civ':
       return `${item.name}${PNG}`
     case 'cultureI':
@@ -414,8 +413,8 @@ export function itemImage(item: Item): string | null {
       return `${item.name}${PNG}`.replace(/ /g, '')
     case 'tile':
       return `tile${item.name}${PNG}`.replace(/ /g, '')
-    // Java: bystater bruker description ("cs1"), fordi arket har navn og
-    // bildereferanse i motsatt kolonnerekkefølge av de andre arkene.
+    // Java: city-states use description ("cs1"), because that sheet has the
+    // name and the image reference in the opposite column order to the others.
     case 'citystate':
       return `${item.description ?? ''}${PNG}`.replace(/ /g, '')
     case 'infantry':
@@ -423,19 +422,19 @@ export function itemImage(item: Item): string | null {
     case 'mounted':
     case 'aircraft':
       return `${itemType(item)}${item.attack}.${item.health}${PNG}`.replace(/ /g, '')
-    // Java: Wonder implementerer ikke Image
+    // Java: Wonder does not implement Image
     case 'wonder':
       return null
   }
 }
 
 // ---------------------------------------------------------------------------
-// Sortering og likhet
+// Ordering and equality
 // ---------------------------------------------------------------------------
 
 /**
- * Java: `compareTo` sammenlignet arkets enum-ordinal — bortsett fra
- * GreatPerson, som alltid returnerte 0.
+ * Java: `compareTo` compared the sheet enum ordinal — except for GreatPerson,
+ * which always returned 0.
  */
 export function compareItems(a: Item, b: Item): number {
   if (a.kind === 'greatperson') return 0
@@ -443,18 +442,19 @@ export function compareItems(a: Item, b: Item): number {
 }
 
 /**
- * Identitet basert på `id`. Java brukte verdi-likhet via `@EqualsAndHashCode`,
- * som betyr at to forskjellige `Infantry 1.3`-instanser var like. Det gjorde
- * fjerning fra `discardedItems` upålitelig. Se `itemValueEquals` for
- * Java-semantikken.
+ * Identity based on `id`. Java used value equality through
+ * `@EqualsAndHashCode`, which made two different `Infantry 1.3` instances
+ * equal. That made removal from `discardedItems` unreliable. See
+ * `itemValueEquals` for the Java semantics.
  */
 export function itemEquals(a: Item, b: Item): boolean {
   return a.id === b.id
 }
 
 /**
- * Javas verdi-likhet, beholdt fordi noen porterte tester uttrykker seg i den.
- * Feltene per type følger `@EqualsAndHashCode`-annotasjonene i old-civ-rest.
+ * Java's value equality, kept because some ported tests are expressed in it.
+ * The fields per type follow the `@EqualsAndHashCode` annotations in
+ * old-civ-rest.
  */
 export function itemValueEquals(a: Item, b: Item): boolean {
   if (a.kind !== b.kind) return false
@@ -479,7 +479,7 @@ export function itemValueEquals(a: Item, b: Item): boolean {
       const other = b as typeof a
       return a.name === other.name
     }
-    // exclude = ownerId, hidden, used (+ itemNumber for alle utenom Hut)
+    // exclude = ownerId, hidden, used (+ itemNumber for everything except Hut)
     case 'hut': {
       const other = b as typeof a
       return (

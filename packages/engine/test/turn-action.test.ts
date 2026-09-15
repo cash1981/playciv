@@ -1,9 +1,10 @@
 /**
- * Port av `no.asgari.civilization.server.action.TurnActionTest`.
+ * Port of `no.asgari.civilization.server.action.TurnActionTest`.
  *
- * Java hadde fem tester — updateSOT, updateTrade, updateCM, updateMovement,
- * updateResearch — som alle sjekket at ordren havnet i riktig felt og at
- * `publicTurns` ble fylt. De kjøres her som en tabell mot én `updateTurn`.
+ * Java had five tests — updateSOT, updateTrade, updateCM, updateMovement and
+ * updateResearch — all checking that the order landed in the right field and
+ * that `publicTurns` was filled. They run here as a table against one
+ * `updateTurn`.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -32,7 +33,7 @@ describe('updateTurn', () => {
   ]
 
   for (const { phase, order } of cases) {
-    it(`${phase} lagres på spillerens tur og i publicTurns`, () => {
+    it(`${phase} is stored on the turn and in publicTurns`, () => {
       const state = unwrap(
         updateTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase, order }),
       )
@@ -49,75 +50,75 @@ describe('updateTurn', () => {
     })
   }
 
-  it('flere faser på samme tur samles i én PlayerTurn', () => {
+  it('several phases on one turn collect into a single PlayerTurn', () => {
     let state = firstCivGame()
     for (const phase of TURN_PHASES) {
       state = unwrap(
-        updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase, order: `${phase} ordre` }),
+        updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase, order: `${phase} order` }),
       )
     }
 
     const turns = playersTurns(state, CASH1981)
     expect(turns).toHaveLength(1)
     expect(turns[0]?.orders).toEqual({
-      SOT: 'SOT ordre',
-      TRADE: 'TRADE ordre',
-      CM: 'CM ordre',
-      MOVEMENT: 'MOVEMENT ordre',
-      RESEARCH: 'RESEARCH ordre',
+      SOT: 'SOT order',
+      TRADE: 'TRADE order',
+      CM: 'CM order',
+      MOVEMENT: 'MOVEMENT order',
+      RESEARCH: 'RESEARCH order',
     })
   })
 
-  it('en endret ordre legges i historikken', () => {
+  it('a changed order goes into the history', () => {
     let state = firstCivGame()
     state = unwrap(
-      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'første' }),
+      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'first' }),
     )
     state = unwrap(
-      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'andre' }),
+      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'second' }),
     )
 
     const turn = playersTurns(state, CASH1981)[0]
-    expect(turn?.orders.SOT).toBe('andre')
-    expect(turn?.history.SOT).toEqual(['første', 'andre'])
+    expect(turn?.orders.SOT).toBe('second')
+    expect(turn?.history.SOT).toEqual(['first', 'second'])
   })
 
-  it('samme ordre to ganger gir bare én historikkoppføring', () => {
-    // Java brukte Set<String> for historikken
+  it('the same order twice makes only one history entry', () => {
+    // Java used a Set<String> for the history
     let state = firstCivGame()
     for (let i = 0; i < 3; i++) {
       state = unwrap(
-        updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'samme' }),
+        updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'same' }),
       )
     }
-    expect(playersTurns(state, CASH1981)[0]?.history.SOT).toEqual(['samme'])
+    expect(playersTurns(state, CASH1981)[0]?.history.SOT).toEqual(['same'])
   })
 
-  it('flere turnumre gir flere PlayerTurn, sortert', () => {
+  it('several turn numbers give several PlayerTurns, sorted', () => {
     let state = firstCivGame()
     for (const turnNumber of [3, 1, 2]) {
       state = unwrap(
-        updateTurn(state, { playerId: CASH1981, turnNumber, phase: 'SOT', order: `tur ${turnNumber}` }),
+        updateTurn(state, { playerId: CASH1981, turnNumber, phase: 'SOT', order: `turn ${turnNumber}` }),
       )
     }
     expect(playersTurns(state, CASH1981).map((turn) => turn.turnNumber)).toEqual([1, 2, 3])
   })
 
-  it('spiller uten tilgang avvises', () => {
+  it('a player without access is refused', () => {
     const error = unwrapErr(
       updateTurn(firstCivGame(), {
-        playerId: 'ingen',
+        playerId: 'outsider',
         turnNumber: 1,
         phase: 'SOT',
         order: 'x',
       }),
     )
-    expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'ingen' })
+    expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'outsider' })
   })
 })
 
 describe('allPublicTurns', () => {
-  it('sorterer på turnummer, deretter brukernavn', () => {
+  it('sorts on turn number, then username', () => {
     let state = firstCivGame()
     state = unwrap(
       updateTurn(state, { playerId: KARANDRAS1, turnNumber: 2, phase: 'SOT', order: 'k2' }),
@@ -136,23 +137,23 @@ describe('allPublicTurns', () => {
     ])
   })
 
-  it('fjerner den gjeldende ordren fra historikken, uten å endre tilstanden', () => {
+  it('strips the current order from the history without changing the state', () => {
     let state = firstCivGame()
     state = unwrap(
-      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'første' }),
+      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'first' }),
     )
     state = unwrap(
-      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'andre' }),
+      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'second' }),
     )
 
-    expect(allPublicTurns(state)[0]?.history.SOT).toEqual(['første'])
-    // Java muterte de lagrede objektene her, så en lesing ødela data
-    expect(playersTurns(state, CASH1981)[0]?.history.SOT).toEqual(['første', 'andre'])
+    expect(allPublicTurns(state)[0]?.history.SOT).toEqual(['first'])
+    // Java mutated the stored objects here, so a read corrupted data
+    expect(playersTurns(state, CASH1981)[0]?.history.SOT).toEqual(['first', 'second'])
   })
 })
 
 describe('addNewTurn', () => {
-  it('oppretter en tom tur', () => {
+  it('creates an empty turn', () => {
     const state = unwrap(addNewTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 2 }))
     const turn = playersTurns(state, CASH1981)[0]
 
@@ -161,7 +162,7 @@ describe('addNewTurn', () => {
     expect(turn?.disabled).toBe(false)
   })
 
-  it('samme turnummer to ganger gir ingen duplikat', () => {
+  it('the same turn number twice makes no duplicate', () => {
     let state = unwrap(addNewTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 2 }))
     state = unwrap(addNewTurn(state, { playerId: CASH1981, turnNumber: 2 }))
     expect(playersTurns(state, CASH1981)).toHaveLength(1)
@@ -169,7 +170,7 @@ describe('addNewTurn', () => {
 })
 
 describe('lockOrUnlockTurn', () => {
-  it('låser turen og logger det offentlig', () => {
+  it('locks the turn and logs it publicly', () => {
     let state = unwrap(
       updateTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'x' }),
     )
@@ -177,11 +178,11 @@ describe('lockOrUnlockTurn', () => {
 
     expect(playersTurns(state, CASH1981)[0]?.disabled).toBe(true)
     expect(state.log.at(-1)?.publicLog).toBe('cash1981  has locked in turn 1')
-    // Den offentlige kopien skal følge med
+    // The public copy has to follow along
     expect(state.publicTurns['1cash1981']?.disabled).toBe(true)
   })
 
-  it('åpner turen igjen', () => {
+  it('reopens the turn', () => {
     let state = unwrap(
       updateTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'x' }),
     )
@@ -192,7 +193,7 @@ describe('lockOrUnlockTurn', () => {
     expect(state.log.at(-1)?.publicLog).toBe('cash1981  has re-opened turn 1')
   })
 
-  it('en tur som ikke finnes gir TURN_NOT_FOUND', () => {
+  it('a turn that does not exist gives TURN_NOT_FOUND', () => {
     const error = unwrapErr(
       lockOrUnlockTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 9, locked: true }),
     )
@@ -200,12 +201,12 @@ describe('lockOrUnlockTurn', () => {
   })
 })
 
-describe('skjult informasjon', () => {
-  it('gamenote og private turlister lekker ikke gjennom publicTurns', () => {
+describe('hidden information', () => {
+  it('gamenote and private turn lists do not leak through publicTurns', () => {
     const state = unwrap(
       updateTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'x' }),
     )
-    // Turordrer ER offentlige — det er poenget med play-by-forum
+    // Turn orders ARE public — that is the point of play by forum
     expect(JSON.stringify(state.publicTurns)).toContain('x')
     expect(JSON.stringify(state.publicTurns)).not.toContain('gamenote')
   })

@@ -1,9 +1,9 @@
 /**
- * Skjult informasjon.
+ * Hidden information.
  *
- * Java lagret hele itemet på loggdokumentet og lot ressurslaget filtrere. Det
- * var sikkerhetshullet som er notert i todo.txt («hide the drawn item in the
- * public log»). Her sjekkes at projeksjonene ikke lekker.
+ * Java stored the whole item on the log document and let the resource layer
+ * filter it. That was the security hole noted in todo.txt ("hide the drawn item
+ * in the public log"). These tests check that the projections do not leak.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -17,13 +17,13 @@ import { findPlayer, toPlayerView, toPublicLog } from '../src/state.js'
 import { CASH1981, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 describe('toPublicLog', () => {
-  it('fjerner itemet og den private loggteksten', () => {
+  it('strips the item and the private log text', () => {
     const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'GREAT_PERSON' }))
     const entry = state.log.at(-1)
-    if (entry === undefined) throw new Error('ingen loggpost')
+    if (entry === undefined) throw new Error('no log entry')
 
     const item = entry.item
-    if (item === null) throw new Error('loggposten mangler item')
+    if (item === null) throw new Error('the log entry has no item')
 
     const publicEntry = toPublicLog(entry)
     expect(Object.keys(publicEntry)).toEqual(['id', 'username', 'logType', 'publicLog'])
@@ -32,7 +32,7 @@ describe('toPublicLog', () => {
 })
 
 describe('toPlayerView', () => {
-  it('eieren ser sin egen hånd i klartekst', () => {
+  it('the owner sees their own hand in the clear', () => {
     let state = firstCivGame()
     for (const sheetName of ['CULTURE_1', 'HUTS', 'INFANTRY'] as const) {
       state = unwrap(draw(state, { playerId: CASH1981, sheetName }))
@@ -47,7 +47,7 @@ describe('toPlayerView', () => {
     ])
   })
 
-  it('motstandere ser bare antall, ikke innhold', () => {
+  it('opponents see counts only, not contents', () => {
     let state = firstCivGame()
     for (const sheetName of ['CULTURE_1', 'HUTS', 'INFANTRY'] as const) {
       state = unwrap(draw(state, { playerId: CASH1981, sheetName }))
@@ -58,15 +58,15 @@ describe('toPlayerView', () => {
 
     expect(cash?.numberOfItemsInHand).toBe(3)
     expect(cash).not.toHaveProperty('items')
-    // Ingen av kortnavnene i cash1981s hånd skal finnes i Karandras1 sitt syn
+    // None of the card names in cash1981's hand may appear in Karandras1's view
     const hand = findPlayer(state, CASH1981)?.items ?? []
     const serialised = JSON.stringify(view)
     for (const item of hand) {
-      expect(serialised, `lekket ${revealAll(item)}`).not.toContain(revealAll(item))
+      expect(serialised, `leaked ${revealAll(item)}`).not.toContain(revealAll(item))
     }
   })
 
-  it('andres loggposter kommer bare i offentlig form', () => {
+  it('log entries belonging to others arrive in public form only', () => {
     const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CIV' }))
 
     const own = toPlayerView(state, CASH1981)
@@ -81,7 +81,7 @@ describe('toPlayerView', () => {
     expect(otherEntry).not.toHaveProperty('privateLog')
   })
 
-  it('viser stokken som antall, ikke som kort', () => {
+  it('shows the deck as a count, not as cards', () => {
     const state = firstCivGame()
     const view = toPlayerView(state, CASH1981)
 
@@ -89,25 +89,25 @@ describe('toPlayerView', () => {
     expect(view).not.toHaveProperty('items')
   })
 
-  it('en tilskuer som ikke er med i spillet ser ingen hånd', () => {
-    const view = toPlayerView(firstCivGame(), 'tilskuer')
+  it('an onlooker who is not in the game sees no hand', () => {
+    const view = toPlayerView(firstCivGame(), 'onlooker')
     expect(view.you).toBeNull()
     expect(view.opponents).toHaveLength(4)
   })
 })
 
-describe('loggtekster', () => {
-  it('ITEM avslører alt privat og bare typen offentlig', () => {
-    // Java: DELIM er " - ", og gir det doble mellomrommet etter "drew"
+describe('log texts', () => {
+  it('ITEM reveals everything privately and only the type publicly', () => {
+    // Java: DELIM is " - ", which gives the double space after "drew"
     const texts = createLogTexts('ITEM', 'cash1981', null, 42)
     expect(texts.privateLog).toBe('cash1981 drew  - . Item number #42')
     expect(texts.publicLog).toBe('cash1981 drew  - . Item number #42')
   })
 
-  it('TECH skjuler teknologien offentlig', () => {
+  it('TECH hides the technology publicly', () => {
     const state = firstCivGame()
     const tech = state.techs[0]
-    if (tech === undefined) throw new Error('ingen tech')
+    if (tech === undefined) throw new Error('no tech')
 
     const texts = createLogTexts('TECH', 'cash1981', tech, tech.itemNumber)
     expect(texts.privateLog).toContain(tech.name)
@@ -117,10 +117,10 @@ describe('loggtekster', () => {
     expect(texts.publicLog).not.toContain(tech.name)
   })
 
-  it('SOCIAL_POLICY skjuler kortet offentlig, selv om revealPublic ville avslørt det', () => {
+  it('SOCIAL_POLICY hides the card publicly, even though revealPublic would show it', () => {
     const state = firstCivGame()
     const policy = state.socialPolicies[0]
-    if (policy === undefined) throw new Error('ingen sosialpolitikk')
+    if (policy === undefined) throw new Error('no social policy')
 
     const texts = createLogTexts('SOCIAL_POLICY', 'cash1981', policy, policy.itemNumber)
     expect(texts.privateLog).toContain(policy.name)
@@ -128,17 +128,17 @@ describe('loggtekster', () => {
     expect(texts.publicLog).toContain('has chosen a hidden social policy')
   })
 
-  it('uniqueItemNumber gir forskjellig nummer per spiller for samme kort', () => {
+  it('uniqueItemNumber gives a different number per player for the same card', () => {
     expect(uniqueItemNumber('cash1981', 42)).not.toBe(uniqueItemNumber('Karandras1', 42))
   })
 
-  it('javaStringHashCode matcher Javas String.hashCode', () => {
-    // Kjente verdier fra java.lang.String.hashCode()
+  it('javaStringHashCode matches the Java String.hashCode', () => {
+    // Known values from java.lang.String.hashCode()
     expect(javaStringHashCode('')).toBe(0)
     expect(javaStringHashCode('a')).toBe(97)
     expect(javaStringHashCode('ab')).toBe(3105)
     expect(javaStringHashCode('hello')).toBe(99162322)
-    // Den klassiske kollisjonen: "Aa" og "BB" hasher likt
+    // The classic collision: "Aa" and "BB" hash the same
     expect(javaStringHashCode('Aa')).toBe(2112)
     expect(javaStringHashCode('BB')).toBe(2112)
   })

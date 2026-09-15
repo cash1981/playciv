@@ -1,9 +1,9 @@
 /**
- * Logg, undo-avstemning og chat.
+ * The log, undo voting and chat.
  *
- * Den offentlige loggen kommer fra serverens `publicLog`-felt og inneholder
- * aldri innholdet i et skjult kort. Den private loggen er filtrert på
- * spillerens egne poster på serversiden.
+ * The public log comes from the server's `publicLog` field and never carries
+ * the contents of a hidden card. The private log is filtered down to the
+ * player's own entries on the server side.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -57,7 +57,7 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
 
   return (
     <section className="panel">
-      <h2>Logg</h2>
+      <h2>Log</h2>
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="row">
@@ -66,18 +66,18 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
           disabled={tab === 'public'}
           onClick={() => setTab('public')}
         >
-          Offentlig
+          Public
         </button>
         <button
           className="small"
           disabled={tab === 'private'}
           onClick={() => setTab('private')}
         >
-          Privat
+          Private
         </button>
         <span style={{ flex: 1 }} />
         <button className="small" onClick={() => void load()}>
-          Oppdater
+          Refresh
         </button>
       </div>
 
@@ -85,29 +85,29 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
         {entries.map((entry) => (
           <li key={entry.id}>
             <span>{entry.message}</span>{' '}
-            {entry.hasUndo && <span className="tag">undo pågår</span>}
+            {entry.hasUndo && <span className="tag">undo pending</span>}
             {tab === 'private' && entry.canUndo === true && (
               <button
                 className="small"
                 disabled={busy}
                 onClick={() => void run(() => api.initiateUndo(gameId, entry.id))}
               >
-                Be om undo
+                Ask for undo
               </button>
             )}
           </li>
         ))}
-        {entries.length === 0 && <li className="muted">Ingenting her ennå.</li>}
+        {entries.length === 0 && <li className="muted">Nothing here yet.</li>}
       </ul>
 
-      <h3 style={{ marginTop: '1rem' }}>Undo som venter på din stemme</h3>
+      <h3 style={{ marginTop: '1rem' }}>Undo waiting for your vote</h3>
       <ul className="list">
         {pending.map((undo) => (
           <li key={undo.id} style={{ display: 'block' }}>
             <div>{undo.message}</div>
             <div className="row" style={{ marginTop: '0.25rem' }}>
               <span className="muted">
-                {undo.votesCast}/{undo.votesRequired} stemmer
+                {undo.votesCast}/{undo.votesRequired} votes
               </span>
               <span style={{ flex: 1 }} />
               <button
@@ -115,19 +115,19 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
                 disabled={busy}
                 onClick={() => void run(() => api.voteUndo(gameId, undo.id, true))}
               >
-                Ja
+                Yes
               </button>
               <button
                 className="small danger"
                 disabled={busy}
                 onClick={() => void run(() => api.voteUndo(gameId, undo.id, false))}
               >
-                Nei
+                No
               </button>
             </div>
           </li>
         ))}
-        {pending.length === 0 && <li className="muted">Ingen.</li>}
+        {pending.length === 0 && <li className="muted">None.</li>}
       </ul>
 
       <h3 style={{ marginTop: '1rem' }}>Chat</h3>
@@ -138,7 +138,7 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
             <span>{entry.message}</span>
           </li>
         ))}
-        {chat.length === 0 && <li className="muted">Stille her.</li>}
+        {chat.length === 0 && <li className="muted">Quiet in here.</li>}
       </ul>
       <form
         className="row"
@@ -157,7 +157,7 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
         <input
           value={message}
           onChange={(event) => setMessage(event.target.value)}
-          placeholder={`Skriv som ${player.username} …`}
+          placeholder={`Write as ${player.username} …`}
           style={{ flex: 1 }}
         />
         <button disabled={busy || message.trim() === ''}>Send</button>

@@ -1,6 +1,6 @@
 /**
- * Port av spillistedelen av `resource/GameResource.java`: opprett, list, bli
- * med, trekk seg, avslutt, chat.
+ * Port of the game-list part of `resource/GameResource.java`: create, list,
+ * join, withdraw, end, chat.
  */
 
 import type { GameState } from '@civ/engine'
@@ -30,7 +30,7 @@ import {
 import { sendError } from '../errors.js'
 import type { ChatMessage } from '../store/types.js'
 
-/** Sammendraget spillisten viser. Java: `PbfDTO`. */
+/** The summary the game list shows. Java: `PbfDTO`. */
 export interface GameSummary {
   readonly id: string
   readonly name: string
@@ -74,7 +74,7 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     )
   })
 
-  /** Java: `GameResource.createGame` med `CreateNewGameDTO`. */
+  /** Java: `GameResource.createGame` with `CreateNewGameDTO`. */
   app.post('/api/games', auth, async (request, reply) => {
     const body = asRecord(request.body)
     const name = requireString(body, 'name')
@@ -89,18 +89,18 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     }
 
     const existing = await context.repo.allGames()
-    // Java hadde en unik indeks på pbf.name
+    // Java had a unique index on pbf.name
     if (existing.some((game) => game.name.toLowerCase() === name.toLowerCase())) {
       return sendError(reply, 409, 'GAME_EXISTS', `A game named ${name} already exists`)
     }
 
     const me = currentPlayer(request)
-    // Java: @Min(2) @Max(5) på CreateNewGameDTO.numOfPlayers
+    // Java: @Min(2) @Max(5) on CreateNewGameDTO.numOfPlayers
     const created = createGame({
       name,
       numOfPlayers,
-      // Seeden avgjør stokking og itemNumber. En tilfeldig id per spill gjør at
-      // to spill med samme navn ikke får samme kortstokk.
+      // The seed decides the shuffle and the itemNumbers. A random id per game
+      // keeps two games with the same name from getting the same deck.
       seed: `${name}:${newId()}`,
       players: [
         {
@@ -113,9 +113,9 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
       ],
     })
 
-    // Java: createNewGame avsluttet med joinGame(..., gameCreator = true), som
-    // kaller startIfAllPlayers. Uten det ville et spill med plass til én aldri
-    // startet.
+    // Java: createNewGame finished with joinGame(..., gameCreator = true),
+    // which calls startIfAllPlayers. Without it a one-seat game would never
+    // start.
     const game = startIfAllPlayers(created)
 
     await context.repo.saveGame(game)
@@ -164,7 +164,7 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     )
   })
 
-  /** Java: `GameAction.getAllRevealedItems` — det regnearket i iframe viste. */
+  /** Java: `GameAction.getAllRevealedItems` — what the iframe spreadsheet showed. */
   app.get('/api/games/:gameId/revealed', auth, async (request, reply) => {
     const { gameId } = request.params as { gameId: string }
     return readGame(context, request, reply, gameId, (state) => allRevealedItems(state))
@@ -186,7 +186,7 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     )
   })
 
-  /** Java: `/{pbfId}/privatelog` — kun spillerens egne poster. */
+  /** Java: `/{pbfId}/privatelog` — the player's own entries only. */
   app.get('/api/games/:gameId/log/private', auth, async (request, reply) => {
     const { gameId } = request.params as { gameId: string }
     return readGame(context, request, reply, gameId, (state, viewerId) =>
@@ -204,8 +204,8 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
   })
 
   // -------------------------------------------------------------------------
-  // Chat. Java lagret dette i sin egen Mongo-samling, ikke på spillet, og det
-  // har ingen spillregler — derfor ligger det her og ikke i motoren.
+  // Chat. Java stored this in its own Mongo collection rather than on the
+  // game, and it carries no game rules — so it lives here, not in the engine.
   // -------------------------------------------------------------------------
 
   app.get('/api/games/:gameId/chat', auth, async (request, reply) => {
@@ -237,7 +237,7 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     return reply.code(201).send(entry)
   })
 
-  /** Java: `/publicchat` — lobbyen, uten tilknytning til et spill. */
+  /** Java: `/publicchat` — the lobby, with no game attached. */
   app.get('/api/chat', auth, async (_request, reply) =>
     reply.send(await context.repo.chatFor(null)),
   )
@@ -258,7 +258,7 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     return reply.code(201).send(entry)
   })
 
-  /** Eksponert så klienten slipper å utlede den fra spillerens syn. */
+  /** Exposed so the client does not have to derive it from the player view. */
   app.get('/api/games/:gameId/state', auth, async (request, reply) => {
     const { gameId } = request.params as { gameId: string }
     const game = await context.repo.findGame(gameId)

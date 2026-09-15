@@ -1,9 +1,9 @@
 /**
- * Port av `no.asgari.civilization.server.SheetName`.
+ * Port of `no.asgari.civilization.server.SheetName`.
  *
- * Java-enumet hadde både et navn (CIV) og en etikett ("Civ"), der etiketten er
- * arkfanen i regnearket. Rekkefølgen under er identisk med Java, fordi
- * `Item.compareTo` sammenligner enum-ordinal.
+ * The Java enum had both a name (CIV) and a label ("Civ"), where the label is
+ * the sheet tab in the spreadsheet. The order below matches Java exactly,
+ * because `Item.compareTo` compares the enum ordinal.
  */
 
 export const SHEET_NAME_ORDER = [
@@ -60,7 +60,7 @@ export const SHEET_LABEL: Readonly<Record<SheetName, string>> = {
   SOCIAL_POLICY: 'Social Policy',
 }
 
-/** Ordinal, slik at `compareTo` kan porteres 1:1. */
+/** The ordinal, so `compareTo` can be ported one to one. */
 const ORDINAL: Readonly<Record<SheetName, number>> = Object.fromEntries(
   SHEET_NAME_ORDER.map((name, index) => [name, index]),
 ) as Record<SheetName, number>
@@ -69,10 +69,10 @@ export function sheetOrdinal(sheet: SheetName): number {
   return ORDINAL[sheet]
 }
 
-/** Java: `SheetName.SHEETS` — hele enumet. */
+/** Java: `SheetName.SHEETS` — the whole enum. */
 export const SHEETS: ReadonlySet<SheetName> = new Set(SHEET_NAME_ORDER)
 
-/** Java: `SheetName.TECHS`. Teknologier velges, de trekkes ikke. */
+/** Java: `SheetName.TECHS`. Techs are chosen, not drawn. */
 export const TECHS: ReadonlySet<SheetName> = new Set<SheetName>([
   'LEVEL_1_TECH',
   'LEVEL_2_TECH',
@@ -106,10 +106,10 @@ export const ALL_WONDERS: ReadonlySet<SheetName> = new Set<SheetName>([
 /**
  * Java: `SheetName.SHUFFLABLE_ITEMS`.
  *
- * Kun disse kan reshuffles. Merk at HUTS, VILLAGES, TILES, CITY_STATES og
- * wonders IKKE er med — forsøk på å reshuffle dem er en feil, ikke en tom
- * stokk. Det avviker fra hva man kanskje ville forvente, men er hva
- * DrawAction.java faktisk gjør, og Java er fasit.
+ * Only these can be reshuffled. Note that HUTS, VILLAGES, TILES, CITY_STATES
+ * and wonders are NOT included — trying to reshuffle them is an error, not an
+ * empty deck. That is not what you might expect, but it is what DrawAction.java
+ * actually does, and Java is the reference.
  */
 export const SHUFFLABLE_ITEMS: ReadonlySet<SheetName> = new Set<SheetName>([
   'AIRCRAFT',
@@ -128,9 +128,8 @@ const withoutWhitespace = (value: string): string => value.replace(/\s/g, '')
 /**
  * Java: `SheetName.find(String)`.
  *
- * Slår først opp mot etiketten med mellomrom fjernet og uten hensyn til
- * store/små bokstaver ("CIV" treffer "Civ"), og faller så tilbake på
- * enum-navnet ("CULTURE_1").
+ * Looks first at the label with whitespace stripped and case ignored, so
+ * "CIV" matches "Civ", then falls back to the enum name ("CULTURE_1").
  */
 export function findSheetName(name: string): SheetName | undefined {
   const needle = withoutWhitespace(name)

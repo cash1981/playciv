@@ -1,6 +1,6 @@
 packages:
   - packages/*
 
-# esbuild trenger sitt postinstall-skript for å hente plattformbinæren (vitest)
+# esbuild needs its postinstall script to fetch the platform binary (vitest)
 allowBuilds:
   esbuild: true

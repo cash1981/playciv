@@ -1,8 +1,8 @@
 /**
- * Teknologier og sosialpolitikk.
+ * Techs and social policy.
  *
- * Begge er skjult informasjon til spilleren velger å avsløre dem, og den
- * offentlige loggen sier bare at «en skjult teknologi» er forsket fram.
+ * Both are hidden until the player chooses to reveal them, and the public log
+ * only says that "a hidden technology" was researched.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -18,7 +18,7 @@ interface Props {
   readonly busy: boolean
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
   readonly view: PlayerView
-  /** Økes av GameView etter hver handling, så listene hentes på nytt. */
+  /** Bumped by GameView after each action, so the lists are fetched again. */
   readonly reloadCount: number
 }
 
@@ -55,7 +55,7 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
 
   return (
     <section className="panel">
-      <h2>Teknologi</h2>
+      <h2>Techs</h2>
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="row">
@@ -64,10 +64,10 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
           onChange={(event) => setChosenTech(event.target.value)}
           style={{ flex: 1 }}
         >
-          <option value="">velg teknologi …</option>
+          <option value="">choose a tech …</option>
           {available.map((tech) => (
             <option key={tech.id} value={tech.name}>
-              Nivå {tech.level} — {tech.name}
+              Level {tech.level} — {tech.name}
             </option>
           ))}
         </select>
@@ -81,18 +81,18 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
             })
           }
         >
-          Forsk
+          Research
         </button>
       </div>
 
-      <h3 style={{ marginTop: '0.8rem' }}>Dine ({yourTechs.length})</h3>
+      <h3 style={{ marginTop: '0.8rem' }}>Yours ({yourTechs.length})</h3>
       <ul className="list scroll">
         {yourTechs.map((tech) => (
           <li key={tech.id}>
             <span>{tech.name}</span>
-            <span className="muted">nivå {tech.level}</span>
+            <span className="muted">level {tech.level}</span>
             <span className={tech.hidden ? 'tag hidden' : 'tag revealed'}>
-              {tech.hidden ? 'skjult' : 'avslørt'}
+              {tech.hidden ? 'hidden' : 'revealed'}
             </span>
             <span style={{ flex: 1 }} />
             {tech.hidden && (
@@ -101,7 +101,7 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
                 disabled={busy}
                 onClick={() => void run(() => api.revealTech(gameId, tech.name))}
               >
-                Avslør
+                Reveal
               </button>
             )}
             <button
@@ -109,36 +109,36 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
               disabled={busy}
               onClick={() => void run(() => api.removeTech(gameId, tech.name))}
             >
-              Fjern
+              Remove
             </button>
           </li>
         ))}
-        {yourTechs.length === 0 && <li className="muted">Ingen valgt.</li>}
+        {yourTechs.length === 0 && <li className="muted">None chosen.</li>}
       </ul>
 
-      <h3 style={{ marginTop: '0.8rem' }}>Avslørt hos alle</h3>
+      <h3 style={{ marginTop: '0.8rem' }}>Revealed by everyone</h3>
       <ul className="list">
         {revealed.map((entry) => (
           <li key={entry.civilization}>
             <strong>{entry.civilization}</strong>
             <span className="muted">
               {entry.techs.length === 0
-                ? 'ingenting avslørt'
+                ? 'nothing revealed'
                 : entry.techs.map((tech) => tech.name).join(', ')}
             </span>
           </li>
         ))}
-        {revealed.length === 0 && <li className="muted">Ingen har valgt sivilisasjon ennå.</li>}
+        {revealed.length === 0 && <li className="muted">Nobody has chosen a civilization yet.</li>}
       </ul>
 
-      <h2 style={{ marginTop: '1rem' }}>Sosialpolitikk</h2>
+      <h2 style={{ marginTop: '1rem' }}>Social policy</h2>
       <div className="row">
         <select
           value={chosenPolicy}
           onChange={(event) => setChosenPolicy(event.target.value)}
           style={{ flex: 1 }}
         >
-          <option value="">velg kort …</option>
+          <option value="">choose a card …</option>
           {policies.map((policy) => (
             <option key={policy.id} value={policy.name}>
               {policy.name}
@@ -155,7 +155,7 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
             })
           }
         >
-          Velg
+          Choose
         </button>
       </div>
       <ul className="list">
@@ -163,11 +163,11 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
           <li key={policy.id}>
             <span>{policy.name}</span>
             {policy.flipside !== null && (
-              <span className="muted">bakside: {policy.flipside}</span>
+              <span className="muted">flipside: {policy.flipside}</span>
             )}
           </li>
         ))}
-        {yourPolicies.length === 0 && <li className="muted">Ingen valgt.</li>}
+        {yourPolicies.length === 0 && <li className="muted">None chosen.</li>}
       </ul>
     </section>
   )

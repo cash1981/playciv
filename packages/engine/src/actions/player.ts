@@ -1,9 +1,9 @@
 /**
- * Port av `no.asgari.civilization.server.action.PlayerAction`.
+ * Port of `no.asgari.civilization.server.action.PlayerAction`.
  *
- * Ikke portert hit, med vilje: `createPlayer`, `newPassword`, `verifyPassword`
- * og e-postutsending. Det er kontoadministrasjon og infrastruktur, ikke
- * spillregler, og hører i server-pakken.
+ * Deliberately not ported here: `createPlayer`, `newPassword`,
+ * `verifyPassword` and email sending. Those are account administration and
+ * infrastructure rather than game rules, and belong in the server package.
  */
 
 import { civTileAssetId, startingCorner } from '../board.js'
@@ -28,7 +28,7 @@ import { draw } from './draw.js'
 
 type ActionResult = Result<GameState, EngineError>
 
-/** Java: `SecurityCheck.hasUserAccess` fulgt av 403. */
+/** Java: `SecurityCheck.hasUserAccess` followed by a 403. */
 function requireAccess(
   state: GameState,
   playerId: string,
@@ -40,7 +40,7 @@ function requireAccess(
 }
 
 // ---------------------------------------------------------------------------
-// Teknologi
+// Techs
 // ---------------------------------------------------------------------------
 
 export interface ChooseTechInput {
@@ -51,10 +51,10 @@ export interface ChooseTechInput {
 /**
  * Java: `PlayerAction.chooseTech`.
  *
- * Java muterte teknologien i `pbf.techs` (satte hidden og ownerId) og la SAMME
- * referanse i spillerens hånd, så den globale listen ble forurenset av hvem som
- * valgte hva. Her legges en kopi i hånden og `state.techs` står urørt — den er
- * katalogen over tilgjengelige teknologier, ikke en eierskapsliste.
+ * Java mutated the tech in `pbf.techs` (setting hidden and ownerId) and put
+ * the SAME reference in the player's hand, so the global list was polluted by
+ * who chose what. Here a copy goes in the hand and `state.techs` is untouched —
+ * it is the catalogue of available techs, not an ownership list.
  */
 export function chooseTech(state: GameState, input: ChooseTechInput): ActionResult {
   const access = requireAccess(state, input.playerId)
@@ -64,7 +64,7 @@ export function chooseTech(state: GameState, input: ChooseTechInput): ActionResu
   const tech = state.techs.find((candidate) => candidate.name === input.techName)
   if (tech === undefined) return err({ kind: 'ITEM_NOT_FOUND' })
 
-  // Java: Tech har @EqualsAndHashCode(of = "name"), så likhet er på navn
+  // Java: Tech has @EqualsAndHashCode(of = "name"), so equality is by name
   if (player.techsChosen.some((chosen) => chosen.name === tech.name)) {
     return err({ kind: 'TECH_ALREADY_CHOSEN', techName: tech.name })
   }
@@ -98,8 +98,9 @@ export function removeTech(state: GameState, input: ChooseTechInput): ActionResu
 /**
  * Java: `PlayerAction.revealTech`.
  *
- * Java tok imot hele `GameLog`-dokumentet, fordi teknologien lå lagret på
- * loggen i Mongo. Her holder navnet: teknologien i spillerens hånd er kilden.
+ * Java took the whole `GameLog` document, because the tech was stored on the
+ * log in Mongo. The name is enough here: the tech in the player's hand is the
+ * source of truth.
  */
 export function revealTech(state: GameState, input: ChooseTechInput): ActionResult {
   const access = requireAccess(state, input.playerId)
@@ -123,8 +124,8 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
 /**
  * Java: `PlayerAction.getRemaingTechsForPlayer`.
  *
- * Java gjorde `techs.removeAll(techsChosen)` på listen som kom fra Mongo, altså
- * en lesing som muterte tilstanden i minnet. Her er det en ren filtrering.
+ * Java did `techs.removeAll(techsChosen)` on the list that came from Mongo, a
+ * read that mutated the in-memory state. Here it is a plain filter.
  */
 export function remainingTechsForPlayer(
   state: GameState,
@@ -134,7 +135,7 @@ export function remainingTechsForPlayer(
   if (player === undefined) return state.techs
 
   const taken = new Set(player.techsChosen.map((tech) => tech.name))
-  // Java la også til startteknologien fra sivilisasjonen
+  // Java also added the starting tech from the civilization
   if (player.civilization !== null) taken.add(player.civilization.startingTech.name)
 
   return state.techs
@@ -142,7 +143,7 @@ export function remainingTechsForPlayer(
     .sort((a, b) => a.level - b.level)
 }
 
-/** Java: `PlayerAction.getTechsForAllPlayers` — bare avslørte teknologier. */
+/** Java: `PlayerAction.getTechsForAllPlayers` — revealed techs only. */
 export interface RevealedTechs {
   readonly civilization: string
   readonly color: string | null
@@ -162,13 +163,13 @@ export function revealedTechsForAllPlayers(state: GameState): readonly RevealedT
 }
 
 // ---------------------------------------------------------------------------
-// Avsløring av items
+// Revealing items
 // ---------------------------------------------------------------------------
 
 export interface RevealItemInput {
   readonly playerId: string
   readonly sheetName: SheetName
-  /** Java lette først på itemNumber, deretter på navn. */
+  /** Java looked by itemNumber first, then by name. */
   readonly itemNumber?: number
   readonly name?: string
 }
@@ -176,10 +177,10 @@ export interface RevealItemInput {
 /**
  * Java: `PlayerAction.revealItem`.
  *
- * Å avsløre er egentlig bare å skrive en offentlig logglinje med det skjulte
- * innholdet. Unntaket er sivilisasjoner: da settes startteknologien, de andre
- * civ-kortene kastes, startenheter trekkes, og om alle har valgt civ trekkes
- * fire ancient wonders.
+ * Revealing is really just writing a public log line carrying the hidden
+ * contents. Civilizations are the exception: the starting tech is set, the
+ * other civ cards are discarded, starting units are drawn, and once everyone
+ * has chosen a civ, four ancient wonders are drawn.
  */
 export function revealItem(state: GameState, input: RevealItemInput): ActionResult {
   const access = requireAccess(state, input.playerId)
@@ -209,7 +210,7 @@ export function revealItem(state: GameState, input: RevealItemInput): ActionResu
     return err({ kind: 'ITEM_ALREADY_REVEALED', name: input.name ?? String(input.itemNumber) })
   }
 
-  // Java: isCivilization kastet 400 hvis sivilisasjon allerede var valgt
+  // Java: isCivilization threw a 400 when a civilization was already chosen
   if (input.sheetName === 'CIV' && player.civilization !== null) {
     return err({ kind: 'CIVILIZATION_ALREADY_CHOSEN', playerId: input.playerId })
   }
@@ -228,9 +229,9 @@ export function revealItem(state: GameState, input: RevealItemInput): ActionResu
 }
 
 /**
- * Java: sekvensen i `revealItem` når itemet er en Civ. Rekkefølgen er bevart:
- * sett startteknologi, logg REVEAL, trekk startenheter, kast de andre civ-ene,
- * og trekk wonders til slutt.
+ * Java: the sequence in `revealItem` when the item is a Civ. The order is
+ * kept: set the starting tech, log REVEAL, draw starting units, discard the
+ * other civs, and draw wonders last.
  */
 function revealCivilization(
   state: GameState,
@@ -252,7 +253,7 @@ function revealCivilization(
   })
   next = appendItemLog(next, 'REVEAL', player.username, player.playerId, civ)
 
-  // Java trakk startenheter bare hvis spilleren ikke hadde units fra før
+  // Java drew starting units only if the player had none already
   const hasUnits = (findPlayer(next, player.playerId)?.items ?? []).some(isUnit)
   if (!hasUnits) {
     const drawn = drawStartingItems(next, player.playerId, civ.name)
@@ -273,13 +274,14 @@ function revealCivilization(
 }
 
 /**
- * Legger sivilisasjonens startbrett i spillerens hjørne.
+ * Puts the civilization's starting tile in the player's corner.
  *
- * Spiller 1 får øvre venstre luke (A1–D4), 2 øvre høyre, 3 nedre høyre og
- * 4 nedre venstre, og brettet snus så pilen peker inn mot midten. Se
- * `startingCorner` i board.ts for hvordan rotasjonen følger av det.
+ * Player 1 takes the top-left slot (A1-D4), 2 the top-right, 3 the
+ * bottom-right and 4 the bottom-left, and the tile is turned so the arrow
+ * points in towards the middle. See `startingCorner` in board.ts for how the
+ * rotation follows from that.
  *
- * Brettet kan flyttes og snus etterpå som alle andre brikker.
+ * The tile can be moved and turned afterwards like any other piece.
  */
 function placeStartingTile(
   state: GameState,
@@ -289,7 +291,7 @@ function placeStartingTile(
   const assetId = civTileAssetId(civ.name)
   if (assetId === undefined) return state
 
-  // Ikke legg ut det samme startbrettet to ganger
+  // Do not lay out the same starting tile twice
   if (state.board.pieces.some((piece) => piece.assetId === assetId)) return state
 
   const corner = startingCorner(state.board, player.playernumber)
@@ -305,8 +307,8 @@ function placeStartingTile(
 }
 
 /**
- * Java: `drawStartingItems`. Bare enheter, og en ancient wonder for Egypt.
- * Antallene kommer fra sivilisasjonskortene i regelboken.
+ * Java: `drawStartingItems`. Units only, plus one ancient wonder for Egypt.
+ * The counts come from the civilization cards in the rulebook.
  */
 const STARTING_UNITS: Readonly<Record<string, readonly SheetName[]>> = {
   Germans: ['INFANTRY', 'INFANTRY', 'INFANTRY', 'ARTILLERY', 'MOUNTED'],
@@ -332,7 +334,7 @@ function drawStartingItems(
   return ok(next)
 }
 
-/** Java: `drawStartingWonders` — fire ancient wonders. */
+/** Java: `drawStartingWonders` — four ancient wonders. */
 function drawStartingWonders(state: GameState, playerId: string): ActionResult {
   let next = appendInfoLog(state, 'Drawing 4 ancient wonders')
   for (let i = 0; i < 4; i++) {
@@ -343,7 +345,7 @@ function drawStartingWonders(state: GameState, playerId: string): ActionResult {
   return ok(next)
 }
 
-/** Java: `deleteTheOtherCivs` — de civ-kortene spilleren ikke valgte kastes. */
+/** Java: `deleteTheOtherCivs` — the civ cards the player did not pick are discarded. */
 function discardTheOtherCivs(state: GameState, playerId: string, chosen: CivItem): GameState {
   const player = findPlayer(state, playerId)
   if (player === undefined) return state
@@ -370,8 +372,8 @@ function discardTheOtherCivs(state: GameState, playerId: string, chosen: CivItem
 }
 
 /**
- * Java: `shouldDrawWonders` — alle plasser fylt, alle har valgt sivilisasjon,
- * og ingen wonders er delt ut eller kastet ennå.
+ * Java: `shouldDrawWonders` — every seat filled, everyone has chosen a
+ * civilization, and no wonders have been dealt or discarded yet.
  */
 function shouldDrawWonders(state: GameState): boolean {
   if (state.numOfPlayers !== state.players.length) return false
@@ -383,7 +385,7 @@ function shouldDrawWonders(state: GameState): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Sosialpolitikk
+// Social policy
 // ---------------------------------------------------------------------------
 
 export interface ChooseSocialPolicyInput {
@@ -394,11 +396,11 @@ export interface ChooseSocialPolicyInput {
 /**
  * Java: `PlayerAction.chooseSocialPolicy`.
  *
- * Ett avvik: Java lagde et helt nytt `SocialPolicy`-objekt med kun navn og
- * flipside, som betyr at `itemNumber` ble 0. Logglinjen bruker itemNumber til å
- * gi hver spiller sitt eget referansenummer, så med 0 fikk alle kort samme
- * nummer for samme spiller og funksjonen var virkningsløs. Her kopieres kortet
- * med sitt faktiske itemNumber.
+ * One deviation: Java built a brand-new `SocialPolicy` object with only a name
+ * and a flipside, which left `itemNumber` at 0. The log line uses itemNumber to
+ * give each player their own reference number, so with 0 every card got the
+ * same number for a given player and the feature did nothing. Here the card is
+ * copied with its real itemNumber.
  */
 export function chooseSocialPolicy(
   state: GameState,
@@ -436,7 +438,7 @@ export function chooseSocialPolicy(
 }
 
 // ---------------------------------------------------------------------------
-// Handel og kasting
+// Trading and discarding
 // ---------------------------------------------------------------------------
 
 export interface TradeInput {
@@ -448,9 +450,8 @@ export interface TradeInput {
 }
 
 /**
- * Java: `PlayerAction.tradeToPlayer` — gir et Tradable item til en annen
- * spiller. I motsetning til `loot` er dette frivillig og spilleren velger selv
- * hvilket item.
+ * Java: `PlayerAction.tradeToPlayer` — gives a Tradable item to another
+ * player. Unlike `loot` this is voluntary, and the player picks the item.
  */
 export function tradeToPlayer(state: GameState, input: TradeInput): ActionResult {
   const from = requireAccess(state, input.playerId)
@@ -480,8 +481,8 @@ export function tradeToPlayer(state: GameState, input: TradeInput): ActionResult
   const updatedTo = findPlayer(next, input.targetPlayerId) as Playerhand
   next = withPlayer(next, { ...updatedTo, items: [...updatedTo.items, traded] })
 
-  // Java: createTradeGameLog skrev to poster. Den første tilskrives MOTTAKEREN,
-  // fordi Java hentet brukernavnet fra item.ownerId etter eierbyttet.
+  // Java: createTradeGameLog wrote two entries. The first is attributed to the
+  // RECEIVER, because Java read the username from item.ownerId after the swap.
   const texts = createLogTexts(
     'TRADE_BETWEEN_PLAYERS',
     toPlayer.username,
@@ -495,7 +496,7 @@ export function tradeToPlayer(state: GameState, input: TradeInput): ActionResult
     playerId: toPlayer.playerId,
     ...texts,
   })
-  // Den andre tilskrives giveren, og er kun privat
+  // The second is attributed to the giver, and is private only
   next = appendLog(next, {
     username: fromPlayer.username,
     playerId: fromPlayer.playerId,
@@ -514,9 +515,9 @@ export interface DiscardInput {
 }
 
 /**
- * Java: `PlayerAction.discardItem`. Kastede items havner i `discardedItems`, som
- * er det reshuffle henter fra. Java satte bevisst IKKE `ownerId` til null her,
- * med kommentaren at det trengs i tilfelle undo.
+ * Java: `PlayerAction.discardItem`. Discarded items land in `discardedItems`,
+ * which is what a reshuffle draws from. Java deliberately did NOT set `ownerId`
+ * to null here, noting that it is needed in case of an undo.
  */
 export function discardItem(state: GameState, input: DiscardInput): ActionResult {
   const access = requireAccess(state, input.playerId)
@@ -545,18 +546,18 @@ export function discardItem(state: GameState, input: DiscardInput): ActionResult
 }
 
 // ---------------------------------------------------------------------------
-// Tur
+// Turns
 // ---------------------------------------------------------------------------
 
 /**
  * Java: `PlayerAction.endTurn`.
  *
- * Advarsel, portert som-er: Java bryr seg ikke om hvem som kaller. Den finner
- * spilleren som HAR turen og gir den videre, så en spiller kan avslutte en
- * annens tur. Autorisasjonen lå i ressurslaget.
+ * A warning, ported as it is: Java does not care who calls. It finds the
+ * player who HAS the turn and passes it on, so one player can end another
+ * player's turn. The authorisation lived in the resource layer.
  *
- * Javas andre kodegren, en indeksbasert variant for spill laget før
- * `playernumber` fantes, er ikke portert. Nye spill får alltid playernumber.
+ * Java's other branch, an index-based variant for games made before
+ * `playernumber` existed, is not ported. New games always have playernumber.
  */
 export function endTurn(state: GameState): ActionResult {
   const current = state.players.find((player) => player.yourTurn)
@@ -580,8 +581,8 @@ export function endTurn(state: GameState): ActionResult {
 }
 
 /**
- * Java: `PlayerAction.takeTurnButton` — tar turen fra hvem som helst. Fantes
- * for å komme videre når en spiller ble borte.
+ * Java: `PlayerAction.takeTurnButton` — takes the turn from anyone. It existed
+ * to keep things moving when a player went missing.
  */
 export function takeTurn(state: GameState, playerId: string): ActionResult {
   const access = requireAccess(state, playerId)
@@ -599,12 +600,12 @@ export function takeTurn(state: GameState, playerId: string): ActionResult {
   return ok(appendPublicLog(next, player.username, playerId, 'took turn button'))
 }
 
-/** Java: `PlayerAction.isYourTurn` — en ren lesing, uten kast. */
+/** Java: `PlayerAction.isYourTurn` — a plain read, with no throwing. */
 export function isYourTurn(state: GameState, playerId: string): boolean {
   return findPlayer(state, playerId)?.yourTurn ?? false
 }
 
-/** Java: `PlayerAction.saveNote` — privat notat, aldri i noen offentlig logg. */
+/** Java: `PlayerAction.saveNote` — a private note, never in any public log. */
 export function saveNote(state: GameState, playerId: string, note: string): ActionResult {
   const access = requireAccess(state, playerId)
   if (!access.ok) return access

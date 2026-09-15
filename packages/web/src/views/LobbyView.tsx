@@ -1,4 +1,4 @@
-/** Spillisten: opprett spill, bli med, åpne. Java: `GameResource`-oversikten. */
+/** The game list: create, join, open. Java: the `GameResource` overview. */
 
 import { useCallback, useEffect, useState } from 'react'
 
@@ -49,12 +49,12 @@ export function LobbyView({ player, onOpenGame, onUnauthorized }: Props): React.
 
   return (
     <>
-      <h1>Spill</h1>
+      <h1>Games</h1>
       {error !== null && <div className="error">{error}</div>}
 
       <div className="grid">
         <section className="panel">
-          <h2>Nytt spill</h2>
+          <h2>New game</h2>
           <form
             onSubmit={(event) => {
               event.preventDefault()
@@ -65,16 +65,16 @@ export function LobbyView({ player, onOpenGame, onUnauthorized }: Props): React.
             }}
           >
             <label>
-              Navn
+              Name
               <input value={name} onChange={(event) => setName(event.target.value)} required />
             </label>
             <label>
-              Antall spillere
+              Players
               <select
                 value={numOfPlayers}
                 onChange={(event) => setNumOfPlayers(Number(event.target.value))}
               >
-                {/* Java: @Min(2) @Max(5) på CreateNewGameDTO */}
+                {/* Java: @Min(2) @Max(5) on CreateNewGameDTO */}
                 {[2, 3, 4, 5].map((count) => (
                   <option key={count} value={count}>
                     {count}
@@ -83,14 +83,14 @@ export function LobbyView({ player, onOpenGame, onUnauthorized }: Props): React.
               </select>
             </label>
             <button className="primary" type="submit" disabled={busy || name.trim() === ''}>
-              Opprett
+              Create
             </button>
           </form>
         </section>
 
         <section className="panel">
-          <h2>Pågående og avsluttede</h2>
-          {games.length === 0 && <p className="muted">Ingen spill ennå.</p>}
+          <h2>Ongoing and finished</h2>
+          {games.length === 0 && <p className="muted">No games yet.</p>}
           <ul className="list">
             {games.map((game) => {
               const full = game.players.length >= game.numOfPlayers
@@ -100,19 +100,19 @@ export function LobbyView({ player, onOpenGame, onUnauthorized }: Props): React.
                   <span className="muted">
                     {game.players.length}/{game.numOfPlayers}
                   </span>
-                  {!game.active && <span className="tag">avsluttet</span>}
-                  {game.winner !== null && <span className="tag revealed">{game.winner} vant</span>}
+                  {!game.active && <span className="tag">ended</span>}
+                  {game.winner !== null && <span className="tag revealed">{game.winner} won</span>}
                   {game.active && game.nameOfUsersTurn !== '' && (
                     <span className={game.nameOfUsersTurn === player.username ? 'tag turn' : 'tag'}>
                       {game.nameOfUsersTurn === player.username
-                        ? 'din tur'
-                        : `${game.nameOfUsersTurn} sin tur`}
+                        ? 'your turn'
+                        : `${game.nameOfUsersTurn}’s turn`}
                     </span>
                   )}
                   <span className="spacer" style={{ flex: 1 }} />
                   {game.youAreIn ? (
                     <button className="small" onClick={() => onOpenGame(game.id)}>
-                      Åpne
+                      Open
                     </button>
                   ) : (
                     <button
@@ -120,7 +120,7 @@ export function LobbyView({ player, onOpenGame, onUnauthorized }: Props): React.
                       disabled={busy || full || !game.active}
                       onClick={() => void run(() => api.join(game.id))}
                     >
-                      {full ? 'Fullt' : 'Bli med'}
+                      {full ? 'Full' : 'Join'}
                     </button>
                   )}
                 </li>

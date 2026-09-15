@@ -1,13 +1,13 @@
 /**
- * Port av `no.asgari.civilization.server.model.PlayerTurn`.
+ * Port of `no.asgari.civilization.server.model.PlayerTurn`.
  *
- * En tur består av fem faser. Hver fase har en gjeldende ordre og en historikk
- * over tidligere ordrer, slik at spillerne kan se hva som ble endret.
+ * A turn has five phases. Each phase holds a current order and a history of
+ * earlier orders, so the players can see what changed.
  *
- * `TurnKey.java` er ikke portert. Den var et forsøk på en sammensatt
- * nøkkel for `publicTurns`, men Java fikk ikke Jackson til å serialisere
- * kartet og endte med å konkatenere `turnNumber + username` til en streng.
- * Den strengen er beholdt som nøkkelformat.
+ * `TurnKey.java` is not ported. It was an attempt at a composite key for
+ * `publicTurns`, but Java could not get Jackson to serialise the map and ended
+ * up concatenating `turnNumber + username` into a string. That string is kept
+ * as the key format.
  */
 
 export const TURN_PHASES = ['SOT', 'TRADE', 'CM', 'MOVEMENT', 'RESEARCH'] as const
@@ -24,12 +24,12 @@ export const TURN_PHASE_LABEL: Readonly<Record<TurnPhase, string>> = {
 export interface PlayerTurn {
   readonly turnNumber: number
   readonly username: string
-  /** Java: `disabled` — satt når spilleren har låst turen. */
+  /** Java: `disabled` — set once the player has locked the turn. */
   readonly disabled: boolean
   readonly orders: Readonly<Record<TurnPhase, string>>
   /**
-   * Java hadde `Set<String>` per fase, altså uten rekkefølge. Her beholdes
-   * innsettingsrekkefølgen, siden historikk uten rekkefølge er lite verdt.
+   * Java used a `Set<String>` per phase, so without order. Insertion order is
+   * kept here, since a history without order is worth little.
    */
   readonly history: Readonly<Record<TurnPhase, readonly string[]>>
 }
@@ -60,15 +60,15 @@ export function createPlayerTurn(username: string, turnNumber: number): PlayerTu
   }
 }
 
-/** Java: `equals` på PlayerTurn brukte turnNumber + username. */
+/** Java: `equals` on PlayerTurn used turnNumber plus username. */
 export function sameTurn(a: PlayerTurn, b: PlayerTurn): boolean {
   return a.turnNumber === b.turnNumber && a.username === b.username
 }
 
 /**
- * Javas `String.compareTo` sammenligner UTF-16-kodeenheter, ikke etter
- * lokalregler. Det betyr at "Karandras1" kommer før "cash1981", fordi store
- * bokstaver har lavere kodepunkt. `localeCompare` gir motsatt rekkefølge.
+ * Java's `String.compareTo` compares UTF-16 code units rather than following
+ * locale rules. That puts "Karandras1" before "cash1981", because capitals have
+ * lower code points. `localeCompare` gives the opposite order.
  */
 export function compareJavaStrings(a: string, b: string): number {
   if (a < b) return -1
@@ -76,12 +76,12 @@ export function compareJavaStrings(a: string, b: string): number {
   return 0
 }
 
-/** Java: `compareTo` sorterte på turnummer, deretter brukernavn. */
+/** Java: `compareTo` sorted on turn number, then username. */
 export function compareTurns(a: PlayerTurn, b: PlayerTurn): number {
   return a.turnNumber - b.turnNumber || compareJavaStrings(a.username, b.username)
 }
 
-/** Setter ordren for én fase og legger den i historikken. */
+/** Sets the order for one phase and adds it to the history. */
 export function withOrder(turn: PlayerTurn, phase: TurnPhase, order: string): PlayerTurn {
   const existing = turn.history[phase]
   return {
@@ -89,25 +89,25 @@ export function withOrder(turn: PlayerTurn, phase: TurnPhase, order: string): Pl
     orders: { ...turn.orders, [phase]: order },
     history: {
       ...turn.history,
-      // Java brukte Set, så samme ordre to ganger ga bare én oppføring
+      // Java used a Set, so the same order twice made only one entry
       [phase]: existing.includes(order) ? existing : [...existing, order],
     },
   }
 }
 
 /**
- * Java: nøkkelen i `PBF.publicTurns`, laget som `turnNumber + username`.
- * Merk at den er tvetydig: tur 11 for «a» og tur 1 for «1a» gir samme nøkkel.
- * Formatet er beholdt for kompatibilitet med eksisterende Mongo-dokumenter.
+ * Java: the key in `PBF.publicTurns`, built as `turnNumber + username`.
+ * Note that it is ambiguous: turn 11 for "a" and turn 1 for "1a" give the same
+ * key. The format is kept for compatibility with existing Mongo documents.
  */
 export function publicTurnKey(turn: PlayerTurn): string {
   return `${turn.turnNumber}${turn.username}`
 }
 
 /**
- * Java: `TurnAction.getAllPublicTurns` fjernet den gjeldende ordren fra
- * historikken før den returnerte — men gjorde det ved å mutere de lagrede
- * objektene, så en lesing ødela data. Her er det en ren projeksjon.
+ * Java: `TurnAction.getAllPublicTurns` stripped the current order from the
+ * history before returning — but did it by mutating the stored objects, so a
+ * read corrupted data. Here it is a pure projection.
  */
 export function withoutCurrentOrderInHistory(turn: PlayerTurn): PlayerTurn {
   const history = { ...turn.history }
@@ -117,7 +117,7 @@ export function withoutCurrentOrderInHistory(turn: PlayerTurn): PlayerTurn {
   return { ...turn, history }
 }
 
-/** Java: `PlayerTurn.endTurn()` økte turnummeret. */
+/** Java: `PlayerTurn.endTurn()` bumped the turn number. */
 export function nextTurnNumber(turn: PlayerTurn): number {
   return turn.turnNumber + 1
 }

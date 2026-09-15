@@ -1,12 +1,12 @@
 /**
- * Seedet PRNG. Java brukte `Collections.shuffle` og `RandomUtils` mot en global
- * kilde, som gjør trekk umulige å reprodusere. Her ligger tilstanden i
- * spilltilstanden, og hver funksjon returnerer neste tilstand.
+ * A seeded PRNG. Java used `Collections.shuffle` and `RandomUtils` against a
+ * global source, which makes draws impossible to reproduce. Here the state
+ * lives in the game state, and every function returns the next state.
  */
 
 export type Rng = number
 
-/** mulberry32 — liten, rask, god nok fordeling for kortstokker. */
+/** mulberry32 — small, fast, and even enough for shuffling cards. */
 function next(state: Rng): readonly [value: number, state: Rng] {
   const seed = (state + 0x6d2b79f5) | 0
   let t = seed
@@ -16,14 +16,14 @@ function next(state: Rng): readonly [value: number, state: Rng] {
   return [value, seed]
 }
 
-/** Heltall i [0, bound). */
+/** An integer in [0, bound). */
 export function nextInt(state: Rng, bound: number): readonly [value: number, state: Rng] {
-  if (bound <= 0) throw new Error(`nextInt krever bound > 0, fikk ${bound}`)
+  if (bound <= 0) throw new Error(`nextInt needs bound > 0, got ${bound}`)
   const [value, nextState] = next(state)
   return [Math.floor(value * bound), nextState]
 }
 
-/** Heltall i [min, max), som Javas `RandomUtils.nextInt(min, max)`. */
+/** An integer in [min, max), like Java's `RandomUtils.nextInt(min, max)`. */
 export function nextIntBetween(
   state: Rng,
   min: number,
@@ -34,10 +34,10 @@ export function nextIntBetween(
 }
 
 /**
- * Fisher–Yates i samme retning som `java.util.Collections.shuffle`, som teller
- * ned og bytter mot `nextInt(i)`. Verdiene blir ikke like Javas — kildene er
- * forskjellige — men algoritmen er den samme, og resultatet er deterministisk
- * for en gitt seed.
+ * Fisher–Yates in the same direction as `java.util.Collections.shuffle`, which
+ * counts down and swaps against `nextInt(i)`. The values differ from Java —
+ * the sources differ — but the algorithm is the same, and the result is
+ * deterministic for a given seed.
  */
 export function shuffle<T>(items: readonly T[], state: Rng): readonly [items: T[], state: Rng] {
   const result = [...items]
@@ -53,7 +53,7 @@ export function shuffle<T>(items: readonly T[], state: Rng): readonly [items: T[
   return [result, rng]
 }
 
-/** Opaque id, brukt som stabil identitet per item-instans. */
+/** An opaque id, used as the stable identity of one item instance. */
 export function nextId(state: Rng): readonly [id: string, state: Rng] {
   const [a, s1] = next(state)
   const [b, s2] = next(s1)
@@ -62,7 +62,7 @@ export function nextId(state: Rng): readonly [id: string, state: Rng] {
   return [`${hi}${lo}`, s2]
 }
 
-/** Lager en seed fra en tekststreng, slik at spill kan navngis reproduserbart. */
+/** Makes a seed from a string, so a game can be named reproducibly. */
 export function seedFrom(text: string): Rng {
   let hash = 0x811c9dc5
   for (let i = 0; i < text.length; i++) {

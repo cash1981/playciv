@@ -1,6 +1,6 @@
 /**
- * Port av `resource/DrawResource.java` og `resource/PlayerResource.java`:
- * trekk, kamp, teknologi, sosialpolitikk, avsløring, handel, tur og undo.
+ * Port of `resource/DrawResource.java` and `resource/PlayerResource.java`:
+ * drawing, battle, techs, social policy, revealing, trading, turns and undo.
  */
 
 import type { SheetName } from '@civ/engine'
@@ -49,7 +49,7 @@ import {
 } from '../context.js'
 import { sendError } from '../errors.js'
 
-/** Slår opp arknavnet og svarer med 400 hvis det ikke finnes. */
+/** Looks up the sheet name and answers 400 when there is no such sheet. */
 function parseSheetName(reply: FastifyReply, raw: string | undefined): SheetName | undefined {
   if (raw === undefined) {
     void sendError(reply, 400, 'BAD_REQUEST', 'sheetName is required')
@@ -77,7 +77,7 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   type Params = { gameId: string }
 
   // -------------------------------------------------------------------------
-  // Trekk
+  // Drawing
   // -------------------------------------------------------------------------
 
   /** Java: `DrawResource.drawItem` — POST draw/{pbfId}/{sheetName}. */
@@ -110,7 +110,7 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   })
 
   // -------------------------------------------------------------------------
-  // Kamp
+  // Battle
   // -------------------------------------------------------------------------
 
   /** Java: `DrawResource.drawUnits` — PUT draw/{pbfId}/battle?numOfUnits=N. */
@@ -152,7 +152,7 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   })
 
   // -------------------------------------------------------------------------
-  // Teknologi og sosialpolitikk
+  // Techs and social policy
   // -------------------------------------------------------------------------
 
   app.get('/api/games/:gameId/techs/available', auth, async (request, reply) => {
@@ -220,10 +220,10 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   })
 
   // -------------------------------------------------------------------------
-  // Items i hånden
+  // Items in hand
   // -------------------------------------------------------------------------
 
-  /** Java: `PlayerResource.revealItem` med `ItemDTO`. */
+  /** Java: `PlayerResource.revealItem` with `ItemDTO`. */
   app.post('/api/games/:gameId/items/reveal', auth, async (request, reply) => {
     const { gameId } = request.params as Params
     const body = asRecord(request.body)
@@ -308,7 +308,7 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   })
 
   // -------------------------------------------------------------------------
-  // Tur
+  // Turns
   // -------------------------------------------------------------------------
 
   app.post('/api/games/:gameId/endturn', auth, async (request, reply) => {
@@ -335,7 +335,7 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
     )
   })
 
-  /** Java: `PlayerResource.updateTurn` med `TurnDTO`. */
+  /** Java: `PlayerResource.updateTurn` with `TurnDTO`. */
   app.post('/api/games/:gameId/turns/update', auth, async (request, reply) => {
     const { gameId } = request.params as Params
     const body = asRecord(request.body)
@@ -381,7 +381,7 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
     )
   })
 
-  /** Java: `/{pbfId}/vote/{gameLogId}/yes` og `/no`. */
+  /** Java: `/{pbfId}/vote/{gameLogId}/yes` and `/no`. */
   app.post('/api/games/:gameId/undo/:logId/vote', auth, async (request, reply) => {
     const { gameId, logId } = request.params as Params & { logId: string }
     const value = asRecord(request.body)['vote']
@@ -399,7 +399,7 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
     return readGame(context, request, reply, gameId, (state) =>
       state.log
         .filter((entry) => entry.undo !== null && !entry.undo.done)
-        // Bare de spilleren ikke har stemt på ennå
+        // Only the ones this player has not voted on yet
         .filter((entry) => !(me.id in (entry.undo?.votes ?? {})))
         .map((entry) => ({
           id: entry.id,
