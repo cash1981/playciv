@@ -193,9 +193,31 @@ describe('image filenames', () => {
     }
   })
 
-  it('wonders carry no image — Java never implemented Image for them', () => {
-    const wonder = game.items.find((item) => item.kind === 'wonder')
-    expect(wonder && itemImage(wonder)).toBeNull()
+  it('wonders map onto the artwork under Moderator/wonders', () => {
+    // Java left Wonder without an Image. The files are lower case with no
+    // spaces, no hyphens and no leading "The"; apostrophes are kept.
+    const named = (name: string) =>
+      game.items.find((item) => item.kind === 'wonder' && item.name === name)
+    const image = (name: string) => {
+      const item = named(name)
+      if (item === undefined) throw new Error(`no wonder named ${name}`)
+      return itemImage(item)
+    }
+
+    expect(image('The Oracle')).toBe('oracle.png')
+    expect(image('Chichen Itza')).toBe('chichenitza.png')
+    expect(image('Notre-Dame')).toBe('notredame.png')
+    expect(image("Leonardo's Workshop")).toBe("leonardo'sworkshop.png")
+    expect(image('The Great Lighthouse')).toBe('greatlighthouse.png')
+  })
+
+  it('every wonder gets an image, and they are all distinct', () => {
+    const wonders = game.items.filter((item) => item.kind === 'wonder')
+    const images = wonders.map((item) => itemImage(item))
+
+    expect(wonders).toHaveLength(27)
+    expect(images.every((image) => image !== null && image.endsWith('.png'))).toBe(true)
+    expect(new Set(images).size).toBe(27)
   })
 })
 

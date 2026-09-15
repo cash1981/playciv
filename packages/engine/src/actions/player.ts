@@ -6,7 +6,15 @@
  * infrastructure rather than game rules, and belong in the server package.
  */
 
-import { civTileAssetId, startingCorner } from '../board.js'
+import {
+  civTileAssetId,
+  cultureCellCenter,
+  cultureStepOf,
+  cultureTrackHeight,
+  findBoardAsset,
+  leaderAssetId,
+  startingCorner,
+} from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { CivItem, Item, SocialPolicyItem, TechItem } from '../item.js'
 import { isTradable, isUnit, itemName, revealAll } from '../item.js'
@@ -263,6 +271,7 @@ function revealCivilization(
 
   next = discardTheOtherCivs(next, player.playerId, civ)
   next = placeStartingTile(next, player, civ)
+  next = placeLeaderMarker(next, player, civ)
 
   if (shouldDrawWonders(next)) {
     const drawn = drawStartingWonders(next, player.playerId)
@@ -302,6 +311,48 @@ function placeStartingTile(
       x: corner.x,
       y: corner.y,
       rotation: corner.rotation,
+    }) ?? state
+  )
+}
+
+/**
+ * Puts the player's leader on the first space of the culture track.
+ *
+ * Which leader follows from the civilization and the player's colour, so
+ * choosing Japan as the red player puts the red Japanese marker on Start. It is
+ * an ordinary piece from there on: drag it along the track as you gain culture.
+ */
+function placeLeaderMarker(
+  state: GameState,
+  player: Playerhand,
+  civ: CivItem,
+): GameState {
+  if (player.color === null) return state
+
+  const assetId = leaderAssetId(civ.name, player.color)
+  if (assetId === undefined) return state
+
+  // A player who somehow reveals twice should not get a second marker
+  if (state.board.pieces.some((piece) => piece.assetId === assetId)) return state
+
+  const asset = findBoardAsset(assetId)
+  if (asset === undefined) return state
+
+  const start = cultureCellCenter(state.board, 1)
+  const sharing = state.board.pieces.filter(
+    (piece) => piece.category === 'leader' && cultureStepOf(state.board, piece) === 1,
+  ).length
+  const lanes = Math.max(1, Math.floor(cultureTrackHeight(state.board) / asset.height))
+
+  return (
+    placeUnchecked(state, {
+      playerId: player.playerId,
+      assetId,
+      x: Math.round(start.x - asset.width / 2),
+      y: Math.round(
+        (cultureTrackHeight(state.board) - lanes * asset.height) / 2 +
+          (sharing % lanes) * asset.height,
+      ),
     }) ?? state
   )
 }

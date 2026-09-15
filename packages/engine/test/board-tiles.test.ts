@@ -17,6 +17,7 @@ import {
   createBoard,
   findBoardAsset,
   firstFreeBlock,
+  mapTop,
   startingCorner,
   tileAssetIdForNumber,
 } from '../src/board.js'
@@ -69,19 +70,21 @@ describe('map tiles in the manifest', () => {
 
 describe('startingCorner', () => {
   const board = createBoard()
+  // The map hangs below the culture track, so every row is offset by mapTop
+  const top = mapTop(board)
 
   it('gives the four corners with the arrow pointing inwards', () => {
     // The raw image has the arrow pointing down and the capital icon in the
     // top left, so turning clockwise moves both around the edge together
-    expect(startingCorner(board, 1)).toEqual({ x: 0, y: 0, rotation: 0 })
-    expect(startingCorner(board, 2)).toEqual({ x: 1128, y: 0, rotation: 90 })
-    expect(startingCorner(board, 3)).toEqual({ x: 1128, y: 1128, rotation: 180 })
-    expect(startingCorner(board, 4)).toEqual({ x: 0, y: 1128, rotation: 270 })
+    expect(startingCorner(board, 1)).toEqual({ x: 0, y: top, rotation: 0 })
+    expect(startingCorner(board, 2)).toEqual({ x: 1128, y: top, rotation: 90 })
+    expect(startingCorner(board, 3)).toEqual({ x: 1128, y: top + 1128, rotation: 180 })
+    expect(startingCorner(board, 4)).toEqual({ x: 0, y: top + 1128, rotation: 270 })
   })
 
   it('player 1 covers A1 to D4', () => {
     const corner = startingCorner(board, 1)
-    expect([corner.x, corner.y]).toEqual([0, 0])
+    expect([corner.x, corner.y]).toEqual([0, top])
     // Four squares of 94 pixels
     expect(TILE_SQUARES * SQUARE_SIZE).toBe(376)
   })
@@ -94,21 +97,25 @@ describe('startingCorner', () => {
 
 describe('firstFreeBlock', () => {
   it('starts in the top left slot', () => {
-    expect(firstFreeBlock(createBoard())).toEqual([0, 0])
+    const board = createBoard()
+    expect(firstFreeBlock(board)).toEqual([0, mapTop(board)])
   })
 
   it('skips slots that already hold a tile', () => {
     let state = firstCivGame()
-    state = place(state, 'tiles/tile01', 0, 0)
-    expect(firstFreeBlock(state.board)).toEqual([376, 0])
+    const top = mapTop(state.board)
 
-    state = place(state, 'tiles/tile02', 376, 0)
-    expect(firstFreeBlock(state.board)).toEqual([752, 0])
+    state = place(state, 'tiles/tile01', 0, top)
+    expect(firstFreeBlock(state.board)).toEqual([376, top])
+
+    state = place(state, 'tiles/tile02', 376, top)
+    expect(firstFreeBlock(state.board)).toEqual([752, top])
   })
 
   it('pays no attention to ordinary pieces', () => {
-    const state = place(firstCivGame(), 'figures/redarmy', 10, 10)
-    expect(firstFreeBlock(state.board)).toEqual([0, 0])
+    const board = createBoard()
+    const state = place(firstCivGame(), 'figures/redarmy', 10, mapTop(board) + 10)
+    expect(firstFreeBlock(state.board)).toEqual([0, mapTop(board)])
   })
 })
 
@@ -167,7 +174,7 @@ describe('automatic placement', () => {
 
     const tiles = after.board.pieces.filter((piece) => piece.category === 'tile')
     expect(tiles).toHaveLength(1)
-    expect([tiles[0]?.x, tiles[0]?.y]).toEqual([0, 0])
+    expect([tiles[0]?.x, tiles[0]?.y]).toEqual([0, mapTop(after.board)])
 
     // The piece has to match the card that landed in the hand
     const drawn = findPlayer(after, CASH1981)?.items.at(-1)
@@ -185,7 +192,7 @@ describe('automatic placement', () => {
     // to the placement. What matters is which slots are filled.
     const tiles = state.board.pieces.filter((piece) => piece.category === 'tile')
     expect(tiles.map((tile) => tile.x).sort((a, b) => a - b)).toEqual([0, 376, 752])
-    expect(tiles.every((tile) => tile.y === 0)).toBe(true)
+    expect(tiles.every((tile) => tile.y === mapTop(state.board))).toBe(true)
   })
 
   it('other draws leave the board alone', () => {
@@ -205,7 +212,7 @@ describe('automatic placement', () => {
     const civTiles = state.board.pieces.filter((piece) => piece.category === 'civtile')
     expect(civTiles).toHaveLength(1)
     // cash1981 is player 1 in the fixture, so the top left slot
-    expect([civTiles[0]?.x, civTiles[0]?.y]).toEqual([0, 0])
+    expect([civTiles[0]?.x, civTiles[0]?.y]).toEqual([0, mapTop(state.board)])
     expect(civTiles[0]?.rotation).toBe(0)
     expect(civTiles[0]?.assetId).toBe(civTileAssetId(civ.name))
   })

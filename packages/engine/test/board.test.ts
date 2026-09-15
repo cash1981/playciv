@@ -28,9 +28,11 @@ import {
   boardHeight,
   boardWidth,
   createBoard,
+  cultureTrackHeight,
   findBoardAsset,
   locationOf,
   mapHeight,
+  mapTop,
   piecesAtStep,
   playerAreas,
   squareOf,
@@ -64,11 +66,19 @@ describe('geometry', () => {
     expect(mapHeight(board)).toBe(1504)
   })
 
+  it('the culture track sits above the map, a gap apart', () => {
+    const board = createBoard()
+    // The track is drawn the full width of the map, so its height follows from
+    // its own aspect: 215 / 3349 of 1504
+    expect(cultureTrackHeight(board)).toBe(97)
+    expect(mapTop(board)).toBe(97 + SQUARE_SIZE)
+  })
+
   it('the surface adds a gap and the player-area band below the map', () => {
     const board = createBoard()
-    // 1504 map + one square of gap + four squares of player areas
-    expect(areaBandTop(board)).toBe(1504 + SQUARE_SIZE)
-    expect(boardHeight(board)).toBe(1504 + SQUARE_SIZE + DEFAULT_AREA_ROWS * SQUARE_SIZE)
+    // track, gap, 1504 map, gap, four squares of player areas
+    expect(areaBandTop(board)).toBe(mapTop(board) + 1504 + SQUARE_SIZE)
+    expect(boardHeight(board)).toBe(areaBandTop(board) + DEFAULT_AREA_ROWS * SQUARE_SIZE)
   })
 
   it('a new game starts with an empty board', () => {
@@ -77,13 +87,14 @@ describe('geometry', () => {
 })
 
 describe('the manifest', () => {
-  it('has pieces in all seven categories', () => {
+  it('has pieces in all eight categories', () => {
     const categories = new Set(BOARD_ASSETS.map((asset) => asset.category))
     expect([...categories].sort()).toEqual([
       'building',
       'city',
       'civtile',
       'figure',
+      'leader',
       'marker',
       'resource',
       'tile',
@@ -273,16 +284,17 @@ describe('removing', () => {
 
 describe('squareOf', () => {
   it('works out the square from the centre of the piece', () => {
-    const state = place(firstCivGame(), 'cities/redcity2', 0, 0)
+    const state = place(firstCivGame(), 'cities/redcity2', 0, mapTop(createBoard()))
     const piece = state.board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
 
-    // 85 x 83 with its top left at the origin has its centre inside A1
+    // 85 x 83 with its top left on the first row of the map is inside A1
     expect(squareOf(state.board, piece)).toBe('A1')
   })
 
   it('reaches P16 in the opposite corner', () => {
-    const state = place(firstCivGame(), 'markers/coin', 1504 - 60, 1504 - 60)
+    const board = createBoard()
+    const state = place(firstCivGame(), 'markers/coin', 1504 - 60, mapTop(board) + 1504 - 60)
     const piece = state.board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
     expect(squareOf(state.board, piece)).toBe('P16')
@@ -398,11 +410,20 @@ describe('player areas', () => {
 
   it('locationOf names the square for pieces on the map', () => {
     const areas = playerAreas(board, firstCivGame().players)
-    const state = place(firstCivGame(), 'markers/coin', 0, 0)
+    const state = place(firstCivGame(), 'markers/coin', 0, mapTop(board))
     const piece = state.board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
 
     expect(locationOf(state.board, areas, piece)).toBe('A1')
+  })
+
+  it('locationOf names the culture space for markers on the track', () => {
+    const areas = playerAreas(board, firstCivGame().players)
+    const state = place(firstCivGame(), 'markers/coin', 0, 0)
+    const piece = state.board.pieces[0]
+    if (piece === undefined) throw new Error('no piece')
+
+    expect(locationOf(state.board, areas, piece)).toBe('culture 1')
   })
 })
 

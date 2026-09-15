@@ -20,7 +20,7 @@ import {
   undoLastBoardChange,
 } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
-import { piecesAtStep } from '../src/board.js'
+import { mapTop, piecesAtStep } from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
@@ -51,7 +51,8 @@ describe('recording', () => {
   })
 
   it('placing a piece records who did it and where', () => {
-    const state = place(firstCivGame(), 'figures/redarmy', 200, 300)
+    const top = mapTop(firstCivGame().board)
+    const state = place(firstCivGame(), 'figures/redarmy', 200, top + 300)
     const entry = state.board.history[0]
 
     expect(state.board.history).toHaveLength(1)
@@ -62,17 +63,20 @@ describe('recording', () => {
   })
 
   it('moving records both ends of the move', () => {
-    let state = place(firstCivGame(), 'figures/redarmy', 200, 300)
+    const top = mapTop(firstCivGame().board)
+    let state = place(firstCivGame(), 'figures/redarmy', 200, top + 300)
     const piece = state.board.pieces[0] as BoardPiece
 
-    state = unwrap(movePiece(state, { playerId: CASH1981, pieceId: piece.id, x: 800, y: 800 }))
+    state = unwrap(
+      movePiece(state, { playerId: CASH1981, pieceId: piece.id, x: 800, y: top + 800 }),
+    )
 
     const entry = state.board.history.at(-1)
     expect(entry?.description).toBe('cash1981 moved Red army from C4 to I9')
     expect(entry?.change).toMatchObject({
       kind: 'move',
-      from: { x: 200, y: 300 },
-      to: { x: 800, y: 800 },
+      from: { x: 200, y: top + 300 },
+      to: { x: 800, y: top + 800 },
     })
   })
 

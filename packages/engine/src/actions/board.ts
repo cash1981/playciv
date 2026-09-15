@@ -18,8 +18,10 @@ import type { Board, BoardArea, BoardChange, BoardPiece, Rotation } from '../boa
 import {
   areaAt,
   clampToBoard,
+  cultureSlot,
   findBoardAsset,
   findPiece,
+  inCultureBand,
   locationOf,
   nextFreeSlot,
   nextRotation,
@@ -205,18 +207,24 @@ export function movePiece(state: GameState, input: MovePieceInput): ActionResult
   }
 
   const areas = areasFor(state)
+  const others = state.board.pieces.filter((other) => other.id !== piece.id)
   const area = areaAt(areas, input.x + piece.width / 2, input.y + piece.height / 2)
-  const wanted =
-    area === undefined
-      ? { x: input.x, y: input.y }
-      : (() => {
-          const others = state.board.pieces.filter((other) => other.id !== piece.id)
-          const [slotX, slotY] = nextFreeSlot(state.board, area, others, {
-            x: input.x,
-            y: input.y,
-          })
-          return { x: slotX, y: slotY }
-        })()
+  const wanted = (() => {
+    // Dropped on the culture track: snap to the nearest space
+    if (inCultureBand(state.board, input.y + piece.height / 2)) {
+      const [cellX, cellY] = cultureSlot(state.board, piece, input.x, input.y, others)
+      return { x: cellX, y: cellY }
+    }
+    // Dropped in a player area: tidy into the next free slot
+    if (area !== undefined) {
+      const [slotX, slotY] = nextFreeSlot(state.board, area, others, {
+        x: input.x,
+        y: input.y,
+      })
+      return { x: slotX, y: slotY }
+    }
+    return { x: input.x, y: input.y }
+  })()
 
   const [x, y] = clampToBoard(state.board, wanted.x, wanted.y, piece.width, piece.height)
   const moved: BoardPiece = { ...piece, x, y }

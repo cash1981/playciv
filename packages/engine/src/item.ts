@@ -422,9 +422,13 @@ export function itemImage(item: Item): string | null {
     case 'mounted':
     case 'aircraft':
       return `${itemType(item)}${item.attack}.${item.health}${PNG}`.replace(/ /g, '')
-    // Java: Wonder does not implement Image
+    // Java left Wonder without an Image, so the old app showed wonders as text
+    // even though the artwork exists. The files under Moderator/wonders are
+    // lower case with no spaces and no leading "The", which all 27 names map
+    // onto. Hyphens go too ("Notre-Dame"), apostrophes stay
+    // ("Leonardo's Workshop").
     case 'wonder':
-      return null
+      return `${item.name.replace(/^The /, '').replace(/[ -]/g, '').toLowerCase()}${PNG}`
   }
 }
 
