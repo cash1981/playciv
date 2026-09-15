@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
-import { itemName, revealAll } from '@civ/engine'
+import { itemName } from '@civ/engine'
 import type { Item, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -16,6 +16,7 @@ import { api } from '../lib/api.js'
 import type { PlayerDto, PlayerView } from '../lib/api.js'
 
 import { BoardView } from './BoardView.js'
+import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import { TechPanel } from './TechPanel.js'
 import { TurnPanel } from './TurnPanel.js'
@@ -244,7 +245,7 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
     <section className="panel">
       <h2>Your hand ({items.length})</h2>
       {items.length === 0 && <p className="muted">Empty.</p>}
-      <ul className="list scroll">
+      <ul className="card-grid scroll">
         {items.map((item) => (
           <HandItem
             key={item.id}
@@ -276,13 +277,10 @@ function HandItem({
   const [target, setTarget] = useState('')
 
   return (
-    <li>
-      <span>{revealAll(item)}</span>
+    <ItemCard item={item}>
       <span className={item.hidden ? 'tag hidden' : 'tag revealed'}>
-        {item.hidden ? 'hidden' : 'revealed'}
+        {item.hidden ? 'only you' : 'published'}
       </span>
-      <span className="muted">#{item.itemNumber}</span>
-      <span style={{ flex: 1 }} />
       {item.hidden && (
         <button
           className="small"
@@ -331,7 +329,7 @@ function HandItem({
       >
         Give
       </button>
-    </li>
+    </ItemCard>
   )
 }
 
@@ -371,11 +369,11 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
       </div>
 
       <h3 style={{ marginTop: '0.8rem' }}>Battlehand ({battlehand.length})</h3>
-      <ul className="list">
+      {battlehand.length === 0 && <p className="muted">Empty.</p>}
+      <ul className="card-grid small">
         {battlehand.map((unit) => (
-          <li key={unit.id}>{revealAll(unit)}</li>
+          <ItemCard key={unit.id} item={unit} />
         ))}
-        {battlehand.length === 0 && <li className="muted">Empty.</li>}
       </ul>
 
       <h3 style={{ marginTop: '0.8rem' }}>Barbarians ({barbarians.length})</h3>
@@ -393,9 +391,9 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
           Discard
         </button>
       </div>
-      <ul className="list">
+      <ul className="card-grid small">
         {barbarians.map((unit) => (
-          <li key={unit.id}>{revealAll(unit)}</li>
+          <ItemCard key={unit.id} item={unit} />
         ))}
       </ul>
     </section>
