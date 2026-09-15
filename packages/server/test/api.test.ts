@@ -159,9 +159,15 @@ describe('games', () => {
       url: `/api/games/${gameId}`,
       headers: bearer(token),
     })
-    const view = game.json() as { you: { username: string; gameCreator: boolean } | null }
+    const view = game.json() as {
+      you: { username: string; gameCreator: boolean; color: string | null } | null
+    }
     expect(view.you?.username).toBe('cash1981')
     expect(view.you?.gameCreator).toBe(true)
+    // Java created the game and then joined the creator, which is what hands
+    // out a colour. Seating them directly left the creator without one, and a
+    // player with no colour has no leader marker for the culture track.
+    expect(view.you?.color).toBe('Green')
   })
 
   it('two games cannot share a name', async () => {

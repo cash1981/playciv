@@ -35,6 +35,8 @@ export interface JoinGameInput {
   readonly username: string
   readonly email?: string
   readonly color?: string
+  /** Java: `createNewGame` finished with `joinGame(..., gameCreator = true)`. */
+  readonly gameCreator?: boolean
 }
 
 /**
@@ -84,7 +86,7 @@ export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
       email: input.email ?? null,
       color,
       playernumber: 0,
-      gameCreator: false,
+      gameCreator: input.gameCreator ?? false,
       yourTurn: false,
       civilization: null,
       items: [],

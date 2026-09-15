@@ -22,12 +22,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AREA_LABEL_HEIGHT,
   COLUMN_LABELS,
+  CULTURE_TRACK,
+  CULTURE_TRACK_CELLS,
   ROTATIONS,
   areaBandTop,
   boardHeight,
   boardWidth,
+  cultureCellCenter,
+  cultureTrackHeight,
   locationOf,
   mapHeight,
+  mapTop,
   piecesAtStep,
 } from '@civ/engine'
 import type { Board, BoardArea, BoardAsset, BoardPiece } from '@civ/engine'
@@ -54,6 +59,7 @@ const CATEGORY_LABEL: Readonly<Record<BoardAsset['category'], string>> = {
   building: 'Buildings',
   civtile: 'Starting tiles',
   tile: 'Map tiles',
+  leader: 'Leaders',
 }
 
 const CATEGORY_ORDER: readonly BoardAsset['category'][] = [
@@ -64,6 +70,7 @@ const CATEGORY_ORDER: readonly BoardAsset['category'][] = [
   'building',
   'civtile',
   'tile',
+  'leader',
 ]
 
 /** File names may contain spaces, for example "Building Program.png". */
@@ -138,7 +145,9 @@ export function BoardView({
 
   const width = boardWidth(board)
   const height = boardHeight(board)
-  const mapBottom = mapHeight(board)
+  const trackHeight = cultureTrackHeight(board)
+  const mapStart = mapTop(board)
+  const mapBottom = mapStart + mapHeight(board)
   const bandTop = areaBandTop(board)
 
   const inCategory = useMemo(
@@ -280,10 +289,10 @@ export function BoardView({
             className={`board-frame${replaying ? ' replaying' : ''}`}
             style={{ width: width * zoom + 28, height: height * zoom + 28 }}
           >
-            <ColumnLabels board={board} zoom={zoom} edge="top" />
+            <ColumnLabels board={board} zoom={zoom} edge="top" offset={mapStart * zoom} />
             <ColumnLabels board={board} zoom={zoom} edge="bottom" offset={mapBottom * zoom} />
-            <RowLabels board={board} zoom={zoom} edge="left" />
-            <RowLabels board={board} zoom={zoom} edge="right" />
+            <RowLabels board={board} zoom={zoom} edge="left" offset={mapStart * zoom} />
+            <RowLabels board={board} zoom={zoom} edge="right" offset={mapStart * zoom} />
 
             <div
               ref={surfaceRef}
@@ -293,12 +302,39 @@ export function BoardView({
               onDrop={onDrop}
               onPointerDown={() => setSelectedId(null)}
             >
-              {/* The map grid only covers the top part of the surface */}
+              {/* The culture track runs across the top, above the map */}
+              <div
+                className="board-track"
+                style={{
+                  width: width * zoom,
+                  height: trackHeight * zoom,
+                  backgroundImage: `url(/board/${CULTURE_TRACK.path})`,
+                }}
+                title="Culture track"
+              >
+                {Array.from({ length: CULTURE_TRACK_CELLS }, (_, index) => {
+                  const step = index + 1
+                  return (
+                    <span
+                      key={step}
+                      className="board-track-cell"
+                      style={{
+                        left: cultureCellCenter(board, step).x * zoom,
+                        height: trackHeight * zoom,
+                      }}
+                      title={`Culture ${step}`}
+                    />
+                  )
+                })}
+              </div>
+
+              {/* The grid covers the map only, not the track or the areas */}
               <div
                 className="board-map"
                 style={{
                   width: width * zoom,
-                  height: mapBottom * zoom,
+                  top: mapStart * zoom,
+                  height: mapHeight(board) * zoom,
                   backgroundSize: `${board.squareSize * zoom}px ${board.squareSize * zoom}px`,
                 }}
               />
@@ -361,6 +397,9 @@ export function BoardView({
                 )
               })}
             </div>
+            <span className="board-band-label" style={{ top: 1 }}>
+              Culture track
+            </span>
             <span className="board-band-label" style={{ top: bandTop * zoom + 14 - 13 }}>
               Player areas
             </span>
@@ -590,12 +629,12 @@ function ColumnLabels({
   readonly board: Board
   readonly zoom: number
   readonly edge: 'top' | 'bottom'
-  readonly offset?: number
+  readonly offset: number
 }): React.JSX.Element {
   return (
     <div
       className={`board-labels columns ${edge}`}
-      style={edge === 'bottom' && offset !== undefined ? { top: offset + 14 } : undefined}
+      style={{ top: edge === 'bottom' ? offset + 14 : offset }}
     >
       {Array.from({ length: board.columns }, (_, index) => (
         <span key={index} style={{ width: board.squareSize * zoom }}>
@@ -610,13 +649,15 @@ function RowLabels({
   board,
   zoom,
   edge,
+  offset,
 }: {
   readonly board: Board
   readonly zoom: number
   readonly edge: 'left' | 'right'
+  readonly offset: number
 }): React.JSX.Element {
   return (
-    <div className={`board-labels rows ${edge}`}>
+    <div className={`board-labels rows ${edge}`} style={{ top: offset + 14 }}>
       {Array.from({ length: board.rows }, (_, index) => (
         <span key={index} style={{ height: board.squareSize * zoom }}>
           {index + 1}

@@ -286,6 +286,30 @@ ul.list > li:last-child {
   left: 14px;
 }
 
+/* The culture track backdrop, stretched across the width of the map */
+.board-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  outline: 1px solid var(--line);
+}
+
+/* One hairline per space, so it is obvious where a marker will land */
+.board-track-cell {
+  position: absolute;
+  top: 0;
+  width: 0;
+  border-left: 1px dashed rgba(255, 255, 255, 0.16);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.board-track:hover .board-track-cell {
+  opacity: 1;
+}
+
 /* Only the map part carries the grid; the player areas sit below it */
 .board-map {
   position: absolute;

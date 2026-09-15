@@ -9,7 +9,6 @@ import {
   createGame,
   endGame,
   joinGame,
-  startIfAllPlayers,
   toPlayerView,
   withdrawFromGame,
 } from '@civ/engine'
@@ -27,7 +26,7 @@ import {
   readGame,
   requireString,
 } from '../context.js'
-import { sendError } from '../errors.js'
+import { sendEngineError, sendError } from '../errors.js'
 import type { ChatMessage } from '../store/types.js'
 
 /** The summary the game list shows. Java: `PbfDTO`. */
@@ -96,30 +95,30 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
 
     const me = currentPlayer(request)
     // Java: @Min(2) @Max(5) on CreateNewGameDTO.numOfPlayers
-    const created = createGame({
+    const empty = createGame({
       name,
       numOfPlayers,
       // The seed decides the shuffle and the itemNumbers. A random id per game
       // keeps two games with the same name from getting the same deck.
       seed: `${name}:${newId()}`,
-      players: [
-        {
-          playerId: me.id,
-          username: me.username,
-          ...(me.email !== null ? { email: me.email } : {}),
-          ...(color !== undefined ? { color } : {}),
-          gameCreator: true,
-        },
-      ],
+      players: [],
     })
 
-    // Java: createNewGame finished with joinGame(..., gameCreator = true),
-    // which calls startIfAllPlayers. Without it a one-seat game would never
-    // start.
-    const game = startIfAllPlayers(created)
+    // Java: createNewGame finished with joinGame(..., gameCreator = true).
+    // Going through joinGame rather than seating the creator directly is what
+    // gives them a colour, and it calls startIfAllPlayers, without which a
+    // two-seat game would never start.
+    const joined = joinGame(empty, {
+      playerId: me.id,
+      username: me.username,
+      ...(me.email !== null ? { email: me.email } : {}),
+      ...(color !== undefined ? { color } : {}),
+      gameCreator: true,
+    })
+    if (!joined.ok) return sendEngineError(reply, joined.error)
 
-    await context.repo.saveGame(game)
-    return reply.code(201).send(toSummary(game, me.id))
+    await context.repo.saveGame(joined.value)
+    return reply.code(201).send(toSummary(joined.value, me.id))
   })
 
   app.get('/api/games/:gameId', auth, async (request, reply) => {
