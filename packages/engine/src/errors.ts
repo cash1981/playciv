@@ -1,9 +1,9 @@
 import type { SheetName } from './sheet-name.js'
 
 /**
- * Feilene motoren kan gi. Java kastet `WebApplicationException` med HTTP-status
- * rett fra domenelogikken; her er feilene rene data, og HTTP-mappingen hører i
- * server-pakken.
+ * The errors the engine can return. Java threw `WebApplicationException` with
+ * an HTTP status straight from the domain logic; here errors are plain data
+ * and the HTTP mapping belongs in the server package.
  */
 export type EngineError =
   /** Java: `PlayerAction.cannotFindPlayer()` — 404 */
@@ -13,11 +13,11 @@ export type EngineError =
   /** Java: `BaseAction.checkYourTurn` — 403 "Its not your turn!" */
   | { readonly kind: 'NOT_YOUR_TURN'; readonly playerId: string }
   /**
-   * Java: `DrawAction.draw` returnerte `Optional.empty()` og logget en warning.
-   * Teknologier skal velges, ikke trekkes.
+   * Java: `DrawAction.draw` returned `Optional.empty()` and logged a warning.
+   * Techs are chosen, not drawn.
    */
   | { readonly kind: 'TECHS_ARE_CHOSEN_NOT_DRAWN'; readonly sheetName: SheetName }
-  /** Java: `reshuffleItems` kastet `IllegalArgumentException` */
+  /** Java: `reshuffleItems` threw `IllegalArgumentException` */
   | { readonly kind: 'NOT_SHUFFLABLE'; readonly sheetName: SheetName }
   /** Java: `NoMoreItemsException` — 410 Gone */
   | { readonly kind: 'NO_MORE_ITEMS'; readonly what: string }
@@ -27,14 +27,18 @@ export type EngineError =
   | { readonly kind: 'NOTHING_TO_LOOT'; readonly playerId: string }
   /** Java: 406 "Item is not lootable" */
   | { readonly kind: 'ITEM_NOT_LOOTABLE'; readonly itemId: string }
-  /** Java: `SecurityCheck.hasUserAccess` var false — 403 */
+  /** Java: `SecurityCheck.hasUserAccess` was false — 403 */
   | { readonly kind: 'NO_ACCESS'; readonly playerId: string }
-  /** Java loggførte en warning og returnerte null */
+  /** Java logged a warning and returned null */
   | { readonly kind: 'TECH_ALREADY_CHOSEN'; readonly techName: string }
-  /** Java loggførte en warning og returnerte null */
+  /** Java logged a warning and returned null */
   | { readonly kind: 'SOCIAL_POLICY_ALREADY_CHOSEN'; readonly name: string }
-  /** Java: 400 — man kan ikke ha begge sider av samme kort */
-  | { readonly kind: 'SOCIAL_POLICY_FLIPSIDE_TAKEN'; readonly name: string; readonly flipside: string }
+  /** Java: 400 — you cannot hold both sides of the same card */
+  | {
+      readonly kind: 'SOCIAL_POLICY_FLIPSIDE_TAKEN'
+      readonly name: string
+      readonly flipside: string
+    }
   /** Java: 304 Not Modified "Item already revealed" */
   | { readonly kind: 'ITEM_ALREADY_REVEALED'; readonly name: string }
   /** Java: 400 "Civilization already chosen" */
@@ -44,7 +48,7 @@ export type EngineError =
   | { readonly kind: 'UNDO_ALREADY_INITIATED'; readonly logId: string }
   /** Java: 412 "This item cannot be undone. Nothing to undo." */
   | { readonly kind: 'UNDO_NOT_INITIATED'; readonly logId: string }
-  /** Loggposten har ingen item, så det finnes ikke noe å angre */
+  /** The log entry carries no item, so there is nothing to undo */
   | { readonly kind: 'NOTHING_TO_UNDO'; readonly logId: string }
   /** Java: 400 "Cannot join the game. Its full!" */
   | { readonly kind: 'GAME_IS_FULL'; readonly numOfPlayers: number }
@@ -55,11 +59,13 @@ export type EngineError =
   /** Java: 403 "Only game creator can end game" */
   | { readonly kind: 'ONLY_GAME_CREATOR_CAN_END_GAME'; readonly playerId: string }
   | { readonly kind: 'TURN_NOT_FOUND'; readonly turnNumber: number }
-  /** Alle farger er i bruk */
+  /** Every colour is taken */
   | { readonly kind: 'NO_COLOR_AVAILABLE' }
-  /** Brikketypen finnes ikke i board-assets.json */
+  /** The piece does not exist in board-assets.json */
   | { readonly kind: 'BOARD_ASSET_NOT_FOUND'; readonly assetId: string }
   | { readonly kind: 'BOARD_PIECE_NOT_FOUND'; readonly pieceId: string }
+  /** The board history is empty, so there is nothing to take back */
+  | { readonly kind: 'NOTHING_TO_UNDO_ON_BOARD' }
 
 export function describeError(error: EngineError): string {
   switch (error.kind) {
@@ -117,5 +123,7 @@ export function describeError(error: EngineError): string {
       return `Unknown board piece: ${error.assetId}`
     case 'BOARD_PIECE_NOT_FOUND':
       return `No piece on the board with id ${error.pieceId}`
+    case 'NOTHING_TO_UNDO_ON_BOARD':
+      return 'There is no board change to undo'
   }
 }

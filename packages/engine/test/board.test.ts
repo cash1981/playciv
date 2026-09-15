@@ -1,8 +1,8 @@
 /**
- * Brettet.
+ * The board.
  *
- * Java hadde ingen brettmodell, så det finnes ingen gamle tester å porte.
- * Geometrien er låst mot `4v4 Map Template.pptx`.
+ * Java had no board model, so there are no old tests to port. The geometry is
+ * pinned against `4v4 Map Template.pptx`.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -16,17 +16,25 @@ import {
   sendToBack,
 } from '../src/actions/board.js'
 import {
+  AREA_LABEL_HEIGHT,
   BOARD_ASSETS,
   COLUMN_LABELS,
+  DEFAULT_AREA_ROWS,
   DEFAULT_COLUMNS,
   DEFAULT_ROWS,
   SQUARE_SIZE,
+  areaAt,
+  areaBandTop,
   boardHeight,
   boardWidth,
+  createBoard,
   findBoardAsset,
+  locationOf,
+  mapHeight,
+  piecesAtStep,
+  playerAreas,
   squareOf,
 } from '../src/board.js'
-import { createBoard } from '../src/board.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
@@ -36,33 +44,40 @@ import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
 const place = (state: GameState, assetId: string, x: number, y: number): GameState =>
   unwrap(placePiece(state, { playerId: CASH1981, assetId, x, y }))
 
-describe('geometri', () => {
-  it('er 16 x 16 ruter, som malen for fire spillere', () => {
+describe('geometry', () => {
+  it('is 16 by 16 squares, as in the four-player template', () => {
     expect(DEFAULT_COLUMNS).toBe(16)
     expect(DEFAULT_ROWS).toBe(16)
     expect(COLUMN_LABELS[0]).toBe('A')
     expect(COLUMN_LABELS.at(-1)).toBe('P')
   })
 
-  it('ruten er 94 piksler, altså et 375-piksels map-tile delt på fire', () => {
+  it('a square is 94 pixels, a 375 pixel map tile divided by four', () => {
     expect(SQUARE_SIZE).toBe(94)
-    // Malen setter sammen brettet av 4 x 4 tiles på 375 x 375
+    // The template builds the board from 4 x 4 tiles of 375 x 375
     expect(Math.round(375 / 4)).toBe(SQUARE_SIZE)
   })
 
-  it('brettflaten er 1504 x 1504', () => {
+  it('the map is 1504 by 1504', () => {
     const board = createBoard()
     expect(boardWidth(board)).toBe(1504)
-    expect(boardHeight(board)).toBe(1504)
+    expect(mapHeight(board)).toBe(1504)
   })
 
-  it('nye spill starter med tomt brett', () => {
+  it('the surface adds a gap and the player-area band below the map', () => {
+    const board = createBoard()
+    // 1504 map + one square of gap + four squares of player areas
+    expect(areaBandTop(board)).toBe(1504 + SQUARE_SIZE)
+    expect(boardHeight(board)).toBe(1504 + SQUARE_SIZE + DEFAULT_AREA_ROWS * SQUARE_SIZE)
+  })
+
+  it('a new game starts with an empty board', () => {
     expect(firstCivGame().board.pieces).toHaveLength(0)
   })
 })
 
-describe('manifestet', () => {
-  it('har brikker i alle sju kategorier', () => {
+describe('the manifest', () => {
+  it('has pieces in all seven categories', () => {
     const categories = new Set(BOARD_ASSETS.map((asset) => asset.category))
     expect([...categories].sort()).toEqual([
       'building',
@@ -75,26 +90,26 @@ describe('manifestet', () => {
     ])
   })
 
-  it('inneholder army og scout i alle fem spillerfarger', () => {
+  it('has an army and a scout in all five player colours', () => {
     for (const colour of ['blue', 'green', 'purple', 'red', 'yellow']) {
       expect(findBoardAsset(`figures/${colour}army`)).toBeDefined()
       expect(findBoardAsset(`figures/${colour}scout`)).toBeDefined()
     }
-    // Barbarer bruker den hvite hæren, og har ingen scout
+    // Barbarians use the white army, and have no scout
     expect(findBoardAsset('figures/whitearmy')).toBeDefined()
   })
 
-  it('inneholder de seks ressursene', () => {
+  it('has the six resources', () => {
     for (const name of ['hut', 'village', 'wheat', 'iron', 'silk', 'incense']) {
       expect(findBoardAsset(`resources/${name}`)).toBeDefined()
     }
   })
 
-  it('har positive størrelser på alle brikker', () => {
+  it('gives every piece a positive size', () => {
     expect(BOARD_ASSETS.every((asset) => asset.width > 0 && asset.height > 0)).toBe(true)
   })
 
-  it('byer og bygninger er omtrent én rute store', () => {
+  it('makes cities and buildings about one square across', () => {
     const city = findBoardAsset('cities/redcity2')
     expect(city?.width).toBeGreaterThan(SQUARE_SIZE * 0.8)
     expect(city?.width).toBeLessThan(SQUARE_SIZE * 1.1)
@@ -102,7 +117,7 @@ describe('manifestet', () => {
 })
 
 describe('placePiece', () => {
-  it('legger brikken på brettet med størrelse fra manifestet', () => {
+  it('puts the piece on the board at the size from the manifest', () => {
     const state = place(firstCivGame(), 'figures/redarmy', 200, 300)
     const piece = state.board.pieces[0]
 
@@ -117,30 +132,31 @@ describe('placePiece', () => {
     expect(piece?.placedBy).toBe(CASH1981)
   })
 
-  it('avviser en brikketype som ikke finnes i manifestet', () => {
+  it('rejects a piece that is not in the manifest', () => {
     const error = unwrapErr(
       placePiece(firstCivGame(), { playerId: CASH1981, assetId: '../../etc/passwd', x: 0, y: 0 }),
     )
     expect(error).toEqual({ kind: 'BOARD_ASSET_NOT_FOUND', assetId: '../../etc/passwd' })
   })
 
-  it('avviser en spiller som ikke er med i spillet', () => {
+  it('rejects a player who is not in the game', () => {
     const error = unwrapErr(
-      placePiece(firstCivGame(), { playerId: 'ingen', assetId: 'figures/redarmy', x: 0, y: 0 }),
+      placePiece(firstCivGame(), { playerId: 'nobody', assetId: 'figures/redarmy', x: 0, y: 0 }),
     )
-    expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'ingen' })
+    expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'nobody' })
   })
 
-  it('klemmer posisjonen innenfor brettet', () => {
+  it('clamps the position to the surface', () => {
     const state = place(firstCivGame(), 'figures/redarmy', -500, 99999)
     const piece = state.board.pieces[0]
+    const surface = boardHeight(createBoard())
 
     expect(piece?.x).toBe(0)
-    // Halve brikken får stikke utenfor nedre kant
-    expect(piece?.y).toBe(1504 - 51 / 2)
+    // Half the piece may hang over the bottom edge
+    expect(piece?.y).toBe(surface - 51 / 2)
   })
 
-  it('hver brikke får sin egen id', () => {
+  it('gives every piece its own id', () => {
     let state = firstCivGame()
     state = place(state, 'figures/redarmy', 0, 0)
     state = place(state, 'figures/redarmy', 0, 0)
@@ -150,46 +166,46 @@ describe('placePiece', () => {
   })
 })
 
-describe('stabling', () => {
-  it('nye brikker legger seg øverst', () => {
+describe('stacking', () => {
+  it('new pieces land on top', () => {
     let state = firstCivGame()
     state = place(state, 'figures/redarmy', 100, 100)
     state = place(state, 'figures/bluearmy', 100, 100)
 
-    // Rekkefølgen i pieces ER z-rekkefølgen
+    // The order of pieces IS the stacking order
     expect(state.board.pieces.map((piece) => piece.assetId)).toEqual([
       'figures/redarmy',
       'figures/bluearmy',
     ])
   })
 
-  it('bringToFront flytter brikken sist i listen', () => {
+  it('bringToFront moves the piece to the end of the list', () => {
     let state = firstCivGame()
     state = place(state, 'figures/redarmy', 100, 100)
     state = place(state, 'figures/bluearmy', 100, 100)
 
     const bottom = state.board.pieces[0]
-    if (bottom === undefined) throw new Error('ingen brikke')
+    if (bottom === undefined) throw new Error('no piece')
 
     state = unwrap(bringToFront(state, { playerId: CASH1981, pieceId: bottom.id }))
     expect(state.board.pieces.at(-1)?.id).toBe(bottom.id)
     expect(state.board.pieces).toHaveLength(2)
   })
 
-  it('sendToBack flytter brikken først i listen', () => {
+  it('sendToBack moves the piece to the start of the list', () => {
     let state = firstCivGame()
     state = place(state, 'figures/redarmy', 100, 100)
     state = place(state, 'figures/bluearmy', 100, 100)
 
     const top = state.board.pieces.at(-1)
-    if (top === undefined) throw new Error('ingen brikke')
+    if (top === undefined) throw new Error('no piece')
 
     state = unwrap(sendToBack(state, { playerId: CASH1981, pieceId: top.id }))
     expect(state.board.pieces[0]?.id).toBe(top.id)
     expect(state.board.pieces).toHaveLength(2)
   })
 
-  it('flere brikker kan ligge i samme rute', () => {
+  it('several pieces can share one square', () => {
     let state = firstCivGame()
     for (const asset of ['figures/redarmy', 'figures/redarmy', 'figures/redscout']) {
       state = place(state, asset, 300, 300)
@@ -201,13 +217,13 @@ describe('stabling', () => {
 })
 
 describe('movePiece', () => {
-  it('flytter brikken og legger den øverst', () => {
+  it('moves the piece and brings it to the top', () => {
     let state = firstCivGame()
     state = place(state, 'figures/redarmy', 100, 100)
     state = place(state, 'figures/bluearmy', 400, 400)
 
     const first = state.board.pieces[0]
-    if (first === undefined) throw new Error('ingen brikke')
+    if (first === undefined) throw new Error('no piece')
 
     state = unwrap(movePiece(state, { playerId: CASH1981, pieceId: first.id, x: 800, y: 800 }))
 
@@ -217,79 +233,211 @@ describe('movePiece', () => {
     expect(moved?.y).toBe(800)
   })
 
-  it('en annen spiller kan flytte en brikke du la ut', () => {
-    // Bevisst valg: alle kan flytte alt, som ved et fysisk bord
+  it('another player can move a piece you put down', () => {
+    // A deliberate choice: everyone may move everything, as at a real table
     let state = place(firstCivGame(), 'figures/redarmy', 100, 100)
     const piece = state.board.pieces[0]
-    if (piece === undefined) throw new Error('ingen brikke')
+    if (piece === undefined) throw new Error('no piece')
 
     state = unwrap(movePiece(state, { playerId: KARANDRAS1, pieceId: piece.id, x: 500, y: 500 }))
     expect(state.board.pieces[0]?.x).toBe(500)
     expect(state.board.pieces[0]?.placedBy).toBe(CASH1981)
   })
 
-  it('ukjent brikke gir BOARD_PIECE_NOT_FOUND', () => {
+  it('an unknown piece gives BOARD_PIECE_NOT_FOUND', () => {
     const error = unwrapErr(
-      movePiece(firstCivGame(), { playerId: CASH1981, pieceId: 'finnes-ikke', x: 0, y: 0 }),
+      movePiece(firstCivGame(), { playerId: CASH1981, pieceId: 'no-such-piece', x: 0, y: 0 }),
     )
-    expect(error).toEqual({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: 'finnes-ikke' })
+    expect(error).toEqual({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: 'no-such-piece' })
   })
 })
 
-describe('fjerning', () => {
-  it('removePiece tar brikken vekk', () => {
+describe('removing', () => {
+  it('removePiece takes the piece away', () => {
     let state = place(firstCivGame(), 'figures/redarmy', 100, 100)
     const piece = state.board.pieces[0]
-    if (piece === undefined) throw new Error('ingen brikke')
+    if (piece === undefined) throw new Error('no piece')
 
     state = unwrap(removePiece(state, { playerId: CASH1981, pieceId: piece.id }))
     expect(state.board.pieces).toHaveLength(0)
   })
 
-  it('clearBoard tømmer alt', () => {
+  it('clearBoard empties everything', () => {
     let state = firstCivGame()
     for (let i = 0; i < 5; i++) state = place(state, 'markers/coin', i * 100, 100)
 
-    state = unwrap(clearBoard(state, CASH1981))
+    state = unwrap(clearBoard(state, { playerId: CASH1981 }))
     expect(state.board.pieces).toHaveLength(0)
   })
 })
 
 describe('squareOf', () => {
-  it('regner ut ruten fra brikkens midtpunkt', () => {
+  it('works out the square from the centre of the piece', () => {
     const state = place(firstCivGame(), 'cities/redcity2', 0, 0)
     const piece = state.board.pieces[0]
-    if (piece === undefined) throw new Error('ingen brikke')
+    if (piece === undefined) throw new Error('no piece')
 
-    // 85 x 83 med venstre topp i origo har midtpunkt inne i A1
+    // 85 x 83 with its top left at the origin has its centre inside A1
     expect(squareOf(state.board, piece)).toBe('A1')
   })
 
-  it('treffer P16 i motsatt hjørne', () => {
+  it('reaches P16 in the opposite corner', () => {
     const state = place(firstCivGame(), 'markers/coin', 1504 - 60, 1504 - 60)
     const piece = state.board.pieces[0]
-    if (piece === undefined) throw new Error('ingen brikke')
+    if (piece === undefined) throw new Error('no piece')
     expect(squareOf(state.board, piece)).toBe('P16')
+  })
+
+  it('is null below the map, where the player areas are', () => {
+    const board = createBoard()
+    const state = place(firstCivGame(), 'markers/coin', 100, areaBandTop(board) + 50)
+    const piece = state.board.pieces[0]
+    if (piece === undefined) throw new Error('no piece')
+    expect(squareOf(state.board, piece)).toBeNull()
   })
 })
 
-describe('migrering', () => {
-  it('gir et gammelt lagret spill et tomt brett', () => {
+describe('player areas', () => {
+  const board = createBoard()
+
+  it('gives one equal-width area per player, in player-number order', () => {
+    const areas = playerAreas(board, firstCivGame().players)
+
+    expect(areas.map((area) => area.username)).toEqual([
+      'cash1981',
+      'Karandras1',
+      'Itchi',
+      'Chul',
+    ])
+    expect(new Set(areas.map((area) => area.width)).size).toBe(1)
+    expect(areas.every((area) => area.y === areaBandTop(board))).toBe(true)
+  })
+
+  it('spans the width of the map', () => {
+    const areas = playerAreas(board, firstCivGame().players)
+    const last = areas.at(-1)
+    if (last === undefined) throw new Error('no areas')
+    expect(last.x + last.width).toBeCloseTo(boardWidth(board), 0)
+  })
+
+  it('has no areas before anyone has joined', () => {
+    expect(playerAreas(board, [])).toEqual([])
+  })
+
+  it('areaAt finds the area a point falls in', () => {
+    const areas = playerAreas(board, firstCivGame().players)
+    const second = areas[1]
+    if (second === undefined) throw new Error('no area')
+
+    expect(areaAt(areas, second.x + 5, second.y + 5)?.username).toBe('Karandras1')
+    // Above the band is the map, not an area
+    expect(areaAt(areas, 100, 100)).toBeUndefined()
+  })
+
+  it('tidies a dropped piece into the next free slot', () => {
+    const areas = playerAreas(board, firstCivGame().players)
+    const mine = areas[0]
+    if (mine === undefined) throw new Error('no area')
+
+    let state = firstCivGame()
+    // Drop three huts at the same messy spot inside the area
+    for (let i = 0; i < 3; i++) {
+      state = place(state, 'resources/hut', mine.x + 30, mine.y + AREA_LABEL_HEIGHT + 20)
+    }
+
+    const positions = state.board.pieces.map((piece) => [piece.x, piece.y])
+    // They line up instead of piling on top of each other
+    expect(new Set(positions.map(String)).size).toBe(3)
+    expect(positions).toEqual([
+      [mine.x, mine.y + AREA_LABEL_HEIGHT],
+      [mine.x + SQUARE_SIZE, mine.y + AREA_LABEL_HEIGHT],
+      [mine.x + SQUARE_SIZE * 2, mine.y + AREA_LABEL_HEIGHT],
+    ])
+  })
+
+  it('tidies a piece dragged from the map into an area', () => {
+    const areas = playerAreas(board, firstCivGame().players)
+    const mine = areas[0]
+    if (mine === undefined) throw new Error('no area')
+
+    let state = place(firstCivGame(), 'resources/hut', 400, 400)
+    const piece = state.board.pieces[0]
+    if (piece === undefined) throw new Error('no piece')
+
+    state = unwrap(
+      movePiece(state, {
+        playerId: CASH1981,
+        pieceId: piece.id,
+        x: mine.x + 40,
+        y: mine.y + AREA_LABEL_HEIGHT + 40,
+      }),
+    )
+
+    expect([state.board.pieces[0]?.x, state.board.pieces[0]?.y]).toEqual([
+      mine.x,
+      mine.y + AREA_LABEL_HEIGHT,
+    ])
+  })
+
+  it('leaves pieces on the map exactly where they are dropped', () => {
+    const state = place(firstCivGame(), 'resources/hut', 437, 291)
+    expect([state.board.pieces[0]?.x, state.board.pieces[0]?.y]).toEqual([437, 291])
+  })
+
+  it('locationOf names the area a piece sits in', () => {
+    const areas = playerAreas(board, firstCivGame().players)
+    const mine = areas[0]
+    if (mine === undefined) throw new Error('no area')
+
+    const state = place(firstCivGame(), 'resources/hut', mine.x + 10, mine.y + 40)
+    const piece = state.board.pieces[0]
+    if (piece === undefined) throw new Error('no piece')
+
+    expect(locationOf(state.board, areas, piece)).toBe("cash1981's area")
+  })
+
+  it('locationOf names the square for pieces on the map', () => {
+    const areas = playerAreas(board, firstCivGame().players)
+    const state = place(firstCivGame(), 'markers/coin', 0, 0)
+    const piece = state.board.pieces[0]
+    if (piece === undefined) throw new Error('no piece')
+
+    expect(locationOf(state.board, areas, piece)).toBe('A1')
+  })
+})
+
+describe('migration', () => {
+  it('gives an old saved game an empty board', () => {
     const { board: _board, ...withoutBoard } = firstCivGame()
     const migrated = migrateGameState(withoutBoard as GameState)
 
     expect(migrated.board.columns).toBe(16)
     expect(migrated.board.pieces).toHaveLength(0)
+    expect(migrated.board.history).toHaveLength(0)
   })
 
-  it('lar et eksisterende brett stå urørt', () => {
+  it('leaves an existing board alone', () => {
     const state = place(firstCivGame(), 'figures/redarmy', 100, 100)
     expect(migrateGameState(state).board.pieces).toHaveLength(1)
   })
+
+  it('turns pieces that predate the history into history entries', () => {
+    // Otherwise stepping back would make them vanish, since replay rebuilds
+    // the board from empty
+    let state = place(firstCivGame(), 'figures/redarmy', 100, 100)
+    state = place(state, 'markers/coin', 400, 400)
+    const older = { ...state, board: { ...state.board, history: undefined } }
+
+    const migrated = migrateGameState(older as unknown as GameState)
+    expect(migrated.board.history).toHaveLength(2)
+    expect(migrated.board.history[0]?.username).toBe('System')
+    expect(piecesAtStep(migrated.board.history, 2)).toHaveLength(2)
+    expect(piecesAtStep(migrated.board.history, 0)).toHaveLength(0)
+  })
 })
 
-describe('renhet', () => {
-  it('placePiece muterer ikke inn-tilstanden', () => {
+describe('purity', () => {
+  it('placePiece does not mutate the input state', () => {
     const before = firstCivGame()
     const snapshot = JSON.stringify(before)
 

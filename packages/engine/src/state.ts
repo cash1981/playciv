@@ -1,20 +1,22 @@
 /**
- * Port av `PBF` og `Playerhand`.
+ * Port of `PBF` and `Playerhand`.
  *
- * PBF het «play by forum» og var Mongo-dokumentet for et spill. Feltene
- * `mapLink` og `assetLink` er bevisst utelatt — de pekte på en Google
- * Presentation og et Google Spreadsheet i en iframe, og skal dø.
+ * PBF stood for "play by forum" and was the Mongo document for a game. The
+ * `mapLink` and `assetLink` fields are deliberately left out — they pointed at
+ * a Google Presentation and a Google Spreadsheet in an iframe, and are going
+ * away.
  */
 
 import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem } from './item.js'
 import type { Rng } from './random.js'
-import type { Board } from './board.js'
+import type { Board, BoardArea } from './board.js'
+import { playerAreas } from './board.js'
 import type { PlayerTurn } from './turn.js'
 import type { Undo } from './undo.js'
 
 export type GameType = 'WAW'
 
-/** Java: `Playerhand.green()` og vennene. */
+/** Java: `Playerhand.green()` and friends. */
 export const PLAYER_COLORS = ['Green', 'Yellow', 'Purple', 'Red', 'Blue'] as const
 export type PlayerColor = (typeof PLAYER_COLORS)[number]
 
@@ -25,20 +27,20 @@ export interface Playerhand {
   readonly color: string | null
   readonly playernumber: number
   readonly gameCreator: boolean
-  /** Java: `yourTurn` — kun én spiller har denne satt om gangen. */
+  /** Java: `yourTurn` — only one player has this set at a time. */
   readonly yourTurn: boolean
-  /** Java: `civilization` — den valgte sivilisasjonen. */
+  /** Java: `civilization` — the chosen civilization. */
   readonly civilization: CivItem | null
-  /** Skjult hånd. Kun eieren skal se innholdet. */
+  /** A hidden hand. Only the owner should see the contents. */
   readonly items: readonly Item[]
   readonly techsChosen: readonly TechItem[]
-  /** Java: maks 3 barbarenheter av gangen. */
+  /** Java: at most three barbarian units at a time. */
   readonly barbarians: readonly UnitItem[]
   readonly battlehand: readonly UnitItem[]
   readonly socialPolicies: readonly SocialPolicyItem[]
-  /** Java: `playerTurns` — spillerens egne turordrer, private til de deles. */
+  /** Java: `playerTurns` — the player's own turn orders, private until shared. */
   readonly playerTurns: readonly PlayerTurn[]
-  /** Java: `gamenote` — spillerens private notat om spillet. */
+  /** Java: `gamenote` — the player's private note about the game. */
   readonly gamenote: string | null
 }
 
@@ -66,30 +68,29 @@ export type LogType =
   | 'RESEARCH'
 
 /**
- * Java: `GameLog`. Java lagret hele itemet på loggdokumentet og lot
- * ressurslaget filtrere; det var kilden til sikkerhetshullet som er notert i
- * todo.txt. Her ligger itemet på et eget felt som `publicLog`-projeksjonen
- * aldri rører.
+ * Java: `GameLog`. Java stored the whole item on the log document and let the
+ * resource layer filter it; that was the security hole noted in todo.txt. Here
+ * the item sits on its own field that the `publicLog` projection never touches.
  */
 export interface GameLogEntry {
   readonly id: string
   readonly username: string
   readonly logType: LogType | null
-  /** Full informasjon. Skal kun vises til eieren av trekket. */
+  /** Full information. Only ever shown to whoever made the draw. */
   readonly privateLog: string
-  /** Informasjon alle kan se. Skal aldri avsløre innholdet i et skjult item. */
+  /** What everyone may see. Never reveals the contents of a hidden item. */
   readonly publicLog: string
   /**
-   * Itemet trekket gjaldt, hvis noe. Java: `GameLog.draw.item`. Kun for
-   * privat visning og undo — send aldri dette ut i en offentlig projeksjon.
+   * The item the draw was about, if any. Java: `GameLog.draw.item`. For the
+   * private view and undo only — never send this out in a public projection.
    */
   readonly item: Item | null
-  /** Java: `GameLog.draw.playerId` — hvem trekket tilhører. */
+  /** Java: `GameLog.draw.playerId` — whose draw it is. */
   readonly playerId: string | null
   /**
-   * Java: `GameLog.draw.undo`. Satt når noen har bedt om undo av denne
-   * loggposten. Undoet henger på loggposten fordi det er handlingen som
-   * angres, ikke itemet.
+   * Java: `GameLog.draw.undo`. Set when someone has asked to undo this log
+   * entry. The undo hangs off the log entry because it is the action being
+   * taken back, not the item.
    */
   readonly undo: Undo | null
 }
@@ -101,31 +102,31 @@ export interface GameState {
   readonly numOfPlayers: number
   readonly active: boolean
   readonly winner: string | null
-  /** Stokken. Java: `PBF.items`. */
+  /** The deck. Java: `PBF.items`. */
   readonly items: readonly Item[]
-  /** Java: `PBF.discardedItems` — det reshuffle henter tilbake fra. */
+  /** Java: `PBF.discardedItems` — what a reshuffle draws back from. */
   readonly discardedItems: readonly Item[]
   readonly players: readonly Playerhand[]
-  /** Java: `withdrawnPlayers` — hender til spillere som har trukket seg. */
+  /** Java: `withdrawnPlayers` — the hands of players who have withdrawn. */
   readonly withdrawnPlayers: readonly Playerhand[]
-  /** Teknologier velges, ikke trekkes, så alle spillere ser hele listen. */
+  /** Techs are chosen rather than drawn, so everyone sees the whole list. */
   readonly techs: readonly TechItem[]
   readonly socialPolicies: readonly SocialPolicyItem[]
   /**
-   * Java: `publicTurns`, nøklet på `turnNumber + username`. Turordrer blir
-   * offentlige idet de oppdateres.
+   * Java: `publicTurns`, keyed on `turnNumber + username`. Turn orders become
+   * public the moment they are updated.
    */
   readonly publicTurns: Readonly<Record<string, PlayerTurn>>
   readonly log: readonly GameLogEntry[]
-  /** Brettet med brikkene som ligger på det. Alle spillere ser hele brettet. */
+  /** The board and the pieces on it. Every player sees the whole board. */
   readonly board: Board
   readonly rng: Rng
-  /** Neste `itemNumber`. Java: `ItemReader.itemCounter`, en global AtomicInteger. */
+  /** The next `itemNumber`. Java: `ItemReader.itemCounter`, a global AtomicInteger. */
   readonly itemCounter: number
 }
 
 // ---------------------------------------------------------------------------
-// Oppslag
+// Lookups
 // ---------------------------------------------------------------------------
 
 export function findPlayer(state: GameState, playerId: string): Playerhand | undefined {
@@ -144,7 +145,7 @@ export function findPlayerByUsername(
   return state.players.find((player) => player.username === username)
 }
 
-/** Java: `misc.SecurityCheck.hasUserAccess` — er spilleren med i dette spillet. */
+/** Java: `misc.SecurityCheck.hasUserAccess` — is the player in this game. */
 export function hasUserAccess(state: GameState, playerId: string): boolean {
   return state.players.some((player) => player.playerId === playerId)
 }
@@ -153,7 +154,7 @@ export function findLogEntry(state: GameState, logId: string): GameLogEntry | un
   return state.log.find((entry) => entry.id === logId)
 }
 
-/** Bytter ut én loggpost og lar resten stå. */
+/** Replaces one log entry and leaves the rest alone. */
 export function withLogEntry(state: GameState, entry: GameLogEntry): GameState {
   return {
     ...state,
@@ -161,7 +162,7 @@ export function withLogEntry(state: GameState, entry: GameLogEntry): GameState {
   }
 }
 
-/** Bytter ut én spillerhånd og lar resten stå. */
+/** Replaces one player hand and leaves the rest alone. */
 export function withPlayer(state: GameState, player: Playerhand): GameState {
   return {
     ...state,
@@ -172,10 +173,10 @@ export function withPlayer(state: GameState, player: Playerhand): GameState {
 }
 
 // ---------------------------------------------------------------------------
-// Projeksjoner — hva en gitt spiller får se
+// Projections — what a given player gets to see
 // ---------------------------------------------------------------------------
 
-/** Det andre spillere får se av en hånd: antall, ikke innhold. */
+/** What other players see of a hand: counts, not contents. */
 export interface OpaquePlayerhand {
   readonly playerId: string
   readonly username: string
@@ -183,22 +184,22 @@ export interface OpaquePlayerhand {
   readonly playernumber: number
   readonly gameCreator: boolean
   readonly yourTurn: boolean
-  /** Sivilisasjonen er offentlig så snart den er avslørt. */
+  /** The civilization is public as soon as it has been revealed. */
   readonly civilization: CivItem | null
   readonly numberOfItemsInHand: number
   readonly numberOfTechsChosen: number
   readonly numberOfBarbarians: number
   readonly numberOfSocialPolicies: number
-  /** Battlehand avsløres eksplisitt under kamp, så den vises som den er. */
+  /** The battlehand is revealed explicitly in battle, so it is shown as it is. */
   readonly battlehand: readonly UnitItem[]
   /**
-   * Kun avslørte teknologier. Java: `getTechsForAllPlayers` filtrerte på
-   * `!isHidden()`, som er hvordan tech-pyramiden blir offentlig.
+   * Revealed techs only. Java: `getTechsForAllPlayers` filtered on
+   * `!isHidden()`, which is how the tech pyramid becomes public.
    */
   readonly revealedTechs: readonly TechItem[]
   /**
-   * Turordrene som er delt offentlig. `gamenote` og `playerTurns` er private
-   * og finnes ikke her.
+   * The turn orders that have been shared. `gamenote` and `playerTurns` are
+   * private and do not appear here.
    */
   readonly publicTurns: readonly PlayerTurn[]
 }
@@ -224,7 +225,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
   }
 }
 
-/** Én loggpost slik alle kan se den. Innholdet i itemet er borte. */
+/** One log entry as everyone may see it. The item contents are gone. */
 export interface PublicLogEntry {
   readonly id: string
   readonly username: string
@@ -242,9 +243,9 @@ export function toPublicLog(entry: GameLogEntry): PublicLogEntry {
 }
 
 /**
- * Spilltilstanden sett fra én spiller: egen hånd i klartekst, andres som tall,
- * stokken kun som antall, og logg der andres trekk bare finnes i offentlig
- * form.
+ * The game state seen by one player: their own hand in the clear, the others'
+ * as counts, the deck as a count only, and a log where other people's draws
+ * appear in public form alone.
  */
 export interface PlayerView {
   readonly id: string
@@ -258,8 +259,10 @@ export interface PlayerView {
   readonly you: Playerhand | null
   readonly opponents: readonly OpaquePlayerhand[]
   readonly techs: readonly TechItem[]
-  /** Brettet er offentlig — alle ser de samme brikkene. */
+  /** The board is public — everyone sees the same pieces. */
   readonly board: Board
+  /** Derived from the player list, so it cannot drift out of step. */
+  readonly boardAreas: readonly BoardArea[]
   readonly log: readonly (PublicLogEntry | GameLogEntry)[]
 }
 
@@ -280,6 +283,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
       .map((player) => opaque(state, player)),
     techs: state.techs,
     board: state.board,
+    boardAreas: playerAreas(state.board, state.players),
     log: state.log.map((entry) =>
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),

@@ -1,337 +1,384 @@
 # Civilization: The Board Game — play by forum
 
-Omskriving av play-by-forum-motoren for Sid Meier's Civilization: The Board Game
-(Fantasy Flight Games), med utvidelsene *Fame and Fortune* og
-*Wisdom and Warfare*.
+A rewrite of the play-by-forum engine for Sid Meier's Civilization: The Board
+Game (Fantasy Flight Games), with the *Fame and Fortune* and *Wisdom and
+Warfare* expansions.
 
-Erstatter to gamle repoer:
+It replaces two old repositories:
 
-| Gammelt | Stack | Erstattes av |
+| Old | Stack | Replaced by |
 | --- | --- | --- |
 | `old-civ-rest` | Java 8, Dropwizard 0.8, MongoDB/MongoJack, Apache POI | `packages/engine` + `packages/server` |
 | `old-civ-web` | AngularJS 1, Bootstrap, Grunt/Bower | `packages/web` |
 
-Den gamle løsningen kjørte på playciv.com og viste brettet gjennom en Google
-Presentation og et Google Spreadsheet i iframe (`mapLink` / `assetLink`). Det er
-borte, og er ikke portert. Et ekte hex-brett kommer senere.
+The old solution ran on playciv.com and showed the board through a Google
+Presentation and a Google Spreadsheet in an iframe (`mapLink` / `assetLink`).
+That is gone and has not been ported; the board now lives in this codebase.
 
-## Kjøre appen
+## Running the app
 
-Krever Node 20 eller nyere og pnpm.
+Needs Node 20 or newer, and pnpm.
 
 ```bash
 pnpm install
 ```
 
-Start API-et i ett terminalvindu:
+Start the API in one terminal:
 
 ```bash
 pnpm --filter @civ/server dev
 ```
 
-Og klienten i et annet:
+And the client in another:
 
 ```bash
 pnpm --filter @civ/web dev
 ```
 
-Klienten ligger på http://localhost:5173 og proxyer `/api` til serveren på
-port 8787. Registrer en bruker, opprett et spill, og la de andre spillerne bli
-med — spillet starter av seg selv når siste plass er fylt.
+The client is on http://localhost:5173 and proxies `/api` to the server on port
+8787. Register a user, create a game, and let the other players join — the game
+starts by itself once the last seat is filled.
 
-Sett `TOKEN_SECRET` før du starter serveren hvis innloggingene skal overleve en
-omstart. Uten den lages en tilfeldig hemmelighet per oppstart.
+Set `TOKEN_SECRET` before starting the server if logins should survive a
+restart. Without it a random secret is made on every start.
 
 ```bash
 pnpm -r test
 ```
 
-## Pakker
+## Packages
 
 ### `packages/engine`
 
-Ren domenelogikk. Ingen HTTP, ingen database, ingen UI. Alle reducere er rene
-funksjoner:
+Pure domain logic. No HTTP, no database, no UI. Every reducer is a pure
+function:
 
 ```ts
 (state: GameState, action: DrawInput) => Result<GameState, EngineError>
 ```
 
-Ingenting kaster. De gamle Java-actionene kastet `WebApplicationException` med
-HTTP-status rett fra domenelogikken; her er feil verdier, og HTTP-mapping hører
-i server-pakken.
+Nothing throws. The old Java actions threw `WebApplicationException` with an
+HTTP status straight from the domain logic; here errors are values, and the HTTP
+mapping belongs to the server package.
 
-Tilfeldighet ligger i tilstanden som en seed (`state.rng`), så et spill kan
-reproduseres og spilles om. Java brukte `Collections.shuffle` mot en global
-kilde.
+Randomness lives in the state as a seed (`state.rng`), so a game can be
+reproduced and replayed. Java used `Collections.shuffle` against a global
+source.
 
-| Fil | Portert fra |
+| File | Ported from |
 | --- | --- |
 | `src/sheet-name.ts` | `SheetName.java` |
-| `src/item.ts` | `Item` + subtypene `Civ`, `Unit`, `Tech`, `Wonder`, `Hut`, `Village`, … |
+| `src/item.ts` | `Item` and the subtypes `Civ`, `Unit`, `Tech`, `Wonder`, `Hut`, `Village`, … |
 | `src/state.ts` | `PBF.java`, `Playerhand.java` |
 | `src/log.ts` | `GameLog.java`, `GameLogAction.java` |
-| `src/gamedata.ts` | `excel/ItemReader.java`, uten Apache POI |
+| `src/gamedata.ts` | `excel/ItemReader.java`, without Apache POI |
 | `src/create-game.ts` | `PBFTestAction.createNewGame` |
-| `src/turn.ts` | `PlayerTurn.java` (og `TurnKey.java`, som aldri virket) |
+| `src/turn.ts` | `PlayerTurn.java` (and `TurnKey.java`, which never worked) |
 | `src/undo.ts` | `Undo.java` |
 | `src/actions/draw.ts` | `action/DrawAction.java` |
 | `src/actions/player.ts` | `action/PlayerAction.java` |
 | `src/actions/undo.ts` | `action/UndoAction.java` |
 | `src/actions/turn.ts` | `action/TurnAction.java` |
-| `src/actions/game.ts` | spilldelen av `action/GameAction.java` |
-| `src/board.ts` + `src/actions/board.ts` | nytt — erstatter Google-lysbildet bak `mapLink` |
-| `src/random.ts` | erstatter `Collections.shuffle` + `RandomUtils` |
+| `src/actions/game.ts` | the game part of `action/GameAction.java` |
+| `src/board.ts` + `src/actions/board.ts` | new — replaces the Google slide behind `mapLink` |
+| `src/random.ts` | replaces `Collections.shuffle` and `RandomUtils` |
 
 ### `packages/server`
 
-Fastify over motoren. Java-motstykke: `resource/*` og `application/*` under
-Dropwizard.
+Fastify on top of the engine. Java counterpart: `resource/*` and
+`application/*` under Dropwizard.
 
-| Fil | Ansvar |
+| File | Responsibility |
 | --- | --- |
-| `src/routes/auth.ts` | `AuthResource` — registrering og innlogging |
-| `src/routes/games.ts` | `GameResource` — opprett, list, bli med, trekk seg, avslutt, logg, chat |
-| `src/routes/play.ts` | `DrawResource` + `PlayerResource` — trekk, kamp, tech, avsløring, handel, tur, undo |
-| `src/errors.ts` | `EngineError` → HTTP-status |
-| `src/auth.ts` | scrypt-passord og HMAC-signerte bearer-tokens |
-| `src/routes/board.ts` | brettet — legg ut, flytt, snu, forrest, bakerst, fjern |
-| `src/store/` | lagringsgrensesnittet og JSON-fil-implementasjonen |
+| `src/routes/auth.ts` | `AuthResource` — registration and login |
+| `src/routes/games.ts` | `GameResource` — create, list, join, withdraw, end, log, chat |
+| `src/routes/play.ts` | `DrawResource` + `PlayerResource` — draws, battle, tech, reveals, trade, turns, undo |
+| `src/errors.ts` | `EngineError` → HTTP status |
+| `src/auth.ts` | scrypt passwords and HMAC-signed bearer tokens |
+| `src/routes/board.ts` | the board — place, move, rotate, front, back, remove, undo, history |
+| `src/store/` | the storage interface and the JSON file implementation |
 
-Serveren har ingen spillregler. Hver rute henter tilstanden, kaller én ren
-funksjon fra motoren, lagrer resultatet og svarer med `toPlayerView(state, deg)`.
-En rute kan derfor ikke lekke andres hånd selv om den ville.
+The server holds no game rules. Every route loads the state, calls one pure
+function from the engine, saves the result and answers with
+`toPlayerView(state, you)`. A route therefore cannot leak someone else's hand
+even if it wanted to.
 
-Miljøvariabler: `PORT` (8787), `HOST`, `DATA_FILE`, `TOKEN_SECRET`, `CORS_ORIGIN`.
+Environment variables: `PORT` (8787), `HOST`, `DATA_FILE`, `TOKEN_SECRET`,
+`CORS_ORIGIN`.
 
 ### `packages/web`
 
-React + Vite. Erstatter AngularJS-appen i `old-civ-web`. Bevisst nøktern —
-grafikken kommer senere. Dekker innlogging, spillisten, og spillsiden med hånd,
-trekk, kamp, teknologi, sosialpolitikk, turordrer, logg, undo-avstemning og chat.
+React and Vite. Replaces the AngularJS app in `old-civ-web`. Deliberately plain
+— the artwork comes later. It covers login, the game list, and the game page
+with hand, draws, battle, technology, social policy, turn orders, log, undo
+voting and chat.
 
-Klienten importerer typene sine fra `@civ/engine`, så den kan ikke komme i
-utakt med hva serveren faktisk sender.
+The client imports its types from `@civ/engine`, so it cannot drift out of step
+with what the server actually sends.
 
-## Brettet
+## The board
 
-Øverst på spillsiden ligger et interaktivt brett som erstatter
-Google Presentation-lysbildet `PBF.mapLink` pekte på.
+At the top of the game page sits an interactive board that replaces the Google
+Presentation slide `PBF.mapLink` used to point at.
 
-Geometrien er hentet fra `Civilization/Moderator/4v4 Map Template.pptx`:
-16 × 16 ruter merket A–P og 1–16, satt sammen av 4 × 4 map-tiles på 375 × 375
-piksler. Det gir en rute på 94 piksler, som er nøyaktig størrelsen på by-,
-bygnings- og bystatbrikkene i samme mappe.
+The geometry comes from `Civilization/Moderator/4v4 Map Template.pptx`: 16 × 16
+squares labelled A–P and 1–16, made of 4 × 4 map tiles of 375 × 375 pixels. That
+gives a square of 94 pixels, which is exactly the size of the city, building and
+city-state pieces in the same folder.
 
-Brikker plasseres **fritt i pikselkoordinater**, ikke låst til ruter. Det er
-hvordan PowerPoint-malen ble brukt, og det er nødvendig for å kunne stable flere
-brikker i samme rute. Rekkefølgen i `board.pieces` ER z-rekkefølgen, så «legg
-forrest» er bare en flytting bakerst i listen — ingen z-indeks å holde styr på.
-Brettet viser likevel hvilken rute en brikke står i, regnet ut fra midtpunktet.
+Pieces are placed at **free pixel coordinates**, not locked to squares. That is
+how the PowerPoint template was used, and it is what makes it possible to stack
+several pieces in one square. The order of `board.pieces` **is** the z-order, so
+"to front" is simply a move to the end of the list — no z-index to keep track
+of. The board still shows which square a piece stands in, worked out from its
+centre.
 
-Alle spillere ser og kan flytte alle brikker, som ved et fysisk bord.
+Every player sees and can move every piece, as at a physical table.
 
-Paletten har sju kategorier, generert fra bildene på disk:
+The palette has seven categories, generated from the images on disk:
 
-| Kategori | Antall | Fra |
+| Category | Count | From |
 | --- | --- | --- |
-| Figurer | 11 | army og scout i fem farger, pluss hvit barbarhær |
-| Ressurser | 6 | hut, village, wheat, iron, silk, incense |
-| Markører | 12 | mynt, kultur, karavane, fortifikasjon, wound, startspiller |
-| Byer | 30 | capital/city/metropolis, med og uten mur, per farge |
-| Bygninger | 15 | market, temple, library, … |
-| Startbrett | 16 | ett per sivilisasjon |
-| Map-tiles | 28 | utforskningsbrettene 1–27, pluss baksiden |
+| Figures | 11 | army and scout in five colours, plus the white barbarian army |
+| Resources | 6 | hut, village, wheat, iron, silk, incense |
+| Markers | 12 | coin, culture, caravan, fortification, wound, first player |
+| Cities | 30 | capital/city/metropolis, with and without walls, per colour |
+| Buildings | 15 | market, temple, library, … |
+| Starting tiles | 16 | one per civilization |
+| Map tiles | 28 | exploration tiles 1–27, plus the back |
 
-### Map-tiles
+### Player areas
 
-Et map-tile dekker 4 × 4 ruter. Kildebildene er 375 × 375, altså én piksel for
-smale, og skaleres til 376 så de flukter med rutenettet.
+Below the map, separated by one square of empty space, sits a band with one
+area per player — the tabletop in front of each seat. Each area carries a name strip in
+the colour of that player and is the same drag surface as the map, so anything
+can be dropped there: a hut a scout just picked up, the buildings you have
+bought but not placed, wounded units, coins.
 
-Tiles legger seg **nederst** i stabelen, ellers ville de dekket brikkene som står
-på dem. De kan snus i fire retninger — pilen på brettet viser hvilken vei det
-skal ligge.
+The band is derived from the player list, so it works for two to five players,
+and every player's area is visible to everyone. Dropping a piece into an area
+**tidies it into the next free slot**, filling left to right and wrapping onto a
+new row, so an area never turns into a heap. Dropping on the map leaves the
+piece exactly where it was let go.
 
-To ting skjer av seg selv:
+Areas are geometry, not state: the server computes them in `toPlayerView` and
+sends them along as `boardAreas`, so client and server cannot disagree about
+where an area is.
 
-**Sivilisasjonens startbrett** legges ut når spilleren avslører sitt civ-kort.
-Spiller 1 får øvre venstre luke (A1–D4), 2 øvre høyre, 3 nedre høyre og 4 nedre
-venstre, og brettet snus så pilen peker inn mot midten. I bildefilene peker pilen
-ned — kontrollert mot `japan.jpg` og `germany.png` — så rotasjonen blir 0°, 90°,
-180° og 270° rundt kanten.
+### Map tiles
 
-**Et trukket utforskningsbrett** legger seg i første ledige 4 × 4-luke. Systemet
-vet ikke hvilket område spilleren utforsker, så det er en bekvemmelighet og ikke
-en spillregel; brettet dras og snus på plass derfra.
+A map tile covers 4 × 4 squares. The source images are 375 × 375, one pixel too
+narrow, and are scaled to 376 so they line up with the grid.
+
+Tiles go to the **bottom** of the stack, otherwise they would cover the pieces
+standing on them. They can be turned in four directions — the arrow on the tile
+shows which way up it belongs.
+
+Two things happen on their own:
+
+**The starting tile of a civilization** is laid out when the player reveals
+their civ card. Player 1 gets the top left slot (A1–D4), 2 the top right, 3 the
+bottom right and 4 the bottom left, and the tile is turned so the arrow points
+inwards. In the image files the arrow points down — checked against `japan.jpg`
+and `germany.png` — so the rotations are 0°, 90°, 180° and 270° around the edge.
+
+**A drawn exploration tile** lands in the first free 4 × 4 slot. The system does
+not know which area the player is exploring, so this is a convenience and not a
+game rule; the tile is dragged and turned into place from there.
 
 ```bash
 pnpm --filter @civ/engine board-assets
 ```
 
-`tools/board-assets.ps1` kopierer PNG-ene til `packages/web/public/board/` og
-skriver `packages/engine/data/board-assets.json` med reelle bildestørrelser.
-Manifestet ligger i **motoren**, ikke i klienten, fordi serveren må kunne avvise
-en brikke som peker på en ukjent fil — uten det kunne en klient sendt hvilken som
-helst streng som bildereferanse.
+`tools/board-assets.ps1` copies the PNGs to `packages/web/public/board/` and
+writes `packages/engine/data/board-assets.json` with the real image sizes. The
+manifest lives in the **engine**, not the client, because the server has to be
+able to refuse a piece pointing at an unknown file — without it a client could
+send any string at all as an image reference.
 
-Flytting logges ikke. En tur består av mange små justeringer, og loggen ville
-druknet. Brettet er sin egen dokumentasjon.
+### History, undo and replay
 
-## Lagring i stedet for MongoDB
+Every change to the board is recorded. Dragging a piece, placing one from the
+palette, rotating it, bringing it to front or sending it to back, removing it,
+clearing the board — each becomes one entry in `board.history` with who did it,
+when, a readable description ("cash1981 moved Red army from E4 to H8") and the
+semantic operation itself.
 
-`packages/server/src/store/types.ts` definerer et `Repository`. Den eneste
-implementasjonen i dag er `JsonFileRepository`: alt ligger i `Map`-er i minnet og
-speiles til `packages/server/data/civ.json` etter hver endring — debounced, og
-atomisk via en midlertidig fil som byttes inn.
+Recording the operation rather than a snapshot is what makes the rest work:
 
-Det holder til å spille lokalt, og spill overlever en omstart. Det er ikke en
-database: ingen indekser, ingen samtidighetskontroll, ingen spørringer. En
-Mongo-implementasjon kan legges ved siden av uten at rutene endres.
+- **Undo** reverts the last entry exactly and pops it off the history. Anyone
+  may undo, the same way anyone may move a piece.
+- **Replay** rebuilds the board at any step by applying the entries from the
+  start, so the back and forward arrows walk through the whole game from the
+  first placement to the present. While replaying, the board is read-only and
+  the log is trimmed to what was known at that step — each entry remembers the
+  length of the game log at the time. That is how you can watch what an opponent
+  did while it was not your turn.
 
-Slett `packages/server/data/civ.json` for å nullstille alt.
+Board moves are deliberately **not** written to the game log. A turn consists of
+many small adjustments and the log would drown; the board history is the record,
+and it is shown as its own list next to the board where each entry can be
+clicked to jump there.
 
-## Spilldata
+Games saved before the history existed get one synthetic `place` entry per piece
+at load time (`src/migrate.ts`), so replay is exact for them too.
 
-`packages/engine/data/gamedata-faf-waw.json` er autogenerert fra
+## Storage instead of MongoDB
+
+`packages/server/src/store/types.ts` defines a `Repository`. The only
+implementation today is `JsonFileRepository`: everything lives in `Map`s in
+memory and is mirrored to `packages/server/data/civ.json` after each change —
+debounced, and atomically through a temporary file that is swapped in.
+
+That is enough to play locally, and games survive a restart. It is not a
+database: no indexes, no concurrency control, no queries. A Mongo implementation
+can be added alongside without touching the routes.
+
+Delete `packages/server/data/civ.json` to reset everything.
+
+## Game data
+
+`packages/engine/data/gamedata-faf-waw.json` is generated from
 `old-civ-rest/src/main/resources/assets/gamedata-faf-waw.xlsx`:
 
 ```bash
 pnpm --filter @civ/engine gamedata
 ```
 
-`tools/xlsx-to-json.ps1` leser xlsx-en direkte som zip + XML via .NET, uten
-Apache POI. JSON-en er en rå celle-dump, ikke tolket spilldata, og gjengir
-POIs `Cell.toString()` med vilje — inkludert at numeriske celler blir `"12.0"`
-og at formelceller blir `"RAND()"`. Det er nettopp de særegenhetene
-`ItemReader.java` filtrerte på, så en trofast port trenger dem.
+`tools/xlsx-to-json.ps1` reads the xlsx directly as zip and XML through .NET,
+without Apache POI. The JSON is a raw cell dump, not interpreted game data, and
+reproduces POI's `Cell.toString()` on purpose — including numeric cells becoming
+`"12.0"` and formula cells becoming `"RAND()"`. Those quirks are exactly what
+`ItemReader.java` filtered on, so a faithful port needs them.
 
-Regenerer JSON-en hvis regnearket endres. Ikke rediger den for hånd.
+Regenerate the JSON if the spreadsheet changes. Do not edit it by hand.
 
-## Skjult informasjon
+## Hidden information
 
-Det gamle systemet lagret hele det trukne kortet på loggdokumentet i Mongo og
-lot ressurslaget filtrere. `todo.txt` i old-civ-rest kaller det et
-sikkerhetshull, og løsningen var punktvise fikser.
+The old system stored the whole drawn card on the log document in Mongo and let
+the resource layer filter it. `todo.txt` in old-civ-rest calls that a security
+hole, and the fix there was piecemeal.
 
-Her ligger skillet i typene:
+Here the split is in the types:
 
-- `GameLogEntry.item` og `.privateLog` er full informasjon.
-- `toPublicLog(entry)` gir en `PublicLogEntry` uten dem.
-- `toPlayerView(state, viewerId)` gir egen hånd i klartekst, motstandernes
-  hender som antall, stokken som antall, og andres loggposter kun i offentlig
-  form.
+- `GameLogEntry.item` and `.privateLog` hold the full information.
+- `toPublicLog(entry)` gives a `PublicLogEntry` without them.
+- `toPlayerView(state, viewerId)` gives your own hand in the clear, opponents'
+  hands as counts, the deck as a count, and other people's log entries in public
+  form only.
 
-Dekket av `packages/engine/test/hidden-info.test.ts`.
+Covered by `packages/engine/test/hidden-info.test.ts`.
 
-## Kjente avvik fra Java
+## Known differences from Java
 
-De gamle testene er fasit. Der Java og en forventning var uenige, vant Java.
+The old tests are the reference. Wherever Java and an expectation disagreed,
+Java won.
 
-**Reshuffle henter ikke fra spillernes hender.** `DrawAction.reshuffleItems`
-legger kun tilbake det som ligger i `pbf.discardedItems`, og bare for typene i
-`SHUFFLABLE_ITEMS`: units, great person, kulturkort I–III og civ. Huts,
-villages, tiles, bystater og wonders kan ikke reshuffles i det hele tatt — Java
-kastet `IllegalArgumentException`, motoren gir `NOT_SHUFFLABLE`.
-`ItemReader.redrawableItems` var bygget for å hente tilbake fra hender, men ble
-aldri brukt noe sted. Se `sheet-name.test.ts` og `draw-action.test.ts`.
+**Reshuffle does not collect from the players' hands.**
+`DrawAction.reshuffleItems` only puts back what is in `pbf.discardedItems`, and
+only for the kinds in `SHUFFLABLE_ITEMS`: units, great person, culture cards
+I–III and civ. Huts, villages, tiles, city states and wonders cannot be
+reshuffled at all — Java threw `IllegalArgumentException`, the engine gives
+`NOT_SHUFFLABLE`. `ItemReader.redrawableItems` was built to collect from hands
+but was never used anywhere. See `sheet-name.test.ts` and `draw-action.test.ts`.
 
-**Units har alltid nivå 0.** `setLevel` kalles ingen steder i old-civ-rest.
-Nivåtabellene (Spearmen, Pikemen, Riflemen, Modern Infantry og motpartene for
-Artillery og Mounted) er portert fordi `revealPublic` og `revealAll` grener på
-dem, men de er uten effekt til oppgradering av units implementeres.
+**Units are always level 0.** `setLevel` is called nowhere in old-civ-rest. The
+level tables (Spearmen, Pikemen, Riflemen, Modern Infantry and the counterparts
+for Artillery and Mounted) are ported because `revealPublic` and `revealAll`
+branch on them, but they have no effect until unit upgrades are implemented.
 
-**Kolonne A og bare kolonne A.** `columnIndexZeroPredicate` betyr at
-unit-arkene leses kun fra første kolonne. Kolonne B–D inneholder statistikk for
-oppgraderte nivåer og er aldri lest.
+**Column A and only column A.** `columnIndexZeroPredicate` means the unit sheets
+are read from the first column only. Columns B to D hold stats for upgraded
+levels and are never read.
 
-**Inkonsistente bildefilnavn er beholdt.** `Civ` fjerner ikke mellomrom mens
-alle andre gjør det, kulturkort stripper utropstegn, great person prefikses med
-`klein`, og bystater bruker `description` og ikke `name`. Filnavnene på disk
-under `Civilization/Moderator/` følger disse reglene, så de er ikke ryddet.
+**Inconsistent image filenames are kept.** `Civ` does not strip spaces while
+everything else does, culture cards strip exclamation marks, great persons are
+prefixed with `klein`, and city states use `description` rather than `name`. The
+filenames on disk under `Civilization/Moderator/` follow those rules, so they
+have not been tidied.
 
-**Doble mellomrom i loggen er beholdt.** Java skrev
-`username + " drew " + " - " + …`. Tekstene er sammenlignbare data og de gamle
-testene matcher på dem.
+**Double spaces in the log are kept.** Java wrote
+`username + " drew " + " - " + …`. The texts are comparable data and the old
+tests match on them.
 
-## Bevisste forbedringer
+## Deliberate improvements
 
-**Stabil `id` per item-instans.** Java identifiserte items med verdi-likhet
-(`@EqualsAndHashCode` på navn/beskrivelse/type), som betød at to identiske
-`Infantry 1.3` var «like» og `discardedItems.remove(item)` kunne fjerne feil
-instans. Hvert item har nå en ugjennomsiktig id. `itemNumber` er beholdt for
-loggkompatibilitet, og startoffset er fortsatt tilfeldig per spill så nummeret
-ikke avslører hvilket kort det er. `itemValueEquals` finnes fortsatt der
-Java-semantikken trengs.
+**A stable `id` per item instance.** Java identified items by value equality
+(`@EqualsAndHashCode` on name/description/type), which meant two identical
+`Infantry 1.3` were "equal" and `discardedItems.remove(item)` could remove the
+wrong instance. Every item now has an opaque id. `itemNumber` is kept for log
+compatibility, and its starting offset is still random per game so the number
+does not give the card away. `itemValueEquals` is still there where the Java
+semantics are needed.
 
-**Space Flight er ikke en singleton.** Java hadde `Tech.SPACE_FLIGHT` som
-statisk felt — delt muterbar tilstand mellom alle spill i samme JVM.
+**Space Flight is not a singleton.** Java had `Tech.SPACE_FLIGHT` as a static
+field — mutable state shared between every game in the same JVM.
 
-**Undo dispatcher på `logType`, ikke på delstrenger i loggteksten.**
-`UndoAction.putDrawnItemBackInPBF` avgjorde hva som skulle skje ved å lete etter
-`"discarded"`, `"drew"` og `"barbarian"` i logglinjen. Loggposten har en
-`logType` som bærer samme informasjon. Javas barbar-gren var uansett død kode:
-den krevde `"drew"`, men barbarlogger skriver `"has drawn"`, og de har heller
-ikke noe item knyttet til seg, så undo kunne aldri initieres for dem.
+**Undo dispatches on `logType`, not on substrings of the log text.**
+`UndoAction.putDrawnItemBackInPBF` decided what to do by looking for
+`"discarded"`, `"drew"` and `"barbarian"` in the log line. The log entry carries
+a `logType` with the same information. The Java barbarian branch was dead code
+anyway: it required `"drew"`, but barbarian logs write `"has drawn"`, and they
+carry no item either, so an undo could never be started for them.
 
-**Fem turfase-metoder ble én.** `updateSOT`, `updateTrade`, `updateCM`,
-`updateMovement` og `updateResearch` skilte seg bare i e-postteksten og
-logtypen. Fasen sto allerede i DTO-en, så `updateSOT` med `phase: "trade"`
-skrev til handelsfasen men logget SOT. `updateTurn` tar fasen som argument.
+**Five turn-phase methods became one.** `updateSOT`, `updateTrade`, `updateCM`,
+`updateMovement` and `updateResearch` differed only in the email text and the
+log type. The phase was already in the DTO, so `updateSOT` with `phase: "trade"`
+wrote to the trade phase but logged SOT. `updateTurn` takes the phase as an
+argument.
 
-**Lesinger muterer ikke lenger.** `getRemaingTechsForPlayer` gjorde
-`techs.removeAll(...)` på listen fra Mongo, og `getAllPublicTurns` strippet
-historikk ved å endre de lagrede objektene. Begge er nå rene projeksjoner.
+**Reads no longer mutate.** `getRemaingTechsForPlayer` did `techs.removeAll(...)`
+on the list from Mongo, and `getAllPublicTurns` stripped history by changing the
+stored objects. Both are pure projections now.
 
-**`addNewTurn` lagrer.** Java glemte `pbfCollection.updateById`, så den nye
-turen forsvant ved neste lesing.
+**`addNewTurn` saves.** Java forgot `pbfCollection.updateById`, so the new turn
+disappeared on the next read.
 
-**Sosialpolitikk beholder sitt `itemNumber`.** Java lagde et nytt objekt med bare
-navn og bakside, som ga `itemNumber` 0. Logglinjen bruker nummeret til å gi hver
-spiller sitt eget referansenummer, så med 0 fikk alle kort samme nummer og
-funksjonen var virkningsløs.
+**A social policy keeps its `itemNumber`.** Java built a new object with only
+name and flipside, which gave `itemNumber` 0. The log line uses the number to
+give each player their own reference number, so with 0 every card got the same
+number and the feature did nothing.
 
-**Fargevalg er deterministisk.** `chooseColorForPlayer` tok første element ut av
-et `HashSet`, altså i uspesifisert rekkefølge. Nå følges rekkefølgen Green,
-Yellow, Purple, Red, Blue.
+**Colour choice is deterministic.** `chooseColorForPlayer` took the first
+element out of a `HashSet`, in unspecified order. It now follows Green, Yellow,
+Purple, Red, Blue.
 
-**`endTurn` lar fortsatt hvem som helst avslutte turen.** Java fant spilleren som
-har turen og ga den videre uten å se på hvem som kalte. Det er portert som-er,
-siden autorisasjonen lå i ressurslaget; server-pakken må håndheve det.
+**`endTurn` still lets anyone end the turn.** Java found the player whose turn
+it is and passed it on without looking at the caller. That is ported as is, since
+the authorization lived in the resource layer; the server package has to enforce
+it.
 
-## Utsatt
+## Deferred
 
-- **Ekte MongoDB.** Erstattet av JSON-fil bak `Repository`, se over.
-- **Kortgrafikk.** Hånden vises som tekst. `itemImage()` i motoren gir allerede
-  filnavnene under `Civilization/Moderator/`.
-- **Spillerpanelene** rundt brettet i malen — farget felt per spiller med byer,
-  bygninger og flagg. Alt innholdet finnes i `PlayerView`, det er bare ikke
-  tegnet opp rundt brettet ennå.
-- **Highscore og turneringer** — `GameAction.getCivHighscore`,
-  `getPlayerHighScore`, `TournamentAction`. Spør på tvers av spill og trenger et
-  ordentlig datalag.
-- **E-postvarsling** — `email/SendEmail`, samt `/newpassword` og
-  `/verify/{playerId}` i `AuthResource`. Java startet en rå `new Thread(...)` per
-  varsel.
-- **`AdminAction`** — bytt bruker i et spill, slett spill, masseutsending.
-- **Sanntid.** Klienten henter på nytt etter hver handling; ingen websocket.
-  `todo.txt` i old-civ-rest ønsket seg det for chat.
+- **Real MongoDB.** Replaced by a JSON file behind `Repository`, see above.
+- **Card artwork.** The hand is shown as text. `itemImage()` in the engine
+  already gives the filenames under `Civilization/Moderator/`.
+- **Highscores and tournaments** — `GameAction.getCivHighscore`,
+  `getPlayerHighScore`, `TournamentAction`. They query across games and need a
+  proper data layer.
+- **Email notification** — `email/SendEmail`, plus `/newpassword` and
+  `/verify/{playerId}` in `AuthResource`. Java started a raw `new Thread(...)`
+  per notification.
+- **`AdminAction`** — swap a user in a game, delete games, bulk mail.
+- **Real time.** The client refetches after every action; there is no websocket.
+  `todo.txt` in old-civ-rest wanted one for chat.
 
-### Sikkerhet
+### Security
 
-Autentiseringen er på utviklingsnivå: scrypt-hashede passord og HMAC-signerte
-bearer-tokens som ikke kan trekkes tilbake før de utløper. Java brukte usaltet
-SHA-1 og HTTP Basic, så det er en forbedring, men det er ikke gjennomgått for
-produksjon.
+Authentication is at development level: scrypt-hashed passwords and HMAC-signed
+bearer tokens that cannot be revoked before they expire. Java used unsalted SHA-1
+and HTTP Basic, so this is an improvement, but it has not been reviewed for
+production.
 
-### Krever en beslutning
+### Needs a decision
 
-`revealItem` for en sivilisasjon trekker startenheter gjennom
-`DrawAction.draw`, som krever at det er spillerens tur. Konsekvensen i Java er at
-bare spilleren som har turen kan avsløre sin sivilisasjon — de tre andre får 403
-under oppsettet. Det ser ut som en feil, men er portert som-er fordi Java er
-fasit og ingen gammel test dekker det. Dokumentert i
-`test/player-action.test.ts`, testen «en spiller som ikke har turen kan ikke
-avsløre sin sivilisasjon».
+`revealItem` for a civilization draws starting units through `DrawAction.draw`,
+which requires that it is the turn of that player. The consequence in Java is
+that only the player whose turn it is can reveal a civilization — the other
+three get 403 during setup. It looks like a bug, but is ported as is because
+Java is the reference and no old test covers it. Documented in
+`test/player-action.test.ts`, the test "a player whose turn it is not cannot
+reveal a civilization".
 
-Referansemateriale — regelbøker, kart i ODP/PPTX, kortgrafikk og en kopi av
-Mongo-databasen — ligger i `Civilization/`, som er utenfor git.
+Reference material — rulebooks, maps in ODP/PPTX, card artwork and a copy of the
+Mongo database — lives in `Civilization/`, which is outside git.

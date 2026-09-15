@@ -1,13 +1,16 @@
 /**
- * Typet klient mot @civ/server.
+ * Typed client for @civ/server.
  *
- * Typene for spilltilstand kommer rett fra motoren, så klienten og serveren
- * ikke kan komme i utakt. Kun DTO-ene serveren definerer selv er gjentatt her.
+ * The game-state types come straight from the engine, so the client and the
+ * server cannot drift apart. Only the DTOs the server defines itself are
+ * repeated here.
  */
 
 import type {
   Board,
+  BoardArea,
   BoardAsset,
+  BoardHistoryEntry,
   BoardPiece,
   Item,
   PlayerTurn,
@@ -19,7 +22,9 @@ import type {
 
 export type {
   Board,
+  BoardArea,
   BoardAsset,
+  BoardHistoryEntry,
   BoardPiece,
   Item,
   PlayerTurn,
@@ -77,7 +82,7 @@ export interface RevealedTechsDto {
   readonly techs: readonly { readonly name: string; readonly level: number }[]
 }
 
-/** Feil fra serveren, med motorens feilkode intakt. */
+/** An error from the server, with the engine's error code intact. */
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
@@ -105,7 +110,7 @@ export function storeToken(token: string | null): void {
     if (token === null) localStorage.removeItem(TOKEN_KEY)
     else localStorage.setItem(TOKEN_KEY, token)
   } catch {
-    // Privat vindu eller blokkerte cookies — innlogging varer da bare økten
+    // A private window or blocked storage: the sign-in then lasts the session
   }
 }
 
@@ -134,7 +139,7 @@ async function request<T>(
     throw new ApiError(
       response.status,
       error?.error ?? 'UNKNOWN',
-      error?.message ?? `${method} ${path} feilet med ${response.status}`,
+      error?.message ?? `${method} ${path} failed with ${response.status}`,
     )
   }
 
@@ -249,6 +254,7 @@ export const api = {
   removePiece: (gameId: string, pieceId: string) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/remove`),
   clearBoard: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/board/clear`),
+  undoBoard: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/board/undo`),
 
   chat: (gameId: string) => get<ChatMessageDto[]>(`/api/games/${gameId}/chat`),
   sendChat: (gameId: string, message: string) =>
