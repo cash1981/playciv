@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { COLUMN_LABELS, squareOf } from '@civ/engine'
+import { COLUMN_LABELS, ROTATIONS, squareOf } from '@civ/engine'
 import type { Board, BoardAsset, BoardPiece } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
@@ -35,6 +35,8 @@ const CATEGORY_LABEL: Readonly<Record<BoardAsset['category'], string>> = {
   marker: 'Markører',
   city: 'Byer',
   building: 'Bygninger',
+  civtile: 'Startbrett',
+  tile: 'Map-tiles',
 }
 
 const CATEGORY_ORDER: readonly BoardAsset['category'][] = [
@@ -43,6 +45,8 @@ const CATEGORY_ORDER: readonly BoardAsset['category'][] = [
   'marker',
   'city',
   'building',
+  'civtile',
+  'tile',
 ]
 
 /** Filnavn kan inneholde mellomrom, f.eks. "Building Program.png". */
@@ -246,6 +250,11 @@ export function BoardView({ gameId, board, busy, run }: Props): React.JSX.Elemen
                       top: y * zoom,
                       width: piece.width * zoom,
                       height: piece.height * zoom,
+                      // Brikkene er kvadratiske eller nær det, så rotasjon om
+                      // midtpunktet holder seg innenfor samme flate
+                      ...(piece.rotation !== 0
+                        ? { transform: `rotate(${piece.rotation}deg)` }
+                        : {}),
                     }}
                     onPointerDown={(event) => {
                       event.stopPropagation()
@@ -305,8 +314,32 @@ export function BoardView({ gameId, board, busy, run }: Props): React.JSX.Elemen
             <>
               <p style={{ margin: '0 0 0.5rem' }}>
                 <strong>{selected.label}</strong>{' '}
-                <span className="muted">{squareOf(board, selected) ?? 'utenfor brettet'}</span>
+                <span className="muted">
+                  {squareOf(board, selected) ?? 'utenfor brettet'}
+                  {selected.rotation !== 0 && ` · ${selected.rotation}°`}
+                </span>
               </p>
+              <div className="row" style={{ marginBottom: '0.4rem' }}>
+                <button
+                  className="small"
+                  disabled={busy}
+                  title="Snu et kvart trinn med klokka"
+                  onClick={() => void run(() => api.rotatePiece(gameId, selected.id))}
+                >
+                  Snu ↻
+                </button>
+                {/* Map-tiles har en pil som viser hvilken vei brettet skal ligge */}
+                {ROTATIONS.map((rotation) => (
+                  <button
+                    key={rotation}
+                    className="small"
+                    disabled={busy || selected.rotation === rotation}
+                    onClick={() => void run(() => api.rotatePiece(gameId, selected.id, rotation))}
+                  >
+                    {rotation}°
+                  </button>
+                ))}
+              </div>
               <div className="row">
                 <button
                   className="small"

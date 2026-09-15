@@ -19,14 +19,26 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
-# Kildemappe -> kategori i paletten
+# Kildemappe -> kategori i paletten. Tiles deles i to fordi de brukes ulikt:
+# civtile er sivilisasjonenes startbrett, tile er de nummererte utforskningene.
 $categories = [ordered] @{
     'figures'   = 'figure'
     'resources' = 'resource'
     'markers'   = 'marker'
     'cities'    = 'city'
     'buildings' = 'building'
+    'tiles'     = 'tile'
 }
+
+# Et map-tile dekker 4 x 4 ruter a 94 piksler. Kildebildene er 375 x 375, altså
+# én piksel for smale; de skaleres til 376 så de flukter med rutenettet.
+$TILE_PIXELS = 376
+
+# Sivilisasjonenes startbrett. Resten av filene i tiles/ er utforskningsbrett.
+$civTiles = @(
+    'america', 'arabia', 'Aztec', 'china', 'egypt', 'England', 'France', 'germany',
+    'greece', 'india', 'japan', 'mongolia', 'rome', 'russia', 'spain', 'Zulu'
+)
 
 $colours = @('blue', 'green', 'purple', 'red', 'yellow', 'white')
 
@@ -68,14 +80,25 @@ foreach ($folder in $categories.Keys) {
 
         $image = [System.Drawing.Image]::FromFile($file.FullName)
         try {
+            $thisCategory = $category
+            $width = $image.Width
+            $height = $image.Height
+
+            if ($category -eq 'tile') {
+                if ($civTiles -contains $file.BaseName) { $thisCategory = 'civtile' }
+                # Alle map-tiles dekker nøyaktig 4 x 4 ruter uansett kildeoppløsning
+                $width = $TILE_PIXELS
+                $height = $TILE_PIXELS
+            }
+
             $assets += [ordered] @{
                 id       = "$folder/$($file.BaseName)"
-                category = $category
+                category = $thisCategory
                 # Stien klienten laster fra, relativt til /board/
                 path     = "$folder/$($file.Name)"
-                label    = Get-Label $category $file.BaseName
-                width    = $image.Width
-                height   = $image.Height
+                label    = Get-Label $thisCategory $file.BaseName
+                width    = $width
+                height   = $height
             }
         } finally {
             $image.Dispose()

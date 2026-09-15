@@ -237,6 +237,11 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/board/pieces`, { assetId, x, y }),
   movePiece: (gameId: string, pieceId: string, x: number, y: number) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/move`, { x, y }),
+  rotatePiece: (gameId: string, pieceId: string, rotation?: number) =>
+    post<PlayerView>(
+      `/api/games/${gameId}/board/pieces/${pieceId}/rotate`,
+      rotation === undefined ? {} : { rotation },
+    ),
   pieceToFront: (gameId: string, pieceId: string) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/front`),
   pieceToBack: (gameId: string, pieceId: string) =>

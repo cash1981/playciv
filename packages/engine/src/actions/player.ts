@@ -6,6 +6,7 @@
  * spillregler, og hører i server-pakken.
  */
 
+import { civTileAssetId, startingCorner } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { CivItem, Item, SocialPolicyItem, TechItem } from '../item.js'
 import { isTradable, isUnit, itemName, revealAll } from '../item.js'
@@ -22,6 +23,7 @@ import type { SheetName } from '../sheet-name.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, hasUserAccess, withPlayer } from '../state.js'
 
+import { placeUnchecked } from './board.js'
 import { draw } from './draw.js'
 
 type ActionResult = Result<GameState, EngineError>
@@ -259,6 +261,7 @@ function revealCivilization(
   }
 
   next = discardTheOtherCivs(next, player.playerId, civ)
+  next = placeStartingTile(next, player, civ)
 
   if (shouldDrawWonders(next)) {
     const drawn = drawStartingWonders(next, player.playerId)
@@ -267,6 +270,38 @@ function revealCivilization(
   }
 
   return ok(next)
+}
+
+/**
+ * Legger sivilisasjonens startbrett i spillerens hjørne.
+ *
+ * Spiller 1 får øvre venstre luke (A1–D4), 2 øvre høyre, 3 nedre høyre og
+ * 4 nedre venstre, og brettet snus så pilen peker inn mot midten. Se
+ * `startingCorner` i board.ts for hvordan rotasjonen følger av det.
+ *
+ * Brettet kan flyttes og snus etterpå som alle andre brikker.
+ */
+function placeStartingTile(
+  state: GameState,
+  player: Playerhand,
+  civ: CivItem,
+): GameState {
+  const assetId = civTileAssetId(civ.name)
+  if (assetId === undefined) return state
+
+  // Ikke legg ut det samme startbrettet to ganger
+  if (state.board.pieces.some((piece) => piece.assetId === assetId)) return state
+
+  const corner = startingCorner(state.board, player.playernumber)
+  return (
+    placeUnchecked(state, {
+      playerId: player.playerId,
+      assetId,
+      x: corner.x,
+      y: corner.y,
+      rotation: corner.rotation,
+    }) ?? state
+  )
 }
 
 /**

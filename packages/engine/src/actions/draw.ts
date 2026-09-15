@@ -6,6 +6,7 @@
  * tilstand, og feil er verdier istedenfor `WebApplicationException`.
  */
 
+import { firstFreeBlock, tileAssetIdForNumber } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { Item } from '../item.js'
 import { isTradable, isUnit, revealAll, revealPublic } from '../item.js'
@@ -19,6 +20,8 @@ import {
 import { shuffle } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
+
+import { placeUnchecked } from './board.js'
 import type { SheetName } from '../sheet-name.js'
 import { SHEET_LABEL, SHUFFLABLE_ITEMS, TECHS } from '../sheet-name.js'
 import type { GameState, Playerhand } from '../state.js'
@@ -102,7 +105,25 @@ function takeFromDeck(state: GameState, player: Playerhand, index: number): Game
     items: [...player.items, drawn],
   })
 
-  return appendItemLog(withHand, 'ITEM', player.username, player.playerId, drawn)
+  const logged = appendItemLog(withHand, 'ITEM', player.username, player.playerId, drawn)
+  return drawn.kind === 'tile' ? placeExploredTile(logged, player.playerId, drawn) : logged
+}
+
+/**
+ * Et trukket utforskningsbrett legger seg på brettet med en gang.
+ *
+ * Systemet vet ikke hvilket område spilleren utforsker, så brettet havner i
+ * første ledige 4 × 4-luke og dras og snus på plass derfra. Det er en
+ * bekvemmelighet, ikke en spillregel.
+ */
+function placeExploredTile(state: GameState, playerId: string, tile: Item): GameState {
+  if (tile.kind !== 'tile') return state
+  // Tile-kortene heter "1" til "27"; bildene heter tile01, tile15a, Tile26b …
+  const assetId = tileAssetIdForNumber(Number(tile.name))
+  if (assetId === undefined) return state
+
+  const [x, y] = firstFreeBlock(state.board)
+  return placeUnchecked(state, { playerId, assetId, x, y }) ?? state
 }
 
 /**

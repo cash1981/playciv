@@ -62,14 +62,16 @@ describe('geometri', () => {
 })
 
 describe('manifestet', () => {
-  it('har brikker i alle fem kategorier', () => {
+  it('har brikker i alle sju kategorier', () => {
     const categories = new Set(BOARD_ASSETS.map((asset) => asset.category))
     expect([...categories].sort()).toEqual([
       'building',
       'city',
+      'civtile',
       'figure',
       'marker',
       'resource',
+      'tile',
     ])
   })
 

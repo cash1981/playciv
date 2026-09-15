@@ -80,6 +80,7 @@ kilde.
 | `src/actions/undo.ts` | `action/UndoAction.java` |
 | `src/actions/turn.ts` | `action/TurnAction.java` |
 | `src/actions/game.ts` | spilldelen av `action/GameAction.java` |
+| `src/board.ts` + `src/actions/board.ts` | nytt — erstatter Google-lysbildet bak `mapLink` |
 | `src/random.ts` | erstatter `Collections.shuffle` + `RandomUtils` |
 
 ### `packages/server`
@@ -94,6 +95,7 @@ Dropwizard.
 | `src/routes/play.ts` | `DrawResource` + `PlayerResource` — trekk, kamp, tech, avsløring, handel, tur, undo |
 | `src/errors.ts` | `EngineError` → HTTP-status |
 | `src/auth.ts` | scrypt-passord og HMAC-signerte bearer-tokens |
+| `src/routes/board.ts` | brettet — legg ut, flytt, snu, forrest, bakerst, fjern |
 | `src/store/` | lagringsgrensesnittet og JSON-fil-implementasjonen |
 
 Serveren har ingen spillregler. Hver rute henter tilstanden, kaller én ren
@@ -129,7 +131,7 @@ Brettet viser likevel hvilken rute en brikke står i, regnet ut fra midtpunktet.
 
 Alle spillere ser og kan flytte alle brikker, som ved et fysisk bord.
 
-Paletten har fem kategorier, generert fra bildene på disk:
+Paletten har sju kategorier, generert fra bildene på disk:
 
 | Kategori | Antall | Fra |
 | --- | --- | --- |
@@ -138,6 +140,29 @@ Paletten har fem kategorier, generert fra bildene på disk:
 | Markører | 12 | mynt, kultur, karavane, fortifikasjon, wound, startspiller |
 | Byer | 30 | capital/city/metropolis, med og uten mur, per farge |
 | Bygninger | 15 | market, temple, library, … |
+| Startbrett | 16 | ett per sivilisasjon |
+| Map-tiles | 28 | utforskningsbrettene 1–27, pluss baksiden |
+
+### Map-tiles
+
+Et map-tile dekker 4 × 4 ruter. Kildebildene er 375 × 375, altså én piksel for
+smale, og skaleres til 376 så de flukter med rutenettet.
+
+Tiles legger seg **nederst** i stabelen, ellers ville de dekket brikkene som står
+på dem. De kan snus i fire retninger — pilen på brettet viser hvilken vei det
+skal ligge.
+
+To ting skjer av seg selv:
+
+**Sivilisasjonens startbrett** legges ut når spilleren avslører sitt civ-kort.
+Spiller 1 får øvre venstre luke (A1–D4), 2 øvre høyre, 3 nedre høyre og 4 nedre
+venstre, og brettet snus så pilen peker inn mot midten. I bildefilene peker pilen
+ned — kontrollert mot `japan.jpg` og `germany.png` — så rotasjonen blir 0°, 90°,
+180° og 270° rundt kanten.
+
+**Et trukket utforskningsbrett** legger seg i første ledige 4 × 4-luke. Systemet
+vet ikke hvilket område spilleren utforsker, så det er en bekvemmelighet og ikke
+en spillregel; brettet dras og snus på plass derfra.
 
 ```bash
 pnpm --filter @civ/engine board-assets
@@ -276,9 +301,6 @@ siden autorisasjonen lå i ressurslaget; server-pakken må håndheve det.
 ## Utsatt
 
 - **Ekte MongoDB.** Erstattet av JSON-fil bak `Repository`, se over.
-- **Map-tiles på brettet.** Brettflaten og brikkene er på plass, men de 44
-  tile-bildene (21 MB) er ikke kopiert inn, og et trukket tile havner ikke på
-  brettet ennå. Se «Krever en beslutning» under.
 - **Kortgrafikk.** Hånden vises som tekst. `itemImage()` i motoren gir allerede
   filnavnene under `Civilization/Moderator/`.
 - **Spillerpanelene** rundt brettet i malen — farget felt per spiller med byer,
@@ -302,14 +324,6 @@ SHA-1 og HTTP Basic, så det er en forbedring, men det er ikke gjennomgått for
 produksjon.
 
 ### Krever en beslutning
-
-**Hvor skal et trukket map-tile legge seg?** Ønsket er at tiles dukker opp
-automatisk på brettet når de trekkes, men regelen for posisjon mangler. Java har
-ingenting å porte fra — den gamle løsningen lot en moderator plassere tiles for
-hånd i et Google-lysbilde. Aktuelle spørsmål: legges tiles i den første ledige
-av de seksten 4 × 4-lukene, eller i en bestemt rekkefølge? Og skal
-sivilisasjonens starttile havne i et hjørne gitt av `playernumber` — 1 øverst til
-venstre, 2 øverst til høyre, og så videre, slik eksempelbildet viser?
 
 `revealItem` for en sivilisasjon trekker startenheter gjennom
 `DrawAction.draw`, som krever at det er spillerens tur. Konsekvensen i Java er at

@@ -12,6 +12,7 @@ import {
   movePiece,
   placePiece,
   removePiece,
+  rotatePiece,
   sendToBack,
 } from '@civ/engine'
 import type { FastifyInstance } from 'fastify'
@@ -86,6 +87,24 @@ export function registerBoardRoutes(app: FastifyInstance, context: AppContext): 
     const { gameId, pieceId } = request.params as Params & { pieceId: string }
     return applyToGame(context, request, reply, gameId, (state) =>
       sendToBack(state, { playerId: currentPlayer(request).id, pieceId }),
+    )
+  })
+
+  /** Uten `rotation` i kroppen snus brikken et kvart trinn med klokka. */
+  app.post('/api/games/:gameId/board/pieces/:pieceId/rotate', auth, async (request, reply) => {
+    const { gameId, pieceId } = request.params as Params & { pieceId: string }
+    const requested = optionalNumber(asRecord(request.body), 'rotation')
+
+    if (requested !== undefined && ![0, 90, 180, 270].includes(requested)) {
+      return sendError(reply, 400, 'BAD_REQUEST', 'rotation must be 0, 90, 180 or 270')
+    }
+
+    return applyToGame(context, request, reply, gameId, (state) =>
+      rotatePiece(state, {
+        playerId: currentPlayer(request).id,
+        pieceId,
+        ...(requested !== undefined ? { rotation: requested as 0 | 90 | 180 | 270 } : {}),
+      }),
     )
   })
 
