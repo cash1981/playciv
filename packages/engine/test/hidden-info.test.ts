@@ -9,8 +9,10 @@
 import { describe, expect, it } from 'vitest'
 
 import { draw } from '../src/actions/draw.js'
-import { createLogTexts, javaStringHashCode, uniqueItemNumber } from '../src/log.js'
+import { chooseTech, revealItem, revealedTechsForAllPlayers } from '../src/actions/player.js'
+import type { CivItem } from '../src/item.js'
 import { itemName, revealAll } from '../src/item.js'
+import { createLogTexts, javaStringHashCode, uniqueItemNumber } from '../src/log.js'
 import { unwrap } from '../src/result.js'
 import { findPlayer, toPlayerView, toPublicLog } from '../src/state.js'
 
@@ -93,6 +95,50 @@ describe('toPlayerView', () => {
     const view = toPlayerView(firstCivGame(), 'onlooker')
     expect(view.you).toBeNull()
     expect(view.opponents).toHaveLength(4)
+  })
+
+  it('a hidden technology stays out of another player\'s public techs view', () => {
+    // CASH1981 reveals a civilization first, so they show up in
+    // revealedTechsForAllPlayers with their (public) starting technology —
+    // otherwise the public-projection assertions below would pass vacuously
+    // against an empty list, since revealedTechsForAllPlayers only returns
+    // players who have chosen a civilization.
+    let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CIV' }))
+    const civ = findPlayer(state, CASH1981)?.items.find(
+      (item): item is CivItem => item.kind === 'civ',
+    )
+    if (civ === undefined) throw new Error('no civ drawn')
+    state = unwrap(revealItem(state, { playerId: CASH1981, sheetName: 'CIV', itemNumber: civ.itemNumber }))
+
+    // A level-1 tech that is not the starting technology, so choosing it
+    // stays hidden rather than being published by the civ reveal.
+    const tech = state.techs.find((candidate) => candidate.name !== civ.startingTech.name)
+    if (tech === undefined) throw new Error('no tech')
+
+    const chosen = unwrap(chooseTech(state, { playerId: CASH1981, techName: tech.name }))
+
+    // The owner sees it, still hidden, in their own hand.
+    const owner = toPlayerView(chosen, CASH1981)
+    expect(owner.you?.techsChosen.some((item) => item.name === tech.name)).toBe(true)
+
+    // Another player sees the opponent as a count only, and the general
+    // catalogue of undrawn/uncommitted techs (in state.techs, sent to every
+    // viewer so they can choose one) is not what is under test here — the
+    // opponent projection and the public "revealed by everyone" list are.
+    const other = toPlayerView(chosen, ITCHI)
+    const cash = other.opponents.find((opponent) => opponent.playerId === CASH1981)
+    expect(cash).not.toHaveProperty('techsChosen')
+    expect(JSON.stringify(cash)).not.toContain(tech.name)
+
+    // The public projection: CASH1981 is present (civ revealed), carries the
+    // starting technology in the clear, and does not carry the hidden one.
+    // This is the assertion the reviewer found was vacuous before the civ
+    // reveal was added — it now fails if hidden filtering ever regresses.
+    const publicTechs = revealedTechsForAllPlayers(chosen)
+    const cashPublic = publicTechs.find((entry) => entry.civilization === civ.name)
+    expect(cashPublic).toBeDefined()
+    expect(cashPublic?.techs.map((entry) => entry.name)).toContain(civ.startingTech.name)
+    expect(cashPublic?.techs.map((entry) => entry.name)).not.toContain(tech.name)
   })
 })
 

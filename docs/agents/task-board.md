@@ -14,6 +14,10 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 _None. The board is clear._
 
+Awaiting merge: `tech-tree` (approved through the review gate, verified in the
+browser, PR to open for `feat/tech-tree`) and `mongodb-storage` (approved and
+verified, PR open for `feat/mongodb-storage`).
+
 ---
 
 ## Format
