@@ -2,8 +2,8 @@
 
 - **Slug:** `tech-tree`
 - **Branch:** `feat/tech-tree`
-- **Owner:** unclaimed
-- **Status:** ready
+- **Owner:** coder, orchestrated by Opus
+- **Status:** in progress — confirmed pure client work (see Approach)
 
 ## Goal
 
@@ -61,10 +61,12 @@ and, on the public/private split:
 
 ## Approach
 
-Mostly client work. Check first whether `revealedTechsForAllPlayers` includes
-the starting technology — `revealCivilization` pushes it into `techsChosen`
-with `hidden: false`, so it should already be there. **Verify before changing
-the engine**; if it is there, this is a pure client change.
+**Pure client work — verified.** The orchestrator confirmed at runtime that
+`revealCivilization` pushes the starting tech into `techsChosen` with
+`hidden: false` (player.ts:250-254), so `revealedTechsForAllPlayers` already
+carries it, while a separately chosen hidden tech stays out of the public
+projection but appears in the owner's `you.techsChosen`. No engine change is
+needed; do not touch `packages/engine`.
 
 New `packages/web/src/views/TechTree.tsx` holding the pyramid, used twice in
 `TechPanel.tsx`: once for your own techs, once per player for the public view.
@@ -74,8 +76,6 @@ New `packages/web/src/views/TechTree.tsx` holding the pyramid, used twice in
 - `packages/web/src/views/TechPanel.tsx`
 - `packages/web/src/views/TechTree.tsx` (new)
 - `packages/web/src/styles.css`
-- `packages/engine/src/actions/player.ts` — only if the starting tech turns out
-  to be missing from the public projection
 
 ## Acceptance criteria
 

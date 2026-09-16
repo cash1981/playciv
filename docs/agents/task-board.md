@@ -12,7 +12,18 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_None. The board is clear._
+### tech-tree
+
+- **Owner:** coder, orchestrated by Opus
+- **Branch:** `feat/tech-tree` (off `main`)
+- **Brief:** `docs/agents/tasks/tech-tree.md`
+- **Status:** in progress — pure client work, no engine change (verified)
+- **Claimed paths:**
+  - `packages/web/src/views/TechPanel.tsx`
+  - `packages/web/src/views/TechTree.tsx` (new)
+  - `packages/web/src/styles.css`
+- **Notes:** client-only. Does not touch `api.ts`, the engine, or the server, so
+  it cannot collide with `public-landing` / `anonymous-readonly` if those start.
 
 ---
 
