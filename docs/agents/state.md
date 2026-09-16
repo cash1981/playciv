@@ -44,13 +44,20 @@ _Last updated: 2026-09-15_
 
 _Nothing. See the queue on the task board._
 
+## Awaiting merge (feature branches with open PRs)
+
+- **`mongodb-storage`** — `feat/mongodb-storage`. MongoDB behind the existing
+  `Repository`, reusing the `playciv` database; SHA-1→scrypt on login; public
+  `GET /api/highscore`. Verified against the live database.
+- **`tech-tree`** — `feat/tech-tree`. The AngularJS pyramid, private and public,
+  built on `revealedTechsForAllPlayers`. Verified in the browser; the
+  hidden-info test is proven load-bearing.
+
 ## Next, in order
 
-1. **`tech-tree`** — the pyramid view from the AngularJS app, private and
-   public versions.
-2. **`public-landing`** — a landing page with active games, highscore and an
-   open chat.
-3. **`anonymous-readonly`** — browse everything public without an account, and
+1. **`public-landing`** — a landing page with active games, highscore and an
+   open chat. Builds on `GET /api/highscore` from `mongodb-storage`.
+2. **`anonymous-readonly`** — browse everything public without an account, and
    the security pass that goes with it.
 
 ## Known problems and loose ends
