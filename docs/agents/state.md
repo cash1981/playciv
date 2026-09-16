@@ -58,6 +58,8 @@ _Last updated: 2026-09-16_
   refresh, and synchronizes browser back navigation.
 - **Issue #16.** Players can remove their own social policies; the action is
   logged and exposed through the UI/API.
+- **Issue #17.** Two-player games use an 8 × 8 board labelled A–H and 1–8;
+  three- to five-player games retain the 16 × 16 board.
 
 ## In progress
 
