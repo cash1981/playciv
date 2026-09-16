@@ -21,6 +21,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Claimed paths:**
   - `packages/engine/src/create-game.ts`
   - `packages/engine/test/game-action.test.ts`
+  - `packages/server/test/board-api.test.ts`
+  - `packages/server/test/api.test.ts`
 - **Notes:** Fixes GitHub issue #17.
 
 ### typecheck-build-order
