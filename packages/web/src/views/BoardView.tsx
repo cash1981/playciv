@@ -270,17 +270,6 @@ export function BoardView({
         >
           Undo
         </button>
-        <button
-          className="small danger"
-          disabled={busy || replaying || pieces.length === 0}
-          onClick={() => {
-            if (window.confirm('Remove every piece from the board?')) {
-              void run(() => api.clearBoard(gameId))
-            }
-          }}
-        >
-          Clear board
-        </button>
       </div>
 
       <ReplayBar
