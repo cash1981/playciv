@@ -8,7 +8,7 @@
 
 import type { FastifyInstance } from 'fastify'
 
-import { hashPassword, newId, verifyPassword } from '../auth.js'
+import { hashPassword, needsUpgrade, newId, verifyPassword } from '../auth.js'
 import type { AppContext } from '../context.js'
 import { asRecord, authenticateWith, currentPlayer, requireString } from '../context.js'
 import { sendError } from '../errors.js'
@@ -80,6 +80,17 @@ export function registerAuthRoutes(app: FastifyInstance, context: AppContext): v
 
     if (player === undefined || !valid) {
       return sendError(reply, 401, 'UNAUTHORIZED', 'Wrong username or password')
+    }
+
+    // Old `playciv` accounts still carry an unsalted SHA-1 hash. Upgrade it to
+    // scrypt now that we have the plaintext password, without ever failing the
+    // login on a write error.
+    if (needsUpgrade(player.passwordHash)) {
+      try {
+        await context.repo.updatePlayerPassword(player.id, await hashPassword(password))
+      } catch (error) {
+        request.log.warn({ error }, 'Failed to upgrade legacy password hash')
+      }
     }
 
     return reply.send({

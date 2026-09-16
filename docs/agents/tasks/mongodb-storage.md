@@ -144,14 +144,61 @@ and connects in an async factory `MongoRepository.connect(url, dbName)`).
 
 ### 4. Highscore in the engine
 
-- New `packages/engine/src/highscore.ts`:
-  - `interface FinishedGameSummary { numOfPlayers: number; winner: string; winnerCiv: string | null }`
-  - `highscore(games: readonly FinishedGameSummary[]): HighscoreResult` returning
-    the player and civ breakdowns described under Reference. Pure.
-  - Export from `packages/engine/src/index.ts`.
-- Add `FinishedGameSummary` to `Repository` and implement
-  `finishedGamesForHighscore` in **both** repos. JSON: derive from `allGames()`
-  filtered to finished-with-winner, reading the winner's civ from the players.
+Java (`GameAction.getPlayerHighScore` / `getCivHighscore`) needs the **whole
+roster** of every finished game, not just the winner — `attempts` counts how
+many finished games each player (or civ) took part in, win or lose. So the
+summary carries the players:
+
+```ts
+interface FinishedGame {
+  readonly numOfPlayers: number
+  readonly winner: string                                    // username
+  readonly players: readonly {
+    readonly username: string
+    readonly civName: string | null
+  }[]
+}
+```
+
+`highscore(games: readonly FinishedGame[], allUsernames?: readonly string[]): HighscoreResult`,
+pure, matching Java behaviour by behaviour:
+
+- **`totalNumberOfGames`**: `games.length` for the player tables; for the civ
+  tables, the count **after** the civ filter below. Java keeps these separate
+  (two DTOs), so `HighscoreResult` has a `players` table set and a `civs` table
+  set, each with its own `totalNumberOfGames`.
+- **`totalNumberOfPlayers`**: `allUsernames?.length` when supplied (Java's
+  registered-account count), else the distinct participants in `games`.
+- **Player total winners** (`getAllWinners`): `attempts` per user = participations
+  across all `games`; winners get their win count; and when `allUsernames` is
+  supplied, every registered user **not** among the winners is included with 0
+  wins and their participation count. Sorted `totalWins` desc, then username
+  desc.
+- **Player per-count N** (`getWinners`): every distinct participant of an
+  N-player game, with wins and attempts counted within N-player games — losers
+  included. Same sort.
+- **Civ tables** (`getCivHighscore`): first keep only games where **every**
+  player has a civ (`players.every(p => p.civName !== null)`). Then the same
+  shape as the player tables, keyed on the winner's civ name.
+- **`percentWin`**: `Math.round(wins / attempts * 100 * 100) / 100 + " %"`, and
+  the literal `"0 %"` when wins or attempts is 0. Note Java prints `"100.0 %"`,
+  with the `.0`.
+- Ties break on **descending** username (Java sorts ascending then reverses, so
+  `Comparator.reverseOrder()` flips both keys). Use `compareJavaStrings` from
+  `packages/engine/src/turn.ts`, reversed.
+
+Export the function and its types from `packages/engine/src/index.ts`.
+
+Add `finishedGamesForHighscore(): Promise<readonly FinishedGame[]>` to
+`Repository` and implement it in **both** repos, returning the full roster:
+
+- JSON: `allGames()` filtered to `!active && winner`, mapping each player to
+  `{ username, civName: civilization?.name ?? null }`.
+- Mongo: the same over **both** `pbf` (old) and `game_state` (new). Old `pbf`
+  players are at `players[].username` and `players[].civilization?.name`.
+
+The `GET /api/highscore` route passes the registry:
+`highscore(await repo.finishedGamesForHighscore(), (await repo.allPlayers()).map(p => p.username))`.
 
 ### 5. Config (`packages/server/src/index.ts`)
 
@@ -199,10 +246,15 @@ and connects in an async factory `MongoRepository.connect(url, dbName)`).
 - [ ] Login with a legacy SHA-1 user rewrites the stored hash to scrypt, and the
       next login still succeeds. (Testable against `JsonFileRepository` by
       seeding a player whose `passwordHash` is a raw SHA-1 hex string.)
-- [ ] `highscore()` matches Java: only finished games with a winner; `percentWin`
-      formatted identically including `"0 %"`; ties broken by UTF-16 username
-      order; per-player-count and per-civ breakdowns present. Tested pure in
-      `highscore.test.ts` with hand-built summaries.
+- [ ] `highscore()` matches Java: `attempts` counts participations in finished
+      games (so a player who lost every game shows a real attempt count and a
+      `percentWin` below 100); non-winners from `allUsernames` appear with 0
+      wins; civ tables include only games where every player has a civ;
+      `percentWin` formatted identically including `"0 %"` and `"100.0 %"`; ties
+      broken by descending username; per-player-count and per-civ breakdowns
+      present with their own game totals. Tested pure in `highscore.test.ts`
+      with hand-built rosters, including a loser and a never-won registered
+      user.
 - [ ] `MongoRepository` implements every `Repository` method. It never writes to
       `pbf`. New games go to `game_state`.
 - [ ] `GET /api/highscore` needs no token and returns the computed result.

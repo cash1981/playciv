@@ -165,3 +165,73 @@ finding from the approver and teaches the cheap model nothing.
 **Consequences.** Reviewers get `Read`, `Grep` and `Glob` only — not even
 `Bash`, since a shell can write. The orchestrator runs the tests and hands the
 reviewer the real output along with a diff written outside the repo.
+
+---
+
+## 2026-09-16 — MongoDB beside the JSON file, old games read-only
+
+**Decision.** The server can run against the restored `playciv` Mongo when
+`MONGO_URL` is set, otherwise the JSON file as before. A `MongoRepository`
+implements the existing `Repository` interface. It reuses the old `player` and
+`chat` collections, reads the old `pbf` games for highscore, and stores new
+games in a fresh `game_state` collection. The old `pbf` documents are never
+written to.
+
+**Why.** The human restored the real database — 553 players, 310 games, 87k
+chat — and wanted the app to reuse it: the player accounts, the chat history,
+and the finished games for highscore. Java's `PBF` shape is nothing like our
+`GameState` (no board, no seed, no publicTurns, a different item model), so
+migrating the 310 old games to playable form would mean inventing the missing
+fields — forbidden by rule 2, and risky for hidden information. Highscore needs
+only each finished game's roster and winner, which the old `pbf` does carry, so
+the history is reused without migration.
+
+**Consequences.** New games live in `game_state`; anyone querying game history
+must read both collections, as `finishedGamesForHighscore` does. Old games are
+not openable in the new UI. `MongoRepository` has no automated test — CI has no
+database — so it is verified manually against the live instance; the shared
+logic is covered by the JSON repo and the pure functions.
+
+---
+
+## 2026-09-16 — Old SHA-1 passwords verified, then upgraded to scrypt
+
+**Decision.** `verifyPassword` accepts both the old unsalted SHA-1 hashes (40
+lowercase hex, no colon) and the new scrypt hashes. On a successful login with
+a legacy hash, the stored value is rewritten to scrypt. The upgrade never
+blocks or fails the login.
+
+**Why.** All 553 restored accounts store `DigestUtils.sha1Hex(password)`. To let
+the human and everyone else log in with their existing passwords — rule: reuse
+the player collection — the old hash must verify. Upgrading on login moves each
+account to salted scrypt the first time it is used, without a mass reset.
+
+**Consequences.** The SHA-1 comparison is kept byte-for-byte identical to Java's
+case-sensitive `String.equals` (lowercase-only regex, no case folding), so no
+hash Java would reject is accepted here. Verified end-to-end against the live
+database: a legacy login returns a token and the stored hash becomes
+`salt:hash`.
+
+---
+
+## 2026-09-16 — Highscore matches Java, including its quirks
+
+**Decision.** `highscore(games, allUsernames?)` in the engine is a faithful port
+of `GameAction.getPlayerHighScore` / `getCivHighscore`. `attempts` counts
+participation in every finished game; non-winning registered players appear with
+0 wins; the civ tables count only games where every player has a civ; per-count
+player tables roster every participant while the civ tables roster only winning
+civs; `percentWin` is formatted as Java's `double + " %"` (with the trailing
+`.0`); ties break on descending username.
+
+**Why.** Rule 1 — Java is the reference. The first draft of the brief carried
+only the winner per finished game, which made `attempts` equal `totalWins` and
+every `percentWin` 100 %. The coder flagged the gap rather than inventing a fix;
+the summary was widened to the full roster. The player/civ roster asymmetry is a
+real Java quirk (`getWinners` flatMaps the roster, `getCivWinners` maps games),
+re-verified against the source and reproduced rather than smoothed over.
+
+**Consequences.** `Repository.finishedGamesForHighscore` returns the full roster
+of each finished game. `GET /api/highscore` is public and passes the registry so
+non-winners appear. Confirmed against the live database: Andrius 39/68 = 57.35 %,
+cash 36/58 = 62.07 %, civ tables filtered from 247 to 235 games.
