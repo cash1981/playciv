@@ -53,13 +53,35 @@ Start any session by reading `state.md` and `task-board.md`. They are short and
 kept current on purpose, so two agents can work at once without reading the
 same 20 files.
 
+## Check the git history first — always
+
+Several agents (Claude, Codex/Luna, Terra, and the human) commit to this
+repository, often on the same branch and often between your turns. **Before you
+plan or touch anything, read what has already happened.** The docs can lag; the
+git history cannot.
+
+```bash
+git fetch origin --prune
+git log --oneline -20 --all --decorate     # what landed, on which branch
+git status                                   # your branch, uncommitted work
+git log --oneline origin/main..HEAD          # commits on your branch not yet on main
+```
+
+Then reconcile: if `main` moved, rebase your branch onto it
+(`git rebase origin/main`) before you add to it, so you build on the latest and
+your eventual diff stays clean. If another agent has committed to the branch you
+are on, read those commits before writing — do not assume the code is where you
+last left it. A file changed on disk since you read it is a signal that someone
+else has been here.
+
 ## Before you touch anything
 
-1. **Claim your work** in `docs/agents/task-board.md`, listing the paths you
+1. **Read the git history** (above). Know what the other agents have done.
+2. **Claim your work** in `docs/agents/task-board.md`, listing the paths you
    will edit. If another live claim already lists a path you need, stop and
    negotiate rather than editing it.
-2. **Work on a feature branch**, never on `main`. See `workflow.md`.
-3. **Nothing merges without a review pass.** Code is written by the coder role
+3. **Work on a feature branch**, never on `main`. See `workflow.md`.
+4. **Nothing merges without a review pass.** Code is written by the coder role
    and checked by a reviewer role that has no write access. The orchestrator —
    the main agent, or the human — is the only one who can approve. See
    `roles.md`.

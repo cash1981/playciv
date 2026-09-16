@@ -4,11 +4,36 @@ How a change gets from an idea to `main`. The shape is the same whether the
 work is done by Claude, by Codex, or by hand.
 
 ```
-  claim ──▶ branch ──▶ code ──▶ verify ──▶ review gate ──▶ approve ──▶ PR ──▶ human merges
-    │                    ▲                      │
-    │                    └──── rejected ────────┘
-    └── released when the branch is merged or abandoned
+  read history ──▶ claim ──▶ branch ──▶ code ──▶ verify ──▶ review gate ──▶ approve ──▶ PR ──▶ human merges
+       │             │         ▲                      │
+       │             │         └──── rejected ────────┘
+       │             └── released when the branch is merged or abandoned
+       └── every turn, because other agents commit between yours
 ```
+
+## 0. Read the git history
+
+Do this every time, before anything else — several agents commit here, often
+between your turns, and the docs can lag behind the commits.
+
+```bash
+git fetch origin --prune
+git log --oneline -20 --all --decorate
+git status
+git log --oneline origin/main..HEAD
+```
+
+If `main` has moved, rebase your branch onto it before adding more, so your diff
+stays clean:
+
+```bash
+git rebase origin/main
+```
+
+If another agent has committed to the branch you are picking up, read those
+commits first — the code is not where you last left it. A file reported as
+changed on disk since you read it means someone else has edited it; re-read
+before you write.
 
 ## 1. Claim the work
 
