@@ -21,7 +21,11 @@ function screenFromPath(pathname: string): Screen {
 
   const encodedGameId = match[1]
   if (encodedGameId === undefined) return { name: 'lobby' }
-  return { name: 'game', gameId: decodeURIComponent(encodedGameId) }
+  try {
+    return { name: 'game', gameId: decodeURIComponent(encodedGameId) }
+  } catch {
+    return { name: 'lobby' }
+  }
 }
 
 export function App(): React.JSX.Element {
