@@ -52,6 +52,8 @@ _Last updated: 2026-09-16_
   is proven load-bearing.
 - **Issue #13.** Hidden technologies retain their yellow border without the
   cropped "only you" badge in the tech pyramid.
+- **Issue #14.** The destructive "Clear board" control is removed from the
+  board UI; undo, replay, and backend compatibility remain.
 
 ## In progress
 
