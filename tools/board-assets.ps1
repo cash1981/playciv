@@ -86,8 +86,11 @@ foreach ($folder in $categories.Keys) {
     $to = Join-Path $WebPublic $folder
     New-Item -ItemType Directory -Path $to -Force | Out-Null
 
-    # -Include needs a wildcard in the path, so filter on Extension instead
-    $files = Get-ChildItem $from -File | Where-Object { $_.Extension -in '.png', '.jpg' }
+    # -Include needs a wildcard in the path, so filter on Extension instead.
+    # Skip the "_100_100" resized duplicates (e.g. startplayer_100_100.png is a
+    # redundant copy of startplayer.png at a different size).
+    $files = Get-ChildItem $from -File |
+        Where-Object { $_.Extension -in '.png', '.jpg' -and $_.BaseName -notlike '*_100_100' }
     foreach ($file in $files) {
         Copy-Item $file.FullName (Join-Path $to $file.Name) -Force
 

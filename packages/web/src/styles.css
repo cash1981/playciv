@@ -227,6 +227,39 @@ ul.list > li:last-child {
   display: block;
 }
 
+.log-time {
+  display: inline-block;
+  min-width: 10.5rem;
+  margin-right: 0.45rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.collapsible-heading {
+  margin: 0;
+}
+
+.collapsible-toggle {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.collapsible-indicator {
+  color: var(--muted);
+  font-size: 1.25rem;
+}
+
+.collapsible-content[hidden] {
+  display: none;
+}
+
 .scroll {
   max-height: 18rem;
   overflow-y: auto;
@@ -262,6 +295,9 @@ ul.list > li:last-child {
 .board-scroll {
   flex: 1;
   min-width: 0;
+  /* Bounded so a zoomed board scrolls inside this box instead of growing the
+     page — without a height cap, `overflow: auto` never triggers vertically. */
+  max-height: 80vh;
   overflow: auto;
   background: #0f1115;
   border: 1px solid var(--line);
@@ -562,12 +598,20 @@ ul.list > li:last-child {
   flex-direction: column;
   gap: 0.3rem;
   margin: 0.5rem 0 0.8rem;
+  max-width: 100%;
+  overflow-x: auto;
+  /* flex-start, not center: centring the column clips the left edge of any
+     row wider than the column, and there is no way to scroll back to it. */
+  align-items: flex-start;
 }
 
 .tech-pyramid-row {
   display: flex;
   justify-content: center;
   gap: 0.3rem;
+  /* Auto margins centre a row that fits inside the column and collapse to 0
+     when the row overflows, so the left edge stays reachable by scrolling. */
+  margin: 0 auto;
 }
 
 .tech-slot {
@@ -582,6 +626,7 @@ ul.list > li:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 0 0 7rem;
 }
 
 .tech-slot.researched {

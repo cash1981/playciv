@@ -57,6 +57,8 @@ export interface LogEntryDto {
   readonly username: string
   readonly logType: string | null
   readonly message: string
+  /** Present when the server has persisted a timestamp for this log entry. */
+  readonly createdAt?: string | null
   readonly hasUndo: boolean
   readonly canUndo?: boolean
 }

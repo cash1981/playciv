@@ -5,11 +5,17 @@
  * cache in front of Mongo. Here passwords are salted scrypt hashes, and an
  * HMAC-signed bearer token stands in for Basic on every request.
  *
+ * The restored `playciv` database still has 553 accounts with the old SHA-1
+ * hash. `verifyPassword` accepts both shapes so those accounts keep working;
+ * `needsUpgrade` tells the login route when to rewrite one to scrypt.
+ * Java: `PlayerAction.java:601` (`DigestUtils.sha1Hex(decodedPassword)`) and
+ * `CivAuthenticator.java:51` (`player.getPassword().equals(sha1Hex(credentials))`).
+ *
  * This is development grade: the token cannot be revoked, and the secret falls
  * back to a random value per start when it is not set.
  */
 
-import { createHmac, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 
 const scryptAsync = promisify(scrypt) as (
@@ -20,13 +26,32 @@ const scryptAsync = promisify(scrypt) as (
 
 const KEY_LENGTH = 64
 
+/**
+ * A raw `sha1Hex` value: 40 hex characters, no `:` separator. Lowercase only
+ * — `DigestUtils.sha1Hex` never emits uppercase, and Java's `String.equals`
+ * in `CivAuthenticator` is case-sensitive, so this matches that exactly.
+ */
+const SHA1_HEX = /^[0-9a-f]{40}$/
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString('hex')
   const derived = await scryptAsync(password, salt, KEY_LENGTH)
   return `${salt}:${derived.toString('hex')}`
 }
 
+/** True for the legacy unsalted-SHA-1 shape; false for a scrypt `salt:hash`. */
+export function needsUpgrade(stored: string): boolean {
+  return SHA1_HEX.test(stored)
+}
+
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  if (needsUpgrade(stored)) {
+    const derived = createHash('sha1').update(password, 'utf8').digest('hex')
+    const derivedBuffer = Buffer.from(derived, 'utf8')
+    const expectedBuffer = Buffer.from(stored, 'utf8')
+    return timingSafeEqual(derivedBuffer, expectedBuffer)
+  }
+
   const [salt, expected] = stored.split(':')
   if (salt === undefined || expected === undefined) return false
 

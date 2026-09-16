@@ -15,7 +15,7 @@ import { dirname } from 'node:path'
 import type { GameState } from '@civ/engine'
 import { migrateGameState } from '@civ/engine'
 
-import type { ChatMessage, Repository, StoredPlayer } from './types.js'
+import type { ChatMessage, FinishedGame, Repository, StoredPlayer } from './types.js'
 
 interface Snapshot {
   readonly version: 1
@@ -87,6 +87,13 @@ export class JsonFileRepository implements Repository {
     return [...this.players.values()]
   }
 
+  async updatePlayerPassword(id: string, passwordHash: string): Promise<void> {
+    const player = this.players.get(id)
+    if (player === undefined) return
+    this.players.set(id, { ...player, passwordHash })
+    this.scheduleWrite()
+  }
+
   async saveGame(game: GameState): Promise<void> {
     this.games.set(game.id, game)
     this.scheduleWrite()
@@ -113,6 +120,22 @@ export class JsonFileRepository implements Repository {
 
   async chatFor(gameId: string | null): Promise<readonly ChatMessage[]> {
     return this.chat.filter((message) => message.gameId === gameId)
+  }
+
+  async finishedGamesForHighscore(): Promise<readonly FinishedGame[]> {
+    const summaries: FinishedGame[] = []
+    for (const game of this.games.values()) {
+      if (game.active || game.winner === null || game.winner === '') continue
+      summaries.push({
+        numOfPlayers: game.numOfPlayers,
+        winner: game.winner,
+        players: game.players.map((player) => ({
+          username: player.username,
+          civName: player.civilization?.name ?? null,
+        })),
+      })
+    }
+    return summaries
   }
 
   async flush(): Promise<void> {

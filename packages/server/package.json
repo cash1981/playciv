@@ -8,12 +8,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "dev": "tsx watch src/index.ts",
-    "start": "node dist/src/index.js"
+    "start": "node dist/src/index.js",
+    "seed:test-user": "tsx src/seed-test-user.ts"
   },
   "dependencies": {
     "@civ/engine": "workspace:*",
     "@fastify/cors": "^11.1.0",
-    "fastify": "^5.6.1"
+    "fastify": "^5.6.1",
+    "mongodb": "^7.6.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

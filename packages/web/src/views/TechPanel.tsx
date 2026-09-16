@@ -13,6 +13,7 @@ import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { PlayerView, RevealedTechsDto } from '../lib/api.js'
 import { TechTree } from './TechTree.js'
+import { CollapsiblePanel } from './CollapsiblePanel.js'
 
 interface Props {
   readonly gameId: string
@@ -55,8 +56,7 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
   const yourPolicies = view.you?.socialPolicies ?? []
 
   return (
-    <section className="panel">
-      <h2>Techs</h2>
+    <CollapsiblePanel id="techs" title="Techs">
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="row">
@@ -173,6 +173,6 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
         ))}
         {yourPolicies.length === 0 && <li className="muted">None chosen.</li>}
       </ul>
-    </section>
+    </CollapsiblePanel>
   )
 }

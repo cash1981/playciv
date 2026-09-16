@@ -14,9 +14,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 _None. The board is clear._
 
-Awaiting merge: `tech-tree` (approved through the review gate, verified in the
-browser, PR to open for `feat/tech-tree`) and `mongodb-storage` (approved and
-verified, PR open for `feat/mongodb-storage`).
+Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
+snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
 ---
 
@@ -64,6 +63,5 @@ Work that is ready to start, most useful first. Taking one means moving it to
 
 | Slug | What | Brief |
 | --- | --- | --- |
-| `tech-tree` | The tech pyramid, private and public | `tasks/tech-tree.md` |
 | `public-landing` | Landing page: active games, highscore, open chat | `tasks/public-landing.md` |
 | `anonymous-readonly` | Read-only access without an account, and the security pass that goes with it | `tasks/anonymous-readonly.md` |

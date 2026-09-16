@@ -25,6 +25,7 @@ import {
   optionalString,
   readGame,
   requireString,
+  stampLog,
 } from '../context.js'
 import { sendEngineError, sendError } from '../errors.js'
 import type { ChatMessage } from '../store/types.js'
@@ -117,8 +118,13 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     })
     if (!joined.ok) return sendEngineError(reply, joined.error)
 
-    await context.repo.saveGame(joined.value)
-    return reply.code(201).send(toSummary(joined.value, me.id))
+    // `joinGame` is called directly rather than through `applyToGame`, so the
+    // "joined / game started" log entries never pass through the stamping
+    // there and would otherwise keep `createdAt: null` forever.
+    const stamped = stampLog(joined.value, new Date().toISOString())
+
+    await context.repo.saveGame(stamped)
+    return reply.code(201).send(toSummary(stamped, me.id))
   })
 
   app.get('/api/games/:gameId', auth, async (request, reply) => {
@@ -169,19 +175,42 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     return readGame(context, request, reply, gameId, (state) => allRevealedItems(state))
   })
 
+  /**
+   * Sorts newest first by timestamp, then by the entry's original position in
+   * `state.log` (a later position is newer — the engine appends
+   * chronologically). The index tiebreak matters because a stable sort on
+   * `createdAt` alone reads oldest-first for same-second or legacy-null
+   * entries: `Array.prototype.sort` keeps their relative order, which is the
+   * insertion order, i.e. oldest first.
+   */
+  function newestFirst<T extends { readonly createdAt: string | null }>(
+    entries: readonly T[],
+  ): T[] {
+    return entries
+      .map((entry, index) => ({ entry, index }))
+      .sort(
+        (a, b) =>
+          (b.entry.createdAt ?? '').localeCompare(a.entry.createdAt ?? '') || b.index - a.index,
+      )
+      .map(({ entry }) => entry)
+  }
+
   /** Java: `/{pbfId}/publiclog`. */
   app.get('/api/games/:gameId/log/public', auth, async (request, reply) => {
     const { gameId } = request.params as { gameId: string }
     return readGame(context, request, reply, gameId, (state) =>
-      state.log
-        .filter((entry) => entry.publicLog !== '')
-        .map((entry) => ({
-          id: entry.id,
-          username: entry.username,
-          logType: entry.logType,
-          message: entry.publicLog,
-          hasUndo: entry.undo !== null,
-        })),
+      newestFirst(
+        state.log
+          .filter((entry) => entry.publicLog !== '')
+          .map((entry) => ({
+            id: entry.id,
+            username: entry.username,
+            logType: entry.logType,
+            message: entry.publicLog,
+            createdAt: entry.createdAt,
+            hasUndo: entry.undo !== null,
+          })),
+      ),
     )
   })
 
@@ -189,16 +218,19 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
   app.get('/api/games/:gameId/log/private', auth, async (request, reply) => {
     const { gameId } = request.params as { gameId: string }
     return readGame(context, request, reply, gameId, (state, viewerId) =>
-      state.log
-        .filter((entry) => entry.playerId === viewerId && entry.privateLog !== '')
-        .map((entry) => ({
-          id: entry.id,
-          username: entry.username,
-          logType: entry.logType,
-          message: entry.privateLog,
-          hasUndo: entry.undo !== null,
-          canUndo: entry.item !== null && entry.undo === null,
-        })),
+      newestFirst(
+        state.log
+          .filter((entry) => entry.playerId === viewerId && entry.privateLog !== '')
+          .map((entry) => ({
+            id: entry.id,
+            username: entry.username,
+            logType: entry.logType,
+            message: entry.privateLog,
+            createdAt: entry.createdAt,
+            hasUndo: entry.undo !== null,
+            canUndo: entry.item !== null && entry.undo === null,
+          })),
+      ),
     )
   })
 

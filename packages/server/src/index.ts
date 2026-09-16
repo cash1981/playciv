@@ -5,6 +5,11 @@
  *   PORT           defaults to 8787
  *   HOST           standard 127.0.0.1
  *   DATA_FILE      where state is mirrored, defaults to ./data/civ.json
+ *                  — ignored when MONGO_URL is set
+ *   MONGO_URL      a MongoDB connection string. When set, this replaces the
+ *                  JSON file: `player` and `chat` are reused, new games go
+ *                  into `game_state`, and `pbf` is read for highscore only.
+ *   MONGO_DB       database name, defaults to "playciv"
  *   TOKEN_SECRET   HMAC secret for session tokens
  *   CORS_ORIGIN    comma separated list, defaults to everything
  */
@@ -14,10 +19,11 @@ import { resolve } from 'node:path'
 
 import { createApp } from './app.js'
 import { JsonFileRepository } from './store/json-file.js'
+import { MongoRepository } from './store/mongo.js'
+import type { Repository } from './store/types.js'
 
 const port = Number(process.env['PORT'] ?? 8787)
 const host = process.env['HOST'] ?? '127.0.0.1'
-const dataFile = resolve(process.env['DATA_FILE'] ?? 'data/civ.json')
 
 const tokenSecret = process.env['TOKEN_SECRET'] ?? randomBytes(32).toString('hex')
 if (process.env['TOKEN_SECRET'] === undefined) {
@@ -30,21 +36,36 @@ if (process.env['TOKEN_SECRET'] === undefined) {
 const corsEnv = process.env['CORS_ORIGIN']
 const corsOrigin = corsEnv === undefined ? true : corsEnv.split(',').map((value) => value.trim())
 
-const repo = new JsonFileRepository({ filePath: dataFile })
-await repo.load()
+const mongoUrl = process.env['MONGO_URL']
+let repo: Repository
+let mongo: MongoRepository | undefined
+let dataFile: string | undefined
+
+if (mongoUrl !== undefined) {
+  const dbName = process.env['MONGO_DB'] ?? 'playciv'
+  mongo = await MongoRepository.connect(mongoUrl, dbName)
+  repo = mongo
+  console.log(`Storage: MongoDB (${dbName})`)
+} else {
+  dataFile = resolve(process.env['DATA_FILE'] ?? 'data/civ.json')
+  const json = new JsonFileRepository({ filePath: dataFile })
+  await json.load()
+  repo = json
+  console.log(`Storage: JSON file, mirrored to ${dataFile}`)
+}
 
 const app = await createApp({ repo, tokenSecret, logger: true, corsOrigin })
 
-// Flush pending changes to disk before the process dies
+// Flush pending changes and close any open connection before the process dies
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     void (async () => {
       await app.close()
       await repo.flush()
+      await mongo?.close()
       process.exit(0)
     })()
   })
 }
 
 await app.listen({ port, host })
-console.log(`State is mirrored to ${dataFile}`)

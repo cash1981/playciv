@@ -11,7 +11,9 @@
  * routes changing.
  */
 
-import type { GameState } from '@civ/engine'
+import type { FinishedGame, GameState } from '@civ/engine'
+
+export type { FinishedGame }
 
 export interface StoredPlayer {
   readonly id: string
@@ -35,6 +37,8 @@ export interface Repository {
   findPlayerById(id: string): Promise<StoredPlayer | undefined>
   findPlayerByUsername(username: string): Promise<StoredPlayer | undefined>
   allPlayers(): Promise<readonly StoredPlayer[]>
+  /** Rewrites the stored hash, used to upgrade a legacy SHA-1 account on login. */
+  updatePlayerPassword(id: string, passwordHash: string): Promise<void>
 
   saveGame(game: GameState): Promise<void>
   findGame(id: string): Promise<GameState | undefined>
@@ -43,6 +47,14 @@ export interface Repository {
 
   appendChat(message: ChatMessage): Promise<void>
   chatFor(gameId: string | null): Promise<readonly ChatMessage[]>
+
+  /**
+   * Finished, won games as a source for `highscore()`, roster included —
+   * `attempts` needs to know who lost, not just who won. `MongoRepository`
+   * reads this from both the old `pbf` collection and the new `game_state`
+   * one; `JsonFileRepository` derives it from `allGames()`.
+   */
+  finishedGamesForHighscore(): Promise<readonly FinishedGame[]>
 
   /** Flushes pending changes to disk. A no-op without file storage. */
   flush(): Promise<void>

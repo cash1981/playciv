@@ -12,6 +12,7 @@ import { registerAuthRoutes } from './routes/auth.js'
 import { registerBoardRoutes } from './routes/board.js'
 import { registerGameRoutes } from './routes/games.js'
 import { registerPlayRoutes } from './routes/play.js'
+import { registerPublicRoutes } from './routes/public.js'
 import { JsonFileRepository } from './store/json-file.js'
 import type { Repository } from './store/types.js'
 
@@ -43,6 +44,7 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
   registerGameRoutes(app, context)
   registerPlayRoutes(app, context)
   registerBoardRoutes(app, context)
+  registerPublicRoutes(app, context)
 
   return app
 }

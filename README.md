@@ -104,7 +104,8 @@ function from the engine, saves the result and answers with
 even if it wanted to.
 
 Environment variables: `PORT` (8787), `HOST`, `DATA_FILE`, `TOKEN_SECRET`,
-`CORS_ORIGIN`.
+`CORS_ORIGIN`, and `MONGO_URL` / `MONGO_DB` to run against MongoDB instead of
+the JSON file (see [Storage](#storage-a-json-file-or-mongodb)).
 
 ### `packages/web`
 
@@ -223,18 +224,56 @@ clicked to jump there.
 Games saved before the history existed get one synthetic `place` entry per piece
 at load time (`src/migrate.ts`), so replay is exact for them too.
 
-## Storage instead of MongoDB
+## Storage: a JSON file or MongoDB
 
-`packages/server/src/store/types.ts` defines a `Repository`. The only
-implementation today is `JsonFileRepository`: everything lives in `Map`s in
-memory and is mirrored to `packages/server/data/civ.json` after each change —
-debounced, and atomically through a temporary file that is swapped in.
+`packages/server/src/store/types.ts` defines a `Repository`. There are two
+implementations, chosen at startup by whether `MONGO_URL` is set.
 
-That is enough to play locally, and games survive a restart. It is not a
-database: no indexes, no concurrency control, no queries. A Mongo implementation
-can be added alongside without touching the routes.
+**`JsonFileRepository`** (the default) keeps everything in `Map`s in memory and
+mirrors it to `packages/server/data/civ.json` after each change — debounced, and
+atomically through a temporary file that is swapped in. Enough to play locally,
+and games survive a restart. Delete the file to reset everything.
 
-Delete `packages/server/data/civ.json` to reset everything.
+**`MongoRepository`** runs against the old `playciv` database restored from
+production. Point at it with:
+
+```bash
+MONGO_URL=mongodb://127.0.0.1:27017 MONGO_DB=playciv pnpm --filter @civ/server dev
+```
+
+It reuses the existing collections rather than starting fresh:
+
+- **`player`** — old accounts log in unchanged. Their passwords are Java's
+  unsalted SHA-1 (`DigestUtils.sha1Hex`); `verifyPassword` accepts that and, on
+  a successful login, rewrites the stored hash to salted scrypt. Old ids are
+  `ObjectId`s, new ones are UUID strings; lookups match both.
+- **`chat`** — old lobby and game chat is read back.
+- **`pbf`** — the old finished games, **read-only**, used only as a highscore
+  source. Java's `PBF` shape is nothing like our `GameState`, so old games are
+  not migrated to playable form.
+- **`game_state`** — a new collection holding new games in the engine's shape.
+  The old `pbf` documents are never written to.
+
+There is no automated test for `MongoRepository` — CI has no database — so it is
+verified by hand against the live instance. The shared repository logic is
+covered by the JSON implementation, and the pure functions (password
+verification, highscore) have their own tests.
+
+Seed a known test account with:
+
+```bash
+MONGO_URL=mongodb://127.0.0.1:27017 pnpm --filter @civ/server seed:test-user
+```
+
+### Highscore
+
+`GET /api/highscore` needs no token and returns wins by player and by
+civilization, broken down by player count, computed by the pure
+`highscore()` function in the engine over every finished game — the old `pbf`
+games and any new ones together. It is a faithful port of Java's
+`getPlayerHighScore` / `getCivHighscore`, down to the `percentWin` formatting
+and the descending-username tiebreak. The tables themselves are drawn by the
+landing page (see the `public-landing` task).
 
 ## Game data
 
@@ -344,9 +383,15 @@ element out of a `HashSet`, in unspecified order. It now follows Green, Yellow,
 Purple, Red, Blue.
 
 **`endTurn` still lets anyone end the turn.** Java found the player whose turn
-it is and passed it on without looking at the caller. That is ported as is, since
-the authorization lived in the resource layer; the server package has to enforce
-it.
+it is and passed it on without looking at the caller. The engine still does
+this; membership is now enforced at the server route (`endturn`/`taketurn`
+reject a non-member with 403), which is where the authorization always belonged.
+
+**`endTurn` returns `GAME_NOT_STARTED` (409) when no one holds the turn.** Java
+either advanced by array index (its legacy pre-2015 branch) or threw
+`NoSuchElementException` → HTTP 500 (its numbered branch). Neither is useful for
+an unstarted game, and the legacy games that branch served are never loaded, so
+the engine returns a clear error instead. See `docs/agents/decisions.md`.
 
 ## Deferred
 

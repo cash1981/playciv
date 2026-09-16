@@ -381,6 +381,30 @@ describe('discarding', () => {
 
 /** Java: `PlayerAction.endTurn` and `takeTurnButton`. */
 describe('changing turn', () => {
+  it('returns GAME_NOT_STARTED for a legacy zero-numbered game rather than guessing an index', () => {
+    const before = firstCivGame()
+    const legacy = {
+      ...before,
+      players: before.players.map((player) => ({ ...player, playernumber: 0 })),
+    }
+
+    const result = endTurn(legacy, { playerId: CASH1981, username: 'cash1981' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.kind).toBe('GAME_NOT_STARTED')
+  })
+
+  it('returns GAME_NOT_STARTED when no player has the turn yet', () => {
+    const before = firstCivGame()
+    const unstarted = {
+      ...before,
+      players: before.players.map((player) => ({ ...player, yourTurn: false })),
+    }
+
+    const result = endTurn(unstarted)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.kind).toBe('GAME_NOT_STARTED')
+  })
+
   it('gives the turn to the next player number', () => {
     const before = firstCivGame()
     expect(isYourTurn(before, CASH1981)).toBe(true)

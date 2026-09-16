@@ -216,14 +216,6 @@
       "height": 36
     },
     {
-      "id": "markers/startplayer_100_100",
-      "category": "marker",
-      "path": "markers/startplayer_100_100.png",
-      "label": "Startplayer_100_100",
-      "width": 100,
-      "height": 100
-    },
-    {
       "id": "markers/startplayer",
       "category": "marker",
       "path": "markers/startplayer.png",

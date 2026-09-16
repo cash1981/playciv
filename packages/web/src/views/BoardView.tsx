@@ -51,6 +51,14 @@ interface Props {
   readonly log: readonly { readonly id: string; readonly message: string }[]
 }
 
+function formatTimestamp(value: string | null): string {
+  if (value === null) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (part: number): string => String(part).padStart(2, '0')
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
 const CATEGORY_LABEL: Readonly<Record<BoardAsset['category'], string>> = {
   figure: 'Figures',
   resource: 'Resources',
@@ -512,6 +520,7 @@ export function BoardView({
           <ul className="list scroll history">
             {[...history].reverse().map((entry, reverseIndex) => {
               const index = history.length - reverseIndex
+              const timestamp = formatTimestamp(entry.at)
               return (
                 <li key={entry.id}>
                   <button
@@ -519,7 +528,7 @@ export function BoardView({
                     onClick={() => setReplayStep(index)}
                     title="Show the board as it was here"
                   >
-                    {entry.description}
+                    {timestamp !== '' ? `${timestamp} — ${entry.description}` : entry.description}
                   </button>
                 </li>
               )

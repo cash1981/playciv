@@ -13,7 +13,7 @@ _Last updated: 2026-09-15_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 280 engine, 37 server |
+| `pnpm -r test` | passing — 294 engine, 51 server (on `feat/game-fixes`) |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -39,19 +39,21 @@ _Last updated: 2026-09-15_
 - **Card artwork.** 346 of 347 items have a picture; only Space Flight does
   not, because it is added in code rather than read from the spreadsheet. The
   hand renders as cards.
+- **MongoDB storage.** `MongoRepository` runs against the restored `playciv`
+  database, chosen by `MONGO_URL` with the JSON file as fallback. Reuses the
+  `player` and `chat` collections, reads old `pbf` games for highscore, stores
+  new games in `game_state`. Old SHA-1 logins verify and upgrade to scrypt.
+  `GET /api/highscore` ports Java's highscore. Verified against the live
+  database (Andrius 39/68, cash 36/58; legacy login upgrades end-to-end). The
+  highscore **UI** is still `public-landing`.
+- **Tech tree.** The AngularJS pyramid, private and public: your own techs
+  (hidden ones badged) and one public pyramid per player from
+  `revealedTechsForAllPlayers`. Verified in the browser; the hidden-info test
+  is proven load-bearing.
 
 ## In progress
 
 _Nothing. See the queue on the task board._
-
-## Awaiting merge (feature branches with open PRs)
-
-- **`mongodb-storage`** — `feat/mongodb-storage`. MongoDB behind the existing
-  `Repository`, reusing the `playciv` database; SHA-1→scrypt on login; public
-  `GET /api/highscore`. Verified against the live database.
-- **`tech-tree`** — `feat/tech-tree`. The AngularJS pyramid, private and public,
-  built on `revealedTechsForAllPlayers`. Verified in the browser; the
-  hidden-info test is proven load-bearing.
 
 ## Next, in order
 
@@ -61,6 +63,18 @@ _Nothing. See the queue on the task board._
    the security pass that goes with it.
 
 ## Known problems and loose ends
+
+- **Game fixes done on `feat/game-fixes`** (off `feat/mongodb-storage`), each
+  through the review gate: membership on endturn/taketurn (403 for non-members),
+  `GAME_NOT_STARTED` (409) instead of a misleading "Couldn't find player",
+  log timestamp stamping on game creation, deterministic newest-first log sort,
+  map tiles snap to the grid on move (bug #6), and the duplicate
+  `startplayer_100_100` marker removed. Client-visual: board zoom now pans with
+  scrollbars (task 3) and the tech pyramid no longer clips its left edge or
+  overlaps the turn orders — both browser-verified. Civ-tile auto-placement,
+  the `dd.MM.yyyy hh:mm:ss` log format, log sorting and collapsible panels were
+  already in place (Luna) and confirmed working. 297 engine + 51 server tests
+  pass. Branch pushed; PR still to open.
 
 - **`gh` is not installed**, so pull requests are opened through the compare
   link rather than the CLI. SSH push works.
@@ -78,5 +92,6 @@ _Nothing. See the queue on the task board._
 
 ## Deferred on purpose
 
-Real MongoDB · highscore and tournament queries across games · email
+Migrating old `pbf` games to playable form · the highscore UI (data and
+endpoint only, see `mongodb-storage`) · tournament collection · email
 notification · `AdminAction` · websockets for live updates.

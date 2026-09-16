@@ -20,6 +20,7 @@ import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import { TechPanel } from './TechPanel.js'
 import { TurnPanel } from './TurnPanel.js'
+import { CollapsiblePanel } from './CollapsiblePanel.js'
 
 interface Props {
   readonly gameId: string
@@ -216,8 +217,7 @@ function DrawPanel({
   run,
 }: PanelProps & { readonly yourTurn: boolean }): React.JSX.Element {
   return (
-    <section className="panel">
-      <h2>Draw</h2>
+    <CollapsiblePanel id="draw" title="Draw">
       <p className="muted" style={{ marginTop: 0 }}>
         {yourTurn ? 'It is your turn.' : 'You can only draw on your own turn.'}
       </p>
@@ -233,7 +233,7 @@ function DrawPanel({
           </button>
         ))}
       </div>
-    </section>
+    </CollapsiblePanel>
   )
 }
 
@@ -242,8 +242,7 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   const opponents = view.opponents
 
   return (
-    <section className="panel">
-      <h2>Your hand ({items.length})</h2>
+    <CollapsiblePanel id="hand" title={`Your hand (${items.length})`}>
       {items.length === 0 && <p className="muted">Empty.</p>}
       <ul className="card-grid scroll">
         {items.map((item) => (
@@ -257,7 +256,7 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
           />
         ))}
       </ul>
-    </section>
+    </CollapsiblePanel>
   )
 }
 
@@ -339,8 +338,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
   const barbarians = view.you?.barbarians ?? []
 
   return (
-    <section className="panel">
-      <h2>Battle</h2>
+    <CollapsiblePanel id="battle" title="Battle">
 
       <div className="row">
         <input
@@ -396,14 +394,13 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
           <ItemCard key={unit.id} item={unit} />
         ))}
       </ul>
-    </section>
+    </CollapsiblePanel>
   )
 }
 
 function OpponentPanel({ view }: { readonly view: PlayerView }): React.JSX.Element {
   return (
-    <section className="panel">
-      <h2>Opponents</h2>
+    <CollapsiblePanel id="opponents" title="Opponents">
       <ul className="list">
         {view.opponents.map((opponent) => (
           <li key={opponent.playerId}>
@@ -427,6 +424,6 @@ function OpponentPanel({ view }: { readonly view: PlayerView }): React.JSX.Eleme
       <p className="muted" style={{ marginBottom: 0 }}>
         Deck: {view.numberOfItemsInDeck} cards · discarded: {view.numberOfDiscardedItems}
       </p>
-    </section>
+    </CollapsiblePanel>
   )
 }
