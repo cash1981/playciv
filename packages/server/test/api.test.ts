@@ -389,6 +389,112 @@ describe('storage', () => {
   })
 })
 
+describe('turn membership', () => {
+  it('a non-member gets 403 from endturn, a member still succeeds', async () => {
+    const { gameId, starter } = await startedGame('Utenforspill')
+    const outsider = await register('Utenforspill-outsider')
+
+    const blocked = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/endturn`,
+      headers: bearer(outsider),
+      payload: {},
+    })
+    expect(blocked.statusCode).toBe(403)
+    expect((blocked.json() as { error: string }).error).toBe('NO_ACCESS')
+
+    const allowed = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/endturn`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(allowed.statusCode).toBe(200)
+  })
+
+  it('a non-member gets 403 from taketurn, a member still succeeds', async () => {
+    const { gameId, waiting } = await startedGame('Overta')
+    const outsider = await register('Overta-outsider')
+
+    const blocked = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/taketurn`,
+      headers: bearer(outsider),
+      payload: {},
+    })
+    expect(blocked.statusCode).toBe(403)
+    expect((blocked.json() as { error: string }).error).toBe('NO_ACCESS')
+
+    const allowed = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/taketurn`,
+      headers: bearer(waiting),
+      payload: {},
+    })
+    expect(allowed.statusCode).toBe(200)
+  })
+
+  it('ending a turn before the game has started gives 409, not a misleading 404', async () => {
+    const creator = await register('Ikkestartet')
+    const gameId = await createGame(creator, 'Ikke startet', 2)
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/endturn`,
+      headers: bearer(creator),
+      payload: {},
+    })
+    expect(response.statusCode).toBe(409)
+    expect((response.json() as { error: string }).error).toBe('GAME_NOT_STARTED')
+  })
+})
+
+describe('log timestamps and order', () => {
+  it('every log entry has a timestamp right after the game is created', async () => {
+    const { gameId, starter } = await startedGame('Tidsstempel')
+
+    const log = await app.inject({
+      method: 'GET',
+      url: `/api/games/${gameId}/log/public`,
+      headers: bearer(starter),
+    })
+    expect(log.statusCode).toBe(200)
+    const entries = log.json() as { createdAt: string | null }[]
+    expect(entries.length).toBeGreaterThan(0)
+    expect(entries.every((entry) => entry.createdAt !== null)).toBe(true)
+  })
+
+  it('reads newest-first even when two entries share a timestamp', async () => {
+    const { gameId, starter } = await startedGame('Sammetid')
+
+    const state = await repo.findGame(gameId)
+    if (state === undefined) throw new Error('game not found')
+    expect(state.log.length).toBeGreaterThanOrEqual(2)
+
+    // Force every entry to the same timestamp, as if they had all landed in
+    // the same second. A stable sort on the timestamp alone would then read
+    // them back in insertion (oldest-first) order.
+    const sameInstant = '2026-01-01T00:00:00.000Z'
+    const stamped = {
+      ...state,
+      log: state.log.map((entry) => ({ ...entry, createdAt: sameInstant })),
+    }
+    await repo.saveGame(stamped)
+
+    const log = await app.inject({
+      method: 'GET',
+      url: `/api/games/${gameId}/log/public`,
+      headers: bearer(starter),
+    })
+    const entries = log.json() as { id: string }[]
+    const expectedNewestFirst = state.log
+      .filter((entry) => entry.publicLog !== '')
+      .map((entry) => entry.id)
+      .reverse()
+    expect(entries.map((entry) => entry.id)).toEqual(expectedNewestFirst)
+  })
+})
+
 /** A whole round through the API, as a smoke test for the entire stack. */
 describe('a whole round', () => {
   it('four players play through setup, draws, turns and an undo', async () => {

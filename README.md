@@ -383,9 +383,15 @@ element out of a `HashSet`, in unspecified order. It now follows Green, Yellow,
 Purple, Red, Blue.
 
 **`endTurn` still lets anyone end the turn.** Java found the player whose turn
-it is and passed it on without looking at the caller. That is ported as is, since
-the authorization lived in the resource layer; the server package has to enforce
-it.
+it is and passed it on without looking at the caller. The engine still does
+this; membership is now enforced at the server route (`endturn`/`taketurn`
+reject a non-member with 403), which is where the authorization always belonged.
+
+**`endTurn` returns `GAME_NOT_STARTED` (409) when no one holds the turn.** Java
+either advanced by array index (its legacy pre-2015 branch) or threw
+`NoSuchElementException` → HTTP 500 (its numbered branch). Neither is useful for
+an unstarted game, and the legacy games that branch served are never loaded, so
+the engine returns a clear error instead. See `docs/agents/decisions.md`.
 
 ## Deferred
 

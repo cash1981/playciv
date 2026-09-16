@@ -13,7 +13,7 @@ _Last updated: 2026-09-15_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 291 engine, 46 server |
+| `pnpm -r test` | passing — 294 engine, 51 server (on `feat/game-fixes`) |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -64,11 +64,15 @@ _Nothing. See the queue on the task board._
 
 ## Known problems and loose ends
 
-- **Game UI bug fixes are not approved (review 2026-09-16).** Despite passing
-  typecheck, build, 293 engine tests and 46 server tests, review of
-  `e082006..aba5090` found unauthorized end-turn access for zero-numbered
-  games, incomplete timestamps/log ordering, tile moves bypassing alignment,
-  and tech-pyramid overflow. The live claim remains open for corrections.
+- **Game UI bug fixes are not approved (review 2026-09-16).** Review of
+  `e082006..aba5090` found unauthorized end-turn access, incomplete
+  timestamps/log ordering, tile moves bypassing alignment, and tech-pyramid
+  overflow. `game-fixes-core` (branch `feat/game-fixes`) fixes the four
+  testable engine/server findings — membership on endturn/taketurn,
+  `GAME_NOT_STARTED` instead of a misleading `PLAYER_NOT_FOUND`, timestamp
+  stamping on game creation, and a deterministic newest-first log sort — with
+  typecheck, 294 engine + 51 server tests and build all passing. Awaiting
+  review. Tile snap-on-move and the client-visual items are separate briefs.
 
 - **`gh` is not installed**, so pull requests are opened through the compare
   link rather than the CLI. SSH push works.

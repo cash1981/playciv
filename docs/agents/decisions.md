@@ -235,3 +235,29 @@ re-verified against the source and reproduced rather than smoothed over.
 of each finished game. `GET /api/highscore` is public and passes the registry so
 non-winners appear. Confirmed against the live database: Andrius 39/68 = 57.35 %,
 cash 36/58 = 62.07 %, civ tables filtered from 247 to 235 games.
+
+---
+
+## 2026-09-16 — endTurn returns GAME_NOT_STARTED instead of crashing
+
+**Decision.** When `endTurn` is called and no player holds the turn (an
+unstarted game, all `playernumber: 0`), the engine returns a distinct
+`GAME_NOT_STARTED` error, which the server maps to HTTP 409. The zero-
+`playernumber` branch returns it too, rather than advancing the turn by array
+index.
+
+**Why.** Java diverged two ways here, neither good: its legacy `else` branch
+(`PlayerAction.endTurn`, for pre-2015 games) advanced by array index on the
+caller's username, and its numbered branch did `filter(isYourTurn).findFirst()
+.get()`, which throws `NoSuchElementException` → HTTP 500 when nobody holds the
+turn. The previous port already diverged (it returned `PLAYER_NOT_FOUND`, shown
+to the user as the misleading "Couldn't find player"). The old `pbf` games that
+the legacy branch existed for are never loaded as `GameState` (they are read-only
+— see the 2026-09-16 MongoDB decision), so there is no real data the index
+fallback serves. A clear 409 is better than a 500 or a misleading 404.
+
+**Consequences.** A deliberate difference from Java, recorded here and in
+`README.md`. The started-game rotation (advance to the next `playernumber`,
+wrapping to 1) is unchanged and still matches Java. Membership is enforced at
+the server route (`requireMembership` on `endturn`/`taketurn`), which is where
+`decisions.md` (2026-09-01) always said it belonged.

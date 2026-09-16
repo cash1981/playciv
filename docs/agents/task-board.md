@@ -18,7 +18,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Branch:** `feat/game-fixes` (off `feat/mongodb-storage`, which carries
   Luna's earlier bug-fix commits plus the MongoDB work)
 - **Brief:** `docs/agents/tasks/game-fixes-core.md`
-- **Status:** in progress — the four testable engine/server findings
+- **Status:** in review — the four testable engine/server findings implemented,
+  verified (typecheck, 294 engine + 51 server tests, build), awaiting review
 - **Claimed paths:**
   - `packages/engine/src/actions/player.ts` (endTurn error only)
   - `packages/engine/src/errors.ts`
