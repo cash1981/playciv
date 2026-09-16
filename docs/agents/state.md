@@ -64,15 +64,17 @@ _Nothing. See the queue on the task board._
 
 ## Known problems and loose ends
 
-- **Game UI bug fixes are not approved (review 2026-09-16).** Review of
-  `e082006..aba5090` found unauthorized end-turn access, incomplete
-  timestamps/log ordering, tile moves bypassing alignment, and tech-pyramid
-  overflow. `game-fixes-core` (branch `feat/game-fixes`) fixes the four
-  testable engine/server findings — membership on endturn/taketurn,
-  `GAME_NOT_STARTED` instead of a misleading `PLAYER_NOT_FOUND`, timestamp
-  stamping on game creation, and a deterministic newest-first log sort — with
-  typecheck, 294 engine + 51 server tests and build all passing. Awaiting
-  review. Tile snap-on-move and the client-visual items are separate briefs.
+- **Game fixes done on `feat/game-fixes`** (off `feat/mongodb-storage`), each
+  through the review gate: membership on endturn/taketurn (403 for non-members),
+  `GAME_NOT_STARTED` (409) instead of a misleading "Couldn't find player",
+  log timestamp stamping on game creation, deterministic newest-first log sort,
+  map tiles snap to the grid on move (bug #6), and the duplicate
+  `startplayer_100_100` marker removed. Client-visual: board zoom now pans with
+  scrollbars (task 3) and the tech pyramid no longer clips its left edge or
+  overlaps the turn orders — both browser-verified. Civ-tile auto-placement,
+  the `dd.MM.yyyy hh:mm:ss` log format, log sorting and collapsible panels were
+  already in place (Luna) and confirmed working. 297 engine + 51 server tests
+  pass. Branch pushed; PR still to open.
 
 - **`gh` is not installed**, so pull requests are opened through the compare
   link rather than the CLI. SSH push works.

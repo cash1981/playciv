@@ -12,33 +12,10 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### game-fixes-core
+_None. The board is clear._
 
-- **Owner:** coder (Sonnet), orchestrated by Opus
-- **Branch:** `feat/game-fixes` (off `feat/mongodb-storage`, which carries
-  Luna's earlier bug-fix commits plus the MongoDB work)
-- **Brief:** `docs/agents/tasks/game-fixes-core.md`
-- **Status:** in review — the four testable engine/server findings implemented,
-  verified (typecheck, 294 engine + 51 server tests, build), awaiting review
-- **Claimed paths:**
-  - `packages/engine/src/actions/player.ts` (endTurn error only)
-  - `packages/engine/src/errors.ts`
-  - `packages/server/src/errors.ts`
-  - `packages/server/src/routes/play.ts`
-  - `packages/server/src/routes/games.ts`
-  - `packages/server/src/context.ts`
-  - `packages/engine/test/`, `packages/server/test/`
-- **Notes:** Continues Luna's `game-ui-bugfixes` on a new branch off
-  `feat/mongodb-storage`. This brief covers only the testable engine/server
-  findings (membership on endturn/taketurn, GAME_NOT_STARTED, log timestamp
-  stamping on create, newest-first tiebreak). The client-visual items (timestamp
-  display, tech-tree float/overlap, collapsible panels, pyramid overflow) and the
-  three new tasks (duplicate start-player asset, civ-tile L-shape placement, tile
-  snap-on-move, zoom panning) are separate briefs to follow.
-
-Recently merged: `tech-tree` and `mongodb-storage`. The latter added `highscore`
-to the engine barrel and `GET /api/highscore`; whoever takes `public-landing`
-builds the UI on that endpoint rather than re-deriving highscore.
+Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
+snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
 ---
 
