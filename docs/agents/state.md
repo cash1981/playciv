@@ -62,6 +62,8 @@ _Last updated: 2026-09-16_
   three- to five-player games retain the 16 × 16 board.
 - **Delete game.** Game creators and the `admin` account can permanently
   delete active or ended games; other players are denied.
+- **Typecheck build order.** Engine declarations are rebuilt automatically
+  before recursive typecheck, so clean checkouts do not use stale `dist` files.
 
 ## In progress
 
