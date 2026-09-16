@@ -299,3 +299,16 @@ still matches Java); only the on-disk file is aliased (`expansionsim.png` copied
 from `expansionism.png`). `revealSocialPolicy` itself was requested by the human
 in issue #6, so it is an authorised new feature, not an invented rule — the
 "ask the human first" bar is met by the issue.
+---
+
+## 2026-09-16 — Two-player games use an 8 × 8 board
+
+**Decision.** New two-player games use an 8 × 8 board labelled A–H and 1–8;
+three- to five-player games retain the 16 × 16 board.
+
+**Why.** GitHub issue #17 explicitly requests the smaller two-player map. The
+old Java system stored a Google Presentation link rather than board geometry,
+so this is a deliberate new-board policy, not a Java port.
+
+**Consequences.** Board dimensions are selected during `createGame`; all board
+geometry and projections consume the stored dimensions.

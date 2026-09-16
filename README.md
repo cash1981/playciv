@@ -432,3 +432,5 @@ reveal a civilization".
 
 Reference material — rulebooks, maps in ODP/PPTX, card artwork and a copy of the
 Mongo database — lives in `Civilization/`, which is outside git.
+
+**Two-player board geometry is new.** The old Java system stored a Google Presentation link instead of board dimensions. Following issue #17, new two-player games use an 8 × 8 board (A–H, 1–8); three- to five-player games use the 16 × 16 board.
