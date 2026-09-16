@@ -12,6 +12,23 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-16-remove-social-policy
+
+- **Owner:** Luna (gpt-5.6-luna)
+- **Branch:** `fix/issue-16-remove-social-policy`
+- **Brief:** `docs/agents/tasks/issue-16-remove-social-policy.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/actions/player.ts`
+  - `packages/engine/src/errors.ts`
+  - `packages/engine/src/log.ts`
+  - `packages/engine/test/player-action.test.ts`
+  - `packages/server/src/routes/play.ts`
+  - `packages/server/test/api.test.ts`
+  - `packages/web/src/lib/api.ts`
+  - `packages/web/src/views/TechPanel.tsx`
+- **Notes:** Fixes GitHub issue #16. Existing user changes in api.ts are in scope only if Luna preserves them.
+
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
