@@ -552,6 +552,82 @@ ul.list > li:last-child {
   line-height: 1.2;
 }
 
+/* --- Tech tree -------------------------------------------------------------
+   Modelled on old-civ-web's table.tech-pyramid, but laid out as centred flex
+   rows instead of colspan tricks, so a row can narrow without spacer cells.
+   --------------------------------------------------------------------------- */
+
+.tech-pyramid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.5rem 0 0.8rem;
+}
+
+.tech-pyramid-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+.tech-slot {
+  position: relative;
+  width: 7rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tech-slot.researched {
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tech-slot.researched.hidden {
+  border-color: var(--warn);
+}
+
+.tech-slot.available {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* A small pill in the corner of a slot you hold but have not revealed */
+.tech-slot-badge {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.3rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--warn);
+  background: var(--bg);
+  color: var(--warn);
+  font-size: 0.6rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* Wraps one player's public pyramid, tinted with their colour */
+.tech-pyramid-block {
+  margin: 0 0 0.8rem;
+  padding: 0.5rem 0.6rem 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.tech-pyramid-block legend {
+  padding: 0 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 /* --- Replay --------------------------------------------------------------- */
 
 .replay-bar {

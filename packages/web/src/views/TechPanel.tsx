@@ -12,6 +12,7 @@ import type { SocialPolicyItem, TechItem } from '@civ/engine'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { PlayerView, RevealedTechsDto } from '../lib/api.js'
+import { TechTree } from './TechTree.js'
 
 interface Props {
   readonly gameId: string
@@ -86,6 +87,9 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
       </div>
 
       <h3 style={{ marginTop: '0.8rem' }}>Yours ({yourTechs.length})</h3>
+      <TechTree
+        techs={yourTechs.map((tech) => ({ name: tech.name, level: tech.level, hidden: tech.hidden }))}
+      />
       <ul className="list scroll">
         {yourTechs.map((tech) => (
           <li key={tech.id}>
@@ -117,19 +121,19 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
       </ul>
 
       <h3 style={{ marginTop: '0.8rem' }}>Revealed by everyone</h3>
-      <ul className="list">
-        {revealed.map((entry) => (
-          <li key={entry.civilization}>
-            <strong>{entry.civilization}</strong>
-            <span className="muted">
-              {entry.techs.length === 0
-                ? 'nothing revealed'
-                : entry.techs.map((tech) => tech.name).join(', ')}
-            </span>
-          </li>
-        ))}
-        {revealed.length === 0 && <li className="muted">Nobody has chosen a civilization yet.</li>}
-      </ul>
+      {revealed.map((entry) => (
+        <fieldset
+          key={entry.civilization}
+          className="tech-pyramid-block"
+          style={{ borderColor: entry.color?.toLowerCase() ?? 'var(--line)' }}
+        >
+          <legend style={{ color: entry.color?.toLowerCase() ?? 'var(--muted)' }}>
+            {entry.civilization}
+          </legend>
+          <TechTree techs={entry.techs.map((tech) => ({ name: tech.name, level: tech.level as 1 | 2 | 3 | 4 | 5 }))} />
+        </fieldset>
+      ))}
+      {revealed.length === 0 && <p className="muted">Nobody has chosen a civilization yet.</p>}
 
       <h2 style={{ marginTop: '1rem' }}>Social policy</h2>
       <div className="row">
