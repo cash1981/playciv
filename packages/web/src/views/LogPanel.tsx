@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { ChatMessageDto, LogEntryDto, PendingUndoDto, PlayerDto, PlayerView } from '../lib/api.js'
+import { CollapsiblePanel } from './CollapsiblePanel.js'
 
 interface Props {
   readonly gameId: string
@@ -21,6 +22,14 @@ interface Props {
 }
 
 type Tab = 'public' | 'private'
+
+function formatTimestamp(value: string | null | undefined): string {
+  if (value === undefined || value === null) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (part: number): string => String(part).padStart(2, '0')
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
 
 export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('public')
@@ -56,8 +65,7 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
   const entries = tab === 'public' ? publicLog : privateLog
 
   return (
-    <section className="panel">
-      <h2>Log</h2>
+    <CollapsiblePanel id="log" title="Log">
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="row">
@@ -84,6 +92,11 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
       <ul className="list log">
         {entries.map((entry) => (
           <li key={entry.id}>
+            {formatTimestamp(entry.createdAt) !== '' && (
+              <time className="log-time" dateTime={entry.createdAt ?? undefined}>
+                {formatTimestamp(entry.createdAt)}
+              </time>
+            )}
             <span>{entry.message}</span>{' '}
             {entry.hasUndo && <span className="tag">undo pending</span>}
             {tab === 'private' && entry.canUndo === true && (
@@ -162,6 +175,6 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
         />
         <button disabled={busy || message.trim() === ''}>Send</button>
       </form>
-    </section>
+    </CollapsiblePanel>
   )
 }

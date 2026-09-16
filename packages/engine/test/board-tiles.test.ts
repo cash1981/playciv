@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { placePiece, rotatePiece } from '../src/actions/board.js'
+import { movePiece, placePiece, rotatePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
 import { revealItem } from '../src/actions/player.js'
 import {
@@ -18,6 +18,7 @@ import {
   findBoardAsset,
   firstFreeBlock,
   mapTop,
+  nearestBlockOrigin,
   startingCorner,
   tileAssetIdForNumber,
 } from '../src/board.js'
@@ -116,6 +117,48 @@ describe('firstFreeBlock', () => {
     const board = createBoard()
     const state = place(firstCivGame(), 'figures/redarmy', 10, mapTop(board) + 10)
     expect(firstFreeBlock(state.board)).toEqual([0, mapTop(board)])
+  })
+})
+
+describe('snapping a moved tile to the grid', () => {
+  it('a tile dropped off-grid on the map lands on the nearest block origin', () => {
+    let state = place(firstCivGame(), 'tiles/tile01', 0, mapTop(createBoard()))
+    const piece = state.board.pieces[0]
+    if (piece === undefined) throw new Error('no piece')
+
+    // 40 pixels off both axes: within half a block of column 1, row 1
+    const target = { x: 376 + 40, y: mapTop(state.board) + 376 + 40 }
+    state = unwrap(movePiece(state, { playerId: CASH1981, pieceId: piece.id, x: target.x, y: target.y }))
+
+    const moved = state.board.pieces[0]
+    expect([moved?.x, moved?.y]).toEqual(nearestBlockOrigin(state.board, target.x, target.y))
+  })
+
+  it('an ordinary piece dropped off-grid on the map keeps its exact coordinates', () => {
+    let state = place(firstCivGame(), 'figures/redarmy', 0, mapTop(createBoard()))
+    const piece = state.board.pieces[0]
+    if (piece === undefined) throw new Error('no piece')
+
+    const target = { x: 376 + 40, y: mapTop(state.board) + 376 + 40 }
+    state = unwrap(movePiece(state, { playerId: CASH1981, pieceId: piece.id, x: target.x, y: target.y }))
+
+    const moved = state.board.pieces[0]
+    expect([moved?.x, moved?.y]).toEqual([target.x, target.y])
+  })
+
+  it('undo restores the tile to its position before the snapped move', () => {
+    let state = place(firstCivGame(), 'tiles/tile01', 0, mapTop(createBoard()))
+    const piece = state.board.pieces[0]
+    if (piece === undefined) throw new Error('no piece')
+    const before = { x: piece.x, y: piece.y }
+
+    const target = { x: 376 + 40, y: mapTop(state.board) + 376 + 40 }
+    state = unwrap(movePiece(state, { playerId: CASH1981, pieceId: piece.id, x: target.x, y: target.y }))
+    // The move did snap, otherwise the test would not exercise undo of a snap
+    expect([state.board.pieces[0]?.x, state.board.pieces[0]?.y]).not.toEqual([target.x, target.y])
+
+    state = unwrap(undoLastBoardChange(state, CASH1981))
+    expect([state.board.pieces[0]?.x, state.board.pieces[0]?.y]).toEqual([before.x, before.y])
   })
 })
 

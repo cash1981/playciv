@@ -45,6 +45,7 @@ import {
   optionalNumber,
   optionalString,
   readGame,
+  requireMembership,
   requireString,
 } from '../context.js'
 import { sendError } from '../errors.js'
@@ -311,13 +312,25 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   // Turns
   // -------------------------------------------------------------------------
 
+  /**
+   * The engine lets anyone with the turn pass it on (Java: authorisation lived
+   * in the resource layer), so a non-member is rejected here, before the
+   * engine ever sees the call.
+   */
   app.post('/api/games/:gameId/endturn', auth, async (request, reply) => {
     const { gameId } = request.params as Params
-    return applyToGame(context, request, reply, gameId, (state) => endTurn(state))
+    if ((await requireMembership(context, request, reply, gameId)) === undefined) return reply
+
+    const player = currentPlayer(request)
+    return applyToGame(context, request, reply, gameId, (state) =>
+      endTurn(state, { playerId: player.id, username: player.username }),
+    )
   })
 
   app.post('/api/games/:gameId/taketurn', auth, async (request, reply) => {
     const { gameId } = request.params as Params
+    if ((await requireMembership(context, request, reply, gameId)) === undefined) return reply
+
     return applyToGame(context, request, reply, gameId, (state) =>
       takeTurn(state, currentPlayer(request).id),
     )
@@ -335,7 +348,11 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
     )
   })
 
-  /** Java: `PlayerResource.updateTurn` with `TurnDTO`. */
+  /**
+   * Java: `PlayerResource.updateTurn` with `TurnDTO`. Unlike `endturn`, the
+   * engine's `updateTurn` already calls `hasUserAccess` on the caller and
+   * returns `NO_ACCESS` (403) for a non-member, so no extra gate is needed here.
+   */
   app.post('/api/games/:gameId/turns/update', auth, async (request, reply) => {
     const { gameId } = request.params as Params
     const body = asRecord(request.body)
@@ -350,6 +367,7 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
     )
   })
 
+  /** `lockOrUnlockTurn` also gates on `hasUserAccess` in the engine, same as `updateTurn`. */
   app.post('/api/games/:gameId/turns/lock', auth, async (request, reply) => {
     const { gameId } = request.params as Params
     const body = asRecord(request.body)

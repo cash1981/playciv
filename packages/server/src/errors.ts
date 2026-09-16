@@ -22,6 +22,9 @@ export function statusFor(error: EngineError): number {
     // Nothing on the board to take back
     case 'NOTHING_TO_UNDO_ON_BOARD':
       return 412
+    // Java: 409 Conflict — there is no current turn to end yet
+    case 'GAME_NOT_STARTED':
+      return 409
     // The client asked for a piece that is not in the manifest
     case 'BOARD_ASSET_NOT_FOUND':
       return 400

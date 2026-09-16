@@ -4,7 +4,7 @@
  */
 
 import type { EngineError, GameState, PlayerView } from '@civ/engine'
-import { toPlayerView } from '@civ/engine'
+import { hasUserAccess, toPlayerView } from '@civ/engine'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 import type { TokenSigner } from './auth.js'
@@ -61,6 +61,45 @@ export function currentPlayer(request: FastifyRequest): StoredPlayer {
 }
 
 /**
+ * Stamps every log entry that has no timestamp yet with `now`. The engine is
+ * pure and cannot call the clock itself, so it appends entries with
+ * `createdAt: null`; the server is the one place allowed to know the time.
+ * Entries that already carry a timestamp are left untouched.
+ */
+export function stampLog(state: GameState, now: string): GameState {
+  return {
+    ...state,
+    log: state.log.map((entry) =>
+      entry.createdAt === null ? { ...entry, createdAt: now } : entry,
+    ),
+  }
+}
+
+/**
+ * Requires the caller to be a player in the game before anything else runs.
+ * The engine's `endTurn` deliberately lets anyone with the turn pass it on
+ * (Java's authorisation lived in the resource layer), so membership is
+ * enforced here, at the route.
+ */
+export async function requireMembership(
+  context: AppContext,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  gameId: string,
+): Promise<GameState | undefined> {
+  const game = await context.repo.findGame(gameId)
+  if (game === undefined) {
+    await sendError(reply, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    return undefined
+  }
+  if (!hasUserAccess(game, currentPlayer(request).id)) {
+    await sendError(reply, 403, 'NO_ACCESS', 'User is not player of this game')
+    return undefined
+  }
+  return game
+}
+
+/**
  * Runs an engine action against a stored game: load, call, save, and answer
  * with the player's own view of the new state.
  */
@@ -79,8 +118,10 @@ export async function applyToGame(
   const result = action(game)
   if (!result.ok) return sendEngineError(reply, result.error)
 
-  await context.repo.saveGame(result.value)
-  return reply.send(toPlayerView(result.value, currentPlayer(request).id))
+  const stamped = stampLog(result.value, new Date().toISOString())
+
+  await context.repo.saveGame(stamped)
+  return reply.send(toPlayerView(stamped, currentPlayer(request).id))
 }
 
 /** Reads a game and answers with the player's view, changing nothing. */

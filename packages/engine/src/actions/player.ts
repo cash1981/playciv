@@ -610,14 +610,33 @@ export function discardItem(state: GameState, input: DiscardInput): ActionResult
  * Java's other branch, an index-based variant for games made before
  * `playernumber` existed, is not ported. New games always have playernumber.
  */
-export function endTurn(state: GameState): ActionResult {
+export interface EndTurnActor {
+  readonly playerId: string
+  readonly username: string
+}
+
+// `_actor` is accepted (and passed by the route) but never read: Java's
+// endTurn does not care who calls, and membership is gated at the route.
+export function endTurn(state: GameState, _actor?: EndTurnActor): ActionResult {
+  const firstPlayer = state.players[0]
+
+  // Java kept a username/index fallback for games created before playernumber
+  // was introduced. MongoDB still contains such games, but old `pbf` games are
+  // never loaded as GameState (they are read-only — see the mongodb decision),
+  // so this branch only ever sees an unstarted new game, where no player has a
+  // playernumber yet. There is nothing to advance by index; report that plainly
+  // instead of guessing at a next player.
+  if ((firstPlayer?.playernumber ?? 0) <= 0) {
+    return err({ kind: 'GAME_NOT_STARTED' })
+  }
+
   const current = state.players.find((player) => player.yourTurn)
-  if (current === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId: '' })
+  if (current === undefined) return err({ kind: 'GAME_NOT_STARTED' })
 
   const nextNumber = current.playernumber + 1
-  const firstPlayer = state.players.find((player) => player.playernumber === 1)
+  const firstNumberedPlayer = state.players.find((player) => player.playernumber === 1)
   const nextPlayer =
-    state.players.find((player) => player.playernumber === nextNumber) ?? firstPlayer
+    state.players.find((player) => player.playernumber === nextNumber) ?? firstNumberedPlayer
 
   if (nextPlayer === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId: '' })
 

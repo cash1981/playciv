@@ -13,7 +13,7 @@ _Last updated: 2026-09-15_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 291 engine, 46 server |
+| `pnpm -r test` | passing — 294 engine, 51 server (on `feat/game-fixes`) |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -63,6 +63,18 @@ _Nothing. See the queue on the task board._
    the security pass that goes with it.
 
 ## Known problems and loose ends
+
+- **Game fixes done on `feat/game-fixes`** (off `feat/mongodb-storage`), each
+  through the review gate: membership on endturn/taketurn (403 for non-members),
+  `GAME_NOT_STARTED` (409) instead of a misleading "Couldn't find player",
+  log timestamp stamping on game creation, deterministic newest-first log sort,
+  map tiles snap to the grid on move (bug #6), and the duplicate
+  `startplayer_100_100` marker removed. Client-visual: board zoom now pans with
+  scrollbars (task 3) and the tech pyramid no longer clips its left edge or
+  overlaps the turn orders — both browser-verified. Civ-tile auto-placement,
+  the `dd.MM.yyyy hh:mm:ss` log format, log sorting and collapsible panels were
+  already in place (Luna) and confirmed working. 297 engine + 51 server tests
+  pass. Branch pushed; PR still to open.
 
 - **`gh` is not installed**, so pull requests are opened through the compare
   link rather than the CLI. SSH push works.

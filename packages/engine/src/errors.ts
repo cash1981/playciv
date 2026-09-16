@@ -66,6 +66,8 @@ export type EngineError =
   | { readonly kind: 'BOARD_PIECE_NOT_FOUND'; readonly pieceId: string }
   /** The board history is empty, so there is nothing to take back */
   | { readonly kind: 'NOTHING_TO_UNDO_ON_BOARD' }
+  /** `endTurn` was called but no player has the turn yet — the game has not started */
+  | { readonly kind: 'GAME_NOT_STARTED' }
 
 export function describeError(error: EngineError): string {
   switch (error.kind) {
@@ -125,5 +127,7 @@ export function describeError(error: EngineError): string {
       return `No piece on the board with id ${error.pieceId}`
     case 'NOTHING_TO_UNDO_ON_BOARD':
       return 'There is no board change to undo'
+    case 'GAME_NOT_STARTED':
+      return 'The game has not started yet, so there is no turn to end'
   }
 }

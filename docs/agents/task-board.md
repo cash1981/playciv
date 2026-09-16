@@ -14,9 +14,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 _None. The board is clear._
 
-Recently merged: `tech-tree` and `mongodb-storage`. The latter added `highscore`
-to the engine barrel and `GET /api/highscore`; whoever takes `public-landing`
-builds the UI on that endpoint rather than re-deriving highscore.
+Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
+snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
 ---
 
