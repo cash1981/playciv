@@ -1,8 +1,9 @@
 /**
  * The root component. Replaces the AngularJS app in old-civ-web.
  *
- * Three screens: sign-in, the game list and the game itself. No router library —
- * the state is small enough for a union to carry it.
+ * Four screens: sign-in, the game list, the game itself and the public
+ * highscore. No router library — the state is small enough for a union to
+ * carry it.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -10,12 +11,18 @@ import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api, storeToken, storedToken } from './lib/api.js'
 import type { PlayerDto } from './lib/api.js'
 import { GameView } from './views/GameView.js'
+import { HighscoreView } from './views/HighscoreView.js'
 import { LobbyView } from './views/LobbyView.js'
 import { LoginView } from './views/LoginView.js'
 
-type Screen = { readonly name: 'lobby' } | { readonly name: 'game'; readonly gameId: string }
+type Screen =
+  | { readonly name: 'lobby' }
+  | { readonly name: 'highscore' }
+  | { readonly name: 'game'; readonly gameId: string }
 
 function screenFromPath(pathname: string): Screen {
+  if (/^\/highscore\/?$/.test(pathname)) return { name: 'highscore' }
+
   const match = /^\/game\/([^/]+)\/?$/.exec(pathname)
   if (match === null) return { name: 'lobby' }
 
@@ -69,6 +76,11 @@ export function App(): React.JSX.Element {
     setScreen({ name: 'lobby' })
   }, [])
 
+  const openHighscore = useCallback(() => {
+    window.history.pushState(null, '', '/highscore')
+    setScreen({ name: 'highscore' })
+  }, [])
+
   if (checking) {
     return (
       <div className="app">
@@ -77,9 +89,32 @@ export function App(): React.JSX.Element {
     )
   }
 
+  // The highscore is public: it renders whether or not anyone is signed in.
+  if (screen.name === 'highscore') {
+    return (
+      <div className="app">
+        <header className="topbar">
+          <strong>Civilization</strong>
+          <span className="muted">playciv</span>
+          <span className="spacer" />
+          <button onClick={backToGames}>{player === null ? 'Sign in' : 'Games'}</button>
+          {player !== null && <span className="muted">{player.username}</span>}
+          {player !== null && <button onClick={signOut}>Sign out</button>}
+        </header>
+        <HighscoreView />
+      </div>
+    )
+  }
+
   if (player === null) {
     return (
       <div className="app">
+        <header className="topbar">
+          <strong>Civilization</strong>
+          <span className="muted">playciv</span>
+          <span className="spacer" />
+          <button onClick={openHighscore}>Highscore</button>
+        </header>
         <LoginView onSignedIn={setPlayer} />
       </div>
     )
@@ -94,6 +129,7 @@ export function App(): React.JSX.Element {
         {screen.name === 'game' && (
           <button onClick={backToGames}>Back to games</button>
         )}
+        <button onClick={openHighscore}>Highscore</button>
         <span className="muted">{player.username}</span>
         <button onClick={signOut}>Sign out</button>
       </header>
