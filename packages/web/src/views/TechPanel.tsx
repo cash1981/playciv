@@ -181,6 +181,13 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
                 Reveal
               </button>
             )}
+            <button
+              className="small"
+              disabled={busy}
+              onClick={() => void run(() => api.removeSocialPolicy(gameId, policy.name))}
+            >
+              Remove
+            </button>
           </ItemCard>
         ))}
         {yourPolicies.length === 0 && <li className="muted">None chosen.</li>}
