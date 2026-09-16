@@ -12,12 +12,14 @@ import type {
   BoardAsset,
   BoardHistoryEntry,
   BoardPiece,
+  HighscoreResult,
   Item,
   PlayerTurn,
   PlayerView,
   SheetName,
   SocialPolicyItem,
   TechItem,
+  WinnerEntry,
 } from '@civ/engine'
 
 export type {
@@ -26,12 +28,14 @@ export type {
   BoardAsset,
   BoardHistoryEntry,
   BoardPiece,
+  HighscoreResult,
   Item,
   PlayerTurn,
   PlayerView,
   SheetName,
   SocialPolicyItem,
   TechItem,
+  WinnerEntry,
 }
 
 export interface PlayerDto {
@@ -162,6 +166,9 @@ export const api = {
   login: (username: string, password: string) =>
     post<AuthResponse>('/api/auth/login', { username, password }),
   me: () => get<PlayerDto>('/api/auth/me'),
+
+  /** Public: the server route needs no bearer token. */
+  highscore: () => get<HighscoreResult>('/api/highscore'),
 
   games: () => get<GameSummary[]>('/api/games'),
   createGame: (name: string, numOfPlayers: number) =>
