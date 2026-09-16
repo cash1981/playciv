@@ -12,7 +12,23 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_None. The board is clear._
+### game-ui-bugfixes
+
+- **Owner:** Luna (gpt-5.6-luna)
+- **Branch:** `feat/mongodb-storage`
+- **Brief:** `docs/agents/tasks/game-ui-bugfixes.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/board.ts`
+  - `packages/engine/src/state.ts`
+  - `packages/engine/test/`
+  - `packages/server/src/routes/`
+  - `packages/server/src/store/`
+  - `packages/server/test/`
+  - `packages/web/src/views/`
+  - `packages/web/src/styles.css`
+  - `packages/web/test/`
+- **Notes:** Fixes reported MongoDB turn lookup, log presentation, tech-tree layout, collapsible game panels, and starting-tile alignment.
 
 Recently merged: `tech-tree` and `mongodb-storage`. The latter added `highscore`
 to the engine barrel and `GET /api/highscore`; whoever takes `public-landing`
