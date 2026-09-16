@@ -656,21 +656,6 @@ ul.list > li:last-child {
   font-weight: 400;
 }
 
-/* A small pill in the corner of a slot you hold but have not revealed */
-.tech-slot-badge {
-  position: absolute;
-  top: -0.5rem;
-  right: -0.3rem;
-  padding: 0 0.3rem;
-  border-radius: 999px;
-  border: 1px solid var(--warn);
-  background: var(--bg);
-  color: var(--warn);
-  font-size: 0.6rem;
-  font-weight: 400;
-  white-space: nowrap;
-}
-
 /* Wraps one player's public pyramid, tinted with their colour */
 .tech-pyramid-block {
   margin: 0 0 0.8rem;

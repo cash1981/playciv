@@ -52,11 +52,6 @@ export function TechTree({ techs }: Props): React.JSX.Element {
                 title={tech.name}
               >
                 {tech.name}
-                {tech.hidden === true && (
-                  <span className="tech-slot-badge" title="Only you can see this">
-                    only you
-                  </span>
-                )}
               </div>
             ))}
             {Array.from({ length: emptyCount }, (_unused, index) => (
