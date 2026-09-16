@@ -199,6 +199,95 @@ describe('games', () => {
     expect(state?.players.filter((player) => player.yourTurn)).toHaveLength(1)
   })
 
+  it('the creator can delete an active game', async () => {
+    const creator = await register('delete-creator-active')
+    const gameId = await createGame(creator, 'Delete active')
+
+    const deleted = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/delete`,
+      headers: bearer(creator),
+      payload: {},
+    })
+
+    expect(deleted.statusCode).toBe(204)
+    expect(await repo.findGame(gameId)).toBeUndefined()
+  })
+
+  it('the creator can delete an ended game', async () => {
+    const creator = await register('delete-creator-ended')
+    const gameId = await createGame(creator, 'Delete ended')
+    const ended = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/end`,
+      headers: bearer(creator),
+      payload: {},
+    })
+    expect(ended.statusCode).toBe(200)
+
+    const deleted = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/delete`,
+      headers: bearer(creator),
+      payload: {},
+    })
+
+    expect(deleted.statusCode).toBe(204)
+    expect(await repo.findGame(gameId)).toBeUndefined()
+  })
+
+  it('admin can open and delete a game without joining it', async () => {
+    const creator = await register('delete-admin-creator')
+    const admin = await register('admin')
+    const gameId = await createGame(creator, 'Delete by admin')
+
+    const opened = await app.inject({
+      method: 'GET',
+      url: `/api/games/${gameId}`,
+      headers: bearer(admin),
+    })
+    expect(opened.statusCode).toBe(200)
+    expect((opened.json() as { you: unknown }).you).toBeNull()
+
+    const deleted = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/delete`,
+      headers: bearer(admin),
+      payload: {},
+    })
+
+    expect(deleted.statusCode).toBe(204)
+    expect(await repo.findGame(gameId)).toBeUndefined()
+  })
+
+  it('a non-owner cannot delete a game and the game remains', async () => {
+    const creator = await register('delete-owner')
+    const other = await register('delete-other')
+    const gameId = await createGame(creator, 'Delete forbidden')
+
+    const forbidden = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/delete`,
+      headers: bearer(other),
+      payload: {},
+    })
+
+    expect(forbidden.statusCode).toBe(403)
+    expect(await repo.findGame(gameId)).toBeDefined()
+  })
+
+  it('deleting a missing game returns 404', async () => {
+    const token = await register('delete-missing')
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/games/missing/delete',
+      headers: bearer(token),
+      payload: {},
+    })
+
+    expect(response.statusCode).toBe(404)
+  })
+
   it('a full game turns further players away', async () => {
     const creator = await register('cash1981')
     const gameId = await createGame(creator, 'Fullt', 2)

@@ -105,7 +105,12 @@ export function App(): React.JSX.Element {
           onUnauthorized={signOut}
         />
       ) : (
-        <GameView gameId={screen.gameId} player={player} onUnauthorized={signOut} />
+        <GameView
+          gameId={screen.gameId}
+          player={player}
+          onUnauthorized={signOut}
+          onDeleted={backToGames}
+        />
       )}
     </div>
   )

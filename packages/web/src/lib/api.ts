@@ -171,6 +171,7 @@ export const api = {
   withdraw: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/withdraw`),
   endGame: (gameId: string, winner?: string) =>
     post<PlayerView>(`/api/games/${gameId}/end`, winner === undefined ? {} : { winner }),
+  deleteGame: (gameId: string) => post<void>(`/api/games/${gameId}/delete`),
 
   publicLog: (gameId: string) => get<LogEntryDto[]>(`/api/games/${gameId}/log/public`),
   privateLog: (gameId: string) => get<LogEntryDto[]>(`/api/games/${gameId}/log/private`),

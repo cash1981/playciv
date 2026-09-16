@@ -26,6 +26,7 @@ interface Props {
   readonly gameId: string
   readonly player: PlayerDto
   readonly onUnauthorized: () => void
+  readonly onDeleted: () => void
 }
 
 /** What can be drawn. Techs are chosen, so they are not listed here. */
@@ -48,7 +49,7 @@ const DRAWABLE: readonly { readonly sheet: SheetName; readonly label: string }[]
   { sheet: 'MODERN_WONDERS', label: 'Modern wonder' },
 ]
 
-export function GameView({ gameId, player, onUnauthorized }: Props): React.JSX.Element {
+export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): React.JSX.Element {
   const [view, setView] = useState<PlayerView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -155,16 +156,22 @@ export function GameView({ gameId, player, onUnauthorized }: Props): React.JSX.E
           >
             Withdraw
           </button>
-          <button
-            className="danger"
-            disabled={busy || !view.active || you?.gameCreator !== true}
-            onClick={() => {
-              const winner = window.prompt('Username of the winner (empty for no winner)') ?? ''
-              void run(() => api.endGame(gameId, winner === '' ? undefined : winner))
-            }}
-          >
-            End the game
-          </button>
+          {(you?.gameCreator === true || player.username === 'admin') && (
+            <button
+              className="danger"
+              disabled={busy}
+              onClick={() => {
+                if (window.confirm('Delete this game permanently?')) {
+                  void run(async () => {
+                    await api.deleteGame(gameId)
+                    onDeleted()
+                  })
+                }
+              }}
+            >
+              Delete game
+            </button>
+          )}
         </div>
       </div>
 

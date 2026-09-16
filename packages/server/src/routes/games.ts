@@ -169,6 +169,28 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     )
   })
 
+  app.post('/api/games/:gameId/delete', auth, async (request, reply) => {
+    const { gameId } = request.params as { gameId: string }
+    const game = await context.repo.findGame(gameId)
+    if (game === undefined) {
+      return sendError(reply, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    }
+
+    const me = currentPlayer(request)
+    const isCreator = game.players.some(
+      (player) => player.playerId === me.id && player.gameCreator,
+    )
+    if (!isCreator && me.username !== 'admin') {
+      return sendError(reply, 403, 'NO_ACCESS', 'Only the game creator or admin can delete a game')
+    }
+
+    const deleted = await context.repo.deleteGame(gameId)
+    if (!deleted) {
+      return sendError(reply, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    }
+    return reply.code(204).send()
+  })
+
   /** Java: `GameAction.getAllRevealedItems` — what the iframe spreadsheet showed. */
   app.get('/api/games/:gameId/revealed', auth, async (request, reply) => {
     const { gameId } = request.params as { gameId: string }
