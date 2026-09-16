@@ -60,6 +60,8 @@ _Last updated: 2026-09-16_
   logged and exposed through the UI/API.
 - **Issue #17.** Two-player games use an 8 × 8 board labelled A–H and 1–8;
   three- to five-player games retain the 16 × 16 board.
+- **Delete game.** Game creators and the `admin` account can permanently
+  delete active or ended games; other players are denied.
 
 ## In progress
 

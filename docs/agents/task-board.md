@@ -12,20 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### delete-game
-
-- **Owner:** Luna (gpt-5.6-luna)
-- **Branch:** `feat/delete-game`
-- **Brief:** `docs/agents/tasks/delete-game.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/server/src/routes/games.ts`
-  - `packages/server/test/api.test.ts`
-  - `packages/web/src/lib/api.ts`
-  - `packages/web/src/views/GameView.tsx`
-  - `packages/web/src/App.tsx`
-- **Notes:** Creator or username `admin` may delete; existing user-authored text changes are already on main.
-
 ### typecheck-build-order
 
 - **Owner:** Codex (GPT-5)
