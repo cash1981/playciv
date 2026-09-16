@@ -12,6 +12,17 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-17-two-player-map
+
+- **Owner:** Luna (gpt-5.6-luna)
+- **Branch:** `fix/issue-17-two-player-map`
+- **Brief:** `docs/agents/tasks/issue-17-two-player-map.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/create-game.ts`
+  - `packages/engine/test/game-action.test.ts`
+- **Notes:** Fixes GitHub issue #17.
+
 ### typecheck-build-order
 
 - **Owner:** Codex (GPT-5)
