@@ -6,7 +6,7 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-15_
+_Last updated: 2026-09-16_
 
 ## Health
 
@@ -50,6 +50,8 @@ _Last updated: 2026-09-15_
   (hidden ones badged) and one public pyramid per player from
   `revealedTechsForAllPlayers`. Verified in the browser; the hidden-info test
   is proven load-bearing.
+- **Issue #13.** Hidden technologies retain their yellow border without the
+  cropped "only you" badge in the tech pyramid.
 
 ## In progress
 

@@ -12,17 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-13-hidden-tech
-
-- **Owner:** Luna (gpt-5.6-luna)
-- **Branch:** `fix/issue-13-hidden-tech`
-- **Brief:** `docs/agents/tasks/issue-13-hidden-tech.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/TechTree.tsx`
-  - `packages/web/src/styles.css`
-- **Notes:** Fixes GitHub issue #13. Existing user changes in `packages/web/src/lib/api.ts` are out of scope.
-
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
