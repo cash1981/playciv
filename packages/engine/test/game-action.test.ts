@@ -17,6 +17,7 @@ import {
   withdrawFromGame,
 } from '../src/actions/game.js'
 import { discardItem, revealItem } from '../src/actions/player.js'
+import { mapTop, squareOf } from '../src/board.js'
 import { createGame } from '../src/create-game.js'
 import { itemName } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -36,6 +37,49 @@ function newGameWithCreator(): GameState {
     ],
   })
 }
+
+describe('createGame board geometry', () => {
+  it('creates an 8 by 8 board with labels A1 through H8 for two players', () => {
+    const state = createGame({ name: 'two-player', numOfPlayers: 2, seed: 'two-player' })
+
+    expect(state.board.columns).toBe(8)
+    expect(state.board.rows).toBe(8)
+
+    const topLeft = {
+      id: 'top-left',
+      assetId: 'test',
+      path: 'test.png',
+      label: 'Test',
+      category: 'marker' as const,
+      x: 0,
+      y: mapTop(state.board),
+      width: 1,
+      height: 1,
+      rotation: 0 as const,
+      placedBy: null,
+    }
+    const bottomRight = {
+      ...topLeft,
+      id: 'bottom-right',
+      x: 7 * 94,
+      y: mapTop(state.board) + 7 * 94,
+    }
+
+    expect(squareOf(state.board, topLeft)).toBe('A1')
+    expect(squareOf(state.board, bottomRight)).toBe('H8')
+  })
+
+  it.each([3, 4, 5])('keeps the 16 by 16 board for %s players', (numOfPlayers) => {
+    const state = createGame({
+      name: 'standard-map',
+      numOfPlayers,
+      seed: `players-${numOfPlayers}`,
+    })
+
+    expect(state.board.columns).toBe(16)
+    expect(state.board.rows).toBe(16)
+  })
+})
 
 describe('joinGame', () => {
   it('adds the player with the next free colour and logs it', () => {

@@ -116,7 +116,7 @@ export function createGame(options: CreateGameOptions): GameState {
     discardedItems: [],
     withdrawnPlayers: [],
     publicTurns: {},
-    board: createBoard(),
+    board: options.numOfPlayers === 2 ? createBoard(8, 8) : createBoard(),
     players: (options.players ?? []).map((player, index) =>
       emptyPlayerhand(player, index + 1),
     ),
