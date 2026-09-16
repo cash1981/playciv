@@ -16,6 +16,7 @@ import {
   endTurn,
   isYourTurn,
   remainingTechsForPlayer,
+  removeSocialPolicy,
   removeTech,
   revealItem,
   revealSocialPolicy,
@@ -330,6 +331,33 @@ describe('social policy', () => {
     if (policy === undefined) throw new Error('no social policy')
 
     const error = unwrapErr(revealSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
+    expect(error).toEqual({ kind: 'ITEM_NOT_FOUND' })
+  })
+
+  it('removes a chosen card, makes it available again and logs the removal', () => {
+    const game = firstCivGame()
+    const policy = game.socialPolicies[0]
+    if (policy === undefined) throw new Error('no social policy')
+
+    const chosen = unwrap(chooseSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
+    const state = unwrap(removeSocialPolicy(chosen, { playerId: CASH1981, name: policy.name }))
+
+    expect(findPlayer(state, CASH1981)?.socialPolicies).toHaveLength(0)
+    expect(state.socialPolicies.some((candidate) => candidate.name === policy.name)).toBe(true)
+    expect(state.log.at(-1)?.logType).toBe('REMOVED_SOCIAL_POLICY')
+    expect(state.log.at(-1)?.privateLog).toContain(policy.name)
+    expect(state.log.at(-1)?.publicLog).toContain('has removed a hidden social policy')
+    expect(state.log.at(-1)?.publicLog).not.toContain(policy.name)
+  })
+
+  it('cannot remove another player\'s chosen card', () => {
+    const game = firstCivGame()
+    const policy = game.socialPolicies[0]
+    if (policy === undefined) throw new Error('no social policy')
+
+    const chosen = unwrap(chooseSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
+    const error = unwrapErr(removeSocialPolicy(chosen, { playerId: CHUL, name: policy.name }))
+
     expect(error).toEqual({ kind: 'ITEM_NOT_FOUND' })
   })
 })

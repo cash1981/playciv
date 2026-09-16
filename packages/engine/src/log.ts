@@ -88,6 +88,11 @@ export function createLogTexts(
         privateLog: `${username} has removed ${DELIM}${all}${uniqueText}`,
         publicLog: `${username} has removed a hidden technology${uniqueText}`,
       }
+    case 'REMOVED_SOCIAL_POLICY':
+      return {
+        privateLog: `${username} has removed ${DELIM}${all}${uniqueText}`,
+        publicLog: `${username} has removed a hidden social policy${uniqueText}`,
+      }
     // Java: DISCARD reveals everything publicly too — the card is out of play
     case 'DISCARD':
       return {
@@ -119,7 +124,6 @@ export function createLogTexts(
     case 'SHUFFLE':
     case 'WITHDRAW':
     case 'JOIN':
-    case 'REMOVED_SOCIAL_POLICY':
     case 'VOTE':
       return { privateLog: '', publicLog: '' }
   }

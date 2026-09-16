@@ -650,6 +650,53 @@ describe('a whole round', () => {
   })
 })
 
+describe('social policy removal', () => {
+  it('removes only the owner\'s chosen policy and logs a hidden removal', async () => {
+    const { gameId, starter, waiting } = await startedGame('Remove policy')
+    const available = await app.inject({
+      method: 'GET',
+      url: `/api/games/${gameId}/socialpolicies`,
+      headers: bearer(starter),
+    })
+    const policy = (available.json() as { name: string }[])[0]
+    if (policy === undefined) throw new Error('no social policy')
+
+    const chosen = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/socialpolicy/choose`,
+      headers: bearer(starter),
+      payload: { name: policy.name },
+    })
+    expect(chosen.statusCode).toBe(200)
+
+    const forbidden = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/socialpolicy/remove`,
+      headers: bearer(waiting),
+      payload: { name: policy.name },
+    })
+    expect(forbidden.statusCode).toBe(404)
+
+    const removed = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/socialpolicy/remove`,
+      headers: bearer(starter),
+      payload: { name: policy.name },
+    })
+    expect(removed.statusCode).toBe(200)
+
+    const view = removed.json() as { you?: { socialPolicies: { name: string }[] } }
+    expect(view.you?.socialPolicies.some((candidate) => candidate.name === policy.name)).toBe(false)
+
+    const state = await repo.findGame(gameId)
+    expect(state?.socialPolicies.some((candidate) => candidate.name === policy.name)).toBe(true)
+    const log = state?.log.at(-1)
+    expect(log?.logType).toBe('REMOVED_SOCIAL_POLICY')
+    expect(log?.publicLog).toContain('has removed a hidden social policy')
+    expect(log?.publicLog).not.toContain(policy.name)
+  })
+})
+
 /** The board. New in this port — Java had no board model. */
 describe('board', () => {
   it('the catalogue of piece types is available', async () => {

@@ -488,6 +488,26 @@ export function chooseSocialPolicy(
   return ok(appendItemLog(next, 'SOCIAL_POLICY', player.username, player.playerId, chosen))
 }
 
+/** Remove a social policy chosen by the player. */
+export function removeSocialPolicy(
+  state: GameState,
+  input: ChooseSocialPolicyInput,
+): ActionResult {
+  const access = requireAccess(state, input.playerId)
+  if (!access.ok) return access
+  const player = access.value
+
+  const policy = player.socialPolicies.find((candidate) => candidate.name === input.name)
+  if (policy === undefined) return err({ kind: 'ITEM_NOT_FOUND' })
+
+  const next = withPlayer(state, {
+    ...player,
+    socialPolicies: player.socialPolicies.filter((candidate) => candidate.name !== policy.name),
+  })
+
+  return ok(appendItemLog(next, 'REMOVED_SOCIAL_POLICY', player.username, player.playerId, policy))
+}
+
 /**
  * There is no `PlayerAction.revealSocialPolicy` in Java — social policies were
  * never revealable there. This mirrors `revealTech` above, which is the

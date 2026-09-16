@@ -22,6 +22,7 @@ import {
   playersActiveUndos,
   remainingTechsForPlayer,
   removeTech,
+  removeSocialPolicy,
   revealAndDiscardBattlehand,
   revealItem,
   revealSocialPolicy,
@@ -213,6 +214,17 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
     }
     return applyToGame(context, request, reply, gameId, (state) =>
       chooseSocialPolicy(state, { playerId: currentPlayer(request).id, name }),
+    )
+  })
+
+  app.post('/api/games/:gameId/socialpolicy/remove', auth, async (request, reply) => {
+    const { gameId } = request.params as Params
+    const name = requireString(asRecord(request.body), 'name')
+    if (name === undefined) {
+      return sendError(reply, 400, 'BAD_REQUEST', 'name is required')
+    }
+    return applyToGame(context, request, reply, gameId, (state) =>
+      removeSocialPolicy(state, { playerId: currentPlayer(request).id, name }),
     )
   })
 
