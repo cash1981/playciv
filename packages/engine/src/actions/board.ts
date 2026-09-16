@@ -230,6 +230,14 @@ export function movePiece(state: GameState, input: MovePieceInput): ActionResult
       })
       return { x: slotX, y: slotY }
     }
+    // Dropped on the map: a 4 x 4 tile snaps to the nearest slot, the same as
+    // placement does. Ordinary pieces keep their raw drop coordinates.
+    if (piece.category === 'tile' || piece.category === 'civtile') {
+      const mapOrigin = nearestBlockOrigin(state.board, input.x, input.y)
+      if (mapOrigin !== undefined) {
+        return { x: mapOrigin[0], y: mapOrigin[1] }
+      }
+    }
     return { x: input.x, y: input.y }
   })()
 
