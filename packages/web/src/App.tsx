@@ -89,7 +89,7 @@ export function App(): React.JSX.Element {
     <div className="app">
       <header className="topbar">
         <strong>Civilization</strong>
-        <span className="muted">play by forum</span>
+        <span className="muted">playciv</span>
         <span className="spacer" />
         {screen.name === 'game' && (
           <button onClick={backToGames}>Back to games</button>

@@ -1,7 +1,6 @@
-# Civilization: The Board Game — play by forum
+# Civilization: The Board Game — V2
 
-A rewrite of the play-by-forum engine for Sid Meier's Civilization: The Board
-Game (Fantasy Flight Games), with the *Fame and Fortune* and *Wisdom and
+A rewrite of Sid Meier's Civilization: The Board Game (Fantasy Flight Games), with the *Fame and Fortune* and *Wisdom and
 Warfare* expansions.
 
 It replaces two old repositories:

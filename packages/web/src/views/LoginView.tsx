@@ -39,7 +39,7 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
   return (
     <div className="center">
       <h1>Civilization</h1>
-      <p className="muted">Play by forum. Sign in to continue.</p>
+      <p className="muted">Civilization the boardgame. Sign in to continue.</p>
 
       {error !== null && <div className="error">{error}</div>}
 
