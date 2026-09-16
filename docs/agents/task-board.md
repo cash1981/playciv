@@ -12,28 +12,28 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### game-ui-bugfixes
+### game-fixes-core
 
-- **Owner:** Luna (gpt-5.6-luna)
-- **Branch:** `feat/mongodb-storage`
-- **Brief:** `docs/agents/tasks/game-ui-bugfixes.md`
-- **Status:** in progress — correcting review findings
+- **Owner:** coder (Sonnet), orchestrated by Opus
+- **Branch:** `feat/game-fixes` (off `feat/mongodb-storage`, which carries
+  Luna's earlier bug-fix commits plus the MongoDB work)
+- **Brief:** `docs/agents/tasks/game-fixes-core.md`
+- **Status:** in progress — the four testable engine/server findings
 - **Claimed paths:**
-  - `packages/engine/src/actions/player.ts`
-  - `packages/engine/src/actions/board.ts`
+  - `packages/engine/src/actions/player.ts` (endTurn error only)
+  - `packages/engine/src/errors.ts`
+  - `packages/server/src/errors.ts`
+  - `packages/server/src/routes/play.ts`
+  - `packages/server/src/routes/games.ts`
   - `packages/server/src/context.ts`
-  - `README.md`
-  - `docs/agents/decisions.md`
-  - `packages/engine/src/board.ts`
-  - `packages/engine/src/state.ts`
-  - `packages/engine/test/`
-  - `packages/server/src/routes/`
-  - `packages/server/src/store/`
-  - `packages/server/test/`
-  - `packages/web/src/views/`
-  - `packages/web/src/styles.css`
-  - `packages/web/test/`
-- **Notes:** Review of `e082006..aba5090` on 2026-09-16 requires changes. Confirmed outsider end-turn access in zero-numbered games, missing creation timestamps and oldest-first undated logs, and tile moves bypassing snapping. Terra also identified inaccessible overflow in the tech pyramid. Typecheck/build pass; 293 engine and 46 server tests pass. Claim remains open for corrections; no merge approval.
+  - `packages/engine/test/`, `packages/server/test/`
+- **Notes:** Continues Luna's `game-ui-bugfixes` on a new branch off
+  `feat/mongodb-storage`. This brief covers only the testable engine/server
+  findings (membership on endturn/taketurn, GAME_NOT_STARTED, log timestamp
+  stamping on create, newest-first tiebreak). The client-visual items (timestamp
+  display, tech-tree float/overlap, collapsible panels, pyramid overflow) and the
+  three new tasks (duplicate start-player asset, civ-tile L-shape placement, tile
+  snap-on-move, zoom panning) are separate briefs to follow.
 
 Recently merged: `tech-tree` and `mongodb-storage`. The latter added `highscore`
 to the engine barrel and `GET /api/highscore`; whoever takes `public-landing`
