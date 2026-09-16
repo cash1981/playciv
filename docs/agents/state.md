@@ -56,6 +56,8 @@ _Last updated: 2026-09-16_
   board UI; undo, replay, and backend compatibility remain.
 - **Issue #15.** Opening or joining a game uses `/game/<gameid>`, restores on
   refresh, and synchronizes browser back navigation.
+- **Issue #16.** Players can remove their own social policies; the action is
+  logged and exposed through the UI/API.
 
 ## In progress
 
