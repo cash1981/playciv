@@ -12,6 +12,16 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### typecheck-build-order
+
+- **Owner:** Codex (GPT-5)
+- **Branch:** `fix/typecheck-build-order`
+- **Brief:** `docs/agents/tasks/typecheck-build-order.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/package.json`
+- **Notes:** Fixes stale generated declaration files during recursive typecheck.
+
 ### issue-16-remove-social-policy
 
 - **Owner:** Luna (gpt-5.6-luna)
