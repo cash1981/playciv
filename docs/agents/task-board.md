@@ -12,6 +12,16 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-14-remove-clear-board
+
+- **Owner:** Luna (gpt-5.6-luna)
+- **Branch:** `fix/issue-14-remove-clear-board`
+- **Brief:** `docs/agents/tasks/issue-14-remove-clear-board.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/BoardView.tsx`
+- **Notes:** Fixes GitHub issue #14. Existing user changes in `packages/web/src/lib/api.ts` are out of scope.
+
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
