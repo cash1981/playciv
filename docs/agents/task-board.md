@@ -12,7 +12,25 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_None. The board is clear._
+### mongodb-storage
+
+- **Owner:** coder (Sonnet), orchestrated by Opus
+- **Branch:** `feat/mongodb-storage` (off `chore/agent-workflow`)
+- **Brief:** `docs/agents/tasks/mongodb-storage.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/server/src/auth.ts`
+  - `packages/server/src/routes/auth.ts`
+  - `packages/server/src/routes/public.ts` (new)
+  - `packages/server/src/store/{types,json-file,mongo}.ts`
+  - `packages/server/src/{app,index,seed-test-user}.ts`
+  - `packages/server/package.json`
+  - `packages/engine/src/{highscore,index}.ts`
+  - `packages/engine/test/highscore.test.ts`
+  - `packages/server/test/auth-legacy.test.ts`
+- **Notes:** Reuses the shared `PlayerView`-adjacent `api.ts`? No — server-only.
+  Claims `state.ts` shape? No. Adds `highscore` to the engine barrel; whoever
+  takes `public-landing` builds the UI on top of `GET /api/highscore`.
 
 Awaiting merge: `tech-tree` (approved through the review gate, verified in the
 browser, PR to open for `feat/tech-tree`) and `mongodb-storage` (approved and
