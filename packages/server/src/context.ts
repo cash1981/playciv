@@ -79,8 +79,19 @@ export async function applyToGame(
   const result = action(game)
   if (!result.ok) return sendEngineError(reply, result.error)
 
-  await context.repo.saveGame(result.value)
-  return reply.send(toPlayerView(result.value, currentPlayer(request).id))
+  const now = new Date().toISOString()
+  const previousLogIds = new Set(game.log.map((entry) => entry.id))
+  const stamped: GameState = {
+    ...result.value,
+    log: result.value.log.map((entry) =>
+      previousLogIds.has(entry.id) || entry.createdAt !== null
+        ? entry
+        : { ...entry, createdAt: now },
+    ),
+  }
+
+  await context.repo.saveGame(stamped)
+  return reply.send(toPlayerView(stamped, currentPlayer(request).id))
 }
 
 /** Reads a game and answers with the player's view, changing nothing. */

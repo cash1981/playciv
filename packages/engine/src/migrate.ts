@@ -51,6 +51,7 @@ export function migrateGameState(state: GameState): GameState {
 
   return {
     ...state,
+    log: state.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
     board:
       board === undefined
         ? fresh

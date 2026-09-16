@@ -23,6 +23,7 @@ import {
   findPiece,
   inCultureBand,
   locationOf,
+  nearestBlockOrigin,
   nextFreeSlot,
   nextRotation,
   playerAreas,
@@ -141,9 +142,15 @@ export function placeUnchecked(
   // Dropping a piece in a player area tidies it into the next free slot
   const areas = areasFor(state)
   const area = areaAt(areas, input.x + asset.width / 2, input.y + asset.height / 2)
+  const mapOrigin =
+    asset.category === 'tile' || asset.category === 'civtile'
+      ? nearestBlockOrigin(state.board, input.x, input.y)
+      : undefined
   const wanted =
-    area === undefined
-      ? { x: input.x, y: input.y }
+    mapOrigin !== undefined
+      ? { x: mapOrigin[0], y: mapOrigin[1] }
+      : area === undefined
+        ? { x: input.x, y: input.y }
       : (() => {
           const [slotX, slotY] = nextFreeSlot(state.board, area, state.board.pieces, {
             x: input.x,

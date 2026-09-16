@@ -180,8 +180,10 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
           username: entry.username,
           logType: entry.logType,
           message: entry.publicLog,
+          createdAt: entry.createdAt,
           hasUndo: entry.undo !== null,
-        })),
+        }))
+        .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')),
     )
   })
 
@@ -196,9 +198,11 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
           username: entry.username,
           logType: entry.logType,
           message: entry.privateLog,
+          createdAt: entry.createdAt,
           hasUndo: entry.undo !== null,
           canUndo: entry.item !== null && entry.undo === null,
-        })),
+        }))
+        .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')),
     )
   })
 

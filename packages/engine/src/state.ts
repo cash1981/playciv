@@ -93,6 +93,8 @@ export interface GameLogEntry {
    * taken back, not the item.
    */
   readonly undo: Undo | null
+  /** ISO timestamp assigned by the server when this entry is persisted. */
+  readonly createdAt: string | null
 }
 
 export interface GameState {

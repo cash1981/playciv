@@ -381,6 +381,18 @@ describe('discarding', () => {
 
 /** Java: `PlayerAction.endTurn` and `takeTurnButton`. */
 describe('changing turn', () => {
+  it('passes a legacy zero-numbered turn to the next player', () => {
+    const before = firstCivGame()
+    const legacy = {
+      ...before,
+      players: before.players.map((player) => ({ ...player, playernumber: 0 })),
+    }
+
+    const after = unwrap(endTurn(legacy, { playerId: CASH1981, username: 'cash1981' }))
+    expect(isYourTurn(after, CASH1981)).toBe(false)
+    expect(isYourTurn(after, KARANDRAS1)).toBe(true)
+  })
+
   it('gives the turn to the next player number', () => {
     const before = firstCivGame()
     expect(isYourTurn(before, CASH1981)).toBe(true)

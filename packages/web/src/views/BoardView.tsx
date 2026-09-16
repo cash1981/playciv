@@ -512,6 +512,7 @@ export function BoardView({
           <ul className="list scroll history">
             {[...history].reverse().map((entry, reverseIndex) => {
               const index = history.length - reverseIndex
+              const timestamp = entry.at === null ? '' : new Date(entry.at).toLocaleString('en-GB')
               return (
                 <li key={entry.id}>
                   <button
@@ -519,7 +520,7 @@ export function BoardView({
                     onClick={() => setReplayStep(index)}
                     title="Show the board as it was here"
                   >
-                    {entry.description}
+                    {timestamp !== '' ? `${timestamp} — ${entry.description}` : entry.description}
                   </button>
                 </li>
               )

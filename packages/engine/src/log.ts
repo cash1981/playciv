@@ -155,6 +155,7 @@ export function appendLog(state: GameState, options: AppendOptions): GameState {
     item: options.item ?? null,
     playerId: options.playerId ?? null,
     undo: null,
+    createdAt: null,
   }
   return { ...state, rng, log: [...state.log, entry] }
 }

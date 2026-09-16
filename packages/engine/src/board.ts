@@ -536,6 +536,29 @@ export function blockOrigin(
 }
 
 /**
+ * Returns the 4 x 4 map slot nearest to a point, or undefined outside the map.
+ * Keeping this calculation here makes both automatic and manual tile
+ * placement use the same origin as the coordinate grid.
+ */
+export function nearestBlockOrigin(
+  board: Board,
+  x: number,
+  y: number,
+): readonly [x: number, y: number] | undefined {
+  const top = mapTop(board)
+  const size = TILE_SQUARES * board.squareSize
+  // x and y are the piece's top-left corner. Rounding that corner absorbs
+  // small pointer offsets without moving a piece dropped exactly on a grid
+  // boundary into the next block.
+  const column = Math.round(x / size)
+  const row = Math.round((y - top) / size)
+  if (column < 0 || column >= blockColumns(board) || row < 0 || row >= blockRows(board)) {
+    return undefined
+  }
+  return blockOrigin(board, column, row)
+}
+
+/**
  * Where a civilization's starting tile goes, and which way it faces.
  *
  * Player 1 takes the top-left slot (A1-D4), 2 the top-right, 3 the

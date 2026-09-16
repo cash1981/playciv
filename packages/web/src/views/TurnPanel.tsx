@@ -13,6 +13,7 @@ import type { PlayerTurn, TurnPhase } from '@civ/engine'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
+import { CollapsiblePanel } from './CollapsiblePanel.js'
 
 interface Props {
   readonly gameId: string
@@ -58,8 +59,7 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
   )
 
   return (
-    <section className="panel">
-      <h2>Turn orders</h2>
+    <CollapsiblePanel id="turn-orders" title="Turn orders">
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="row">
@@ -133,6 +133,6 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
         ))}
         {publicTurns.length === 0 && <li className="muted">No orders written yet.</li>}
       </ul>
-    </section>
+    </CollapsiblePanel>
   )
 }

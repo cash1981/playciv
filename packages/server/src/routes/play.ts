@@ -313,7 +313,10 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
 
   app.post('/api/games/:gameId/endturn', auth, async (request, reply) => {
     const { gameId } = request.params as Params
-    return applyToGame(context, request, reply, gameId, (state) => endTurn(state))
+    const player = currentPlayer(request)
+    return applyToGame(context, request, reply, gameId, (state) =>
+      endTurn(state, { playerId: player.id, username: player.username }),
+    )
   })
 
   app.post('/api/games/:gameId/taketurn', auth, async (request, reply) => {

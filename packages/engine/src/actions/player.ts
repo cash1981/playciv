@@ -610,14 +610,42 @@ export function discardItem(state: GameState, input: DiscardInput): ActionResult
  * Java's other branch, an index-based variant for games made before
  * `playernumber` existed, is not ported. New games always have playernumber.
  */
-export function endTurn(state: GameState): ActionResult {
+export interface EndTurnActor {
+  readonly playerId: string
+  readonly username: string
+}
+
+export function endTurn(state: GameState, actor?: EndTurnActor): ActionResult {
+  const firstPlayer = state.players[0]
+
+  // Java kept a username/index fallback for games created before playernumber
+  // was introduced. MongoDB still contains such games, so do not try to run
+  // the numbered branch against their zero-valued player numbers.
+  if ((firstPlayer?.playernumber ?? 0) <= 0) {
+    const index = state.players.findIndex((player) => player.yourTurn)
+    const current = state.players[index]
+    const nextPlayer = index < 0 ? undefined : state.players[index + 1] ?? firstPlayer
+    if (current === undefined || nextPlayer === undefined) {
+      return err({ kind: 'PLAYER_NOT_FOUND', playerId: actor?.playerId ?? '' })
+    }
+
+    return ok({
+      ...state,
+      players: state.players.map((player) => {
+        if (player.playerId === nextPlayer.playerId) return { ...player, yourTurn: true }
+        if (player.playerId === current.playerId) return { ...player, yourTurn: false }
+        return player
+      }),
+    })
+  }
+
   const current = state.players.find((player) => player.yourTurn)
   if (current === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId: '' })
 
   const nextNumber = current.playernumber + 1
-  const firstPlayer = state.players.find((player) => player.playernumber === 1)
+  const firstNumberedPlayer = state.players.find((player) => player.playernumber === 1)
   const nextPlayer =
-    state.players.find((player) => player.playernumber === nextNumber) ?? firstPlayer
+    state.players.find((player) => player.playernumber === nextNumber) ?? firstNumberedPlayer
 
   if (nextPlayer === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId: '' })
 
