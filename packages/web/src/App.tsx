@@ -15,10 +15,25 @@ import { LoginView } from './views/LoginView.js'
 
 type Screen = { readonly name: 'lobby' } | { readonly name: 'game'; readonly gameId: string }
 
+function screenFromPath(pathname: string): Screen {
+  const match = /^\/game\/([^/]+)\/?$/.exec(pathname)
+  if (match === null) return { name: 'lobby' }
+
+  const encodedGameId = match[1]
+  if (encodedGameId === undefined) return { name: 'lobby' }
+  return { name: 'game', gameId: decodeURIComponent(encodedGameId) }
+}
+
 export function App(): React.JSX.Element {
   const [player, setPlayer] = useState<PlayerDto | null>(null)
   const [checking, setChecking] = useState(true)
-  const [screen, setScreen] = useState<Screen>({ name: 'lobby' })
+  const [screen, setScreen] = useState<Screen>(() => screenFromPath(window.location.pathname))
+
+  useEffect(() => {
+    const onPopState = () => setScreen(screenFromPath(window.location.pathname))
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   // A stored token may have expired, so it has to be tried against the server
   useEffect(() => {
@@ -36,6 +51,17 @@ export function App(): React.JSX.Element {
   const signOut = useCallback(() => {
     storeToken(null)
     setPlayer(null)
+    window.history.replaceState(null, '', '/')
+    setScreen({ name: 'lobby' })
+  }, [])
+
+  const openGame = useCallback((gameId: string) => {
+    window.history.pushState(null, '', `/game/${encodeURIComponent(gameId)}`)
+    setScreen({ name: 'game', gameId })
+  }, [])
+
+  const backToGames = useCallback(() => {
+    window.history.replaceState(null, '', '/')
     setScreen({ name: 'lobby' })
   }, [])
 
@@ -62,7 +88,7 @@ export function App(): React.JSX.Element {
         <span className="muted">play by forum</span>
         <span className="spacer" />
         {screen.name === 'game' && (
-          <button onClick={() => setScreen({ name: 'lobby' })}>Back to games</button>
+          <button onClick={backToGames}>Back to games</button>
         )}
         <span className="muted">{player.username}</span>
         <button onClick={signOut}>Sign out</button>
@@ -71,7 +97,7 @@ export function App(): React.JSX.Element {
       {screen.name === 'lobby' ? (
         <LobbyView
           player={player}
-          onOpenGame={(gameId) => setScreen({ name: 'game', gameId })}
+          onOpenGame={openGame}
           onUnauthorized={signOut}
         />
       ) : (

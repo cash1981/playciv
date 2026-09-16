@@ -33,12 +33,12 @@ export function LobbyView({ player, onOpenGame, onUnauthorized }: Props): React.
     void reload()
   }, [reload])
 
-  async function run(action: () => Promise<unknown>): Promise<void> {
+  async function run(action: () => Promise<unknown>, onSuccess?: () => void): Promise<void> {
     setBusy(true)
     setError(null)
     try {
       await action()
-      await reload()
+      if (onSuccess === undefined) await reload()
     } catch (caught) {
       if (isUnauthorized(caught)) return onUnauthorized()
       setError(errorMessage(caught))
@@ -118,7 +118,7 @@ export function LobbyView({ player, onOpenGame, onUnauthorized }: Props): React.
                     <button
                       className="small"
                       disabled={busy || full || !game.active}
-                      onClick={() => void run(() => api.join(game.id))}
+                      onClick={() => void run(() => api.join(game.id), () => onOpenGame(game.id))}
                     >
                       {full ? 'Full' : 'Join'}
                     </button>
