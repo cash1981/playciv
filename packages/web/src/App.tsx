@@ -12,10 +12,15 @@ import type { PlayerDto } from './lib/api.js'
 import { GameView } from './views/GameView.js'
 import { LobbyView } from './views/LobbyView.js'
 import { LoginView } from './views/LoginView.js'
+import { AdminView } from './views/AdminView.js'
 
-type Screen = { readonly name: 'lobby' } | { readonly name: 'game'; readonly gameId: string }
+type Screen =
+  | { readonly name: 'lobby' }
+  | { readonly name: 'admin' }
+  | { readonly name: 'game'; readonly gameId: string }
 
 function screenFromPath(pathname: string): Screen {
+  if (pathname === '/admin' || pathname === '/admin/') return { name: 'admin' }
   const match = /^\/game\/([^/]+)\/?$/.exec(pathname)
   if (match === null) return { name: 'lobby' }
 
@@ -64,6 +69,11 @@ export function App(): React.JSX.Element {
     setScreen({ name: 'game', gameId })
   }, [])
 
+  const openAdmin = useCallback(() => {
+    window.history.pushState(null, '', '/admin')
+    setScreen({ name: 'admin' })
+  }, [])
+
   const backToGames = useCallback(() => {
     window.history.replaceState(null, '', '/')
     setScreen({ name: 'lobby' })
@@ -94,6 +104,12 @@ export function App(): React.JSX.Element {
         {screen.name === 'game' && (
           <button onClick={backToGames}>Back to games</button>
         )}
+        {screen.name === 'admin' && (
+          <button onClick={backToGames}>Back to games</button>
+        )}
+        {player.role === 'admin' && screen.name !== 'admin' && (
+          <button onClick={openAdmin}>Admin</button>
+        )}
         <span className="muted">{player.username}</span>
         <button onClick={signOut}>Sign out</button>
       </header>
@@ -104,6 +120,12 @@ export function App(): React.JSX.Element {
           onOpenGame={openGame}
           onUnauthorized={signOut}
         />
+      ) : screen.name === 'admin' ? (
+        player.role === 'admin' ? (
+          <AdminView player={player} onUnauthorized={signOut} onBack={backToGames} />
+        ) : (
+          <LobbyView player={player} onOpenGame={openGame} onUnauthorized={signOut} />
+        )
       ) : (
         <GameView
           gameId={screen.gameId}

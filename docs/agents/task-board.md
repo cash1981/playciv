@@ -15,31 +15,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
-### admin-user-management
-
-- **Owner:** Codex/Luna (GPT-5.6-Luna)
-- **Branch:** `feat/admin-user-management`
-- **Brief:** `docs/agents/tasks/admin-user-management.md`
-- **Status:** claimed
-- **Claimed paths:**
-  - `packages/server/src/store/`
-  - `packages/server/src/routes/`
-  - `packages/server/src/auth.ts`
-  - `packages/server/src/app.ts`
-  - `packages/server/src/migrate-user-roles.ts`
-  - `packages/server/package.json`
-  - `packages/server/test/`
-  - `packages/web/src/App.tsx`
-  - `packages/web/src/lib/api.ts`
-  - `packages/web/src/views/AdminView.tsx`
-  - `packages/web/src/`
-  - `docs/agents/state.md`
-  - `docs/agents/decisions.md`
-  - `docs/agents/task-board.md`
-- **Notes:** Use `role: user | admin` plus `disabled: boolean`. Existing
-  Mongo documents need backward-compatible defaults. Review with Terra before
-  merge.
-
 ---
 
 ## Format

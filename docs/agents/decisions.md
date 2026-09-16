@@ -312,3 +312,23 @@ so this is a deliberate new-board policy, not a Java port.
 
 **Consequences.** Board dimensions are selected during `createGame`; all board
 geometry and projections consume the stored dimensions.
+
+---
+
+## 2026-09-16 — Roles are database-backed and enabled admins cannot lock themselves out
+
+**Decision.** Player records carry `role: user | admin` and `disabled`, with
+legacy records defaulting to an enabled user. Bearer tokens continue to carry
+only the player id; authorization reads the current stored player on every
+request. An admin cannot disable, demote or delete itself, and the last enabled
+admin cannot be removed.
+
+**Why.** This keeps account authorization compatible with a future OIDC/OAuth
+identity provider and guarantees that an administrator can recover access.
+The Mongo migration defaults `ADMIN_USERNAME` to `cash`, sets only missing
+access fields, and promotes that account without touching its password.
+
+**Consequences.** The old engine end-game reducer still exposes Java's
+username-shaped escape hatch because engine paths were not part of this task's
+claim; the server authorizes from the persisted role and supplies that legacy
+compatibility input only after the role check.

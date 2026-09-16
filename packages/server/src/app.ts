@@ -9,6 +9,7 @@ import type { FastifyInstance } from 'fastify'
 import { TokenSigner } from './auth.js'
 import type { AppContext } from './context.js'
 import { registerAuthRoutes } from './routes/auth.js'
+import { registerAdminRoutes } from './routes/admin.js'
 import { registerBoardRoutes } from './routes/board.js'
 import { registerGameRoutes } from './routes/games.js'
 import { registerPlayRoutes } from './routes/play.js'
@@ -41,6 +42,7 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
   app.get('/api/health', async () => ({ status: 'ok' }))
 
   registerAuthRoutes(app, context)
+  registerAdminRoutes(app, context)
   registerGameRoutes(app, context)
   registerPlayRoutes(app, context)
   registerBoardRoutes(app, context)

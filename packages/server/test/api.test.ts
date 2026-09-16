@@ -239,6 +239,9 @@ describe('games', () => {
   it('admin can open and delete a game without joining it', async () => {
     const creator = await register('delete-admin-creator')
     const admin = await register('admin')
+    const adminPlayer = await repo.findPlayerByUsername('admin')
+    expect(adminPlayer).toBeDefined()
+    await repo.updatePlayer(adminPlayer?.id as string, { role: 'admin' })
     const gameId = await createGame(creator, 'Delete by admin')
 
     const opened = await app.inject({

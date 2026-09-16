@@ -19,12 +19,16 @@ export interface PlayerDto {
   readonly id: string
   readonly username: string
   readonly email: string | null
+  readonly role: 'user' | 'admin'
+  readonly disabled: boolean
 }
 
 export const toPlayerDto = (player: StoredPlayer): PlayerDto => ({
   id: player.id,
   username: player.username,
   email: player.email,
+  role: player.role ?? 'user',
+  disabled: player.disabled === true,
 })
 
 export function registerAuthRoutes(app: FastifyInstance, context: AppContext): void {
@@ -54,6 +58,8 @@ export function registerAuthRoutes(app: FastifyInstance, context: AppContext): v
       email,
       passwordHash: await hashPassword(password),
       createdAt: new Date().toISOString(),
+      role: 'user',
+      disabled: false,
     }
     await context.repo.createPlayer(player)
 
@@ -80,6 +86,10 @@ export function registerAuthRoutes(app: FastifyInstance, context: AppContext): v
 
     if (player === undefined || !valid) {
       return sendError(reply, 401, 'UNAUTHORIZED', 'Wrong username or password')
+    }
+
+    if (player.disabled === true) {
+      return sendError(reply, 403, 'ACCOUNT_DISABLED', 'This account is disabled')
     }
 
     // Old `playciv` accounts still carry an unsalted SHA-1 hash. Upgrade it to

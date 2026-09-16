@@ -112,6 +112,18 @@ label {
   font-size: 0.85rem;
 }
 
+label.inline-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  white-space: nowrap;
+}
+
+label.inline-label select {
+  width: auto;
+}
+
 label > input,
 label > select,
 label > textarea {

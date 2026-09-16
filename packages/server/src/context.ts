@@ -47,7 +47,27 @@ export function authenticateWith(context: AppContext) {
       return
     }
 
+    if (player.disabled === true) {
+      await sendError(reply, 403, 'ACCOUNT_DISABLED', 'This account is disabled')
+      return
+    }
+
     request.player = player
+  }
+}
+
+/** Requires a valid, currently enabled account with the persisted admin role. */
+export function requireAdminWith(context: AppContext) {
+  const authenticate = authenticateWith(context)
+  return async function requireAdmin(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> {
+    await authenticate(request, reply)
+    if (reply.sent) return
+    if (currentPlayer(request).role !== 'admin') {
+      await sendError(reply, 403, 'ADMIN_REQUIRED', 'Only admins may manage users')
+    }
   }
 }
 

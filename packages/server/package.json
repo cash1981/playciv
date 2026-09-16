@@ -9,7 +9,8 @@
     "test": "vitest run",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/src/index.js",
-    "seed:test-user": "tsx src/seed-test-user.ts"
+    "seed:test-user": "tsx src/seed-test-user.ts",
+    "migrate:user-roles": "tsx src/migrate-user-roles.ts"
   },
   "dependencies": {
     "@civ/engine": "workspace:*",

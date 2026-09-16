@@ -163,7 +163,9 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     return applyToGame(context, request, reply, gameId, (state) =>
       endGame(state, {
         playerId: me.id,
-        username: me.username,
+        // The engine still carries Java's username-shaped admin escape hatch;
+        // authorization is decided here from the persisted role.
+        username: me.role === 'admin' ? 'admin' : me.username,
         ...(winner !== undefined ? { winner } : {}),
       }),
     )
@@ -180,7 +182,7 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     const isCreator = game.players.some(
       (player) => player.playerId === me.id && player.gameCreator,
     )
-    if (!isCreator && me.username !== 'admin') {
+    if (!isCreator && me.role !== 'admin') {
       return sendError(reply, 403, 'NO_ACCESS', 'Only the game creator or admin can delete a game')
     }
 

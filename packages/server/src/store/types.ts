@@ -15,6 +15,8 @@ import type { FinishedGame, GameState } from '@civ/engine'
 
 export type { FinishedGame }
 
+export type UserRole = 'user' | 'admin'
+
 export interface StoredPlayer {
   readonly id: string
   readonly username: string
@@ -22,6 +24,15 @@ export interface StoredPlayer {
   /** A scrypt hash of the form `salt:hash`. Java used unsalted SHA-1. */
   readonly passwordHash: string
   readonly createdAt: string
+  /** Optional only at the boundary for seed/legacy records; repositories normalize it. */
+  readonly role?: UserRole
+  readonly disabled?: boolean
+}
+
+export interface PlayerUpdate {
+  readonly email?: string | null
+  readonly role?: UserRole
+  readonly disabled?: boolean
 }
 
 export interface ChatMessage {
@@ -39,6 +50,8 @@ export interface Repository {
   allPlayers(): Promise<readonly StoredPlayer[]>
   /** Rewrites the stored hash, used to upgrade a legacy SHA-1 account on login. */
   updatePlayerPassword(id: string, passwordHash: string): Promise<void>
+  updatePlayer(id: string, changes: PlayerUpdate): Promise<StoredPlayer | undefined>
+  deletePlayer(id: string): Promise<boolean>
 
   saveGame(game: GameState): Promise<void>
   findGame(id: string): Promise<GameState | undefined>

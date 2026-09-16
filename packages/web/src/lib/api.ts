@@ -38,6 +38,18 @@ export interface PlayerDto {
   readonly id: string
   readonly username: string
   readonly email: string | null
+  readonly role: 'user' | 'admin'
+  readonly disabled: boolean
+}
+
+export interface AdminUserDto extends PlayerDto {
+  readonly createdAt: string
+}
+
+export interface AdminUserUpdate {
+  readonly email?: string | null
+  readonly role?: 'user' | 'admin'
+  readonly disabled?: boolean
 }
 
 export interface GameSummary {
@@ -117,7 +129,7 @@ export function storeToken(token: string | null): void {
 }
 
 async function request<T>(
-  method: 'GET' | 'POST',
+  method: 'DELETE' | 'GET' | 'PATCH' | 'POST',
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -150,6 +162,8 @@ async function request<T>(
 
 const get = <T>(path: string): Promise<T> => request<T>('GET', path)
 const post = <T>(path: string, body?: unknown): Promise<T> => request<T>('POST', path, body ?? {})
+const patch = <T>(path: string, body: unknown): Promise<T> => request<T>('PATCH', path, body)
+const del = <T>(path: string): Promise<T> => request<T>('DELETE', path)
 
 export interface AuthResponse {
   readonly token: string
@@ -162,6 +176,11 @@ export const api = {
   login: (username: string, password: string) =>
     post<AuthResponse>('/api/auth/login', { username, password }),
   me: () => get<PlayerDto>('/api/auth/me'),
+
+  adminUsers: () => get<AdminUserDto[]>('/api/admin/users'),
+  updateAdminUser: (userId: string, changes: AdminUserUpdate) =>
+    patch<AdminUserDto>(`/api/admin/users/${userId}`, changes),
+  deleteAdminUser: (userId: string) => del<void>(`/api/admin/users/${userId}`),
 
   games: () => get<GameSummary[]>('/api/games'),
   createGame: (name: string, numOfPlayers: number) =>

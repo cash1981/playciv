@@ -15,11 +15,22 @@ import { dirname } from 'node:path'
 import type { GameState } from '@civ/engine'
 import { migrateGameState } from '@civ/engine'
 
-import type { ChatMessage, FinishedGame, Repository, StoredPlayer } from './types.js'
+import type {
+  ChatMessage,
+  FinishedGame,
+  PlayerUpdate,
+  Repository,
+  StoredPlayer,
+  UserRole,
+} from './types.js'
 
+type SnapshotPlayer = Omit<StoredPlayer, 'role' | 'disabled'> & {
+  readonly role?: UserRole
+  readonly disabled?: boolean
+}
 interface Snapshot {
   readonly version: 1
-  readonly players: readonly StoredPlayer[]
+  readonly players: readonly SnapshotPlayer[]
   readonly games: readonly GameState[]
   readonly chat: readonly ChatMessage[]
 }
@@ -60,14 +71,27 @@ export class JsonFileRepository implements Repository {
     }
 
     const snapshot = JSON.parse(raw) as Snapshot
-    for (const player of snapshot.players) this.players.set(player.id, player)
+    let normalizedPlayers = false
+    for (const player of snapshot.players) {
+      normalizedPlayers ||= player.role === undefined || player.disabled === undefined
+      this.players.set(player.id, {
+        ...player,
+        role: player.role === 'admin' ? 'admin' : 'user',
+        disabled: player.disabled === true,
+      })
+    }
+    if (normalizedPlayers) this.scheduleWrite()
     // Games saved before a field existed must be filled in before use
     for (const game of snapshot.games) this.games.set(game.id, migrateGameState(game))
     this.chat = [...snapshot.chat]
   }
 
   async createPlayer(player: StoredPlayer): Promise<void> {
-    this.players.set(player.id, player)
+    this.players.set(player.id, {
+      ...player,
+      role: player.role === 'admin' ? 'admin' : 'user',
+      disabled: player.disabled === true,
+    })
     this.scheduleWrite()
   }
 
@@ -92,6 +116,21 @@ export class JsonFileRepository implements Repository {
     if (player === undefined) return
     this.players.set(id, { ...player, passwordHash })
     this.scheduleWrite()
+  }
+
+  async updatePlayer(id: string, changes: PlayerUpdate): Promise<StoredPlayer | undefined> {
+    const player = this.players.get(id)
+    if (player === undefined) return undefined
+    const updated = { ...player, ...changes }
+    this.players.set(id, updated)
+    this.scheduleWrite()
+    return updated
+  }
+
+  async deletePlayer(id: string): Promise<boolean> {
+    const deleted = this.players.delete(id)
+    if (deleted) this.scheduleWrite()
+    return deleted
   }
 
   async saveGame(game: GameState): Promise<void> {

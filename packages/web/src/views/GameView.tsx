@@ -156,7 +156,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
           >
             Withdraw
           </button>
-          {(you?.gameCreator === true || player.username === 'admin') && (
+          {(you?.gameCreator === true || player.role === 'admin') && (
             <button
               className="danger"
               disabled={busy}

@@ -19,7 +19,13 @@ import { MongoClient, ObjectId } from 'mongodb'
 import type { GameState } from '@civ/engine'
 import { migrateGameState } from '@civ/engine'
 
-import type { ChatMessage, FinishedGame, Repository, StoredPlayer } from './types.js'
+import type {
+  ChatMessage,
+  FinishedGame,
+  PlayerUpdate,
+  Repository,
+  StoredPlayer,
+} from './types.js'
 
 /** Java: `Player`. Only the fields this repository reads or writes. */
 interface PlayerDoc {
@@ -28,6 +34,8 @@ interface PlayerDoc {
   readonly email?: string | null
   readonly password: string
   readonly createdAt?: string
+  readonly role?: StoredPlayer['role']
+  readonly disabled?: boolean
 }
 
 /** Java: `Chat`. `pbfId` is `null` for lobby chat. */
@@ -106,6 +114,8 @@ export class MongoRepository implements Repository {
       email: player.email,
       password: player.passwordHash,
       createdAt: player.createdAt,
+      role: player.role === 'admin' ? 'admin' : 'user',
+      disabled: player.disabled === true,
     })
   }
 
@@ -136,6 +146,25 @@ export class MongoRepository implements Repository {
     const filters: PlayerDoc['_id'][] = [id]
     if (ObjectId.isValid(id)) filters.push(new ObjectId(id))
     await this.players.updateOne({ _id: { $in: filters } }, { $set: { password: passwordHash } })
+  }
+
+  async updatePlayer(id: string, changes: PlayerUpdate): Promise<StoredPlayer | undefined> {
+    const filters: PlayerDoc['_id'][] = [id]
+    if (ObjectId.isValid(id)) filters.push(new ObjectId(id))
+
+    const set: Record<string, unknown> = {}
+    if (changes.email !== undefined) set['email'] = changes.email
+    if (changes.role !== undefined) set['role'] = changes.role
+    if (changes.disabled !== undefined) set['disabled'] = changes.disabled
+    await this.players.updateOne({ _id: { $in: filters } }, { $set: set })
+    return this.findPlayerById(id)
+  }
+
+  async deletePlayer(id: string): Promise<boolean> {
+    const filters: PlayerDoc['_id'][] = [id]
+    if (ObjectId.isValid(id)) filters.push(new ObjectId(id))
+    const result = await this.players.deleteOne({ _id: { $in: filters } })
+    return result.deletedCount > 0
   }
 
   // ---------------------------------------------------------------------
@@ -251,6 +280,8 @@ function toStoredPlayer(doc: PlayerDoc): StoredPlayer {
     email: doc.email ?? null,
     passwordHash: doc.password,
     createdAt: doc.createdAt ?? objectIdTimestamp(doc._id),
+    role: doc.role === 'admin' ? 'admin' : 'user',
+    disabled: doc.disabled === true,
   }
 }
 

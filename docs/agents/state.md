@@ -13,7 +13,7 @@ _Last updated: 2026-09-16_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 294 engine, 51 server (on `feat/game-fixes`) |
+| `pnpm -r test` | passing — 311 engine, 63 server (on `feat/admin-user-management`) |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -60,10 +60,14 @@ _Last updated: 2026-09-16_
   logged and exposed through the UI/API.
 - **Issue #17.** Two-player games use an 8 × 8 board labelled A–H and 1–8;
   three- to five-player games retain the 16 × 16 board.
-- **Delete game.** Game creators and the `admin` account can permanently
-  delete active or ended games; other players are denied.
+- **Delete game.** Game creators and enabled admins can permanently delete
+  active or ended games; other players are denied.
 - **Typecheck build order.** Engine declarations are rebuilt automatically
   before recursive typecheck, so clean checkouts do not use stale `dist` files.
+- **Admin user management.** Accounts persist `role` and `disabled`, disabled
+  accounts are rejected server-side, admins can manage users without password
+  hashes in API responses, and the protected web admin page uses role lookup
+  from storage rather than token claims.
 
 ## In progress
 
