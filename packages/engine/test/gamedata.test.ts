@@ -7,11 +7,19 @@
  * the Excel conversion.
  */
 
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
 import { createGame } from '../src/create-game.js'
 import type { CivItem, SheetName, WonderItem } from '../src/index.js'
 import { itemImage, itemName, revealAll, revealPublic } from '../src/item.js'
+
+/** `tools/item-assets.ps1` writes here; see conventions.md on generated files. */
+const WEB_PUBLIC_ITEMS = fileURLToPath(
+  new URL('../../web/public/items/', import.meta.url),
+)
 
 const game = createGame({ name: 'gamedata', numOfPlayers: 4, seed: 'gamedata' })
 
@@ -218,6 +226,30 @@ describe('image filenames', () => {
     expect(wonders).toHaveLength(27)
     expect(images.every((image) => image !== null && image.endsWith('.png'))).toBe(true)
     expect(new Set(images).size).toBe(27)
+  })
+
+  it('every social policy maps onto artwork under packages/web/public/items', () => {
+    // The WaW files are lower case, unlike the tech/hut/village case this used
+    // to share. "Expansionsim" is a typo in the spreadsheet — itemImage() asks
+    // for expansionsim.png, and tools/item-assets.ps1 copies expansionism.png
+    // under that name too.
+    expect(game.socialPolicies).toHaveLength(8)
+    const names = game.socialPolicies.map((policy) => policy.name)
+    expect(names).toContain('Expansionsim')
+
+    for (const policy of game.socialPolicies) {
+      const image = itemImage(policy)
+      if (image === null) throw new Error(`no image for ${policy.name}`)
+      expect(image).not.toContain(' ')
+      expect(
+        existsSync(`${WEB_PUBLIC_ITEMS}${image}`),
+        `missing ${image} for ${policy.name}`,
+      ).toBe(true)
+    }
+
+    const expansionsim = game.socialPolicies.find((policy) => policy.name === 'Expansionsim')
+    if (expansionsim === undefined) throw new Error('no Expansionsim policy')
+    expect(itemImage(expansionsim)).toBe('expansionsim.png')
   })
 })
 

@@ -18,6 +18,7 @@ import {
   remainingTechsForPlayer,
   removeTech,
   revealItem,
+  revealSocialPolicy,
   revealTech,
   revealedTechsForAllPlayers,
   saveNote,
@@ -309,6 +310,27 @@ describe('social policy', () => {
       chooseSocialPolicy(state, { playerId: CASH1981, name: policy.flipside }),
     )
     expect(error.kind).toBe('SOCIAL_POLICY_FLIPSIDE_TAKEN')
+  })
+
+  it('reveals a chosen card, which then shows in the public log', () => {
+    const game = firstCivGame()
+    const policy = game.socialPolicies[0]
+    if (policy === undefined) throw new Error('no social policy')
+
+    let state = unwrap(chooseSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
+    state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: policy.name }))
+
+    expect(findPlayer(state, CASH1981)?.socialPolicies[0]?.hidden).toBe(false)
+    expect(state.log.at(-1)?.publicLog).toContain(policy.name)
+  })
+
+  it('a card you have not chosen gives ITEM_NOT_FOUND', () => {
+    const game = firstCivGame()
+    const policy = game.socialPolicies[0]
+    if (policy === undefined) throw new Error('no social policy')
+
+    const error = unwrapErr(revealSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
+    expect(error).toEqual({ kind: 'ITEM_NOT_FOUND' })
   })
 })
 

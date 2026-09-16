@@ -336,6 +336,12 @@ prefixed with `klein`, and city states use `description` rather than `name`. The
 filenames on disk under `Civilization/Moderator/` follow those rules, so they
 have not been tidied.
 
+**Social policy images are lower-cased.** Java's `SocialPolicy.getImage()` kept
+the name's case; here they are lower-cased to match the *Wisdom and Warfare*
+artwork under `Civilization/WaW/`, which is all lower case. See
+`docs/agents/decisions.md`. The `Expansionsim` spreadsheet typo is kept in the
+data; only the on-disk file is aliased.
+
 **Double spaces in the log are kept.** Java wrote
 `username + " drew " + " - " + …`. The texts are comparable data and the old
 tests match on them.

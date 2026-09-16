@@ -14,6 +14,7 @@ import { api } from '../lib/api.js'
 import type { PlayerView, RevealedTechsDto } from '../lib/api.js'
 import { TechTree } from './TechTree.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { ItemCard } from './ItemCard.js'
 
 interface Props {
   readonly gameId: string
@@ -162,14 +163,25 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
           Choose
         </button>
       </div>
-      <ul className="list">
+      <ul className="card-grid small">
         {yourPolicies.map((policy) => (
-          <li key={policy.id}>
-            <span>{policy.name}</span>
+          <ItemCard key={policy.id} item={policy}>
             {policy.flipside !== null && (
               <span className="muted">flipside: {policy.flipside}</span>
             )}
-          </li>
+            <span className={policy.hidden ? 'tag hidden' : 'tag revealed'}>
+              {policy.hidden ? 'hidden' : 'revealed'}
+            </span>
+            {policy.hidden && (
+              <button
+                className="small"
+                disabled={busy}
+                onClick={() => void run(() => api.revealSocialPolicy(gameId, policy.name))}
+              >
+                Reveal
+              </button>
+            )}
+          </ItemCard>
         ))}
         {yourPolicies.length === 0 && <li className="muted">None chosen.</li>}
       </ul>

@@ -24,6 +24,7 @@ import {
   removeTech,
   revealAndDiscardBattlehand,
   revealItem,
+  revealSocialPolicy,
   revealTech,
   revealedTechsForAllPlayers,
   saveNote,
@@ -218,6 +219,17 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   app.get('/api/games/:gameId/socialpolicies', auth, async (request, reply) => {
     const { gameId } = request.params as Params
     return readGame(context, request, reply, gameId, (state) => state.socialPolicies)
+  })
+
+  app.post('/api/games/:gameId/socialpolicies/reveal', auth, async (request, reply) => {
+    const { gameId } = request.params as Params
+    const name = requireString(asRecord(request.body), 'name')
+    if (name === undefined) {
+      return sendError(reply, 400, 'BAD_REQUEST', 'name is required')
+    }
+    return applyToGame(context, request, reply, gameId, (state) =>
+      revealSocialPolicy(state, { playerId: currentPlayer(request).id, name }),
+    )
   })
 
   // -------------------------------------------------------------------------

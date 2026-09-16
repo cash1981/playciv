@@ -409,8 +409,13 @@ export function itemImage(item: Item): string | null {
     case 'hut':
     case 'village':
     case 'tech':
-    case 'socialpolicy':
       return `${item.name}${PNG}`.replace(/ /g, '')
+    // The WaW social-policy files are lower case, unlike hut/village/tech
+    // artwork above. `Expansionsim` is a typo in the spreadsheet data; the
+    // file on disk is `expansionism.png`, so `tools/item-assets.ps1` copies
+    // it in twice, once under each name.
+    case 'socialpolicy':
+      return `${item.name.toLowerCase().replace(/ /g, '')}${PNG}`
     case 'tile':
       return `tile${item.name}${PNG}`.replace(/ /g, '')
     // Java: city-states use description ("cs1"), because that sheet has the

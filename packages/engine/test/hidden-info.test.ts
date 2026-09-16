@@ -9,7 +9,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { draw } from '../src/actions/draw.js'
-import { chooseTech, revealItem, revealedTechsForAllPlayers } from '../src/actions/player.js'
+import {
+  chooseSocialPolicy,
+  chooseTech,
+  revealItem,
+  revealSocialPolicy,
+  revealedTechsForAllPlayers,
+} from '../src/actions/player.js'
 import type { CivItem } from '../src/item.js'
 import { itemName, revealAll } from '../src/item.js'
 import { createLogTexts, javaStringHashCode, uniqueItemNumber } from '../src/log.js'
@@ -139,6 +145,32 @@ describe('toPlayerView', () => {
     expect(cashPublic).toBeDefined()
     expect(cashPublic?.techs.map((entry) => entry.name)).toContain(civ.startingTech.name)
     expect(cashPublic?.techs.map((entry) => entry.name)).not.toContain(tech.name)
+  })
+
+  it('a hidden social policy stays out of another player\'s view, and shows in the public log once revealed', () => {
+    const game = firstCivGame()
+    const policy = game.socialPolicies[0]
+    if (policy === undefined) throw new Error('no social policy')
+
+    const chosen = unwrap(chooseSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
+
+    // The owner sees it, still hidden, in their own hand.
+    const owner = toPlayerView(chosen, CASH1981)
+    expect(owner.you?.socialPolicies.some((item) => item.name === policy.name)).toBe(true)
+
+    // Another player sees only a count, not the card, and the name does not
+    // leak anywhere in their view — including the log line for choosing it.
+    const other = toPlayerView(chosen, ITCHI)
+    const cash = other.opponents.find((opponent) => opponent.playerId === CASH1981)
+    expect(cash).not.toHaveProperty('socialPolicies')
+    expect(JSON.stringify(other)).not.toContain(policy.name)
+
+    const revealed = unwrap(
+      revealSocialPolicy(chosen, { playerId: CASH1981, name: policy.name }),
+    )
+    const entry = revealed.log.at(-1)
+    if (entry === undefined) throw new Error('no log entry')
+    expect(toPublicLog(entry).publicLog).toContain(policy.name)
   })
 })
 
