@@ -286,15 +286,24 @@ const CULTURE_CELL_FRACTIONS: readonly number[] = CULTURE_SECTIONS.flatMap((sect
 const CULTURE_START_FRACTION = 0.0131
 
 /**
- * Every position on the track, START included, as fractions of the image
- * width. Index 0 is START; indices 1..27 are the grey spaces, matching the
- * 1-based numbering players use. Leave room here for issue #7 to append the
- * Culture Victory panel as one more entry at the end.
+ * The Culture Victory panel at the far right, measured the same way as START:
+ * the parchment end panel spans x 3263..3348 of 3349, centre fraction ~0.9870.
+ */
+const CULTURE_VICTORY_FRACTION = 0.987
+
+/**
+ * Every position on the track, both end panels included, as fractions of the
+ * image width. Index 0 is START; indices 1..27 are the grey spaces, matching
+ * the 1-based numbering players use; index 28 is the Culture Victory panel.
  */
 const CULTURE_POSITION_FRACTIONS: readonly number[] = [
   CULTURE_START_FRACTION,
   ...CULTURE_CELL_FRACTIONS,
+  CULTURE_VICTORY_FRACTION,
 ]
+
+/** The last position on the track: the Culture Victory panel. */
+export const CULTURE_VICTORY_STEP = CULTURE_POSITION_FRACTIONS.length - 1
 
 /** Bottom edge of the culture track band. */
 export const cultureBandBottom = (board: Board): number => cultureTrackHeight(board)
@@ -527,7 +536,11 @@ export function locationOf(
   piece: BoardPiece,
 ): string {
   const step = cultureStepOf(board, piece)
-  if (step !== null) return step === 0 ? 'culture START' : `culture ${step}`
+  if (step !== null) {
+    if (step === 0) return 'culture START'
+    if (step === CULTURE_VICTORY_STEP) return 'culture victory'
+    return `culture ${step}`
+  }
 
   const square = squareOf(board, piece)
   if (square !== null) return square

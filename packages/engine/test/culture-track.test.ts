@@ -15,6 +15,7 @@ import { revealItem } from '../src/actions/player.js'
 import type { BoardPiece } from '../src/board.js'
 import {
   CULTURE_TRACK_CELLS,
+  CULTURE_VICTORY_STEP,
   createBoard,
   cultureCellCenter,
   cultureStepOf,
@@ -62,7 +63,7 @@ describe('the track', () => {
   })
 
   it('Start and Culture Victory stay clear of the first and last space', () => {
-    // The panels at either end are not spaces, so no marker belongs on them
+    // The grey spaces sit between the START and Culture Victory end panels
     const first = cultureCellCenter(board, 1).x
     const last = cultureCellCenter(board, CULTURE_TRACK_CELLS).x
     expect(first).toBeGreaterThan(0)
@@ -75,9 +76,18 @@ describe('the track', () => {
 
   it('a step outside the track is pulled back to an end', () => {
     expect(cultureCellCenter(board, -5)).toEqual(cultureCellCenter(board, 0))
+    // The last position is Culture Victory, not the last grey space
     expect(cultureCellCenter(board, 99)).toEqual(
-      cultureCellCenter(board, CULTURE_TRACK_CELLS),
+      cultureCellCenter(board, CULTURE_VICTORY_STEP),
     )
+  })
+
+  it('Culture Victory is the last position, past the last space', () => {
+    expect(CULTURE_VICTORY_STEP).toBe(CULTURE_TRACK_CELLS + 1)
+    const victory = cultureCellCenter(board, CULTURE_VICTORY_STEP).x
+    const lastSpace = cultureCellCenter(board, CULTURE_TRACK_CELLS).x
+    expect(victory).toBeGreaterThan(lastSpace)
+    expect(victory).toBeLessThan(1504)
   })
 })
 
@@ -172,6 +182,28 @@ describe('moving a marker', () => {
     expect(state.board.history.at(-1)?.description).toBe(
       "cash1981 moved Japanese (Red) from culture START to culture 9",
     )
+  })
+
+  it('a marker can be moved onto Culture Victory', () => {
+    const board = createBoard()
+    const areas = playerAreas(board, firstCivGame().players)
+    const target = cultureCellCenter(board, CULTURE_VICTORY_STEP)
+
+    let state = place(firstCivGame(), 'leaders/japanese_red', 0, 0)
+    const piece = state.board.pieces[0] as BoardPiece
+    // Aim a little short of the victory centre; it should still snap there
+    state = unwrap(
+      movePiece(state, {
+        playerId: CASH1981,
+        pieceId: piece.id,
+        x: target.x - piece.width / 2 - 8,
+        y: 4,
+      }),
+    )
+
+    const moved = state.board.pieces.at(-1) as BoardPiece
+    expect(cultureStepOf(state.board, moved)).toBe(CULTURE_VICTORY_STEP)
+    expect(locationOf(state.board, areas, moved)).toBe('culture victory')
   })
 })
 
