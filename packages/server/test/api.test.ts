@@ -714,7 +714,7 @@ describe('board', () => {
     expect(assets.some((asset) => asset.id === 'resources/wheat')).toBe(true)
   })
 
-  it('a new game has an empty 16 by 16 board', async () => {
+  it('a new two-player game has an empty 8 by 8 board', async () => {
     const { gameId, starter } = await startedGame('Brettspill')
     const response = await app.inject({
       method: 'GET',
@@ -723,8 +723,8 @@ describe('board', () => {
     })
 
     expect(response.json()).toEqual({
-      columns: 16,
-      rows: 16,
+      columns: 8,
+      rows: 8,
       squareSize: 94,
       areaRows: 4,
       pieces: [],

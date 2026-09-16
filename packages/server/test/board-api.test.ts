@@ -78,8 +78,8 @@ describe('player areas', () => {
 
     const areas = (view.json() as { boardAreas: { username: string; y: number }[] }).boardAreas
     expect(areas).toHaveLength(2)
-    // The map is 16 squares of 94, so the band starts below 1504
-    expect(areas.every((area) => area.y > 1504)).toBe(true)
+    // The two-player map is 8 squares of 94, so the band starts below 752
+    expect(areas.every((area) => area.y > 752)).toBe(true)
   })
 
   it('a piece dropped in an area tidies into a slot', async () => {
@@ -142,7 +142,7 @@ describe('history over HTTP', () => {
       method: 'POST',
       url: `/api/games/${gameId}/board/pieces/${piece.id}/move`,
       headers: bearer(starter),
-      payload: { x: 900, y: 900 },
+      payload: { x: 700, y: 800 },
     })
 
     const history = (moved.json() as { board: { history: { description: string }[] } }).board
