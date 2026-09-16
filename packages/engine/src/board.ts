@@ -277,6 +277,25 @@ const CULTURE_CELL_FRACTIONS: readonly number[] = CULTURE_SECTIONS.flatMap((sect
   )
 })
 
+/**
+ * Centre of the START panel, as a fraction of the track image's width.
+ * Measured off `culture track.png` directly (the panel has no even
+ * subdivisions to derive it from, unlike the grey spaces): the parchment
+ * panel spans x 0..88 of 3349, centre fraction ~0.0131.
+ */
+const CULTURE_START_FRACTION = 0.0131
+
+/**
+ * Every position on the track, START included, as fractions of the image
+ * width. Index 0 is START; indices 1..27 are the grey spaces, matching the
+ * 1-based numbering players use. Leave room here for issue #7 to append the
+ * Culture Victory panel as one more entry at the end.
+ */
+const CULTURE_POSITION_FRACTIONS: readonly number[] = [
+  CULTURE_START_FRACTION,
+  ...CULTURE_CELL_FRACTIONS,
+]
+
 /** Bottom edge of the culture track band. */
 export const cultureBandBottom = (board: Board): number => cultureTrackHeight(board)
 
@@ -285,22 +304,29 @@ export const inCultureBand = (board: Board, y: number): boolean =>
   y >= 0 && y < cultureBandBottom(board)
 
 /**
- * Centre of one space, in board coordinates. `step` is 1-based, matching the
- * numbering players use when they say "I am on 12".
+ * Centre of one position, in board coordinates. `step` is 0 for START, then
+ * 1-based for the grey spaces, matching the numbering players use when they
+ * say "I am on 12".
  */
 export function cultureCellCenter(
   board: Board,
   step: number,
 ): { readonly x: number; readonly y: number } {
-  const index = Math.min(Math.max(Math.round(step), 1), CULTURE_TRACK_CELLS) - 1
-  const fraction = CULTURE_CELL_FRACTIONS[index] ?? 0
+  const index = Math.min(
+    Math.max(Math.round(step), 0),
+    CULTURE_POSITION_FRACTIONS.length - 1,
+  )
+  const fraction = CULTURE_POSITION_FRACTIONS[index] ?? 0
   return {
     x: Math.round(fraction * boardWidth(board)),
     y: Math.round(cultureTrackHeight(board) / 2),
   }
 }
 
-/** The space a piece sits on, by its centre, or null when off the track. */
+/**
+ * The position a piece sits on, by its centre, or null when off the track.
+ * 0 is START, 1..27 are the grey spaces.
+ */
 export function cultureStepOf(board: Board, piece: BoardPiece): number | null {
   const centreY = piece.y + piece.height / 2
   if (!inCultureBand(board, centreY)) return null
@@ -308,14 +334,14 @@ export function cultureStepOf(board: Board, piece: BoardPiece): number | null {
   const centreX = (piece.x + piece.width / 2) / boardWidth(board)
   let best = 0
   let bestDistance = Number.POSITIVE_INFINITY
-  for (const [index, fraction] of CULTURE_CELL_FRACTIONS.entries()) {
+  for (const [index, fraction] of CULTURE_POSITION_FRACTIONS.entries()) {
     const distance = Math.abs(fraction - centreX)
     if (distance < bestDistance) {
       bestDistance = distance
       best = index
     }
   }
-  return best + 1
+  return best
 }
 
 /**
@@ -501,7 +527,7 @@ export function locationOf(
   piece: BoardPiece,
 ): string {
   const step = cultureStepOf(board, piece)
-  if (step !== null) return `culture ${step}`
+  if (step !== null) return step === 0 ? 'culture START' : `culture ${step}`
 
   const square = squareOf(board, piece)
   if (square !== null) return square

@@ -338,9 +338,9 @@ function placeLeaderMarker(
   const asset = findBoardAsset(assetId)
   if (asset === undefined) return state
 
-  const start = cultureCellCenter(state.board, 1)
+  const start = cultureCellCenter(state.board, 0)
   const sharing = state.board.pieces.filter(
-    (piece) => piece.category === 'leader' && cultureStepOf(state.board, piece) === 1,
+    (piece) => piece.category === 'leader' && cultureStepOf(state.board, piece) === 0,
   ).length
   const lanes = Math.max(1, Math.floor(cultureTrackHeight(state.board) / asset.height))
 

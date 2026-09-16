@@ -419,11 +419,12 @@ describe('player areas', () => {
 
   it('locationOf names the culture space for markers on the track', () => {
     const areas = playerAreas(board, firstCivGame().players)
+    // x 0 is nearest the START panel, not space 1 — see issue #4
     const state = place(firstCivGame(), 'markers/coin', 0, 0)
     const piece = state.board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
 
-    expect(locationOf(state.board, areas, piece)).toBe('culture 1')
+    expect(locationOf(state.board, areas, piece)).toBe('culture START')
   })
 })
 

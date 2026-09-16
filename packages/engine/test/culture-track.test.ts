@@ -69,8 +69,12 @@ describe('the track', () => {
     expect(last).toBeLessThan(1504)
   })
 
+  it('step 0 is START, distinct from space 1', () => {
+    expect(cultureCellCenter(board, 0)).not.toEqual(cultureCellCenter(board, 1))
+  })
+
   it('a step outside the track is pulled back to an end', () => {
-    expect(cultureCellCenter(board, 0)).toEqual(cultureCellCenter(board, 1))
+    expect(cultureCellCenter(board, -5)).toEqual(cultureCellCenter(board, 0))
     expect(cultureCellCenter(board, 99)).toEqual(
       cultureCellCenter(board, CULTURE_TRACK_CELLS),
     )
@@ -86,6 +90,12 @@ describe('cultureStepOf', () => {
       const piece = { x: centre.x - 23, y: 10, width: 46, height: 35 } as BoardPiece
       expect(cultureStepOf(board, piece)).toBe(step)
     }
+  })
+
+  it('reads START back from a marker placed on its centre', () => {
+    const centre = cultureCellCenter(board, 0)
+    const piece = { x: centre.x - 23, y: 10, width: 46, height: 35 } as BoardPiece
+    expect(cultureStepOf(board, piece)).toBe(0)
   })
 
   it('is null for pieces below the track', () => {
@@ -160,7 +170,7 @@ describe('moving a marker', () => {
     const moved = state.board.pieces.at(-1) as BoardPiece
     expect(locationOf(state.board, areas, moved)).toBe('culture 9')
     expect(state.board.history.at(-1)?.description).toBe(
-      "cash1981 moved Japanese (Red) from culture 1 to culture 9",
+      "cash1981 moved Japanese (Red) from culture START to culture 9",
     )
   })
 })
@@ -199,7 +209,7 @@ describe('choosing a civilization', () => {
     )
   }
 
-  it('puts the matching leader on the first space', () => {
+  it('puts the matching leader on START', () => {
     const state = chooseCiv(firstCivGame(), CASH1981)
 
     const player = findPlayer(state, CASH1981)
@@ -207,7 +217,7 @@ describe('choosing a civilization', () => {
     expect(markers).toHaveLength(1)
 
     const marker = markers[0] as BoardPiece
-    expect(cultureStepOf(state.board, marker)).toBe(1)
+    expect(cultureStepOf(state.board, marker)).toBe(0)
     // cash1981 plays Red in the fixture
     expect(marker.assetId).toBe(
       leaderAssetId((player?.civilization?.name ?? '') as string, 'Red'),
@@ -217,13 +227,13 @@ describe('choosing a civilization', () => {
   it('records the placement in the board history like any other piece', () => {
     const state = chooseCiv(firstCivGame(), CASH1981)
     const entry = state.board.history.find((candidate) =>
-      candidate.description.includes('culture 1'),
+      candidate.description.includes('culture START'),
     )
     expect(entry?.change.kind).toBe('place')
     expect(entry?.playerId).toBe(CASH1981)
   })
 
-  it('a second player lands on the same space without covering the first', () => {
+  it('a second player lands on START without covering the first', () => {
     let state = chooseCiv(firstCivGame(), CASH1981)
     // Karandras1 needs the turn before the reveal can draw starting units
     state = { ...state, players: state.players.map((player) => ({ ...player, yourTurn: player.playerId === KARANDRAS1 })) }
@@ -231,7 +241,7 @@ describe('choosing a civilization', () => {
 
     const markers = state.board.pieces.filter((piece) => piece.category === 'leader')
     expect(markers).toHaveLength(2)
-    expect(markers.every((marker) => cultureStepOf(state.board, marker) === 1)).toBe(true)
+    expect(markers.every((marker) => cultureStepOf(state.board, marker) === 0)).toBe(true)
     expect(new Set(markers.map((marker) => marker.y)).size).toBe(2)
   })
 })
