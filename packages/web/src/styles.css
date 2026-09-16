@@ -154,6 +154,18 @@ label > textarea {
   align-items: start;
 }
 
+/*
+ * The game panels stack one per line, each using the full width. With the
+ * panels collapsible, a multi-column grid made an expanded section (e.g. Turn
+ * orders) shove its neighbours out of view; a single column keeps every
+ * section on its own row so expanding one only pushes the rest down.
+ */
+.panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .row {
   display: flex;
   gap: 0.4rem;

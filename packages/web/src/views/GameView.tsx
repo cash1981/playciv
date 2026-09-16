@@ -180,7 +180,7 @@ export function GameView({ gameId, player, onUnauthorized }: Props): React.JSX.E
         log={boardLog}
       />
 
-      <div className="grid">
+      <div className="panel-stack">
         <DrawPanel gameId={gameId} busy={busy} yourTurn={yourTurn} run={run} view={view} />
         <HandPanel gameId={gameId} busy={busy} run={run} view={view} />
         <BattlePanel gameId={gameId} busy={busy} run={run} view={view} />
