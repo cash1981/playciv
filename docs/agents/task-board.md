@@ -12,17 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-15-game-url
-
-- **Owner:** Luna (gpt-5.6-luna)
-- **Branch:** `fix/issue-15-game-url`
-- **Brief:** `docs/agents/tasks/issue-15-game-url.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/App.tsx`
-  - `packages/web/src/views/LobbyView.tsx`
-- **Notes:** Fixes GitHub issue #15. Existing user changes in `packages/web/src/lib/api.ts` are out of scope.
-
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 

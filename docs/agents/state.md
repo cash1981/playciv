@@ -54,6 +54,8 @@ _Last updated: 2026-09-16_
   cropped "only you" badge in the tech pyramid.
 - **Issue #14.** The destructive "Clear board" control is removed from the
   board UI; undo, replay, and backend compatibility remain.
+- **Issue #15.** Opening or joining a game uses `/game/<gameid>`, restores on
+  refresh, and synchronizes browser back navigation.
 
 ## In progress
 
