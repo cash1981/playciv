@@ -837,3 +837,105 @@ ul.history > li {
     width: 100%;
   }
 }
+
+/* --- Highscore -------------------------------------------------------------
+   Port of old-civ-web's highscore.html: nested pill tabs over sortable,
+   paginated tables. The pills replace uib-tabset; the table replaces ng-table.
+   --------------------------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.7rem;
+}
+
+/* The second (sub-tab) row sits closer to the caption below it. */
+.tabs + .tabs {
+  margin-bottom: 1rem;
+}
+
+.tab {
+  flex: 1 1 auto;
+  padding: 0.35rem 0.7rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #10131a;
+  font-weight: 600;
+}
+
+.highscore-caption {
+  margin: 0 0 0.7rem;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.highscore-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: center;
+}
+
+.highscore-table th,
+.highscore-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.highscore-table tbody tr:nth-child(odd) {
+  background: var(--panel-2);
+}
+
+.highscore-table tbody tr:hover {
+  background: var(--line);
+}
+
+.highscore-table th {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.highscore-table th .sort {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.3rem;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.highscore-table th .sort:hover {
+  color: var(--accent);
+}
+
+.sort-indicator {
+  font-size: 0.7rem;
+  color: var(--accent);
+  min-width: 0.8rem;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  margin-top: 0.7rem;
+}

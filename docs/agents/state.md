@@ -44,8 +44,11 @@ _Last updated: 2026-09-16_
   `player` and `chat` collections, reads old `pbf` games for highscore, stores
   new games in `game_state`. Old SHA-1 logins verify and upgrade to scrypt.
   `GET /api/highscore` ports Java's highscore. Verified against the live
-  database (Andrius 39/68, cash 36/58; legacy login upgrades end-to-end). The
-  highscore **UI** is still `public-landing`.
+  database (Andrius 39/68, cash 36/58; legacy login upgrades end-to-end).
+- **Highscore UI.** A public `/highscore` page (branch `feat/highscore-page`)
+  porting `old-civ-web`'s: two-level Player/Civilization tabs over Total and
+  2/3/4/5-player sub-tabs, sortable and paginated (10/page, default `totalWins`
+  desc), reading `GET /api/highscore`. See `tasks/highscore-page.md`.
 - **Tech tree.** The AngularJS pyramid, private and public: your own techs
   (hidden ones badged) and one public pyramid per player from
   `revealedTechsForAllPlayers`. Verified in the browser; the hidden-info test
@@ -110,6 +113,5 @@ _Nothing. See the queue on the task board._
 
 ## Deferred on purpose
 
-Migrating old `pbf` games to playable form · the highscore UI (data and
-endpoint only, see `mongodb-storage`) · tournament collection · email
+Migrating old `pbf` games to playable form · tournament collection · email
 notification · `AdminAction` · websockets for live updates.
