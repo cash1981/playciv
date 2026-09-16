@@ -64,6 +64,12 @@ _Nothing. See the queue on the task board._
 
 ## Known problems and loose ends
 
+- **Game UI bug fixes are not approved (review 2026-09-16).** Despite passing
+  typecheck, build, 293 engine tests and 46 server tests, review of
+  `e082006..aba5090` found unauthorized end-turn access for zero-numbered
+  games, incomplete timestamps/log ordering, tile moves bypassing alignment,
+  and tech-pyramid overflow. The live claim remains open for corrections.
+
 - **`gh` is not installed**, so pull requests are opened through the compare
   link rather than the CLI. SSH push works.
 - **Space Flight has no artwork.** Nothing to fix; there is no such card.

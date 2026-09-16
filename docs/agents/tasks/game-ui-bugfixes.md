@@ -3,7 +3,7 @@
 - **Slug:** `game-ui-bugfixes`
 - **Branch:** `feat/mongodb-storage`
 - **Owner:** Luna
-- **Status:** in progress
+- **Status:** in progress — correcting review findings
 
 ## Goal
 
@@ -54,6 +54,11 @@ proves each regression and retain hidden-information assertions.
 
 ## Claimed paths
 
+- `packages/engine/src/actions/player.ts`
+- `packages/engine/src/actions/board.ts`
+- `packages/server/src/context.ts`
+- `README.md`
+- `docs/agents/decisions.md`
 - `packages/engine/src/board.ts`
 - `packages/engine/src/state.ts`
 - `packages/engine/test/`

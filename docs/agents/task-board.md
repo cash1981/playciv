@@ -17,8 +17,13 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** Luna (gpt-5.6-luna)
 - **Branch:** `feat/mongodb-storage`
 - **Brief:** `docs/agents/tasks/game-ui-bugfixes.md`
-- **Status:** in progress
+- **Status:** in progress — correcting review findings
 - **Claimed paths:**
+  - `packages/engine/src/actions/player.ts`
+  - `packages/engine/src/actions/board.ts`
+  - `packages/server/src/context.ts`
+  - `README.md`
+  - `docs/agents/decisions.md`
   - `packages/engine/src/board.ts`
   - `packages/engine/src/state.ts`
   - `packages/engine/test/`
@@ -28,7 +33,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/web/src/views/`
   - `packages/web/src/styles.css`
   - `packages/web/test/`
-- **Notes:** Fixes reported MongoDB turn lookup, log presentation, tech-tree layout, collapsible game panels, and starting-tile alignment.
+- **Notes:** Review of `e082006..aba5090` on 2026-09-16 requires changes. Confirmed outsider end-turn access in zero-numbered games, missing creation timestamps and oldest-first undated logs, and tile moves bypassing snapping. Terra also identified inaccessible overflow in the tech pyramid. Typecheck/build pass; 293 engine and 46 server tests pass. Claim remains open for corrections; no merge approval.
 
 Recently merged: `tech-tree` and `mongodb-storage`. The latter added `highscore`
 to the engine barrel and `GET /api/highscore`; whoever takes `public-landing`
