@@ -25,7 +25,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 ### issue-16-remove-social-policy
 
 - **Owner:** Luna (gpt-5.6-luna)
-- **Branch:** `fix/issue-16-remove-social-policy`
+- **Branch:** `fix/issue-16-social-policy-ui`
 - **Brief:** `docs/agents/tasks/issue-16-remove-social-policy.md`
 - **Status:** in progress
 - **Claimed paths:**
