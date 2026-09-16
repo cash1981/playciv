@@ -261,3 +261,41 @@ fallback serves. A clear 409 is better than a 500 or a misleading 404.
 wrapping to 1) is unchanged and still matches Java. Membership is enforced at
 the server route (`requireMembership` on `endturn`/`taketurn`), which is where
 `decisions.md` (2026-09-01) always said it belonged.
+
+---
+
+## 2026-09-16 — revealSocialPolicy has no Java counterpart
+
+**Decision.** `revealSocialPolicy` mirrors the in-repo `revealTech` (find the
+chosen item, set `hidden: false`, append a `REVEAL` log) rather than a Java
+method, because `PlayerAction` never had one — social policies were never
+revealable in Java.
+
+**Why.** Issue #6 asks for reveal parity with techs and items. `revealTech` is
+the closest in-repo pattern and the shapes match: both are items chosen into
+the player's hand with a `hidden` flag.
+
+**Consequences.** No Java test exists to port for this action; its engine test
+is original, not a port.
+
+---
+
+## 2026-09-16 — Social policy images are lower-cased for the WaW artwork
+
+**Decision.** `itemImage()` for a social policy returns the name lower-cased with
+spaces removed (`Military Tradition` → `militarytradition.png`). Java's
+`SocialPolicy.getImage()` kept the name's case (`name + ".png"` with spaces
+removed → `MilitaryTradition.png`).
+
+**Why.** Issue #6 asks to use the artwork under `Civilization/WaW`, and those
+files are all lower case (`patronage.png`, `naturalreligion.png`, …). Matching
+them is what makes the cards show. The previous code (socialpolicy shared the
+hut/village/tech case) matched Java's case exactly but pointed at files that do
+not exist in this repo, so the policies had no image.
+
+**Consequences.** A deliberate difference from Java's `getImage`, recorded here
+and in `README.md`. The spreadsheet name keeps its `Expansionsim` typo (the data
+still matches Java); only the on-disk file is aliased (`expansionsim.png` copied
+from `expansionism.png`). `revealSocialPolicy` itself was requested by the human
+in issue #6, so it is an authorised new feature, not an invented rule — the
+"ask the human first" bar is met by the issue.

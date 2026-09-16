@@ -488,6 +488,33 @@ export function chooseSocialPolicy(
   return ok(appendItemLog(next, 'SOCIAL_POLICY', player.username, player.playerId, chosen))
 }
 
+/**
+ * There is no `PlayerAction.revealSocialPolicy` in Java — social policies were
+ * never revealable there. This mirrors `revealTech` above, which is the
+ * in-repo pattern for revealing a chosen item.
+ */
+export function revealSocialPolicy(
+  state: GameState,
+  input: ChooseSocialPolicyInput,
+): ActionResult {
+  const access = requireAccess(state, input.playerId)
+  if (!access.ok) return access
+  const player = access.value
+
+  const policy = player.socialPolicies.find((candidate) => candidate.name === input.name)
+  if (policy === undefined) return err({ kind: 'ITEM_NOT_FOUND' })
+
+  const revealed: SocialPolicyItem = { ...policy, hidden: false }
+  const next = withPlayer(state, {
+    ...player,
+    socialPolicies: player.socialPolicies.map((candidate) =>
+      candidate.name === policy.name ? revealed : candidate,
+    ),
+  })
+
+  return ok(appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed))
+}
+
 // ---------------------------------------------------------------------------
 // Trading and discarding
 // ---------------------------------------------------------------------------

@@ -202,6 +202,8 @@ export const api = {
     get<SocialPolicyItem[]>(`/api/games/${gameId}/socialpolicies`),
   chooseSocialPolicy: (gameId: string, name: string) =>
     post<PlayerView>(`/api/games/${gameId}/socialpolicy/choose`, { name }),
+  revealSocialPolicy: (gameId: string, name: string) =>
+    post<PlayerView>(`/api/games/${gameId}/socialpolicies/reveal`, { name }),
 
   revealItem: (gameId: string, sheetName: SheetName, itemNumber: number) =>
     post<PlayerView>(`/api/games/${gameId}/items/reveal`, { sheetName, itemNumber }),
