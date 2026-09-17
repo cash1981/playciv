@@ -25,6 +25,7 @@ $categories = [ordered] @{
     'markers'   = 'marker'
     'cities'    = 'city'
     'buildings' = 'building'
+    'great people' = 'greatperson'
     'tiles'     = 'tile'
     'leaders'   = 'leader'
 }

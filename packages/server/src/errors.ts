@@ -31,6 +31,8 @@ export function statusFor(error: EngineError): number {
     case 'UNKNOWN_STAT':
     case 'INVALID_STAT_VALUE':
       return 400
+    case 'BOARD_ASSET_LIMIT_REACHED':
+      return 409
     case 'NOT_YOUR_TURN':
     case 'NO_ACCESS':
     case 'GAME_CREATOR_MUST_END_GAME':

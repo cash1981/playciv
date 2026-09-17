@@ -100,6 +100,16 @@ describe('player areas', () => {
     expect(pieces).toHaveLength(2)
     expect(pieces[0]?.x).not.toBe(pieces[1]?.x)
   })
+
+  it('rejects a placement once a two-player resource supply is exhausted', async () => {
+    const { gameId, starter } = await startedGame('Supply')
+    await place(gameId, starter, 'resources/wheat', 0, 0)
+    await place(gameId, starter, 'resources/wheat', 0, 0)
+
+    const exhausted = await place(gameId, starter, 'resources/wheat', 0, 0)
+    expect(exhausted.statusCode).toBe(409)
+    expect((exhausted.json() as { error: string }).error).toBe('BOARD_ASSET_LIMIT_REACHED')
+  })
 })
 
 describe('history over HTTP', () => {

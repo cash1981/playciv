@@ -38,6 +38,7 @@ import {
   mapHeight,
   mapTop,
   piecesAtStep,
+  remainingBoardAssetCount,
 } from '@civ/engine'
 import type { Board, BoardArea, BoardAsset, BoardPiece } from '@civ/engine'
 
@@ -48,6 +49,7 @@ import type { PlayerView } from '../lib/api.js'
 interface Props {
   readonly gameId: string
   readonly board: Board
+  readonly numOfPlayers: number
   readonly areas: readonly BoardArea[]
   readonly busy: boolean
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
@@ -69,6 +71,7 @@ const CATEGORY_LABEL: Readonly<Record<BoardAsset['category'], string>> = {
   marker: 'Markers',
   city: 'Cities',
   building: 'Buildings',
+  greatperson: 'Great People',
   civtile: 'Starting tiles',
   tile: 'Map tiles',
   leader: 'Leaders',
@@ -80,6 +83,7 @@ const CATEGORY_ORDER: readonly BoardAsset['category'][] = [
   'marker',
   'city',
   'building',
+  'greatperson',
   'civtile',
   'tile',
   'leader',
@@ -94,6 +98,7 @@ const ZOOM_STEPS = [0.3, 0.4, 0.5, 0.65, 0.8, 1] as const
 export function BoardView({
   gameId,
   board,
+  numOfPlayers,
   areas,
   busy,
   run,
@@ -464,21 +469,29 @@ export function BoardView({
           </p>
 
           <div className="palette-grid">
-            {inCategory.map((asset) => (
-              <div
-                key={asset.id}
-                className="palette-item"
-                title={asset.label}
-                draggable={!replaying}
-                onDragStart={(event) => {
-                  event.dataTransfer.setData('text/civ-asset', asset.id)
-                  event.dataTransfer.effectAllowed = 'copy'
-                }}
-              >
-                <img src={assetUrl(asset.path)} alt={asset.label} draggable={false} />
-                <span>{asset.label}</span>
-              </div>
-            ))}
+            {inCategory.map((asset) => {
+              const remaining = remainingBoardAssetCount(asset, pieces, numOfPlayers)
+              const exhausted = remaining === 0
+              return (
+                <div
+                  key={asset.id}
+                  className={`palette-item${exhausted ? ' unavailable' : ''}`}
+                  title={exhausted ? `${asset.label} (none available)` : asset.label}
+                  draggable={!replaying && !exhausted}
+                  onDragStart={(event) => {
+                    if (exhausted) return
+                    event.dataTransfer.setData('text/civ-asset', asset.id)
+                    event.dataTransfer.effectAllowed = 'copy'
+                  }}
+                >
+                  <img src={assetUrl(asset.path)} alt={asset.label} draggable={false} />
+                  <span>
+                    {asset.label}
+                    {remaining !== undefined && ` (${remaining})`}
+                  </span>
+                </div>
+              )
+            })}
             {inCategory.length === 0 && <p className="muted">Loading …</p>}
           </div>
 

@@ -36,6 +36,7 @@ import {
   mapTop,
   piecesAtStep,
   playerAreas,
+  remainingBoardAssetCount,
   squareOf,
 } from '../src/board.js'
 import { migrateGameState } from '../src/migrate.js'
@@ -92,13 +93,14 @@ describe('geometry', () => {
 })
 
 describe('the manifest', () => {
-  it('has pieces in all eight categories', () => {
+  it('has pieces in all nine categories', () => {
     const categories = new Set(BOARD_ASSETS.map((asset) => asset.category))
     expect([...categories].sort()).toEqual([
       'building',
       'city',
       'civtile',
       'figure',
+      'greatperson',
       'leader',
       'marker',
       'resource',
@@ -162,6 +164,59 @@ describe('placePiece', () => {
       placePiece(firstCivGame(), { playerId: 'nobody', assetId: 'figures/redarmy', x: 0, y: 0 }),
     )
     expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'nobody' })
+  })
+
+  it('shares six pieces between an upgrade family', () => {
+    let state = firstCivGame()
+    for (let index = 0; index < 3; index++) {
+      state = place(state, 'buildings/barracks', 0, 0)
+      state = place(state, 'buildings/academy', 0, 0)
+    }
+
+    const academy = findBoardAsset('buildings/academy')
+    if (academy === undefined) throw new Error('academy missing from manifest')
+    expect(remainingBoardAssetCount(academy, state.board.pieces, state.numOfPlayers)).toBe(0)
+    expect(unwrapErr(placePiece(state, {
+      playerId: CASH1981,
+      assetId: 'buildings/barracks',
+      x: 0,
+      y: 0,
+    }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'buildings/barracks', limit: 6 })
+  })
+
+  it('gives non-upgradeable buildings their own supply of six', () => {
+    let state = firstCivGame()
+    for (let index = 0; index < 6; index++) state = place(state, 'buildings/harbor', 0, 0)
+    expect(unwrapErr(placePiece(state, {
+      playerId: CASH1981,
+      assetId: 'buildings/harbor',
+      x: 0,
+      y: 0,
+    }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'buildings/harbor', limit: 6 })
+  })
+
+  it('limits each resource to the number of players', () => {
+    let state = firstCivGame()
+    for (let index = 0; index < 4; index++) state = place(state, 'resources/wheat', 0, 0)
+    expect(unwrapErr(placePiece(state, {
+      playerId: CASH1981,
+      assetId: 'resources/wheat',
+      x: 0,
+      y: 0,
+    }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'resources/wheat', limit: 4 })
+  })
+
+  it('limits each Great Person type to three and removal restores one', () => {
+    let state = firstCivGame()
+    for (let index = 0; index < 3; index++) state = place(state, 'great people/artist', 0, 0)
+    const artist = findBoardAsset('great people/artist')
+    if (artist === undefined) throw new Error('artist missing from manifest')
+    expect(remainingBoardAssetCount(artist, state.board.pieces, state.numOfPlayers)).toBe(0)
+
+    const piece = state.board.pieces[0]
+    if (piece === undefined) throw new Error('artist was not placed')
+    state = unwrap(removePiece(state, { playerId: CASH1981, pieceId: piece.id }))
+    expect(remainingBoardAssetCount(artist, state.board.pieces, state.numOfPlayers)).toBe(1)
   })
 
   it('clamps the position to the surface', () => {

@@ -740,6 +740,12 @@ ul.list > li:last-child {
   border-color: var(--accent);
 }
 
+.palette-item.unavailable {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
 .palette-item img {
   max-width: 2.6rem;
   max-height: 2.6rem;

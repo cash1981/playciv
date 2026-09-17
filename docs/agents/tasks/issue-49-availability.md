@@ -7,11 +7,10 @@
 
 ## Goal
 
-Players can see how many physical building and resource pieces remain available,
-and the board refuses placements once a category's finite supply is exhausted.
-Removing a piece returns it to the available pool. Great Person availability is
-represented consistently with the card/deck model rather than being silently
-treated as a board piece.
+Players can see how many physical building, resource, and Great Person pieces
+remain available, and the board refuses placements once a finite supply is
+exhausted. Removing a piece returns it to the available pool. Great Persons
+are board assets loaded from `Civilization/Moderator/great people`.
 
 ## Why
 
@@ -36,10 +35,8 @@ Person availability.
 
 **Out:**
 
-- Inventing limits not stated in issue #49; unresolved limits are listed below.
+- Inventing limits beyond the resolved rules below.
 - Changing card effects or the board's visual geometry.
-- Treating Great Persons as board pieces; they remain cards in the deck/hand
-  model unless the open question is answered differently.
 
 ## Reference
 
@@ -51,6 +48,12 @@ and three Great Persons per type.
 The old backend and item model do not enforce these board-piece limits. The old
 client used a Google Sheet for assets; this finite-supply behavior is therefore
 a requested improvement, not a direct port.
+
+Resolved decisions: every building asset has a supply of six, including
+Harbor, Ironmine, Shipyard, and Tradingpost. Upgrade pairs share their six
+pieces. Each resource asset has a supply equal to the player count (2–5).
+Each Great Person type has a supply of three; placing one consumes a piece and
+removing it restores the supply.
 
 ## Approach
 
@@ -89,11 +92,8 @@ mutable state.
 - [ ] Verified in the browser: counts change after placement/removal and exhausted actions are disabled.
 - [ ] Hidden information: no opponent hand/card contents are added to public projections.
 
-## Open questions
+## Resolved design decisions
 
-- Issue #49 does not state the maximum for non-upgradeable buildings (Harbor,
-  Ironmine, Shipyard, Tradingpost). Confirm whether those are also six each or
-  use another limit.
-- Great Persons are cards, not board pieces in the current model. Confirm
-  whether “available” means remaining cards in the Great Person deck (per type)
-  or a separate visible inventory that is not tied to drawing.
+- Non-upgradeable buildings are capped at six each.
+- Great Persons are board assets, capped at three per type, using the same
+  placement/removal accounting as buildings.

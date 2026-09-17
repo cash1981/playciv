@@ -53,6 +53,8 @@ export type BoardAssetCategory =
   | 'marker'
   | 'city'
   | 'building'
+  /** Great Person pieces from the Moderator artwork. */
+  | 'greatperson'
   /** The civilizations' starting tiles, one per civ. */
   | 'civtile'
   /** The numbered exploration tiles, plus the tile back. */
@@ -114,6 +116,53 @@ export function findBoardAsset(assetId: string): BoardAsset | undefined {
 
 export function boardAssetsByCategory(category: BoardAssetCategory): readonly BoardAsset[] {
   return BOARD_ASSETS.filter((asset) => asset.category === category)
+}
+
+/** Upgrade families share one physical pool; all other buildings have their own. */
+const BUILDING_SUPPLY_GROUP: Readonly<Record<string, string>> = {
+  'buildings/academy': 'barracks-family',
+  'buildings/barracks': 'barracks-family',
+  'buildings/aqueduct': 'granary-family',
+  'buildings/granary': 'granary-family',
+  'buildings/library': 'library-family',
+  'buildings/university': 'library-family',
+  'buildings/bank': 'market-family',
+  'buildings/market': 'market-family',
+  'buildings/cathedral': 'temple-family',
+  'buildings/temple': 'temple-family',
+}
+
+const buildingSupplyGroup = (asset: BoardAsset): string | undefined =>
+  asset.category === 'building'
+    ? (BUILDING_SUPPLY_GROUP[asset.id] ?? asset.id)
+    : undefined
+
+/** The finite supply for a board asset, or undefined for unlimited assets. */
+export function boardAssetLimit(asset: BoardAsset, numOfPlayers: number): number | undefined {
+  if (asset.category === 'building') return 6
+  if (asset.category === 'resource') return Math.max(0, Math.min(5, numOfPlayers))
+  if (asset.category === 'greatperson') return 3
+  return undefined
+}
+
+/** Number of copies still available for a palette asset. */
+export function remainingBoardAssetCount(
+  asset: BoardAsset,
+  pieces: readonly BoardPiece[],
+  numOfPlayers: number,
+): number | undefined {
+  const limit = boardAssetLimit(asset, numOfPlayers)
+  if (limit === undefined) return undefined
+
+  const group = buildingSupplyGroup(asset)
+  const used = pieces.filter((piece) => {
+    if (piece.category !== asset.category) return false
+    if (asset.category === 'building') {
+      return (BUILDING_SUPPLY_GROUP[piece.assetId] ?? piece.assetId) === group
+    }
+    return piece.assetId === asset.id
+  }).length
+  return Math.max(0, limit - used)
 }
 
 /** A piece lying on the board. */
