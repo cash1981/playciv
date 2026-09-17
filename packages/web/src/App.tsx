@@ -160,24 +160,6 @@ export function App(): React.JSX.Element {
     )
   }
 
-  if (screen.name === 'about') {
-    return (
-      <div className="app">
-        <header className="topbar">
-          <strong>Civilization</strong>
-          <span className="muted">playciv</span>
-          <span className="spacer" />
-          <button onClick={backToGames}>{player === null ? 'Sign in' : 'Games'}</button>
-          <button onClick={openHighscore}>Highscore</button>
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          {player !== null && <span className="muted">{player.username}</span>}
-          {player !== null && <button onClick={signOut}>Sign out</button>}
-        </header>
-        <AboutView />
-      </div>
-    )
-  }
-
   if (player === null) {
     return (
       <div className="app">
