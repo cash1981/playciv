@@ -413,10 +413,10 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   })
 
   /**
-   * Update one of a player's status-board stats (coins, trade, culture,
-   * victory points). Any member of the game may edit any player's stats — this
-   * is shared bookkeeping, replacing the old shared asset spreadsheet. The
-   * engine authorizes membership and validates the stat and value.
+   * Update one of a player's shared status-board values. Any member of the game
+   * may edit any player's values — this is shared bookkeeping, replacing the
+   * old shared asset spreadsheet. The engine authorizes membership and
+   * validates the stat and value.
    */
   app.post('/api/games/:gameId/players/:targetPlayerId/stat', auth, async (request, reply) => {
     const { gameId, targetPlayerId } = request.params as Params & { targetPlayerId: string }

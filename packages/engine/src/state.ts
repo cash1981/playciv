@@ -21,22 +21,42 @@ export const PLAYER_COLORS = ['Green', 'Yellow', 'Purple', 'Red', 'Blue'] as con
 export type PlayerColor = (typeof PLAYER_COLORS)[number]
 
 /**
- * The per-player status board (issue #43), replacing a manual spreadsheet the
- * players used to keep alongside the game. Public — every member of the game
- * may see and edit every player's numbers, as at a physical table.
+ * The per-player status board, replacing a manual spreadsheet the players used
+ * to keep alongside the game. Public — every member of the game may see and
+ * edit every player's numbers, as at a physical table.
  */
 export interface PlayerStats {
   readonly coins: number
   readonly trade: number
   readonly culture: number
-  readonly victoryPoints: number
+  readonly infantry: number
+  readonly artillery: number
+  readonly mounted: number
+  readonly stacking: number
+  readonly mvmt: number
+  readonly combat: number
+  readonly handSize: number
+  readonly efta: number
+  readonly infra: number
+  readonly mic: number
+  readonly pe: number
 }
 
 export const DEFAULT_PLAYER_STATS: PlayerStats = {
   coins: 0,
   trade: 0,
   culture: 0,
-  victoryPoints: 0,
+  infantry: 1,
+  artillery: 1,
+  mounted: 1,
+  stacking: 2,
+  mvmt: 2,
+  combat: 0,
+  handSize: 0,
+  efta: 0,
+  infra: 0,
+  mic: 0,
+  pe: 0,
 }
 
 export interface Playerhand {

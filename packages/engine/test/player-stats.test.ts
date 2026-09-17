@@ -11,14 +11,16 @@ import { describe, expect, it } from 'vitest'
 
 import { placePiece } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
-import { revealItem, setPlayerStat } from '../src/actions/player.js'
+import { chooseTech, revealItem, setPlayerStat } from '../src/actions/player.js'
 import { createGame } from '../src/create-game.js'
+import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import {
   buildingCountOf,
   cityCountOf,
   cultureMarkerLevelOf,
+  DEFAULT_PLAYER_STATS,
   findPlayer,
   toPlayerView,
 } from '../src/state.js'
@@ -53,6 +55,44 @@ function chooseCiv(start: GameState, playerId: string): GameState {
 }
 
 describe('setPlayerStat', () => {
+  it('starts the status board with the requested defaults', () => {
+    expect(findPlayer(firstCivGame(), CASH1981)?.stats).toMatchObject({
+      coins: 0,
+      trade: 0,
+      culture: 0,
+      infantry: 1,
+      artillery: 1,
+      mounted: 1,
+      stacking: 2,
+      mvmt: 2,
+      combat: 0,
+      handSize: 0,
+      efta: 0,
+      infra: 0,
+      mic: 0,
+      pe: 0,
+    })
+  })
+
+  it('fills new status fields on an older saved player without losing old values', () => {
+    const original = firstCivGame()
+    const older = {
+      ...original,
+      players: original.players.map((player) => ({
+        ...player,
+        stats: { coins: 9, trade: 2, culture: 4 },
+      })),
+    } as unknown as GameState
+
+    const migrated = migrateGameState(older)
+    expect(findPlayer(migrated, CASH1981)?.stats).toEqual({
+      ...DEFAULT_PLAYER_STATS,
+      coins: 9,
+      trade: 2,
+      culture: 4,
+    })
+  })
+
   it('sets a stat on the target and writes a public log entry', () => {
     const state = unwrap(
       setPlayerStat(firstCivGame(), {
@@ -97,16 +137,15 @@ describe('setPlayerStat', () => {
       setPlayerStat(state, {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
-        stat: 'victoryPoints',
+        stat: 'combat',
         value: 2,
       }),
     )
 
     expect(findPlayer(state, CASH1981)?.stats).toEqual({
+      ...DEFAULT_PLAYER_STATS,
       coins: 5,
-      trade: 0,
-      culture: 0,
-      victoryPoints: 2,
+      combat: 2,
     })
   })
 
@@ -172,6 +211,18 @@ describe('setPlayerStat', () => {
       }),
     )
     expect(findPlayer(state, CASH1981)?.stats.culture).toBe(0)
+  })
+
+  it('accepts a negative combat modifier', () => {
+    const state = unwrap(
+      setPlayerStat(firstCivGame(), {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        stat: 'combat',
+        value: -1,
+      }),
+    )
+    expect(findPlayer(state, CASH1981)?.stats.combat).toBe(-1)
   })
 })
 
@@ -246,13 +297,13 @@ describe('projections carry the status board', () => {
 
     const view = toPlayerView(state, KARANDRAS1)
 
-    expect(view.you?.stats).toEqual({ coins: 0, trade: 0, culture: 0, victoryPoints: 0 })
+    expect(view.you?.stats).toEqual(DEFAULT_PLAYER_STATS)
     expect(view.you?.cultureMarkerLevel).toBeNull()
     expect(view.you?.cityCount).toBe(0)
     expect(view.you?.buildingCount).toBe(0)
 
     const cash = view.opponents.find((opponent) => opponent.playerId === CASH1981)
-    expect(cash?.stats).toEqual({ coins: 4, trade: 0, culture: 0, victoryPoints: 0 })
+    expect(cash?.stats).toEqual({ ...DEFAULT_PLAYER_STATS, coins: 4 })
     expect(cash?.cityCount).toBe(1)
     expect(cash?.buildingCount).toBe(0)
     expect(cash?.cultureMarkerLevel).toBeNull()
@@ -260,11 +311,12 @@ describe('projections carry the status board', () => {
 
   it('never leaks another player\'s hand or hidden techs alongside the public stats', () => {
     let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'GREAT_PERSON' }))
+    state = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Navy' }))
     state = unwrap(
       setPlayerStat(state, {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
-        stat: 'victoryPoints',
+        stat: 'handSize',
         value: 9,
       }),
     )
@@ -273,18 +325,15 @@ describe('projections carry the status board', () => {
     const cash = view.opponents.find((opponent) => opponent.playerId === CASH1981)
 
     // The stat is public...
-    expect(cash?.stats.victoryPoints).toBe(9)
+    expect(cash?.stats.handSize).toBe(9)
     // ...but the hand it sits alongside is still a count, not the cards
     expect(cash).not.toHaveProperty('items')
+    expect(cash).not.toHaveProperty('techsChosen')
+    expect(cash?.revealedTechs).toEqual([])
     expect(cash?.numberOfItemsInHand).toBe(1)
 
     // A member not shown here (CHUL) proves opponents beyond the pair above
     // are unaffected by the edit.
-    expect(findPlayer(state, CHUL)?.stats).toEqual({
-      coins: 0,
-      trade: 0,
-      culture: 0,
-      victoryPoints: 0,
-    })
+    expect(findPlayer(state, CHUL)?.stats).toEqual(DEFAULT_PLAYER_STATS)
   })
 })

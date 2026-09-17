@@ -105,10 +105,14 @@ _Last updated: 2026-09-17_
   culture, victory points) that any game member may edit via `setPlayerStat`
   (`POST /api/games/:id/players/:targetId/stat`), logged publicly. Building
   ownership falls back to `placedBy` since building art has no colour variant.
+- **Player status details.** Replaced obsolete status columns with grouped,
+  editable Units and Cards, default modifiers, and EftA/Infra/MIC/PE values;
+  older saved stats are migrated with defaults and Combat supports signed
+  modifiers.
 - 
 ## In progress
 
-_Nothing. Issue #20 is ready for the human to merge from `feat/issue-20-theme-switch`._
+_Nothing._
 
 ## Next, in order
 
