@@ -498,3 +498,84 @@ Great Person card deck remains independent.
 buildings for resources and Great Persons. The old system had no board-piece
 inventory to port, so this is an explicit product rule rather than a silent
 correction of legacy Java behavior.
+
+---
+
+## 2026-09-17 — Wonders live on the board, not in a hand
+
+**Decision.** Wonders are a `wonder` board-asset category with their own art
+(the 27 images in `Civilization/Moderator/wonders`, ~85 px, near-square) and a
+palette entry, and they are placed on a shared **Wonders** area at the right of
+the player-area band. Every wonder that used to be drawn into a hand — the four
+ancient wonders dealt once all civilizations are chosen, Egypt's starting
+wonder, and any wonder drawn from the draw menu — is instead taken off the deck,
+placed in the Wonders area, and named in a **public** log line. No wonder ever
+enters a player's hand. The player areas shrink in width (the Wonders area is
+`WONDERS_AREA_SQUARES = 3` squares wide) to make room.
+
+**Why.** The owner asked for it: wonders were never really giftable or hidden
+bookkeeping the way ordinary cards are (the old system marked them non-`Tradable`
+and rendered them as text-only cards with no art), and tracking them openly on
+the board matches how the physical game lays wonders out. This deliberately
+deviates from the old behaviour, which put drawn wonders in the hidden hand.
+
+**Consequences.**
+- New engine surface: `wonder` in `BoardAssetCategory`; `wonderAssetId(name)`
+  (same normalisation as `itemImage`); `wondersArea` / `boardAreas` /
+  `WONDERS_AREA_ID`; `drawWonderToBoard` (low-level, no turn check) and
+  `drawWonder` (turn-gated wrapper). `playerAreas` now reserves the Wonders
+  area's width, so `boardAreas` (players + Wonders) spans the map, not
+  `playerAreas` alone. `boardAreas` is what the view and piece-placement use.
+- Wonders on the board are **public** — that is the point. Because wonders no
+  longer reach any hand, the hand projection is unchanged and nothing new can
+  leak; hidden-info tests are unaffected.
+- The pure `draw` reducer is left as the faithful Java port (a wonder drawn
+  through it would still go to the hand). The redirect to the board is done at
+  the **server draw route** for wonder sheets, via `drawWonder`. A manual wonder
+  draw is **still turn-gated** like any other draw; only the destination differs
+  (board, not hand). The start-of-game deal calls `drawWonderToBoard` directly,
+  since revealing a civilization is not a turn action.
+- `shouldDrawWonders` gates on a new `wondersDealt` state flag, **not** on a
+  wonder piece being on the board. A moderator may place wonder art from the
+  palette, and that must not cancel the deal. The flag is set when the bulk
+  four-wonder draw runs, and when Egypt's starting wonder is drawn — so Egypt
+  still suppresses the bulk draw, as in Java. `migrate.ts` back-fills the flag
+  for older saved games (true when setup is complete or a wonder already exists
+  anywhere, so the deal never re-fires mid-game).
+- **Undo of a wonder placement removes the wonder from the game.** The wonder is
+  taken off the deck when placed, and the deck removal is not part of the board
+  history; board undo reverts only the placement, so the piece disappears with
+  nothing put back in the deck. Wonders are not reshuffleable anyway, so this is
+  accepted — re-add wonder art from the palette if needed.
+- The Wonders area is a 3×3 grid (`WONDERS_AREA_SQUARES = 3`, nine slots). A
+  tenth wonder falls back to the first slot; a moderator can drag wonders out
+  across the board. Enough for the four ancient wonders dealt at start.
+- Not done here: hiding the "Give" button on non-giftable cards (already blocked
+  server-side by `isTradable`) is a separate follow-up.
+
+---
+
+## 2026-09-17 — Culture-track markers are placed freely, not snapped
+
+**Decision.** Dropping a leader marker on the culture track no longer snaps it to
+the nearest space or steps it into a lane. Markers are placed freely, at the
+exact drop position, like every other piece on the board. This reverses the
+"markers snap to a space when dropped" part of the 2026-09-15 decision above;
+everything else there still stands.
+
+**Why.** The owner found the snapping made markers hard to position — they could
+not put a marker exactly where they wanted, and the lane-stepping sometimes left
+markers partly on top of each other. Free placement is also what the board does
+everywhere else (`board.ts`: "Pieces sit at free pixel coordinates rather than
+snapping"), so the snap was the odd one out. There is no ported rule that
+requires snapping; the track is a marker aid, and the player decides the exact
+spot, including whether two markers share a space.
+
+**Consequences.** The `cultureSlot` helper is removed and the culture-band branch
+in `movePiece` is gone. `cultureStepOf` and `locationOf` still read the nearest
+space from a marker's position, so the log still says "moved … to culture 7".
+Markers can now overlap if dropped on the same spot — that is the player's
+choice. The one exception is the *automatic* placement of a leader on START when
+a civilization is revealed (`placeLeaderMarker`): it still fans markers out into
+lanes so two players choosing at once are not hidden under each other. That is
+only a default starting spot; either marker can then be moved freely.

@@ -135,7 +135,7 @@ centre.
 
 Every player sees and can move every piece, as at a physical table.
 
-The palette has nine categories, generated from the images on disk. Buildings
+The palette has ten categories, generated from the images on disk. Buildings
 and resources use finite physical supplies: upgrade families share six
 building pieces, each resource type is limited by the player count, and each
 Great Person type has three board pieces. The separate Great Person card deck
@@ -151,7 +151,8 @@ remains a hand/draw mechanic.
 | Great People | 6 | artist, builder, general, humanitarian, merchant, scientist |
 | Starting tiles | 16 | one per civilization |
 | Map tiles | 28 | exploration tiles 1–27, plus the back |
-| Leaders | 80 | civilization portraits in player colours |
+| Leaders | 80 | culture-track markers, per civilization and colour |
+| Wonders | 27 | the 27 wonders, placed in the shared Wonders area |
 
 ### Player areas
 
@@ -162,10 +163,16 @@ can be dropped there: a hut a scout just picked up, the buildings you have
 bought but not placed, wounded units, coins.
 
 The band is derived from the player list, so it works for two to five players,
-and every player's area is visible to everyone. Dropping a piece into an area
-**tidies it into the next free slot**, filling left to right and wrapping onto a
-new row, so an area never turns into a heap. Dropping on the map leaves the
-piece exactly where it was let go.
+and every player's area is visible to everyone. A shared **Wonders** area sits
+at the right of the band — the player areas shrink to make room — and holds the
+wonders. Dropping a piece into an area **tidies it into the next free slot**,
+filling left to right and wrapping onto a new row, so an area never turns into a
+heap. Dropping on the map leaves the piece exactly where it was let go.
+
+Wonders are the one card kind that never enters a hand. The wonders drawn at the
+start of a game (and any drawn later from the draw menu) are placed in the
+Wonders area and named in the public log, rather than kept secret in a hand —
+they were never giftable or hidden bookkeeping the way ordinary cards are.
 
 Areas are geometry, not state: the server computes them in `toPlayerView` and
 sends them along as `boardAreas`, so client and server cannot disagree about

@@ -12,8 +12,11 @@ import type { GameState, Playerhand } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 
 /** Everything that did not exist in some earlier version of `GameState`. */
-type MaybeOlder = Omit<GameState, 'board' | 'withdrawnPlayers' | 'publicTurns'> &
-  Partial<Pick<GameState, 'board' | 'withdrawnPlayers' | 'publicTurns'>>
+type MaybeOlder = Omit<
+  GameState,
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt'
+> &
+  Partial<Pick<GameState, 'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt'>>
 
 /** A hand from before the status board (issue #43) existed. */
 type MaybeOlderPlayerhand = Omit<Playerhand, 'stats'> & Partial<Pick<Playerhand, 'stats'>>
@@ -58,6 +61,19 @@ export function migrateGameState(state: GameState): GameState {
   const fresh = createBoard()
   const board = older.board as MaybeOlderBoard | undefined
 
+  // A game saved before `wondersDealt` existed is treated as having dealt if the
+  // setup is complete or a wonder already exists anywhere (an old game put drawn
+  // wonders in a hand). That way the deal never re-fires on a game past setup,
+  // while a game still choosing civs will deal correctly when the last is chosen.
+  const hasWonder =
+    state.players.some((player) => player.items.some((item) => item.kind === 'wonder')) ||
+    state.discardedItems.some((item) => item.kind === 'wonder') ||
+    (board?.pieces ?? []).some((piece) => piece.category === 'wonder')
+  const setupComplete =
+    state.players.length > 0 &&
+    state.numOfPlayers === state.players.length &&
+    state.players.every((player) => player.civilization !== null)
+
   return {
     ...state,
     log: state.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
@@ -72,5 +88,6 @@ export function migrateGameState(state: GameState): GameState {
           },
     withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withStats),
     publicTurns: older.publicTurns ?? {},
+    wondersDealt: older.wondersDealt ?? (hasWonder || setupComplete),
   }
 }

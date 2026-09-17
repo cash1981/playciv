@@ -30,12 +30,21 @@ _Last updated: 2026-09-17_
   stacking by array order, seven palette categories, map tiles that place
   themselves, starting tiles in the right corner with the arrow inwards.
 - **Player areas.** A band below the map, one per player, pieces tidy into rows.
+- **Wonders on the board.** A `wonder` board-asset category (27 pieces, art from
+  `Civilization/Moderator/wonders`) shows in the piece palette. A shared
+  **Wonders** area sits at the right of the player-area band — the player areas
+  shrink to make room — and every wonder drawn at game start, or drawn manually,
+  is placed there and named in a public log line instead of going into a hand.
+  Manual wonder draws stay turn-gated like any other draw; a `wondersDealt` flag
+  (not board pieces) decides whether the start-of-game deal has run, so palette
+  art never cancels it. Verified in the browser.
 - **Board history.** Every change recorded as a semantic operation, giving exact
   undo and step-by-step replay with the log trimmed to each step.
 - **Everything in English.**
 - **Culture track.** A band above the map, 27 spaces in four sections, measured
-  off the artwork. Leader markers snap to a space and step aside rather than
-  cover each other. Choosing a civilization places that leader on Start. The
+  off the artwork. Leader markers are placed freely, not snapped to a space, so
+  they can be nudged anywhere and can share a space; the log still names the
+  nearest space. Choosing a civilization places that leader on Start. The
   band is drawn `CULTURE_TRACK_SCALE` (1.7×) taller than its bare aspect so it
   reads well at any zoom (issue #22).
 - **Card artwork.** 346 of 347 items have a picture; only Space Flight does

@@ -15,6 +15,20 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
+### culture-free-move
+
+- **Owner:** Claude (Opus 4.8)
+- **Branch:** `feat/culture-free-move`
+- **Status:** in review (PR #53)
+- **Claimed paths:**
+  - `packages/engine/src/actions/board.ts` (`movePiece` only)
+  - `packages/engine/src/board.ts` (removes the `cultureSlot` helper)
+  - `packages/engine/test/culture-track.test.ts`
+- **Notes:** Culture-track markers are no longer snapped to the nearest space
+  when dropped — they are placed freely like every other piece, so they can be
+  nudged anywhere and can share a space. `cultureStepOf`/`locationOf` still read
+  the nearest step for the log. (wonders-board merged as PR #52.)
+
 ---
 
 ## Format

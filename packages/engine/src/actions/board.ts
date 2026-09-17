@@ -18,11 +18,10 @@ import type { Board, BoardArea, BoardChange, BoardPiece, Rotation } from '../boa
 import {
   areaAt,
   boardAssetLimit,
+  boardAreas,
   clampToBoard,
-  cultureSlot,
   findBoardAsset,
   findPiece,
-  inCultureBand,
   locationOf,
   nearestBlockOrigin,
   nextFreeSlot,
@@ -48,9 +47,14 @@ function requireAccess(state: GameState, playerId: string): EngineError | undefi
   return hasUserAccess(state, playerId) ? undefined : { kind: 'NO_ACCESS', playerId }
 }
 
-/** The player areas for this game, derived from the current player list. */
+/**
+ * The areas for this game: one per player plus the shared Wonders area, derived
+ * from the current player list. A piece dropped in any of them tidies into its
+ * grid, so wonders collect in the Wonders area the same way huts collect in a
+ * player's area.
+ */
 export function areasFor(state: GameState): readonly BoardArea[] {
-  return playerAreas(state.board, state.players)
+  return boardAreas(state.board, state.players)
 }
 
 interface Recorded {
@@ -232,11 +236,11 @@ export function movePiece(state: GameState, input: MovePieceInput): ActionResult
   const others = state.board.pieces.filter((other) => other.id !== piece.id)
   const area = areaAt(areas, input.x + piece.width / 2, input.y + piece.height / 2)
   const wanted = (() => {
-    // Dropped on the culture track: snap to the nearest space
-    if (inCultureBand(state.board, input.y + piece.height / 2)) {
-      const [cellX, cellY] = cultureSlot(state.board, piece, input.x, input.y, others)
-      return { x: cellX, y: cellY }
-    }
+    // Culture-track markers are placed freely, not snapped to a space: they fall
+    // through to the raw-drop case below, so the player decides the exact spot
+    // (see decisions.md, 2026-09-17). The step is still read off the position
+    // for the log by `cultureStepOf`.
+
     // Dropped in a player area: tidy into the next free slot
     if (area !== undefined) {
       const [slotX, slotY] = nextFreeSlot(state.board, area, others, {

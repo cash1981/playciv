@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { placePiece } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
 import {
   chooseSocialPolicy,
@@ -260,6 +261,54 @@ describe('reveal civilization', () => {
       revealItem(state, { playerId: KARANDRAS1, sheetName: 'CIV', itemNumber: civ.itemNumber }),
     )
     expect(error).toEqual({ kind: 'NOT_YOUR_TURN', playerId: KARANDRAS1 })
+  })
+
+  // Reveal a civilization for every player, in player-number order, forcing the
+  // turn to each in turn (drawing and revealing both require the turn).
+  const revealEveryCiv = (start: GameState): GameState => {
+    let state = start
+    const order = [...state.players]
+      .sort((a, b) => a.playernumber - b.playernumber)
+      .map((player) => player.playerId)
+    for (const playerId of order) {
+      state = {
+        ...state,
+        players: state.players.map((p) => ({ ...p, yourTurn: p.playerId === playerId })),
+      }
+      state = unwrap(draw(state, { playerId, sheetName: 'CIV' }))
+      state = unwrap(revealCivFor(state, playerId))
+    }
+    return state
+  }
+
+  it('deals wonders onto the board, not into any hand, once every civ is revealed', () => {
+    const state = revealEveryCiv(firstCivGame())
+
+    expect(state.players.every((p) => p.civilization !== null)).toBe(true)
+    expect(state.wondersDealt).toBe(true)
+    // No wonder sits in any hand ...
+    for (const player of state.players) {
+      expect(player.items.some((item) => item.kind === 'wonder')).toBe(false)
+    }
+    // ... they are on the board instead.
+    expect(state.board.pieces.some((piece) => piece.category === 'wonder')).toBe(true)
+  })
+
+  it('a wonder placed from the palette does not cancel the start-of-game deal', () => {
+    // A moderator decorates the board with wonder art before setup finishes.
+    let state = unwrap(
+      placePiece(firstCivGame(), { playerId: CASH1981, assetId: 'wonders/bigben', x: 0, y: 0 }),
+    )
+    expect(state.board.pieces.some((piece) => piece.category === 'wonder')).toBe(true)
+    // The decorative piece must not mark the wonders as dealt ...
+    expect(state.wondersDealt).toBe(false)
+
+    // ... so the deal still runs when the last civilization is revealed.
+    state = revealEveryCiv(state)
+    expect(state.wondersDealt).toBe(true)
+    for (const player of state.players) {
+      expect(player.items.some((item) => item.kind === 'wonder')).toBe(false)
+    }
   })
 })
 

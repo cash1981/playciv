@@ -463,6 +463,42 @@ describe('draws', () => {
     expect(drawn.statusCode).toBe(400)
     expect((drawn.json() as { error: string }).error).toBe('TECHS_ARE_CHOSEN_NOT_DRAWN')
   })
+
+  it('a drawn wonder lands on the shared board, not in the hand', async () => {
+    const { gameId, starter: token } = await startedGame('Underspill')
+    const drawn = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/ANCIENT_WONDERS`,
+      headers: bearer(token),
+      payload: {},
+    })
+    expect(drawn.statusCode).toBe(200)
+
+    const view = drawn.json() as {
+      you: { items: unknown[] }
+      board: { pieces: { category: string }[] }
+      boardAreas: { username: string }[]
+    }
+    // Not in the hand
+    expect(view.you.items).toHaveLength(0)
+    // On the board, in the shared Wonders area
+    expect(view.board.pieces.filter((piece) => piece.category === 'wonder')).toHaveLength(1)
+    expect(view.boardAreas.some((area) => area.username === 'Wonders')).toBe(true)
+  })
+
+  it('a wonder draw is turn-gated like any other draw', async () => {
+    // A wonder goes to the board rather than the hand, but drawing one is still
+    // a draw: the player who does not have the turn is refused.
+    const { gameId, waiting: token } = await startedGame('Underspill2')
+    const drawn = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/ANCIENT_WONDERS`,
+      headers: bearer(token),
+      payload: {},
+    })
+    expect(drawn.statusCode).toBe(403)
+    expect((drawn.json() as { error: string }).error).toBe('NOT_YOUR_TURN')
+  })
 })
 
 describe('hidden information over HTTP', () => {

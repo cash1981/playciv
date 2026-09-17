@@ -1622,6 +1622,222 @@
       "label": "Zulu (Yellow)",
       "width": 46,
       "height": 35
+    },
+    {
+      "id": "wonders/angkorwat",
+      "category": "wonder",
+      "path": "wonders/angkorwat.png",
+      "label": "Angkor Wat",
+      "width": 83,
+      "height": 85
+    },
+    {
+      "id": "wonders/bigben",
+      "category": "wonder",
+      "path": "wonders/bigben.png",
+      "label": "Big Ben",
+      "width": 83,
+      "height": 83
+    },
+    {
+      "id": "wonders/brandenburggate",
+      "category": "wonder",
+      "path": "wonders/brandenburggate.png",
+      "label": "Brandenburg Gate",
+      "width": 86,
+      "height": 84
+    },
+    {
+      "id": "wonders/chichenitza",
+      "category": "wonder",
+      "path": "wonders/chichenitza.png",
+      "label": "Chichen Itza",
+      "width": 86,
+      "height": 83
+    },
+    {
+      "id": "wonders/colossus",
+      "category": "wonder",
+      "path": "wonders/colossus.png",
+      "label": "The Colossus",
+      "width": 84,
+      "height": 84
+    },
+    {
+      "id": "wonders/cristoredentor",
+      "category": "wonder",
+      "path": "wonders/cristoredentor.png",
+      "label": "Cristo Redentor",
+      "width": 86,
+      "height": 84
+    },
+    {
+      "id": "wonders/greatlighthouse",
+      "category": "wonder",
+      "path": "wonders/greatlighthouse.png",
+      "label": "The Great Lighthouse",
+      "width": 90,
+      "height": 88
+    },
+    {
+      "id": "wonders/greatwall",
+      "category": "wonder",
+      "path": "wonders/greatwall.png",
+      "label": "The Great Wall",
+      "width": 85,
+      "height": 83
+    },
+    {
+      "id": "wonders/hanginggardens",
+      "category": "wonder",
+      "path": "wonders/hanginggardens.png",
+      "label": "The Hanging Gardens",
+      "width": 84,
+      "height": 83
+    },
+    {
+      "id": "wonders/himejisamuraicastle",
+      "category": "wonder",
+      "path": "wonders/himejisamuraicastle.png",
+      "label": "Himeji Samurai Castle",
+      "width": 87,
+      "height": 85
+    },
+    {
+      "id": "wonders/internet",
+      "category": "wonder",
+      "path": "wonders/internet.png",
+      "label": "The Internet",
+      "width": 88,
+      "height": 90
+    },
+    {
+      "id": "wonders/kremlin",
+      "category": "wonder",
+      "path": "wonders/kremlin.png",
+      "label": "The Kremlin",
+      "width": 84,
+      "height": 84
+    },
+    {
+      "id": "wonders/leonardo'sworkshop",
+      "category": "wonder",
+      "path": "wonders/leonardo'sworkshop.png",
+      "label": "Leonardo's Workshop",
+      "width": 90,
+      "height": 88
+    },
+    {
+      "id": "wonders/louvre",
+      "category": "wonder",
+      "path": "wonders/louvre.png",
+      "label": "The Louvre",
+      "width": 87,
+      "height": 85
+    },
+    {
+      "id": "wonders/machupichu",
+      "category": "wonder",
+      "path": "wonders/machupichu.png",
+      "label": "Machu Pichu",
+      "width": 85,
+      "height": 84
+    },
+    {
+      "id": "wonders/notredame",
+      "category": "wonder",
+      "path": "wonders/notredame.png",
+      "label": "Notre-Dame",
+      "width": 90,
+      "height": 89
+    },
+    {
+      "id": "wonders/oracle",
+      "category": "wonder",
+      "path": "wonders/oracle.png",
+      "label": "The Oracle",
+      "width": 86,
+      "height": 82
+    },
+    {
+      "id": "wonders/panamacanal",
+      "category": "wonder",
+      "path": "wonders/panamacanal.png",
+      "label": "Panama Canal",
+      "width": 86,
+      "height": 85
+    },
+    {
+      "id": "wonders/pentagon",
+      "category": "wonder",
+      "path": "wonders/pentagon.png",
+      "label": "The Pentagon",
+      "width": 90,
+      "height": 89
+    },
+    {
+      "id": "wonders/porcelaintower",
+      "category": "wonder",
+      "path": "wonders/porcelaintower.png",
+      "label": "Porcelain Tower",
+      "width": 87,
+      "height": 84
+    },
+    {
+      "id": "wonders/pyramids",
+      "category": "wonder",
+      "path": "wonders/pyramids.png",
+      "label": "The Pyramids",
+      "width": 86,
+      "height": 83
+    },
+    {
+      "id": "wonders/statueofliberty",
+      "category": "wonder",
+      "path": "wonders/statueofliberty.png",
+      "label": "Statue of Liberty",
+      "width": 86,
+      "height": 85
+    },
+    {
+      "id": "wonders/statueofzeus",
+      "category": "wonder",
+      "path": "wonders/statueofzeus.png",
+      "label": "Statue of Zeus",
+      "width": 89,
+      "height": 90
+    },
+    {
+      "id": "wonders/stonehenge",
+      "category": "wonder",
+      "path": "wonders/stonehenge.png",
+      "label": "Stonehenge",
+      "width": 86,
+      "height": 82
+    },
+    {
+      "id": "wonders/sydneyoperahouse",
+      "category": "wonder",
+      "path": "wonders/sydneyoperahouse.png",
+      "label": "Sydney Opera House",
+      "width": 83,
+      "height": 85
+    },
+    {
+      "id": "wonders/tajmahal",
+      "category": "wonder",
+      "path": "wonders/tajmahal.png",
+      "label": "Taj Mahal",
+      "width": 85,
+      "height": 81
+    },
+    {
+      "id": "wonders/unitednations",
+      "category": "wonder",
+      "path": "wonders/unitednations.png",
+      "label": "United Nations",
+      "width": 86,
+      "height": 85
     }
   ]
 }

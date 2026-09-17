@@ -42,6 +42,21 @@ export const CULTURE_GAP_SQUARES = 1
 /** Room for the name written across the top of a player area, in pixels. */
 export const AREA_LABEL_HEIGHT = 26
 
+/**
+ * Width of the shared Wonders area at the right of the player-area band, in
+ * squares. The wonder art is about one square, so three squares give a 3-wide
+ * grid — room for a couple of rows of wonders. The player areas share the
+ * remaining width, so they shrink as this grows; three squares keeps a
+ * four-player area three columns wide, as it was before this area existed.
+ */
+export const WONDERS_AREA_SQUARES = 3
+
+/**
+ * The `playerId` on the shared Wonders area. It is not a real player, so a
+ * sentinel is used; the client and `locationOf` special-case it.
+ */
+export const WONDERS_AREA_ID = '__wonders__'
+
 /** Column labels from the template: A through P. */
 export const COLUMN_LABELS = Array.from({ length: DEFAULT_COLUMNS }, (_, index) =>
   String.fromCharCode(65 + index),
@@ -61,6 +76,8 @@ export type BoardAssetCategory =
   | 'tile'
   /** Leader portraits, which mark a player's place on the culture track. */
   | 'leader'
+  /** The 27 wonders, which sit in the shared Wonders area below the map. */
+  | 'wonder'
 
 /** Pieces can face four ways. Degrees, clockwise. */
 export type Rotation = 0 | 90 | 180 | 270
@@ -420,33 +437,6 @@ export function cultureStepOf(board: Board, piece: BoardPiece): number | null {
   return best
 }
 
-/**
- * Where a piece dropped on the culture track belongs: centred on the nearest
- * space. Markers already on that space are stepped down a row so several
- * players on the same space stay readable rather than hiding each other.
- */
-export function cultureSlot(
-  board: Board,
-  piece: BoardPiece,
-  x: number,
-  y: number,
-  others: readonly BoardPiece[],
-): readonly [x: number, y: number] {
-  const step = cultureStepOf(board, { ...piece, x, y }) ?? 1
-  const centre = cultureCellCenter(board, step)
-  const left = Math.round(centre.x - piece.width / 2)
-
-  const band = cultureTrackHeight(board)
-  const lanes = Math.max(1, Math.floor(band / piece.height))
-  const sharing = others.filter(
-    (other) => other.id !== piece.id && cultureStepOf(board, other) === step,
-  ).length
-
-  const lane = sharing % lanes
-  const top = Math.round((band - lanes * piece.height) / 2 + lane * piece.height)
-  return [left, top]
-}
-
 // ---------------------------------------------------------------------------
 // Player areas
 // ---------------------------------------------------------------------------
@@ -480,10 +470,21 @@ export interface AreaPlayer {
   readonly playernumber: number
 }
 
+/** Gutter between areas in the band, in pixels. */
+const AREA_GUTTER = 8
+
+/** Width of the shared Wonders area, in board coordinates. */
+export const wondersAreaWidth = (board: Board): number =>
+  WONDERS_AREA_SQUARES * board.squareSize
+
 /**
  * Lays the players out in a band below the map, in player-number order, one
  * equal-width area each. Derived rather than stored, so it cannot drift out of
  * step when someone joins or withdraws.
+ *
+ * The rightmost slice of the band is reserved for the shared Wonders area (see
+ * {@link wondersArea}), so the player areas share the width that is left and
+ * shrink as more players join.
  */
 export function playerAreas(
   board: Board,
@@ -491,10 +492,11 @@ export function playerAreas(
 ): readonly BoardArea[] {
   if (players.length === 0) return []
 
-  const gutter = 8
+  const gutter = AREA_GUTTER
   const top = areaBandTop(board)
   const height = board.areaRows * board.squareSize
-  const total = boardWidth(board)
+  // Reserve the Wonders area (plus one gutter) at the right.
+  const total = boardWidth(board) - wondersAreaWidth(board) - gutter
   const width = (total - gutter * (players.length - 1)) / players.length
 
   return [...players]
@@ -508,6 +510,38 @@ export function playerAreas(
       width: Math.round(width),
       height,
     }))
+}
+
+/**
+ * The shared Wonders area, pinned to the right of the player-area band. Every
+ * wonder drawn at the start of the game — and any wonder placed from the
+ * palette — lands here rather than in a hand. It is not owned by a player, so it
+ * carries the {@link WONDERS_AREA_ID} sentinel and no colour.
+ */
+export function wondersArea(board: Board): BoardArea {
+  const width = wondersAreaWidth(board)
+  return {
+    playerId: WONDERS_AREA_ID,
+    username: 'Wonders',
+    color: null,
+    x: boardWidth(board) - width,
+    y: areaBandTop(board),
+    width,
+    height: board.areaRows * board.squareSize,
+  }
+}
+
+/**
+ * Every area in the band: the player areas and the shared Wonders area. This is
+ * what the client draws and what piece placement tidies into, so both the map
+ * view and the drop logic agree on where the Wonders area is.
+ */
+export function boardAreas(
+  board: Board,
+  players: readonly AreaPlayer[],
+): readonly BoardArea[] {
+  if (players.length === 0) return []
+  return [...playerAreas(board, players), wondersArea(board)]
 }
 
 /** The area a point falls inside, if any. */
@@ -613,7 +647,9 @@ export function locationOf(
   if (square !== null) return square
 
   const area = areaAt(areas, piece.x + piece.width / 2, piece.y + piece.height / 2)
-  if (area !== undefined) return `${area.username}'s area`
+  if (area !== undefined) {
+    return area.playerId === WONDERS_AREA_ID ? 'the Wonders area' : `${area.username}'s area`
+  }
 
   return 'off the board'
 }
@@ -796,6 +832,21 @@ export function leaderAssetId(civName: string, color: string): string | undefine
   const colour = color.toLowerCase()
   if (leader === undefined || !LEADER_COLOURS.has(colour)) return undefined
   return `leaders/${leader}_${colour}`
+}
+
+/**
+ * The board asset for a wonder, by its spreadsheet name. The wonder art is
+ * named lower case, without spaces, without a leading "The" and with hyphens
+ * stripped — the same rule `itemImage()` uses for the card art, and what the
+ * files copied by `tools/board-assets.ps1` are called. Returns the id whether
+ * or not the asset exists; the caller checks with {@link findBoardAsset}.
+ */
+export function wonderAssetId(wonderName: string): string {
+  const file = wonderName
+    .replace(/^The /, '')
+    .replace(/[ -]/g, '')
+    .toLowerCase()
+  return `wonders/${file}`
 }
 
 /**

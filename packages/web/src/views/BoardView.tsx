@@ -29,6 +29,7 @@ import {
   CULTURE_TRACK_CELLS,
   ROTATIONS,
   TILE_SQUARES,
+  WONDERS_AREA_ID,
   areaBandTop,
   boardHeight,
   boardWidth,
@@ -75,6 +76,7 @@ const CATEGORY_LABEL: Readonly<Record<BoardAsset['category'], string>> = {
   civtile: 'Starting tiles',
   tile: 'Map tiles',
   leader: 'Leaders',
+  wonder: 'Wonders',
 }
 
 const CATEGORY_ORDER: readonly BoardAsset['category'][] = [
@@ -87,6 +89,7 @@ const CATEGORY_ORDER: readonly BoardAsset['category'][] = [
   'civtile',
   'tile',
   'leader',
+  'wonder',
 ]
 
 /** File names may contain spaces, for example "Building Program.png". */
@@ -447,30 +450,37 @@ export function BoardView({
                 )
               })}
 
-              {areas.map((area) => (
-                <div
-                  key={area.playerId}
-                  className="board-area"
-                  style={{
-                    left: area.x * zoom,
-                    top: area.y * zoom,
-                    width: area.width * zoom,
-                    height: area.height * zoom,
-                    borderColor: area.color?.toLowerCase() ?? 'var(--line)',
-                  }}
-                >
-                  <span
-                    className="board-area-name"
+              {areas.map((area) => {
+                const isWonders = area.playerId === WONDERS_AREA_ID
+                return (
+                  <div
+                    key={area.playerId}
+                    className={`board-area${isWonders ? ' board-area-wonders' : ''}`}
                     style={{
-                      height: AREA_LABEL_HEIGHT * zoom,
-                      background: area.color?.toLowerCase() ?? 'var(--panel-2)',
-                      fontSize: Math.max(8, 13 * zoom),
+                      left: area.x * zoom,
+                      top: area.y * zoom,
+                      width: area.width * zoom,
+                      height: area.height * zoom,
+                      borderColor: isWonders
+                        ? 'var(--wonder-accent)'
+                        : (area.color?.toLowerCase() ?? 'var(--line)'),
                     }}
                   >
-                    {area.username}
-                  </span>
-                </div>
-              ))}
+                    <span
+                      className="board-area-name"
+                      style={{
+                        height: AREA_LABEL_HEIGHT * zoom,
+                        background: isWonders
+                          ? 'var(--wonder-accent)'
+                          : (area.color?.toLowerCase() ?? 'var(--panel-2)'),
+                        fontSize: Math.max(8, 13 * zoom),
+                      }}
+                    >
+                      {area.username}
+                    </span>
+                  </div>
+                )
+              })}
 
               {pieces.map((piece) => {
                 const dragging = dragRef.current?.id === piece.id && dragPosition !== null

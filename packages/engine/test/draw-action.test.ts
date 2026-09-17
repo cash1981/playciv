@@ -10,7 +10,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { draw, drawUnitsForBattle, revealAndDiscardBattlehand } from '../src/actions/draw.js'
-import { drawBarbarians, discardBarbarians, loot } from '../src/actions/draw.js'
+import { drawBarbarians, discardBarbarians, drawWonder, drawWonderToBoard, loot } from '../src/actions/draw.js'
+import { wondersArea } from '../src/board.js'
 import type { Item, ItemKind } from '../src/item.js'
 import { isUnit, itemImage, itemName, itemValueEquals } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -77,6 +78,81 @@ describe('draw takes the item out of the deck and hands it to the player', () =>
       expect(item.ownerId).toBe(CASH1981)
     })
   }
+})
+
+/**
+ * Wonders are the exception: the owner asked for them to sit on the shared
+ * board rather than in a hidden hand. `drawWonderToBoard` takes the wonder off
+ * the deck, places it in the Wonders area, and names it in a public log line —
+ * nothing goes into any hand.
+ */
+describe('drawWonderToBoard places the wonder on the board, not in a hand', () => {
+  const wonderPieces = (state: GameState) =>
+    state.board.pieces.filter((piece) => piece.category === 'wonder')
+
+  it('takes the wonder off the deck and puts a piece in the Wonders area', () => {
+    const before = firstCivGame()
+    const countBefore = countInDeck(before, 'ANCIENT_WONDERS')
+    expect(countBefore).toBeGreaterThan(0)
+
+    const after = unwrap(drawWonderToBoard(before, CASH1981, 'ANCIENT_WONDERS'))
+
+    expect(countInDeck(after, 'ANCIENT_WONDERS')).toBe(countBefore - 1)
+    // Nothing was added to any hand
+    expect(handOf(after, CASH1981)).toHaveLength(0)
+
+    const pieces = wonderPieces(after)
+    expect(pieces).toHaveLength(1)
+    const piece = pieces[0]
+    if (piece === undefined) throw new Error('no wonder piece')
+
+    const area = wondersArea(after.board)
+    expect(piece.x).toBeGreaterThanOrEqual(area.x)
+    expect(piece.x + piece.width).toBeLessThanOrEqual(area.x + area.width + 1)
+    expect(piece.y).toBeGreaterThanOrEqual(area.y)
+  })
+
+  it('names the wonder in a public log line', () => {
+    const after = unwrap(drawWonderToBoard(firstCivGame(), CASH1981, 'ANCIENT_WONDERS'))
+    const entry = after.log.at(-1)
+    expect(entry?.publicLog).toMatch(/drew .+ and placed it in the Wonders area/)
+    expect(entry?.playerId).toBe(CASH1981)
+  })
+
+  it('the low-level helper places without a turn check (the start flow uses it off-turn)', () => {
+    // KARANDRAS1 does not hold the turn in firstCivGame; the helper still places
+    // the wonder, because the reveal flow calls it when it is nobody's turn.
+    // The turn is enforced one level up, in `drawWonder` (tested below).
+    const after = unwrap(drawWonderToBoard(firstCivGame(), KARANDRAS1, 'ANCIENT_WONDERS'))
+    expect(wonderPieces(after)).toHaveLength(1)
+  })
+
+  it('drawWonder refuses a player who does not have the turn', () => {
+    // KARANDRAS1 is not the starter in firstCivGame.
+    const error = unwrapErr(drawWonder(firstCivGame(), { playerId: KARANDRAS1, sheetName: 'ANCIENT_WONDERS' }))
+    expect(error.kind).toBe('NOT_YOUR_TURN')
+  })
+
+  it('drawWonder places on the board for the player whose turn it is', () => {
+    const after = unwrap(drawWonder(firstCivGame(), { playerId: CASH1981, sheetName: 'ANCIENT_WONDERS' }))
+    expect(wonderPieces(after)).toHaveLength(1)
+    expect(handOf(after, CASH1981)).toHaveLength(0)
+  })
+
+  it('tidies several wonders into distinct slots in the Wonders area', () => {
+    let state = firstCivGame()
+    for (let i = 0; i < 3; i++) {
+      state = unwrap(drawWonderToBoard(state, CASH1981, 'ANCIENT_WONDERS'))
+    }
+    const pieces = wonderPieces(state)
+    expect(pieces).toHaveLength(3)
+    expect(new Set(pieces.map((piece) => `${piece.x},${piece.y}`)).size).toBe(3)
+
+    const area = wondersArea(state.board)
+    for (const piece of pieces) {
+      expect(piece.x).toBeGreaterThanOrEqual(area.x)
+    }
+  })
 })
 
 /** Java: `drawCivAndMakeSureItsNoLongerInPBFCollection` — the log requirements. */

@@ -10,7 +10,7 @@
 import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem } from './item.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece } from './board.js'
-import { cultureStepOf, leaderAssetId, playerAreas } from './board.js'
+import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
 import type { PlayerTurn } from './turn.js'
 import type { Undo } from './undo.js'
 
@@ -166,6 +166,14 @@ export interface GameState {
   readonly rng: Rng
   /** The next `itemNumber`. Java: `ItemReader.itemCounter`, a global AtomicInteger. */
   readonly itemCounter: number
+  /**
+   * Whether the start-of-game ancient wonders have been dealt onto the board.
+   * The deal happens once, when the last civilization is revealed. This flag is
+   * the authority for that — a wonder *piece* on the board is not, because a
+   * moderator may place wonder art from the palette, which must not cancel the
+   * deal.
+   */
+  readonly wondersDealt: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -417,7 +425,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
       .map((player) => opaque(state, player)),
     techs: state.techs,
     board: state.board,
-    boardAreas: playerAreas(state.board, state.players),
+    boardAreas: boardAreas(state.board, state.players),
     log: state.log.map((entry) =>
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),

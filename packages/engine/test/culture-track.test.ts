@@ -125,50 +125,52 @@ describe('cultureStepOf', () => {
 })
 
 describe('moving a marker', () => {
-  it('snaps to the nearest space when dropped on the track', () => {
+  it('keeps the exact drop position on the track — markers are not snapped', () => {
     const board = createBoard()
     const target = cultureCellCenter(board, 12)
 
     let state = place(firstCivGame(), 'leaders/japanese_red', 0, 0)
     const piece = state.board.pieces[0] as BoardPiece
 
-    // Dropped a little off centre, on purpose
+    // Dropped a little off the centre of space 12, on purpose.
+    const dropX = Math.round(target.x - piece.width / 2 + 9)
     state = unwrap(
-      movePiece(state, {
-        playerId: CASH1981,
-        pieceId: piece.id,
-        x: target.x - piece.width / 2 + 9,
-        y: 4,
-      }),
+      movePiece(state, { playerId: CASH1981, pieceId: piece.id, x: dropX, y: 4 }),
     )
 
     const moved = state.board.pieces.at(-1) as BoardPiece
+    // The marker stays exactly where it was dropped, rather than snapping to the
+    // cell centre ...
+    expect(moved.x).toBe(dropX)
+    expect(moved.y).toBe(4)
+    // ... but the nearest space is still read off its position for the log.
     expect(cultureStepOf(state.board, moved)).toBe(12)
-    expect(moved.x).toBe(Math.round(target.x - piece.width / 2))
   })
 
-  it('two markers on the same space are stepped apart rather than hidden', () => {
+  it('two markers can share a space at different spots, without being moved apart', () => {
     const board = createBoard()
     const centre = cultureCellCenter(board, 5)
 
     let state = place(firstCivGame(), 'leaders/japanese_red', 0, 0)
     state = place(state, 'leaders/caesar_blue', 0, 0)
+    const [a, b] = state.board.pieces as [BoardPiece, BoardPiece]
 
-    for (const piece of [...state.board.pieces]) {
-      state = unwrap(
-        movePiece(state, {
-          playerId: CASH1981,
-          pieceId: piece.id,
-          x: centre.x - piece.width / 2,
-          y: 4,
-        }),
-      )
-    }
+    // Drop both near space 5, but at different x — the player's choice.
+    const ax = Math.round(centre.x - a.width / 2)
+    const bx = Math.round(centre.x - b.width / 2 + 18)
+    state = unwrap(movePiece(state, { playerId: CASH1981, pieceId: a.id, x: ax, y: 4 }))
+    state = unwrap(movePiece(state, { playerId: CASH1981, pieceId: b.id, x: bx, y: 4 }))
 
-    const [first, second] = state.board.pieces
-    expect(cultureStepOf(state.board, first as BoardPiece)).toBe(5)
-    expect(cultureStepOf(state.board, second as BoardPiece)).toBe(5)
-    expect(first?.y).not.toBe(second?.y)
+    const movedA = state.board.pieces.find((p) => p.id === a.id) as BoardPiece
+    const movedB = state.board.pieces.find((p) => p.id === b.id) as BoardPiece
+    // Both read as space 5 for the log ...
+    expect(cultureStepOf(state.board, movedA)).toBe(5)
+    expect(cultureStepOf(state.board, movedB)).toBe(5)
+    // ... and each kept exactly where it was put, rather than being lane-stepped.
+    expect(movedA.x).toBe(ax)
+    expect(movedB.x).toBe(bx)
+    expect(movedA.y).toBe(4)
+    expect(movedB.y).toBe(4)
   })
 
   it('the log line names the space', () => {
@@ -201,17 +203,13 @@ describe('moving a marker', () => {
 
     let state = place(firstCivGame(), 'leaders/japanese_red', 0, 0)
     const piece = state.board.pieces[0] as BoardPiece
-    // Aim a little short of the victory centre; it should still snap there
+    const dropX = Math.round(target.x - piece.width / 2)
     state = unwrap(
-      movePiece(state, {
-        playerId: CASH1981,
-        pieceId: piece.id,
-        x: target.x - piece.width / 2 - 8,
-        y: 4,
-      }),
+      movePiece(state, { playerId: CASH1981, pieceId: piece.id, x: dropX, y: 4 }),
     )
 
     const moved = state.board.pieces.at(-1) as BoardPiece
+    expect(moved.x).toBe(dropX)
     expect(cultureStepOf(state.board, moved)).toBe(CULTURE_VICTORY_STEP)
     expect(locationOf(state.board, areas, moved)).toBe('culture victory')
   })

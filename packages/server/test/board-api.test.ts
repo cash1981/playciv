@@ -68,7 +68,7 @@ const place = (gameId: string, token: string, assetId: string, x: number, y: num
   })
 
 describe('player areas', () => {
-  it('the view carries one area per player, below the map', async () => {
+  it('the view carries one area per player plus the shared Wonders area, below the map', async () => {
     const { gameId, starter } = await startedGame('Areas')
     const view = await app.inject({
       method: 'GET',
@@ -77,7 +77,9 @@ describe('player areas', () => {
     })
 
     const areas = (view.json() as { boardAreas: { username: string; y: number }[] }).boardAreas
-    expect(areas).toHaveLength(2)
+    // Two players, then the shared Wonders area at the right.
+    expect(areas).toHaveLength(3)
+    expect(areas.at(-1)?.username).toBe('Wonders')
     // The two-player map is 8 rows of 94, so the band starts below the map at 752
     expect(areas.every((area) => area.y > 752)).toBe(true)
   })

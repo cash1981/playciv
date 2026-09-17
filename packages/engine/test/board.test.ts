@@ -24,8 +24,10 @@ import {
   CULTURE_TRACK,
   CULTURE_TRACK_SCALE,
   SQUARE_SIZE,
+  WONDERS_AREA_ID,
   areaAt,
   areaBandTop,
+  boardAreas,
   boardHeight,
   boardWidth,
   createBoard,
@@ -38,6 +40,8 @@ import {
   playerAreas,
   remainingBoardAssetCount,
   squareOf,
+  wondersArea,
+  wondersAreaWidth,
 } from '../src/board.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -105,6 +109,7 @@ describe('the manifest', () => {
       'marker',
       'resource',
       'tile',
+      'wonder',
     ])
   })
 
@@ -380,15 +385,29 @@ describe('player areas', () => {
     expect(areas.every((area) => area.y === areaBandTop(board))).toBe(true)
   })
 
-  it('spans the width of the map', () => {
+  it('leaves room at the right for the Wonders area', () => {
     const areas = playerAreas(board, firstCivGame().players)
     const last = areas.at(-1)
     if (last === undefined) throw new Error('no areas')
+    // The player areas stop short of the map's right edge by the width of the
+    // Wonders area (plus a gutter), rather than filling it.
+    expect(last.x + last.width).toBeLessThan(boardWidth(board) - wondersAreaWidth(board))
+  })
+
+  it('together with the Wonders area, spans the width of the map', () => {
+    const areas = boardAreas(board, firstCivGame().players)
+    const last = areas.at(-1)
+    if (last === undefined) throw new Error('no areas')
+    // The last area is the Wonders area, pinned to the map's right edge.
+    expect(last.playerId).toBe(WONDERS_AREA_ID)
     expect(last.x + last.width).toBeCloseTo(boardWidth(board), 0)
+    expect(last.width).toBe(wondersAreaWidth(board))
+    expect(wondersArea(board).x + wondersArea(board).width).toBeCloseTo(boardWidth(board), 0)
   })
 
   it('has no areas before anyone has joined', () => {
     expect(playerAreas(board, [])).toEqual([])
+    expect(boardAreas(board, [])).toEqual([])
   })
 
   it('areaAt finds the area a point falls in', () => {

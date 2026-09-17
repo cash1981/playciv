@@ -129,5 +129,6 @@ export function createGame(options: CreateGameOptions): GameState {
     log: [],
     rng: deck.rng,
     itemCounter: counter,
+    wondersDealt: false,
   }
 }
