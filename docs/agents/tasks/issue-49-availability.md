@@ -17,8 +17,8 @@ are board assets loaded from `Civilization/Moderator/great people`.
 Issue #49 asks for visible and enforced finite supplies: upgrade pairs such as
 Barracks/Academy share six pieces, resources scale with player count, and each
 Great Person type has a maximum of three. The current board palette allows
-unlimited placement and the current draw UI does not expose remaining Great
-Person availability.
+unlimited placement and the current board palette does not expose remaining
+Great Person availability.
 
 ## Scope
 
@@ -28,8 +28,9 @@ Person availability.
 - Enforce finite placement for buildings and resources, returning a typed engine
   error when a supply is exhausted.
 - Make removal/deletion restore availability.
-- Show remaining counts beside affected palette/draw entries and disable actions
-  when no supply remains.
+- Show remaining counts beside affected board-palette entries and disable
+  placement when no supply remains. The separate Great Person card draw remains
+  a deck/hand action and is not part of this physical board-piece supply.
 - Cover the limits, upgrade-family sharing, player-count resource limits,
   removal restoration, and the public UI/API behavior with tests.
 
@@ -86,7 +87,7 @@ mutable state.
 - [ ] Resources are limited to the player count specified in issue #49.
 - [ ] An exhausted supply cannot be placed through the reducer or HTTP API.
 - [ ] Removing a placed piece restores one available piece.
-- [ ] The UI shows remaining counts and disables exhausted palette actions.
+- [ ] The UI shows remaining counts and disables exhausted board-palette actions.
 - [ ] Great Person availability is represented without leaking hidden card data.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 - [ ] Verified in the browser: counts change after placement/removal and exhausted actions are disabled.
