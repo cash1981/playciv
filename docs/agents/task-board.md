@@ -19,7 +19,7 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
 - **Owner:** Claude (Opus 4.8)
 - **Branch:** `feat/culture-free-move`
-- **Status:** in progress
+- **Status:** in review (PR #53)
 - **Claimed paths:**
   - `packages/engine/src/actions/board.ts` (`movePiece` only)
   - `packages/engine/src/board.ts` (removes the `cultureSlot` helper)
