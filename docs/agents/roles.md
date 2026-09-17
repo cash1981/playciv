@@ -8,7 +8,7 @@ code is right.
 | --- | --- | --- | --- |
 | **Orchestrator** | strong (Opus) | yes | yes |
 | **Coder** | cheap (Sonnet, or Haiku for mechanical work) | yes, inside claimed paths | no |
-| **Reviewer** | strong (Opus) | **no** | no |
+| **Reviewer** | Sol (strong review model) | **no** | no |
 | **Rules checker** | strong (Opus) | **no** | no |
 
 The orchestrator is the session you are talking to. The other three are defined
@@ -67,7 +67,7 @@ Use Haiku for mechanical work (renames, moving code, applying a decided
 pattern) and Sonnet for anything needing judgement. Change the `model` line in
 `.claude/agents/coder.md`.
 
-### `reviewer`
+### `reviewer` (Sol)
 
 Reads a diff and the brief it was meant to satisfy, and reports. Looks for:
 correctness against the brief, hidden-information leaks, purity violations,

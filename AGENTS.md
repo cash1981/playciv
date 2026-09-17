@@ -82,9 +82,9 @@ else has been here.
    negotiate rather than editing it.
 3. **Work on a feature branch**, never on `main`. See `workflow.md`.
 4. **Nothing merges without a review pass.** Code is written by the coder role
-   and checked by a reviewer role that has no write access. The orchestrator —
-   the main agent, or the human — is the only one who can approve. See
-   `roles.md`.
+   and checked by the read-only Sol reviewer, which has no write access. The
+   orchestrator — the main agent, or the human — is the only one who can
+   approve. See `roles.md`.
 
 ## Before you finish
 
