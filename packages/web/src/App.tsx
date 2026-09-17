@@ -15,6 +15,7 @@ import { HighscoreView } from './views/HighscoreView.js'
 import { LobbyView } from './views/LobbyView.js'
 import { LoginView } from './views/LoginView.js'
 import { AdminView } from './views/AdminView.js'
+import { Navigation } from './views/Navigation.js'
 import { applyTheme, saveTheme, storedTheme, type Theme } from './theme.js'
 
 type Screen =
@@ -95,6 +96,19 @@ export function App(): React.JSX.Element {
     setScreen({ name: 'highscore' })
   }, [])
 
+  const navigate = useCallback((path: string) => {
+    if (path === '/') {
+      backToGames()
+    } else if (path === '/admin') {
+      openAdmin()
+    } else if (path === '/highscore') {
+      openHighscore()
+    } else {
+      window.history.pushState(null, '', path)
+      setScreen({ name: 'lobby' })
+    }
+  }, [backToGames, openAdmin, openHighscore])
+
   const toggleTheme = useCallback(() => {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
   }, [])
@@ -111,15 +125,7 @@ export function App(): React.JSX.Element {
   if (screen.name === 'highscore') {
     return (
       <div className="app">
-        <header className="topbar">
-          <strong>Civilization</strong>
-          <span className="muted">playciv</span>
-          <span className="spacer" />
-          <button onClick={backToGames}>{player === null ? 'Sign in' : 'Games'}</button>
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          {player !== null && <span className="muted">{player.username}</span>}
-          {player !== null && <button onClick={signOut}>Sign out</button>}
-        </header>
+        <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
         <HighscoreView />
       </div>
     )
@@ -128,13 +134,7 @@ export function App(): React.JSX.Element {
   if (player === null) {
     return (
       <div className="app">
-        <header className="topbar">
-          <strong>Civilization</strong>
-          <span className="muted">playciv</span>
-          <span className="spacer" />
-          <button onClick={openHighscore}>Highscore</button>
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-        </header>
+        <Navigation player={null} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
         <LoginView onSignedIn={setPlayer} />
       </div>
     )
@@ -142,24 +142,7 @@ export function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <strong>Civilization</strong>
-        <span className="muted">playciv</span>
-        <span className="spacer" />
-        {screen.name === 'game' && (
-          <button onClick={backToGames}>Back to games</button>
-        )}
-        {screen.name === 'admin' && (
-          <button onClick={backToGames}>Back to games</button>
-        )}
-        {player.role === 'admin' && screen.name !== 'admin' && (
-          <button onClick={openAdmin}>Admin</button>
-        )}
-        <button onClick={openHighscore}>Highscore</button>
-        <ThemeToggle theme={theme} onToggle={toggleTheme} />
-        <span className="muted">{player.username}</span>
-        <button onClick={signOut}>Sign out</button>
-      </header>
+      <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
 
       {screen.name === 'lobby' ? (
         <LobbyView
@@ -182,15 +165,6 @@ export function App(): React.JSX.Element {
         />
       )}
     </div>
-  )
-}
-
-function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }): React.JSX.Element {
-  const nextTheme = theme === 'dark' ? 'light' : 'dark'
-  return (
-    <button onClick={onToggle} aria-label={`Switch to ${nextTheme} theme`}>
-      {theme === 'dark' ? 'Light theme' : 'Dark theme'}
-    </button>
   )
 }
 
