@@ -20,15 +20,16 @@ Add-Type -AssemblyName System.Drawing
 # Source folder -> palette category. Tiles split in two because they are used
 # differently: civtile is a starting tile, tile is a numbered exploration tile.
 $categories = [ordered] @{
-    'figures'   = 'figure'
-    'resources' = 'resource'
-    'markers'   = 'marker'
-    'cities'    = 'city'
-    'buildings' = 'building'
+    'figures'      = 'figure'
+    'resources'    = 'resource'
+    'markers'      = 'marker'
+    'cities'       = 'city'
+    'buildings'    = 'building'
     'great people' = 'greatperson'
-    'tiles'     = 'tile'
-    'leaders'   = 'leader'
-    'wonders'   = 'wonder'
+    'tiles'        = 'tile'
+    'leaders'      = 'leader'
+    'wonders'      = 'wonder'
+    'city-states'  = 'citystate'
 }
 
 # A map tile covers 4 x 4 squares of 94 pixels. The source images are 375 x 375,
@@ -44,6 +45,11 @@ $LEADER_WIDTH = 46
 # of the source images are ~85 px, but a few are up to 117; cap the longer side
 # at 90 (keeping aspect) so none overlaps its neighbour or overhangs the board.
 $WONDER_MAX = 90
+
+# City-states are placed on the map like cities, which are ~85 px. The source
+# art is 86–112 px; cap the longer side at 90 (keeping aspect) so a city-state
+# sits in a single square the way a city does.
+$CITYSTATE_MAX = 90
 
 # The civilisations starting tiles. The rest of tiles/ are exploration tiles.
 $civTiles = @(
@@ -98,6 +104,12 @@ function Get-Label([string] $category, [string] $baseName) {
     if ($category -eq 'wonder') {
         $key = $baseName.ToLower()
         if ($wonderLabels.ContainsKey($key)) { return $wonderLabels[$key] }
+    }
+
+    if ($category -eq 'citystate') {
+        # "cs1" -> "City-state 1"
+        $number = $baseName -replace '(?i)^cs', ''
+        return "City-state $number"
     }
 
     if ($category -eq 'leader') {
@@ -174,6 +186,16 @@ foreach ($folder in $categories.Keys) {
                 $maxDim = [Math]::Max($image.Width, $image.Height)
                 if ($maxDim -gt $WONDER_MAX) {
                     $scale = $WONDER_MAX / $maxDim
+                    $width = [int] [Math]::Round($image.Width * $scale)
+                    $height = [int] [Math]::Round($image.Height * $scale)
+                }
+            }
+
+            if ($category -eq 'citystate') {
+                # Keep a city-state within one square, like a city
+                $maxDim = [Math]::Max($image.Width, $image.Height)
+                if ($maxDim -gt $CITYSTATE_MAX) {
+                    $scale = $CITYSTATE_MAX / $maxDim
                     $width = [int] [Math]::Round($image.Width * $scale)
                     $height = [int] [Math]::Round($image.Height * $scale)
                 }

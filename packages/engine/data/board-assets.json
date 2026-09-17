@@ -1838,6 +1838,46 @@
       "label": "United Nations",
       "width": 86,
       "height": 85
+    },
+    {
+      "id": "city-states/cs1",
+      "category": "citystate",
+      "path": "city-states/cs1.png",
+      "label": "City-state 1",
+      "width": 86,
+      "height": 85
+    },
+    {
+      "id": "city-states/cs2",
+      "category": "citystate",
+      "path": "city-states/cs2.png",
+      "label": "City-state 2",
+      "width": 90,
+      "height": 88
+    },
+    {
+      "id": "city-states/cs3",
+      "category": "citystate",
+      "path": "city-states/cs3.png",
+      "label": "City-state 3",
+      "width": 90,
+      "height": 88
+    },
+    {
+      "id": "city-states/cs4",
+      "category": "citystate",
+      "path": "city-states/cs4.png",
+      "label": "City-state 4",
+      "width": 90,
+      "height": 87
+    },
+    {
+      "id": "city-states/cs5",
+      "category": "citystate",
+      "path": "city-states/cs5.png",
+      "label": "City-state 5",
+      "width": 90,
+      "height": 88
     }
   ]
 }

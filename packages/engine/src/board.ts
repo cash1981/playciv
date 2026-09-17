@@ -78,6 +78,8 @@ export type BoardAssetCategory =
   | 'leader'
   /** The 27 wonders, which sit in the shared Wonders area below the map. */
   | 'wonder'
+  /** The five neutral city-states (cs1–cs5), placed on the map like cities. */
+  | 'citystate'
 
 /** Pieces can face four ways. Degrees, clockwise. */
 export type Rotation = 0 | 90 | 180 | 270
