@@ -51,12 +51,17 @@ shallow everywhere instead of sharp somewhere.
 
 ## 3. Spawn the reviewer
 
-Use the Agent tool with `subagent_type: "reviewer"`; the repository's reviewer
-definition is configured to run on `gpt-5.6-sol`. Give it:
+For a Codex orchestrator, use the reviewer agent with model
+`gpt-5.6-sol`. Give it:
 
 - the path to the diff,
 - the path to the task brief, `docs/agents/tasks/<slug>.md`,
 - the verification output from step 1, verbatim.
+
+For a Claude orchestrator, do not invoke the local `.claude/agents/reviewer.md`
+as the standard gate: that definition is intentionally native to Claude Code.
+Instead, hand the diff, brief, and verification output to a Sol-compatible
+Codex review task. If that handoff is unavailable, stop and report the blocker.
 
 If the change touches game rules, the deck, log texts or a projection, also
 spawn `rules-checker` with the same diff. Run them in the same message so they
