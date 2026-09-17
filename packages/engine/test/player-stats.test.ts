@@ -13,6 +13,7 @@ import { placePiece } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
 import { chooseTech, revealItem, setPlayerStat } from '../src/actions/player.js'
 import { createGame } from '../src/create-game.js'
+import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import {
@@ -55,7 +56,41 @@ function chooseCiv(start: GameState, playerId: string): GameState {
 
 describe('setPlayerStat', () => {
   it('starts the status board with the requested defaults', () => {
-    expect(findPlayer(firstCivGame(), CASH1981)?.stats).toEqual(DEFAULT_PLAYER_STATS)
+    expect(findPlayer(firstCivGame(), CASH1981)?.stats).toMatchObject({
+      coins: 0,
+      trade: 0,
+      culture: 0,
+      infantry: 1,
+      artillery: 1,
+      mounted: 1,
+      stacking: 2,
+      mvmt: 2,
+      combat: 0,
+      handSize: 0,
+      efta: 0,
+      infra: 0,
+      mic: 0,
+      pe: 0,
+    })
+  })
+
+  it('fills new status fields on an older saved player without losing old values', () => {
+    const original = firstCivGame()
+    const older = {
+      ...original,
+      players: original.players.map((player) => ({
+        ...player,
+        stats: { coins: 9, trade: 2, culture: 4 },
+      })),
+    } as unknown as GameState
+
+    const migrated = migrateGameState(older)
+    expect(findPlayer(migrated, CASH1981)?.stats).toEqual({
+      ...DEFAULT_PLAYER_STATS,
+      coins: 9,
+      trade: 2,
+      culture: 4,
+    })
   })
 
   it('sets a stat on the target and writes a public log entry', () => {

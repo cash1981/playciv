@@ -70,7 +70,7 @@ export type EngineError =
   | { readonly kind: 'GAME_NOT_STARTED' }
   /** Java has no equivalent — `setPlayerStat` (issue #43) got a key outside `PlayerStats` */
   | { readonly kind: 'UNKNOWN_STAT'; readonly stat: string }
-  /** `setPlayerStat` (issue #43) got a value that is not a non-negative integer */
+  /** `setPlayerStat` (issue #43) got a value that is not an allowed integer */
   | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number }
 
 export function describeError(error: EngineError): string {
@@ -136,6 +136,6 @@ export function describeError(error: EngineError): string {
     case 'UNKNOWN_STAT':
       return `Unknown player stat: ${error.stat}`
     case 'INVALID_STAT_VALUE':
-      return `Player stat must be a non-negative whole number, got ${error.value}`
+      return `Player stat must be a whole number; only Combat may be negative, got ${error.value}`
   }
 }
