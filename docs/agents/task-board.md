@@ -15,23 +15,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
-### issue-21-auto-enter-game
-
-- **Owner:** Codex/Luna (GPT-5.6-Luna)
-- **Branch:** `fix/issue-21-auto-enter-game`
-- **Brief:** `docs/agents/tasks/issue-21-auto-enter-game.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/LobbyView.tsx`
-  - `packages/web/`
-  - `AGENTS.md`
-  - `docs/agents/workflow.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/tasks/issue-21-auto-enter-game.md`
-  - `docs/agents/state.md`
-- **Notes:** Dedicated worktree required because other agents and the human are
-  working concurrently.
-
 ---
 
 ## Format
