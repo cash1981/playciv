@@ -84,6 +84,13 @@ _Last updated: 2026-09-17_
   player-specific item number, while a reselected policy gets a fresh number.
 - **Issue #20.** Added a persisted light theme, white board surroundings and
   `tileback.png` fog of war for empty map slots; dark remains the default.
+- **Issue #19.** The admin user page pages 10 at a time in the browser, filters
+  by username or email, and edits a username or email inline. The PATCH route and
+  both repositories now accept a `username` change, rejected with `USERNAME_TAKEN`
+  when another account already uses that name (case-insensitive).
+- **Issue #26.** The white army figure is removed from the board palette: gone
+  from the manifest and the public art, and excluded in `tools/board-assets.ps1`
+  so a regeneration keeps it out.
 
 ## In progress
 

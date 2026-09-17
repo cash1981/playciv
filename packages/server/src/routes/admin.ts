@@ -72,7 +72,25 @@ export function registerAdminRoutes(app: FastifyInstance, context: AppContext): 
       else return sendError(reply, 400, 'BAD_REQUEST', 'email must be a string or null')
     }
 
-    if (role === undefined && disabled === undefined && email === undefined) {
+    let username: string | undefined
+    if (hasField(body, 'username')) {
+      if (typeof body['username'] !== 'string') {
+        return sendError(reply, 400, 'BAD_REQUEST', 'username must be a string')
+      }
+      const trimmed = body['username'].trim()
+      if (trimmed === '') {
+        return sendError(reply, 400, 'BAD_REQUEST', 'username must not be empty')
+      }
+      // Usernames are the login identity and are matched case-insensitively, so a
+      // rename may only reuse a name if it is the target's own (e.g. a case fix).
+      const clash = await context.repo.findPlayerByUsername(trimmed)
+      if (clash !== undefined && clash.id !== target.id) {
+        return sendError(reply, 409, 'USERNAME_TAKEN', `Username ${trimmed} is already in use`)
+      }
+      username = trimmed
+    }
+
+    if (role === undefined && disabled === undefined && email === undefined && username === undefined) {
       return sendError(reply, 400, 'BAD_REQUEST', 'At least one user field is required')
     }
 
@@ -92,6 +110,7 @@ export function registerAdminRoutes(app: FastifyInstance, context: AppContext): 
     }
 
     const changes: PlayerUpdate = {
+      ...(username !== undefined ? { username } : {}),
       ...(email !== undefined ? { email } : {}),
       ...(role !== undefined ? { role } : {}),
       ...(disabled !== undefined ? { disabled } : {}),

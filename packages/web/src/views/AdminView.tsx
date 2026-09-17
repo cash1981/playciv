@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { api } from '../lib/api.js'
@@ -10,10 +10,20 @@ interface Props {
   readonly onBack: () => void
 }
 
+/** Users shown per page. The list is paged in the browser, not on the server. */
+const PAGE_SIZE = 10
+
 export function AdminView({ player, onUnauthorized, onBack }: Props): React.JSX.Element {
   const [users, setUsers] = useState<readonly AdminUserDto[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(0)
+
+  /** The user being edited, and the draft values for the free-text fields. */
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [draftUsername, setDraftUsername] = useState('')
+  const [draftEmail, setDraftEmail] = useState('')
 
   const reload = useCallback(async () => {
     try {
@@ -29,17 +39,73 @@ export function AdminView({ player, onUnauthorized, onBack }: Props): React.JSX.
     void reload()
   }, [reload])
 
-  async function update(user: AdminUserDto, changes: Parameters<typeof api.updateAdminUser>[1]): Promise<void> {
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    if (needle === '') return users
+    return users.filter(
+      (user) =>
+        user.username.toLowerCase().includes(needle) ||
+        (user.email ?? '').toLowerCase().includes(needle),
+    )
+  }, [users, query])
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  // A shorter list (after a search or a delete) can leave the page out of range.
+  const safePage = Math.min(page, pageCount - 1)
+  const visible = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
+
+  function search(value: string): void {
+    setQuery(value)
+    setPage(0)
+  }
+
+  function startEdit(user: AdminUserDto): void {
+    setEditingId(user.id)
+    setDraftUsername(user.username)
+    setDraftEmail(user.email ?? '')
+    setError(null)
+  }
+
+  async function update(
+    user: AdminUserDto,
+    changes: Parameters<typeof api.updateAdminUser>[1],
+  ): Promise<void> {
     setBusyId(user.id)
     setError(null)
     try {
       const updated = await api.updateAdminUser(user.id, changes)
-      setUsers((current) => current.map((candidate) => (candidate.id === updated.id ? updated : candidate)))
+      setUsers((current) =>
+        current.map((candidate) => (candidate.id === updated.id ? updated : candidate)),
+      )
     } catch (caught) {
-      if (isUnauthorized(caught)) return onUnauthorized()
+      if (isUnauthorized(caught)) {
+        onUnauthorized()
+        return
+      }
       setError(errorMessage(caught))
+      throw caught
     } finally {
       setBusyId(null)
+    }
+  }
+
+  async function saveEdit(user: AdminUserDto): Promise<void> {
+    const username = draftUsername.trim()
+    const email = draftEmail.trim()
+    const changes: Parameters<typeof api.updateAdminUser>[1] = {
+      ...(username !== user.username ? { username } : {}),
+      ...(email !== (user.email ?? '') ? { email: email === '' ? null : email } : {}),
+    }
+    // Nothing actually changed — just leave edit mode.
+    if (Object.keys(changes).length === 0) {
+      setEditingId(null)
+      return
+    }
+    try {
+      await update(user, changes)
+      setEditingId(null)
+    } catch {
+      // update() already surfaced the error; stay in edit mode to fix or retry.
     }
   }
 
@@ -68,21 +134,60 @@ export function AdminView({ player, onUnauthorized, onBack }: Props): React.JSX.
       {error !== null && <div className="error">{error}</div>}
 
       <section className="panel">
+        <div className="row" style={{ marginBottom: '0.75rem' }}>
+          <input
+            type="search"
+            placeholder="Search username or email"
+            value={query}
+            onChange={(event) => search(event.target.value)}
+            style={{ flex: 1, minWidth: '12rem' }}
+          />
+          <span className="muted" style={{ whiteSpace: 'nowrap' }}>
+            {filtered.length} {filtered.length === 1 ? 'user' : 'users'}
+          </span>
+        </div>
+
         <ul className="list">
-          {users.map((user) => {
+          {visible.map((user) => {
             const busy = busyId === user.id
             const isCurrent = user.id === player.id
+            const editing = editingId === user.id
+
             return (
               <li key={user.id}>
-                <div style={{ minWidth: '12rem' }}>
-                  <strong>{user.username}</strong>
-                  <div className="muted">{user.email ?? 'No email'}</div>
-                </div>
+                {editing ? (
+                  <div className="admin-edit" style={{ minWidth: '16rem', flex: 1 }}>
+                    <label className="inline-label">
+                      Username
+                      <input
+                        value={draftUsername}
+                        disabled={busy}
+                        onChange={(event) => setDraftUsername(event.target.value)}
+                      />
+                    </label>
+                    <label className="inline-label">
+                      Email
+                      <input
+                        type="email"
+                        placeholder="No email"
+                        value={draftEmail}
+                        disabled={busy}
+                        onChange={(event) => setDraftEmail(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div style={{ minWidth: '12rem' }}>
+                    <strong>{user.username}</strong>
+                    <div className="muted">{user.email ?? 'No email'}</div>
+                  </div>
+                )}
+
                 <label className="inline-label">
                   Role
                   <select
                     value={user.role}
-                    disabled={busy || isCurrent}
+                    disabled={busy || isCurrent || editing}
                     onChange={(event) =>
                       void update(user, { role: event.target.value as 'user' | 'admin' })
                     }
@@ -95,15 +200,39 @@ export function AdminView({ player, onUnauthorized, onBack }: Props): React.JSX.
                   <input
                     type="checkbox"
                     checked={!user.disabled}
-                    disabled={busy || isCurrent}
+                    disabled={busy || isCurrent || editing}
                     onChange={(event) => void update(user, { disabled: !event.target.checked })}
                   />
                   Enabled
                 </label>
                 <span className="spacer" style={{ flex: 1 }} />
+
+                {editing ? (
+                  <>
+                    <button
+                      className="small primary"
+                      disabled={busy || draftUsername.trim() === ''}
+                      onClick={() => void saveEdit(user)}
+                    >
+                      Save
+                    </button>
+                    <button className="small" disabled={busy} onClick={() => setEditingId(null)}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="small"
+                    disabled={busy || editingId !== null}
+                    title="Edit username or email"
+                    onClick={() => startEdit(user)}
+                  >
+                    Edit
+                  </button>
+                )}
                 <button
                   className="danger small"
-                  disabled={busy || isCurrent}
+                  disabled={busy || isCurrent || editing}
                   onClick={() => void remove(user)}
                 >
                   Delete
@@ -112,7 +241,25 @@ export function AdminView({ player, onUnauthorized, onBack }: Props): React.JSX.
             )
           })}
         </ul>
-        {users.length === 0 && <p className="muted">No users found.</p>}
+        {filtered.length === 0 && <p className="muted">No users found.</p>}
+
+        {pageCount > 1 && (
+          <div className="pager">
+            <button className="small" disabled={safePage <= 0} onClick={() => setPage(safePage - 1)}>
+              ‹ Prev
+            </button>
+            <span className="muted">
+              Page {safePage + 1} / {pageCount}
+            </span>
+            <button
+              className="small"
+              disabled={safePage >= pageCount - 1}
+              onClick={() => setPage(safePage + 1)}
+            >
+              Next ›
+            </button>
+          </div>
+        )}
       </section>
     </>
   )

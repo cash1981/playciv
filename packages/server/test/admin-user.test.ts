@@ -168,6 +168,70 @@ describe('account access', () => {
     expect((await repo.findGame(gameId))?.active).toBe(false)
   })
 
+  it('an admin can fix a username and email typo', async () => {
+    const admin = await makeAdmin('editor-admin')
+    const target = await register('mistyped')
+
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: `/api/admin/users/${target.id}`,
+      headers: bearer(admin.token),
+      payload: { username: 'corrected', email: 'corrected@example.com' },
+    })
+    expect(updated.statusCode).toBe(200)
+    expect(updated.json()).toMatchObject({ username: 'corrected', email: 'corrected@example.com' })
+
+    // The renamed account logs in under its new username.
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'corrected', password: 'secret' },
+    })
+    expect(login.statusCode).toBe(200)
+  })
+
+  it('rejects a username already taken by another user', async () => {
+    const admin = await makeAdmin('rename-admin')
+    await register('taken-name')
+    const target = await register('wants-rename')
+
+    const conflict = await app.inject({
+      method: 'PATCH',
+      url: `/api/admin/users/${target.id}`,
+      headers: bearer(admin.token),
+      payload: { username: 'taken-name' },
+    })
+    expect(conflict.statusCode).toBe(409)
+    expect((conflict.json() as { error: string }).error).toBe('USERNAME_TAKEN')
+  })
+
+  it('lets a user keep its own name when only fixing the casing', async () => {
+    const admin = await makeAdmin('casing-admin')
+    const target = await register('lowercase')
+
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: `/api/admin/users/${target.id}`,
+      headers: bearer(admin.token),
+      payload: { username: 'LowerCase' },
+    })
+    expect(updated.statusCode).toBe(200)
+    expect(updated.json()).toMatchObject({ username: 'LowerCase' })
+  })
+
+  it('rejects an empty username', async () => {
+    const admin = await makeAdmin('guard-admin')
+    const target = await register('keeps-name')
+
+    const rejected = await app.inject({
+      method: 'PATCH',
+      url: `/api/admin/users/${target.id}`,
+      headers: bearer(admin.token),
+      payload: { username: '   ' },
+    })
+    expect(rejected.statusCode).toBe(400)
+  })
+
   it('does not let the current admin lock or delete itself', async () => {
     const admin = await makeAdmin('self-protecting-admin')
 

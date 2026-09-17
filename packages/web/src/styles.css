@@ -145,6 +145,19 @@ label.inline-label select {
   width: auto;
 }
 
+/* Inline user editor in the admin list: the username and email fields stacked. */
+.admin-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.admin-edit label.inline-label input {
+  flex: 1;
+  width: auto;
+  margin-top: 0;
+}
+
 label > input,
 label > select,
 label > textarea {

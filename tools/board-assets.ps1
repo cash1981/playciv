@@ -46,6 +46,11 @@ $civTiles = @(
 
 $colours = @('blue', 'green', 'purple', 'red', 'yellow', 'white')
 
+# Pieces to leave out of the manifest even though the source art exists, keyed by
+# "<folder>/<basename>". The white army (barbarians) was dropped as unused; see
+# issue #26.
+$exclude = @('figures/whitearmy')
+
 function Get-Label([string] $category, [string] $baseName) {
     $name = $baseName
 
@@ -88,9 +93,14 @@ foreach ($folder in $categories.Keys) {
 
     # -Include needs a wildcard in the path, so filter on Extension instead.
     # Skip the "_100_100" resized duplicates (e.g. startplayer_100_100.png is a
-    # redundant copy of startplayer.png at a different size).
+    # redundant copy of startplayer.png at a different size) and anything in the
+    # exclude list.
     $files = Get-ChildItem $from -File |
-        Where-Object { $_.Extension -in '.png', '.jpg' -and $_.BaseName -notlike '*_100_100' }
+        Where-Object {
+            $_.Extension -in '.png', '.jpg' -and
+            $_.BaseName -notlike '*_100_100' -and
+            "$folder/$($_.BaseName)" -notin $exclude
+        }
     foreach ($file in $files) {
         Copy-Item $file.FullName (Join-Path $to $file.Name) -Force
 
