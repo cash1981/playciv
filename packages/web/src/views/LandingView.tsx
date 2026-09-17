@@ -164,8 +164,18 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
               })
             }}
           >
-            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Game name" required />
-            <select value={numOfPlayers} onChange={(event) => setNumOfPlayers(Number(event.target.value))}>
+            <input
+              aria-label="Game name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Game name"
+              required
+            />
+            <select
+              aria-label="Number of players"
+              value={numOfPlayers}
+              onChange={(event) => setNumOfPlayers(Number(event.target.value))}
+            >
               {[2, 3, 4, 5].map((count) => <option key={count} value={count}>{count} players</option>)}
             </select>
             <button className="primary" type="submit" disabled={busy || name.trim() === ''}>Create</button>
