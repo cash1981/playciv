@@ -30,6 +30,7 @@ export interface StoredPlayer {
 }
 
 export interface PlayerUpdate {
+  readonly username?: string
   readonly email?: string | null
   readonly role?: UserRole
   readonly disabled?: boolean

@@ -51,6 +51,7 @@ export interface AdminUserDto extends PlayerDto {
 }
 
 export interface AdminUserUpdate {
+  readonly username?: string
   readonly email?: string | null
   readonly role?: 'user' | 'admin'
   readonly disabled?: boolean

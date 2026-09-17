@@ -153,6 +153,7 @@ export class MongoRepository implements Repository {
     if (ObjectId.isValid(id)) filters.push(new ObjectId(id))
 
     const set: Record<string, unknown> = {}
+    if (changes.username !== undefined) set['username'] = changes.username
     if (changes.email !== undefined) set['email'] = changes.email
     if (changes.role !== undefined) set['role'] = changes.role
     if (changes.disabled !== undefined) set['disabled'] = changes.disabled

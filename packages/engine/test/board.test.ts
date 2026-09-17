@@ -111,8 +111,10 @@ describe('the manifest', () => {
       expect(findBoardAsset(`figures/${colour}army`)).toBeDefined()
       expect(findBoardAsset(`figures/${colour}scout`)).toBeDefined()
     }
-    // Barbarians use the white army, and have no scout
-    expect(findBoardAsset('figures/whitearmy')).toBeDefined()
+  })
+
+  it('has no white army (removed as unused, issue #26)', () => {
+    expect(findBoardAsset('figures/whitearmy')).toBeUndefined()
   })
 
   it('has the six resources', () => {
