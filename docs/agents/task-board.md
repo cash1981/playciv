@@ -22,7 +22,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/engine/src/state.ts`
   - `packages/engine/src/migrate.ts`
   - `packages/engine/src/actions/player.ts`
-  - `packages/engine/test/player-action.test.ts`
+  - `packages/engine/test/player-stats.test.ts`
   - `packages/server/src/routes/play.ts`
   - `packages/server/test/api.test.ts`
   - `packages/web/src/views/StatusPanel.tsx`

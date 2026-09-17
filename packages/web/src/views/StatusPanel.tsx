@@ -51,7 +51,7 @@ const MODIFIER_COLUMNS: readonly StatColumn[] = [
   { key: 'stacking', label: 'Stacking' },
   { key: 'mvmt', label: 'Mvmt' },
   { key: 'combat', label: 'Combat', signed: true },
-  { key: 'handSize', label: 'Hand Size', signed: true },
+  { key: 'handSize', label: 'Hand Size' },
 ]
 
 const EFTA_COLUMNS: readonly StatColumn[] = [

@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 
 import { placePiece } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
-import { revealItem, setPlayerStat } from '../src/actions/player.js'
+import { chooseTech, revealItem, setPlayerStat } from '../src/actions/player.js'
 import { createGame } from '../src/create-game.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
@@ -276,6 +276,7 @@ describe('projections carry the status board', () => {
 
   it('never leaks another player\'s hand or hidden techs alongside the public stats', () => {
     let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'GREAT_PERSON' }))
+    state = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Navy' }))
     state = unwrap(
       setPlayerStat(state, {
         editorPlayerId: CASH1981,
@@ -292,6 +293,8 @@ describe('projections carry the status board', () => {
     expect(cash?.stats.handSize).toBe(9)
     // ...but the hand it sits alongside is still a count, not the cards
     expect(cash).not.toHaveProperty('items')
+    expect(cash).not.toHaveProperty('techsChosen')
+    expect(cash?.revealedTechs).toEqual([])
     expect(cash?.numberOfItemsInHand).toBe(1)
 
     // A member not shown here (CHUL) proves opponents beyond the pair above
