@@ -12,19 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-23-itemnumber-social-policy
-
-- **Owner:** Codex (GPT-5)
-- **Branch:** `fix/issue-23-itemnumber-social-policy`
-- **Brief:** `docs/agents/tasks/issue-23-itemnumber-social-policy.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/log.ts`
-  - `packages/engine/test/player-action.test.ts`
-  - `docs/agents/tasks/issue-23-itemnumber-social-policy.md`
-  - `docs/agents/task-board.md`
-- **Notes:** Fixing the reveal log to retain a social policy's per-player item number.
-
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 

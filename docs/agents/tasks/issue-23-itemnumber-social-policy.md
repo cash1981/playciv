@@ -49,21 +49,24 @@ after choosing the policy again.
 
 ## Claimed paths
 
+- `packages/engine/src/actions/player.ts`
 - `packages/engine/src/log.ts`
 - `packages/engine/test/player-action.test.ts`
+- `README.md`
+- `docs/agents/decisions.md`
 - `docs/agents/tasks/issue-23-itemnumber-social-policy.md`
 - `docs/agents/task-board.md`
 
 ## Acceptance criteria
 
-- [ ] A social policy's choose, reveal, and remove log entries use the same
+- [x] A social policy's choose, reveal, and remove log entries use the same
   per-player item number.
-- [ ] Choosing the same policy after removal gives it a different item number.
-- [ ] Existing tech reveal numbering remains unchanged.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: the revealed policy name is only in the reveal log as
+- [x] Choosing the same policy after removal gives it a different item number.
+- [x] Existing tech reveal numbering remains unchanged.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: the revealed policy name is only in the reveal log as
   before; no additional card information is exposed by the number fix.
-- [ ] Browser verification: not applicable; this is an engine log-format fix.
+- [x] Browser verification: not applicable; this is an engine log-format fix.
 
 ## Open questions
 

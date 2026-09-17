@@ -6,7 +6,7 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-16_
+_Last updated: 2026-09-17_
 
 ## Health
 
@@ -75,6 +75,8 @@ _Last updated: 2026-09-16_
   from storage rather than token claims.
 - **Issue #21.** Joining a game now opens that game immediately after the join
   request succeeds.
+- **Issue #23.** Social-policy choose, reveal and removal logs now retain one
+  player-specific item number, while a reselected policy gets a fresh number.
 
 ## In progress
 
