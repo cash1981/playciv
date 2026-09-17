@@ -3,7 +3,7 @@
 - **Slug:** `issue-34-faq`
 - **Branch:** `feat/issue-34-faq`
 - **Owner:** Codex (GPT-5)
-- **Status:** in progress
+- **Status:** done — review gate approved; ready for human merge
 
 ## Goal
 
@@ -46,11 +46,11 @@ it through the current app shell. Keep answers concise and public.
 
 ## Acceptance criteria
 
-- [ ] `/faq` renders for signed-out and signed-in visitors.
-- [ ] It covers the old FAQ topics and current virtual-board workflow.
-- [ ] Answers do not claim obsolete Google Slides/Spreadsheet steps.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Verified in the browser with keyboard-accessible disclosure controls.
+- [x] `/faq` renders for signed-out and signed-in visitors.
+- [x] It covers the old FAQ topics and current virtual-board workflow.
+- [x] Answers do not claim obsolete Google Slides/Spreadsheet steps.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Verified in the browser with keyboard-accessible disclosure controls.
 
 ## Open questions
 
