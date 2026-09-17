@@ -13,7 +13,7 @@ _Last updated: 2026-09-16_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 311 engine, 63 server (on `feat/admin-user-management`) |
+| `pnpm -r test` | passing — 312 engine, 63 server (on `fix/issue-21-auto-enter-game`) |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -73,6 +73,8 @@ _Last updated: 2026-09-16_
   accounts are rejected server-side, admins can manage users without password
   hashes in API responses, and the protected web admin page uses role lookup
   from storage rather than token claims.
+- **Issue #21.** Joining a game now opens that game immediately after the join
+  request succeeds.
 
 ## In progress
 
