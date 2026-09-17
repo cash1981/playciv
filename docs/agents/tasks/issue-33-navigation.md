@@ -60,4 +60,6 @@ menu links read-only and make external documents open safely in a new tab.
 
 ## Open questions
 
-- [ ] Confirm the final URLs/assets for the rulebook PDFs and tech overview images.
+None. The old client contains the referenced PDFs/images under
+`old-civ-web/app/images/help/`; copy the needed public assets into the rewrite
+and update only the obsolete Google/old-app wording.
