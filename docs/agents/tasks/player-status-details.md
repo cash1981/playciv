@@ -3,7 +3,7 @@
 - **Slug:** `player-status-details`
 - **Branch:** `feat/player-status-details`
 - **Owner:** Codex (GPT-5)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
