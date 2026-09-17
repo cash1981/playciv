@@ -21,10 +21,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   AREA_LABEL_HEIGHT,
+  blockColumns,
+  blockOrigin,
+  blockRows,
   COLUMN_LABELS,
   CULTURE_TRACK,
   CULTURE_TRACK_CELLS,
   ROTATIONS,
+  TILE_SQUARES,
   areaBandTop,
   boardHeight,
   boardWidth,
@@ -164,6 +168,25 @@ export function BoardView({
   )
 
   const selected = pieces.find((piece) => piece.id === selectedId) ?? null
+
+  /** Empty map slots are unknown territory until a tile is placed there. */
+  const fogSlots = useMemo(() => {
+    const tileSize = TILE_SQUARES * board.squareSize
+    const occupied = new Set(
+      pieces
+        .filter((piece) => piece.category === 'tile' || piece.category === 'civtile')
+        .map(
+          (piece) =>
+            `${Math.round(piece.x / tileSize)},${Math.round((piece.y - mapStart) / tileSize)}`,
+        ),
+    )
+
+    return Array.from({ length: blockRows(board) }, (_, row) =>
+      Array.from({ length: blockColumns(board) }, (_, column) => ({ column, row })),
+    )
+      .flat()
+      .filter(({ column, row }) => !occupied.has(`${column},${row}`))
+  }, [board, mapStart, pieces])
 
   /** Mouse coordinates into board coordinates, with the zoom taken out. */
   const toBoard = useCallback(
@@ -335,6 +358,22 @@ export function BoardView({
                   backgroundSize: `${board.squareSize * zoom}px ${board.squareSize * zoom}px`,
                 }}
               />
+
+              {fogSlots.map(({ column, row }) => {
+                const [x, y] = blockOrigin(board, column, row)
+                const size = TILE_SQUARES * board.squareSize * zoom
+                return (
+                  <img
+                    key={`fog-${column}-${row}`}
+                    className="board-fog-tile"
+                    src="/board/tiles/tileback.png"
+                    alt=""
+                    aria-hidden="true"
+                    draggable={false}
+                    style={{ left: x * zoom, top: y * zoom, width: size, height: size }}
+                  />
+                )
+              })}
 
               {areas.map((area) => (
                 <div

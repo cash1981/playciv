@@ -13,7 +13,7 @@ _Last updated: 2026-09-17_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 312 engine, 63 server (on `fix/issue-21-auto-enter-game`) |
+| `pnpm -r test` | passing — 310 engine, 62 server (on `feat/issue-20-theme-switch`) |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -82,10 +82,12 @@ _Last updated: 2026-09-17_
   request succeeds.
 - **Issue #23.** Social-policy choose, reveal and removal logs now retain one
   player-specific item number, while a reselected policy gets a fresh number.
+- **Issue #20.** Added a persisted light theme, white board surroundings and
+  `tileback.png` fog of war for empty map slots; dark remains the default.
 
 ## In progress
 
-_Nothing. See the queue on the task board._
+_Nothing. Issue #20 is ready for the human to merge from `feat/issue-20-theme-switch`._
 
 ## Next, in order
 

@@ -15,6 +15,7 @@ import { HighscoreView } from './views/HighscoreView.js'
 import { LobbyView } from './views/LobbyView.js'
 import { LoginView } from './views/LoginView.js'
 import { AdminView } from './views/AdminView.js'
+import { applyTheme, saveTheme, storedTheme, type Theme } from './theme.js'
 
 type Screen =
   | { readonly name: 'lobby' }
@@ -41,6 +42,12 @@ export function App(): React.JSX.Element {
   const [player, setPlayer] = useState<PlayerDto | null>(null)
   const [checking, setChecking] = useState(true)
   const [screen, setScreen] = useState<Screen>(() => screenFromPath(window.location.pathname))
+  const [theme, setTheme] = useState<Theme>(() => storedTheme())
+
+  useEffect(() => {
+    applyTheme(theme)
+    saveTheme(theme)
+  }, [theme])
 
   useEffect(() => {
     const onPopState = () => setScreen(screenFromPath(window.location.pathname))
@@ -88,6 +95,10 @@ export function App(): React.JSX.Element {
     setScreen({ name: 'highscore' })
   }, [])
 
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
+  }, [])
+
   if (checking) {
     return (
       <div className="app">
@@ -105,6 +116,7 @@ export function App(): React.JSX.Element {
           <span className="muted">playciv</span>
           <span className="spacer" />
           <button onClick={backToGames}>{player === null ? 'Sign in' : 'Games'}</button>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
           {player !== null && <span className="muted">{player.username}</span>}
           {player !== null && <button onClick={signOut}>Sign out</button>}
         </header>
@@ -121,6 +133,7 @@ export function App(): React.JSX.Element {
           <span className="muted">playciv</span>
           <span className="spacer" />
           <button onClick={openHighscore}>Highscore</button>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
         </header>
         <LoginView onSignedIn={setPlayer} />
       </div>
@@ -143,6 +156,7 @@ export function App(): React.JSX.Element {
           <button onClick={openAdmin}>Admin</button>
         )}
         <button onClick={openHighscore}>Highscore</button>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
         <span className="muted">{player.username}</span>
         <button onClick={signOut}>Sign out</button>
       </header>
@@ -168,6 +182,15 @@ export function App(): React.JSX.Element {
         />
       )}
     </div>
+  )
+}
+
+function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }): React.JSX.Element {
+  const nextTheme = theme === 'dark' ? 'light' : 'dark'
+  return (
+    <button onClick={onToggle} aria-label={`Switch to ${nextTheme} theme`}>
+      {theme === 'dark' ? 'Light theme' : 'Dark theme'}
+    </button>
   )
 }
 

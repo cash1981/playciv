@@ -11,10 +11,31 @@
   --text: #e6e8ec;
   --muted: #9aa3b2;
   --accent: #6ea8fe;
+  --accent-text: #10131a;
   --good: #63c98f;
   --warn: #e6b455;
   --bad: #e2686a;
+  --error-bg: #3a1f21;
+  --error-text: #ffc9ca;
+  --board-bg: #0f1115;
   --radius: 8px;
+}
+
+:root[data-theme='light'] {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --panel-2: #e9edf2;
+  --line: #c4ccd6;
+  --text: #202733;
+  --muted: #5c6877;
+  --accent: #2867ad;
+  --accent-text: #ffffff;
+  --good: #287b4e;
+  --warn: #8b6200;
+  --bad: #b33b42;
+  --error-bg: #fff0f0;
+  --error-text: #8c2028;
+  --board-bg: #ffffff;
 }
 
 * {
@@ -74,7 +95,7 @@ button:disabled {
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #10131a;
+  color: var(--accent-text);
   font-weight: 600;
 }
 
@@ -190,9 +211,9 @@ label > textarea {
 }
 
 .error {
-  background: #3a1f21;
+  background: var(--error-bg);
   border: 1px solid var(--bad);
-  color: #ffc9ca;
+  color: var(--error-text);
   border-radius: var(--radius);
   padding: 0.5rem 0.7rem;
   margin-bottom: 1rem;
@@ -323,7 +344,7 @@ ul.list > li:last-child {
      page — without a height cap, `overflow: auto` never triggers vertically. */
   max-height: 80vh;
   overflow: auto;
-  background: #0f1115;
+  background: var(--board-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 0.5rem;
@@ -380,6 +401,13 @@ ul.list > li:last-child {
     linear-gradient(to right, rgba(255, 255, 255, 0.11) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.11) 1px, transparent 1px);
   outline: 1px solid var(--line);
+}
+
+.board-fog-tile {
+  position: absolute;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
 }
 
 .board-area {
@@ -868,7 +896,7 @@ ul.history > li {
 .tab.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #10131a;
+  color: var(--accent-text);
   font-weight: 600;
 }
 
