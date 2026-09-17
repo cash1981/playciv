@@ -322,6 +322,20 @@ label > textarea {
   color: var(--accent);
 }
 
+.tag.discarded {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+/* The "by X · revealed · discarded" line under a revealed card's caption. */
+.revealed-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+  margin-top: 0.2rem;
+}
+
 ul.list {
   list-style: none;
   margin: 0;

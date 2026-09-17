@@ -5,10 +5,10 @@
 
 import type { GameState } from '@civ/engine'
 import {
-  allRevealedItems,
   createGame,
   endGame,
   joinGame,
+  revealedFeed,
   toPlayerView,
   withdrawFromGame,
 } from '@civ/engine'
@@ -88,6 +88,17 @@ export function toPublicSummary(game: GameState, viewerId?: string): PublicGameS
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
     youAreIn: viewerId !== undefined && game.players.some((player) => player.playerId === viewerId),
   }
+}
+
+/** Revealed-feed page size: the default when none is asked for, and the cap. */
+const DEFAULT_REVEALED_SIZE = 20
+const MAX_REVEALED_SIZE = 100
+
+/** Parses a query integer, falling back to `fallback` and clamping to [min, max]. */
+function clampInt(raw: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = raw === undefined ? NaN : Number.parseInt(raw, 10)
+  const value = Number.isFinite(parsed) ? parsed : fallback
+  return Math.min(Math.max(value, min), max)
 }
 
 export function registerGameRoutes(app: FastifyInstance, context: AppContext): void {
@@ -223,10 +234,27 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     return reply.code(204).send()
   })
 
-  /** Java: `GameAction.getAllRevealedItems` — what the iframe spreadsheet showed. */
+  /**
+   * The Revealed and Discarded Items panel (issue #51). Server-backed pagination:
+   * the engine builds the full chronological feed, the route returns one bounded
+   * page plus the total so the browser never loads the whole history or every
+   * image at once. `page` is 1-based; `size` is clamped to 1..MAX_REVEALED_SIZE.
+   */
   app.get('/api/games/:gameId/revealed', auth, async (request, reply) => {
     const { gameId } = request.params as { gameId: string }
-    return readGame(context, request, reply, gameId, (state) => allRevealedItems(state))
+    const query = request.query as { page?: string; size?: string }
+    const size = clampInt(query.size, DEFAULT_REVEALED_SIZE, 1, MAX_REVEALED_SIZE)
+    const page = clampInt(query.page, 1, 1, Number.MAX_SAFE_INTEGER)
+    return readGame(context, request, reply, gameId, (state) => {
+      const all = revealedFeed(state)
+      const start = (page - 1) * size
+      return {
+        items: all.slice(start, start + size),
+        total: all.length,
+        page,
+        size,
+      }
+    })
   })
 
   /**

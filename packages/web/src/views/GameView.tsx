@@ -18,6 +18,7 @@ import type { PlayerDto, PlayerView } from '../lib/api.js'
 import { BoardView } from './BoardView.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
+import { RevealedPanel } from './RevealedPanel.js'
 import { StatusPanel } from './StatusPanel.js'
 import { TechPanel } from './TechPanel.js'
 import { TurnPanel } from './TurnPanel.js'
@@ -196,7 +197,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         <TechPanel gameId={gameId} busy={busy} run={run} view={view} reloadCount={reloadCount} />
         <TurnPanel gameId={gameId} busy={busy} run={run} reloadCount={reloadCount} />
         <StatusPanel gameId={gameId} view={view} busy={busy} run={run} />
-        <OpponentPanel view={view} />
+        <RevealedPanel gameId={gameId} reloadCount={reloadCount} />
         <LogPanel
           gameId={gameId}
           busy={busy}
@@ -408,32 +409,3 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
   )
 }
 
-function OpponentPanel({ view }: { readonly view: PlayerView }): React.JSX.Element {
-  return (
-    <CollapsiblePanel id="opponents" title="Opponents">
-      <ul className="list">
-        {view.opponents.map((opponent) => (
-          <li key={opponent.playerId}>
-            {opponent.color != null && (
-              <span className="swatch" style={{ background: opponent.color.toLowerCase() }} />
-            )}
-            <strong>{opponent.username}</strong>
-            {opponent.yourTurn && <span className="tag turn">turn</span>}
-            {opponent.civilization != null && (
-              <span className="tag revealed">{opponent.civilization.name}</span>
-            )}
-            {/* Counts, not contents — the projection gives nothing more */}
-            <span className="muted">
-              {opponent.numberOfItemsInHand} cards · {opponent.numberOfTechsChosen} techs ·{' '}
-              {opponent.numberOfSocialPolicies} policies
-            </span>
-          </li>
-        ))}
-        {view.opponents.length === 0 && <li className="muted">Nobody else has joined yet.</li>}
-      </ul>
-      <p className="muted" style={{ marginBottom: 0 }}>
-        Deck: {view.numberOfItemsInDeck} cards · discarded: {view.numberOfDiscardedItems}
-      </p>
-    </CollapsiblePanel>
-  )
-}

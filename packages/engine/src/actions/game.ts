@@ -250,3 +250,115 @@ export function allRevealedItems(state: GameState): readonly Item[] {
 
   return [...discarded, ...revealed]
 }
+
+/**
+ * One row of the "Revealed and Discarded Items" panel (issue #51). A public
+ * item, who owns/revealed it, and whether it was revealed, discarded, or both.
+ */
+export interface RevealedEntry {
+  readonly item: Item
+  /** Java: `Item.ownerId` — the revealing/owning player, kept even once discarded. */
+  readonly playerId: string | null
+  readonly username: string | null
+  readonly revealed: boolean
+  readonly discarded: boolean
+  /** Newest matching log timestamp, used to order the feed newest first. */
+  readonly createdAt: string | null
+}
+
+/**
+ * The chronological feed behind the Revealed and Discarded Items panel.
+ *
+ * The public set is exactly what `allRevealedItems` shows — discarded items and
+ * non-hidden hand items — so hidden hands and hidden techs never appear. The log
+ * only enriches an already-public row: it supplies the chronology, the revealing
+ * player, and the fact that a discarded item was revealed first. It never adds a
+ * row, so an item revealed and then returned to the deck or re-hidden does not
+ * leak here.
+ *
+ * Rows are keyed by `itemNumber`, so an item revealed and later discarded is one
+ * row carrying both `revealed` and `discarded`. Newest first; rows with no known
+ * timestamp sort last, keeping their relative order.
+ */
+export function revealedFeed(state: GameState): readonly RevealedEntry[] {
+  const nameOf = (playerId: string | null): string | null => {
+    if (playerId === null) return null
+    const player =
+      findPlayer(state, playerId) ??
+      state.withdrawnPlayers.find((withdrawn) => withdrawn.playerId === playerId)
+    return player?.username ?? null
+  }
+
+  interface Row {
+    item: Item
+    playerId: string | null
+    revealed: boolean
+    discarded: boolean
+    createdAt: string | null
+  }
+
+  // Seed from the current public set: discarded items and non-hidden hand items.
+  const rows = new Map<number, Row>()
+
+  for (const item of state.discardedItems) {
+    rows.set(item.itemNumber, {
+      item,
+      playerId: item.ownerId,
+      revealed: false,
+      discarded: true,
+      createdAt: null,
+    })
+  }
+
+  for (const player of state.players) {
+    for (const item of player.items) {
+      if (item.hidden) continue
+      const existing = rows.get(item.itemNumber)
+      if (existing === undefined) {
+        rows.set(item.itemNumber, {
+          item,
+          playerId: item.ownerId ?? player.playerId,
+          revealed: true,
+          discarded: false,
+          createdAt: null,
+        })
+      } else {
+        existing.revealed = true
+      }
+    }
+  }
+
+  // Enrich already-public rows from the log: chronology, revealing player, and
+  // whether a discarded item was revealed first. Never adds a row.
+  const newer = (a: string | null, b: string | null): string | null => {
+    if (a === null) return b
+    if (b === null) return a
+    return a.localeCompare(b) >= 0 ? a : b
+  }
+
+  for (const entry of state.log) {
+    if (entry.item === null) continue
+    if (entry.logType !== 'REVEAL' && entry.logType !== 'DISCARD') continue
+    const row = rows.get(entry.item.itemNumber)
+    if (row === undefined) continue
+    if (entry.logType === 'REVEAL') row.revealed = true
+    if (entry.logType === 'DISCARD') row.discarded = true
+    row.createdAt = newer(row.createdAt, entry.createdAt)
+    if (row.playerId === null) row.playerId = entry.playerId
+  }
+
+  return [...rows.values()]
+    .map((row, index) => ({ row, index }))
+    .sort(
+      (a, b) =>
+        (b.row.createdAt ?? '').localeCompare(a.row.createdAt ?? '') || a.index - b.index,
+    )
+    .map(({ row }) => ({
+      item: row.item,
+      playerId: row.playerId,
+      username: nameOf(row.playerId),
+      revealed: row.revealed,
+      discarded: row.discarded,
+      createdAt: row.createdAt,
+    }))
+}
