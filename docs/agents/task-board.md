@@ -12,6 +12,27 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### player-status-details
+
+- **Owner:** Codex (GPT-5)
+- **Branch:** `feat/player-status-details`
+- **Brief:** `docs/agents/tasks/player-status-details.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/state.ts`
+  - `packages/engine/src/migrate.ts`
+  - `packages/engine/src/actions/player.ts`
+  - `packages/engine/test/player-action.test.ts`
+  - `packages/server/src/routes/play.ts`
+  - `packages/server/test/api.test.ts`
+  - `packages/web/src/views/StatusPanel.tsx`
+  - `packages/web/src/styles.css`
+  - `docs/agents/tasks/player-status-details.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/workflow.md`
+  - `docs/agents/state.md`
+- **Notes:** Shared bookkeeping fields; no game-rule changes.
+
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 

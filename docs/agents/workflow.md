@@ -145,6 +145,8 @@ deliberately left out. Link the task brief.
 - Update `state.md`: move the task from "in progress" to "done", one line.
 - Release the claim in `task-board.md`.
 - Delete the local branch once merged.
+- Delete the finished local worktree and its files once the branch is merged or
+  abandoned; do not leave stale worktrees or feature files behind.
 
 A task that leaves the board or the state file stale is not finished, because
 the next agent will act on what those files say.
