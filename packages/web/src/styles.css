@@ -18,6 +18,7 @@
   --error-bg: #3a1f21;
   --error-text: #ffc9ca;
   --board-bg: #0f1115;
+  --wonder-accent: #c9a227;
   --radius: 8px;
 }
 
@@ -36,6 +37,7 @@
   --error-bg: #fff0f0;
   --error-text: #8c2028;
   --board-bg: #ffffff;
+  --wonder-accent: #9a7d12;
 }
 
 * {
@@ -528,6 +530,11 @@ ul.list > li:last-child {
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.04);
   overflow: hidden;
+}
+
+/* The shared Wonders area, distinguished from the players' own areas. */
+.board-area-wonders {
+  background: rgba(201, 162, 39, 0.07);
 }
 
 .board-area-name {
