@@ -27,6 +27,7 @@ $categories = [ordered] @{
     'buildings' = 'building'
     'tiles'     = 'tile'
     'leaders'   = 'leader'
+    'wonders'   = 'wonder'
 }
 
 # A map tile covers 4 x 4 squares of 94 pixels. The source images are 375 x 375,
@@ -38,6 +39,11 @@ $TILE_PIXELS = 376
 # wide, so they are scaled down to leave a little air on each side of a cell.
 $LEADER_WIDTH = 46
 
+# Wonders sit in the shared Wonders area and tidy into its 94-pixel grid. Most
+# of the source images are ~85 px, but a few are up to 117; cap the longer side
+# at 90 (keeping aspect) so none overlaps its neighbour or overhangs the board.
+$WONDER_MAX = 90
+
 # The civilisations starting tiles. The rest of tiles/ are exploration tiles.
 $civTiles = @(
     'america', 'arabia', 'Aztec', 'china', 'egypt', 'England', 'France', 'germany',
@@ -46,6 +52,40 @@ $civTiles = @(
 
 $colours = @('blue', 'green', 'purple', 'red', 'yellow', 'white')
 
+# The wonder art (Moderator/wonders) is named lower case with no spaces, no
+# leading "The" and hyphens stripped, matching `itemImage()` in the engine. The
+# proper names are written out so the palette label reads well rather than
+# "Greatlighthouse". Keys are the file base names.
+$wonderLabels = @{
+    'angkorwat'           = 'Angkor Wat'
+    'bigben'              = 'Big Ben'
+    'brandenburggate'     = 'Brandenburg Gate'
+    'chichenitza'         = 'Chichen Itza'
+    'colossus'            = 'The Colossus'
+    'cristoredentor'      = 'Cristo Redentor'
+    'greatlighthouse'     = 'The Great Lighthouse'
+    'greatwall'           = 'The Great Wall'
+    'hanginggardens'      = 'The Hanging Gardens'
+    'himejisamuraicastle' = 'Himeji Samurai Castle'
+    'internet'            = 'The Internet'
+    'kremlin'             = 'The Kremlin'
+    "leonardo'sworkshop"  = "Leonardo's Workshop"
+    'louvre'              = 'The Louvre'
+    'machupichu'          = 'Machu Pichu'
+    'notredame'           = 'Notre-Dame'
+    'oracle'              = 'The Oracle'
+    'panamacanal'         = 'Panama Canal'
+    'pentagon'            = 'The Pentagon'
+    'porcelaintower'      = 'Porcelain Tower'
+    'pyramids'            = 'The Pyramids'
+    'statueofliberty'     = 'Statue of Liberty'
+    'statueofzeus'        = 'Statue of Zeus'
+    'stonehenge'          = 'Stonehenge'
+    'sydneyoperahouse'    = 'Sydney Opera House'
+    'tajmahal'            = 'Taj Mahal'
+    'unitednations'       = 'United Nations'
+}
+
 # Pieces to leave out of the manifest even though the source art exists, keyed by
 # "<folder>/<basename>". The white army (barbarians) was dropped as unused; see
 # issue #26.
@@ -53,6 +93,11 @@ $exclude = @('figures/whitearmy')
 
 function Get-Label([string] $category, [string] $baseName) {
     $name = $baseName
+
+    if ($category -eq 'wonder') {
+        $key = $baseName.ToLower()
+        if ($wonderLabels.ContainsKey($key)) { return $wonderLabels[$key] }
+    }
 
     if ($category -eq 'leader') {
         # "japanese_red" -> "Japanese (Red)". The source names mix casing, so
@@ -121,6 +166,16 @@ foreach ($folder in $categories.Keys) {
                 # Scaled to a culture track cell, keeping the aspect of the source
                 $height = [int] [Math]::Round($image.Height * $LEADER_WIDTH / $image.Width)
                 $width = $LEADER_WIDTH
+            }
+
+            if ($category -eq 'wonder') {
+                # Keep wonders within one grid square so they tidy without overlap
+                $maxDim = [Math]::Max($image.Width, $image.Height)
+                if ($maxDim -gt $WONDER_MAX) {
+                    $scale = $WONDER_MAX / $maxDim
+                    $width = [int] [Math]::Round($image.Width * $scale)
+                    $height = [int] [Math]::Round($image.Height * $scale)
+                }
             }
 
             $assets += [ordered] @{

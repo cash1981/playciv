@@ -6,7 +6,13 @@
  * returned, and errors are values rather than `WebApplicationException`.
  */
 
-import { firstFreeBlock, tileAssetIdForNumber } from '../board.js'
+import {
+  areaSlotRegion,
+  firstFreeBlock,
+  tileAssetIdForNumber,
+  wonderAssetId,
+  wondersArea,
+} from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { Item } from '../item.js'
 import { isTradable, isUnit, revealAll, revealPublic } from '../item.js'
@@ -124,6 +130,76 @@ function placeExploredTile(state: GameState, playerId: string, tile: Item): Game
 
   const [x, y] = firstFreeBlock(state.board)
   return placeUnchecked(state, { playerId, assetId, x, y }) ?? state
+}
+
+/**
+ * Draws a wonder off the deck onto the board instead of into a hand.
+ *
+ * The old system, and this engine until now, put drawn wonders in the player's
+ * hidden hand. The owner asked for them to sit on the board instead: the wonder
+ * is taken off the deck, placed as a piece in the shared Wonders area (where it
+ * tidies into the next free slot), and named in a public log line. Wonders are
+ * public information once on the board, so nothing is added to any hand and the
+ * hand projection is unchanged.
+ *
+ * This is the low-level placement, without a turn check — the start-of-game
+ * reveal flow calls it directly, and reveal does not run on a player's turn.
+ * The manual draw route goes through {@link drawWonder}, which checks the turn
+ * first. It never reshuffles, because wonders are not shuffleable.
+ */
+export function drawWonderToBoard(
+  state: GameState,
+  playerId: string,
+  sheetName: SheetName,
+): DrawResult {
+  const found = requirePlayer(state, playerId)
+  if (!found.ok) return found
+  const player = found.value
+
+  const index = state.items.findIndex((item) => item.sheetName === sheetName)
+  const item = state.items[index]
+  if (item === undefined || item.kind !== 'wonder') {
+    return err({ kind: 'NO_MORE_ITEMS', what: SHEET_LABEL[sheetName] })
+  }
+
+  const withDeck: GameState = {
+    ...state,
+    items: [...state.items.slice(0, index), ...state.items.slice(index + 1)],
+  }
+
+  const assetId = wonderAssetId(item.name)
+  const region = areaSlotRegion(wondersArea(withDeck.board))
+  const next = placeUnchecked(withDeck, { playerId, assetId, x: region.x, y: region.y })
+  // The wonder is off the deck now; if its art is missing there is nowhere to
+  // put it, so fail rather than silently drop it and log a placement that did
+  // not happen.
+  if (next === undefined) {
+    return err({ kind: 'BOARD_ASSET_NOT_FOUND', assetId })
+  }
+
+  return ok(
+    appendPublicLog(
+      next,
+      player.username,
+      playerId,
+      `drew ${item.name} and placed it in the Wonders area`,
+    ),
+  )
+}
+
+/**
+ * A manual wonder draw from the draw menu. Like every other draw it requires
+ * the caller to have the turn; it then places the wonder on the board through
+ * {@link drawWonderToBoard} rather than into the hand. The start-of-game reveal
+ * flow does not use this — it is not on anyone's turn — and calls
+ * `drawWonderToBoard` directly.
+ */
+export function drawWonder(state: GameState, input: DrawInput): DrawResult {
+  const found = requirePlayer(state, input.playerId)
+  if (!found.ok) return found
+  const turn = requireYourTurn(found.value)
+  if (!turn.ok) return turn
+  return drawWonderToBoard(state, input.playerId, input.sheetName)
 }
 
 /**

@@ -5,6 +5,7 @@
 
 import type { PlayerStats, SheetName } from '@civ/engine'
 import {
+  ALL_WONDERS,
   chooseSocialPolicy,
   chooseTech,
   discardBarbarians,
@@ -12,6 +13,7 @@ import {
   draw,
   drawBarbarians,
   drawUnitsForBattle,
+  drawWonder,
   endBattle,
   endTurn,
   findSheetName,
@@ -84,15 +86,24 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   // Drawing
   // -------------------------------------------------------------------------
 
-  /** Java: `DrawResource.drawItem` — POST draw/{pbfId}/{sheetName}. */
+  /**
+   * Java: `DrawResource.drawItem` — POST draw/{pbfId}/{sheetName}.
+   *
+   * Wonders are the exception: instead of going into the drawing player's hand
+   * they are placed on the shared board (see `drawWonder`). The draw is still
+   * turn-gated like any other; only the destination differs.
+   */
   app.post('/api/games/:gameId/draw/:sheetName', auth, async (request, reply) => {
     const { gameId, sheetName: raw } = request.params as Params & { sheetName: string }
     const sheetName = parseSheetName(reply, raw)
     if (sheetName === undefined) return reply
 
-    return applyToGame(context, request, reply, gameId, (state) =>
-      draw(state, { playerId: currentPlayer(request).id, sheetName }),
-    )
+    return applyToGame(context, request, reply, gameId, (state) => {
+      const playerId = currentPlayer(request).id
+      return ALL_WONDERS.has(sheetName)
+        ? drawWonder(state, { playerId, sheetName })
+        : draw(state, { playerId, sheetName })
+    })
   })
 
   /** Java: `DrawResource.loot`. */

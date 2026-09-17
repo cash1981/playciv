@@ -28,11 +28,12 @@ import {
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { SheetName } from '../sheet-name.js'
+import { ALL_WONDERS } from '../sheet-name.js'
 import type { GameState, Playerhand, PlayerStats } from '../state.js'
 import { findPlayer, hasUserAccess, withPlayer } from '../state.js'
 
 import { placeUnchecked } from './board.js'
-import { draw } from './draw.js'
+import { draw, drawWonderToBoard } from './draw.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -370,6 +371,9 @@ const STARTING_UNITS: Readonly<Record<string, readonly SheetName[]>> = {
 
 const DEFAULT_STARTING_UNITS: readonly SheetName[] = ['INFANTRY', 'ARTILLERY', 'MOUNTED']
 
+/** Whether a sheet holds wonders, which go to the board rather than a hand. */
+const isWonderSheet = (sheetName: SheetName): boolean => ALL_WONDERS.has(sheetName)
+
 function drawStartingItems(
   state: GameState,
   playerId: string,
@@ -378,22 +382,36 @@ function drawStartingItems(
   const sheets = STARTING_UNITS[civName] ?? DEFAULT_STARTING_UNITS
   let next = state
   for (const sheetName of sheets) {
-    const drawn = draw(next, { playerId, sheetName })
-    if (!drawn.ok) return drawn
-    next = drawn.value
+    if (isWonderSheet(sheetName)) {
+      // Egypt's starting list includes an ancient wonder, which — like every
+      // wonder — goes onto the board rather than into the hand. Drawing it here
+      // marks the wonders as dealt, so it suppresses the bulk four-wonder draw
+      // just as Egypt's hand wonder did in Java.
+      const drawn = drawWonderToBoard(next, playerId, sheetName)
+      if (!drawn.ok) return drawn
+      next = { ...drawn.value, wondersDealt: true }
+    } else {
+      const drawn = draw(next, { playerId, sheetName })
+      if (!drawn.ok) return drawn
+      next = drawn.value
+    }
   }
   return ok(next)
 }
 
-/** Java: `drawStartingWonders` — four ancient wonders. */
+/**
+ * Java: `drawStartingWonders` — four ancient wonders. They no longer go into
+ * the player's hand: each is placed in the shared Wonders area and named in a
+ * public log line. See {@link drawWonderToBoard}.
+ */
 function drawStartingWonders(state: GameState, playerId: string): ActionResult {
   let next = appendInfoLog(state, 'Drawing 4 ancient wonders')
   for (let i = 0; i < 4; i++) {
-    const drawn = draw(next, { playerId, sheetName: 'ANCIENT_WONDERS' })
+    const drawn = drawWonderToBoard(next, playerId, 'ANCIENT_WONDERS')
     if (!drawn.ok) return drawn
     next = drawn.value
   }
-  return ok(next)
+  return ok({ ...next, wondersDealt: true })
 }
 
 /** Java: `deleteTheOtherCivs` — the civ cards the player did not pick are discarded. */
@@ -427,12 +445,13 @@ function discardTheOtherCivs(state: GameState, playerId: string, chosen: CivItem
  * civilization, and no wonders have been dealt or discarded yet.
  */
 function shouldDrawWonders(state: GameState): boolean {
+  // `wondersDealt` — not a wonder piece on the board — is the authority: a
+  // moderator may place wonder art from the palette, and that must not cancel
+  // the deal. Egypt's starting wonder sets the flag too, so its presence still
+  // suppresses the bulk draw, matching Java where Egypt's hand wonder did.
+  if (state.wondersDealt) return false
   if (state.numOfPlayers !== state.players.length) return false
-  if (!state.players.every((player) => player.civilization !== null)) return false
-
-  const isWonder = (item: Item): boolean => item.kind === 'wonder'
-  if (state.discardedItems.some(isWonder)) return false
-  return !state.players.some((player) => player.items.some(isWonder))
+  return state.players.every((player) => player.civilization !== null)
 }
 
 // ---------------------------------------------------------------------------

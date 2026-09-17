@@ -17,6 +17,7 @@
 import type { Board, BoardArea, BoardChange, BoardPiece, Rotation } from '../board.js'
 import {
   areaAt,
+  boardAreas,
   clampToBoard,
   cultureSlot,
   findBoardAsset,
@@ -26,7 +27,6 @@ import {
   nearestBlockOrigin,
   nextFreeSlot,
   nextRotation,
-  playerAreas,
   revertChange,
 } from '../board.js'
 import type { EngineError } from '../errors.js'
@@ -46,9 +46,14 @@ function requireAccess(state: GameState, playerId: string): EngineError | undefi
   return hasUserAccess(state, playerId) ? undefined : { kind: 'NO_ACCESS', playerId }
 }
 
-/** The player areas for this game, derived from the current player list. */
+/**
+ * The areas for this game: one per player plus the shared Wonders area, derived
+ * from the current player list. A piece dropped in any of them tidies into its
+ * grid, so wonders collect in the Wonders area the same way huts collect in a
+ * player's area.
+ */
 export function areasFor(state: GameState): readonly BoardArea[] {
-  return playerAreas(state.board, state.players)
+  return boardAreas(state.board, state.players)
 }
 
 interface Recorded {
