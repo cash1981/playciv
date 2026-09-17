@@ -401,6 +401,13 @@ ul.list > li:last-child {
   outline: 1px solid var(--line);
 }
 
+.board-fog-tile {
+  position: absolute;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+}
+
 .board-area {
   position: absolute;
   border: 2px solid var(--line);

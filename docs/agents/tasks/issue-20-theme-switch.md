@@ -36,6 +36,8 @@ interface without changing the existing default.
   sufficient for this UI-only request.
 - Reworking game artwork, board assets or card images beyond ensuring the
   surrounding interface remains readable.
+- Showing the existing `tileback.png` artwork over empty map slots as fog of
+  war; the board remains a manual placement surface.
 
 ## Reference
 
@@ -58,6 +60,7 @@ the same preference.
 - `packages/web/src/styles.css`
 - `packages/web/src/main.tsx`
 - `packages/web/index.html`
+- `packages/web/src/views/BoardView.tsx`
 - `docs/agents/tasks/issue-20-theme-switch.md`
 - `docs/agents/task-board.md`
 
