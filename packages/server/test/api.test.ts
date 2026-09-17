@@ -899,3 +899,83 @@ describe('board', () => {
   })
 
 })
+
+describe('player stats (#43)', () => {
+  interface StatView {
+    you: { playerId: string; stats: { coins: number; trade: number } }
+    opponents: { playerId: string; stats: { coins: number } }[]
+  }
+
+  async function ids(gameId: string, token: string): Promise<{ me: string; other: string }> {
+    const response = await app.inject({ method: 'GET', url: `/api/games/${gameId}`, headers: bearer(token) })
+    const view = response.json() as StatView
+    return { me: view.you.playerId, other: view.opponents[0]!.playerId }
+  }
+
+  it('lets a member set another player and their own stat', async () => {
+    const { gameId, starter } = await startedGame('Stats')
+    const { me, other } = await ids(gameId, starter)
+
+    const setOther = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/stat`,
+      headers: bearer(starter),
+      payload: { stat: 'coins', value: 5 },
+    })
+    expect(setOther.statusCode).toBe(200)
+    const afterOther = setOther.json() as StatView
+    expect(afterOther.opponents.find((o) => o.playerId === other)?.stats.coins).toBe(5)
+
+    const setMine = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${me}/stat`,
+      headers: bearer(starter),
+      payload: { stat: 'trade', value: 3 },
+    })
+    expect(setMine.statusCode).toBe(200)
+    expect((setMine.json() as StatView).you.stats.trade).toBe(3)
+  })
+
+  it('refuses a non-member', async () => {
+    const { gameId, starter } = await startedGame('StatsGuard')
+    const { other } = await ids(gameId, starter)
+    const outsider = await register('stats-outsider')
+
+    const denied = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/stat`,
+      headers: bearer(outsider),
+      payload: { stat: 'coins', value: 1 },
+    })
+    expect(denied.statusCode).toBe(403)
+    expect((denied.json() as { error: string }).error).toBe('NO_ACCESS')
+  })
+
+  it('rejects an unknown stat', async () => {
+    const { gameId, starter } = await startedGame('StatsUnknown')
+    const { other } = await ids(gameId, starter)
+
+    const rejected = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/stat`,
+      headers: bearer(starter),
+      payload: { stat: 'gold', value: 1 },
+    })
+    expect(rejected.statusCode).toBe(400)
+    expect((rejected.json() as { error: string }).error).toBe('UNKNOWN_STAT')
+  })
+
+  it('rejects a negative value', async () => {
+    const { gameId, starter } = await startedGame('StatsNegative')
+    const { other } = await ids(gameId, starter)
+
+    const rejected = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/stat`,
+      headers: bearer(starter),
+      payload: { stat: 'coins', value: -3 },
+    })
+    expect(rejected.statusCode).toBe(400)
+    expect((rejected.json() as { error: string }).error).toBe('INVALID_STAT_VALUE')
+  })
+})

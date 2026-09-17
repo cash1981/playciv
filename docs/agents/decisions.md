@@ -430,3 +430,34 @@ new one.
 **Consequences.** Nothing can clear a board any more. The retained clear cases
 are compatibility-only and no longer exercised by a test, since nothing can
 produce the entry to feed them.
+
+---
+
+## 2026-09-17 — Player status board replaces the old asset spreadsheet (issue #43)
+
+**Decision.** Each game has an in-app player status board (a "Status" panel in
+the game view) instead of the old embedded Google Sheet. Most columns are
+derived from the game state; four stats — coins, trade, culture, victory points
+— are editable, and **any member of the game may edit any player's stats**. Each
+edit is written to the public game log. A new pure engine reducer `setPlayerStat`
+owns the change; the server route `POST /api/games/:id/players/:targetId/stat`
+authorizes membership (via the reducer) and validates the stat and value.
+
+**Why.** The old app tracked this in a manually maintained shared spreadsheet
+because play is asynchronous. The rewrite already models most of it (techs,
+policies, hand, units, board pieces, culture-track marker), so we auto-derive
+what we can and keep a few shared editable numbers for the rest, on-platform.
+The owner asked for the hybrid approach and for edits to be open to all players
+(shared bookkeeping, like the old sheet).
+
+**Consequences.**
+- `Playerhand` gains `stats: PlayerStats` (coins/trade/culture/victoryPoints),
+  defaulted to zero and back-filled by `migrate.ts` for older games. Stats are
+  public in every projection.
+- Read-only derived fields exposed per player: `cultureMarkerLevel` (from the
+  culture-track marker), `cityCount`, `buildingCount`.
+- **City ownership is inferred from the piece colour** (`cities/<colour>...`).
+  **Buildings have no per-colour artwork**, so `buildingCountOf` falls back to
+  `piece.placedBy`; since anyone may move any piece, a building's count can be
+  wrong if it changes hands after placement. Acceptable for a bookkeeping aid,
+  and the editable stats cover anything the derived counts get wrong.

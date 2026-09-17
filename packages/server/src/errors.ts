@@ -27,6 +27,9 @@ export function statusFor(error: EngineError): number {
       return 409
     // The client asked for a piece that is not in the manifest
     case 'BOARD_ASSET_NOT_FOUND':
+    // A player-stat update named an unknown stat or an invalid value
+    case 'UNKNOWN_STAT':
+    case 'INVALID_STAT_VALUE':
       return 400
     case 'NOT_YOUR_TURN':
     case 'NO_ACCESS':

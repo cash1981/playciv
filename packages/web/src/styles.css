@@ -992,6 +992,21 @@ ul.history > li {
   letter-spacing: 0.03em;
 }
 
+.status-table td {
+  white-space: nowrap;
+}
+
+/* The status board has many columns; let it scroll sideways on narrow screens. */
+.scroll-x {
+  overflow-x: auto;
+}
+
+/* Inline editable stat fields in the status board. */
+.stat-input {
+  width: 4.5rem;
+  padding: 0.15rem 0.35rem;
+}
+
 .sort-indicator {
   font-size: 0.7rem;
   color: var(--accent);

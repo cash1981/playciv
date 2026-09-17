@@ -14,6 +14,7 @@ import type {
   BoardPiece,
   HighscoreResult,
   Item,
+  PlayerStats,
   PlayerTurn,
   PlayerView,
   SheetName,
@@ -30,6 +31,7 @@ export type {
   BoardPiece,
   HighscoreResult,
   Item,
+  PlayerStats,
   PlayerTurn,
   PlayerView,
   SheetName,
@@ -263,6 +265,14 @@ export const api = {
   lockTurn: (gameId: string, turnNumber: number, locked: boolean) =>
     post<PlayerView>(`/api/games/${gameId}/turns/lock`, { turnNumber, locked }),
   saveNote: (gameId: string, note: string) => post<PlayerView>(`/api/games/${gameId}/note`, { note }),
+  // Shared bookkeeping: any member may set any player's stat (issue #43).
+  setPlayerStat: (
+    gameId: string,
+    targetPlayerId: string,
+    stat: keyof PlayerStats,
+    value: number,
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/players/${targetPlayerId}/stat`, { stat, value }),
 
   initiateUndo: (gameId: string, logId: string) =>
     post<PlayerView>(`/api/games/${gameId}/undo/${logId}`),

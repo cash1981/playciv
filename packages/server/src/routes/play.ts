@@ -3,7 +3,7 @@
  * drawing, battle, techs, social policy, revealing, trading, turns and undo.
  */
 
-import type { SheetName } from '@civ/engine'
+import type { PlayerStats, SheetName } from '@civ/engine'
 import {
   chooseSocialPolicy,
   chooseTech,
@@ -29,6 +29,7 @@ import {
   revealTech,
   revealedTechsForAllPlayers,
   saveNote,
+  setPlayerStat,
   takeTurn,
   tradeToPlayer,
   updateTurn,
@@ -408,6 +409,33 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
     const note = optionalString(asRecord(request.body), 'note') ?? ''
     return applyToGame(context, request, reply, gameId, (state) =>
       saveNote(state, currentPlayer(request).id, note),
+    )
+  })
+
+  /**
+   * Update one of a player's status-board stats (coins, trade, culture,
+   * victory points). Any member of the game may edit any player's stats — this
+   * is shared bookkeeping, replacing the old shared asset spreadsheet. The
+   * engine authorizes membership and validates the stat and value.
+   */
+  app.post('/api/games/:gameId/players/:targetPlayerId/stat', auth, async (request, reply) => {
+    const { gameId, targetPlayerId } = request.params as Params & { targetPlayerId: string }
+    const body = asRecord(request.body)
+    const stat = requireString(body, 'stat')
+    if (stat === undefined) {
+      return sendError(reply, 400, 'BAD_REQUEST', 'stat is required')
+    }
+    const value = optionalNumber(body, 'value')
+    if (value === undefined) {
+      return sendError(reply, 400, 'BAD_REQUEST', 'value must be a number')
+    }
+    return applyToGame(context, request, reply, gameId, (state) =>
+      setPlayerStat(state, {
+        editorPlayerId: currentPlayer(request).id,
+        targetPlayerId,
+        stat: stat as keyof PlayerStats,
+        value,
+      }),
     )
   })
 

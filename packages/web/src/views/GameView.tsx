@@ -194,7 +194,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         <BattlePanel gameId={gameId} busy={busy} run={run} view={view} />
         <TechPanel gameId={gameId} busy={busy} run={run} view={view} reloadCount={reloadCount} />
         <TurnPanel gameId={gameId} busy={busy} run={run} reloadCount={reloadCount} />
-        <StatusPanel view={view} />
+        <StatusPanel gameId={gameId} view={view} busy={busy} run={run} />
         <OpponentPanel view={view} />
         <LogPanel
           gameId={gameId}
@@ -210,7 +210,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
 
 // ---------------------------------------------------------------------------
 
-type Run = (action: () => Promise<PlayerView | unknown>) => Promise<void>
+export type Run = (action: () => Promise<PlayerView | unknown>) => Promise<void>
 
 interface PanelProps {
   readonly gameId: string
