@@ -12,7 +12,22 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing. See the queue below._
+### issue-37-password-reset
+
+- **Owner:** Codex (GPT-5)
+- **Branch:** `feat/issue-37-password-reset`
+- **Brief:** `docs/agents/tasks/issue-37-password-reset.md`
+- **Status:** blocked
+- **Claimed paths:**
+  - `packages/server/src/routes/auth.ts`
+  - `packages/server/src/store/`
+  - `packages/server/test/`
+  - `packages/web/src/App.tsx`
+  - `packages/web/src/views/PasswordResetView.tsx`
+  - `packages/web/src/lib/api.ts`
+  - `docs/agents/tasks/issue-37-password-reset.md`
+  - `docs/agents/task-board.md`
+- **Notes:** Blocked by issue #30 mailer/provider decision; no insecure workaround.
 
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
