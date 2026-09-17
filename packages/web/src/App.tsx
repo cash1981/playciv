@@ -16,17 +16,20 @@ import { LobbyView } from './views/LobbyView.js'
 import { LoginView } from './views/LoginView.js'
 import { AdminView } from './views/AdminView.js'
 import { Navigation } from './views/Navigation.js'
+import { FaqView } from './views/FaqView.js'
 import { applyTheme, saveTheme, storedTheme, type Theme } from './theme.js'
 
 type Screen =
   | { readonly name: 'lobby' }
   | { readonly name: 'admin' }
   | { readonly name: 'highscore' }
+  | { readonly name: 'faq' }
   | { readonly name: 'game'; readonly gameId: string }
 
 function screenFromPath(pathname: string): Screen {
   if (pathname === '/admin' || pathname === '/admin/') return { name: 'admin' }
   if (/^\/highscore\/?$/.test(pathname)) return { name: 'highscore' }
+  if (/^\/faq\/?$/.test(pathname)) return { name: 'faq' }
   const match = /^\/game\/([^/]+)\/?$/.exec(pathname)
   if (match === null) return { name: 'lobby' }
 
@@ -103,6 +106,9 @@ export function App(): React.JSX.Element {
       openAdmin()
     } else if (path === '/highscore') {
       openHighscore()
+    } else if (path === '/faq') {
+      window.history.pushState(null, '', '/faq')
+      setScreen({ name: 'faq' })
     } else {
       window.history.pushState(null, '', path)
       setScreen({ name: 'lobby' })
@@ -117,6 +123,16 @@ export function App(): React.JSX.Element {
     return (
       <div className="app">
         <p className="muted">Loading …</p>
+      </div>
+    )
+  }
+
+  // The FAQ is public: it renders whether or not anyone is signed in.
+  if (screen.name === 'faq') {
+    return (
+      <div className="app">
+        <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
+        <FaqView />
       </div>
     )
   }
