@@ -13,7 +13,7 @@ const helpLinks = [
 
 interface NavigationProps {
   readonly player: PlayerDto | null
-  readonly screen: 'lobby' | 'admin' | 'highscore' | 'game'
+  readonly screen: 'lobby' | 'admin' | 'highscore' | 'faq' | 'game'
   readonly theme: Theme
   readonly onNavigate: (path: string) => void
   readonly onSignOut: () => void
