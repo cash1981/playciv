@@ -16,6 +16,7 @@
   --bad: #e2686a;
   --error-bg: #3a1f21;
   --error-text: #ffc9ca;
+  --board-bg: #0f1115;
   --radius: 8px;
 }
 
@@ -32,6 +33,7 @@
   --bad: #b33b42;
   --error-bg: #fff0f0;
   --error-text: #8c2028;
+  --board-bg: #ffffff;
 }
 
 * {
@@ -340,7 +342,7 @@ ul.list > li:last-child {
      page — without a height cap, `overflow: auto` never triggers vertically. */
   max-height: 80vh;
   overflow: auto;
-  background: #0f1115;
+  background: var(--board-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 0.5rem;

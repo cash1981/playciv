@@ -23,6 +23,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/web/src/theme.ts`
   - `packages/web/src/styles.css`
   - `packages/web/src/main.tsx`
+  - `packages/web/index.html`
   - `docs/agents/tasks/issue-20-theme-switch.md`
   - `docs/agents/task-board.md`
 - **Notes:** Adding a persisted light-theme option while keeping dark as the default.

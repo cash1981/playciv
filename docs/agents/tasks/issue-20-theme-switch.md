@@ -57,6 +57,7 @@ the same preference.
 - `packages/web/src/theme.ts`
 - `packages/web/src/styles.css`
 - `packages/web/src/main.tsx`
+- `packages/web/index.html`
 - `docs/agents/tasks/issue-20-theme-switch.md`
 - `docs/agents/task-board.md`
 
