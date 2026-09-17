@@ -43,6 +43,18 @@ export interface GameSummary {
   readonly youAreIn: boolean
 }
 
+/** The public lobby summary. It deliberately has no viewer-specific fields. */
+export interface PublicGameSummary {
+  readonly id: string
+  readonly name: string
+  readonly gameType: string
+  readonly numOfPlayers: number
+  readonly active: boolean
+  readonly winner: string | null
+  readonly players: readonly { readonly username: string; readonly color: string | null }[]
+  readonly nameOfUsersTurn: string
+}
+
 function toSummary(game: GameState, viewerId: string): GameSummary {
   return {
     id: game.id,
@@ -57,6 +69,22 @@ function toSummary(game: GameState, viewerId: string): GameSummary {
     })),
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
     youAreIn: game.players.some((player) => player.playerId === viewerId),
+  }
+}
+
+export function toPublicSummary(game: GameState): PublicGameSummary {
+  return {
+    id: game.id,
+    name: game.name,
+    gameType: game.gameType,
+    numOfPlayers: game.numOfPlayers,
+    active: game.active,
+    winner: game.winner,
+    players: game.players.map((player) => ({
+      username: player.username,
+      color: player.color,
+    })),
+    nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
   }
 }
 
@@ -292,11 +320,7 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     return reply.code(201).send(entry)
   })
 
-  /** Java: `/publicchat` — the lobby, with no game attached. */
-  app.get('/api/chat', auth, async (_request, reply) =>
-    reply.send(await context.repo.chatFor(null)),
-  )
-
+  /** Java: `/publicchat` — posting remains authenticated. */
   app.post('/api/chat', auth, async (request, reply) => {
     const message = requireString(asRecord(request.body), 'message')
     if (message === undefined) {

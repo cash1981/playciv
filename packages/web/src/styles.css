@@ -256,6 +256,14 @@ label > textarea {
   align-items: start;
 }
 
+.landing-intro {
+  padding: 1.5rem 0 0.5rem;
+}
+
+.landing-intro p {
+  margin: 0 0 0.8rem;
+}
+
 /*
  * The game panels stack one per line, each using the full width. With the
  * panels collapsible, a multi-column grid made an expanded section (e.g. Turn

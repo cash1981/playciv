@@ -69,6 +69,17 @@ export interface GameSummary {
   readonly youAreIn: boolean
 }
 
+export interface PublicGameSummary {
+  readonly id: string
+  readonly name: string
+  readonly gameType: string
+  readonly numOfPlayers: number
+  readonly active: boolean
+  readonly winner: string | null
+  readonly players: readonly { readonly username: string; readonly color: string | null }[]
+  readonly nameOfUsersTurn: string
+}
+
 export interface LogEntryDto {
   readonly id: string
   readonly username: string
@@ -188,6 +199,9 @@ export const api = {
   deleteAdminUser: (userId: string) => del<void>(`/api/admin/users/${userId}`),
   /** Public: the server route needs no bearer token. */
   highscore: () => get<HighscoreResult>('/api/highscore'),
+  publicGames: () => get<PublicGameSummary[]>('/api/public/games'),
+  lobbyChat: () => get<ChatMessageDto[]>('/api/chat'),
+  sendLobbyChat: (message: string) => post<ChatMessageDto>('/api/chat', { message }),
 
   games: () => get<GameSummary[]>('/api/games'),
   createGame: (name: string, numOfPlayers: number) =>
