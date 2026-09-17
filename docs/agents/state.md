@@ -95,6 +95,8 @@ _Last updated: 2026-09-17_
   resources, with links to FAQ, About and Highscore.
 - **Issue #34.** Added a public FAQ with current virtual-board and join-flow
   guidance, replacing obsolete Google Slides instructions.
+- **Issue #35.** Added the public About page with license, FFG disclaimer,
+   repository links and contact information.
 
 ## In progress
 

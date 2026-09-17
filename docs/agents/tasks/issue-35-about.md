@@ -3,7 +3,7 @@
 - **Slug:** `issue-35-about`
 - **Branch:** `feat/issue-35-about`
 - **Owner:** Codex (GPT-5)
-- **Status:** in progress
+- **Status:** done — review gate approved; ready for human merge
 
 ## Goal
 
@@ -50,11 +50,11 @@ all links ordinary, keyboard accessible and safe for external navigation.
 
 ## Acceptance criteria
 
-- [ ] `/about` renders for signed-out and signed-in visitors.
-- [ ] License, trademark disclaimer, repository links and contact are present.
-- [ ] Existing game and authentication routes continue to work.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Verified in the browser, including external-link behavior.
+- [x] `/about` renders for signed-out and signed-in visitors.
+- [x] License, trademark disclaimer, repository links and contact are present.
+- [x] Existing game and authentication routes continue to work.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Verified in the browser, including external-link behavior.
 
 ## Open questions
 
