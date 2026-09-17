@@ -139,6 +139,10 @@ describe('the manifest', () => {
       'buildings/cathedral': 5,
       'buildings/barracks': 5,
       'buildings/academy': 5,
+      'buildings/granary': 6,
+      'buildings/aqueduct': 6,
+      'buildings/library': 6,
+      'buildings/university': 6,
       'buildings/workshop': 6,
       'buildings/harbor': 10,
       'buildings/tradingpost': 6,
@@ -193,7 +197,7 @@ describe('placePiece', () => {
     expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'nobody' })
   })
 
-  it('shares six pieces between an upgrade family', () => {
+  it('shares five pieces between an upgrade family', () => {
     let state = firstCivGame()
     for (let index = 0; index < 3; index++) state = place(state, 'buildings/barracks', 0, 0)
     for (let index = 0; index < 2; index++) state = place(state, 'buildings/academy', 0, 0)
@@ -209,7 +213,7 @@ describe('placePiece', () => {
     }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'buildings/barracks', limit: 5 })
   })
 
-  it('gives non-upgradeable buildings their own supply of six', () => {
+  it('gives Harbor its physical supply of ten', () => {
     let state = firstCivGame()
     for (let index = 0; index < 10; index++) state = place(state, 'buildings/harbor', 0, 0)
     expect(unwrapErr(placePiece(state, {

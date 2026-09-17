@@ -41,10 +41,12 @@ Great Person availability.
 
 ## Reference
 
-Issue #49 states that upgraded building families share a total of six pieces.
-The listed families are Barracks/Academy, Granary/Aqueduct, Library/University,
-Market/Bank, and Temple/Cathedral. It requests resource limits by player count
-and three Great Persons per type.
+The original issue discussion described upgraded building families as sharing
+six pieces. The later physical reference image supersedes that value with the
+per-family counts recorded below. The families are Barracks/Academy,
+Granary/Aqueduct, Library/University, Market/Bank, and Temple/Cathedral. The
+issue also requests resource limits by player count and three Great Persons per
+type.
 
 The old backend and item model do not enforce these board-piece limits. The old
 client used a Google Sheet for assets; this finite-supply behavior is therefore
