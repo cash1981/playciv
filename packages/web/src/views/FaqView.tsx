@@ -19,8 +19,8 @@ export function FaqView(): React.JSX.Element {
 
         <CollapsiblePanel id="faq-join-game" title="How do I join a game?" defaultOpen={false}>
           <p className="faq-answer">
-            Sign in, find the active game in the list and select <strong>Join</strong>. Once you
-            have joined, select <strong>Open</strong> to enter the game.
+            Sign in, find the active game in the list and select <strong>Join</strong>. The game
+            opens automatically after you join.
           </p>
         </CollapsiblePanel>
 
