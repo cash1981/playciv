@@ -95,6 +95,8 @@ _Last updated: 2026-09-17_
   resources, with links to FAQ, About and Highscore.
 - **Issue #34.** Added a public FAQ with current virtual-board and join-flow
   guidance, replacing obsolete Google Slides instructions.
+- **Issue #38.** Added the anonymous landing page with public games, highscore
+   and lobby chat, including public-data privacy regression coverage.
 
 ## In progress
 

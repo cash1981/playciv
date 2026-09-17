@@ -1,9 +1,9 @@
 # Public landing page
 
 - **Slug:** `public-landing`
-- **Branch:** `feat/public-landing`
+- **Branch:** `feat/issue-38-public-landing`
 - **Owner:** Codex (GPT-5)
-- **Status:** in progress
+- **Status:** done — review gate approved; ready for human merge
 
 ## Goal
 
@@ -94,19 +94,19 @@ in. Reuse the existing chat component in read-only mode.
 
 ## Acceptance criteria
 
-- [ ] The landing page loads with no token and shows games, highscore and chat.
-- [ ] Highscore matches Java: only finished games with a winner; `percentWin`
+- [x] The landing page loads with no token and shows games, highscore and chat.
+- [x] Highscore matches Java: only finished games with a winner; `percentWin`
       formatted the same way, including `"0 %"`; ties broken by UTF-16 username
       order.
-- [ ] Both breakdowns are present: by player and by civilization, each split by
+- [x] Both breakdowns are present: by player and by civilization, each split by
       player count.
-- [ ] A signed-out visitor sees no button that would fail, and no private data
+- [x] A signed-out visitor sees no button that would fail, and no private data
       anywhere in the payloads.
-- [ ] A test builds finished games by hand and pins the computed table.
-- [ ] A server test calls the public endpoints **with no Authorization header**
+- [x] A test builds finished games by hand and pins the computed table.
+- [x] A server test calls the public endpoints **with no Authorization header**
       and asserts 200, then asserts no hand, private log or unrevealed item
       appears in the body.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 
 ## Open questions
 
