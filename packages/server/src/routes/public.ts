@@ -51,7 +51,7 @@ export function registerPublicRoutes(app: FastifyInstance, context: AppContext):
       messages
         .filter((message) => Date.parse(message.createdAt) >= cutoff)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-        .slice(-50),
+        .slice(0, 50),
     )
   })
 }

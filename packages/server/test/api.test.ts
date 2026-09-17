@@ -149,8 +149,8 @@ describe('public landing endpoints', () => {
     expect(response.statusCode).toBe(200)
     const messages = response.json() as { message: string }[]
     expect(messages).toHaveLength(50)
-    expect(messages[0]?.message).toBe('recent 1')
-    expect(messages.at(-1)?.message).toBe('recent 50')
+    expect(messages[0]?.message).toBe('recent 0')
+    expect(messages.at(-1)?.message).toBe('recent 49')
     expect(response.body).not.toContain('too old')
   })
 })
