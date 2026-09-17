@@ -332,3 +332,21 @@ access fields, and promotes that account without touching its password.
 username-shaped escape hatch because engine paths were not part of this task's
 claim; the server authorizes from the persisted role and supplies that legacy
 compatibility input only after the role check.
+
+---
+
+## 2026-09-17 — Two-player games use the full 16 × 16 board (reverses the 8 × 8 policy)
+
+**Decision.** Every game, two players included, uses the full 16 × 16 board
+labelled A–P and 1–16. This reverses the 2026-09-16 decision above that gave
+two-player games an 8 × 8 board.
+
+**Why.** The human product owner asked for it: a two-player game should have the
+same full-size map as a normal game, with coordinates running to P16. As the
+superseded entry records, board size here is a product choice rather than a Java
+port — Java stored only a Google Presentation link, no board geometry — so this
+is the owner's call to make, and no Java reference is contradicted.
+
+**Consequences.** `createGame` no longer special-cases `numOfPlayers === 2`; it
+always calls `createBoard()` with the 16 × 16 default. Board geometry and every
+projection already read the stored dimensions, so nothing else changed.

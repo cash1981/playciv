@@ -61,8 +61,9 @@ _Last updated: 2026-09-16_
   refresh, and synchronizes browser back navigation.
 - **Issue #16.** Players can remove their own social policies; the action is
   logged and exposed through the UI/API.
-- **Issue #17.** Two-player games use an 8 × 8 board labelled A–H and 1–8;
-  three- to five-player games retain the 16 × 16 board.
+- **Board size.** Every game uses the full 16 × 16 board (A–P, 1–16), two
+  players included. (Issue #17's temporary 8 × 8 two-player board was reverted
+  at the product owner's request; see `decisions.md`.)
 - **Delete game.** Game creators and enabled admins can permanently delete
   active or ended games; other players are denied.
 - **Typecheck build order.** Engine declarations are rebuilt automatically

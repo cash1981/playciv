@@ -78,8 +78,8 @@ describe('player areas', () => {
 
     const areas = (view.json() as { boardAreas: { username: string; y: number }[] }).boardAreas
     expect(areas).toHaveLength(2)
-    // The two-player map is 8 squares of 94, so the band starts below 752
-    expect(areas.every((area) => area.y > 752)).toBe(true)
+    // The map is 16 squares of 94, so the band starts below the map at 1504
+    expect(areas.every((area) => area.y > 1504)).toBe(true)
   })
 
   it('a piece dropped in an area tidies into a slot', async () => {
