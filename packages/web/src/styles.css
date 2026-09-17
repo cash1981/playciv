@@ -219,9 +219,10 @@ label > textarea {
   position: absolute;
   z-index: 10;
   top: calc(100% + 0.35rem);
-  left: 0;
+  right: 0;
   display: grid;
-  min-width: 16rem;
+  width: min(24rem, calc(100vw - 2rem));
+  min-width: 0;
   padding: 0.35rem;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -828,9 +829,12 @@ ul.history > li {
 
 @media (max-width: 900px) {
   .site-navigation {
-    order: 3;
     flex-basis: 100%;
     justify-content: space-between;
+  }
+
+  .topbar .spacer {
+    display: none;
   }
 
   .board-layout {
