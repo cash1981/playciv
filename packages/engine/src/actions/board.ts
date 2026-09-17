@@ -26,7 +26,6 @@ import {
   nearestBlockOrigin,
   nextFreeSlot,
   nextRotation,
-  playerAreas,
   remainingBoardAssetCount,
   revertChange,
 } from '../board.js'
