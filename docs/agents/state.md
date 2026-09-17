@@ -93,6 +93,8 @@ _Last updated: 2026-09-17_
   so a regeneration keeps it out.
 - **Issue #33.** Added the responsive navigation menu and bundled rule/help
   resources, with links to FAQ, About and Highscore.
+- **Issue #34.** Added a public FAQ with current virtual-board and join-flow
+  guidance, replacing obsolete Google Slides instructions.
 
 ## In progress
 

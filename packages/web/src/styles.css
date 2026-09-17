@@ -392,6 +392,30 @@ ul.list > li:last-child {
   margin: 4rem auto;
 }
 
+/* --- FAQ ------------------------------------------------------------------ */
+
+.faq-page {
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+.faq-intro {
+  margin: 0 0 1rem;
+}
+
+.faq-list {
+  gap: 0.6rem;
+}
+
+.faq-answer {
+  max-width: 45rem;
+  margin: 0.8rem 0 0;
+}
+
+.faq-answer + .faq-answer {
+  margin-top: 0.7rem;
+}
+
 /* --- Board ---------------------------------------------------------------- */
 
 .board-panel {
