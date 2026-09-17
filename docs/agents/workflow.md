@@ -47,27 +47,24 @@ If a live claim already lists a path you need:
 
 Claims are by path, not by feature, because that is what actually collides.
 
-## 2. Branch
+## 2. Branch and worktree
 
-Never commit on `main`. One branch per feature:
+Never commit on `main` or in the shared checkout. Every agent must use a
+dedicated git worktree so simultaneous agents and the human cannot overwrite
+each other's working files. One branch per feature:
 
 ```bash
-git checkout main
-git pull
-git checkout -b feat/<slug>
+git fetch origin --prune
+git worktree add ../civ-<slug> -b feat/<slug> origin/main
+cd ../civ-<slug>
 ```
 
 Prefixes: `feat/` for features, `fix/` for defects, `chore/` for tooling and
 docs, `refactor/` for changes with no behaviour difference.
 
-For genuinely simultaneous work, use a git worktree so two branches can be
-checked out at once:
-
-```bash
-git worktree add ../civ-<slug> feat/<slug>
-```
-
-Claude's Agent tool can do this itself with `isolation: "worktree"`.
+Claude's Agent tool must use `isolation: "worktree"`; Codex agents must create
+and work inside an equivalent git worktree. Before merging, fetch `origin` and
+rebase the feature branch onto the current `origin/main` in its worktree.
 
 ## 3. Code
 
