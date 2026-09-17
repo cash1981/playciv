@@ -11,7 +11,6 @@
 import {
   BOARD_ASSETS,
   bringToFront,
-  clearBoard,
   movePiece,
   placePiece,
   removePiece,
@@ -121,13 +120,6 @@ export function registerBoardRoutes(app: FastifyInstance, context: AppContext): 
     const { gameId, pieceId } = request.params as Params & { pieceId: string }
     return applyToGame(context, request, reply, gameId, (state) =>
       removePiece(state, { playerId: currentPlayer(request).id, pieceId, at: now() }),
-    )
-  })
-
-  app.post('/api/games/:gameId/board/clear', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    return applyToGame(context, request, reply, gameId, (state) =>
-      clearBoard(state, { playerId: currentPlayer(request).id, at: now() }),
     )
   })
 

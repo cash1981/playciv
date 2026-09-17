@@ -9,7 +9,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   bringToFront,
-  clearBoard,
   movePiece,
   placePiece,
   removePiece,
@@ -22,6 +21,8 @@ import {
   DEFAULT_AREA_ROWS,
   DEFAULT_COLUMNS,
   DEFAULT_ROWS,
+  CULTURE_TRACK,
+  CULTURE_TRACK_SCALE,
   SQUARE_SIZE,
   areaAt,
   areaBandTop,
@@ -69,9 +70,13 @@ describe('geometry', () => {
   it('the culture track sits above the map, a gap apart', () => {
     const board = createBoard()
     // The track is drawn the full width of the map, so its height follows from
-    // its own aspect: 215 / 3349 of 1504
-    expect(cultureTrackHeight(board)).toBe(97)
-    expect(mapTop(board)).toBe(97 + SQUARE_SIZE)
+    // its own aspect (215 / 3349 of 1504), stretched taller by CULTURE_TRACK_SCALE
+    // so the band reads well (issue #22).
+    const expected = Math.round(
+      (boardWidth(board) * CULTURE_TRACK.height * CULTURE_TRACK_SCALE) / CULTURE_TRACK.width,
+    )
+    expect(cultureTrackHeight(board)).toBe(expected)
+    expect(mapTop(board)).toBe(expected + SQUARE_SIZE)
   })
 
   it('the surface adds a gap and the player-area band below the map', () => {
@@ -273,13 +278,6 @@ describe('removing', () => {
     expect(state.board.pieces).toHaveLength(0)
   })
 
-  it('clearBoard empties everything', () => {
-    let state = firstCivGame()
-    for (let i = 0; i < 5; i++) state = place(state, 'markers/coin', i * 100, 100)
-
-    state = unwrap(clearBoard(state, { playerId: CASH1981 }))
-    expect(state.board.pieces).toHaveLength(0)
-  })
 })
 
 describe('squareOf', () => {

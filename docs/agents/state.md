@@ -35,7 +35,9 @@ _Last updated: 2026-09-17_
 - **Everything in English.**
 - **Culture track.** A band above the map, 27 spaces in four sections, measured
   off the artwork. Leader markers snap to a space and step aside rather than
-  cover each other. Choosing a civilization places that leader on Start.
+  cover each other. Choosing a civilization places that leader on Start. The
+  band is drawn `CULTURE_TRACK_SCALE` (1.7×) taller than its bare aspect so it
+  reads well at any zoom (issue #22).
 - **Card artwork.** 346 of 347 items have a picture; only Space Flight does
   not, because it is added in code rather than read from the spreadsheet. The
   hand renders as cards.
@@ -55,8 +57,11 @@ _Last updated: 2026-09-17_
   is proven load-bearing.
 - **Issue #13.** Hidden technologies retain their yellow border without the
   cropped "only you" badge in the tech pyramid.
-- **Issue #14.** The destructive "Clear board" control is removed from the
-  board UI; undo, replay, and backend compatibility remain.
+- **Issue #14.** The destructive "Clear board" action is gone end to end: the
+  UI control, the `clearBoard` reducer, the `POST /board/clear` route and the
+  `api.clearBoard` method are all removed. Undo and replay remain, and the
+  `{ kind: 'clear' }` history variant is kept so older cleared games still
+  replay.
 - **Issue #15.** Opening or joining a game uses `/game/<gameid>`, restores on
   refresh, and synchronizes browser back navigation.
 - **Issue #16.** Players can remove their own social policies; the action is

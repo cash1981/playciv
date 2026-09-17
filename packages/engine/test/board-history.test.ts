@@ -11,7 +11,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   bringToFront,
-  clearBoard,
   movePiece,
   placePiece,
   removePiece,
@@ -185,18 +184,6 @@ describe('undo', () => {
     expect(snapshot(state.board.pieces)).toBe(original)
   })
 
-  it('brings the whole board back after a clear', () => {
-    let state = firstCivGame()
-    for (let i = 0; i < 4; i++) state = place(state, 'markers/coin', i * 100, 0)
-    const original = snapshot(state.board.pieces)
-
-    state = unwrap(clearBoard(state, { playerId: CASH1981 }))
-    expect(state.board.pieces).toHaveLength(0)
-
-    state = unwrap(undoLastBoardChange(state, CASH1981))
-    expect(snapshot(state.board.pieces)).toBe(original)
-  })
-
   it('undoes a turn', () => {
     let state = place(firstCivGame(), 'tiles/tile01', 0, 0)
     const piece = state.board.pieces[0] as BoardPiece
@@ -304,19 +291,6 @@ describe('replay', () => {
     expect(piecesAtStep(final.board.history, -5)).toHaveLength(0)
   })
 
-  it('survives a clear in the middle of the sequence', () => {
-    const { states, final } = timeline([
-      ...sequence,
-      (state: GameState) => unwrap(clearBoard(state, { playerId: CASH1981 })),
-      (state: GameState) => place(state, 'markers/coin', 50, 50),
-    ])
-
-    for (let step = 0; step <= final.board.history.length; step++) {
-      expect(snapshot(piecesAtStep(final.board.history, step))).toBe(
-        snapshot((states[step] as GameState).board.pieces),
-      )
-    }
-  })
 })
 
 describe('purity', () => {
