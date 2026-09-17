@@ -11,8 +11,10 @@ code is right.
 | **Reviewer** | Sol (`gpt-5.6-sol`; Claude uses a Sol-compatible handoff) | **no** | no |
 | **Rules checker** | strong (Opus) | **no** | no |
 
-The orchestrator is the session you are talking to. The other three are defined
-in `.claude/agents/` and spawned with the Agent tool.
+The orchestrator is the session you are talking to. The coder and rules-checker
+are defined in `.claude/agents/` for Claude-local use. The standard reviewer is
+Sol and is dispatched through a Sol-compatible Codex review task; the Claude
+local reviewer definition is not a standard gate path.
 
 ## Why reviewers cannot write
 
