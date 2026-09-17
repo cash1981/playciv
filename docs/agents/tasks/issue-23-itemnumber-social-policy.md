@@ -23,12 +23,13 @@ was revealed.
 **In:**
 
 - Make reveal log formatting use the social policy's unique item-number format.
+- Allocate a fresh item number for each social-policy choice.
 - Add engine regression coverage for choose → reveal → remove and choose again.
 
 **Out:**
 
-- Changing item-number allocation or social-policy ownership; those already
-  preserve the card's item number and are covered by existing tests.
+- Changing social-policy ownership or the policy-selection rules beyond the
+  item-number allocation required by issue #23.
 - UI changes; the issue concerns the engine log values.
 
 ## Reference

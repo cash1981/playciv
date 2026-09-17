@@ -339,6 +339,7 @@ describe('social policy', () => {
 
     state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: policy.name }))
     expect(state.log.at(-1)?.privateLog).toContain(firstNumber)
+    expect(state.log.at(-1)?.publicLog).toContain(firstNumber)
 
     state = unwrap(removeSocialPolicy(state, { playerId: CASH1981, name: policy.name }))
     expect(state.log.at(-1)?.privateLog).toContain(firstNumber)
