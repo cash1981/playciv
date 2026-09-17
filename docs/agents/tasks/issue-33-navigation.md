@@ -1,0 +1,70 @@
+# Issue #33 — Navigation menu with rulebook and help links
+
+- **Slug:** `issue-33-navigation`
+- **Branch:** `feat/issue-33-navigation`
+- **Owner:** Codex (GPT-5)
+- **Status:** done — review gate approved; ready for human merge
+
+## Goal
+
+Players can open a consistent navigation menu from the application shell and
+reach the rulebooks, reference images, FAQ, About page and highscore.
+
+## Why
+
+The old app exposed these resources from `old-civ-web/app/views/nav.html`; the
+rewrite currently only has a minimal top bar.
+
+## Scope
+
+**In:**
+
+- Add a navigation menu to the shared application shell.
+- Link the six rule/reference resources named in issue #33.
+- Link the FAQ, About and Highscore routes; the FAQ and About pages are
+  provided by issues #34 and #35.
+
+**Out:**
+
+- Writing or rewriting rulebook content.
+- Implementing the FAQ or About pages themselves; those are issues #34 and #35.
+
+## Reference
+
+The old client is `old-civ-web/app/views/nav.html`. Preserve the existing
+application routes and use the current public assets or explicit external URLs
+for documents that are not in the repository.
+
+## Approach
+
+Add a reusable navigation component or section in the shared app shell, with
+responsive/accessibile links for signed-in and signed-out users. Keep the
+menu links read-only and make external documents open safely in a new tab.
+
+## Claimed paths
+
+- `packages/web/src/App.tsx`
+- `packages/web/src/views/Navigation.tsx`
+- `packages/web/src/styles.css`
+- `packages/web/public/`
+- `docs/agents/tasks/issue-33-navigation.md`
+- `docs/agents/task-board.md`
+
+## Acceptance criteria
+
+- [x] The navigation is visible and usable on public and authenticated pages.
+- [x] All rule/reference links from issue #33 are present and have meaningful labels.
+- [x] FAQ, About and Highscore links target their routes. FAQ and About use
+  normal browser navigation so the companion routes work after issues #34 and
+  #35 are merged sequentially.
+- [x] Existing login, game and admin navigation still works.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Verified in the browser at desktop and narrow viewport widths.
+
+## Open questions
+
+None. The old client contains the referenced PDFs/images under
+`old-civ-web/app/images/help/`; copy the needed public assets into the rewrite
+and update only the obsolete Google/old-app wording. FAQ and About are
+implemented in issues #34 and #35; this branch must expose those links without
+intercepting them as routes it does not yet know.
