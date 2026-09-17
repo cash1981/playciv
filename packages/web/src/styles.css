@@ -416,6 +416,17 @@ ul.list > li:last-child {
   margin-top: 0.7rem;
 }
 
+/* --- About --------------------------------------------------------------- */
+
+.about-page {
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+.about-page p:last-child {
+  margin-bottom: 0;
+}
+
 /* --- Board ---------------------------------------------------------------- */
 
 .board-panel {
