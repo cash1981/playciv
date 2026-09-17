@@ -74,7 +74,7 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
           <ul className="list">
             {games.map((game) => {
               const full = game.players.length >= game.numOfPlayers
-              const alreadyJoined = player !== null && game.players.some((candidate) => candidate.username === player.username)
+              const alreadyJoined = player !== null && game.youAreIn
               return (
                 <li key={game.id}>
                   <strong>{game.name}</strong>

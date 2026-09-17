@@ -78,6 +78,7 @@ export interface PublicGameSummary {
   readonly winner: string | null
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
+  readonly youAreIn: boolean
 }
 
 export interface LogEntryDto {

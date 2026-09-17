@@ -153,15 +153,8 @@ export function App(): React.JSX.Element {
     if (showLogin) {
       return (
         <div className="app">
-          <header className="topbar">
-            <strong>Civilization</strong>
-            <span className="muted">playciv</span>
-            <span className="spacer" />
-            <button onClick={() => setShowLogin(false)}>Back</button>
-            <button onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
-              {theme === 'dark' ? 'Light theme' : 'Dark theme'}
-            </button>
-          </header>
+          <Navigation player={null} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
+          <button onClick={() => setShowLogin(false)}>Back</button>
           <LoginView
             onSignedIn={(signedIn) => {
               setPlayer(signedIn)

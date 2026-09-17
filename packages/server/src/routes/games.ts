@@ -53,6 +53,7 @@ export interface PublicGameSummary {
   readonly winner: string | null
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
+  readonly youAreIn: boolean
 }
 
 function toSummary(game: GameState, viewerId: string): GameSummary {
@@ -72,7 +73,7 @@ function toSummary(game: GameState, viewerId: string): GameSummary {
   }
 }
 
-export function toPublicSummary(game: GameState): PublicGameSummary {
+export function toPublicSummary(game: GameState, viewerId?: string): PublicGameSummary {
   return {
     id: game.id,
     name: game.name,
@@ -85,6 +86,7 @@ export function toPublicSummary(game: GameState): PublicGameSummary {
       color: player.color,
     })),
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
+    youAreIn: viewerId !== undefined && game.players.some((player) => player.playerId === viewerId),
   }
 }
 

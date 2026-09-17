@@ -4,18 +4,30 @@
  */
 
 import { highscore } from '@civ/engine'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 import type { AppContext } from '../context.js'
 import { toPublicSummary } from './games.js'
 
+async function optionalViewerId(request: FastifyRequest, context: AppContext): Promise<string | undefined> {
+  const header = request.headers.authorization
+  if (header === undefined || !header.startsWith('Bearer ')) return undefined
+  const payload = context.tokens.verify(header.slice('Bearer '.length))
+  if (payload === undefined) return undefined
+  const player = await context.repo.findPlayerById(payload.playerId)
+  return player?.disabled === true ? undefined : player?.id
+}
+
+const PUBLIC_CHAT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
+
 export function registerPublicRoutes(app: FastifyInstance, context: AppContext): void {
-  app.get('/api/public/games', async (_request, reply) => {
+  app.get('/api/public/games', async (request, reply) => {
     const games = await context.repo.allGames()
+    const viewerId = await optionalViewerId(request, context)
     return reply.send(
       [...games]
         .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
-        .map(toPublicSummary),
+        .map((game) => toPublicSummary(game, viewerId)),
     )
   })
 
@@ -32,5 +44,14 @@ export function registerPublicRoutes(app: FastifyInstance, context: AppContext):
     )
   })
 
-  app.get('/api/chat', async (_request, reply) => reply.send(await context.repo.chatFor(null)))
+  app.get('/api/chat', async (_request, reply) => {
+    const cutoff = Date.now() - PUBLIC_CHAT_MAX_AGE_MS
+    const messages = await context.repo.chatFor(null)
+    return reply.send(
+      messages
+        .filter((message) => Date.parse(message.createdAt) >= cutoff)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .slice(-50),
+    )
+  })
 }
