@@ -16,6 +16,7 @@ import type { Item, SocialPolicyItem, TechItem } from './item.js'
 import type { Rng } from './random.js'
 import { nextIntBetween, nextId, seedFrom } from './random.js'
 import type { GameState, GameType, Playerhand } from './state.js'
+import { DEFAULT_PLAYER_STATS } from './state.js'
 
 const GAMEDATA: Readonly<Record<GameType, GameDataFile>> = {
   WAW: gamedataWaw as GameDataFile,
@@ -56,6 +57,7 @@ export function emptyPlayerhand(player: NewPlayer, playernumber: number): Player
     socialPolicies: [],
     playerTurns: [],
     gamenote: null,
+    stats: DEFAULT_PLAYER_STATS,
   }
 }
 

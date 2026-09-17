@@ -148,6 +148,8 @@ interface AppendOptions {
   readonly publicLog?: string
   readonly item?: Item
   readonly playerId?: string
+  /** ISO timestamp, supplied by the caller since the engine stays pure. */
+  readonly createdAt?: string | null
 }
 
 /** Appends one log entry and returns the new state. */
@@ -162,7 +164,7 @@ export function appendLog(state: GameState, options: AppendOptions): GameState {
     item: options.item ?? null,
     playerId: options.playerId ?? null,
     undo: null,
-    createdAt: null,
+    createdAt: options.createdAt ?? null,
   }
   return { ...state, rng, log: [...state.log, entry] }
 }

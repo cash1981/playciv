@@ -21,6 +21,7 @@ import { shuffle } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
+import { DEFAULT_PLAYER_STATS } from '../state.js'
 import {
   PLAYER_COLORS,
   findPlayer,
@@ -96,6 +97,7 @@ export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
       socialPolicies: [],
       playerTurns: [],
       gamenote: null,
+      stats: DEFAULT_PLAYER_STATS,
     }
     next = state
   }

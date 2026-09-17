@@ -68,6 +68,10 @@ export type EngineError =
   | { readonly kind: 'NOTHING_TO_UNDO_ON_BOARD' }
   /** `endTurn` was called but no player has the turn yet — the game has not started */
   | { readonly kind: 'GAME_NOT_STARTED' }
+  /** Java has no equivalent — `setPlayerStat` (issue #43) got a key outside `PlayerStats` */
+  | { readonly kind: 'UNKNOWN_STAT'; readonly stat: string }
+  /** `setPlayerStat` (issue #43) got a value that is not a non-negative integer */
+  | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number }
 
 export function describeError(error: EngineError): string {
   switch (error.kind) {
@@ -129,5 +133,9 @@ export function describeError(error: EngineError): string {
       return 'There is no board change to undo'
     case 'GAME_NOT_STARTED':
       return 'The game has not started yet, so there is no turn to end'
+    case 'UNKNOWN_STAT':
+      return `Unknown player stat: ${error.stat}`
+    case 'INVALID_STAT_VALUE':
+      return `Player stat must be a non-negative whole number, got ${error.value}`
   }
 }

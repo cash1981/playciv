@@ -8,11 +8,20 @@
 
 import type { Board, BoardHistoryEntry, BoardPiece } from './board.js'
 import { createBoard } from './board.js'
-import type { GameState } from './state.js'
+import type { GameState, Playerhand } from './state.js'
+import { DEFAULT_PLAYER_STATS } from './state.js'
 
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<GameState, 'board' | 'withdrawnPlayers' | 'publicTurns'> &
   Partial<Pick<GameState, 'board' | 'withdrawnPlayers' | 'publicTurns'>>
+
+/** A hand from before the status board (issue #43) existed. */
+type MaybeOlderPlayerhand = Omit<Playerhand, 'stats'> & Partial<Pick<Playerhand, 'stats'>>
+
+const withStats = (player: MaybeOlderPlayerhand): Playerhand => ({
+  ...player,
+  stats: player.stats ?? DEFAULT_PLAYER_STATS,
+})
 
 /** A board from before the player areas and the history existed. */
 type MaybeOlderBoard = Omit<Board, 'areaRows' | 'history'> &
@@ -52,6 +61,7 @@ export function migrateGameState(state: GameState): GameState {
   return {
     ...state,
     log: state.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
+    players: state.players.map(withStats),
     board:
       board === undefined
         ? fresh
@@ -60,7 +70,7 @@ export function migrateGameState(state: GameState): GameState {
             areaRows: board.areaRows ?? fresh.areaRows,
             history: board.history ?? historyForImportedPieces(board.pieces),
           },
-    withdrawnPlayers: older.withdrawnPlayers ?? [],
+    withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withStats),
     publicTurns: older.publicTurns ?? {},
   }
 }
