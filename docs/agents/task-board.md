@@ -12,22 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-20-theme-switch
-
-- **Owner:** Codex (GPT-5)
-- **Branch:** `feat/issue-20-theme-switch`
-- **Brief:** `docs/agents/tasks/issue-20-theme-switch.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/App.tsx`
-  - `packages/web/src/theme.ts`
-  - `packages/web/src/styles.css`
-  - `packages/web/src/main.tsx`
-  - `packages/web/index.html`
-  - `packages/web/src/views/BoardView.tsx`
-  - `docs/agents/tasks/issue-20-theme-switch.md`
-  - `docs/agents/task-board.md`
-- **Notes:** Adding a persisted light-theme option while keeping dark as the default.
+_Nothing. See the queue below._
 
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.

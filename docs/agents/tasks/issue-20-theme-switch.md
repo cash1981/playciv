@@ -3,7 +3,7 @@
 - **Slug:** `issue-20-theme-switch`
 - **Branch:** `feat/issue-20-theme-switch`
 - **Owner:** Codex (GPT-5)
-- **Status:** in progress
+- **Status:** done — ready for human merge
 
 ## Goal
 
@@ -66,14 +66,14 @@ the same preference.
 
 ## Acceptance criteria
 
-- [ ] Dark remains the default when no preference is stored.
-- [ ] A user can switch to a readable white/light theme from the header.
-- [ ] The selected theme applies across lobby, highscore, admin and game views.
-- [ ] Refreshing the page preserves the selected theme.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Browser verification: both themes are visibly applied and the choice
+- [x] Dark remains the default when no preference is stored.
+- [x] A user can switch to a readable white/light theme from the header.
+- [x] The selected theme applies across lobby, highscore, admin and game views.
+- [x] Refreshing the page preserves the selected theme.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Browser verification: both themes are visibly applied and the choice
   survives a refresh.
-- [ ] Empty map slots show the tile back until a map tile is placed there.
+- [x] Empty map slots show the tile back until a map tile is placed there.
 
 ## Open questions
 
