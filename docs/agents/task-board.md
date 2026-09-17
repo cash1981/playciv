@@ -20,7 +20,7 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 - **Owner:** Claude (Opus 4.8)
 - **Branch:** `feat/wonders-board`
 - **Brief:** `docs/agents/tasks/wonders-board.md`
-- **Status:** in progress
+- **Status:** in review (PR #52)
 - **Claimed paths:**
   - `packages/engine/src/board.ts`
   - `packages/engine/src/state.ts` (`boardAreas` only, not the `PlayerView` hand shape)
