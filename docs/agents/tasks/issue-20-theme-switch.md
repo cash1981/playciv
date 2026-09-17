@@ -25,6 +25,8 @@ interface without changing the existing default.
 - Add a theme toggle in the shared application header, including public pages.
 - Persist the selected theme in browser local storage and apply it before the
   app renders.
+- Show `tileback.png` over empty 4×4 map slots as fog of war, while leaving
+  placed map tiles visible and movable.
 - Add focused tests where the current web test setup can support them, plus
   browser verification of both themes and refresh persistence.
 
@@ -34,10 +36,8 @@ interface without changing the existing default.
   theme.
 - Server-side storage or account synchronization; local browser preference is
   sufficient for this UI-only request.
-- Reworking game artwork, board assets or card images beyond ensuring the
-  surrounding interface remains readable.
-- Showing the existing `tileback.png` artwork over empty map slots as fog of
-  war; the board remains a manual placement surface.
+- Reworking game artwork, board assets or card images beyond the fog-of-war
+  overlay described above.
 
 ## Reference
 
@@ -73,6 +73,7 @@ the same preference.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 - [ ] Browser verification: both themes are visibly applied and the choice
   survives a refresh.
+- [ ] Empty map slots show the tile back until a map tile is placed there.
 
 ## Open questions
 

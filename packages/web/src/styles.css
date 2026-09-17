@@ -11,6 +11,7 @@
   --text: #e6e8ec;
   --muted: #9aa3b2;
   --accent: #6ea8fe;
+  --accent-text: #10131a;
   --good: #63c98f;
   --warn: #e6b455;
   --bad: #e2686a;
@@ -28,6 +29,7 @@
   --text: #202733;
   --muted: #5c6877;
   --accent: #2867ad;
+  --accent-text: #ffffff;
   --good: #287b4e;
   --warn: #8b6200;
   --bad: #b33b42;
@@ -93,7 +95,7 @@ button:disabled {
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #10131a;
+  color: var(--accent-text);
   font-weight: 600;
 }
 
@@ -894,7 +896,7 @@ ul.history > li {
 .tab.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #10131a;
+  color: var(--accent-text);
   font-weight: 600;
 }
 
