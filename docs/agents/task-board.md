@@ -15,21 +15,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
-### reviewer-policy
-
-- **Owner:** Codex/orchestrator
-- **Branch:** `chore/reviewer-policy`
-- **Brief:** `docs/agents/tasks/reviewer-policy.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `AGENTS.md`
-  - `docs/agents/roles.md`
-  - `docs/agents/workflow.md`
-  - `.agents/skills/review-gate/SKILL.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/tasks/reviewer-policy.md`
-  - `docs/agents/state.md`
-
 ---
 
 ## Format

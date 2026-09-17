@@ -49,7 +49,8 @@ shallow everywhere instead of sharp somewhere.
 
 ## 3. Spawn the reviewer
 
-Use the Agent tool with `subagent_type: "reviewer"`. Give it:
+Use the Agent tool with `subagent_type: "reviewer"`; the repository's reviewer
+definition is configured to run on `gpt-5.6-sol`. Give it:
 
 - the path to the diff,
 - the path to the task brief, `docs/agents/tasks/<slug>.md`,

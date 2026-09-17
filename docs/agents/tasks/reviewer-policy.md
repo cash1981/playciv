@@ -3,7 +3,7 @@
 - **Slug:** `reviewer-policy`
 - **Branch:** `chore/reviewer-policy`
 - **Owner:** Codex/orchestrator
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -18,8 +18,8 @@ orchestrator responsible for the final approval.
 
 ## Acceptance criteria
 
-- [ ] `AGENTS.md`, `docs/agents/roles.md`, `docs/agents/workflow.md`, and the
+- [x] `AGENTS.md`, `docs/agents/roles.md`, `docs/agents/workflow.md`, and the
   local review-gate skill all require Sol for reviews.
-- [ ] The instructions continue to require dedicated worktrees.
-- [ ] No coding or runtime behavior changes.
-- [ ] The task board and state are updated and the branch is pushed.
+- [x] The instructions continue to require dedicated worktrees.
+- [x] No coding or runtime behavior changes.
+- [x] The task board and state are updated and the branch is pushed.
