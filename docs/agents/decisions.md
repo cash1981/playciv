@@ -459,5 +459,7 @@ The owner asked for the hybrid approach and for edits to be open to all players
 - **City ownership is inferred from the piece colour** (`cities/<colour>...`).
   **Buildings have no per-colour artwork**, so `buildingCountOf` falls back to
   `piece.placedBy`; since anyone may move any piece, a building's count can be
-  wrong if it changes hands after placement. Acceptable for a bookkeeping aid,
-  and the editable stats cover anything the derived counts get wrong.
+  wrong if it changes hands after placement. The derived `cityCount`/
+  `buildingCount` are advisory and have no editable override, so a misattributed
+  building can only be corrected by removing and re-placing the piece, not from
+  the status board. Acceptable for a bookkeeping aid.

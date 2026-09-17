@@ -909,7 +909,9 @@ describe('player stats (#43)', () => {
   async function ids(gameId: string, token: string): Promise<{ me: string; other: string }> {
     const response = await app.inject({ method: 'GET', url: `/api/games/${gameId}`, headers: bearer(token) })
     const view = response.json() as StatView
-    return { me: view.you.playerId, other: view.opponents[0]!.playerId }
+    const other = view.opponents[0]
+    if (other === undefined) throw new Error('expected an opponent in the game')
+    return { me: view.you.playerId, other: other.playerId }
   }
 
   it('lets a member set another player and their own stat', async () => {

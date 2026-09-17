@@ -46,7 +46,9 @@ const STAT_COLUMNS: readonly { readonly key: keyof PlayerStats; readonly label: 
   { key: 'victoryPoints', label: 'VP' },
 ]
 
-const COLUMN_COUNT = 7 + STAT_COLUMNS.length
+// Player + Civilization, the editable stats, then the six derived/count columns
+// (culture level, cities, buildings, techs, policies, hand, battlehand, barbarians).
+const COLUMN_COUNT = 2 + STAT_COLUMNS.length + 8
 
 export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Element {
   const rows: Row[] = []
@@ -189,8 +191,10 @@ function StatCell({
   }, [value])
 
   function commit(): void {
-    const parsed = Number(draft)
-    if (!Number.isInteger(parsed) || parsed < 0) {
+    const trimmed = draft.trim()
+    const parsed = Number(trimmed)
+    // Empty or partial input (e.g. "" or "-") must revert, not save 0.
+    if (trimmed === '' || !Number.isInteger(parsed) || parsed < 0) {
       setDraft(String(value))
       return
     }
