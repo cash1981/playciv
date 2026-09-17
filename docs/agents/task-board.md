@@ -19,7 +19,7 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
 - **Owner:** Claude (Opus 4.8)
 - **Branch:** `feat/citystate-pieces`
-- **Status:** in progress
+- **Status:** in review (PR #57)
 - **Claimed paths:**
   - `packages/engine/src/board.ts` (`BoardAssetCategory` only)
   - `packages/engine/data/board-assets.json` and `packages/web/public/board/`
