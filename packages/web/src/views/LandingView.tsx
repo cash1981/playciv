@@ -104,7 +104,9 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
                       {full ? 'Full' : 'Join'}
                     </button>
                   )}
-                  {player === null && <span className="muted">Sign in to join</span>}
+                  {player === null && game.active && !full && (
+                    <span className="muted">Sign in to join</span>
+                  )}
                 </li>
               )
             })}
@@ -139,6 +141,7 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
               }}
             >
               <input
+                aria-label="Lobby chat message"
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
                 placeholder={`Write as ${player.username} …`}
