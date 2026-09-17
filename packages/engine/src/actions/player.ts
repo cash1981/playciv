@@ -28,7 +28,7 @@ import {
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { SheetName } from '../sheet-name.js'
-import type { GameState, Playerhand } from '../state.js'
+import type { GameState, Playerhand, PlayerStats } from '../state.js'
 import { findPlayer, hasUserAccess, withPlayer } from '../state.js'
 
 import { placeUnchecked } from './board.js'
@@ -736,4 +736,85 @@ export function saveNote(state: GameState, playerId: string, note: string): Acti
   if (!access.ok) return access
   return ok(withPlayer(state, { ...access.value, gamenote: note }))
 }
+
+// ---------------------------------------------------------------------------
+// Status board (issue #43)
+//
+// Java has no equivalent — the players tracked coins, trade, culture and
+// victory points on a manual spreadsheet alongside the game. This replaces it
+// with a small shared board: every member of the game may edit every player's
+// numbers, exactly as they could reach across the physical table and update
+// someone else's tally.
+// ---------------------------------------------------------------------------
+
+const STAT_KEYS: readonly (keyof PlayerStats)[] = [
+  'coins',
+  'trade',
+  'culture',
+  'victoryPoints',
+]
+
+const STAT_LABEL: Readonly<Record<keyof PlayerStats, string>> = {
+  coins: 'coins',
+  trade: 'trade',
+  culture: 'culture',
+  victoryPoints: 'victory points',
+}
+
+function isPlayerStatKey(stat: string): stat is keyof PlayerStats {
+  return (STAT_KEYS as readonly string[]).includes(stat)
+}
+
+export interface SetPlayerStatInput {
+  readonly editorPlayerId: string
+  readonly targetPlayerId: string
+  readonly stat: keyof PlayerStats
+  readonly value: number
+  /** ISO timestamp for the log entry. The engine itself stays pure. */
+  readonly at?: string
+}
+
+/**
+ * Sets one entry on a player's status board. Any current player may edit any
+ * other current player's numbers — the board is shared bookkeeping, not a
+ * private hand, so there is no owner-only restriction here.
+ */
+export function setPlayerStat(state: GameState, input: SetPlayerStatInput): ActionResult {
+  const editorAccess = requireAccess(state, input.editorPlayerId)
+  if (!editorAccess.ok) return editorAccess
+  const editor = editorAccess.value
+
+  const targetAccess = requireAccess(state, input.targetPlayerId)
+  if (!targetAccess.ok) return targetAccess
+  const target = targetAccess.value
+
+  if (!isPlayerStatKey(input.stat)) {
+    return err({ kind: 'UNKNOWN_STAT', stat: String(input.stat) })
+  }
+
+  if (!Number.isInteger(input.value) || input.value < 0) {
+    return err({ kind: 'INVALID_STAT_VALUE', value: input.value })
+  }
+
+  const next = withPlayer(state, {
+    ...target,
+    stats: { ...target.stats, [input.stat]: input.value },
+  })
+
+  const message =
+    editor.playerId === target.playerId
+      ? `set their ${STAT_LABEL[input.stat]} to ${input.value}`
+      : `set ${target.username}'s ${STAT_LABEL[input.stat]} to ${input.value}`
+
+  return ok(
+    appendLog(next, {
+      username: editor.username,
+      playerId: editor.playerId,
+      publicLog: `${editor.username} ${message}`,
+      privateLog: '',
+      createdAt: input.at ?? null,
+    }),
+  )
+}
+
 

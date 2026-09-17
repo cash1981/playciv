@@ -18,6 +18,7 @@ import type { PlayerDto, PlayerView } from '../lib/api.js'
 import { BoardView } from './BoardView.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
+import { StatusPanel } from './StatusPanel.js'
 import { TechPanel } from './TechPanel.js'
 import { TurnPanel } from './TurnPanel.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
@@ -193,6 +194,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         <BattlePanel gameId={gameId} busy={busy} run={run} view={view} />
         <TechPanel gameId={gameId} busy={busy} run={run} view={view} reloadCount={reloadCount} />
         <TurnPanel gameId={gameId} busy={busy} run={run} reloadCount={reloadCount} />
+        <StatusPanel gameId={gameId} view={view} busy={busy} run={run} />
         <OpponentPanel view={view} />
         <LogPanel
           gameId={gameId}
@@ -208,7 +210,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
 
 // ---------------------------------------------------------------------------
 
-type Run = (action: () => Promise<PlayerView | unknown>) => Promise<void>
+export type Run = (action: () => Promise<PlayerView | unknown>) => Promise<void>
 
 interface PanelProps {
   readonly gameId: string

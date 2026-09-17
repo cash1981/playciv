@@ -9,8 +9,8 @@
 
 import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem } from './item.js'
 import type { Rng } from './random.js'
-import type { Board, BoardArea } from './board.js'
-import { playerAreas } from './board.js'
+import type { Board, BoardArea, BoardPiece } from './board.js'
+import { cultureStepOf, leaderAssetId, playerAreas } from './board.js'
 import type { PlayerTurn } from './turn.js'
 import type { Undo } from './undo.js'
 
@@ -19,6 +19,25 @@ export type GameType = 'WAW'
 /** Java: `Playerhand.green()` and friends. */
 export const PLAYER_COLORS = ['Green', 'Yellow', 'Purple', 'Red', 'Blue'] as const
 export type PlayerColor = (typeof PLAYER_COLORS)[number]
+
+/**
+ * The per-player status board (issue #43), replacing a manual spreadsheet the
+ * players used to keep alongside the game. Public — every member of the game
+ * may see and edit every player's numbers, as at a physical table.
+ */
+export interface PlayerStats {
+  readonly coins: number
+  readonly trade: number
+  readonly culture: number
+  readonly victoryPoints: number
+}
+
+export const DEFAULT_PLAYER_STATS: PlayerStats = {
+  coins: 0,
+  trade: 0,
+  culture: 0,
+  victoryPoints: 0,
+}
 
 export interface Playerhand {
   readonly playerId: string
@@ -42,6 +61,8 @@ export interface Playerhand {
   readonly playerTurns: readonly PlayerTurn[]
   /** Java: `gamenote` — the player's private note about the game. */
   readonly gamenote: string | null
+  /** The status board. New in this port — see {@link PlayerStats}. */
+  readonly stats: PlayerStats
 }
 
 /** Java: `GameLog.LogType`. */
@@ -175,6 +196,71 @@ export function withPlayer(state: GameState, player: Playerhand): GameState {
 }
 
 // ---------------------------------------------------------------------------
+// Status board (issue #43) — read-only derived numbers
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a player's leader marker sits on the culture track, or `null` when it
+ * has not been placed yet (no civilization chosen, no colour, or the marker is
+ * off the track). The marker itself is placed by `placeLeaderMarker` in
+ * `actions/player.ts` when a civilization is revealed.
+ */
+export function cultureMarkerLevelOf(state: GameState, playerId: string): number | null {
+  const player = findPlayer(state, playerId)
+  if (player === undefined || player.civilization === null || player.color === null) {
+    return null
+  }
+
+  const assetId = leaderAssetId(player.civilization.name, player.color)
+  if (assetId === undefined) return null
+
+  const piece = state.board.pieces.find((candidate) => candidate.assetId === assetId)
+  if (piece === undefined) return null
+
+  return cultureStepOf(state.board, piece)
+}
+
+/** The five player colours a city piece can come in, matching `PLAYER_COLORS`. */
+const CITY_COLOR_PREFIXES = ['blue', 'green', 'purple', 'red', 'yellow'] as const
+
+/**
+ * A city piece's colour, read off its asset id — for example
+ * "cities/redcity2" belongs to Red. There is no equivalent for `building`
+ * pieces: the manifest has one generic image per building type, with no
+ * per-colour artwork, so `buildingCountOf` below falls back to `placedBy`
+ * instead.
+ */
+function cityColorOf(piece: BoardPiece): string | undefined {
+  const base = piece.assetId.split('/').at(-1)?.toLowerCase() ?? ''
+  return CITY_COLOR_PREFIXES.find((colour) => base.startsWith(colour))
+}
+
+/** How many city pieces (capital, city or metropolis, walled or not) belong to a player. */
+export function cityCountOf(state: GameState, playerId: string): number {
+  const player = findPlayer(state, playerId)
+  if (player === undefined || player.color === null) return 0
+
+  const colour = player.color.toLowerCase()
+  return state.board.pieces.filter(
+    (piece) => piece.category === 'city' && cityColorOf(piece) === colour,
+  ).length
+}
+
+/**
+ * How many building pieces belong to a player. Buildings carry no per-colour
+ * artwork (see {@link cityColorOf}), so ownership is read off `placedBy`
+ * instead — who put the piece on the board. Pieces can be moved by anyone
+ * afterwards, same as any other board piece, so this undercounts a building
+ * that changed hands after being moved; there is no stronger signal in the
+ * board model to attribute it by.
+ */
+export function buildingCountOf(state: GameState, playerId: string): number {
+  return state.board.pieces.filter(
+    (piece) => piece.category === 'building' && piece.placedBy === playerId,
+  ).length
+}
+
+// ---------------------------------------------------------------------------
 // Projections — what a given player gets to see
 // ---------------------------------------------------------------------------
 
@@ -204,6 +290,12 @@ export interface OpaquePlayerhand {
    * private and do not appear here.
    */
   readonly publicTurns: readonly PlayerTurn[]
+  /** The status board (issue #43) is public, unlike the rest of the hand. */
+  readonly stats: PlayerStats
+  /** Derived from the board, so it cannot drift out of step. See `state.ts`. */
+  readonly cultureMarkerLevel: number | null
+  readonly cityCount: number
+  readonly buildingCount: number
 }
 
 function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
@@ -224,6 +316,10 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     publicTurns: Object.values(state.publicTurns).filter(
       (turn) => turn.username === player.username,
     ),
+    stats: player.stats,
+    cultureMarkerLevel: cultureMarkerLevelOf(state, player.playerId),
+    cityCount: cityCountOf(state, player.playerId),
+    buildingCount: buildingCountOf(state, player.playerId),
   }
 }
 
@@ -244,6 +340,13 @@ export function toPublicLog(entry: GameLogEntry): PublicLogEntry {
   }
 }
 
+/** The viewer's own hand, plus the same derived board numbers opponents get. */
+export interface PlayerViewSelf extends Playerhand {
+  readonly cultureMarkerLevel: number | null
+  readonly cityCount: number
+  readonly buildingCount: number
+}
+
 /**
  * The game state seen by one player: their own hand in the clear, the others'
  * as counts, the deck as a count only, and a log where other people's draws
@@ -258,7 +361,7 @@ export interface PlayerView {
   readonly winner: string | null
   readonly numberOfItemsInDeck: number
   readonly numberOfDiscardedItems: number
-  readonly you: Playerhand | null
+  readonly you: PlayerViewSelf | null
   readonly opponents: readonly OpaquePlayerhand[]
   readonly techs: readonly TechItem[]
   /** The board is public — everyone sees the same pieces. */
@@ -269,7 +372,16 @@ export interface PlayerView {
 }
 
 export function toPlayerView(state: GameState, viewerId: string): PlayerView {
-  const you = findPlayer(state, viewerId) ?? null
+  const player = findPlayer(state, viewerId)
+  const you: PlayerViewSelf | null =
+    player === undefined
+      ? null
+      : {
+          ...player,
+          cultureMarkerLevel: cultureMarkerLevelOf(state, viewerId),
+          cityCount: cityCountOf(state, viewerId),
+          buildingCount: buildingCountOf(state, viewerId),
+        }
   return {
     id: state.id,
     name: state.name,
