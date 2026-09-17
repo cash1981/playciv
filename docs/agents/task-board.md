@@ -20,6 +20,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Status:** in progress
 - **Claimed paths:**
   - `packages/web/src/App.tsx`
+  - `packages/web/src/theme.ts`
   - `packages/web/src/styles.css`
   - `packages/web/src/main.tsx`
   - `docs/agents/tasks/issue-20-theme-switch.md`

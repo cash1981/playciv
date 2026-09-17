@@ -14,7 +14,24 @@
   --good: #63c98f;
   --warn: #e6b455;
   --bad: #e2686a;
+  --error-bg: #3a1f21;
+  --error-text: #ffc9ca;
   --radius: 8px;
+}
+
+:root[data-theme='light'] {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --panel-2: #e9edf2;
+  --line: #c4ccd6;
+  --text: #202733;
+  --muted: #5c6877;
+  --accent: #2867ad;
+  --good: #287b4e;
+  --warn: #8b6200;
+  --bad: #b33b42;
+  --error-bg: #fff0f0;
+  --error-text: #8c2028;
 }
 
 * {
@@ -190,9 +207,9 @@ label > textarea {
 }
 
 .error {
-  background: #3a1f21;
+  background: var(--error-bg);
   border: 1px solid var(--bad);
-  color: #ffc9ca;
+  color: var(--error-text);
   border-radius: var(--radius);
   padding: 0.5rem 0.7rem;
   margin-bottom: 1rem;

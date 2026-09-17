@@ -54,6 +54,7 @@ the same preference.
 ## Claimed paths
 
 - `packages/web/src/App.tsx`
+- `packages/web/src/theme.ts`
 - `packages/web/src/styles.css`
 - `packages/web/src/main.tsx`
 - `docs/agents/tasks/issue-20-theme-switch.md`
