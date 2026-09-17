@@ -19,10 +19,8 @@ import {
   areaAt,
   boardAreas,
   clampToBoard,
-  cultureSlot,
   findBoardAsset,
   findPiece,
-  inCultureBand,
   locationOf,
   nearestBlockOrigin,
   nextFreeSlot,
@@ -222,11 +220,11 @@ export function movePiece(state: GameState, input: MovePieceInput): ActionResult
   const others = state.board.pieces.filter((other) => other.id !== piece.id)
   const area = areaAt(areas, input.x + piece.width / 2, input.y + piece.height / 2)
   const wanted = (() => {
-    // Dropped on the culture track: snap to the nearest space
-    if (inCultureBand(state.board, input.y + piece.height / 2)) {
-      const [cellX, cellY] = cultureSlot(state.board, piece, input.x, input.y, others)
-      return { x: cellX, y: cellY }
-    }
+    // Culture-track markers are placed freely, not snapped to a space: they fall
+    // through to the raw-drop case below, so the player decides the exact spot
+    // (see decisions.md, 2026-09-17). The step is still read off the position
+    // for the log by `cultureStepOf`.
+
     // Dropped in a player area: tidy into the next free slot
     if (area !== undefined) {
       const [slotX, slotY] = nextFreeSlot(state.board, area, others, {

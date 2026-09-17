@@ -536,3 +536,30 @@ deviates from the old behaviour, which put drawn wonders in the hidden hand.
   across the board. Enough for the four ancient wonders dealt at start.
 - Not done here: hiding the "Give" button on non-giftable cards (already blocked
   server-side by `isTradable`) is a separate follow-up.
+
+---
+
+## 2026-09-17 — Culture-track markers are placed freely, not snapped
+
+**Decision.** Dropping a leader marker on the culture track no longer snaps it to
+the nearest space or steps it into a lane. Markers are placed freely, at the
+exact drop position, like every other piece on the board. This reverses the
+"markers snap to a space when dropped" part of the 2026-09-15 decision above;
+everything else there still stands.
+
+**Why.** The owner found the snapping made markers hard to position — they could
+not put a marker exactly where they wanted, and the lane-stepping sometimes left
+markers partly on top of each other. Free placement is also what the board does
+everywhere else (`board.ts`: "Pieces sit at free pixel coordinates rather than
+snapping"), so the snap was the odd one out. There is no ported rule that
+requires snapping; the track is a marker aid, and the player decides the exact
+spot, including whether two markers share a space.
+
+**Consequences.** The `cultureSlot` helper is removed and the culture-band branch
+in `movePiece` is gone. `cultureStepOf` and `locationOf` still read the nearest
+space from a marker's position, so the log still says "moved … to culture 7".
+Markers can now overlap if dropped on the same spot — that is the player's
+choice. The one exception is the *automatic* placement of a leader on START when
+a civilization is revealed (`placeLeaderMarker`): it still fans markers out into
+lanes so two players choosing at once are not hidden under each other. That is
+only a default starting spot; either marker can then be moved freely.

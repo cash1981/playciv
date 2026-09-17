@@ -388,33 +388,6 @@ export function cultureStepOf(board: Board, piece: BoardPiece): number | null {
   return best
 }
 
-/**
- * Where a piece dropped on the culture track belongs: centred on the nearest
- * space. Markers already on that space are stepped down a row so several
- * players on the same space stay readable rather than hiding each other.
- */
-export function cultureSlot(
-  board: Board,
-  piece: BoardPiece,
-  x: number,
-  y: number,
-  others: readonly BoardPiece[],
-): readonly [x: number, y: number] {
-  const step = cultureStepOf(board, { ...piece, x, y }) ?? 1
-  const centre = cultureCellCenter(board, step)
-  const left = Math.round(centre.x - piece.width / 2)
-
-  const band = cultureTrackHeight(board)
-  const lanes = Math.max(1, Math.floor(band / piece.height))
-  const sharing = others.filter(
-    (other) => other.id !== piece.id && cultureStepOf(board, other) === step,
-  ).length
-
-  const lane = sharing % lanes
-  const top = Math.round((band - lanes * piece.height) / 2 + lane * piece.height)
-  return [left, top]
-}
-
 // ---------------------------------------------------------------------------
 // Player areas
 // ---------------------------------------------------------------------------

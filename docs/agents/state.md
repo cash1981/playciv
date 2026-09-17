@@ -42,8 +42,9 @@ _Last updated: 2026-09-17_
   undo and step-by-step replay with the log trimmed to each step.
 - **Everything in English.**
 - **Culture track.** A band above the map, 27 spaces in four sections, measured
-  off the artwork. Leader markers snap to a space and step aside rather than
-  cover each other. Choosing a civilization places that leader on Start. The
+  off the artwork. Leader markers are placed freely, not snapped to a space, so
+  they can be nudged anywhere and can share a space; the log still names the
+  nearest space. Choosing a civilization places that leader on Start. The
   band is drawn `CULTURE_TRACK_SCALE` (1.7×) taller than its bare aspect so it
   reads well at any zoom (issue #22).
 - **Card artwork.** 346 of 347 items have a picture; only Space Flight does
