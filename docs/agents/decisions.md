@@ -463,3 +463,22 @@ The owner asked for the hybrid approach and for edits to be open to all players
   `buildingCount` are advisory and have no editable override, so a misattributed
   building can only be corrected by removing and re-placing the piece, not from
   the status board. Acceptable for a bookkeeping aid.
+
+---
+
+## 2026-09-17 — Player status uses grouped shared bookkeeping fields
+
+**Decision.** The status board now presents grouped columns for Coins/Trade/
+Culture, Units and Cards, default modifiers, and Technology & Infrastructure.
+The old Barbarians, Hand, Policies, Techs, Battlehand, VP, and other derived
+count columns are removed from this panel. The new fields are stored in the
+existing public `PlayerStats` object so they remain editable by any game member.
+Existing games receive missing fields from the same defaults used for new games.
+
+**Why.** The human requested a compact status view matching the physical
+bookkeeping sheet, rather than duplicating values that are already available in
+the hand, battle, tech, and policy panels.
+
+**Consequences.** Combat is a signed modifier and accepts negative values;
+other status values remain non-negative integers. This is bookkeeping only and
+does not make the values affect engine rules.

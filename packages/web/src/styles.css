@@ -1100,6 +1100,17 @@ ul.history > li {
   letter-spacing: 0.03em;
 }
 
+.status-table th.status-group-heading {
+  color: var(--text);
+  background: var(--panel-2);
+  text-align: center;
+  border-bottom: 0;
+}
+
+.status-table thead tr + tr th {
+  border-top: 1px solid var(--line);
+}
+
 .status-table td {
   white-space: nowrap;
 }

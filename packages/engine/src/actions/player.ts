@@ -740,25 +740,44 @@ export function saveNote(state: GameState, playerId: string, note: string): Acti
 // ---------------------------------------------------------------------------
 // Status board (issue #43)
 //
-// Java has no equivalent — the players tracked coins, trade, culture and
-// victory points on a manual spreadsheet alongside the game. This replaces it
-// with a small shared board: every member of the game may edit every player's
-// numbers, exactly as they could reach across the physical table and update
-// someone else's tally.
+// Java has no equivalent — the players tracked these values on a manual
+// spreadsheet alongside the game. This replaces it with a shared board: every
+// member of the game may edit every player's numbers, exactly as they could
+// reach across the physical table and update someone else's tally.
 // ---------------------------------------------------------------------------
 
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
   'coins',
   'trade',
   'culture',
-  'victoryPoints',
+  'infantry',
+  'artillery',
+  'mounted',
+  'stacking',
+  'mvmt',
+  'combat',
+  'handSize',
+  'efta',
+  'infra',
+  'mic',
+  'pe',
 ]
 
 const STAT_LABEL: Readonly<Record<keyof PlayerStats, string>> = {
   coins: 'coins',
   trade: 'trade',
   culture: 'culture',
-  victoryPoints: 'victory points',
+  infantry: 'infantry',
+  artillery: 'artillery',
+  mounted: 'mounted',
+  stacking: 'stacking',
+  mvmt: 'movement',
+  combat: 'combat',
+  handSize: 'hand size',
+  efta: 'EftA',
+  infra: 'Infra',
+  mic: 'MIC',
+  pe: 'PE',
 }
 
 function isPlayerStatKey(stat: string): stat is keyof PlayerStats {
@@ -792,7 +811,8 @@ export function setPlayerStat(state: GameState, input: SetPlayerStatInput): Acti
     return err({ kind: 'UNKNOWN_STAT', stat: String(input.stat) })
   }
 
-  if (!Number.isInteger(input.value) || input.value < 0) {
+  const allowsNegative = input.stat === 'combat'
+  if (!Number.isInteger(input.value) || (!allowsNegative && input.value < 0)) {
     return err({ kind: 'INVALID_STAT_VALUE', value: input.value })
   }
 

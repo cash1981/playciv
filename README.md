@@ -349,10 +349,10 @@ tests match on them.
 
 **A player status board instead of a shared spreadsheet.** The old app embedded
 a per-game Google Sheet that players kept by hand. That is now an in-app "Player
-status" panel: most columns (culture-track level, city and building counts,
-techs, policies, hand and unit counts) are read straight from the game state,
-and a few shared stats (coins, trade, culture, victory points) are editable by
-any member of the game, with every edit written to the public log.
+status" panel: shared bookkeeping includes coins, trade, culture, unit counts,
+movement/combat/stacking values, hand size and EftA/Infra/MIC/PE modifiers.
+Every value is editable by any member of the game, with every edit written to
+the public log; new games start with the standard unit and modifier defaults.
 
 **A stable `id` per item instance.** Java identified items by value equality
 (`@EqualsAndHashCode` on name/description/type), which meant two identical

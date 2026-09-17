@@ -20,7 +20,7 @@ type MaybeOlderPlayerhand = Omit<Playerhand, 'stats'> & Partial<Pick<Playerhand,
 
 const withStats = (player: MaybeOlderPlayerhand): Playerhand => ({
   ...player,
-  stats: player.stats ?? DEFAULT_PLAYER_STATS,
+  stats: { ...DEFAULT_PLAYER_STATS, ...player.stats },
 })
 
 /** A board from before the player areas and the history existed. */

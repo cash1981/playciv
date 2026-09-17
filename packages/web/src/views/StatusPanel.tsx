@@ -1,10 +1,9 @@
 /**
  * A per-player status board: one row per player (yourself and every opponent).
  *
- * Replaces the old shared asset spreadsheet (issue #43). Most columns are
- * derived automatically from the game state; the four stat columns (coins,
- * trade, culture, victory points) are shared bookkeeping that ANY member may
- * edit for ANY player, saved through `api.setPlayerStat`.
+ * Replaces the old shared asset spreadsheet. All values shown here are shared
+ * bookkeeping that ANY member may edit for ANY player, saved through
+ * `api.setPlayerStat`.
  */
 
 import { useEffect, useState } from 'react'
@@ -28,27 +27,48 @@ interface Row {
   readonly yourTurn: boolean
   readonly civilizationName: string | null
   readonly stats: PlayerStats
-  readonly cultureLevel: number | null
-  readonly cities: number
-  readonly buildings: number
-  readonly techsChosen: number
-  readonly socialPolicies: number
-  readonly cardsInHand: number
-  readonly battlehand: number
-  readonly barbarians: number
 }
 
-/** The four editable stats, in display order, with their column headers. */
-const STAT_COLUMNS: readonly { readonly key: keyof PlayerStats; readonly label: string }[] = [
+type StatColumn = {
+  readonly key: keyof PlayerStats
+  readonly label: string
+  readonly signed?: boolean
+}
+
+const ACCOUNTING_COLUMNS: readonly StatColumn[] = [
   { key: 'coins', label: 'Coins' },
   { key: 'trade', label: 'Trade' },
   { key: 'culture', label: 'Culture' },
-  { key: 'victoryPoints', label: 'VP' },
 ]
 
-// Player + Civilization, the editable stats, then the six derived/count columns
-// (culture level, cities, buildings, techs, policies, hand, battlehand, barbarians).
-const COLUMN_COUNT = 2 + STAT_COLUMNS.length + 8
+const UNIT_COLUMNS: readonly StatColumn[] = [
+  { key: 'infantry', label: 'Infantry' },
+  { key: 'artillery', label: 'Artillery' },
+  { key: 'mounted', label: 'Mounted' },
+]
+
+const MODIFIER_COLUMNS: readonly StatColumn[] = [
+  { key: 'stacking', label: 'Stacking' },
+  { key: 'mvmt', label: 'Mvmt' },
+  { key: 'combat', label: 'Combat', signed: true },
+  { key: 'handSize', label: 'Hand Size', signed: true },
+]
+
+const EFTA_COLUMNS: readonly StatColumn[] = [
+  { key: 'efta', label: 'EftA' },
+  { key: 'infra', label: 'Infra' },
+  { key: 'mic', label: 'MIC' },
+  { key: 'pe', label: 'PE' },
+]
+
+const STATUS_GROUPS: readonly { readonly label: string; readonly columns: readonly StatColumn[] }[] = [
+  { label: 'Coins, Trade & Culture', columns: ACCOUNTING_COLUMNS },
+  { label: 'Units and Cards', columns: UNIT_COLUMNS },
+  { label: 'Default values', columns: MODIFIER_COLUMNS },
+  { label: 'Technology & Infrastructure', columns: EFTA_COLUMNS },
+]
+
+const COLUMN_COUNT = 2 + ACCOUNTING_COLUMNS.length + UNIT_COLUMNS.length + MODIFIER_COLUMNS.length + EFTA_COLUMNS.length
 
 export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Element {
   const rows: Row[] = []
@@ -61,14 +81,6 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
       yourTurn: view.you.yourTurn,
       civilizationName: view.you.civilization?.name ?? null,
       stats: view.you.stats,
-      cultureLevel: view.you.cultureMarkerLevel,
-      cities: view.you.cityCount,
-      buildings: view.you.buildingCount,
-      techsChosen: view.you.techsChosen.length,
-      socialPolicies: view.you.socialPolicies.length,
-      cardsInHand: view.you.items.length,
-      battlehand: view.you.battlehand.length,
-      barbarians: view.you.barbarians.length,
     })
   }
 
@@ -80,40 +92,31 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
       yourTurn: opponent.yourTurn,
       civilizationName: opponent.civilization?.name ?? null,
       stats: opponent.stats,
-      cultureLevel: opponent.cultureMarkerLevel,
-      cities: opponent.cityCount,
-      buildings: opponent.buildingCount,
-      techsChosen: opponent.numberOfTechsChosen,
-      socialPolicies: opponent.numberOfSocialPolicies,
-      cardsInHand: opponent.numberOfItemsInHand,
-      battlehand: opponent.battlehand.length,
-      barbarians: opponent.numberOfBarbarians,
     })
   }
 
   return (
     <CollapsiblePanel id="status" title="Player status">
       <p className="muted" style={{ margin: '0 0 0.5rem' }}>
-        Coins, trade, culture and victory points are shared bookkeeping — anyone in
-        the game can edit them. Everything else is read from the game.
+        These values are shared bookkeeping — anyone in the game can edit them.
+        Unit and modifier values start with the standard defaults shown below.
       </p>
       <div className="scroll-x">
         <table className="status-table">
           <thead>
             <tr>
-              <th>Player</th>
-              <th>Civilization</th>
-              {STAT_COLUMNS.map((column) => (
+              <th rowSpan={2}>Player</th>
+              <th rowSpan={2}>Civilization</th>
+              {STATUS_GROUPS.map((group) => (
+                <th key={group.label} colSpan={group.columns.length} className="status-group-heading">
+                  {group.label}
+                </th>
+              ))}
+            </tr>
+            <tr>
+              {STATUS_GROUPS.flatMap((group) => group.columns).map((column) => (
                 <th key={column.key}>{column.label}</th>
               ))}
-              <th title="Culture-track marker position">Culture lvl</th>
-              <th>Cities</th>
-              <th>Buildings</th>
-              <th>Techs</th>
-              <th>Policies</th>
-              <th>Hand</th>
-              <th>Battlehand</th>
-              <th>Barbarians</th>
             </tr>
           </thead>
           <tbody>
@@ -135,10 +138,11 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
                     <span className="muted">hidden</span>
                   )}
                 </td>
-                {STAT_COLUMNS.map((column) => (
+                {STATUS_GROUPS.flatMap((group) => group.columns).map((column) => (
                   <td key={column.key}>
                     <StatCell
                       value={row.stats[column.key]}
+                      signed={column.signed === true}
                       disabled={busy}
                       onCommit={(value) =>
                         void run(() => api.setPlayerStat(gameId, row.playerId, column.key, value))
@@ -146,14 +150,6 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
                     />
                   </td>
                 ))}
-                <td>{row.cultureLevel ?? <span className="muted">—</span>}</td>
-                <td>{row.cities}</td>
-                <td>{row.buildings}</td>
-                <td>{row.techsChosen}</td>
-                <td>{row.socialPolicies}</td>
-                <td>{row.cardsInHand}</td>
-                <td>{row.battlehand}</td>
-                <td>{row.barbarians}</td>
               </tr>
             ))}
             {rows.length === 0 && (
@@ -171,31 +167,34 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
 }
 
 /**
- * An inline editable non-negative integer. Commits on blur or Enter, and only
- * when the value actually changed, so another player's concurrent edits (which
- * arrive as a new `value` prop) are not clobbered.
+ * An inline editable integer. Combat may be negative; other values are
+ * non-negative. Commits on blur or Enter, and only when the value actually
+ * changed, so concurrent edits are not clobbered.
  */
 function StatCell({
   value,
+  signed = false,
   disabled,
   onCommit,
 }: {
   readonly value: number
+  readonly signed?: boolean
   readonly disabled: boolean
   readonly onCommit: (value: number) => void
 }): React.JSX.Element {
-  const [draft, setDraft] = useState(String(value))
+  const displayValue = signed && value >= 0 ? `+${value}` : String(value)
+  const [draft, setDraft] = useState(displayValue)
 
   useEffect(() => {
-    setDraft(String(value))
-  }, [value])
+    setDraft(displayValue)
+  }, [displayValue])
 
   function commit(): void {
     const trimmed = draft.trim()
     const parsed = Number(trimmed)
     // Empty or partial input (e.g. "" or "-") must revert, not save 0.
-    if (trimmed === '' || !Number.isInteger(parsed) || parsed < 0) {
-      setDraft(String(value))
+    if (trimmed === '' || !Number.isInteger(parsed) || (!signed && parsed < 0)) {
+      setDraft(displayValue)
       return
     }
     if (parsed !== value) onCommit(parsed)
@@ -204,10 +203,8 @@ function StatCell({
   return (
     <input
       className="stat-input"
-      type="number"
-      min={0}
-      step={1}
-      inputMode="numeric"
+      type="text"
+      inputMode="decimal"
       value={draft}
       disabled={disabled}
       onChange={(event) => setDraft(event.target.value)}
