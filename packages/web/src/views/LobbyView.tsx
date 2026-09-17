@@ -39,6 +39,7 @@ export function LobbyView({ player, onOpenGame, onUnauthorized }: Props): React.
     try {
       await action()
       if (onSuccess === undefined) await reload()
+      else onSuccess()
     } catch (caught) {
       if (isUnauthorized(caught)) return onUnauthorized()
       setError(errorMessage(caught))

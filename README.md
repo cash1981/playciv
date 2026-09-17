@@ -378,10 +378,11 @@ stored objects. Both are pure projections now.
 **`addNewTurn` saves.** Java forgot `pbfCollection.updateById`, so the new turn
 disappeared on the next read.
 
-**A social policy keeps its `itemNumber`.** Java built a new object with only
-name and flipside, which gave `itemNumber` 0. The log line uses the number to
-give each player their own reference number, so with 0 every card got the same
-number and the feature did nothing.
+**Social-policy choices get fresh log numbers.** Java built a new object with
+only name and flipside, which gave `itemNumber` 0. Each choice now receives a
+fresh number from the game's counter; its choose, reveal and removal logs use
+the same player-specific number, while choosing the policy again after removal
+gets a new number.
 
 **Colour choice is deterministic.** `chooseColorForPlayer` took the first
 element out of a `HashSet`, in unspecified order. It now follows Green, Yellow,

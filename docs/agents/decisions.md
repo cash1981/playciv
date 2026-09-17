@@ -368,3 +368,24 @@ not a port, so this is the owner's call.
 **Consequences.** `createGame` special-cases `numOfPlayers === 2` again, now
 with `createBoard(16, 8)`. Everything else reads the stored dimensions, so the
 column labels run to P and the rows stop at 8 without further change.
+
+---
+
+## 2026-09-17 — Social-policy selections receive fresh item numbers
+
+**Decision.** A social policy selection gets a fresh number from the game's
+`itemCounter`. The selected policy keeps that number through its choose, reveal
+and removal logs; selecting the same policy again after removal gets another
+number. Reveal logs use the player-specific `uniqueItemNumber` format for
+social policies, as they already do for technologies.
+
+**Why.** Issue #23 exposed two problems: the reveal log used the policy's base
+number instead of the selection's player-specific number, and reselecting a
+removed policy reused the old reference. Java's constructor left selected
+social policies at item number 0, so the requested behaviour is an intentional
+correction of that legacy bug.
+
+**Consequences.** `chooseSocialPolicy` advances the pure game-state counter
+when it creates a selection. The public projection and hidden-policy rules are
+unchanged; existing hidden-information tests continue to prove that a hidden
+policy name is not exposed before reveal.

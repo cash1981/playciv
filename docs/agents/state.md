@@ -6,14 +6,14 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-16_
+_Last updated: 2026-09-17_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 311 engine, 63 server (on `feat/admin-user-management`) |
+| `pnpm -r test` | passing — 312 engine, 63 server (on `fix/issue-21-auto-enter-game`) |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -73,6 +73,10 @@ _Last updated: 2026-09-16_
   accounts are rejected server-side, admins can manage users without password
   hashes in API responses, and the protected web admin page uses role lookup
   from storage rather than token claims.
+- **Issue #21.** Joining a game now opens that game immediately after the join
+  request succeeds.
+- **Issue #23.** Social-policy choose, reveal and removal logs now retain one
+  player-specific item number, while a reselected policy gets a fresh number.
 
 ## In progress
 

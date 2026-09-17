@@ -28,6 +28,7 @@ import {
 } from '../src/actions/player.js'
 import type { CivItem } from '../src/item.js'
 import { itemName } from '../src/item.js'
+import { uniqueItemNumber } from '../src/log.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
@@ -276,15 +277,15 @@ describe('social policy', () => {
     expect(state.log.at(-1)?.publicLog).not.toContain(policy.name)
   })
 
-  it('the item number follows the card, so the log number is not zero', () => {
-    // Java built a new SocialPolicy object, which gave item number 0 and made
-    // the per-player log number pointless.
+  it('allocates a non-zero item number for the chosen card', () => {
     const game = firstCivGame()
     const policy = game.socialPolicies[0]
     if (policy === undefined) throw new Error('no social policy')
 
     const state = unwrap(chooseSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
-    expect(findPlayer(state, CASH1981)?.socialPolicies[0]?.itemNumber).toBe(policy.itemNumber)
+    expect(findPlayer(state, CASH1981)?.socialPolicies[0]?.itemNumber).toBeGreaterThan(
+      policy.itemNumber,
+    )
   })
 
   it('the same card twice is refused', () => {
@@ -323,6 +324,33 @@ describe('social policy', () => {
 
     expect(findPlayer(state, CASH1981)?.socialPolicies[0]?.hidden).toBe(false)
     expect(state.log.at(-1)?.publicLog).toContain(policy.name)
+  })
+
+  it('keeps one item number through choose, reveal and removal, then allocates a new one', () => {
+    const game = firstCivGame()
+    const policy = game.socialPolicies[0]
+    if (policy === undefined) throw new Error('no social policy')
+
+    let state = unwrap(chooseSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
+    const firstChoice = findPlayer(state, CASH1981)?.socialPolicies[0]
+    if (firstChoice === undefined) throw new Error('policy was not chosen')
+    const firstNumber = uniqueItemNumber('cash1981', firstChoice.itemNumber)
+    expect(state.log.at(-1)?.privateLog).toContain(firstNumber)
+
+    state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: policy.name }))
+    expect(state.log.at(-1)?.privateLog).toContain(firstNumber)
+    expect(state.log.at(-1)?.publicLog).toContain(firstNumber)
+
+    state = unwrap(removeSocialPolicy(state, { playerId: CASH1981, name: policy.name }))
+    expect(state.log.at(-1)?.privateLog).toContain(firstNumber)
+
+    state = unwrap(chooseSocialPolicy(state, { playerId: CASH1981, name: policy.name }))
+    const secondChoice = findPlayer(state, CASH1981)?.socialPolicies[0]
+    if (secondChoice === undefined) throw new Error('policy was not chosen again')
+    expect(secondChoice.itemNumber).not.toBe(firstChoice.itemNumber)
+    expect(state.log.at(-1)?.privateLog).toContain(
+      uniqueItemNumber('cash1981', secondChoice.itemNumber),
+    )
   })
 
   it('a card you have not chosen gives ITEM_NOT_FOUND', () => {
