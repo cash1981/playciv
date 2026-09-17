@@ -55,7 +55,7 @@ same 20 files.
 
 ## Check the git history first — always
 
-Several agents (Claude, Codex/Luna, Sol, and the human) commit to this
+Several agents (Claude, Codex/Luna, and the human) commit to this
 repository, often on the same branch and often between your turns. **Before you
 plan or touch anything, read what has already happened.** The docs can lag; the
 git history cannot.

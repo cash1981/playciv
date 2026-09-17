@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Reads a diff against the task brief it was meant to satisfy and returns a verdict with findings. Read-only by design — it cannot write, edit or run anything. Use after the coder reports and the orchestrator has run the verification. Not for writing code and not for fixing what it finds.
-model: gpt-5.6-sol
+model: claude-opus-5
 tools: Read, Glob, Grep
 ---
 

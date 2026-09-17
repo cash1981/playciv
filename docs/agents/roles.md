@@ -8,7 +8,7 @@ code is right.
 | --- | --- | --- | --- |
 | **Orchestrator** | strong (Opus) | yes | yes |
 | **Coder** | cheap (Sonnet, or Haiku for mechanical work) | yes, inside claimed paths | no |
-| **Reviewer** | Sol (strong review model) | **no** | no |
+| **Reviewer** | Sol (`gpt-5.6-sol`; Claude uses a Sol-compatible handoff) | **no** | no |
 | **Rules checker** | strong (Opus) | **no** | no |
 
 The orchestrator is the session you are talking to. The other three are defined

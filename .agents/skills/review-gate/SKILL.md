@@ -5,9 +5,11 @@ description: Run the review cycle on the current feature branch — verify, hand
 
 # Review gate
 
-The reviewer for every gate must be Sol (`gpt-5.6-sol`). Do not use Terra as
-the default reviewer. If Sol is unavailable, stop and report the blocker
-instead of silently substituting a weaker reviewer.
+The reviewer for every gate must be Sol (`gpt-5.6-sol`). Codex orchestrators
+must spawn the reviewer with that model. Claude orchestrators must hand the
+diff to a Sol-compatible Codex review task; the Claude-local reviewer is not a
+substitute. Do not use Terra as the default reviewer. If Sol is unavailable,
+stop and report the blocker instead of silently substituting a weaker reviewer.
 
 The check between "the code is written" and "the code is merged". The coder
 never approves its own work: it is written on a cheaper model and read by a

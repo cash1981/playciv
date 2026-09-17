@@ -92,8 +92,10 @@ saw. "It should work" is not verification.
 ## 5. The review gate
 
 **The coder never merges its own work.** Code is written by the `coder` role on
-a cheaper model; it is checked by the read-only `reviewer` role using Sol, the
-designated stronger review model. Sol **cannot write**. See `roles.md` for why.
+a cheaper model; it is checked by the read-only `reviewer` role using Sol
+(`gpt-5.6-sol`), the designated stronger review model. Codex starts Sol
+directly; Claude must hand off to a Sol-compatible Codex review task. Sol
+**cannot write**. See `roles.md` for why.
 
 The orchestrator drives it:
 
