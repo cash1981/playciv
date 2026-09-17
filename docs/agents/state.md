@@ -13,7 +13,7 @@ _Last updated: 2026-09-17_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 355 engine, 78 server, 3 web |
+| `pnpm -r test` | passing — 356 engine, 78 server, 3 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -141,6 +141,7 @@ _Last updated: 2026-09-17_
   (`?page=&size=`, default 20, capped 100) so the browser never loads the whole
   history or every image at once. The `opponents` data stays on the view for the
   turn banner, Player status and the trade dropdown. Browser-verified.
+
 ## In progress
 
 _Nothing._

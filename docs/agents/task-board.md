@@ -20,7 +20,7 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 - **Owner:** Claude (Opus 4.8)
 - **Branch:** `feat/issue-51-revealed`
 - **Brief:** `docs/agents/tasks/revealed-panel.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
   - `packages/engine/src/actions/game.ts` (adds `revealedFeed`)
   - `packages/engine/src/state.ts` (`RevealedEntry` type only)

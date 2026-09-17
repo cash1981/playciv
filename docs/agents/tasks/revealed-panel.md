@@ -55,10 +55,9 @@ map, OR the reveal/discard flags and keep the newest `createdAt`. Sort by
 
 ## Paths
 
-- `packages/engine/src/actions/game.ts` — add `revealedFeed`; keep
-  `allRevealedItems`.
-- `packages/engine/src/state.ts` — `RevealedEntry` type (exported via index).
-- `packages/engine/src/index.ts` — export `revealedFeed`, `RevealedEntry`.
+- `packages/engine/src/actions/game.ts` — add `revealedFeed` and the
+  `RevealedEntry` type (co-located with the projection, already re-exported by
+  `index.ts`'s `export * from './actions/game.js'`); keep `allRevealedItems`.
 - `packages/server/src/routes/games.ts` — `/revealed` takes `page`/`size`,
   returns `{ items, total, page, size }`.
 - `packages/web/src/lib/api.ts` — `revealed(gameId, page, size)` + DTOs.

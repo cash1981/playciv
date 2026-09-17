@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 
 import { draw } from '../src/actions/draw.js'
 import { revealedFeed } from '../src/actions/game.js'
-import { chooseTech, discardItem, revealItem } from '../src/actions/player.js'
+import { chooseTech, discardItem, revealItem, revealTech } from '../src/actions/player.js'
 import { itemName } from '../src/item.js'
 import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
@@ -100,11 +100,56 @@ describe('revealedFeed', () => {
     expect(feed[0]?.discarded).toBe(true)
   })
 
-  it('never leaks a hidden technology', () => {
+  it('never lets a technology into the feed, even one with a REVEAL log entry', () => {
     let state = firstCivGame()
-    // A chosen tech is hidden by default; it must not surface in the feed.
+    // Techs live in techsChosen, never in the hand or discard pile. Reveal one so
+    // a REVEAL log entry carries it: the feed's log walk must still refuse to add
+    // it, because the walk only ever enriches a row already in the public set.
     state = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Navy' }))
+    state = unwrap(revealTech(state, { playerId: CASH1981, techName: 'Navy' }))
+    expect(state.log.some((entry) => entry.logType === 'REVEAL' && entry.item?.kind === 'tech')).toBe(
+      true,
+    )
     expect(revealedFeed(state).some((entry) => entry.item.kind === 'tech')).toBe(false)
+  })
+
+  it('does not resurrect a card that has left the public set', () => {
+    // The property that protects hidden information: the log walk never adds a
+    // row, it only enriches one already seeded from the public set. Reveal and
+    // discard a card, then take it out of the discard pile (as a reshuffle
+    // returns it to the deck). Its REVEAL/DISCARD log entries survive, but the
+    // card is no longer public, so it must vanish from the feed rather than be
+    // resurrected — otherwise a later hidden redraw would leak.
+    let state = firstCivGame()
+    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CULTURE_1' }))
+    const card = handItem(state, 'CULTURE_1')
+    state = unwrap(
+      revealItem(state, {
+        playerId: CASH1981,
+        sheetName: 'CULTURE_1',
+        itemNumber: card.itemNumber,
+      }),
+    )
+    state = unwrap(
+      discardItem(state, {
+        playerId: CASH1981,
+        sheetName: 'CULTURE_1',
+        itemNumber: card.itemNumber,
+        name: itemName(card),
+      }),
+    )
+    expect(revealedFeed(state).some((entry) => entry.item.itemNumber === card.itemNumber)).toBe(true)
+
+    const reshuffled: GameState = {
+      ...state,
+      discardedItems: state.discardedItems.filter((item) => item.itemNumber !== card.itemNumber),
+    }
+    expect(state.log.some((entry) => entry.logType === 'REVEAL' && entry.item?.itemNumber === card.itemNumber)).toBe(
+      true,
+    )
+    expect(
+      revealedFeed(reshuffled).some((entry) => entry.item.itemNumber === card.itemNumber),
+    ).toBe(false)
   })
 
   it('orders the feed newest first by log timestamp', () => {

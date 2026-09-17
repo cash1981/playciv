@@ -50,6 +50,13 @@ export function RevealedPanel({ gameId, reloadCount }: Props): React.JSX.Element
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const items = data?.items ?? []
 
+  // If the feed shrinks (e.g. a reshuffle empties the discard pile) the current
+  // page can fall past the end; step back so the viewer is not left on a blank
+  // page with Next disabled.
+  useEffect(() => {
+    if (data !== null && page > totalPages) setPage(totalPages)
+  }, [data, page, totalPages])
+
   return (
     <CollapsiblePanel id="revealed" title={`Revealed and Discarded Items (${total})`}>
       {loadError !== null && <div className="error">{loadError}</div>}

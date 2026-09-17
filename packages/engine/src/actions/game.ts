@@ -295,6 +295,8 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     revealed: boolean
     discarded: boolean
     createdAt: string | null
+    /** Log index of the newest contributing entry; -1 when the log names none. */
+    logOrder: number
   }
 
   // Seed from the current public set: discarded items and non-hidden hand items.
@@ -307,6 +309,7 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
       revealed: false,
       discarded: true,
       createdAt: null,
+      logOrder: -1,
     })
   }
 
@@ -321,6 +324,7 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
           revealed: true,
           discarded: false,
           createdAt: null,
+          logOrder: -1,
         })
       } else {
         existing.revealed = true
@@ -336,22 +340,28 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     return a.localeCompare(b) >= 0 ? a : b
   }
 
-  for (const entry of state.log) {
-    if (entry.item === null) continue
-    if (entry.logType !== 'REVEAL' && entry.logType !== 'DISCARD') continue
+  state.log.forEach((entry, logIndex) => {
+    if (entry.item === null) return
+    if (entry.logType !== 'REVEAL' && entry.logType !== 'DISCARD') return
     const row = rows.get(entry.item.itemNumber)
-    if (row === undefined) continue
+    if (row === undefined) return
     if (entry.logType === 'REVEAL') row.revealed = true
     if (entry.logType === 'DISCARD') row.discarded = true
     row.createdAt = newer(row.createdAt, entry.createdAt)
+    row.logOrder = Math.max(row.logOrder, logIndex)
     if (row.playerId === null) row.playerId = entry.playerId
-  }
+  })
 
+  // Newest first: by timestamp, then by log position for entries stamped in the
+  // same request (matching the public-log route), then by seed order so rows the
+  // log never named keep a stable order.
   return [...rows.values()]
     .map((row, index) => ({ row, index }))
     .sort(
       (a, b) =>
-        (b.row.createdAt ?? '').localeCompare(a.row.createdAt ?? '') || a.index - b.index,
+        (b.row.createdAt ?? '').localeCompare(a.row.createdAt ?? '') ||
+        b.row.logOrder - a.row.logOrder ||
+        a.index - b.index,
     )
     .map(({ row }) => ({
       item: row.item,
