@@ -487,12 +487,14 @@ does not make the values affect engine rules.
 
 ## 2026-09-17 — Issue #49 uses finite supplies for public board assets
 
-**Decision.** The board palette enforces physical supplies for buildings,
-resources, and Great Person pieces. Every building asset has six pieces;
-upgrade pairs share their six-piece pool. Each resource asset has a supply
-equal to the number of players, and each Great Person board asset has three
-pieces. Placement consumes availability and removal restores it. The separate
-Great Person card deck remains independent.
+**Decision.** The board palette enforces the physical building supplies from
+the reference sheet: Market/Bank 5, Temple/Cathedral 5, Barracks/Academy 5,
+Granary/Aqueduct 6, Library/University 6, Workshop 6, Harbor 10,
+Tradingpost 6, Shipyard 5, and Ironmine 6. Upgrade pairs share their family
+pool. Each resource asset has a supply equal to the number of players, and
+each Great Person board asset has three pieces. Placement consumes availability
+and removal restores it. The separate Great Person card deck remains
+independent.
 
 **Why.** The human requested the same availability mechanic as physical
 buildings for resources and Great Persons. The old system had no board-piece

@@ -123,10 +123,14 @@ _Last updated: 2026-09-17_
   editable Units and Cards, default modifiers, and EftA/Infra/MIC/PE values;
   older saved stats are migrated with defaults and Combat supports signed
   modifiers.
-- **Issue #49.** Board supplies are now finite and visible: buildings have six
-  pieces per type with upgrade families sharing pools, resources have one pool
-  per type sized to the player count, and Great Person board assets have three
-  pieces per type. Placement is rejected at zero and removal restores supply.
+- **Issue #49.** Board supplies are now finite and visible: building counts
+  come from the physical reference sheet, resources have one pool per type
+  sized to the player count, and Great Person board assets have three pieces
+  per type. Placement is rejected at zero and removal restores supply.
+- **Issue #49 correction.** Building availability now uses the physical counts
+  from the reference image: Market/Bank 5, Temple/Cathedral 5,
+  Barracks/Academy 5, Granary/Aqueduct 6, Library/University 6, Workshop 6,
+  Harbor 10, Tradingpost 6, Shipyard 5, and Ironmine 6.
 - 
 ## In progress
 

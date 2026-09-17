@@ -31,7 +31,7 @@ describe('BoardPalette finite supplies', () => {
         category="building"
         onCategoryChange={() => undefined}
         replaying={false}
-        pieces={Array.from({ length: 6 }, (_, index) => piece('buildings/barracks', String(index)))}
+        pieces={Array.from({ length: 5 }, (_, index) => piece('buildings/barracks', String(index)))}
         numOfPlayers={4}
       />,
     )
@@ -44,7 +44,7 @@ describe('BoardPalette finite supplies', () => {
         category="building"
         onCategoryChange={() => undefined}
         replaying={false}
-        pieces={Array.from({ length: 5 }, (_, index) => piece('buildings/barracks', String(index)))}
+        pieces={Array.from({ length: 4 }, (_, index) => piece('buildings/barracks', String(index)))}
         numOfPlayers={4}
       />,
     )

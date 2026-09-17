@@ -27,6 +27,7 @@ import {
   WONDERS_AREA_ID,
   areaAt,
   areaBandTop,
+  boardAssetLimit,
   boardAreas,
   boardHeight,
   boardWidth,
@@ -141,6 +142,31 @@ describe('the manifest', () => {
     }
   })
 
+  it('uses the physical supply count for every building type', () => {
+    const expected: Readonly<Record<string, number>> = {
+      'buildings/market': 5,
+      'buildings/bank': 5,
+      'buildings/temple': 5,
+      'buildings/cathedral': 5,
+      'buildings/barracks': 5,
+      'buildings/academy': 5,
+      'buildings/granary': 6,
+      'buildings/aqueduct': 6,
+      'buildings/library': 6,
+      'buildings/university': 6,
+      'buildings/workshop': 6,
+      'buildings/harbor': 10,
+      'buildings/tradingpost': 6,
+      'buildings/shipyard': 5,
+      'buildings/ironmine': 6,
+    }
+    for (const [assetId, limit] of Object.entries(expected)) {
+      const asset = findBoardAsset(assetId)
+      if (asset === undefined) throw new Error(`${assetId} missing from manifest`)
+      expect(boardAssetLimit(asset, 4), assetId).toBe(limit)
+    }
+  })
+
   it('gives every piece a positive size', () => {
     expect(BOARD_ASSETS.every((asset) => asset.width > 0 && asset.height > 0)).toBe(true)
   })
@@ -182,12 +208,10 @@ describe('placePiece', () => {
     expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'nobody' })
   })
 
-  it('shares six pieces between an upgrade family', () => {
+  it('shares five pieces between an upgrade family', () => {
     let state = firstCivGame()
-    for (let index = 0; index < 3; index++) {
-      state = place(state, 'buildings/barracks', 0, 0)
-      state = place(state, 'buildings/academy', 0, 0)
-    }
+    for (let index = 0; index < 3; index++) state = place(state, 'buildings/barracks', 0, 0)
+    for (let index = 0; index < 2; index++) state = place(state, 'buildings/academy', 0, 0)
 
     const academy = findBoardAsset('buildings/academy')
     if (academy === undefined) throw new Error('academy missing from manifest')
@@ -197,18 +221,18 @@ describe('placePiece', () => {
       assetId: 'buildings/barracks',
       x: 0,
       y: 0,
-    }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'buildings/barracks', limit: 6 })
+    }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'buildings/barracks', limit: 5 })
   })
 
-  it('gives non-upgradeable buildings their own supply of six', () => {
+  it('gives Harbor its physical supply of ten', () => {
     let state = firstCivGame()
-    for (let index = 0; index < 6; index++) state = place(state, 'buildings/harbor', 0, 0)
+    for (let index = 0; index < 10; index++) state = place(state, 'buildings/harbor', 0, 0)
     expect(unwrapErr(placePiece(state, {
       playerId: CASH1981,
       assetId: 'buildings/harbor',
       x: 0,
       y: 0,
-    }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'buildings/harbor', limit: 6 })
+    }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'buildings/harbor', limit: 10 })
   })
 
   it('limits each resource to the number of players', () => {
