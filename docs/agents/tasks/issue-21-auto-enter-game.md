@@ -58,7 +58,10 @@ existing `onOpenGame` callback.
 - [ ] All agents are explicitly instructed to use dedicated worktrees.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 - [ ] No hidden information or game-rule behavior is changed.
-- [ ] Browser behavior is verified or the limitation is reported honestly.
+- [x] Browser behavior limitation is reported honestly: this checkout has no
+  browser automation session or web test runner; typecheck/build passed and
+  the callback flow was inspected directly. A browser smoke test should be
+  run against the deployed app before release.
 
 ## Open questions
 
