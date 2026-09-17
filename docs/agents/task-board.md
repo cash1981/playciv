@@ -12,6 +12,29 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-49-availability
+
+- **Owner:** Codex (GPT-5)
+- **Branch:** `feat/issue-49-availability`
+- **Brief:** `docs/agents/tasks/issue-49-availability.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/board.ts`
+  - `packages/engine/src/actions/board.ts`
+  - `packages/engine/src/errors.ts`
+  - `packages/engine/test/board.test.ts`
+  - `packages/engine/test/board-tiles.test.ts`
+  - `packages/web/src/views/BoardView.tsx`
+  - `packages/web/src/views/GameView.tsx`
+  - `packages/web/src/styles.css`
+  - `packages/web/src/lib/api.ts`
+  - `packages/server/src/routes/board.ts`
+  - `packages/server/test/board-api.test.ts`
+  - `docs/agents/tasks/issue-49-availability.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+- **Notes:** Issue #49 has two open rule questions: non-upgradeable building limits and how Great Person availability maps to cards.
+
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
