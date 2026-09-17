@@ -38,6 +38,11 @@ _Last updated: 2026-09-17_
   Manual wonder draws stay turn-gated like any other draw; a `wondersDealt` flag
   (not board pieces) decides whether the start-of-game deal has run, so palette
   art never cancels it. Verified in the browser.
+- **City-states on the board.** A `citystate` board-asset category (the five
+  neutral city-states cs1–cs5, art from `Civilization/Moderator/city-states`,
+  capped to one square) shows in the piece palette, so a city-state can be placed
+  on the map like a city. Placing one does not count towards a player's city
+  count (`cityCountOf` filters `category === 'city'`). Verified in the browser.
 - **Board history.** Every change recorded as a semantic operation, giving exact
   undo and step-by-step replay with the log trimmed to each step.
 - **Everything in English.**

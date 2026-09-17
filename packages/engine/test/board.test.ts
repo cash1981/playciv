@@ -98,11 +98,12 @@ describe('geometry', () => {
 })
 
 describe('the manifest', () => {
-  it('has pieces in all nine categories', () => {
+  it('has pieces in all eleven categories', () => {
     const categories = new Set(BOARD_ASSETS.map((asset) => asset.category))
     expect([...categories].sort()).toEqual([
       'building',
       'city',
+      'citystate',
       'civtile',
       'figure',
       'greatperson',
@@ -112,6 +113,16 @@ describe('the manifest', () => {
       'tile',
       'wonder',
     ])
+  })
+
+  it('has the five neutral city-states', () => {
+    const cityStates = BOARD_ASSETS.filter((asset) => asset.category === 'citystate')
+    expect(cityStates).toHaveLength(5)
+    for (const id of ['cs1', 'cs2', 'cs3', 'cs4', 'cs5']) {
+      expect(findBoardAsset(`city-states/${id}`)).toBeDefined()
+    }
+    // Kept within one square so a city-state sits on the map like a city.
+    expect(cityStates.every((asset) => asset.width <= 94 && asset.height <= 94)).toBe(true)
   })
 
   it('has an army and a scout in all five player colours', () => {

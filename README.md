@@ -147,6 +147,7 @@ Person card deck remains a hand/draw mechanic.
 | Resources | 6 | hut, village, wheat, iron, silk, incense |
 | Markers | 11 | coin, culture, caravan, fortification, wound, first player |
 | Cities | 30 | capital/city/metropolis, with and without walls, per colour |
+| City-states | 5 | the five neutral city-states (cs1–cs5) |
 | Buildings | 15 | market, temple, library, … |
 | Great People | 6 | artist, builder, general, humanitarian, merchant, scientist |
 | Starting tiles | 16 | one per civilization |
