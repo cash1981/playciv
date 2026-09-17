@@ -12,6 +12,21 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-49-building-supplies
+
+- **Owner:** Codex (GPT-5)
+- **Branch:** `fix/issue-49-building-supplies`
+- **Brief:** `docs/agents/tasks/issue-49-building-supplies.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/board.ts`
+  - `packages/engine/test/board.test.ts`
+  - `packages/web/src/views/BoardView.test.tsx`
+  - `docs/agents/tasks/issue-49-building-supplies.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+- **Notes:** Correcting building counts from the physical reference image.
+
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
