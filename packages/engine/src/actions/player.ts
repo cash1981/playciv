@@ -447,11 +447,10 @@ export interface ChooseSocialPolicyInput {
 /**
  * Java: `PlayerAction.chooseSocialPolicy`.
  *
- * One deviation: Java built a brand-new `SocialPolicy` object with only a name
- * and a flipside, which left `itemNumber` at 0. The log line uses itemNumber to
- * give each player their own reference number, so with 0 every card got the
- * same number for a given player and the feature did nothing. Here the card is
- * copied with its real itemNumber.
+ * Java built a brand-new `SocialPolicy` object with only a name and a flipside,
+ * which left `itemNumber` at 0. Allocate a fresh number for each choice so the
+ * same policy can be chosen again after removal without reusing its old log
+ * reference.
  */
 export function chooseSocialPolicy(
   state: GameState,
@@ -479,11 +478,20 @@ export function chooseSocialPolicy(
     })
   }
 
-  const chosen: SocialPolicyItem = { ...policy, ownerId: input.playerId, hidden: true }
-  const next = withPlayer(state, {
-    ...player,
-    socialPolicies: [...player.socialPolicies, chosen],
-  })
+  const itemNumber = state.itemCounter + 1
+  const chosen: SocialPolicyItem = {
+    ...policy,
+    itemNumber,
+    ownerId: input.playerId,
+    hidden: true,
+  }
+  const next = {
+    ...withPlayer(state, {
+      ...player,
+      socialPolicies: [...player.socialPolicies, chosen],
+    }),
+    itemCounter: itemNumber,
+  }
 
   return ok(appendItemLog(next, 'SOCIAL_POLICY', player.username, player.playerId, chosen))
 }

@@ -100,7 +100,10 @@ export function createLogTexts(
         publicLog: `${username} has discarded ${DELIM}${all}${itemNumberText}`,
       }
     case 'REVEAL': {
-      const suffix = item !== null && item.kind === 'tech' ? uniqueText : itemNumberText
+      const suffix =
+        item !== null && (item.kind === 'tech' || item.kind === 'socialpolicy')
+          ? uniqueText
+          : itemNumberText
       const text = `${username} has revealed ${DELIM}${all}${suffix}`
       return { privateLog: text, publicLog: text }
     }
