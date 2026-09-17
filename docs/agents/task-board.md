@@ -12,34 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-49-availability
-
-- **Owner:** Codex (GPT-5)
-- **Branch:** `feat/issue-49-availability`
-- **Brief:** `docs/agents/tasks/issue-49-availability.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/board.ts`
-  - `packages/engine/src/actions/board.ts`
-  - `packages/engine/src/errors.ts`
-  - `packages/engine/test/board.test.ts`
-  - `packages/engine/test/board-tiles.test.ts`
-  - `packages/web/src/views/BoardView.tsx`
-  - `packages/web/src/views/BoardView.test.tsx`
-  - `packages/web/src/views/GameView.tsx`
-  - `packages/web/src/styles.css`
-  - `packages/web/src/lib/api.ts`
-  - `packages/server/src/routes/board.ts`
-  - `packages/server/src/errors.ts`
-  - `packages/server/test/board-api.test.ts`
-  - `tools/board-assets.ps1`
-  - `packages/engine/data/board-assets.json`
-  - `packages/web/public/board/`
-  - `docs/agents/tasks/issue-49-availability.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`
-- **Notes:** Resolved: all buildings have six pieces (upgrade pairs share the pool); Great Person board assets have three pieces per type.
-
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
@@ -71,7 +43,7 @@ at a time. Claim them by name.
 
 | Resource | Owned by |
 | --- | --- |
-| `packages/engine/data/board-assets.json` and `packages/web/public/board/` | issue-49-availability |
+| `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |

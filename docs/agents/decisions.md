@@ -482,3 +482,19 @@ the hand, battle, tech, and policy panels.
 **Consequences.** Combat is a signed modifier and accepts negative values;
 other status values remain non-negative integers. This is bookkeeping only and
 does not make the values affect engine rules.
+
+---
+
+## 2026-09-17 — Issue #49 uses finite supplies for public board assets
+
+**Decision.** The board palette enforces physical supplies for buildings,
+resources, and Great Person pieces. Every building asset has six pieces;
+upgrade pairs share their six-piece pool. Each resource asset has a supply
+equal to the number of players, and each Great Person board asset has three
+pieces. Placement consumes availability and removal restores it. The separate
+Great Person card deck remains independent.
+
+**Why.** The human requested the same availability mechanic as physical
+buildings for resources and Great Persons. The old system had no board-piece
+inventory to port, so this is an explicit product rule rather than a silent
+correction of legacy Java behavior.

@@ -13,7 +13,7 @@ _Last updated: 2026-09-17_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 310 engine, 62 server (on `feat/issue-20-theme-switch`) |
+| `pnpm -r test` | passing — 337 engine, 73 server, 1 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -109,6 +109,10 @@ _Last updated: 2026-09-17_
   editable Units and Cards, default modifiers, and EftA/Infra/MIC/PE values;
   older saved stats are migrated with defaults and Combat supports signed
   modifiers.
+- **Issue #49.** Board supplies are now finite and visible: buildings have six
+  pieces per type with upgrade families sharing pools, resources have one pool
+  per type sized to the player count, and Great Person board assets have three
+  pieces per type. Placement is rejected at zero and removal restores supply.
 - 
 ## In progress
 

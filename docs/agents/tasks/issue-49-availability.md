@@ -61,8 +61,8 @@ removing it restores the supply.
 Keep limits in the engine as named availability rules, derive remaining counts
 from `GameState.numOfPlayers` and `state.board.pieces`, and make the existing
 `placePiece` reducer reject exhausted supplies. Expose the same derived counts
-to the board palette and relevant draw controls without duplicating counters in
-mutable state.
+to the board palette without duplicating counters in mutable state. The
+separate Great Person card draw remains independent.
 
 ## Claimed paths
 
@@ -76,7 +76,11 @@ mutable state.
 - `packages/web/src/styles.css`
 - `packages/web/src/lib/api.ts`
 - `packages/server/src/routes/board.ts`
+- `packages/server/src/errors.ts`
 - `packages/server/test/board-api.test.ts`
+- `packages/web/src/views/BoardView.test.tsx`
+- `README.md`
+- `docs/agents/decisions.md`
 - `docs/agents/tasks/issue-49-availability.md`
 - `docs/agents/task-board.md`
 - `docs/agents/state.md`
