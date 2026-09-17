@@ -12,21 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-33-navigation
-
-- **Owner:** Codex (GPT-5)
-- **Branch:** `feat/issue-33-navigation`
-- **Brief:** `docs/agents/tasks/issue-33-navigation.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/App.tsx`
-  - `packages/web/src/views/Navigation.tsx`
-  - `packages/web/src/styles.css`
-  - `packages/web/public/`
-  - `docs/agents/tasks/issue-33-navigation.md`
-  - `docs/agents/task-board.md`
-- **Notes:** Separate worktree; links depend on the final URLs/assets for the reference documents.
-
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 

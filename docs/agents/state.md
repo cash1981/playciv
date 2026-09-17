@@ -91,6 +91,8 @@ _Last updated: 2026-09-17_
 - **Issue #26.** The white army figure is removed from the board palette: gone
   from the manifest and the public art, and excluded in `tools/board-assets.ps1`
   so a regeneration keeps it out.
+- **Issue #33.** Added the responsive navigation menu and bundled rule/help
+  resources, with links to FAQ, About and Highscore.
 
 ## In progress
 

@@ -3,7 +3,7 @@
 - **Slug:** `issue-33-navigation`
 - **Branch:** `feat/issue-33-navigation`
 - **Owner:** Codex (GPT-5)
-- **Status:** in progress
+- **Status:** done — review gate approved; ready for human merge
 
 ## Goal
 
@@ -52,14 +52,14 @@ menu links read-only and make external documents open safely in a new tab.
 
 ## Acceptance criteria
 
-- [ ] The navigation is visible and usable on public and authenticated pages.
-- [ ] All rule/reference links from issue #33 are present and have meaningful labels.
-- [ ] FAQ, About and Highscore links target their routes. FAQ and About use
+- [x] The navigation is visible and usable on public and authenticated pages.
+- [x] All rule/reference links from issue #33 are present and have meaningful labels.
+- [x] FAQ, About and Highscore links target their routes. FAQ and About use
   normal browser navigation so the companion routes work after issues #34 and
   #35 are merged sequentially.
-- [ ] Existing login, game and admin navigation still works.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Verified in the browser at desktop and narrow viewport widths.
+- [x] Existing login, game and admin navigation still works.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Verified in the browser at desktop and narrow viewport widths.
 
 ## Open questions
 
