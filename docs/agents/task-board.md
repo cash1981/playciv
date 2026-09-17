@@ -25,10 +25,12 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/engine/test/board.test.ts`
   - `packages/engine/test/board-tiles.test.ts`
   - `packages/web/src/views/BoardView.tsx`
+  - `packages/web/src/views/BoardView.test.tsx`
   - `packages/web/src/views/GameView.tsx`
   - `packages/web/src/styles.css`
   - `packages/web/src/lib/api.ts`
   - `packages/server/src/routes/board.ts`
+  - `packages/server/src/errors.ts`
   - `packages/server/test/board-api.test.ts`
   - `tools/board-assets.ps1`
   - `packages/engine/data/board-assets.json`
