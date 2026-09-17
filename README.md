@@ -347,6 +347,13 @@ tests match on them.
 
 ## Deliberate improvements
 
+**A player status board instead of a shared spreadsheet.** The old app embedded
+a per-game Google Sheet that players kept by hand. That is now an in-app "Player
+status" panel: most columns (culture-track level, city and building counts,
+techs, policies, hand and unit counts) are read straight from the game state,
+and a few shared stats (coins, trade, culture, victory points) are editable by
+any member of the game, with every edit written to the public log.
+
 **A stable `id` per item instance.** Java identified items by value equality
 (`@EqualsAndHashCode` on name/description/type), which meant two identical
 `Infantry 1.3` were "equal" and `discardedItems.remove(item)` could remove the
