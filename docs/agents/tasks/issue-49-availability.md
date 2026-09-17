@@ -14,8 +14,8 @@ are board assets loaded from `Civilization/Moderator/great people`.
 
 ## Why
 
-Issue #49 asks for visible and enforced finite supplies: upgrade pairs such as
-Barracks/Academy share six pieces, resources scale with player count, and each
+Issue #49 asks for visible and enforced finite supplies: building counts come
+from the physical reference sheet, resources scale with player count, and each
 Great Person type has a maximum of three. The current board palette allows
 unlimited placement and the current board palette does not expose remaining
 Great Person availability.
@@ -50,11 +50,12 @@ The old backend and item model do not enforce these board-piece limits. The old
 client used a Google Sheet for assets; this finite-supply behavior is therefore
 a requested improvement, not a direct port.
 
-Resolved decisions: every building asset has a supply of six, including
-Harbor, Ironmine, Shipyard, and Tradingpost. Upgrade pairs share their six
-pieces. Each resource asset has a supply equal to the player count (2–5).
-Each Great Person type has a supply of three; placing one consumes a piece and
-removing it restores the supply.
+Resolved decisions: building counts come from the physical reference sheet:
+Market/Bank 5, Temple/Cathedral 5, Barracks/Academy 5, Granary/Aqueduct 6,
+Library/University 6, Workshop 6, Harbor 10, Tradingpost 6, Shipyard 5, and
+Ironmine 6. Upgrade pairs share their family pool. Each resource asset has a
+supply equal to the player count (2–5). Each Great Person type has a supply of
+three; placing one consumes a piece and removing it restores the supply.
 
 ## Approach
 
@@ -87,7 +88,7 @@ separate Great Person card draw remains independent.
 
 ## Acceptance criteria
 
-- [ ] Building upgrade families share a total of six available pieces.
+- [ ] Building families/types use the physical reference-sheet counts.
 - [ ] Resources are limited to the player count specified in issue #49.
 - [ ] An exhausted supply cannot be placed through the reducer or HTTP API.
 - [ ] Removing a placed piece restores one available piece.
@@ -99,6 +100,7 @@ separate Great Person card draw remains independent.
 
 ## Resolved design decisions
 
-- Non-upgradeable buildings are capped at six each.
+- Building counts are taken from the physical reference sheet and upgrade pairs
+  share their family pool.
 - Great Persons are board assets, capped at three per type, using the same
   placement/removal accounting as buildings.

@@ -149,6 +149,20 @@ const BUILDING_SUPPLY_GROUP: Readonly<Record<string, string>> = {
   'buildings/temple': 'temple-family',
 }
 
+/** Physical building counts from the Moderator building reference sheet. */
+const BUILDING_SUPPLY_LIMIT: Readonly<Record<string, number>> = {
+  'barracks-family': 5,
+  'market-family': 5,
+  'temple-family': 5,
+  'granary-family': 6,
+  'library-family': 6,
+  'buildings/workshop': 6,
+  'buildings/harbor': 10,
+  'buildings/tradingpost': 6,
+  'buildings/shipyard': 5,
+  'buildings/ironmine': 6,
+}
+
 const buildingSupplyGroup = (asset: BoardAsset): string | undefined =>
   asset.category === 'building'
     ? (BUILDING_SUPPLY_GROUP[asset.id] ?? asset.id)
@@ -156,7 +170,10 @@ const buildingSupplyGroup = (asset: BoardAsset): string | undefined =>
 
 /** The finite supply for a board asset, or undefined for unlimited assets. */
 export function boardAssetLimit(asset: BoardAsset, numOfPlayers: number): number | undefined {
-  if (asset.category === 'building') return 6
+  if (asset.category === 'building') {
+    const group = buildingSupplyGroup(asset)
+    return BUILDING_SUPPLY_LIMIT[group ?? asset.id] ?? 6
+  }
   if (asset.category === 'resource') return Math.max(0, Math.min(5, numOfPlayers))
   if (asset.category === 'greatperson') return 3
   return undefined

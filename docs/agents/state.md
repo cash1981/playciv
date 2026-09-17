@@ -118,10 +118,10 @@ _Last updated: 2026-09-17_
   editable Units and Cards, default modifiers, and EftA/Infra/MIC/PE values;
   older saved stats are migrated with defaults and Combat supports signed
   modifiers.
-- **Issue #49.** Board supplies are now finite and visible: buildings have six
-  pieces per type with upgrade families sharing pools, resources have one pool
-  per type sized to the player count, and Great Person board assets have three
-  pieces per type. Placement is rejected at zero and removal restores supply.
+- **Issue #49.** Board supplies are now finite and visible: building counts
+  come from the physical reference sheet, resources have one pool per type
+  sized to the player count, and Great Person board assets have three pieces
+  per type. Placement is rejected at zero and removal restores supply.
 - 
 ## In progress
 

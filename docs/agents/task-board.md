@@ -22,6 +22,9 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/engine/src/board.ts`
   - `packages/engine/test/board.test.ts`
   - `packages/web/src/views/BoardView.test.tsx`
+  - `README.md`
+  - `docs/agents/decisions.md`
+  - `docs/agents/tasks/issue-49-availability.md`
   - `docs/agents/tasks/issue-49-building-supplies.md`
   - `docs/agents/task-board.md`
   - `docs/agents/state.md`
