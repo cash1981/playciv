@@ -350,3 +350,21 @@ is the owner's call to make, and no Java reference is contradicted.
 **Consequences.** `createGame` no longer special-cases `numOfPlayers === 2`; it
 always calls `createBoard()` with the 16 × 16 default. Board geometry and every
 projection already read the stored dimensions, so nothing else changed.
+
+---
+
+## 2026-09-17 — Two-player board is 16 × 8, not full 16 × 16 (corrects the entry above)
+
+**Decision.** Two-player games use a 16 × 8 board (columns A–P, rows 1–8) —
+full width, half height. Three- to five-player games keep the full 16 × 16.
+This corrects the entry directly above: the owner did want a smaller two-player
+map after all, just not the 8 × 8 of issue #17. The "full 16 × 16 for everyone"
+step was based on a misstatement in the issue, which the owner then corrected.
+
+**Why.** The owner clarified the intent: issue #17's goal (a smaller two-player
+map) stands, but the size is 16 × 8, not 8 × 8. Board size is a product choice,
+not a port, so this is the owner's call.
+
+**Consequences.** `createGame` special-cases `numOfPlayers === 2` again, now
+with `createBoard(16, 8)`. Everything else reads the stored dimensions, so the
+column labels run to P and the rows stop at 8 without further change.

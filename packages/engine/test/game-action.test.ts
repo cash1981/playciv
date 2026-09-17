@@ -39,12 +39,12 @@ function newGameWithCreator(): GameState {
 }
 
 describe('createGame board geometry', () => {
-  it('labels the whole board A1 through P16, two players included', () => {
-    // A two-player game gets the same full-size board as everyone else.
+  it('gives two-player games a 16 by 8 board, labelled A1 through P8', () => {
+    // A two-player game is full width but half height: 16 columns, 8 rows.
     const state = createGame({ name: 'two-player', numOfPlayers: 2, seed: 'two-player' })
 
     expect(state.board.columns).toBe(16)
-    expect(state.board.rows).toBe(16)
+    expect(state.board.rows).toBe(8)
 
     const topLeft = {
       id: 'top-left',
@@ -63,14 +63,14 @@ describe('createGame board geometry', () => {
       ...topLeft,
       id: 'bottom-right',
       x: 15 * 94,
-      y: mapTop(state.board) + 15 * 94,
+      y: mapTop(state.board) + 7 * 94,
     }
 
     expect(squareOf(state.board, topLeft)).toBe('A1')
-    expect(squareOf(state.board, bottomRight)).toBe('P16')
+    expect(squareOf(state.board, bottomRight)).toBe('P8')
   })
 
-  it.each([2, 3, 4, 5])('uses the 16 by 16 board for %s players', (numOfPlayers) => {
+  it.each([3, 4, 5])('uses the full 16 by 16 board for %s players', (numOfPlayers) => {
     const state = createGame({
       name: 'standard-map',
       numOfPlayers,

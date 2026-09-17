@@ -116,7 +116,9 @@ export function createGame(options: CreateGameOptions): GameState {
     discardedItems: [],
     withdrawnPlayers: [],
     publicTurns: {},
-    board: createBoard(),
+    // Two-player games use a half-height 16 × 8 board (A–P, 1–8); three or more
+    // players get the full 16 × 16.
+    board: options.numOfPlayers === 2 ? createBoard(16, 8) : createBoard(),
     players: (options.players ?? []).map((player, index) =>
       emptyPlayerhand(player, index + 1),
     ),
