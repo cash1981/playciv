@@ -21,7 +21,8 @@ rewrite currently only has a minimal top bar.
 
 - Add a navigation menu to the shared application shell.
 - Link the six rule/reference resources named in issue #33.
-- Link FAQ, About and Highscore routes/pages.
+- Link the FAQ, About and Highscore routes; the FAQ and About pages are
+  provided by issues #34 and #35.
 
 **Out:**
 
@@ -53,7 +54,9 @@ menu links read-only and make external documents open safely in a new tab.
 
 - [ ] The navigation is visible and usable on public and authenticated pages.
 - [ ] All rule/reference links from issue #33 are present and have meaningful labels.
-- [ ] FAQ, About and Highscore are reachable from the menu.
+- [ ] FAQ, About and Highscore links target their routes. FAQ and About use
+  normal browser navigation so the companion routes work after issues #34 and
+  #35 are merged sequentially.
 - [ ] Existing login, game and admin navigation still works.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 - [ ] Verified in the browser at desktop and narrow viewport widths.
@@ -62,4 +65,6 @@ menu links read-only and make external documents open safely in a new tab.
 
 None. The old client contains the referenced PDFs/images under
 `old-civ-web/app/images/help/`; copy the needed public assets into the rewrite
-and update only the obsolete Google/old-app wording.
+and update only the obsolete Google/old-app wording. FAQ and About are
+implemented in issues #34 and #35; this branch must expose those links without
+intercepting them as routes it does not yet know.

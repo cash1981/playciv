@@ -37,8 +37,8 @@ export function Navigation({
         <span className="muted">playciv</span>
       </a>
       <nav className="site-navigation" aria-label="Main navigation">
-        <a href="/faq" onClick={(event) => navigate(event, '/faq', onNavigate)}>FAQ</a>
-        <a href="/about" onClick={(event) => navigate(event, '/about', onNavigate)}>About</a>
+        <a href="/faq">FAQ</a>
+        <a href="/about">About</a>
         <a href="/highscore" onClick={(event) => navigate(event, '/highscore', onNavigate)}>Highscore</a>
         <details className="navigation-menu">
           <summary>Rules and help</summary>
