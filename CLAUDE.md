@@ -13,7 +13,7 @@ definitions in `.claude/agents/`. Spawn them with the Agent tool using the
 
 - `coder` — writes code, on a cheaper model
 - `reviewer` — checks the work, on a stronger model, **read-only**
-- `rules-checker` — checks a change against the Java reference, **read-only**
+- `rules-checker` — checks a change against the old system (old backend `old-civ-rest` + old client `old-civ-web`), **read-only**
 
 Reviewers have no Write, Edit or Bash tool. That is deliberate: a reviewer that
 can edit will fix what it finds instead of reporting it, and the orchestrator

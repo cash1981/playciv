@@ -11,8 +11,8 @@ saves opening files just to find out where things live.
 | `tools/` | yes | PowerShell generators that turn source material into data the app ships. Not part of the build; run by hand when the source material changes. |
 | `docs/agents/` | yes | This folder. How we work, and where things stand. |
 | `.claude/` | yes | Agent definitions, skills and the dev-server launch config. |
-| `old-civ-rest/` | **no** | The dead Java 8 / Dropwizard / MongoDB backend. **The reference for every rule.** Read it; never change it. |
-| `old-civ-web/` | **no** | The dead AngularJS 1 client. Reference for how the UI used to present things, and the source of the card artwork. |
+| `old-civ-rest/` | **no** | The dead Java 8 / Dropwizard / MongoDB backend. **With `old-civ-web`, the reference for the business logic**; the backend is authoritative when the same rule is in both and they conflict. Read it; never change it. |
+| `old-civ-web/` | **no** | The dead AngularJS 1 client. **Part of the business-logic reference** — the source for logic that lived only in the client — plus how the UI used to present things, and the card artwork. |
 | `Civilization/` | **no** | Rulebooks, board templates (ODP/PPTX), piece and card artwork, a Mongo dump. Large binaries. |
 
 The three gitignored folders are reference material. They are on the human's

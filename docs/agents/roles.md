@@ -79,13 +79,14 @@ it rather than take it on faith.
 
 ### `rules-checker`
 
-The specialist. Reads the change against `old-civ-rest` and answers one
-question: does this match what Java does? Used whenever a change touches game
+The specialist. Reads the change against the old system — `old-civ-rest` and,
+for logic that lived in the client, `old-civ-web` — and answers one question:
+does this match what the old system did? Used whenever a change touches game
 rules, the deck, the log texts, or a projection.
 
 It is separate from `reviewer` because it is a different kind of reading —
-cross-referencing a Java file, not judging TypeScript — and because it is worth
-running on its own when a change is small but rule-bearing.
+cross-referencing the old backend and client, not judging TypeScript — and
+because it is worth running on its own when a change is small but rule-bearing.
 
 ## Cost
 

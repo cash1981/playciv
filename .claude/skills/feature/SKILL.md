@@ -58,8 +58,8 @@ Only after `/review-gate` has been approved. If it has not, say so and stop.
 2. **Update `docs/agents/state.md`:** move the task to "Done" as one line, and
    add anything that belongs under "Known problems".
 3. **Append to `docs/agents/decisions.md`** if the work settled something worth
-   keeping — a deviation from Java, a design choice with consequences. Append
-   at the bottom; never reword what is there.
+   keeping — a deviation from the old system, a design choice with consequences.
+   Append at the bottom; never reword what is there.
 4. **Release the claim:** remove the block from "Live claims" and free any
    shared resources it held.
 5. **Commit and push:**

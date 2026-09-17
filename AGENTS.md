@@ -21,12 +21,18 @@ reference material: `old-civ-rest` (Java 8 / Dropwizard / MongoDB) and
 
 ## The five rules that never bend
 
-1. **The old Java tests are the reference.** Where the Java source and an
-   expectation disagree, Java wins. If you think Java is wrong, port it as it
-   is and write the disagreement down in `docs/agents/decisions.md`.
-2. **Do not invent FFG rules.** If a rule is unclear, read the Java source and
-   its tests. If it is still unclear, stop and ask the human. Guessing a board
-   game rule and encoding it is worse than leaving it undone.
+1. **The old system is the reference.** The business logic to reproduce is what
+   the old backend (`old-civ-rest`, Java) and the old client (`old-civ-web`,
+   AngularJS) did *between them* — the two together implement it, not the Java
+   alone. Reproduce their combined behaviour. Where the same rule is
+   implemented in both and they disagree, the backend wins and its tests are
+   the strongest evidence; where logic lived only in the old client, that
+   client is the reference for it. If you think the old system is wrong, port
+   it as it is and write the disagreement down in `docs/agents/decisions.md`.
+2. **Do not invent FFG rules.** If a rule is unclear, read the old backend and
+   the old client and their tests. If it is still unclear, stop and ask the
+   human. Guessing a board game rule and encoding it is worse than leaving it
+   undone.
 3. **The engine is pure.** Every reducer is
    `(state, input) => Result<GameState, EngineError>`. No exceptions, no
    `Date.now()`, no `Math.random()`, no I/O. Time and randomness are passed in.

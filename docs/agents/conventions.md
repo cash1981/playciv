@@ -3,21 +3,27 @@
 The rules, with the reasoning. The five headline rules are in `AGENTS.md`; this
 is the detail.
 
-## The Java source is the reference
+## The old system is the reference
 
-`old-civ-rest` is the specification. When the port and Java disagree, Java is
-right and the port is wrong — even when Java is obviously buggy.
+The specification is the old system as a whole: the old backend
+(`old-civ-rest`, Java) and the old client (`old-civ-web`, AngularJS) together
+implement the business logic to reproduce. Read both. When the same rule lives
+in both and they disagree, the backend wins and its tests are the strongest
+evidence; when logic lived only in the old client, that client is the reference
+for it. When the port and the old system disagree, the old system is right and
+the port is wrong — even when the old behaviour is obviously buggy.
 
-- A ported test names its Java counterpart in a comment at the top.
-- A deliberate difference from Java goes in `decisions.md` **and** in the
-  "Known differences" or "Deliberate improvements" section of `README.md`.
-- Never "fix" Java behaviour silently. `endTurn` letting anyone end the turn,
+- A ported test names its counterpart in a comment at the top — the old
+  backend's test, or the old-client behaviour it stands in for.
+- A deliberate difference from the old system goes in `decisions.md` **and** in
+  the "Known differences" or "Deliberate improvements" section of `README.md`.
+- Never "fix" old behaviour silently. `endTurn` letting anyone end the turn,
   units always being level 0, double spaces in log text: all ported as they
   are, all written down.
 
 **Do not invent FFG rules.** The culture track is a marker with no rules
-attached precisely because neither Java nor the old client had any. If a rule
-is needed and is not in the source, ask.
+attached precisely because neither the old backend nor the old client had any.
+If a rule is needed and is not in the old system, ask.
 
 ## The engine is pure
 

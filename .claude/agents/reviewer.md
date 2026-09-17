@@ -28,9 +28,10 @@ reverse.
    added to `toPlayerView`, `toPublicLog` or a route response: does it carry
    another player's hand, private log, unrevealed tech or unrevealed item? Is
    there a test proving it does not?
-2. **Disagreement with the Java reference.** `old-civ-rest` is the
-   specification. A change that "fixes" Java behaviour without recording the
-   difference in `decisions.md` and `README.md` is a finding.
+2. **Disagreement with the old system.** The old backend (`old-civ-rest`) and
+   old client (`old-civ-web`) together are the specification. A change that
+   "fixes" old behaviour without recording the difference in `decisions.md` and
+   `README.md` is a finding.
 3. **Invented game rules.** The project forbids inventing FFG rules. If the
    change encodes a rule, find where it came from. If it came from nowhere,
    that is a critical finding.
