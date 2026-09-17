@@ -17,6 +17,7 @@ import { LoginView } from './views/LoginView.js'
 import { AdminView } from './views/AdminView.js'
 import { Navigation } from './views/Navigation.js'
 import { FaqView } from './views/FaqView.js'
+import { AboutView } from './views/AboutView.js'
 import { applyTheme, saveTheme, storedTheme, type Theme } from './theme.js'
 
 type Screen =
@@ -24,12 +25,14 @@ type Screen =
   | { readonly name: 'admin' }
   | { readonly name: 'highscore' }
   | { readonly name: 'faq' }
+  | { readonly name: 'about' }
   | { readonly name: 'game'; readonly gameId: string }
 
 function screenFromPath(pathname: string): Screen {
   if (pathname === '/admin' || pathname === '/admin/') return { name: 'admin' }
   if (/^\/highscore\/?$/.test(pathname)) return { name: 'highscore' }
   if (/^\/faq\/?$/.test(pathname)) return { name: 'faq' }
+  if (/^\/about\/?$/.test(pathname)) return { name: 'about' }
   const match = /^\/game\/([^/]+)\/?$/.exec(pathname)
   if (match === null) return { name: 'lobby' }
 
@@ -137,12 +140,40 @@ export function App(): React.JSX.Element {
     )
   }
 
+  // The About page is public: it renders whether or not anyone is signed in.
+  if (screen.name === 'about') {
+    return (
+      <div className="app">
+        <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
+        <AboutView />
+      </div>
+    )
+  }
+
   // The highscore is public: it renders whether or not anyone is signed in.
   if (screen.name === 'highscore') {
     return (
       <div className="app">
         <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
         <HighscoreView />
+      </div>
+    )
+  }
+
+  if (screen.name === 'about') {
+    return (
+      <div className="app">
+        <header className="topbar">
+          <strong>Civilization</strong>
+          <span className="muted">playciv</span>
+          <span className="spacer" />
+          <button onClick={backToGames}>{player === null ? 'Sign in' : 'Games'}</button>
+          <button onClick={openHighscore}>Highscore</button>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          {player !== null && <span className="muted">{player.username}</span>}
+          {player !== null && <button onClick={signOut}>Sign out</button>}
+        </header>
+        <AboutView />
       </div>
     )
   }
