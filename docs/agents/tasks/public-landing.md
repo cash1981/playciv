@@ -2,8 +2,8 @@
 
 - **Slug:** `public-landing`
 - **Branch:** `feat/public-landing`
-- **Owner:** unclaimed
-- **Status:** ready
+- **Owner:** Codex (GPT-5)
+- **Status:** in progress
 
 ## Goal
 
