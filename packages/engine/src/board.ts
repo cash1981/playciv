@@ -174,6 +174,11 @@ export type BoardChange =
       readonly fromIndex: number
       readonly toTop: boolean
     }
+  /**
+   * The clear action was removed in issue #14, but games cleared before then
+   * still carry this entry in their history, so replay and undo must keep
+   * handling it. No code produces a new one.
+   */
   | { readonly kind: 'clear'; readonly pieces: readonly BoardPiece[] }
 
 export interface BoardHistoryEntry {
@@ -220,11 +225,24 @@ export const boardWidth = (board: Board): number => board.columns * board.square
 export const mapHeight = (board: Board): number => board.rows * board.squareSize
 
 /**
+ * How much taller the culture track band is drawn than its own aspect ratio
+ * would give. The artwork is very wide and short, so at full board width its
+ * natural height is only about one square, which reads as a thin strip even at
+ * 100% zoom (issue #22). The client paints the image with
+ * `background-size: 100% 100%`, so stretching the band simply grows the image
+ * with it; cell centres stay at `trackHeight / 2` and zoom is unaffected.
+ */
+export const CULTURE_TRACK_SCALE = 1.7
+
+/**
  * Height of the culture track band. The track image is drawn across the full
- * width of the map, so its height follows from its own aspect.
+ * width of the map, so its height follows from its own aspect, then stretched
+ * taller by {@link CULTURE_TRACK_SCALE} so the band is comfortable to read.
  */
 export const cultureTrackHeight = (board: Board): number =>
-  Math.round((boardWidth(board) * CULTURE_TRACK.height) / CULTURE_TRACK.width)
+  Math.round(
+    (boardWidth(board) * CULTURE_TRACK.height * CULTURE_TRACK_SCALE) / CULTURE_TRACK.width,
+  )
 
 /** Top edge of the map. The culture track sits above it. */
 export const mapTop = (board: Board): number =>
@@ -793,6 +811,7 @@ export function applyChange(
       const rest = withoutPiece(pieces, piece.id)
       return change.toTop ? [...rest, piece] : [piece, ...rest]
     }
+    // Kept for games cleared before the clear action was removed (issue #14).
     case 'clear':
       return []
   }
@@ -826,6 +845,7 @@ export function revertChange(
       if (piece === undefined) return pieces
       return insertAt(withoutPiece(pieces, piece.id), change.fromIndex, piece)
     }
+    // Kept for games cleared before the clear action was removed (issue #14).
     case 'clear':
       return change.pieces
   }

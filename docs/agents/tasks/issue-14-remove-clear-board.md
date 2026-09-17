@@ -2,8 +2,8 @@
 
 - **Slug:** `issue-14-remove-clear-board`
 - **Branch:** `fix/issue-14-remove-clear-board`
-- **Owner:** Luna
-- **Status:** in progress
+- **Owner:** Luna (UI removal), then Claude (full removal)
+- **Status:** done
 
 ## Goal
 
@@ -20,10 +20,14 @@ functionality is warranted.
 
 - Remove the clear-board button and its confirmation handler from the board UI.
 
+- Remove the whole action: the `clearBoard` engine reducer, the
+  `POST /board/clear` route and the `api.clearBoard` client method, plus their
+  tests. (The UI button was removed first; the owner then asked for the rest.)
+
 **Out:**
 
-- Keep the engine reducer and server endpoint for history compatibility; this
-  issue only removes the user-facing control.
+- Keep the `{ kind: 'clear' }` `BoardChange` variant and its replay/undo cases:
+  games cleared before this change still carry that history entry.
 
 ## Reference
 
@@ -41,9 +45,10 @@ unchanged.
 
 ## Acceptance criteria
 
-- [ ] The board controls contain no "Clear board" button or confirmation.
-- [ ] Undo and replay remain available and unchanged.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] The board controls contain no "Clear board" button or confirmation.
+- [x] No `clearBoard` reducer, `/board/clear` route or `api.clearBoard` method.
+- [x] Undo and replay remain available and unchanged.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 
 ## Open questions
 

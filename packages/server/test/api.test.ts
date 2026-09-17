@@ -898,21 +898,4 @@ describe('board', () => {
     expect(view.board.pieces.at(-1)?.x).toBe(700)
   })
 
-  it('clears the board', async () => {
-    const { gameId, starter } = await startedGame('Tombrett')
-    await app.inject({
-      method: 'POST',
-      url: `/api/games/${gameId}/board/pieces`,
-      headers: bearer(starter),
-      payload: { assetId: 'markers/coin', x: 10, y: 10 },
-    })
-
-    const cleared = await app.inject({
-      method: 'POST',
-      url: `/api/games/${gameId}/board/clear`,
-      headers: bearer(starter),
-      payload: {},
-    })
-    expect((cleared.json() as { board: { pieces: unknown[] } }).board.pieces).toHaveLength(0)
-  })
 })

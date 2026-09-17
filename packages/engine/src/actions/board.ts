@@ -363,26 +363,6 @@ export function removePiece(state: GameState, input: PieceInput): ActionResult {
   )
 }
 
-export interface ClearBoardInput {
-  readonly playerId: string
-  readonly at?: string
-}
-
-/** Empties the board. Useful when a setup has to be redone from scratch. */
-export function clearBoard(state: GameState, input: ClearBoardInput): ActionResult {
-  const denied = requireAccess(state, input.playerId)
-  if (denied !== undefined) return err(denied)
-
-  return ok(
-    record(input, {
-      state,
-      pieces: [],
-      change: { kind: 'clear', pieces: state.board.pieces },
-      description: `cleared the board of ${state.board.pieces.length} pieces`,
-    }),
-  )
-}
-
 // ---------------------------------------------------------------------------
 // Undo
 // ---------------------------------------------------------------------------

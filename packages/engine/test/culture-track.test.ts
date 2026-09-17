@@ -14,8 +14,11 @@ import { draw } from '../src/actions/draw.js'
 import { revealItem } from '../src/actions/player.js'
 import type { BoardPiece } from '../src/board.js'
 import {
+  CULTURE_TRACK,
   CULTURE_TRACK_CELLS,
+  CULTURE_TRACK_SCALE,
   CULTURE_VICTORY_STEP,
+  boardWidth,
   createBoard,
   cultureCellCenter,
   cultureStepOf,
@@ -41,6 +44,13 @@ describe('the track', () => {
 
   it('has 27 spaces, matching the artwork', () => {
     expect(CULTURE_TRACK_CELLS).toBe(27)
+  })
+
+  it('is drawn taller than its bare aspect ratio, so it reads well (issue #22)', () => {
+    const aspectHeight = (boardWidth(board) * CULTURE_TRACK.height) / CULTURE_TRACK.width
+    expect(CULTURE_TRACK_SCALE).toBeGreaterThan(1)
+    expect(cultureTrackHeight(board)).toBe(Math.round(aspectHeight * CULTURE_TRACK_SCALE))
+    expect(cultureTrackHeight(board)).toBeGreaterThan(aspectHeight)
   })
 
   it('sits above the map and is a band, not a row of squares', () => {

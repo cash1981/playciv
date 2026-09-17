@@ -389,3 +389,44 @@ correction of that legacy bug.
 when it creates a selection. The public projection and hidden-policy rules are
 unchanged; existing hidden-information tests continue to prove that a hidden
 policy name is not exposed before reveal.
+
+---
+
+## 2026-09-17 — Culture track band is stretched taller than its aspect (issue #22)
+
+**Decision.** The culture track band is drawn `CULTURE_TRACK_SCALE` (1.7×)
+taller than the height its own aspect ratio would give at full board width.
+
+**Why.** The artwork is very wide and short (3349 × 215), so scaled to the full
+board width its natural height is only about one square, which reads as a thin
+strip even at 100% zoom (issue #22). The client paints the image with
+`background-size: 100% 100%`, so stretching the band simply grows the image with
+it — nothing is clipped or re-tiled — and cell centres stay at `trackHeight / 2`,
+so marker positions and zoom are unaffected. Neither the old backend nor the old
+client had a culture track, so there is no reference to contradict; this is a
+presentation choice.
+
+**Consequences.** `cultureTrackHeight` multiplies by `CULTURE_TRACK_SCALE`, so
+`mapTop` and the whole board are that much taller. Every geometry consumer reads
+`mapTop`/`cultureTrackHeight` rather than a hard-coded number, so only the band
+height changed.
+
+---
+
+## 2026-09-17 — Clear-board action removed, its history kind kept (issue #14)
+
+**Decision.** The clear-board action is gone: the `clearBoard` engine reducer,
+the `POST /board/clear` route and the `api.clearBoard` client method are
+deleted, along with their tests. The `{ kind: 'clear' }` `BoardChange` variant
+and its `applyChange`/`revertChange` cases stay.
+
+**Why.** Issue #14 says there is no situation where clearing the whole board is
+warranted. The user-facing button was already removed earlier; this finishes the
+job by removing the now-unreachable action end to end. The history variant is
+kept because games cleared before this change still carry a clear entry in their
+board history, and replay and undo must keep reproducing it. No code produces a
+new one.
+
+**Consequences.** Nothing can clear a board any more. The retained clear cases
+are compatibility-only and no longer exercised by a test, since nothing can
+produce the entry to feed them.
