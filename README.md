@@ -135,7 +135,11 @@ centre.
 
 Every player sees and can move every piece, as at a physical table.
 
-The palette has nine categories, generated from the images on disk:
+The palette has ten categories, generated from the images on disk. Buildings
+and resources use finite physical supplies: upgrade families share six
+building pieces, each resource type is limited by the player count, and each
+Great Person type has three board pieces. The separate Great Person card deck
+remains a hand/draw mechanic.
 
 | Category | Count | From |
 | --- | --- | --- |
@@ -144,6 +148,7 @@ The palette has nine categories, generated from the images on disk:
 | Markers | 11 | coin, culture, caravan, fortification, wound, first player |
 | Cities | 30 | capital/city/metropolis, with and without walls, per colour |
 | Buildings | 15 | market, temple, library, … |
+| Great People | 6 | artist, builder, general, humanitarian, merchant, scientist |
 | Starting tiles | 16 | one per civilization |
 | Map tiles | 28 | exploration tiles 1–27, plus the back |
 | Leaders | 80 | culture-track markers, per civilization and colour |

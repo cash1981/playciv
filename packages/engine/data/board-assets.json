@@ -584,6 +584,54 @@
       "height": 83
     },
     {
+      "id": "great people/artist",
+      "category": "greatperson",
+      "path": "great people/artist.png",
+      "label": "Artist",
+      "width": 87,
+      "height": 87
+    },
+    {
+      "id": "great people/builder",
+      "category": "greatperson",
+      "path": "great people/builder.png",
+      "label": "Builder",
+      "width": 85,
+      "height": 85
+    },
+    {
+      "id": "great people/general",
+      "category": "greatperson",
+      "path": "great people/general.png",
+      "label": "General",
+      "width": 84,
+      "height": 86
+    },
+    {
+      "id": "great people/humanitarian",
+      "category": "greatperson",
+      "path": "great people/humanitarian.png",
+      "label": "Humanitarian",
+      "width": 85,
+      "height": 84
+    },
+    {
+      "id": "great people/merchant",
+      "category": "greatperson",
+      "path": "great people/merchant.png",
+      "label": "Merchant",
+      "width": 86,
+      "height": 85
+    },
+    {
+      "id": "great people/scientist",
+      "category": "greatperson",
+      "path": "great people/scientist.png",
+      "label": "Scientist",
+      "width": 85,
+      "height": 85
+    },
+    {
       "id": "tiles/america",
       "category": "civtile",
       "path": "tiles/america.png",

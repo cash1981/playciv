@@ -17,6 +17,7 @@
 import type { Board, BoardArea, BoardChange, BoardPiece, Rotation } from '../board.js'
 import {
   areaAt,
+  boardAssetLimit,
   boardAreas,
   clampToBoard,
   findBoardAsset,
@@ -25,6 +26,7 @@ import {
   nearestBlockOrigin,
   nextFreeSlot,
   nextRotation,
+  remainingBoardAssetCount,
   revertChange,
 } from '../board.js'
 import type { EngineError } from '../errors.js'
@@ -115,6 +117,19 @@ export interface PlacePieceInput {
 export function placePiece(state: GameState, input: PlacePieceInput): ActionResult {
   const denied = requireAccess(state, input.playerId)
   if (denied !== undefined) return err(denied)
+
+  const asset = findBoardAsset(input.assetId)
+  if (asset === undefined) {
+    return err({ kind: 'BOARD_ASSET_NOT_FOUND', assetId: input.assetId })
+  }
+  const remaining = remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)
+  if (remaining !== undefined && remaining === 0) {
+    return err({
+      kind: 'BOARD_ASSET_LIMIT_REACHED',
+      assetId: input.assetId,
+      limit: boardAssetLimit(asset, state.numOfPlayers) ?? 0,
+    })
+  }
 
   const placed = placeUnchecked(state, input)
   if (placed === undefined) {

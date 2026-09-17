@@ -39,6 +39,7 @@ import {
   mapHeight,
   mapTop,
   piecesAtStep,
+  remainingBoardAssetCount,
 } from '@civ/engine'
 import type { Board, BoardArea, BoardAsset, BoardPiece } from '@civ/engine'
 
@@ -49,6 +50,7 @@ import type { PlayerView } from '../lib/api.js'
 interface Props {
   readonly gameId: string
   readonly board: Board
+  readonly numOfPlayers: number
   readonly areas: readonly BoardArea[]
   readonly busy: boolean
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
@@ -70,6 +72,7 @@ const CATEGORY_LABEL: Readonly<Record<BoardAsset['category'], string>> = {
   marker: 'Markers',
   city: 'Cities',
   building: 'Buildings',
+  greatperson: 'Great People',
   civtile: 'Starting tiles',
   tile: 'Map tiles',
   leader: 'Leaders',
@@ -82,6 +85,7 @@ const CATEGORY_ORDER: readonly BoardAsset['category'][] = [
   'marker',
   'city',
   'building',
+  'greatperson',
   'civtile',
   'tile',
   'leader',
@@ -94,9 +98,82 @@ const assetUrl = (path: string): string =>
 
 const ZOOM_STEPS = [0.3, 0.4, 0.5, 0.65, 0.8, 1] as const
 
+export interface BoardPaletteProps {
+  readonly assets: readonly BoardAsset[]
+  readonly category: BoardAsset['category']
+  readonly onCategoryChange: (category: BoardAsset['category']) => void
+  readonly replaying: boolean
+  readonly pieces: readonly BoardPiece[]
+  readonly numOfPlayers: number
+}
+
+/** The palette is separate so its finite-supply UI can be tested without a browser. */
+export function BoardPalette({
+  assets,
+  category,
+  onCategoryChange,
+  replaying,
+  pieces,
+  numOfPlayers,
+}: BoardPaletteProps): React.JSX.Element {
+  const inCategory = assets.filter((asset) => asset.category === category)
+
+  return (
+    <>
+      <h3>Pieces</h3>
+      <div className="row" style={{ marginBottom: '0.5rem' }}>
+        {CATEGORY_ORDER.map((name) => (
+          <button
+            key={name}
+            className="small"
+            disabled={category === name}
+            onClick={() => onCategoryChange(name)}
+          >
+            {CATEGORY_LABEL[name]}
+          </button>
+        ))}
+      </div>
+
+      <p className="muted" style={{ margin: '0 0 0.5rem' }}>
+        {replaying
+          ? 'Replaying — return to now to make changes.'
+          : 'Drag a piece onto the board. Drop it in a player area to tidy it into a row.'}
+      </p>
+
+      <div className="palette-grid">
+        {inCategory.map((asset) => {
+          const remaining = remainingBoardAssetCount(asset, pieces, numOfPlayers)
+          const exhausted = remaining === 0
+          return (
+            <div
+              key={asset.id}
+              className={`palette-item${exhausted ? ' unavailable' : ''}`}
+              title={exhausted ? `${asset.label} (none available)` : asset.label}
+              draggable={!replaying && !exhausted}
+              onDragStart={(event) => {
+                if (exhausted) return
+                event.dataTransfer.setData('text/civ-asset', asset.id)
+                event.dataTransfer.effectAllowed = 'copy'
+              }}
+            >
+              <img src={assetUrl(asset.path)} alt={asset.label} draggable={false} />
+              <span>
+                {asset.label}
+                {remaining !== undefined && ` (${remaining})`}
+              </span>
+            </div>
+          )
+        })}
+        {inCategory.length === 0 && <p className="muted">Loading …</p>}
+      </div>
+    </>
+  )
+}
+
 export function BoardView({
   gameId,
   board,
+  numOfPlayers,
   areas,
   busy,
   run,
@@ -164,11 +241,6 @@ export function BoardView({
   const mapStart = mapTop(board)
   const mapBottom = mapStart + mapHeight(board)
   const bandTop = areaBandTop(board)
-
-  const inCategory = useMemo(
-    () => assets.filter((asset) => asset.category === category),
-    [assets, category],
-  )
 
   const selected = pieces.find((piece) => piece.id === selectedId) ?? null
 
@@ -453,44 +525,14 @@ export function BoardView({
         </div>
 
         <aside className="board-palette">
-          <h3>Pieces</h3>
-          <div className="row" style={{ marginBottom: '0.5rem' }}>
-            {CATEGORY_ORDER.map((name) => (
-              <button
-                key={name}
-                className="small"
-                disabled={category === name}
-                onClick={() => setCategory(name)}
-              >
-                {CATEGORY_LABEL[name]}
-              </button>
-            ))}
-          </div>
-
-          <p className="muted" style={{ margin: '0 0 0.5rem' }}>
-            {replaying
-              ? 'Replaying — return to now to make changes.'
-              : 'Drag a piece onto the board. Drop it in a player area to tidy it into a row.'}
-          </p>
-
-          <div className="palette-grid">
-            {inCategory.map((asset) => (
-              <div
-                key={asset.id}
-                className="palette-item"
-                title={asset.label}
-                draggable={!replaying}
-                onDragStart={(event) => {
-                  event.dataTransfer.setData('text/civ-asset', asset.id)
-                  event.dataTransfer.effectAllowed = 'copy'
-                }}
-              >
-                <img src={assetUrl(asset.path)} alt={asset.label} draggable={false} />
-                <span>{asset.label}</span>
-              </div>
-            ))}
-            {inCategory.length === 0 && <p className="muted">Loading …</p>}
-          </div>
+          <BoardPalette
+            assets={assets}
+            category={category}
+            onCategoryChange={setCategory}
+            replaying={replaying}
+            pieces={pieces}
+            numOfPlayers={numOfPlayers}
+          />
 
           <h3 style={{ marginTop: '1rem' }}>Selected piece</h3>
           {selected === null ? (

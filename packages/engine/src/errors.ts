@@ -63,6 +63,8 @@ export type EngineError =
   | { readonly kind: 'NO_COLOR_AVAILABLE' }
   /** The piece does not exist in board-assets.json */
   | { readonly kind: 'BOARD_ASSET_NOT_FOUND'; readonly assetId: string }
+  /** The physical supply for this board asset has been exhausted. */
+  | { readonly kind: 'BOARD_ASSET_LIMIT_REACHED'; readonly assetId: string; readonly limit: number }
   | { readonly kind: 'BOARD_PIECE_NOT_FOUND'; readonly pieceId: string }
   /** The board history is empty, so there is nothing to take back */
   | { readonly kind: 'NOTHING_TO_UNDO_ON_BOARD' }
@@ -127,6 +129,8 @@ export function describeError(error: EngineError): string {
       return 'No colors left to assign'
     case 'BOARD_ASSET_NOT_FOUND':
       return `Unknown board piece: ${error.assetId}`
+    case 'BOARD_ASSET_LIMIT_REACHED':
+      return `No ${error.assetId} pieces remain available`
     case 'BOARD_PIECE_NOT_FOUND':
       return `No piece on the board with id ${error.pieceId}`
     case 'NOTHING_TO_UNDO_ON_BOARD':

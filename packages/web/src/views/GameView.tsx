@@ -182,6 +182,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
       <BoardView
         gameId={gameId}
         board={view.board}
+        numOfPlayers={view.numOfPlayers}
         areas={view.boardAreas}
         busy={busy}
         run={run}
