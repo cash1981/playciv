@@ -1,8 +1,8 @@
 /**
  * The root component. Replaces the AngularJS app in old-civ-web.
  *
- * Four screens: sign-in, the game list, the game itself and the public
- * highscore. No router library — the state is small enough for a union to
+ * The small route state covers the landing page, admin, game and highscore.
+ * No router library — the state is small enough for a union to
  * carry it.
  */
 
@@ -12,7 +12,7 @@ import { ApiError, api, storeToken, storedToken } from './lib/api.js'
 import type { PlayerDto } from './lib/api.js'
 import { GameView } from './views/GameView.js'
 import { HighscoreView } from './views/HighscoreView.js'
-import { LobbyView } from './views/LobbyView.js'
+import { LandingView } from './views/LandingView.js'
 import { LoginView } from './views/LoginView.js'
 import { AdminView } from './views/AdminView.js'
 import { Navigation } from './views/Navigation.js'
@@ -47,6 +47,7 @@ function screenFromPath(pathname: string): Screen {
 
 export function App(): React.JSX.Element {
   const [player, setPlayer] = useState<PlayerDto | null>(null)
+  const [showLogin, setShowLogin] = useState(false)
   const [checking, setChecking] = useState(true)
   const [screen, setScreen] = useState<Screen>(() => screenFromPath(window.location.pathname))
   const [theme, setTheme] = useState<Theme>(() => storedTheme())
@@ -78,6 +79,7 @@ export function App(): React.JSX.Element {
   const signOut = useCallback(() => {
     storeToken(null)
     setPlayer(null)
+    setShowLogin(false)
     window.history.replaceState(null, '', '/')
     setScreen({ name: 'lobby' })
   }, [])
@@ -161,10 +163,24 @@ export function App(): React.JSX.Element {
   }
 
   if (player === null) {
+    if (showLogin) {
+      return (
+        <div className="app">
+          <Navigation player={null} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
+          <button onClick={() => setShowLogin(false)}>Back</button>
+          <LoginView
+            onSignedIn={(signedIn) => {
+              setPlayer(signedIn)
+              setShowLogin(false)
+            }}
+          />
+        </div>
+      )
+    }
     return (
       <div className="app">
         <Navigation player={null} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
-        <LoginView onSignedIn={setPlayer} />
+        <LandingView player={null} onOpenGame={openGame} onSignIn={() => setShowLogin(true)} />
       </div>
     )
   }
@@ -174,16 +190,12 @@ export function App(): React.JSX.Element {
       <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
 
       {screen.name === 'lobby' ? (
-        <LobbyView
-          player={player}
-          onOpenGame={openGame}
-          onUnauthorized={signOut}
-        />
+        <LandingView player={player} onOpenGame={openGame} onSignIn={signOut} />
       ) : screen.name === 'admin' ? (
         player.role === 'admin' ? (
           <AdminView player={player} onUnauthorized={signOut} onBack={backToGames} />
         ) : (
-          <LobbyView player={player} onOpenGame={openGame} onUnauthorized={signOut} />
+          <LandingView player={player} onOpenGame={openGame} onSignIn={signOut} />
         )
       ) : (
         <GameView

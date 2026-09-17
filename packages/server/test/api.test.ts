@@ -10,6 +10,7 @@
 import type { FastifyInstance } from 'fastify'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { itemName } from '@civ/engine'
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
 
@@ -78,6 +79,79 @@ describe('health', () => {
   it('answers ok', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/health' })
     expect(response.json()).toEqual({ status: 'ok' })
+  })
+})
+
+describe('public landing endpoints', () => {
+  it('serve anonymous public data without hidden game information', async () => {
+    const { gameId, starter } = await startedGame('Public landing')
+    const drawn = await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/CULTURE_1`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(drawn.statusCode).toBe(200)
+
+    const state = await repo.findGame(gameId)
+    const card = state?.players.find((player) => player.yourTurn)?.items[0]
+    expect(card).toBeDefined()
+    const cardName = card === undefined ? undefined : itemName(card)
+    const drawLog = state?.log.find(
+      (entry) => entry.item !== null && itemName(entry.item) === cardName,
+    )
+    expect(drawLog?.privateLog).toBeTruthy()
+
+    const [games, scores, chat] = await Promise.all([
+      app.inject({ method: 'GET', url: '/api/public/games' }),
+      app.inject({ method: 'GET', url: '/api/highscore' }),
+      app.inject({ method: 'GET', url: '/api/chat' }),
+    ])
+
+    for (const response of [games, scores, chat]) {
+      expect(response.statusCode).toBe(200)
+      expect(response.body).not.toContain('"items"')
+      expect(response.body).not.toContain('"privateLog"')
+      expect(response.body).not.toContain(cardName as string)
+      expect(response.body).not.toContain(drawLog?.privateLog as string)
+    }
+
+    const authenticatedGames = await app.inject({
+      method: 'GET',
+      url: '/api/public/games',
+      headers: bearer(starter),
+    })
+    const matchingGame = (authenticatedGames.json() as { id: string; youAreIn: boolean }[])
+      .find((game) => game.id === gameId)
+    expect(matchingGame?.youAreIn).toBe(true)
+  })
+
+  it('limits anonymous lobby chat to the latest two weeks and 50 messages', async () => {
+    const now = Date.now()
+    await repo.appendChat({
+      id: 'old-chat',
+      gameId: null,
+      username: 'old-user',
+      message: 'too old',
+      createdAt: new Date(now - 15 * 24 * 60 * 60 * 1000).toISOString(),
+    })
+    for (let index = 0; index < 51; index += 1) {
+      await repo.appendChat({
+        id: `recent-chat-${index}`,
+        gameId: null,
+        username: 'recent-user',
+        message: `recent ${index}`,
+        createdAt: new Date(now - (50 - index) * 1000).toISOString(),
+      })
+    }
+
+    const response = await app.inject({ method: 'GET', url: '/api/chat' })
+    expect(response.statusCode).toBe(200)
+    const messages = response.json() as { message: string }[]
+    expect(messages).toHaveLength(50)
+    expect(messages[0]?.message).toBe('recent 0')
+    expect(messages.at(-1)?.message).toBe('recent 49')
+    expect(response.body).not.toContain('too old')
   })
 })
 
