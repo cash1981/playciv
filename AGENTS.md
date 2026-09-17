@@ -55,7 +55,7 @@ same 20 files.
 
 ## Check the git history first — always
 
-Several agents (Claude, Codex/Luna, and the human) commit to this
+Several agents (Claude, Codex/Luna, Terra, and the human) commit to this
 repository, often on the same branch and often between your turns. **Before you
 plan or touch anything, read what has already happened.** The docs can lag; the
 git history cannot.
@@ -82,9 +82,9 @@ else has been here.
    negotiate rather than editing it.
 3. **Work on a feature branch**, never on `main`. See `workflow.md`.
 4. **Nothing merges without a review pass.** Code is written by the coder role
-   and checked by the read-only Sol reviewer, which has no write access. The
-   orchestrator — the main agent, or the human — is the only one who can
-   approve. See `roles.md`.
+   and checked by a reviewer role that has no write access. The orchestrator —
+   the main agent, or the human — is the only one who can approve. See
+   `roles.md`.
 
 ## Before you finish
 

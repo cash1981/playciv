@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Legacy Claude-local diff reviewer. Read-only by design — it cannot write, edit or run anything. Do not use for the standard review gate; hand the review to the Sol-compatible Codex reviewer instead. Not for writing code and not for fixing what it finds.
+description: Reads a diff against the task brief it was meant to satisfy and returns a verdict with findings. Read-only by design — it cannot write, edit or run anything. Use after the coder reports and the orchestrator has run the verification. Not for writing code and not for fixing what it finds.
 model: claude-opus-5
 tools: Read, Glob, Grep
 ---

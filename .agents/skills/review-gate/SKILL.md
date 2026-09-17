@@ -5,11 +5,10 @@ description: Run the review cycle on the current feature branch — verify, hand
 
 # Review gate
 
-The reviewer for every gate must be Sol (`gpt-5.6-sol`). Codex orchestrators
-must spawn the reviewer with that model. Claude orchestrators must hand the
-diff to a Sol-compatible Codex review task; the Claude-local reviewer is not a
-substitute. Do not use Terra as the default reviewer. If Sol is unavailable,
-stop and report the blocker instead of silently substituting a weaker reviewer.
+The reviewer for every Codex review gate must be Sol (`gpt-5.6-sol`). Spawn the
+reviewer with that model. Do not use Terra as the default reviewer. If Sol is
+unavailable, stop and report the blocker instead of silently substituting a
+weaker reviewer.
 
 The check between "the code is written" and "the code is merged". The coder
 never approves its own work: it is written on a cheaper model and read by a
@@ -51,17 +50,11 @@ shallow everywhere instead of sharp somewhere.
 
 ## 3. Spawn the reviewer
 
-For a Codex orchestrator, use the reviewer agent with model
-`gpt-5.6-sol`. Give it:
+Use the reviewer agent with model `gpt-5.6-sol`. Give it:
 
 - the path to the diff,
 - the path to the task brief, `docs/agents/tasks/<slug>.md`,
 - the verification output from step 1, verbatim.
-
-For a Claude orchestrator, do not invoke the local `.claude/agents/reviewer.md`
-as the standard gate: that definition is intentionally native to Claude Code.
-Instead, hand the diff, brief, and verification output to a Sol-compatible
-Codex review task. If that handoff is unavailable, stop and report the blocker.
 
 If the change touches game rules, the deck, log texts or a projection, also
 spawn `rules-checker` with the same diff. Run them in the same message so they

@@ -72,8 +72,6 @@ _Last updated: 2026-09-16_
   accounts are rejected server-side, admins can manage users without password
   hashes in API responses, and the protected web admin page uses role lookup
   from storage rather than token claims.
-- **Reviewer policy.** Future review gates use the read-only Sol reviewer
-  (`gpt-5.6-sol`); Terra is no longer the default reviewer.
 
 ## In progress
 

@@ -8,13 +8,11 @@ code is right.
 | --- | --- | --- | --- |
 | **Orchestrator** | strong (Opus) | yes | yes |
 | **Coder** | cheap (Sonnet, or Haiku for mechanical work) | yes, inside claimed paths | no |
-| **Reviewer** | Sol (`gpt-5.6-sol`; Claude uses a Sol-compatible handoff) | **no** | no |
+| **Reviewer** | strong (Opus) | **no** | no |
 | **Rules checker** | strong (Opus) | **no** | no |
 
-The orchestrator is the session you are talking to. The coder and rules-checker
-are defined in `.claude/agents/` for Claude-local use. The standard reviewer is
-Sol and is dispatched through a Sol-compatible Codex review task; the Claude
-local reviewer definition is not a standard gate path.
+The orchestrator is the session you are talking to. The other three are defined
+in `.claude/agents/` and spawned with the Agent tool.
 
 ## Why reviewers cannot write
 
@@ -69,7 +67,7 @@ Use Haiku for mechanical work (renames, moving code, applying a decided
 pattern) and Sonnet for anything needing judgement. Change the `model` line in
 `.claude/agents/coder.md`.
 
-### `reviewer` (Sol)
+### `reviewer`
 
 Reads a diff and the brief it was meant to satisfy, and reports. Looks for:
 correctness against the brief, hidden-information leaks, purity violations,

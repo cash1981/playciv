@@ -350,14 +350,3 @@ is the owner's call to make, and no Java reference is contradicted.
 **Consequences.** `createGame` no longer special-cases `numOfPlayers === 2`; it
 always calls `createBoard()` with the 16 × 16 default. Board geometry and every
 projection already read the stored dimensions, so nothing else changed.
----
-
-## 2026-09-17 — Sol is the designated review model
-
-**Decision.** Every review gate uses the read-only `gpt-5.6-sol` reviewer. Terra
-is not the default reviewer. The orchestrator still runs verification and owns
-the final approval; the reviewer only reports findings.
-
-**Why.** Recent bugs indicate that the previous reviewer setup did not provide
-enough confidence. A single explicit reviewer model keeps the process
-consistent across Claude and Codex agents.
