@@ -13,7 +13,7 @@ _Last updated: 2026-09-17_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 337 engine, 73 server, 1 web |
+| `pnpm -r test` | passing — 356 engine, 78 server, 3 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -131,7 +131,17 @@ _Last updated: 2026-09-17_
   from the reference image: Market/Bank 5, Temple/Cathedral 5,
   Barracks/Academy 5, Granary/Aqueduct 6, Library/University 6, Workshop 6,
   Harbor 10, Tradingpost 6, Shipyard 5, and Ironmine 6.
-- 
+- **Issue #51.** The Opponents panel is replaced by a **Revealed and Discarded
+  Items** panel: a chronological, newest-first feed of every public item — the
+  card, who revealed or owns it, and whether it was revealed, discarded, or
+  both. `revealedFeed` builds it from the public set (discarded items plus
+  non-hidden hand items, so hidden hands and techs never appear) and enriches it
+  from the log for chronology, the revealing player, and revealed-then-discarded
+  (one row, both facts, keyed by item identity). The route pages it server-side
+  (`?page=&size=`, default 20, capped 100) so the browser never loads the whole
+  history or every image at once. The `opponents` data stays on the view for the
+  turn banner, Player status and the trade dropdown. Browser-verified.
+
 ## In progress
 
 _Nothing._

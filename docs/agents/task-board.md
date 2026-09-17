@@ -15,6 +15,29 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
+### revealed-panel
+
+- **Owner:** Claude (Opus 4.8)
+- **Branch:** `feat/issue-51-revealed`
+- **Brief:** `docs/agents/tasks/revealed-panel.md`
+- **Status:** in review (PR #59)
+- **Claimed paths:**
+  - `packages/engine/src/actions/game.ts` (adds `revealedFeed`)
+  - `packages/engine/src/state.ts` (`RevealedEntry` type only)
+  - `packages/engine/src/index.ts` (exports only)
+  - `packages/server/src/routes/games.ts` (`/revealed` route only)
+  - `packages/web/src/lib/api.ts` (`revealed` method only)
+  - `packages/web/src/views/GameView.tsx` (removes Opponents panel, adds RevealedPanel)
+  - `packages/web/src/views/RevealedPanel.tsx` (new)
+  - `packages/web/src/styles.css` (a `discarded` tag if needed)
+  - `packages/engine/test/revealed-feed.test.ts` (new)
+  - `packages/server/test/api.test.ts`
+  - `packages/web/src/views/RevealedPanel.test.tsx` (new)
+- **Notes:** Issue #51. Replaces the Opponents panel with a chronological,
+  server-paginated Revealed and Discarded Items feed. `opponents` data stays on
+  `PlayerView` (still used by the turn banner, StatusPanel and the trade target
+  dropdown) — only the visible panel goes.
+
 ### citystate-pieces
 
 - **Owner:** Claude (Opus 4.8)

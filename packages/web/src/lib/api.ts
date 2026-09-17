@@ -17,6 +17,7 @@ import type {
   PlayerStats,
   PlayerTurn,
   PlayerView,
+  RevealedEntry,
   SheetName,
   SocialPolicyItem,
   TechItem,
@@ -34,10 +35,19 @@ export type {
   PlayerStats,
   PlayerTurn,
   PlayerView,
+  RevealedEntry,
   SheetName,
   SocialPolicyItem,
   TechItem,
   WinnerEntry,
+}
+
+/** One server-backed page of the Revealed and Discarded Items feed (issue #51). */
+export interface RevealedPage {
+  readonly items: readonly RevealedEntry[]
+  readonly total: number
+  readonly page: number
+  readonly size: number
 }
 
 export interface PlayerDto {
@@ -218,7 +228,8 @@ export const api = {
 
   publicLog: (gameId: string) => get<LogEntryDto[]>(`/api/games/${gameId}/log/public`),
   privateLog: (gameId: string) => get<LogEntryDto[]>(`/api/games/${gameId}/log/private`),
-  revealed: (gameId: string) => get<Item[]>(`/api/games/${gameId}/revealed`),
+  revealed: (gameId: string, page: number, size: number) =>
+    get<RevealedPage>(`/api/games/${gameId}/revealed?page=${page}&size=${size}`),
 
   draw: (gameId: string, sheetName: SheetName) =>
     post<PlayerView>(`/api/games/${gameId}/draw/${sheetName}`),

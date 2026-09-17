@@ -573,6 +573,105 @@ describe('hidden information over HTTP', () => {
   })
 })
 
+describe('revealed and discarded items feed', () => {
+  interface RevealedEntryDto {
+    readonly item: { readonly id: string; readonly sheetName: string }
+    readonly username: string | null
+    readonly revealed: boolean
+    readonly discarded: boolean
+  }
+  interface RevealedPageDto {
+    readonly items: RevealedEntryDto[]
+    readonly total: number
+    readonly page: number
+    readonly size: number
+  }
+
+  async function drawAndReveal(gameId: string, token: string, sheetName: string): Promise<void> {
+    await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/${sheetName}`,
+      headers: bearer(token),
+      payload: {},
+    })
+    const state = await repo.findGame(gameId)
+    const item = state?.players
+      .flatMap((player) => player.items)
+      .find((candidate) => candidate.sheetName === sheetName && candidate.hidden)
+    if (item === undefined) throw new Error(`no hidden ${sheetName} to reveal`)
+    await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/items/reveal`,
+      headers: bearer(token),
+      payload: { sheetName, itemNumber: item.itemNumber },
+    })
+  }
+
+  it('pages the feed server-side and names the revealing player', async () => {
+    const { gameId, starter } = await startedGame('Avslørt')
+    const me = await app.inject({ method: 'GET', url: `/api/games/${gameId}`, headers: bearer(starter) })
+    const myName = (me.json() as { you: { username: string } }).you.username
+
+    await drawAndReveal(gameId, starter, 'CULTURE_1')
+    await drawAndReveal(gameId, starter, 'HUTS')
+
+    const first = await app.inject({
+      method: 'GET',
+      url: `/api/games/${gameId}/revealed?page=1&size=1`,
+      headers: bearer(starter),
+    })
+    expect(first.statusCode).toBe(200)
+    const firstPage = first.json() as RevealedPageDto
+    expect(firstPage.total).toBe(2)
+    expect(firstPage.size).toBe(1)
+    expect(firstPage.page).toBe(1)
+    expect(firstPage.items).toHaveLength(1)
+    expect(firstPage.items[0]?.revealed).toBe(true)
+    expect(firstPage.items[0]?.username).toBe(myName)
+
+    const second = await app.inject({
+      method: 'GET',
+      url: `/api/games/${gameId}/revealed?page=2&size=1`,
+      headers: bearer(starter),
+    })
+    const secondPage = second.json() as RevealedPageDto
+    expect(secondPage.items).toHaveLength(1)
+    expect(secondPage.items[0]?.item.id).not.toBe(firstPage.items[0]?.item.id)
+  })
+
+  it('does not leak a hidden hand card', async () => {
+    const { gameId, starter } = await startedGame('Skjult')
+    await app.inject({
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/CULTURE_1`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    const state = await repo.findGame(gameId)
+    const card = state?.players.flatMap((player) => player.items).find((item) => item.hidden)
+    expect(card).toBeDefined()
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/games/${gameId}/revealed`,
+      headers: bearer(starter),
+    })
+    const page = response.json() as RevealedPageDto
+    expect(page.total).toBe(0)
+    expect(response.body).not.toContain((card as { name: string }).name)
+  })
+
+  it('clamps an oversized page size', async () => {
+    const { gameId, starter } = await startedGame('Tak')
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/games/${gameId}/revealed?size=9999`,
+      headers: bearer(starter),
+    })
+    expect((response.json() as RevealedPageDto).size).toBe(100)
+  })
+})
+
 describe('storage', () => {
   it('games survive a new app against the same repository', async () => {
     const { gameId, starter: token } = await startedGame('Lagringsspill')
