@@ -63,6 +63,7 @@ export default {
         service: 'playciv-worker',
         // Proves the pure engine package bundles and runs on workerd.
         enginePlayerColors: PLAYER_COLORS.length,
+        mongoUrlConfigured: env.MONGO_URL !== undefined,
         tokenSecretConfigured: env.TOKEN_SECRET !== undefined,
         time: new Date().toISOString(),
       })
