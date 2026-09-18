@@ -15,6 +15,19 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
+### issue-63-arena-ux
+
+- **Owner:** Claude (Sonnet 5)
+- **Branch:** `fix/issue-63-arena-ux`
+- **Brief:** `docs/agents/tasks/issue-63-arena-ux.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/GameView.tsx`
+  - `packages/web/src/styles.css`
+- **Notes:** Follow-up to issue #63/PR #66 (already merged to `main`). Client-only
+  UX fixes: single shared arena border, immediate placement (no Confirm step),
+  smaller arena cards with horizontal scroll.
+
 
 ### revealed-panel
 
