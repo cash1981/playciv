@@ -6,6 +6,8 @@
  * `ADMIN_USERNAME` (default `cash`). It is safe to run more than once.
  */
 
+import './load-env.js'
+
 import { MongoClient } from 'mongodb'
 
 const mongoUrl = process.env['MONGO_URL']

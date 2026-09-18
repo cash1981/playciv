@@ -15,3 +15,8 @@ coverage/
 
 # Lokal spilltilstand fra @civ/server
 /packages/server/data/
+
+# Miljøvariabler og hemmeligheter — aldri commit. Malen .env.example er trygg.
+.env
+.env.*
+!.env.example
