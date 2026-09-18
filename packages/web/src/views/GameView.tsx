@@ -12,7 +12,7 @@ import { itemName } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
-import { api } from '../lib/api.js'
+import { ApiError, api } from '../lib/api.js'
 import type { PlayerDto, PlayerView } from '../lib/api.js'
 
 import { BoardView } from './BoardView.js'
@@ -99,6 +99,10 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         setReloadCount((count) => count + 1)
       } catch (caught) {
         if (isUnauthorized(caught)) return onUnauthorized()
+        // On conflict: reload so rev is fresh before the next action
+        if (caught instanceof ApiError && caught.status === 409) {
+          await reload()
+        }
         setError(errorMessage(caught))
       } finally {
         setBusy(false)
@@ -470,7 +474,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
             key={unit.id}
             item={unit}
             draggable={battle !== null}
-            onDragStart={() => handleDragStart(unit.id)}
+            onDragStart={(e) => { e.dataTransfer.setData('text/plain', unit.id); handleDragStart(unit.id) }}
           >
             {battle !== null && mySideInBattle !== null && (
               <button
@@ -507,7 +511,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
             key={unit.id}
             item={unit}
             draggable={battle !== null}
-            onDragStart={() => handleDragStart(unit.id)}
+            onDragStart={(e) => { e.dataTransfer.setData('text/plain', unit.id); handleDragStart(unit.id) }}
           >
             {battle !== null && (
               <button
@@ -719,7 +723,13 @@ interface ArenaUnitCardProps {
 }
 
 function ArenaUnitCard({ unit, gameId, busy, rev, run }: ArenaUnitCardProps): React.JSX.Element {
+  const [attack, setAttack] = useState(unit.attack)
+  const [health, setHealth] = useState(unit.health)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sync when the server sends a fresh value
+  useEffect(() => { setAttack(unit.attack) }, [unit.attack])
+  useEffect(() => { setHealth(unit.health) }, [unit.health])
 
   function commitStat(key: 'attack' | 'health', value: number): void {
     if (timerRef.current !== null) clearTimeout(timerRef.current)
@@ -735,16 +745,16 @@ function ArenaUnitCard({ unit, gameId, busy, rev, run }: ArenaUnitCardProps): Re
         <label>
           ATK
           <input
-            type="number" min={0} defaultValue={unit.attack}
-            onChange={(e) => commitStat('attack', Number(e.target.value))}
+            type="number" min={0} value={attack}
+            onChange={(e) => { const v = Number(e.target.value); setAttack(v); commitStat('attack', v) }}
             style={{ width: '3.5rem', marginLeft: '0.3rem' }}
           />
         </label>
         <label>
           HP
           <input
-            type="number" min={0} defaultValue={unit.health}
-            onChange={(e) => commitStat('health', Number(e.target.value))}
+            type="number" min={0} value={health}
+            onChange={(e) => { const v = Number(e.target.value); setHealth(v); commitStat('health', v) }}
             style={{ width: '3.5rem', marginLeft: '0.3rem' }}
           />
         </label>

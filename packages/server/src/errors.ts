@@ -45,6 +45,7 @@ export function statusFor(error: EngineError): number {
     case 'BOARD_ASSET_LIMIT_REACHED':
     case 'BATTLE_ALREADY_ACTIVE':
     case 'UNIT_ALREADY_IN_BATTLE':
+    case 'ARENA_POSITION_OCCUPIED':
       return 409
     case 'NO_BATTLE_ACTIVE':
     case 'ARENA_UNIT_NOT_FOUND':

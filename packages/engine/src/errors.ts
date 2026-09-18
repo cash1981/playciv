@@ -88,6 +88,8 @@ export type EngineError =
   | { readonly kind: 'INVALID_ARENA_STAT_VALUE'; readonly value: number }
   /** A player cannot initiate a battle against themselves */
   | { readonly kind: 'CANNOT_BATTLE_YOURSELF'; readonly playerId: string }
+  /** That position is already occupied on this side */
+  | { readonly kind: 'ARENA_POSITION_OCCUPIED' }
 
 export function describeError(error: EngineError): string {
   switch (error.kind) {
@@ -169,5 +171,7 @@ export function describeError(error: EngineError): string {
       return `Arena stat must be a non-negative whole number, got ${error.value}`
     case 'CANNOT_BATTLE_YOURSELF':
       return 'You cannot initiate a battle against yourself'
+    case 'ARENA_POSITION_OCCUPIED':
+      return 'That position is already occupied on this side'
   }
 }

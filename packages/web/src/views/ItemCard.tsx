@@ -31,7 +31,7 @@ export function ItemCard({
   readonly item: Item
   readonly reveal?: 'all' | 'public'
   readonly draggable?: boolean
-  readonly onDragStart?: () => void
+  readonly onDragStart?: (e: React.DragEvent<HTMLLIElement>) => void
   readonly children?: React.ReactNode
 }): React.JSX.Element {
   const label = reveal === 'all' ? revealAll(item) : itemName(item)

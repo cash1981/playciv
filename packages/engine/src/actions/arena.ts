@@ -48,17 +48,16 @@ function requireAccess(
 }
 
 /**
- * Finds the player to the left of `playerId` (next higher playernumber,
- * wrapping around). Returns undefined if the game has no numbered players yet.
+ * Finds the player to the left of `playerId` (next by index in `state.players`,
+ * wrapping around). Using index rather than `playernumber + 1` avoids gaps when
+ * a player has withdrawn and their number is no longer assigned.
+ *
+ * Returns undefined if `playerId` is not found.
  */
-function playerToLeft(state: GameState, playerId: string): Playerhand | undefined {
-  const player = findPlayer(state, playerId)
-  if (player === undefined || player.playernumber <= 0) return undefined
-  const nextNumber = player.playernumber + 1
-  return (
-    state.players.find((p) => p.playernumber === nextNumber) ??
-    state.players.find((p) => p.playernumber === 1)
-  )
+function playerToLeft(state: GameState, ofPlayerId: string): Playerhand | undefined {
+  const idx = state.players.findIndex((p) => p.playerId === ofPlayerId)
+  if (idx === -1) return undefined
+  return state.players[(idx + 1) % state.players.length]
 }
 
 // ---------------------------------------------------------------------------
@@ -229,6 +228,13 @@ export function placeUnitInArena(
     return err({ kind: 'UNIT_ALREADY_IN_BATTLE', unitId: input.unitId })
   }
 
+  const positionOccupied = battle.arena.some(
+    (u) => u.side === input.side && u.position === input.position,
+  )
+  if (positionOccupied) {
+    return err({ kind: 'ARENA_POSITION_OCCUPIED' })
+  }
+
   // Mark the unit inBattle in the source hand
   let nextState: GameState
   if (isBarbController) {
@@ -240,7 +246,10 @@ export function placeUnitInArena(
     const updatedBattlehand = player.battlehand.map((u) =>
       u.id === input.unitId ? { ...u, inBattle: true } : u,
     )
-    nextState = withPlayer(state, { ...player, battlehand: updatedBattlehand })
+    const updatedItems = player.items.map((it) =>
+      it.id === input.unitId ? { ...it, inBattle: true } as typeof it : it,
+    )
+    nextState = withPlayer(state, { ...player, battlehand: updatedBattlehand, items: updatedItems })
   }
 
   // Create the arena unit
@@ -338,14 +347,8 @@ export interface KillArenaUnitInput {
   readonly arenaUnitId: string
 }
 
-/**
- * Removes a unit from the arena and marks it `killed` on its source card.
- * Does NOT move it to `discardedItems` — players handle their own discard
- * (revival cards such as Oracle can bring units back).
- *
- * The column (position) stays open so the surviving opponent unit can still
- * receive a new opponent on the same front.
- */
+// Removes the unit from the arena and clears inBattle on its source card.
+// killed is NOT set — players manage their own cards and discard manually.
 export function killArenaUnit(
   state: GameState,
   input: KillArenaUnitInput,
@@ -382,7 +385,10 @@ export function killArenaUnit(
       const updatedBattlehand = owner.battlehand.map((u) =>
         u.id === arenaUnit.unit.id ? { ...u, inBattle: false } : u,
       )
-      nextState = withPlayer(nextState, { ...owner, battlehand: updatedBattlehand })
+      const updatedItems = owner.items.map((it) =>
+        it.id === arenaUnit.unit.id ? { ...it, inBattle: false } as typeof it : it,
+      )
+      nextState = withPlayer(nextState, { ...owner, battlehand: updatedBattlehand, items: updatedItems })
     }
   }
 

@@ -14,7 +14,7 @@ import {
   drawBarbarians,
   drawUnitsForBattle,
   drawWonder,
-  endBattle,
+  endBattleAction,
   endTurn,
   findSheetName,
   initiateUndo,
@@ -148,7 +148,9 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
 
   app.post('/api/games/:gameId/battle/end', auth, async (c) => {
     const gameId = c.req.param('gameId')
-    return applyToGame(context, c, gameId, (state) => endBattle(state, currentPlayer(c).id))
+    return applyToGame(context, c, gameId, (state) =>
+      endBattleAction(state, { playerId: currentPlayer(c).id }),
+    )
   })
 
   app.post('/api/games/:gameId/battle/barbarians', auth, async (c) => {
