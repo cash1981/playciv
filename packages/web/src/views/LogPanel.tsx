@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { ChatMessageDto, LogEntryDto, PendingUndoDto, PlayerDto, PlayerView } from '../lib/api.js'
+import { formatTimestamp } from '../lib/formatTimestamp.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 
 interface Props {
@@ -22,14 +23,6 @@ interface Props {
 }
 
 type Tab = 'public' | 'private'
-
-function formatTimestamp(value: string | null | undefined): string {
-  if (value === undefined || value === null) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const pad = (part: number): string => String(part).padStart(2, '0')
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-}
 
 export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('public')
@@ -147,6 +140,9 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
       <ul className="list scroll">
         {chat.map((entry) => (
           <li key={entry.id}>
+            <time className="log-time" dateTime={entry.createdAt}>
+              {formatTimestamp(entry.createdAt)}
+            </time>
             <strong>{entry.username}</strong>
             <span>{entry.message}</span>
           </li>

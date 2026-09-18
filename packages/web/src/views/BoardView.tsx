@@ -342,11 +342,7 @@ export function BoardView({
   return (
     <section className="panel board-panel">
       <div className="row">
-        <h2 style={{ margin: 0 }}>Board</h2>
-        <span className="muted">
-          {board.columns} × {board.rows} squares · {pieces.length}{' '}
-          {pieces.length === 1 ? 'piece' : 'pieces'}
-        </span>
+        <h2 style={{ margin: 0 }}>Civilization Boardgame</h2>
         <span style={{ flex: 1 }} />
         <label style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <span className="muted">Zoom</span>
