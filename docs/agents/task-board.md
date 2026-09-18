@@ -20,7 +20,7 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 - **Owner:** Claude (Sonnet 4.6)
 - **Branch:** `feat/issue-63-battle-arena`
 - **Brief:** `docs/agents/tasks/issue-63-battle-arena.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
   - `packages/engine/src/battle.ts` (new)
   - `packages/engine/src/actions/arena.ts` (new)
@@ -33,13 +33,10 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
   - `packages/server/src/errors.ts`
   - `packages/web/src/lib/api.ts`
   - `packages/web/src/views/GameView.tsx`
+  - `packages/web/src/views/ItemCard.tsx`
   - `packages/web/src/styles.css`
-  - `packages/engine/test/arena.test.ts` (new)
-  - `packages/server/test/api.test.ts`
-- **Notes:** Issue #63. Adds battle arena with drag-and-drop, manual HP/attack
-  tracking, battle turns, kill button, and auto-refresh toggle. Extends existing
-  BattlePanel in place. Adds `battle: Battle | null` and `rev: number` to
-  GameState.
+- **Notes:** Issue #63. Engine + server + web layers complete. All checks pass
+  (typecheck, test, build). Awaiting review gate before merge.
 
 ### revealed-panel
 
@@ -111,8 +108,8 @@ at a time. Claim them by name.
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
-| `packages/engine/src/state.ts` (`PlayerView` shape) | issue-63-battle-arena |
-| `packages/web/src/lib/api.ts` | issue-63-battle-arena |
+| `packages/engine/src/state.ts` (`PlayerView` shape) | free |
+| `packages/web/src/lib/api.ts` | free |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.

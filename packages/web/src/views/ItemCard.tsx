@@ -24,17 +24,21 @@ export function ItemCard({
   item,
   /** What the viewer is allowed to read: the whole card, or only its public face. */
   reveal = 'all',
+  draggable,
+  onDragStart,
   children,
 }: {
   readonly item: Item
   readonly reveal?: 'all' | 'public'
+  readonly draggable?: boolean
+  readonly onDragStart?: () => void
   readonly children?: React.ReactNode
 }): React.JSX.Element {
   const label = reveal === 'all' ? revealAll(item) : itemName(item)
   const url = itemImageUrl(item)
 
   return (
-    <li className="card">
+    <li className="card" draggable={draggable} onDragStart={onDragStart}>
       <div className="card-art">
         {url === null ? (
           <span className="card-art-fallback">{label}</span>

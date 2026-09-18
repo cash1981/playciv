@@ -14,9 +14,9 @@ import { DEFAULT_PLAYER_STATS } from './state.js'
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt'
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev'
 > &
-  Partial<Pick<GameState, 'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt'>>
+  Partial<Pick<GameState, 'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev'>>
 
 /** A hand from before the status board (issue #43) existed. */
 type MaybeOlderPlayerhand = Omit<Playerhand, 'stats'> & Partial<Pick<Playerhand, 'stats'>>
@@ -89,5 +89,7 @@ export function migrateGameState(state: GameState): GameState {
     withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withStats),
     publicTurns: older.publicTurns ?? {},
     wondersDealt: older.wondersDealt ?? (hasWonder || setupComplete),
+    battle: older.battle ?? null,
+    rev: older.rev ?? 0,
   }
 }

@@ -39,9 +39,18 @@ export function statusFor(error: EngineError): number {
     // A player-stat update named an unknown stat or an invalid value
     case 'UNKNOWN_STAT':
     case 'INVALID_STAT_VALUE':
+    case 'INVALID_ARENA_STAT_VALUE':
+    case 'CANNOT_BATTLE_YOURSELF':
       return 400
     case 'BOARD_ASSET_LIMIT_REACHED':
+    case 'BATTLE_ALREADY_ACTIVE':
+    case 'UNIT_ALREADY_IN_BATTLE':
       return 409
+    case 'NO_BATTLE_ACTIVE':
+    case 'ARENA_UNIT_NOT_FOUND':
+      return 404
+    case 'NOT_IN_THIS_BATTLE':
+      return 403
     case 'NOT_YOUR_TURN':
     case 'NO_ACCESS':
     case 'GAME_CREATOR_MUST_END_GAME':

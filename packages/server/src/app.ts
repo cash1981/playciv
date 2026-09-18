@@ -11,6 +11,7 @@ import type { AppContext, Variables } from './context.js'
 import { sendError } from './errors.js'
 import { registerAuthRoutes } from './routes/auth.js'
 import { registerAdminRoutes } from './routes/admin.js'
+import { registerArenaRoutes } from './routes/arena.js'
 import { registerBoardRoutes } from './routes/board.js'
 import { registerGameRoutes } from './routes/games.js'
 import { registerPlayRoutes } from './routes/play.js'
@@ -81,6 +82,7 @@ export function createApp(options: CreateAppOptions): App {
   registerAdminRoutes(app, context)
   registerGameRoutes(app, context)
   registerPlayRoutes(app, context)
+  registerArenaRoutes(app, context)
   registerBoardRoutes(app, context)
   registerPublicRoutes(app, context)
 

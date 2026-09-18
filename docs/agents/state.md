@@ -6,7 +6,7 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-17_
+_Last updated: 2026-09-18_
 
 ## Health
 
@@ -15,7 +15,7 @@ _Last updated: 2026-09-17_
 | `pnpm -r typecheck` | passing |
 | `pnpm -r test` | passing — 356 engine, 81 server, 3 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes |
+| `main` pushed to `origin` | yes (feat/issue-63-battle-arena awaiting review) |
 
 ## Done
 
@@ -148,6 +148,8 @@ _Last updated: 2026-09-17_
   (`?page=&size=`, default 20, capped 100) so the browser never loads the whole
   history or every image at once. The `opponents` data stays on the view for the
   turn banner, Player status and the trade dropdown. Browser-verified.
+
+- **Issue #63.** Battle arena: initiate (attacker vs player or barbarians), drag-and-drop units from battlehand/barbarians to positional arena fronts, manual attack/health inputs per unit, kill button, advisory turn marker, per-side HP+attack summaries, `endBattleTurn` / `endBattleArena` actions, concurrent-write protection via `rev` counter (409 on mismatch), and a 30-second auto-refresh toggle (top-right, persisted in `localStorage`). No server-side turn enforcement. `battle: Battle | null` and `rev: number` added to `GameState` and `PlayerView`; migrated with `?? null` / `?? 0`. All checks pass on `feat/issue-63-battle-arena`.
 
 ## In progress
 

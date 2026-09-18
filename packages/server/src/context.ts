@@ -108,22 +108,40 @@ export async function requireMembership(
 /**
  * Runs an engine action against a stored game: load, call, save, and answer
  * with the player's own view of the new state.
+ *
+ * `clientRev` is optional. When supplied, it must match the stored game's
+ * `rev` counter; if it does not, a 409 Conflict is returned before the action
+ * runs. This prevents last-write-wins data loss when two players act on the
+ * same object simultaneously (most relevant to the battle arena).
+ *
+ * `rev` is always incremented on every successful write.
  */
 export async function applyToGame(
   context: AppContext,
   c: Context<{ Variables: Variables }>,
   gameId: string,
   action: (state: GameState) => { ok: true; value: GameState } | { ok: false; error: EngineError },
+  clientRev?: number,
 ): Promise<Response> {
   const game = await context.repo.findGame(gameId)
   if (game === undefined) {
     return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
   }
 
+  if (clientRev !== undefined && clientRev !== game.rev) {
+    return sendError(
+      c,
+      409,
+      'CONFLICT',
+      `Game was modified concurrently (expected rev ${clientRev}, got ${game.rev}). Reload and retry.`,
+    )
+  }
+
   const result = action(game)
   if (!result.ok) return sendEngineError(c, result.error)
 
-  const stamped = stampLog(result.value, new Date().toISOString())
+  // Increment rev on every successful write.
+  const stamped = stampLog({ ...result.value, rev: game.rev + 1 }, new Date().toISOString())
 
   await context.repo.saveGame(stamped)
   return c.json(toPlayerView(stamped, currentPlayer(c).id))
