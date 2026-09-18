@@ -6,6 +6,7 @@
  * never implemented arena tracking. See docs/agents/decisions.md.
  */
 
+import type { Rotation } from './board.js'
 import type { UnitItem } from './item.js'
 
 /** Which side of the arena. The initiator is always 'attacker'. */
@@ -60,6 +61,14 @@ export interface ArenaUnit {
   readonly health: number
   /** The playerId of whoever dragged the card into the arena. */
   readonly placedBy: string
+  /**
+   * Visual rotation of the card, in 90° steps. The physical card prints one
+   * unit level per edge (e.g. Archer/Catapult/Cannon/Mobile Artillery on an
+   * Artillery card); rotating it is how a player shows which level the unit
+   * is currently playing at. Purely cosmetic — it does not touch `attack` or
+   * `health`, which stay independently user-entered.
+   */
+  readonly rotation: Rotation
 }
 
 /** The one battle that may be active in a game at a time. */

@@ -23,10 +23,21 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 - **Status:** in progress
 - **Claimed paths:**
   - `packages/web/src/views/GameView.tsx`
+  - `packages/web/src/views/ItemCard.tsx`
   - `packages/web/src/styles.css`
-- **Notes:** Follow-up to issue #63/PR #66 (already merged to `main`). Client-only
-  UX fixes: single shared arena border, immediate placement (no Confirm step),
-  smaller arena cards with horizontal scroll.
+  - `packages/web/src/lib/api.ts`
+  - `packages/engine/src/battle.ts`
+  - `packages/engine/src/actions/arena.ts`
+  - `packages/engine/src/migrate.ts`
+  - `packages/engine/test/arena.test.ts`
+  - `packages/server/src/routes/arena.ts`
+  - `packages/server/test/api.test.ts`
+- **Notes:** Follow-up to issue #63/PR #66 (already merged to `main`). UX fixes:
+  single shared arena border, immediate placement (no Confirm step), smaller
+  arena cards with horizontal scroll. Also adds a cosmetic "Rotate" button per
+  arena unit (reuses the board's `Rotation`/`nextRotation`), for showing which
+  printed unit level (e.g. Archer vs Mobile Artillery) is currently in play —
+  requested mid-session, see `decisions.md`.
 
 
 ### revealed-panel

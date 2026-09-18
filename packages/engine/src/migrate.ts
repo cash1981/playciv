@@ -89,7 +89,13 @@ export function migrateGameState(state: GameState): GameState {
     withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withStats),
     publicTurns: older.publicTurns ?? {},
     wondersDealt: older.wondersDealt ?? (hasWonder || setupComplete),
-    battle: older.battle ?? null,
+    battle:
+      older.battle === null || older.battle === undefined
+        ? null
+        : {
+            ...older.battle,
+            arena: older.battle.arena.map((unit) => ({ ...unit, rotation: unit.rotation ?? 0 })),
+          },
     rev: older.rev ?? 0,
   }
 }

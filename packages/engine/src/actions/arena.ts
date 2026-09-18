@@ -7,6 +7,7 @@
  * Design decisions recorded in docs/agents/decisions.md.
  */
 
+import { nextRotation } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { UnitItem } from '../item.js'
 import { isUnit, revealAll } from '../item.js'
@@ -264,6 +265,7 @@ export function placeUnitInArena(
     attack: input.attack,
     health: input.health,
     placedBy: input.playerId,
+    rotation: 0,
   }
 
   nextState = appendPublicLog(
@@ -327,6 +329,55 @@ export function setArenaUnitStat(
     player.username,
     player.playerId,
     `updates ${revealAll(unit.unit)} ${input.key}: ${oldValue} → ${input.value}`,
+  )
+
+  return ok({
+    ...nextState,
+    battle: {
+      ...battle,
+      arena: battle.arena.map((u) => (u.id === input.arenaUnitId ? updatedUnit : u)),
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// rotateArenaUnit
+// ---------------------------------------------------------------------------
+
+export interface RotateArenaUnitInput {
+  readonly playerId: string
+  readonly arenaUnitId: string
+}
+
+/**
+ * Rotates an arena unit's card 90°. Any game member may call this, same as
+ * `setArenaUnitStat` — it is cosmetic (which printed level reads right-side
+ * up), not a combat value, so it needs no participant guard.
+ */
+export function rotateArenaUnit(
+  state: GameState,
+  input: RotateArenaUnitInput,
+): ActionResult {
+  if (state.battle === null) return err({ kind: 'NO_BATTLE_ACTIVE' })
+
+  const found = requireAccess(state, input.playerId)
+  if (!found.ok) return found
+  const player = found.value
+
+  const battle = state.battle
+  const unit = battle.arena.find((u) => u.id === input.arenaUnitId)
+  if (unit === undefined) {
+    return err({ kind: 'ARENA_UNIT_NOT_FOUND', arenaUnitId: input.arenaUnitId })
+  }
+
+  const rotation = nextRotation(unit.rotation)
+  const updatedUnit: ArenaUnit = { ...unit, rotation }
+
+  const nextState = appendPublicLog(
+    state,
+    player.username,
+    player.playerId,
+    `rotates ${revealAll(unit.unit)} to ${rotation}°`,
   )
 
   return ok({

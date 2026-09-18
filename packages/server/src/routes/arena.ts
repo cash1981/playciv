@@ -13,6 +13,7 @@ import {
   initiateBattle,
   killArenaUnit,
   placeUnitInArena,
+  rotateArenaUnit,
   setArenaUnitStat,
 } from '@civ/engine'
 
@@ -160,6 +161,30 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
       gameId,
       (state) =>
         killArenaUnit(state, {
+          playerId: currentPlayer(c).id,
+          arenaUnitId,
+        }),
+      clientRev,
+    )
+  })
+
+  /**
+   * Rotate an arena unit's card 90°. Body: `{ rev: number }`.
+   * Cosmetic — cycles which printed unit level reads right-side up. Any game
+   * member may call this, same as the attack/health edit above.
+   */
+  app.post('/api/games/:gameId/battle/arena/:arenaUnitId/rotate', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const arenaUnitId = c.req.param('arenaUnitId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const clientRev = optionalNumber(body, 'rev')
+
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) =>
+        rotateArenaUnit(state, {
           playerId: currentPlayer(c).id,
           arenaUnitId,
         }),

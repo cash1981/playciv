@@ -26,26 +26,31 @@ export function ItemCard({
   reveal = 'all',
   draggable,
   onDragStart,
+  /** Visual rotation in degrees — the physical card prints one unit level per edge. */
+  rotation,
   children,
 }: {
   readonly item: Item
   readonly reveal?: 'all' | 'public'
   readonly draggable?: boolean
   readonly onDragStart?: (e: React.DragEvent<HTMLLIElement>) => void
+  readonly rotation?: number
   readonly children?: React.ReactNode
 }): React.JSX.Element {
   const label = reveal === 'all' ? revealAll(item) : itemName(item)
   const url = itemImageUrl(item)
+  const imageStyle = rotation ? { transform: `rotate(${rotation}deg)` } : undefined
 
   return (
     <li className="card" draggable={draggable} onDragStart={onDragStart}>
       <div className="card-art">
         {url === null ? (
-          <span className="card-art-fallback">{label}</span>
+          <span className="card-art-fallback" style={imageStyle}>{label}</span>
         ) : (
           <img
             src={url}
             alt={label}
+            style={imageStyle}
             onError={(event) => {
               // A missing file should leave the name readable, not a broken icon
               event.currentTarget.style.display = 'none'

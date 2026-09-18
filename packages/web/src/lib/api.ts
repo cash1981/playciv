@@ -274,6 +274,8 @@ export const api = {
     patch<PlayerView>(`/api/games/${gameId}/battle/arena/${arenaUnitId}`, { key, value, rev }),
   killArenaUnit: (gameId: string, arenaUnitId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/${arenaUnitId}/kill`, { rev }),
+  rotateArenaUnit: (gameId: string, arenaUnitId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/${arenaUnitId}/rotate`, { rev }),
   endBattleTurn: (gameId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/turn/end`, { rev }),
   endBattleArena: (gameId: string, rev: number) =>
