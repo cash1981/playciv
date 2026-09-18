@@ -1138,6 +1138,13 @@ ul.history > li {
   border-top: 1px solid var(--line);
 }
 
+/* Vertical dividers between section groups */
+.status-table th.status-group-heading.status-group-start,
+.status-table thead tr + tr th.status-group-start,
+.status-table td.status-group-start {
+  border-left: 2px solid var(--line);
+}
+
 .status-table td {
   white-space: nowrap;
 }

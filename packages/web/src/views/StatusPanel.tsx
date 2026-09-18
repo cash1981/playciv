@@ -70,6 +70,9 @@ const STATUS_GROUPS: readonly { readonly label: string; readonly columns: readon
 
 const COLUMN_COUNT = 2 + ACCOUNTING_COLUMNS.length + UNIT_COLUMNS.length + MODIFIER_COLUMNS.length + INVESTMENT_COLUMNS.length
 
+/** Keys of the first column in each group — used to draw vertical section dividers. */
+const GROUP_START_KEYS = new Set(STATUS_GROUPS.map((g) => g.columns[0]!.key))
+
 export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Element {
   const rows: Row[] = []
 
@@ -107,15 +110,24 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
             <tr>
               <th rowSpan={2}>Player</th>
               <th rowSpan={2}>Civilization</th>
-              {STATUS_GROUPS.map((group) => (
-                <th key={group.label} colSpan={group.columns.length} className="status-group-heading">
+              {STATUS_GROUPS.map((group, i) => (
+                <th
+                  key={group.label}
+                  colSpan={group.columns.length}
+                  className={`status-group-heading${i > 0 ? ' status-group-start' : ''}`}
+                >
                   {group.label}
                 </th>
               ))}
             </tr>
             <tr>
               {STATUS_GROUPS.flatMap((group) => group.columns).map((column) => (
-                <th key={column.key}>{column.label}</th>
+                <th
+                  key={column.key}
+                  className={GROUP_START_KEYS.has(column.key) ? 'status-group-start' : undefined}
+                >
+                  {column.label}
+                </th>
               ))}
             </tr>
           </thead>
@@ -139,7 +151,10 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
                   )}
                 </td>
                 {STATUS_GROUPS.flatMap((group) => group.columns).map((column) => (
-                  <td key={column.key}>
+                  <td
+                    key={column.key}
+                    className={GROUP_START_KEYS.has(column.key) ? 'status-group-start' : undefined}
+                  >
                     <StatCell
                       value={row.stats[column.key]}
                       signed={column.signed === true}
