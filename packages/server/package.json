@@ -3,8 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "main": "./dist/src/lib.js",
+  "types": "./dist/src/lib.d.ts",
+  "exports": { ".": { "types": "./dist/src/lib.d.ts", "default": "./dist/src/lib.js" } },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "pretypecheck": "pnpm build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "dev": "tsx watch src/index.ts",
@@ -14,8 +18,8 @@
   },
   "dependencies": {
     "@civ/engine": "workspace:*",
-    "@fastify/cors": "^11.1.0",
-    "fastify": "^5.6.1",
+    "@hono/node-server": "^1.13.0",
+    "hono": "^4.6.0",
     "mongodb": "^7.6.0"
   },
   "devDependencies": {

@@ -12,8 +12,8 @@ import {
   toPlayerView,
   withdrawFromGame,
 } from '@civ/engine'
-import type { FastifyInstance } from 'fastify'
 
+import type { App } from '../app.js'
 import { newId } from '../auth.js'
 import type { AppContext } from '../context.js'
 import {
@@ -101,14 +101,13 @@ function clampInt(raw: string | undefined, fallback: number, min: number, max: n
   return Math.min(Math.max(value, min), max)
 }
 
-export function registerGameRoutes(app: FastifyInstance, context: AppContext): void {
-  const authenticate = authenticateWith(context)
-  const auth = { preHandler: authenticate }
+export function registerGameRoutes(app: App, context: AppContext): void {
+  const auth = authenticateWith(context)
 
-  app.get('/api/games', auth, async (request, reply) => {
+  app.get('/api/games', auth, async (c) => {
     const games = await context.repo.allGames()
-    const me = currentPlayer(request).id
-    return reply.send(
+    const me = currentPlayer(c).id
+    return c.json(
       [...games]
         .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
         .map((game) => toSummary(game, me)),
@@ -116,26 +115,26 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
   })
 
   /** Java: `GameResource.createGame` with `CreateNewGameDTO`. */
-  app.post('/api/games', auth, async (request, reply) => {
-    const body = asRecord(request.body)
+  app.post('/api/games', auth, async (c) => {
+    const body = asRecord(await c.req.json().catch(() => ({})))
     const name = requireString(body, 'name')
     const numOfPlayers = optionalNumber(body, 'numOfPlayers') ?? 4
     const color = optionalString(body, 'color')
 
     if (name === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'name is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'name is required')
     }
     if (numOfPlayers < 2 || numOfPlayers > 5) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'numOfPlayers must be between 2 and 5')
+      return sendError(c, 400, 'BAD_REQUEST', 'numOfPlayers must be between 2 and 5')
     }
 
     const existing = await context.repo.allGames()
     // Java had a unique index on pbf.name
     if (existing.some((game) => game.name.toLowerCase() === name.toLowerCase())) {
-      return sendError(reply, 409, 'GAME_EXISTS', `A game named ${name} already exists`)
+      return sendError(c, 409, 'GAME_EXISTS', `A game named ${name} already exists`)
     }
 
-    const me = currentPlayer(request)
+    const me = currentPlayer(c)
     // Java: @Min(2) @Max(5) on CreateNewGameDTO.numOfPlayers
     const empty = createGame({
       name,
@@ -157,7 +156,7 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
       ...(color !== undefined ? { color } : {}),
       gameCreator: true,
     })
-    if (!joined.ok) return sendEngineError(reply, joined.error)
+    if (!joined.ok) return sendEngineError(c, joined.error)
 
     // `joinGame` is called directly rather than through `applyToGame`, so the
     // "joined / game started" log entries never pass through the stamping
@@ -165,21 +164,21 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     const stamped = stampLog(joined.value, new Date().toISOString())
 
     await context.repo.saveGame(stamped)
-    return reply.code(201).send(toSummary(stamped, me.id))
+    return c.json(toSummary(stamped, me.id), 201)
   })
 
-  app.get('/api/games/:gameId', auth, async (request, reply) => {
-    const { gameId } = request.params as { gameId: string }
-    return readGame(context, request, reply, gameId)
+  app.get('/api/games/:gameId', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return readGame(context, c, gameId)
   })
 
   /** Java: `GameResource.joinGame`. */
-  app.post('/api/games/:gameId/join', auth, async (request, reply) => {
-    const { gameId } = request.params as { gameId: string }
-    const color = optionalString(asRecord(request.body), 'color')
-    const me = currentPlayer(request)
+  app.post('/api/games/:gameId/join', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const color = optionalString(asRecord(await c.req.json().catch(() => ({}))), 'color')
+    const me = currentPlayer(c)
 
-    return applyToGame(context, request, reply, gameId, (state) =>
+    return applyToGame(context, c, gameId, (state) =>
       joinGame(state, {
         playerId: me.id,
         username: me.username,
@@ -189,19 +188,17 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     )
   })
 
-  app.post('/api/games/:gameId/withdraw', auth, async (request, reply) => {
-    const { gameId } = request.params as { gameId: string }
-    return applyToGame(context, request, reply, gameId, (state) =>
-      withdrawFromGame(state, currentPlayer(request).id),
-    )
+  app.post('/api/games/:gameId/withdraw', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return applyToGame(context, c, gameId, (state) => withdrawFromGame(state, currentPlayer(c).id))
   })
 
-  app.post('/api/games/:gameId/end', auth, async (request, reply) => {
-    const { gameId } = request.params as { gameId: string }
-    const winner = optionalString(asRecord(request.body), 'winner')
-    const me = currentPlayer(request)
+  app.post('/api/games/:gameId/end', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const winner = optionalString(asRecord(await c.req.json().catch(() => ({}))), 'winner')
+    const me = currentPlayer(c)
 
-    return applyToGame(context, request, reply, gameId, (state) =>
+    return applyToGame(context, c, gameId, (state) =>
       endGame(state, {
         playerId: me.id,
         // The engine still carries Java's username-shaped admin escape hatch;
@@ -212,26 +209,26 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
     )
   })
 
-  app.post('/api/games/:gameId/delete', auth, async (request, reply) => {
-    const { gameId } = request.params as { gameId: string }
+  app.post('/api/games/:gameId/delete', auth, async (c) => {
+    const gameId = c.req.param('gameId')
     const game = await context.repo.findGame(gameId)
     if (game === undefined) {
-      return sendError(reply, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+      return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
     }
 
-    const me = currentPlayer(request)
+    const me = currentPlayer(c)
     const isCreator = game.players.some(
       (player) => player.playerId === me.id && player.gameCreator,
     )
     if (!isCreator && me.role !== 'admin') {
-      return sendError(reply, 403, 'NO_ACCESS', 'Only the game creator or admin can delete a game')
+      return sendError(c, 403, 'NO_ACCESS', 'Only the game creator or admin can delete a game')
     }
 
     const deleted = await context.repo.deleteGame(gameId)
     if (!deleted) {
-      return sendError(reply, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+      return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
     }
-    return reply.code(204).send()
+    return c.body(null, 204)
   })
 
   /**
@@ -240,12 +237,11 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
    * page plus the total so the browser never loads the whole history or every
    * image at once. `page` is 1-based; `size` is clamped to 1..MAX_REVEALED_SIZE.
    */
-  app.get('/api/games/:gameId/revealed', auth, async (request, reply) => {
-    const { gameId } = request.params as { gameId: string }
-    const query = request.query as { page?: string; size?: string }
-    const size = clampInt(query.size, DEFAULT_REVEALED_SIZE, 1, MAX_REVEALED_SIZE)
-    const page = clampInt(query.page, 1, 1, Number.MAX_SAFE_INTEGER)
-    return readGame(context, request, reply, gameId, (state) => {
+  app.get('/api/games/:gameId/revealed', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const size = clampInt(c.req.query('size'), DEFAULT_REVEALED_SIZE, 1, MAX_REVEALED_SIZE)
+    const page = clampInt(c.req.query('page'), 1, 1, Number.MAX_SAFE_INTEGER)
+    return readGame(context, c, gameId, (state) => {
       const all = revealedFeed(state)
       const start = (page - 1) * size
       return {
@@ -278,9 +274,9 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
   }
 
   /** Java: `/{pbfId}/publiclog`. */
-  app.get('/api/games/:gameId/log/public', auth, async (request, reply) => {
-    const { gameId } = request.params as { gameId: string }
-    return readGame(context, request, reply, gameId, (state) =>
+  app.get('/api/games/:gameId/log/public', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return readGame(context, c, gameId, (state) =>
       newestFirst(
         state.log
           .filter((entry) => entry.publicLog !== '')
@@ -297,9 +293,9 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
   })
 
   /** Java: `/{pbfId}/privatelog` — the player's own entries only. */
-  app.get('/api/games/:gameId/log/private', auth, async (request, reply) => {
-    const { gameId } = request.params as { gameId: string }
-    return readGame(context, request, reply, gameId, (state, viewerId) =>
+  app.get('/api/games/:gameId/log/private', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return readGame(context, c, gameId, (state, viewerId) =>
       newestFirst(
         state.log
           .filter((entry) => entry.playerId === viewerId && entry.privateLog !== '')
@@ -321,24 +317,24 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
   // game, and it carries no game rules — so it lives here, not in the engine.
   // -------------------------------------------------------------------------
 
-  app.get('/api/games/:gameId/chat', auth, async (request, reply) => {
-    const { gameId } = request.params as { gameId: string }
-    return reply.send(await context.repo.chatFor(gameId))
+  app.get('/api/games/:gameId/chat', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return c.json(await context.repo.chatFor(gameId))
   })
 
-  app.post('/api/games/:gameId/chat', auth, async (request, reply) => {
-    const { gameId } = request.params as { gameId: string }
-    const message = requireString(asRecord(request.body), 'message')
+  app.post('/api/games/:gameId/chat', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const message = requireString(asRecord(await c.req.json().catch(() => ({}))), 'message')
     if (message === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'message is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'message is required')
     }
 
     const game = await context.repo.findGame(gameId)
     if (game === undefined) {
-      return sendError(reply, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+      return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
     }
 
-    const me = currentPlayer(request)
+    const me = currentPlayer(c)
     const entry: ChatMessage = {
       id: newId(),
       gameId,
@@ -347,33 +343,33 @@ export function registerGameRoutes(app: FastifyInstance, context: AppContext): v
       createdAt: new Date().toISOString(),
     }
     await context.repo.appendChat(entry)
-    return reply.code(201).send(entry)
+    return c.json(entry, 201)
   })
 
   /** Java: `/publicchat` — posting remains authenticated. */
-  app.post('/api/chat', auth, async (request, reply) => {
-    const message = requireString(asRecord(request.body), 'message')
+  app.post('/api/chat', auth, async (c) => {
+    const message = requireString(asRecord(await c.req.json().catch(() => ({}))), 'message')
     if (message === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'message is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'message is required')
     }
     const entry: ChatMessage = {
       id: newId(),
       gameId: null,
-      username: currentPlayer(request).username,
+      username: currentPlayer(c).username,
       message,
       createdAt: new Date().toISOString(),
     }
     await context.repo.appendChat(entry)
-    return reply.code(201).send(entry)
+    return c.json(entry, 201)
   })
 
   /** Exposed so the client does not have to derive it from the player view. */
-  app.get('/api/games/:gameId/state', auth, async (request, reply) => {
-    const { gameId } = request.params as { gameId: string }
+  app.get('/api/games/:gameId/state', auth, async (c) => {
+    const gameId = c.req.param('gameId')
     const game = await context.repo.findGame(gameId)
     if (game === undefined) {
-      return sendError(reply, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+      return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
     }
-    return reply.send(toPlayerView(game, currentPlayer(request).id))
+    return c.json(toPlayerView(game, currentPlayer(c).id))
   })
 }

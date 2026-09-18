@@ -5,13 +5,14 @@
  * and that two players really see the same board.
  */
 
-import type { FastifyInstance } from 'fastify'
+import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
+import { inject } from './helpers.js'
 
-let app: FastifyInstance
+let app: App
 let repo: JsonFileRepository
 
 beforeEach(async () => {
@@ -23,13 +24,13 @@ beforeEach(async () => {
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` })
 
 async function register(username: string): Promise<string> {
-  const response = await app.inject({
+  const response = await inject(app, {
     method: 'POST',
     url: '/api/auth/register',
     payload: { username, password: 'secret', email: `${username}@example.com` },
   })
-  expect(response.statusCode).toBe(201)
-  return (response.json() as { token: string }).token
+  expect(response.status).toBe(201)
+  return (await response.json() as { token: string }).token
 }
 
 /** A started two-player game, and the token of whoever got the first turn. */
@@ -37,16 +38,16 @@ async function startedGame(
   name: string,
 ): Promise<{ gameId: string; starter: string; waiting: string }> {
   const creator = await register(`${name}-a`)
-  const created = await app.inject({
+  const created = await inject(app, {
     method: 'POST',
     url: '/api/games',
     headers: bearer(creator),
     payload: { name, numOfPlayers: 2 },
   })
-  const gameId = (created.json() as { id: string }).id
+  const gameId = (await created.json() as { id: string }).id
 
   const other = await register(`${name}-b`)
-  await app.inject({
+  await inject(app, {
     method: 'POST',
     url: `/api/games/${gameId}/join`,
     headers: bearer(other),
@@ -60,7 +61,7 @@ async function startedGame(
 }
 
 const place = (gameId: string, token: string, assetId: string, x: number, y: number) =>
-  app.inject({
+  inject(app, {
     method: 'POST',
     url: `/api/games/${gameId}/board/pieces`,
     headers: bearer(token),
@@ -70,13 +71,13 @@ const place = (gameId: string, token: string, assetId: string, x: number, y: num
 describe('player areas', () => {
   it('the view carries one area per player plus the shared Wonders area, below the map', async () => {
     const { gameId, starter } = await startedGame('Areas')
-    const view = await app.inject({
+    const view = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}`,
       headers: bearer(starter),
     })
 
-    const areas = (view.json() as { boardAreas: { username: string; y: number }[] }).boardAreas
+    const areas = (await view.json() as { boardAreas: { username: string; y: number }[] }).boardAreas
     // Two players, then the shared Wonders area at the right.
     expect(areas).toHaveLength(3)
     expect(areas.at(-1)?.username).toBe('Wonders')
@@ -86,19 +87,19 @@ describe('player areas', () => {
 
   it('a piece dropped in an area tidies into a slot', async () => {
     const { gameId, starter } = await startedGame('Tidy')
-    const view = await app.inject({
+    const view = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}`,
       headers: bearer(starter),
     })
-    const area = (view.json() as { boardAreas: { x: number; y: number }[] }).boardAreas[0]
+    const area = (await view.json() as { boardAreas: { x: number; y: number }[] }).boardAreas[0]
     if (area === undefined) throw new Error('no area')
 
     // Drop two huts at the same untidy spot
     await place(gameId, starter, 'resources/hut', area.x + 37, area.y + 61)
     const second = await place(gameId, starter, 'resources/hut', area.x + 37, area.y + 61)
 
-    const pieces = (second.json() as { board: { pieces: { x: number }[] } }).board.pieces
+    const pieces = (await second.json() as { board: { pieces: { x: number }[] } }).board.pieces
     expect(pieces).toHaveLength(2)
     expect(pieces[0]?.x).not.toBe(pieces[1]?.x)
   })
@@ -109,8 +110,8 @@ describe('player areas', () => {
     await place(gameId, starter, 'resources/wheat', 0, 0)
 
     const exhausted = await place(gameId, starter, 'resources/wheat', 0, 0)
-    expect(exhausted.statusCode).toBe(409)
-    expect((exhausted.json() as { error: string }).error).toBe('BOARD_ASSET_LIMIT_REACHED')
+    expect(exhausted.status).toBe(409)
+    expect((await exhausted.json() as { error: string }).error).toBe('BOARD_ASSET_LIMIT_REACHED')
   })
 })
 
@@ -119,13 +120,13 @@ describe('history over HTTP', () => {
     const { gameId, starter } = await startedGame('History')
     await place(gameId, starter, 'figures/redarmy', 200, 300)
 
-    const history = await app.inject({
+    const history = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/board/history`,
       headers: bearer(starter),
     })
 
-    const entries = history.json() as { description: string; at: string }[]
+    const entries = await history.json() as { description: string; at: string }[]
     expect(entries).toHaveLength(1)
     expect(entries[0]?.description).toContain('placed Red army')
     // The server supplies the timestamp; the engine stays pure
@@ -136,28 +137,28 @@ describe('history over HTTP', () => {
     const { gameId, starter, waiting } = await startedGame('Shared')
     await place(gameId, starter, 'markers/coin', 100, 100)
 
-    const theirs = await app.inject({
+    const theirs = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/board/history`,
       headers: bearer(waiting),
     })
-    expect(theirs.json()).toHaveLength(1)
+    expect(await theirs.json()).toHaveLength(1)
   })
 
   it('a move records where it came from and went to', async () => {
     const { gameId, starter } = await startedGame('Moves')
     const placed = await place(gameId, starter, 'figures/redarmy', 100, 100)
-    const piece = (placed.json() as { board: { pieces: { id: string }[] } }).board.pieces[0]
+    const piece = (await placed.json() as { board: { pieces: { id: string }[] } }).board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
 
-    const moved = await app.inject({
+    const moved = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/board/pieces/${piece.id}/move`,
       headers: bearer(starter),
       payload: { x: 700, y: 800 },
     })
 
-    const history = (moved.json() as { board: { history: { description: string }[] } }).board
+    const history = (await moved.json() as { board: { history: { description: string }[] } }).board
       .history
     expect(history).toHaveLength(2)
     expect(history[1]?.description).toMatch(/moved Red army from .+ to .+/)
@@ -169,15 +170,15 @@ describe('undo over HTTP', () => {
     const { gameId, starter } = await startedGame('Undo')
     await place(gameId, starter, 'figures/redarmy', 200, 300)
 
-    const undone = await app.inject({
+    const undone = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/board/undo`,
       headers: bearer(starter),
       payload: {},
     })
 
-    const board = (undone.json() as { board: { pieces: unknown[]; history: unknown[] } }).board
-    expect(undone.statusCode).toBe(200)
+    const board = (await undone.json() as { board: { pieces: unknown[]; history: unknown[] } }).board
+    expect(undone.status).toBe(200)
     expect(board.pieces).toHaveLength(0)
     expect(board.history).toHaveLength(0)
   })
@@ -186,26 +187,26 @@ describe('undo over HTTP', () => {
     const { gameId, starter, waiting } = await startedGame('UndoOther')
     await place(gameId, starter, 'figures/redarmy', 200, 300)
 
-    const undone = await app.inject({
+    const undone = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/board/undo`,
       headers: bearer(waiting),
       payload: {},
     })
-    expect(undone.statusCode).toBe(200)
+    expect(undone.status).toBe(200)
   })
 
   it('an empty history gives 412', async () => {
     const { gameId, starter } = await startedGame('NothingToUndo')
-    const undone = await app.inject({
+    const undone = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/board/undo`,
       headers: bearer(starter),
       payload: {},
     })
 
-    expect(undone.statusCode).toBe(412)
-    expect((undone.json() as { error: string }).error).toBe('NOTHING_TO_UNDO_ON_BOARD')
+    expect(undone.status).toBe(412)
+    expect((await undone.json() as { error: string }).error).toBe('NOTHING_TO_UNDO_ON_BOARD')
   })
 })
 
@@ -213,31 +214,31 @@ describe('rotation over HTTP', () => {
   it('turns a quarter step when no angle is given', async () => {
     const { gameId, starter } = await startedGame('Rotate')
     const placed = await place(gameId, starter, 'tiles/tile01', 0, 0)
-    const piece = (placed.json() as { board: { pieces: { id: string }[] } }).board.pieces[0]
+    const piece = (await placed.json() as { board: { pieces: { id: string }[] } }).board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
 
-    const turned = await app.inject({
+    const turned = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/board/pieces/${piece.id}/rotate`,
       headers: bearer(starter),
       payload: {},
     })
-    const pieces = (turned.json() as { board: { pieces: { rotation: number }[] } }).board.pieces
+    const pieces = (await turned.json() as { board: { pieces: { rotation: number }[] } }).board.pieces
     expect(pieces[0]?.rotation).toBe(90)
   })
 
   it('rejects an angle that is not a quarter turn', async () => {
     const { gameId, starter } = await startedGame('BadAngle')
     const placed = await place(gameId, starter, 'tiles/tile01', 0, 0)
-    const piece = (placed.json() as { board: { pieces: { id: string }[] } }).board.pieces[0]
+    const piece = (await placed.json() as { board: { pieces: { id: string }[] } }).board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
 
-    const turned = await app.inject({
+    const turned = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/board/pieces/${piece.id}/rotate`,
       headers: bearer(starter),
       payload: { rotation: 45 },
     })
-    expect(turned.statusCode).toBe(400)
+    expect(turned.status).toBe(400)
   })
 })

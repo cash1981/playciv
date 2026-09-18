@@ -10,7 +10,7 @@
     "dry-run": "npx wrangler deploy --dry-run"
   },
   "dependencies": {
-    "@civ/engine": "workspace:*",
+    "@civ/server": "workspace:*",
     "mongodb": "^7.6.0"
   },
   "devDependencies": {

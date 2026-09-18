@@ -1,25 +1,12 @@
 /**
- * Cloudflare Worker for playciv.app — Stage 0 spike.
+ * Cloudflare Worker for playciv.app.
  *
- * Purpose: prove the two unknowns before porting the real API in Stage 1, and
- * serve the built SPA so the domain shows the app.
- *
- *   1. that the MongoDB driver reaches Atlas from workerd, and
- *   2. that `node:crypto` scrypt (used for password hashing) runs on workerd,
- *
- * The `/api/_spike/*` routes are diagnostic and temporary — they are removed
- * when the real API lands. This file is not meant to be merged to main as-is.
- *
- * Requests to `/api/*` are handled here; everything else is served from the
- * built SPA via the ASSETS binding.
+ * Serves the API through the same Hono app as the Node server
+ * (`@civ/server`), backed by MongoDB, and falls back to the built SPA
+ * (`packages/web/dist`) for everything else via the ASSETS binding.
  */
 
-import { randomBytes, scrypt } from 'node:crypto'
-import { promisify } from 'node:util'
-
-import { MongoClient } from 'mongodb'
-
-import { PLAYER_COLORS } from '@civ/engine'
+import { createApp, MongoRepository } from '@civ/server'
 
 interface Env {
   /** The built SPA (packages/web/dist), bound in wrangler.jsonc. */
@@ -28,75 +15,43 @@ interface Env {
   readonly MONGO_URL?: string
   /** Database name; defaults to "playciv" like the server. */
   readonly MONGO_DB?: string
-  /** HMAC secret for session tokens. Present here only to confirm it is wired. */
+  /** HMAC secret for session tokens. */
   readonly TOKEN_SECRET?: string
 }
 
-const scryptAsync = promisify(scrypt) as (
-  password: string,
-  salt: string,
-  keylen: number,
-) => Promise<Buffer>
+let appPromise: Promise<ReturnType<typeof createApp>> | undefined
 
-/** scrypt key length, matching the server's auth module. */
-const KEY_LENGTH = 64
-
-function json(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  })
+async function getApp(env: Env): Promise<ReturnType<typeof createApp>> {
+  if (appPromise === undefined) {
+    appPromise = (async () => {
+      if (env.MONGO_URL === undefined) throw new Error('MONGO_URL is not configured')
+      // Fail closed: an empty HMAC secret would let anyone forge bearer tokens
+      // for any player and read their hidden hand. The Node entry generates a
+      // random one; a Worker must be given a real secret.
+      if (env.TOKEN_SECRET === undefined || env.TOKEN_SECRET === '') {
+        throw new Error('TOKEN_SECRET is not configured')
+      }
+      const repo = await MongoRepository.connect(env.MONGO_URL, env.MONGO_DB ?? 'playciv')
+      return createApp({ repo, tokenSecret: env.TOKEN_SECRET, corsOrigin: true })
+    })()
+    // A failed first connection must not poison the isolate for its whole life:
+    // clear the cache so the next request retries instead of replaying the error.
+    appPromise.catch(() => {
+      appPromise = undefined
+    })
+  }
+  return appPromise
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
 
-    // Everything that is not the API is the SPA.
     if (!url.pathname.startsWith('/api/')) {
       return env.ASSETS.fetch(request)
     }
 
-    if (url.pathname === '/api/health') {
-      return json({
-        ok: true,
-        service: 'playciv-worker',
-        // Proves the pure engine package bundles and runs on workerd.
-        enginePlayerColors: PLAYER_COLORS.length,
-        mongoUrlConfigured: env.MONGO_URL !== undefined,
-        tokenSecretConfigured: env.TOKEN_SECRET !== undefined,
-        time: new Date().toISOString(),
-      })
-    }
-
-    if (url.pathname === '/api/_spike/scrypt') {
-      const start = Date.now()
-      const salt = randomBytes(16).toString('hex')
-      const derived = await scryptAsync('spike-password', salt, KEY_LENGTH)
-      return json({ ok: true, scryptWorks: derived.length === KEY_LENGTH, ms: Date.now() - start })
-    }
-
-    if (url.pathname === '/api/_spike/mongo') {
-      if (env.MONGO_URL === undefined) {
-        return json({ ok: false, error: 'MONGO_URL is not set as a Worker secret' }, 500)
-      }
-      const client = new MongoClient(env.MONGO_URL)
-      try {
-        await client.connect()
-        const db = client.db(env.MONGO_DB ?? 'playciv')
-        const ping = await db.command({ ping: 1 })
-        const players = await db.collection('player').estimatedDocumentCount()
-        return json({ ok: true, ping, players })
-      } catch (error) {
-        return json(
-          { ok: false, error: error instanceof Error ? error.message : String(error) },
-          500,
-        )
-      } finally {
-        await client.close()
-      }
-    }
-
-    return json({ ok: false, error: 'Not found' }, 404)
+    const app = await getApp(env)
+    return app.fetch(request, env, ctx)
   },
 }

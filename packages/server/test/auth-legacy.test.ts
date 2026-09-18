@@ -6,13 +6,14 @@
 
 import { createHash } from 'node:crypto'
 
-import type { FastifyInstance } from 'fastify'
+import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createTestApp } from '../src/app.js'
 import { hashPassword, needsUpgrade, verifyPassword } from '../src/auth.js'
 import type { JsonFileRepository } from '../src/store/json-file.js'
 import type { StoredPlayer } from '../src/store/types.js'
+import { inject } from './helpers.js'
 
 const sha1Hex = (value: string): string => createHash('sha1').update(value, 'utf8').digest('hex')
 
@@ -45,7 +46,7 @@ describe('verifyPassword', () => {
 })
 
 describe('login upgrades a legacy account', () => {
-  let app: FastifyInstance
+  let app: App
   let repo: JsonFileRepository
 
   beforeEach(async () => {
@@ -69,12 +70,12 @@ describe('login upgrades a legacy account', () => {
   it('rewrites the stored hash to scrypt on a successful login', async () => {
     await seedLegacyPlayer('cash1981', 'oldpassword')
 
-    const response = await app.inject({
+    const response = await inject(app, {
       method: 'POST',
       url: '/api/auth/login',
       payload: { username: 'cash1981', password: 'oldpassword' },
     })
-    expect(response.statusCode).toBe(200)
+    expect(response.status).toBe(200)
 
     const stored = await repo.findPlayerById('legacy-1')
     expect(stored?.passwordHash).not.toBe(sha1Hex('oldpassword'))
@@ -84,29 +85,29 @@ describe('login upgrades a legacy account', () => {
   it('still logs in with the same password after the upgrade', async () => {
     await seedLegacyPlayer('cash1981', 'oldpassword')
 
-    await app.inject({
+    await inject(app, {
       method: 'POST',
       url: '/api/auth/login',
       payload: { username: 'cash1981', password: 'oldpassword' },
     })
 
-    const second = await app.inject({
+    const second = await inject(app, {
       method: 'POST',
       url: '/api/auth/login',
       payload: { username: 'cash1981', password: 'oldpassword' },
     })
-    expect(second.statusCode).toBe(200)
+    expect(second.status).toBe(200)
   })
 
   it('does not upgrade the hash on a failed login', async () => {
     await seedLegacyPlayer('cash1981', 'oldpassword')
 
-    const response = await app.inject({
+    const response = await inject(app, {
       method: 'POST',
       url: '/api/auth/login',
       payload: { username: 'cash1981', password: 'wrong' },
     })
-    expect(response.statusCode).toBe(401)
+    expect(response.status).toBe(401)
 
     const stored = await repo.findPlayerById('legacy-1')
     expect(needsUpgrade(stored?.passwordHash ?? '')).toBe(true)

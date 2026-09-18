@@ -22,6 +22,8 @@ import './load-env.js'
 import { randomBytes } from 'node:crypto'
 import { resolve } from 'node:path'
 
+import { serve } from '@hono/node-server'
+
 import { createApp } from './app.js'
 import { JsonFileRepository } from './store/json-file.js'
 import { MongoRepository } from './store/mongo.js'
@@ -59,18 +61,18 @@ if (mongoUrl !== undefined) {
   console.log(`Storage: JSON file, mirrored to ${dataFile}`)
 }
 
-const app = await createApp({ repo, tokenSecret, logger: true, corsOrigin })
+const app = createApp({ repo, tokenSecret, logger: true, corsOrigin })
+
+const server = serve({ fetch: app.fetch, port, hostname: host })
 
 // Flush pending changes and close any open connection before the process dies
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     void (async () => {
-      await app.close()
+      await new Promise<void>((resolveClose) => server.close(() => resolveClose()))
       await repo.flush()
       await mongo?.close()
       process.exit(0)
     })()
   })
 }
-
-await app.listen({ port, host })

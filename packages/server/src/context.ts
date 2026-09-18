@@ -5,7 +5,8 @@
 
 import type { EngineError, GameState, PlayerView } from '@civ/engine'
 import { hasUserAccess, toPlayerView } from '@civ/engine'
-import type { FastifyReply, FastifyRequest } from 'fastify'
+import type { Context } from 'hono'
+import { createMiddleware } from 'hono/factory'
 
 import type { TokenSigner } from './auth.js'
 import { sendEngineError, sendError } from './errors.js'
@@ -16,66 +17,54 @@ export interface AppContext {
   readonly tokens: TokenSigner
 }
 
-declare module 'fastify' {
-  interface FastifyRequest {
-    /** Set by `authenticate` once the Authorization header checks out. */
-    player?: StoredPlayer
-  }
-}
+/** The Hono context variables set once `authenticate` has run. */
+export type Variables = { player: StoredPlayer }
 
-/** Requires a valid bearer token and puts the player on the request. */
+/** Requires a valid bearer token and puts the player on the context. */
 export function authenticateWith(context: AppContext) {
-  return async function authenticate(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ): Promise<void> {
-    const header = request.headers.authorization
+  return createMiddleware<{ Variables: Variables }>(async (c, next) => {
+    const header = c.req.header('authorization')
     if (header === undefined || !header.startsWith('Bearer ')) {
-      await sendError(reply, 401, 'UNAUTHORIZED', 'Missing bearer token')
-      return
+      return sendError(c, 401, 'UNAUTHORIZED', 'Missing bearer token')
     }
 
     const payload = context.tokens.verify(header.slice('Bearer '.length))
     if (payload === undefined) {
-      await sendError(reply, 401, 'UNAUTHORIZED', 'Invalid or expired token')
-      return
+      return sendError(c, 401, 'UNAUTHORIZED', 'Invalid or expired token')
     }
 
     const player = await context.repo.findPlayerById(payload.playerId)
     if (player === undefined) {
-      await sendError(reply, 401, 'UNAUTHORIZED', 'Unknown player')
-      return
+      return sendError(c, 401, 'UNAUTHORIZED', 'Unknown player')
     }
 
     if (player.disabled === true) {
-      await sendError(reply, 403, 'ACCOUNT_DISABLED', 'This account is disabled')
-      return
+      return sendError(c, 403, 'ACCOUNT_DISABLED', 'This account is disabled')
     }
 
-    request.player = player
-  }
+    c.set('player', player)
+    await next()
+  })
 }
 
 /** Requires a valid, currently enabled account with the persisted admin role. */
 export function requireAdminWith(context: AppContext) {
   const authenticate = authenticateWith(context)
-  return async function requireAdmin(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ): Promise<void> {
-    await authenticate(request, reply)
-    if (reply.sent) return
-    if (currentPlayer(request).role !== 'admin') {
-      await sendError(reply, 403, 'ADMIN_REQUIRED', 'Only admins may manage users')
+  return createMiddleware<{ Variables: Variables }>(async (c, next) => {
+    const result = await authenticate(c, async () => undefined)
+    if (result !== undefined) return result
+    if (currentPlayer(c).role !== 'admin') {
+      return sendError(c, 403, 'ADMIN_REQUIRED', 'Only admins may manage users')
     }
-  }
+    await next()
+  })
 }
 
 /** The signed-in player. Only call this from routes running `authenticate`. */
-export function currentPlayer(request: FastifyRequest): StoredPlayer {
-  const player = request.player
+export function currentPlayer(c: Context<{ Variables: Variables }>): StoredPlayer {
+  const player = c.get('player')
   if (player === undefined) {
-    throw new Error('currentPlayer called without the authenticate preHandler')
+    throw new Error('currentPlayer called without the authenticate middleware')
   }
   return player
 }
@@ -103,18 +92,15 @@ export function stampLog(state: GameState, now: string): GameState {
  */
 export async function requireMembership(
   context: AppContext,
-  request: FastifyRequest,
-  reply: FastifyReply,
+  c: Context<{ Variables: Variables }>,
   gameId: string,
-): Promise<GameState | undefined> {
+): Promise<GameState | Response> {
   const game = await context.repo.findGame(gameId)
   if (game === undefined) {
-    await sendError(reply, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
-    return undefined
+    return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
   }
-  if (!hasUserAccess(game, currentPlayer(request).id)) {
-    await sendError(reply, 403, 'NO_ACCESS', 'User is not player of this game')
-    return undefined
+  if (!hasUserAccess(game, currentPlayer(c).id)) {
+    return sendError(c, 403, 'NO_ACCESS', 'User is not player of this game')
   }
   return game
 }
@@ -125,38 +111,36 @@ export async function requireMembership(
  */
 export async function applyToGame(
   context: AppContext,
-  request: FastifyRequest,
-  reply: FastifyReply,
+  c: Context<{ Variables: Variables }>,
   gameId: string,
   action: (state: GameState) => { ok: true; value: GameState } | { ok: false; error: EngineError },
-): Promise<FastifyReply> {
+): Promise<Response> {
   const game = await context.repo.findGame(gameId)
   if (game === undefined) {
-    return sendError(reply, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
   }
 
   const result = action(game)
-  if (!result.ok) return sendEngineError(reply, result.error)
+  if (!result.ok) return sendEngineError(c, result.error)
 
   const stamped = stampLog(result.value, new Date().toISOString())
 
   await context.repo.saveGame(stamped)
-  return reply.send(toPlayerView(stamped, currentPlayer(request).id))
+  return c.json(toPlayerView(stamped, currentPlayer(c).id))
 }
 
 /** Reads a game and answers with the player's view, changing nothing. */
 export async function readGame(
   context: AppContext,
-  request: FastifyRequest,
-  reply: FastifyReply,
+  c: Context<{ Variables: Variables }>,
   gameId: string,
   project: (state: GameState, viewerId: string) => unknown = toPlayerView,
-): Promise<FastifyReply> {
+): Promise<Response> {
   const game = await context.repo.findGame(gameId)
   if (game === undefined) {
-    return sendError(reply, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
   }
-  return reply.send(project(game, request.player?.id ?? ''))
+  return c.json(project(game, c.get('player')?.id ?? ''))
 }
 
 export type { PlayerView }

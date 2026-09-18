@@ -39,9 +39,10 @@ import {
 } from '@civ/engine'
 import type { TurnPhase } from '@civ/engine'
 import { TURN_PHASES, allPublicTurns, playersTurns } from '@civ/engine'
-import type { FastifyInstance, FastifyReply } from 'fastify'
+import type { Context } from 'hono'
 
-import type { AppContext } from '../context.js'
+import type { App } from '../app.js'
+import type { AppContext, Variables } from '../context.js'
 import {
   applyToGame,
   asRecord,
@@ -56,31 +57,33 @@ import {
 import { sendError } from '../errors.js'
 
 /** Looks up the sheet name and answers 400 when there is no such sheet. */
-function parseSheetName(reply: FastifyReply, raw: string | undefined): SheetName | undefined {
+function parseSheetName(
+  c: Context<{ Variables: Variables }>,
+  raw: string | undefined,
+): SheetName | Response {
   if (raw === undefined) {
-    void sendError(reply, 400, 'BAD_REQUEST', 'sheetName is required')
-    return undefined
+    return sendError(c, 400, 'BAD_REQUEST', 'sheetName is required')
   }
   const sheetName = findSheetName(raw)
   if (sheetName === undefined) {
-    void sendError(reply, 400, 'BAD_REQUEST', `Unknown sheet name ${raw}`)
-    return undefined
+    return sendError(c, 400, 'BAD_REQUEST', `Unknown sheet name ${raw}`)
   }
   return sheetName
 }
 
-function parsePhase(reply: FastifyReply, raw: string | undefined): TurnPhase | undefined {
+function parsePhase(
+  c: Context<{ Variables: Variables }>,
+  raw: string | undefined,
+): TurnPhase | Response {
   const phase = TURN_PHASES.find((candidate) => candidate === raw?.toUpperCase())
   if (phase === undefined) {
-    void sendError(reply, 400, 'BAD_REQUEST', `phase must be one of ${TURN_PHASES.join(', ')}`)
-    return undefined
+    return sendError(c, 400, 'BAD_REQUEST', `phase must be one of ${TURN_PHASES.join(', ')}`)
   }
   return phase
 }
 
-export function registerPlayRoutes(app: FastifyInstance, context: AppContext): void {
-  const auth = { preHandler: authenticateWith(context) }
-  type Params = { gameId: string }
+export function registerPlayRoutes(app: App, context: AppContext): void {
+  const auth = authenticateWith(context)
 
   // -------------------------------------------------------------------------
   // Drawing
@@ -93,13 +96,13 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
    * they are placed on the shared board (see `drawWonder`). The draw is still
    * turn-gated like any other; only the destination differs.
    */
-  app.post('/api/games/:gameId/draw/:sheetName', auth, async (request, reply) => {
-    const { gameId, sheetName: raw } = request.params as Params & { sheetName: string }
-    const sheetName = parseSheetName(reply, raw)
-    if (sheetName === undefined) return reply
+  app.post('/api/games/:gameId/draw/:sheetName', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const sheetName = parseSheetName(c, c.req.param('sheetName'))
+    if (sheetName instanceof Response) return sheetName
 
-    return applyToGame(context, request, reply, gameId, (state) => {
-      const playerId = currentPlayer(request).id
+    return applyToGame(context, c, gameId, (state) => {
+      const playerId = currentPlayer(c).id
       return ALL_WONDERS.has(sheetName)
         ? drawWonder(state, { playerId, sheetName })
         : draw(state, { playerId, sheetName })
@@ -107,17 +110,15 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   })
 
   /** Java: `DrawResource.loot`. */
-  app.post('/api/games/:gameId/loot/:sheetName/:targetPlayerId', auth, async (request, reply) => {
-    const { gameId, sheetName: raw, targetPlayerId } = request.params as Params & {
-      sheetName: string
-      targetPlayerId: string
-    }
-    const sheetName = parseSheetName(reply, raw)
-    if (sheetName === undefined) return reply
+  app.post('/api/games/:gameId/loot/:sheetName/:targetPlayerId', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const targetPlayerId = c.req.param('targetPlayerId')
+    const sheetName = parseSheetName(c, c.req.param('sheetName'))
+    if (sheetName instanceof Response) return sheetName
 
-    return applyToGame(context, request, reply, gameId, (state) =>
+    return applyToGame(context, c, gameId, (state) =>
       loot(state, {
-        playerId: currentPlayer(request).id,
+        playerId: currentPlayer(c).id,
         targetPlayerId,
         sheetNames: new Set([sheetName]),
       }),
@@ -129,40 +130,36 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   // -------------------------------------------------------------------------
 
   /** Java: `DrawResource.drawUnits` — PUT draw/{pbfId}/battle?numOfUnits=N. */
-  app.post('/api/games/:gameId/battle/draw', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const numberOfDraws = optionalNumber(asRecord(request.body), 'numberOfUnits') ?? 0
+  app.post('/api/games/:gameId/battle/draw', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const numberOfDraws = optionalNumber(asRecord(await c.req.json().catch(() => ({}))), 'numberOfUnits') ?? 0
 
-    return applyToGame(context, request, reply, gameId, (state) =>
-      drawUnitsForBattle(state, { playerId: currentPlayer(request).id, numberOfDraws }),
+    return applyToGame(context, c, gameId, (state) =>
+      drawUnitsForBattle(state, { playerId: currentPlayer(c).id, numberOfDraws }),
     )
   })
 
-  app.post('/api/games/:gameId/battle/reveal', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    return applyToGame(context, request, reply, gameId, (state) =>
-      revealAndDiscardBattlehand(state, currentPlayer(request).id),
+  app.post('/api/games/:gameId/battle/reveal', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return applyToGame(context, c, gameId, (state) =>
+      revealAndDiscardBattlehand(state, currentPlayer(c).id),
     )
   })
 
-  app.post('/api/games/:gameId/battle/end', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    return applyToGame(context, request, reply, gameId, (state) =>
-      endBattle(state, currentPlayer(request).id),
-    )
+  app.post('/api/games/:gameId/battle/end', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return applyToGame(context, c, gameId, (state) => endBattle(state, currentPlayer(c).id))
   })
 
-  app.post('/api/games/:gameId/battle/barbarians', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    return applyToGame(context, request, reply, gameId, (state) =>
-      drawBarbarians(state, currentPlayer(request).id),
-    )
+  app.post('/api/games/:gameId/battle/barbarians', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return applyToGame(context, c, gameId, (state) => drawBarbarians(state, currentPlayer(c).id))
   })
 
-  app.post('/api/games/:gameId/battle/barbarians/discard', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    return applyToGame(context, request, reply, gameId, (state) =>
-      discardBarbarians(state, currentPlayer(request).id),
+  app.post('/api/games/:gameId/battle/barbarians/discard', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return applyToGame(context, c, gameId, (state) =>
+      discardBarbarians(state, currentPlayer(c).id),
     )
   })
 
@@ -170,89 +167,87 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   // Techs and social policy
   // -------------------------------------------------------------------------
 
-  app.get('/api/games/:gameId/techs/available', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    return readGame(context, request, reply, gameId, (state, viewerId) =>
+  app.get('/api/games/:gameId/techs/available', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return readGame(context, c, gameId, (state, viewerId) =>
       remainingTechsForPlayer(state, viewerId),
     )
   })
 
   /** Java: `PlayerResource.getChosenTechFromPlayer` — `/tech/all`. */
-  app.get('/api/games/:gameId/techs/revealed', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    return readGame(context, request, reply, gameId, (state) =>
-      revealedTechsForAllPlayers(state),
-    )
+  app.get('/api/games/:gameId/techs/revealed', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return readGame(context, c, gameId, (state) => revealedTechsForAllPlayers(state))
   })
 
-  app.post('/api/games/:gameId/techs/choose', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const techName = requireString(asRecord(request.body), 'name')
+  app.post('/api/games/:gameId/techs/choose', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const techName = requireString(asRecord(await c.req.json().catch(() => ({}))), 'name')
     if (techName === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'name is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'name is required')
     }
-    return applyToGame(context, request, reply, gameId, (state) =>
-      chooseTech(state, { playerId: currentPlayer(request).id, techName }),
+    return applyToGame(context, c, gameId, (state) =>
+      chooseTech(state, { playerId: currentPlayer(c).id, techName }),
     )
   })
 
-  app.post('/api/games/:gameId/techs/remove', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const techName = requireString(asRecord(request.body), 'name')
+  app.post('/api/games/:gameId/techs/remove', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const techName = requireString(asRecord(await c.req.json().catch(() => ({}))), 'name')
     if (techName === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'name is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'name is required')
     }
-    return applyToGame(context, request, reply, gameId, (state) =>
-      removeTech(state, { playerId: currentPlayer(request).id, techName }),
+    return applyToGame(context, c, gameId, (state) =>
+      removeTech(state, { playerId: currentPlayer(c).id, techName }),
     )
   })
 
-  app.post('/api/games/:gameId/techs/reveal', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const techName = requireString(asRecord(request.body), 'name')
+  app.post('/api/games/:gameId/techs/reveal', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const techName = requireString(asRecord(await c.req.json().catch(() => ({}))), 'name')
     if (techName === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'name is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'name is required')
     }
-    return applyToGame(context, request, reply, gameId, (state) =>
-      revealTech(state, { playerId: currentPlayer(request).id, techName }),
+    return applyToGame(context, c, gameId, (state) =>
+      revealTech(state, { playerId: currentPlayer(c).id, techName }),
     )
   })
 
-  app.post('/api/games/:gameId/socialpolicy/choose', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const name = requireString(asRecord(request.body), 'name')
+  app.post('/api/games/:gameId/socialpolicy/choose', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const name = requireString(asRecord(await c.req.json().catch(() => ({}))), 'name')
     if (name === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'name is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'name is required')
     }
-    return applyToGame(context, request, reply, gameId, (state) =>
-      chooseSocialPolicy(state, { playerId: currentPlayer(request).id, name }),
+    return applyToGame(context, c, gameId, (state) =>
+      chooseSocialPolicy(state, { playerId: currentPlayer(c).id, name }),
     )
   })
 
-  app.post('/api/games/:gameId/socialpolicy/remove', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const name = requireString(asRecord(request.body), 'name')
+  app.post('/api/games/:gameId/socialpolicy/remove', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const name = requireString(asRecord(await c.req.json().catch(() => ({}))), 'name')
     if (name === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'name is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'name is required')
     }
-    return applyToGame(context, request, reply, gameId, (state) =>
-      removeSocialPolicy(state, { playerId: currentPlayer(request).id, name }),
+    return applyToGame(context, c, gameId, (state) =>
+      removeSocialPolicy(state, { playerId: currentPlayer(c).id, name }),
     )
   })
 
-  app.get('/api/games/:gameId/socialpolicies', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    return readGame(context, request, reply, gameId, (state) => state.socialPolicies)
+  app.get('/api/games/:gameId/socialpolicies', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return readGame(context, c, gameId, (state) => state.socialPolicies)
   })
 
-  app.post('/api/games/:gameId/socialpolicies/reveal', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const name = requireString(asRecord(request.body), 'name')
+  app.post('/api/games/:gameId/socialpolicies/reveal', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const name = requireString(asRecord(await c.req.json().catch(() => ({}))), 'name')
     if (name === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'name is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'name is required')
     }
-    return applyToGame(context, request, reply, gameId, (state) =>
-      revealSocialPolicy(state, { playerId: currentPlayer(request).id, name }),
+    return applyToGame(context, c, gameId, (state) =>
+      revealSocialPolicy(state, { playerId: currentPlayer(c).id, name }),
     )
   })
 
@@ -261,18 +256,18 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   // -------------------------------------------------------------------------
 
   /** Java: `PlayerResource.revealItem` with `ItemDTO`. */
-  app.post('/api/games/:gameId/items/reveal', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const body = asRecord(request.body)
-    const sheetName = parseSheetName(reply, optionalString(body, 'sheetName'))
-    if (sheetName === undefined) return reply
+  app.post('/api/games/:gameId/items/reveal', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const sheetName = parseSheetName(c, optionalString(body, 'sheetName'))
+    if (sheetName instanceof Response) return sheetName
 
     const itemNumber = optionalNumber(body, 'itemNumber')
     const name = optionalString(body, 'name')
 
-    return applyToGame(context, request, reply, gameId, (state) =>
+    return applyToGame(context, c, gameId, (state) =>
       revealItem(state, {
-        playerId: currentPlayer(request).id,
+        playerId: currentPlayer(c).id,
         sheetName,
         ...(itemNumber !== undefined ? { itemNumber } : {}),
         ...(name !== undefined ? { name } : {}),
@@ -280,18 +275,18 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
     )
   })
 
-  app.post('/api/games/:gameId/items/discard', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const body = asRecord(request.body)
-    const sheetName = parseSheetName(reply, optionalString(body, 'sheetName'))
-    if (sheetName === undefined) return reply
+  app.post('/api/games/:gameId/items/discard', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const sheetName = parseSheetName(c, optionalString(body, 'sheetName'))
+    if (sheetName instanceof Response) return sheetName
 
     const itemNumber = optionalNumber(body, 'itemNumber')
     const name = optionalString(body, 'name')
 
-    return applyToGame(context, request, reply, gameId, (state) =>
+    return applyToGame(context, c, gameId, (state) =>
       discardItem(state, {
-        playerId: currentPlayer(request).id,
+        playerId: currentPlayer(c).id,
         sheetName,
         ...(itemNumber !== undefined ? { itemNumber } : {}),
         ...(name !== undefined ? { name } : {}),
@@ -300,42 +295,42 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   })
 
   /** Java: `PlayerResource.itemBackToDeck`. */
-  app.post('/api/games/:gameId/items/backtodeck', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const body = asRecord(request.body)
-    const sheetName = parseSheetName(reply, optionalString(body, 'sheetName'))
-    if (sheetName === undefined) return reply
+  app.post('/api/games/:gameId/items/backtodeck', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const sheetName = parseSheetName(c, optionalString(body, 'sheetName'))
+    if (sheetName instanceof Response) return sheetName
 
     const name = requireString(body, 'name')
     if (name === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'name is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'name is required')
     }
 
-    return applyToGame(context, request, reply, gameId, (state) =>
+    return applyToGame(context, c, gameId, (state) =>
       playerPutsItemBackInDeck(state, {
-        playerId: currentPlayer(request).id,
+        playerId: currentPlayer(c).id,
         sheetName,
         name,
       }),
     )
   })
 
-  app.post('/api/games/:gameId/items/trade', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const body = asRecord(request.body)
-    const sheetName = parseSheetName(reply, optionalString(body, 'sheetName'))
-    if (sheetName === undefined) return reply
+  app.post('/api/games/:gameId/items/trade', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const sheetName = parseSheetName(c, optionalString(body, 'sheetName'))
+    if (sheetName instanceof Response) return sheetName
 
     const targetPlayerId = requireString(body, 'targetPlayerId')
     if (targetPlayerId === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'targetPlayerId is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'targetPlayerId is required')
     }
     const itemNumber = optionalNumber(body, 'itemNumber')
     const name = optionalString(body, 'name')
 
-    return applyToGame(context, request, reply, gameId, (state) =>
+    return applyToGame(context, c, gameId, (state) =>
       tradeToPlayer(state, {
-        playerId: currentPlayer(request).id,
+        playerId: currentPlayer(c).id,
         targetPlayerId,
         sheetName,
         ...(itemNumber !== undefined ? { itemNumber } : {}),
@@ -353,35 +348,33 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
    * in the resource layer), so a non-member is rejected here, before the
    * engine ever sees the call.
    */
-  app.post('/api/games/:gameId/endturn', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    if ((await requireMembership(context, request, reply, gameId)) === undefined) return reply
+  app.post('/api/games/:gameId/endturn', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const membership = await requireMembership(context, c, gameId)
+    if (membership instanceof Response) return membership
 
-    const player = currentPlayer(request)
-    return applyToGame(context, request, reply, gameId, (state) =>
+    const player = currentPlayer(c)
+    return applyToGame(context, c, gameId, (state) =>
       endTurn(state, { playerId: player.id, username: player.username }),
     )
   })
 
-  app.post('/api/games/:gameId/taketurn', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    if ((await requireMembership(context, request, reply, gameId)) === undefined) return reply
+  app.post('/api/games/:gameId/taketurn', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const membership = await requireMembership(context, c, gameId)
+    if (membership instanceof Response) return membership
 
-    return applyToGame(context, request, reply, gameId, (state) =>
-      takeTurn(state, currentPlayer(request).id),
-    )
+    return applyToGame(context, c, gameId, (state) => takeTurn(state, currentPlayer(c).id))
   })
 
-  app.get('/api/games/:gameId/turns/public', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    return readGame(context, request, reply, gameId, (state) => allPublicTurns(state))
+  app.get('/api/games/:gameId/turns/public', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return readGame(context, c, gameId, (state) => allPublicTurns(state))
   })
 
-  app.get('/api/games/:gameId/turns/mine', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    return readGame(context, request, reply, gameId, (state, viewerId) =>
-      playersTurns(state, viewerId),
-    )
+  app.get('/api/games/:gameId/turns/mine', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return readGame(context, c, gameId, (state, viewerId) => playersTurns(state, viewerId))
   })
 
   /**
@@ -389,38 +382,36 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
    * engine's `updateTurn` already calls `hasUserAccess` on the caller and
    * returns `NO_ACCESS` (403) for a non-member, so no extra gate is needed here.
    */
-  app.post('/api/games/:gameId/turns/update', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const body = asRecord(request.body)
-    const phase = parsePhase(reply, optionalString(body, 'phase'))
-    if (phase === undefined) return reply
+  app.post('/api/games/:gameId/turns/update', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const phase = parsePhase(c, optionalString(body, 'phase'))
+    if (phase instanceof Response) return phase
 
     const turnNumber = optionalNumber(body, 'turnNumber') ?? 1
     const order = optionalString(body, 'order') ?? ''
 
-    return applyToGame(context, request, reply, gameId, (state) =>
-      updateTurn(state, { playerId: currentPlayer(request).id, turnNumber, phase, order }),
+    return applyToGame(context, c, gameId, (state) =>
+      updateTurn(state, { playerId: currentPlayer(c).id, turnNumber, phase, order }),
     )
   })
 
   /** `lockOrUnlockTurn` also gates on `hasUserAccess` in the engine, same as `updateTurn`. */
-  app.post('/api/games/:gameId/turns/lock', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const body = asRecord(request.body)
+  app.post('/api/games/:gameId/turns/lock', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
     const turnNumber = optionalNumber(body, 'turnNumber') ?? 1
     const locked = body['locked'] === true
 
-    return applyToGame(context, request, reply, gameId, (state) =>
-      lockOrUnlockTurn(state, { playerId: currentPlayer(request).id, turnNumber, locked }),
+    return applyToGame(context, c, gameId, (state) =>
+      lockOrUnlockTurn(state, { playerId: currentPlayer(c).id, turnNumber, locked }),
     )
   })
 
-  app.post('/api/games/:gameId/note', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const note = optionalString(asRecord(request.body), 'note') ?? ''
-    return applyToGame(context, request, reply, gameId, (state) =>
-      saveNote(state, currentPlayer(request).id, note),
-    )
+  app.post('/api/games/:gameId/note', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const note = optionalString(asRecord(await c.req.json().catch(() => ({}))), 'note') ?? ''
+    return applyToGame(context, c, gameId, (state) => saveNote(state, currentPlayer(c).id, note))
   })
 
   /**
@@ -429,20 +420,21 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
    * old shared asset spreadsheet. The engine authorizes membership and
    * validates the stat and value.
    */
-  app.post('/api/games/:gameId/players/:targetPlayerId/stat', auth, async (request, reply) => {
-    const { gameId, targetPlayerId } = request.params as Params & { targetPlayerId: string }
-    const body = asRecord(request.body)
+  app.post('/api/games/:gameId/players/:targetPlayerId/stat', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const targetPlayerId = c.req.param('targetPlayerId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
     const stat = requireString(body, 'stat')
     if (stat === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'stat is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'stat is required')
     }
     const value = optionalNumber(body, 'value')
     if (value === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'value must be a number')
+      return sendError(c, 400, 'BAD_REQUEST', 'value must be a number')
     }
-    return applyToGame(context, request, reply, gameId, (state) =>
+    return applyToGame(context, c, gameId, (state) =>
       setPlayerStat(state, {
-        editorPlayerId: currentPlayer(request).id,
+        editorPlayerId: currentPlayer(c).id,
         targetPlayerId,
         stat: stat as keyof PlayerStats,
         value,
@@ -455,29 +447,31 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
   // -------------------------------------------------------------------------
 
   /** Java: `GameResource.undoItem` — PUT /{pbfId}/undo/{gameLogId}. */
-  app.post('/api/games/:gameId/undo/:logId', auth, async (request, reply) => {
-    const { gameId, logId } = request.params as Params & { logId: string }
-    return applyToGame(context, request, reply, gameId, (state) =>
-      initiateUndo(state, { logId, playerId: currentPlayer(request).id }),
+  app.post('/api/games/:gameId/undo/:logId', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const logId = c.req.param('logId')
+    return applyToGame(context, c, gameId, (state) =>
+      initiateUndo(state, { logId, playerId: currentPlayer(c).id }),
     )
   })
 
   /** Java: `/{pbfId}/vote/{gameLogId}/yes` and `/no`. */
-  app.post('/api/games/:gameId/undo/:logId/vote', auth, async (request, reply) => {
-    const { gameId, logId } = request.params as Params & { logId: string }
-    const value = asRecord(request.body)['vote']
+  app.post('/api/games/:gameId/undo/:logId/vote', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const logId = c.req.param('logId')
+    const value = asRecord(await c.req.json().catch(() => ({})))['vote']
 
-    return applyToGame(context, request, reply, gameId, (state) =>
-      vote(state, { logId, playerId: currentPlayer(request).id, vote: value === true }),
+    return applyToGame(context, c, gameId, (state) =>
+      vote(state, { logId, playerId: currentPlayer(c).id, vote: value === true }),
     )
   })
 
   /** Java: `PlayerResource.getAllUndoThatNeedsVoteFromPlayer`. */
-  app.get('/api/games/:gameId/undo/pending', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    const me = currentPlayer(request)
+  app.get('/api/games/:gameId/undo/pending', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const me = currentPlayer(c)
 
-    return readGame(context, request, reply, gameId, (state) =>
+    return readGame(context, c, gameId, (state) =>
       state.log
         .filter((entry) => entry.undo !== null && !entry.undo.done)
         // Only the ones this player has not voted on yet
@@ -492,10 +486,10 @@ export function registerPlayRoutes(app: FastifyInstance, context: AppContext): v
     )
   })
 
-  app.get('/api/games/:gameId/undo/mine', auth, async (request, reply) => {
-    const { gameId } = request.params as Params
-    return readGame(context, request, reply, gameId, (state) =>
-      playersActiveUndos(state, currentPlayer(request).username).map((entry) => ({
+  app.get('/api/games/:gameId/undo/mine', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return readGame(context, c, gameId, (state) =>
+      playersActiveUndos(state, currentPlayer(c).username).map((entry) => ({
         id: entry.id,
         message: entry.publicLog,
       })),
