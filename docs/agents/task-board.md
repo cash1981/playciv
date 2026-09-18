@@ -15,23 +15,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
-### issue-54-56-ui
-
-- **Owner:** Codex (GPT-5)
-- **Branch:** `fix/issue-54-56-ui`
-- **Brief:** `docs/agents/tasks/issue-54-56-ui.md`
-- **Status:** in review
-- **Claimed paths:**
-  - `packages/web/src/lib/formatTimestamp.ts` (new)
-  - `packages/web/src/lib/formatTimestamp.test.ts` (new)
-  - `packages/web/src/views/ChatTimestamp.tsx` (new)
-  - `packages/web/src/views/ChatTimestamp.test.tsx` (new)
-  - `packages/web/src/views/LogPanel.tsx`
-  - `packages/web/src/views/LandingView.tsx`
-  - `packages/web/src/views/BoardView.tsx` (header line only)
-- **Notes:** Issues #54 and #56. Restricted to chat presentation and the board
-  heading; no engine, server or board-interaction changes.
-
 ### revealed-panel
 
 - **Owner:** Claude (Opus 4.8)

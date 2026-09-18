@@ -3,7 +3,7 @@
 - **Slug:** `issue-54-56-ui`
 - **Branch:** `fix/issue-54-56-ui`
 - **Owner:** Codex
-- **Status:** in review
+- **Status:** done
 
 ## Goal
 

@@ -6,14 +6,14 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-17_
+_Last updated: 2026-09-18_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 356 engine, 81 server, 3 web |
+| `pnpm -r test` | passing — 356 engine, 81 server, 7 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -33,6 +33,8 @@ _Last updated: 2026-09-17_
   JSON file. See `decisions.md`.
 - **Client.** React and Vite: login, game list, game page, hand, draws, battle,
   techs, turn orders, log, undo votes, chat.
+- **Issues #54 and #56.** Game and lobby chat show local log-format timestamps;
+  the board header now reads only **Civilization Boardgame**.
 - **Board.** 16 × 16 map from the PowerPoint template, free pixel placement,
   stacking by array order, seven palette categories, map tiles that place
   themselves, starting tiles in the right corner with the arrow inwards.
