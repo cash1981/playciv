@@ -364,7 +364,6 @@ function HandItem({
   )
 }
 
-
 function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   const [count, setCount] = useState(3)
   const battlehand = view.you?.battlehand ?? []

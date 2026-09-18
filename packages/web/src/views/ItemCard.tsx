@@ -12,7 +12,7 @@
  */
 
 import { itemImage, itemName, revealAll } from '@civ/engine'
-import type { Item } from '@civ/engine'
+import type { Item, Rotation } from '@civ/engine'
 
 /** File names may contain spaces and apostrophes, for example "Leonardo's Workshop". */
 export function itemImageUrl(item: Item): string | null {
@@ -34,7 +34,7 @@ export function ItemCard({
   readonly reveal?: 'all' | 'public'
   readonly draggable?: boolean
   readonly onDragStart?: (e: React.DragEvent<HTMLLIElement>) => void
-  readonly rotation?: number
+  readonly rotation?: Rotation
   readonly children?: React.ReactNode
 }): React.JSX.Element {
   const label = reveal === 'all' ? revealAll(item) : itemName(item)

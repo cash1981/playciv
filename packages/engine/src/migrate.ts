@@ -6,6 +6,7 @@
  * explicitly, and every storage implementation calls this when it reads a game.
  */
 
+import type { ArenaUnit } from './battle.js'
 import type { Board, BoardHistoryEntry, BoardPiece } from './board.js'
 import { createBoard } from './board.js'
 import type { GameState, Playerhand } from './state.js'
@@ -29,6 +30,9 @@ const withStats = (player: MaybeOlderPlayerhand): Playerhand => ({
 /** A board from before the player areas and the history existed. */
 type MaybeOlderBoard = Omit<Board, 'areaRows' | 'history'> &
   Partial<Pick<Board, 'areaRows' | 'history'>>
+
+/** An arena unit from before the rotate button (issue #63 follow-up) existed. */
+type MaybeOlderArenaUnit = Omit<ArenaUnit, 'rotation'> & Partial<Pick<ArenaUnit, 'rotation'>>
 
 /**
  * Turns pieces that predate the history into one entry each.
@@ -94,7 +98,9 @@ export function migrateGameState(state: GameState): GameState {
         ? null
         : {
             ...older.battle,
-            arena: older.battle.arena.map((unit) => ({ ...unit, rotation: unit.rotation ?? 0 })),
+            arena: older.battle.arena.map(
+              (unit: MaybeOlderArenaUnit): ArenaUnit => ({ ...unit, rotation: unit.rotation ?? 0 }),
+            ),
           },
     rev: older.rev ?? 0,
   }

@@ -3,7 +3,7 @@
 - **Slug:** `issue-63-arena-ux`
 - **Branch:** `fix/issue-63-arena-ux`
 - **Owner:** Claude (Sonnet 5)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 

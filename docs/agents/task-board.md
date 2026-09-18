@@ -15,31 +15,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
-### issue-63-arena-ux
-
-- **Owner:** Claude (Sonnet 5)
-- **Branch:** `fix/issue-63-arena-ux`
-- **Brief:** `docs/agents/tasks/issue-63-arena-ux.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/GameView.tsx`
-  - `packages/web/src/views/ItemCard.tsx`
-  - `packages/web/src/styles.css`
-  - `packages/web/src/lib/api.ts`
-  - `packages/engine/src/battle.ts`
-  - `packages/engine/src/actions/arena.ts`
-  - `packages/engine/src/migrate.ts`
-  - `packages/engine/test/arena.test.ts`
-  - `packages/server/src/routes/arena.ts`
-  - `packages/server/test/api.test.ts`
-- **Notes:** Follow-up to issue #63/PR #66 (already merged to `main`). UX fixes:
-  single shared arena border, immediate placement (no Confirm step), smaller
-  arena cards with horizontal scroll. Also adds a cosmetic "Rotate" button per
-  arena unit (reuses the board's `Rotation`/`nextRotation`), for showing which
-  printed unit level (e.g. Archer vs Mobile Artillery) is currently in play —
-  requested mid-session, see `decisions.md`.
-
-
 ### revealed-panel
 
 - **Owner:** Claude (Opus 4.8)

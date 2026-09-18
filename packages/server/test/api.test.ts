@@ -812,6 +812,81 @@ describe('arena rev guard', () => {
   })
 })
 
+describe('arena place and rotate', () => {
+  it('places a unit and rotates it 90 degrees through the API', async () => {
+    const { gameId, starter, waiting } = await startedGame('Arena-rotate')
+
+    const drawn = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/INFANTRY`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(drawn.status).toBe(200)
+
+    const battlehand = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/draw`,
+      headers: bearer(starter),
+      payload: { numberOfUnits: 1 },
+    })
+    expect(battlehand.status).toBe(200)
+    const battlehandView = await battlehand.json() as {
+      rev: number
+      you: { battlehand: { id: string; attack: number; health: number }[] }
+    }
+    const unit = battlehandView.you.battlehand[0]!
+
+    // initiateBattle takes the opponent's playerId, not their token.
+    const waitingView = await inject(app, {
+      method: 'GET',
+      url: `/api/games/${gameId}`,
+      headers: bearer(waiting),
+    })
+    const waitingId = (await waitingView.json() as { you: { playerId: string } }).you.playerId
+
+    const initiated = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/initiate`,
+      headers: bearer(starter),
+      payload: { opponentId: waitingId, rev: battlehandView.rev },
+    })
+    expect(initiated.status).toBe(200)
+    const initiatedView = await initiated.json() as { rev: number }
+
+    const placed = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/place`,
+      headers: bearer(starter),
+      payload: {
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+        rev: initiatedView.rev,
+      },
+    })
+    expect(placed.status).toBe(200)
+    const placedView = await placed.json() as {
+      rev: number
+      battle: { arena: { id: string; rotation: number }[] }
+    }
+    const arenaUnitId = placedView.battle.arena[0]!.id
+    expect(placedView.battle.arena[0]!.rotation).toBe(0)
+
+    const rotated = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/${arenaUnitId}/rotate`,
+      headers: bearer(starter),
+      payload: { rev: placedView.rev },
+    })
+    expect(rotated.status).toBe(200)
+    const rotatedView = await rotated.json() as { battle: { arena: { rotation: number }[] } }
+    expect(rotatedView.battle.arena[0]!.rotation).toBe(90)
+  })
+})
+
 /** A whole round through the API, as a smoke test for the entire stack. */
 describe('a whole round', () => {
   it('four players play through setup, draws, turns and an undo', async () => {

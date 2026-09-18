@@ -18,8 +18,10 @@ import {
 } from '../src/actions/arena.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
 import { isUnit } from '../src/item.js'
+import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
+import type { GameState } from '../src/state.js'
 
 import { CASH1981, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -445,6 +447,32 @@ describe('rotateArenaUnit', () => {
       rotateArenaUnit(state, { playerId: CASH1981, arenaUnitId: 'no-such-unit' }),
     )
     expect(error.kind).toBe('ARENA_UNIT_NOT_FOUND')
+  })
+
+  it('migrating a saved battle backfills rotation: 0 on arena units missing it', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+
+    // Simulate a game saved before the rotate button existed: strip
+    // `rotation` from the persisted arena unit, as an old JSON blob would.
+    const arenaUnit = state.battle!.arena[0]! as unknown as Record<string, unknown>
+    delete arenaUnit['rotation']
+    const older = { ...state, battle: { ...state.battle, arena: [arenaUnit] } }
+
+    const migrated = migrateGameState(older as unknown as GameState)
+    expect(migrated.battle!.arena[0]!.rotation).toBe(0)
   })
 })
 
