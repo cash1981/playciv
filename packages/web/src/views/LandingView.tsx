@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { errorMessage, isUnauthorized } from '../App.js'
 import { api } from '../lib/api.js'
 import type { PlayerDto, PublicGameSummary } from '../lib/api.js'
+import { ChatTimestamp } from './ChatTimestamp.js'
 import { HighscoreView } from './HighscoreView.js'
 
 interface Props {
@@ -118,6 +119,7 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
           <ul className="list scroll">
             {chat.map((entry) => (
               <li key={entry.id}>
+                <ChatTimestamp createdAt={entry.createdAt} />
                 <strong>{entry.username}</strong>{' '}
                 <span>{entry.message}</span>
               </li>
