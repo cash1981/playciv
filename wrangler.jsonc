@@ -17,7 +17,12 @@
     // with index.html returned for unknown client-side routes.
     "directory": "packages/web/dist",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    // Run the Worker before static-asset routing. Without this, the SPA
+    // not_found_handling above answers /api/* with index.html and the Worker's
+    // fetch handler is never reached. The Worker serves non-/api paths itself
+    // via env.ASSETS.fetch.
+    "run_worker_first": true
   },
   "observability": {
     "enabled": true
