@@ -33,6 +33,8 @@ _Last updated: 2026-09-18_
   JSON file. See `decisions.md`.
 - **Client.** React and Vite: login, game list, game page, hand, draws, battle,
   techs, turn orders, log, undo votes, chat.
+- **Issues #54 and #56.** Game and lobby chat show local log-format timestamps;
+  the board header now reads only **Civilization Boardgame**.
 - **Board.** 16 × 16 map from the PowerPoint template, free pixel placement,
   stacking by array order, seven palette categories, map tiles that place
   themselves, starting tiles in the right corner with the arrow inwards.
