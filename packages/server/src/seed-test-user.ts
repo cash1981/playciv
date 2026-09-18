@@ -7,6 +7,8 @@
  * (and optionally `MONGO_DB`, default `playciv`) set in the environment.
  */
 
+import './load-env.js'
+
 import { hashPassword, newId } from './auth.js'
 import { MongoRepository } from './store/mongo.js'
 import type { StoredPlayer } from './store/types.js'

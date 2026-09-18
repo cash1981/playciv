@@ -12,7 +12,12 @@
  *   MONGO_DB       database name, defaults to "playciv"
  *   TOKEN_SECRET   HMAC secret for session tokens
  *   CORS_ORIGIN    comma separated list, defaults to everything
+ *
+ * For local development these can live in a gitignored `packages/server/.env`;
+ * `./load-env.js` loads it. In production the host supplies them.
  */
+
+import './load-env.js'
 
 import { randomBytes } from 'node:crypto'
 import { resolve } from 'node:path'
