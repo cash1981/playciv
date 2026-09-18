@@ -8,6 +8,11 @@
   "name": "playciv",
   "main": "packages/worker/src/index.ts",
   "compatibility_date": "2026-09-18",
+  // The Node API's base URL. Not a secret (a public URL), so it lives in config
+  // rather than a dashboard variable, which keeps it in every deployed version.
+  "vars": {
+    "API_ORIGIN": "https://playciv-api.onrender.com"
+  },
   "assets": {
     // Built by `pnpm run build` (packages/web). Served for every non-/api path,
     // with index.html returned for unknown client-side routes.
