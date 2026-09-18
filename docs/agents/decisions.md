@@ -581,3 +581,30 @@ choice. The one exception is the *automatic* placement of a leader on START when
 a civilization is revealed (`placeLeaderMarker`): it still fans markers out into
 lanes so two players choosing at once are not hidden under each other. That is
 only a default starting spot; either marker can then be moved freely.
+
+## 2026-09-18 — Hono for the HTTP layer, and Cloudflare Workers hosting
+
+**Decision.** Replace Fastify with Hono in `packages/server`, and deploy the app
+as a single Cloudflare Worker (`packages/worker`) that serves the built SPA as
+static assets and runs the API against MongoDB Atlas. Local development and the
+Node entry point stay, running the same Hono app through `@hono/node-server`
+against the JSON-file repository.
+
+**Why.** The owner chose to host the whole app on Cloudflare against Atlas.
+Cloudflare Workers do not offer Node's listening-server model, so Fastify (built
+on `node:http`) cannot run there. Hono is written against the web-standard
+`Request`/`Response`, so the same code runs on Workers and, via an adapter, on
+Node — one codebase instead of two. A spike proved the platform first: the
+`mongodb` driver reaches Atlas from workerd under `nodejs_compat`, `node:crypto`
+scrypt runs there, and the engine bundles. Keeping Fastify and hosting the API
+on a separate Node box was the rejected alternative; it was simpler but split
+hosting across two providers, which the owner did not want.
+
+**Consequences.** The HTTP framework is Hono everywhere. Route handlers use
+`c.req`/`c.json`; server tests use `app.request` via `test/helpers.ts`. On
+Workers, secrets (`MONGO_URL`, `TOKEN_SECRET`) must be set as *runtime* secrets
+and the Worker fails closed if either is missing. A 304 (`ITEM_ALREADY_REVEALED`)
+is answered with an empty body because the Fetch spec forbids a body on that
+status. Malformed JSON is rejected with 400 by middleware, and unmatched routes
+and unhandled throws return the `{ error, message }` shape via `notFound`/
+`onError`.

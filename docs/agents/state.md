@@ -13,7 +13,7 @@ _Last updated: 2026-09-17_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 356 engine, 78 server, 3 web |
+| `pnpm -r test` | passing — 356 engine, 81 server, 3 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -22,8 +22,13 @@ _Last updated: 2026-09-17_
 - **The port itself.** Deck, items, draws, reshuffle, hands, techs, social
   policy, trade, turns, undo voting, chat, game lifecycle. Every Java action
   class has a counterpart and a test file naming it.
-- **Server.** Fastify over the engine, scrypt passwords, HMAC bearer tokens,
-  JSON-file repository standing in for MongoDB.
+- **Server.** Hono over the engine (one HTTP codebase for Node and Cloudflare
+  Workers), scrypt passwords, HMAC bearer tokens, JSON-file repository standing
+  in for MongoDB.
+- **Cloudflare deploy.** A `packages/worker` Cloudflare Worker serves the built
+  SPA (static assets) and runs the same Hono API against MongoDB Atlas;
+  `wrangler.jsonc` sets `nodejs_compat`. Local development is unchanged: `pnpm
+  dev` runs the Node server against the JSON file. See `decisions.md`.
 - **Client.** React and Vite: login, game list, game page, hand, draws, battle,
   techs, turn orders, log, undo votes, chat.
 - **Board.** 16 × 16 map from the PowerPoint template, free pixel placement,

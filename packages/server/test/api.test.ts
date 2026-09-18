@@ -1,5 +1,5 @@
 /**
- * API tests that run against the app in memory through `fastify.inject`, with
+ * API tests that run against the app in memory through `app.request`, with
  * no network involved.
  *
  * The last test plays a whole round: four players register, create and join a
@@ -7,14 +7,15 @@
  * end the game.
  */
 
-import type { FastifyInstance } from 'fastify'
+import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { itemName } from '@civ/engine'
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
+import { inject } from './helpers.js'
 
-let app: FastifyInstance
+let app: App
 let repo: JsonFileRepository
 
 beforeEach(async () => {
@@ -24,26 +25,26 @@ beforeEach(async () => {
 })
 
 async function register(username: string): Promise<string> {
-  const response = await app.inject({
+  const response = await inject(app, {
     method: 'POST',
     url: '/api/auth/register',
     payload: { username, password: 'hemmelig', email: `${username}@example.com` },
   })
-  expect(response.statusCode).toBe(201)
-  return (response.json() as { token: string }).token
+  expect(response.status).toBe(201)
+  return (await response.json() as { token: string }).token
 }
 
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` })
 
 async function createGame(token: string, name: string, numOfPlayers = 4): Promise<string> {
-  const response = await app.inject({
+  const response = await inject(app, {
     method: 'POST',
     url: '/api/games',
     headers: bearer(token),
     payload: { name, numOfPlayers },
   })
-  expect(response.statusCode).toBe(201)
-  return (response.json() as { id: string }).id
+  expect(response.status).toBe(201)
+  return (await response.json() as { id: string }).id
 }
 
 /**
@@ -60,13 +61,13 @@ async function startedGame(
   const gameId = await createGame(creator, name, 2)
   const other = await register(`${name}-b`)
 
-  const join = await app.inject({
+  const join = await inject(app, {
     method: 'POST',
     url: `/api/games/${gameId}/join`,
     headers: bearer(other),
     payload: {},
   })
-  expect(join.statusCode).toBe(200)
+  expect(join.status).toBe(200)
 
   const state = await repo.findGame(gameId)
   const starterName = state?.players.find((player) => player.yourTurn)?.username
@@ -77,21 +78,21 @@ async function startedGame(
 
 describe('health', () => {
   it('answers ok', async () => {
-    const response = await app.inject({ method: 'GET', url: '/api/health' })
-    expect(response.json()).toEqual({ status: 'ok' })
+    const response = await inject(app, { method: 'GET', url: '/api/health' })
+    expect(await response.json()).toEqual({ status: 'ok' })
   })
 })
 
 describe('public landing endpoints', () => {
   it('serve anonymous public data without hidden game information', async () => {
     const { gameId, starter } = await startedGame('Public landing')
-    const drawn = await app.inject({
+    const drawn = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/draw/CULTURE_1`,
       headers: bearer(starter),
       payload: {},
     })
-    expect(drawn.statusCode).toBe(200)
+    expect(drawn.status).toBe(200)
 
     const state = await repo.findGame(gameId)
     const card = state?.players.find((player) => player.yourTurn)?.items[0]
@@ -103,25 +104,25 @@ describe('public landing endpoints', () => {
     expect(drawLog?.privateLog).toBeTruthy()
 
     const [games, scores, chat] = await Promise.all([
-      app.inject({ method: 'GET', url: '/api/public/games' }),
-      app.inject({ method: 'GET', url: '/api/highscore' }),
-      app.inject({ method: 'GET', url: '/api/chat' }),
+      inject(app, { method: 'GET', url: '/api/public/games' }),
+      inject(app, { method: 'GET', url: '/api/highscore' }),
+      inject(app, { method: 'GET', url: '/api/chat' }),
     ])
 
     for (const response of [games, scores, chat]) {
-      expect(response.statusCode).toBe(200)
+      expect(response.status).toBe(200)
       expect(response.body).not.toContain('"items"')
       expect(response.body).not.toContain('"privateLog"')
       expect(response.body).not.toContain(cardName as string)
       expect(response.body).not.toContain(drawLog?.privateLog as string)
     }
 
-    const authenticatedGames = await app.inject({
+    const authenticatedGames = await inject(app, {
       method: 'GET',
       url: '/api/public/games',
       headers: bearer(starter),
     })
-    const matchingGame = (authenticatedGames.json() as { id: string; youAreIn: boolean }[])
+    const matchingGame = (await authenticatedGames.json() as { id: string; youAreIn: boolean }[])
       .find((game) => game.id === gameId)
     expect(matchingGame?.youAreIn).toBe(true)
   })
@@ -145,9 +146,9 @@ describe('public landing endpoints', () => {
       })
     }
 
-    const response = await app.inject({ method: 'GET', url: '/api/chat' })
-    expect(response.statusCode).toBe(200)
-    const messages = response.json() as { message: string }[]
+    const response = await inject(app, { method: 'GET', url: '/api/chat' })
+    expect(response.status).toBe(200)
+    const messages = await response.json() as { message: string }[]
     expect(messages).toHaveLength(50)
     expect(messages[0]?.message).toBe('recent 0')
     expect(messages.at(-1)?.message).toBe('recent 49')
@@ -159,67 +160,67 @@ describe('auth', () => {
   it('registers and logs in', async () => {
     await register('cash1981')
 
-    const login = await app.inject({
+    const login = await inject(app, {
       method: 'POST',
       url: '/api/auth/login',
       payload: { username: 'cash1981', password: 'hemmelig' },
     })
-    expect(login.statusCode).toBe(200)
-    expect((login.json() as { player: { username: string } }).player.username).toBe('cash1981')
+    expect(login.status).toBe(200)
+    expect((await login.json() as { player: { username: string } }).player.username).toBe('cash1981')
   })
 
   it('refuses a wrong password', async () => {
     await register('cash1981')
-    const login = await app.inject({
+    const login = await inject(app, {
       method: 'POST',
       url: '/api/auth/login',
       payload: { username: 'cash1981', password: 'feil' },
     })
-    expect(login.statusCode).toBe(401)
+    expect(login.status).toBe(401)
   })
 
   it('refuses an unknown user with the same answer as a wrong password', async () => {
-    const login = await app.inject({
+    const login = await inject(app, {
       method: 'POST',
       url: '/api/auth/login',
       payload: { username: 'finnesikke', password: 'hemmelig' },
     })
-    expect(login.statusCode).toBe(401)
+    expect(login.status).toBe(401)
   })
 
   it('the same username cannot be taken twice', async () => {
     await register('cash1981')
-    const again = await app.inject({
+    const again = await inject(app, {
       method: 'POST',
       url: '/api/auth/register',
       payload: { username: 'CASH1981', password: 'hemmelig' },
     })
-    expect(again.statusCode).toBe(409)
+    expect(again.status).toBe(409)
   })
 
   it('never stores the password in the clear, and never sends the hash out', async () => {
     const token = await register('cash1981')
-    const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: bearer(token) })
+    const me = await inject(app, { method: 'GET', url: '/api/auth/me', headers: bearer(token) })
 
-    expect(JSON.stringify(me.json())).not.toContain('hemmelig')
-    expect(me.json()).not.toHaveProperty('passwordHash')
+    expect(JSON.stringify(await me.json())).not.toContain('hemmelig')
+    expect(await me.json()).not.toHaveProperty('passwordHash')
 
     const stored = await repo.findPlayerByUsername('cash1981')
     expect(stored?.passwordHash).not.toContain('hemmelig')
   })
 
   it('routes without a token give 401', async () => {
-    const response = await app.inject({ method: 'GET', url: '/api/games' })
-    expect(response.statusCode).toBe(401)
+    const response = await inject(app, { method: 'GET', url: '/api/games' })
+    expect(response.status).toBe(401)
   })
 
   it('an invalid token gives 401', async () => {
-    const response = await app.inject({
+    const response = await inject(app, {
       method: 'GET',
       url: '/api/games',
       headers: bearer('tull.tull'),
     })
-    expect(response.statusCode).toBe(401)
+    expect(response.status).toBe(401)
   })
 })
 
@@ -228,12 +229,12 @@ describe('games', () => {
     const token = await register('cash1981')
     const gameId = await createGame(token, 'First game')
 
-    const game = await app.inject({
+    const game = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}`,
       headers: bearer(token),
     })
-    const view = game.json() as {
+    const view = await game.json() as {
       you: { username: string; gameCreator: boolean; color: string | null } | null
     }
     expect(view.you?.username).toBe('cash1981')
@@ -247,13 +248,13 @@ describe('games', () => {
   it('two games cannot share a name', async () => {
     const token = await register('cash1981')
     await createGame(token, 'Duplikat')
-    const again = await app.inject({
+    const again = await inject(app, {
       method: 'POST',
       url: '/api/games',
       headers: bearer(token),
       payload: { name: 'Duplikat', numOfPlayers: 4 },
     })
-    expect(again.statusCode).toBe(409)
+    expect(again.status).toBe(409)
   })
 
   it('the game starts when the last player joins', async () => {
@@ -261,13 +262,13 @@ describe('games', () => {
     const gameId = await createGame(creator, 'Startspill', 2)
 
     const other = await register('Karandras1')
-    const join = await app.inject({
+    const join = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/join`,
       headers: bearer(other),
       payload: {},
     })
-    expect(join.statusCode).toBe(200)
+    expect(join.status).toBe(200)
 
     const state = await repo.findGame(gameId)
     expect(state?.players.filter((player) => player.yourTurn)).toHaveLength(1)
@@ -277,36 +278,36 @@ describe('games', () => {
     const creator = await register('delete-creator-active')
     const gameId = await createGame(creator, 'Delete active')
 
-    const deleted = await app.inject({
+    const deleted = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/delete`,
       headers: bearer(creator),
       payload: {},
     })
 
-    expect(deleted.statusCode).toBe(204)
+    expect(deleted.status).toBe(204)
     expect(await repo.findGame(gameId)).toBeUndefined()
   })
 
   it('the creator can delete an ended game', async () => {
     const creator = await register('delete-creator-ended')
     const gameId = await createGame(creator, 'Delete ended')
-    const ended = await app.inject({
+    const ended = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/end`,
       headers: bearer(creator),
       payload: {},
     })
-    expect(ended.statusCode).toBe(200)
+    expect(ended.status).toBe(200)
 
-    const deleted = await app.inject({
+    const deleted = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/delete`,
       headers: bearer(creator),
       payload: {},
     })
 
-    expect(deleted.statusCode).toBe(204)
+    expect(deleted.status).toBe(204)
     expect(await repo.findGame(gameId)).toBeUndefined()
   })
 
@@ -318,22 +319,22 @@ describe('games', () => {
     await repo.updatePlayer(adminPlayer?.id as string, { role: 'admin' })
     const gameId = await createGame(creator, 'Delete by admin')
 
-    const opened = await app.inject({
+    const opened = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}`,
       headers: bearer(admin),
     })
-    expect(opened.statusCode).toBe(200)
-    expect((opened.json() as { you: unknown }).you).toBeNull()
+    expect(opened.status).toBe(200)
+    expect((await opened.json() as { you: unknown }).you).toBeNull()
 
-    const deleted = await app.inject({
+    const deleted = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/delete`,
       headers: bearer(admin),
       payload: {},
     })
 
-    expect(deleted.statusCode).toBe(204)
+    expect(deleted.status).toBe(204)
     expect(await repo.findGame(gameId)).toBeUndefined()
   })
 
@@ -342,47 +343,47 @@ describe('games', () => {
     const other = await register('delete-other')
     const gameId = await createGame(creator, 'Delete forbidden')
 
-    const forbidden = await app.inject({
+    const forbidden = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/delete`,
       headers: bearer(other),
       payload: {},
     })
 
-    expect(forbidden.statusCode).toBe(403)
+    expect(forbidden.status).toBe(403)
     expect(await repo.findGame(gameId)).toBeDefined()
   })
 
   it('deleting a missing game returns 404', async () => {
     const token = await register('delete-missing')
-    const response = await app.inject({
+    const response = await inject(app, {
       method: 'POST',
       url: '/api/games/missing/delete',
       headers: bearer(token),
       payload: {},
     })
 
-    expect(response.statusCode).toBe(404)
+    expect(response.status).toBe(404)
   })
 
   it('a full game turns further players away', async () => {
     const creator = await register('cash1981')
     const gameId = await createGame(creator, 'Fullt', 2)
-    await app.inject({
+    await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/join`,
       headers: bearer(await register('Karandras1')),
       payload: {},
     })
 
-    const third = await app.inject({
+    const third = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/join`,
       headers: bearer(await register('Itchi')),
       payload: {},
     })
-    expect(third.statusCode).toBe(400)
-    expect((third.json() as { error: string }).error).toBe('GAME_IS_FULL')
+    expect(third.status).toBe(400)
+    expect((await third.json() as { error: string }).error).toBe('GAME_IS_FULL')
   })
 })
 
@@ -391,7 +392,7 @@ describe('draws', () => {
     const creator = await register('cash1981')
     const gameId = await createGame(creator, 'Trekkspill', 2)
     const other = await register('Karandras1')
-    await app.inject({
+    await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/join`,
       headers: bearer(other),
@@ -402,15 +403,15 @@ describe('draws', () => {
     const starter = state?.players.find((player) => player.yourTurn)
     const starterToken = starter?.username === 'cash1981' ? creator : other
 
-    const drawn = await app.inject({
+    const drawn = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/draw/HUTS`,
       headers: bearer(starterToken),
       payload: {},
     })
-    expect(drawn.statusCode).toBe(200)
+    expect(drawn.status).toBe(200)
 
-    const view = drawn.json() as { you: { items: { sheetName: string; hidden: boolean }[] } }
+    const view = await drawn.json() as { you: { items: { sheetName: string; hidden: boolean }[] } }
     expect(view.you.items).toHaveLength(1)
     expect(view.you.items[0]?.sheetName).toBe('HUTS')
     expect(view.you.items[0]?.hidden).toBe(true)
@@ -420,7 +421,7 @@ describe('draws', () => {
     const creator = await register('cash1981')
     const gameId = await createGame(creator, 'Turspill', 2)
     const other = await register('Karandras1')
-    await app.inject({
+    await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/join`,
       headers: bearer(other),
@@ -431,50 +432,50 @@ describe('draws', () => {
     const waiting = state?.players.find((player) => !player.yourTurn)
     const waitingToken = waiting?.username === 'cash1981' ? creator : other
 
-    const drawn = await app.inject({
+    const drawn = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/draw/HUTS`,
       headers: bearer(waitingToken),
       payload: {},
     })
-    expect(drawn.statusCode).toBe(403)
-    expect((drawn.json() as { error: string }).error).toBe('NOT_YOUR_TURN')
+    expect(drawn.status).toBe(403)
+    expect((await drawn.json() as { error: string }).error).toBe('NOT_YOUR_TURN')
   })
 
   it('an unknown sheet name gives 400', async () => {
     const { gameId, starter: token } = await startedGame('Arkspill')
-    const drawn = await app.inject({
+    const drawn = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/draw/SJAKKBRIKKER`,
       headers: bearer(token),
       payload: {},
     })
-    expect(drawn.statusCode).toBe(400)
+    expect(drawn.status).toBe(400)
   })
 
   it('technologies cannot be drawn', async () => {
     const { gameId, starter: token } = await startedGame('Techspill')
-    const drawn = await app.inject({
+    const drawn = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/draw/LEVEL_1_TECH`,
       headers: bearer(token),
       payload: {},
     })
-    expect(drawn.statusCode).toBe(400)
-    expect((drawn.json() as { error: string }).error).toBe('TECHS_ARE_CHOSEN_NOT_DRAWN')
+    expect(drawn.status).toBe(400)
+    expect((await drawn.json() as { error: string }).error).toBe('TECHS_ARE_CHOSEN_NOT_DRAWN')
   })
 
   it('a drawn wonder lands on the shared board, not in the hand', async () => {
     const { gameId, starter: token } = await startedGame('Underspill')
-    const drawn = await app.inject({
+    const drawn = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/draw/ANCIENT_WONDERS`,
       headers: bearer(token),
       payload: {},
     })
-    expect(drawn.statusCode).toBe(200)
+    expect(drawn.status).toBe(200)
 
-    const view = drawn.json() as {
+    const view = await drawn.json() as {
       you: { items: unknown[] }
       board: { pieces: { category: string }[] }
       boardAreas: { username: string }[]
@@ -490,14 +491,14 @@ describe('draws', () => {
     // A wonder goes to the board rather than the hand, but drawing one is still
     // a draw: the player who does not have the turn is refused.
     const { gameId, waiting: token } = await startedGame('Underspill2')
-    const drawn = await app.inject({
+    const drawn = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/draw/ANCIENT_WONDERS`,
       headers: bearer(token),
       payload: {},
     })
-    expect(drawn.statusCode).toBe(403)
-    expect((drawn.json() as { error: string }).error).toBe('NOT_YOUR_TURN')
+    expect(drawn.status).toBe(403)
+    expect((await drawn.json() as { error: string }).error).toBe('NOT_YOUR_TURN')
   })
 })
 
@@ -506,7 +507,7 @@ describe('hidden information over HTTP', () => {
     const creator = await register('cash1981')
     const gameId = await createGame(creator, 'Skjultspill', 2)
     const other = await register('Karandras1')
-    await app.inject({
+    await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/join`,
       headers: bearer(other),
@@ -518,7 +519,7 @@ describe('hidden information over HTTP', () => {
     const starterToken = starter?.username === 'cash1981' ? creator : other
     const otherToken = starterToken === creator ? other : creator
 
-    await app.inject({
+    await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/draw/CULTURE_1`,
       headers: bearer(starterToken),
@@ -526,17 +527,17 @@ describe('hidden information over HTTP', () => {
     })
 
     // What the player who drew sees
-    const own = await app.inject({
+    const own = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}`,
       headers: bearer(starterToken),
     })
-    const ownView = own.json() as { you: { items: { name: string }[] } }
+    const ownView = await own.json() as { you: { items: { name: string }[] } }
     const cardName = ownView.you.items[0]?.name
     expect(cardName).toBeDefined()
 
     // What the opponent sees
-    const theirs = await app.inject({
+    const theirs = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}`,
       headers: bearer(otherToken),
@@ -544,7 +545,7 @@ describe('hidden information over HTTP', () => {
     const body = theirs.body
     expect(body).not.toContain(cardName as string)
 
-    const theirView = theirs.json() as {
+    const theirView = await theirs.json() as {
       opponents: { numberOfItemsInHand: number }[]
     }
     expect(theirView.opponents[0]?.numberOfItemsInHand).toBe(1)
@@ -552,7 +553,7 @@ describe('hidden information over HTTP', () => {
 
   it('the public log does not give the card away', async () => {
     const { gameId, starter: token } = await startedGame('Loggspill')
-    await app.inject({
+    await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/draw/CULTURE_1`,
       headers: bearer(token),
@@ -563,7 +564,7 @@ describe('hidden information over HTTP', () => {
     const card = state?.players[0]?.items[0]
     expect(card).toBeDefined()
 
-    const log = await app.inject({
+    const log = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/log/public`,
       headers: bearer(token),
@@ -588,7 +589,7 @@ describe('revealed and discarded items feed', () => {
   }
 
   async function drawAndReveal(gameId: string, token: string, sheetName: string): Promise<void> {
-    await app.inject({
+    await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/draw/${sheetName}`,
       headers: bearer(token),
@@ -599,7 +600,7 @@ describe('revealed and discarded items feed', () => {
       .flatMap((player) => player.items)
       .find((candidate) => candidate.sheetName === sheetName && candidate.hidden)
     if (item === undefined) throw new Error(`no hidden ${sheetName} to reveal`)
-    await app.inject({
+    await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/items/reveal`,
       headers: bearer(token),
@@ -609,19 +610,19 @@ describe('revealed and discarded items feed', () => {
 
   it('pages the feed server-side and names the revealing player', async () => {
     const { gameId, starter } = await startedGame('Avslørt')
-    const me = await app.inject({ method: 'GET', url: `/api/games/${gameId}`, headers: bearer(starter) })
-    const myName = (me.json() as { you: { username: string } }).you.username
+    const me = await inject(app, { method: 'GET', url: `/api/games/${gameId}`, headers: bearer(starter) })
+    const myName = (await me.json() as { you: { username: string } }).you.username
 
     await drawAndReveal(gameId, starter, 'CULTURE_1')
     await drawAndReveal(gameId, starter, 'HUTS')
 
-    const first = await app.inject({
+    const first = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/revealed?page=1&size=1`,
       headers: bearer(starter),
     })
-    expect(first.statusCode).toBe(200)
-    const firstPage = first.json() as RevealedPageDto
+    expect(first.status).toBe(200)
+    const firstPage = await first.json() as RevealedPageDto
     expect(firstPage.total).toBe(2)
     expect(firstPage.size).toBe(1)
     expect(firstPage.page).toBe(1)
@@ -629,19 +630,19 @@ describe('revealed and discarded items feed', () => {
     expect(firstPage.items[0]?.revealed).toBe(true)
     expect(firstPage.items[0]?.username).toBe(myName)
 
-    const second = await app.inject({
+    const second = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/revealed?page=2&size=1`,
       headers: bearer(starter),
     })
-    const secondPage = second.json() as RevealedPageDto
+    const secondPage = await second.json() as RevealedPageDto
     expect(secondPage.items).toHaveLength(1)
     expect(secondPage.items[0]?.item.id).not.toBe(firstPage.items[0]?.item.id)
   })
 
   it('does not leak a hidden hand card', async () => {
     const { gameId, starter } = await startedGame('Skjult')
-    await app.inject({
+    await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/draw/CULTURE_1`,
       headers: bearer(starter),
@@ -651,24 +652,24 @@ describe('revealed and discarded items feed', () => {
     const card = state?.players.flatMap((player) => player.items).find((item) => item.hidden)
     expect(card).toBeDefined()
 
-    const response = await app.inject({
+    const response = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/revealed`,
       headers: bearer(starter),
     })
-    const page = response.json() as RevealedPageDto
+    const page = await response.json() as RevealedPageDto
     expect(page.total).toBe(0)
     expect(response.body).not.toContain((card as { name: string }).name)
   })
 
   it('clamps an oversized page size', async () => {
     const { gameId, starter } = await startedGame('Tak')
-    const response = await app.inject({
+    const response = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/revealed?size=9999`,
       headers: bearer(starter),
     })
-    expect((response.json() as RevealedPageDto).size).toBe(100)
+    expect((await response.json() as RevealedPageDto).size).toBe(100)
   })
 })
 
@@ -676,17 +677,17 @@ describe('storage', () => {
   it('games survive a new app against the same repository', async () => {
     const { gameId, starter: token } = await startedGame('Lagringsspill')
 
-    // A fresh Fastify instance against the same repository, like a restart on the same data file
+    // A fresh Hono app against the same repository, like a restart on the same data file
     const { createApp } = await import('../src/app.js')
-    const restarted = await createApp({ repo, tokenSecret: 'test-secret' })
+    const restarted = createApp({ repo, tokenSecret: 'test-secret' })
 
-    const game = await restarted.inject({
+    const game = await inject(restarted, {
       method: 'GET',
       url: `/api/games/${gameId}`,
       headers: bearer(token),
     })
-    expect(game.statusCode).toBe(200)
-    expect((game.json() as { name: string }).name).toBe('Lagringsspill')
+    expect(game.status).toBe(200)
+    expect((await game.json() as { name: string }).name).toBe('Lagringsspill')
   })
 })
 
@@ -695,58 +696,58 @@ describe('turn membership', () => {
     const { gameId, starter } = await startedGame('Utenforspill')
     const outsider = await register('Utenforspill-outsider')
 
-    const blocked = await app.inject({
+    const blocked = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/endturn`,
       headers: bearer(outsider),
       payload: {},
     })
-    expect(blocked.statusCode).toBe(403)
-    expect((blocked.json() as { error: string }).error).toBe('NO_ACCESS')
+    expect(blocked.status).toBe(403)
+    expect((await blocked.json() as { error: string }).error).toBe('NO_ACCESS')
 
-    const allowed = await app.inject({
+    const allowed = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/endturn`,
       headers: bearer(starter),
       payload: {},
     })
-    expect(allowed.statusCode).toBe(200)
+    expect(allowed.status).toBe(200)
   })
 
   it('a non-member gets 403 from taketurn, a member still succeeds', async () => {
     const { gameId, waiting } = await startedGame('Overta')
     const outsider = await register('Overta-outsider')
 
-    const blocked = await app.inject({
+    const blocked = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/taketurn`,
       headers: bearer(outsider),
       payload: {},
     })
-    expect(blocked.statusCode).toBe(403)
-    expect((blocked.json() as { error: string }).error).toBe('NO_ACCESS')
+    expect(blocked.status).toBe(403)
+    expect((await blocked.json() as { error: string }).error).toBe('NO_ACCESS')
 
-    const allowed = await app.inject({
+    const allowed = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/taketurn`,
       headers: bearer(waiting),
       payload: {},
     })
-    expect(allowed.statusCode).toBe(200)
+    expect(allowed.status).toBe(200)
   })
 
   it('ending a turn before the game has started gives 409, not a misleading 404', async () => {
     const creator = await register('Ikkestartet')
     const gameId = await createGame(creator, 'Ikke startet', 2)
 
-    const response = await app.inject({
+    const response = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/endturn`,
       headers: bearer(creator),
       payload: {},
     })
-    expect(response.statusCode).toBe(409)
-    expect((response.json() as { error: string }).error).toBe('GAME_NOT_STARTED')
+    expect(response.status).toBe(409)
+    expect((await response.json() as { error: string }).error).toBe('GAME_NOT_STARTED')
   })
 })
 
@@ -754,13 +755,13 @@ describe('log timestamps and order', () => {
   it('every log entry has a timestamp right after the game is created', async () => {
     const { gameId, starter } = await startedGame('Tidsstempel')
 
-    const log = await app.inject({
+    const log = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/log/public`,
       headers: bearer(starter),
     })
-    expect(log.statusCode).toBe(200)
-    const entries = log.json() as { createdAt: string | null }[]
+    expect(log.status).toBe(200)
+    const entries = await log.json() as { createdAt: string | null }[]
     expect(entries.length).toBeGreaterThan(0)
     expect(entries.every((entry) => entry.createdAt !== null)).toBe(true)
   })
@@ -782,12 +783,12 @@ describe('log timestamps and order', () => {
     }
     await repo.saveGame(stamped)
 
-    const log = await app.inject({
+    const log = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/log/public`,
       headers: bearer(starter),
     })
-    const entries = log.json() as { id: string }[]
+    const entries = await log.json() as { id: string }[]
     const expectedNewestFirst = state.log
       .filter((entry) => entry.publicLog !== '')
       .map((entry) => entry.id)
@@ -807,13 +808,13 @@ describe('a whole round', () => {
 
     const gameId = await createGame(creatorToken, 'Full runde', 4)
     for (const username of ['Karandras1', 'Itchi', 'Chul']) {
-      const join = await app.inject({
+      const join = await inject(app, {
         method: 'POST',
         url: `/api/games/${gameId}/join`,
         headers: bearer(tokens[username] as string),
         payload: {},
       })
-      expect(join.statusCode).toBe(200)
+      expect(join.status).toBe(200)
     }
 
     // Who starts is random, so find out
@@ -822,13 +823,13 @@ describe('a whole round', () => {
     const starter = tokens[starterName] as string
 
     // Draw a civ card and reveal it
-    const drawn = await app.inject({
+    const drawn = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/draw/CIV`,
       headers: bearer(starter),
       payload: {},
     })
-    expect(drawn.statusCode).toBe(200)
+    expect(drawn.status).toBe(200)
 
     state = await repo.findGame(gameId)
     const civ = state?.players
@@ -836,13 +837,13 @@ describe('a whole round', () => {
       ?.items.find((item) => item.sheetName === 'CIV')
     expect(civ).toBeDefined()
 
-    const revealed = await app.inject({
+    const revealed = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/items/reveal`,
       headers: bearer(starter),
       payload: { sheetName: 'CIV', itemNumber: civ?.itemNumber },
     })
-    expect(revealed.statusCode).toBe(200)
+    expect(revealed.status).toBe(200)
 
     // The civilization gives starting units and a starting technology
     state = await repo.findGame(gameId)
@@ -852,30 +853,30 @@ describe('a whole round', () => {
     expect(hand?.items.filter((item) => item.kind === 'infantry').length).toBeGreaterThan(0)
 
     // Choose a technology
-    const available = await app.inject({
+    const available = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/techs/available`,
       headers: bearer(starter),
     })
-    const firstTech = (available.json() as { name: string }[])[0]?.name as string
-    const chosen = await app.inject({
+    const firstTech = (await available.json() as { name: string }[])[0]?.name as string
+    const chosen = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/techs/choose`,
       headers: bearer(starter),
       payload: { name: firstTech },
     })
-    expect(chosen.statusCode).toBe(200)
+    expect(chosen.status).toBe(200)
 
     // Write a turn order
-    const turn = await app.inject({
+    const turn = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/turns/update`,
       headers: bearer(starter),
       payload: { turnNumber: 1, phase: 'SOT', order: 'Build city at L4' },
     })
-    expect(turn.statusCode).toBe(200)
+    expect(turn.status).toBe(200)
 
-    const publicTurns = await app.inject({
+    const publicTurns = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/turns/public`,
       headers: bearer(tokens['Chul'] as string),
@@ -883,41 +884,41 @@ describe('a whole round', () => {
     expect(publicTurns.body).toContain('Build city at L4')
 
     // Chat
-    await app.inject({
+    await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/chat`,
       headers: bearer(starter),
       payload: { message: 'good luck' },
     })
-    const chat = await app.inject({
+    const chat = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/chat`,
       headers: bearer(tokens['Itchi'] as string),
     })
-    expect((chat.json() as { message: string }[])[0]?.message).toBe('good luck')
+    expect((await chat.json() as { message: string }[])[0]?.message).toBe('good luck')
 
     // Undo of the tech choice: start it and let everyone vote yes
     state = await repo.findGame(gameId)
     const techLog = state?.log.find((entry) => entry.logType === 'TECH')
     expect(techLog).toBeDefined()
 
-    const initiated = await app.inject({
+    const initiated = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/undo/${techLog?.id}`,
       headers: bearer(starter),
       payload: {},
     })
-    expect(initiated.statusCode).toBe(200)
+    expect(initiated.status).toBe(200)
 
     for (const username of ['cash1981', 'Karandras1', 'Itchi', 'Chul']) {
       if (username === starterName) continue
-      const voted = await app.inject({
+      const voted = await inject(app, {
         method: 'POST',
         url: `/api/games/${gameId}/undo/${techLog?.id}/vote`,
         headers: bearer(tokens[username] as string),
         payload: { vote: true },
       })
-      expect(voted.statusCode).toBe(200)
+      expect(voted.status).toBe(200)
     }
 
     state = await repo.findGame(gameId)
@@ -926,24 +927,24 @@ describe('a whole round', () => {
     expect(afterUndo?.techsChosen.map((tech) => tech.name)).not.toContain(firstTech)
 
     // End the turn
-    const ended = await app.inject({
+    const ended = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/endturn`,
       headers: bearer(starter),
       payload: {},
     })
-    expect(ended.statusCode).toBe(200)
+    expect(ended.status).toBe(200)
     state = await repo.findGame(gameId)
     expect(state?.players.find((player) => player.yourTurn)?.username).not.toBe(starterName)
 
     // End the game
-    const finished = await app.inject({
+    const finished = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/end`,
       headers: bearer(creatorToken),
       payload: { winner: 'Itchi' },
     })
-    expect(finished.statusCode).toBe(200)
+    expect(finished.status).toBe(200)
 
     state = await repo.findGame(gameId)
     expect(state?.active).toBe(false)
@@ -954,39 +955,39 @@ describe('a whole round', () => {
 describe('social policy removal', () => {
   it('removes only the owner\'s chosen policy and logs a hidden removal', async () => {
     const { gameId, starter, waiting } = await startedGame('Remove policy')
-    const available = await app.inject({
+    const available = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/socialpolicies`,
       headers: bearer(starter),
     })
-    const policy = (available.json() as { name: string }[])[0]
+    const policy = (await available.json() as { name: string }[])[0]
     if (policy === undefined) throw new Error('no social policy')
 
-    const chosen = await app.inject({
+    const chosen = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/socialpolicy/choose`,
       headers: bearer(starter),
       payload: { name: policy.name },
     })
-    expect(chosen.statusCode).toBe(200)
+    expect(chosen.status).toBe(200)
 
-    const forbidden = await app.inject({
+    const forbidden = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/socialpolicy/remove`,
       headers: bearer(waiting),
       payload: { name: policy.name },
     })
-    expect(forbidden.statusCode).toBe(404)
+    expect(forbidden.status).toBe(404)
 
-    const removed = await app.inject({
+    const removed = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/socialpolicy/remove`,
       headers: bearer(starter),
       payload: { name: policy.name },
     })
-    expect(removed.statusCode).toBe(200)
+    expect(removed.status).toBe(200)
 
-    const view = removed.json() as { you?: { socialPolicies: { name: string }[] } }
+    const view = await removed.json() as { you?: { socialPolicies: { name: string }[] } }
     expect(view.you?.socialPolicies.some((candidate) => candidate.name === policy.name)).toBe(false)
 
     const state = await repo.findGame(gameId)
@@ -1002,14 +1003,14 @@ describe('social policy removal', () => {
 describe('board', () => {
   it('the catalogue of piece types is available', async () => {
     const token = await register('brettkatalog')
-    const response = await app.inject({
+    const response = await inject(app, {
       method: 'GET',
       url: '/api/board/assets',
       headers: bearer(token),
     })
 
-    const assets = response.json() as { id: string; category: string }[]
-    expect(response.statusCode).toBe(200)
+    const assets = await response.json() as { id: string; category: string }[]
+    expect(response.status).toBe(200)
     expect(assets.length).toBeGreaterThan(50)
     expect(assets.some((asset) => asset.id === 'figures/redarmy')).toBe(true)
     expect(assets.some((asset) => asset.id === 'resources/wheat')).toBe(true)
@@ -1017,13 +1018,13 @@ describe('board', () => {
 
   it('a new two-player game has an empty 16 by 8 board', async () => {
     const { gameId, starter } = await startedGame('Brettspill')
-    const response = await app.inject({
+    const response = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/board`,
       headers: bearer(starter),
     })
 
-    expect(response.json()).toEqual({
+    expect(await response.json()).toEqual({
       columns: 16,
       rows: 8,
       squareSize: 94,
@@ -1035,15 +1036,15 @@ describe('board', () => {
 
   it('places a piece and gives it back in the view of the player', async () => {
     const { gameId, starter } = await startedGame('Brikkespill')
-    const response = await app.inject({
+    const response = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/board/pieces`,
       headers: bearer(starter),
       payload: { assetId: 'figures/redarmy', x: 200, y: 300 },
     })
 
-    expect(response.statusCode).toBe(200)
-    const view = response.json() as { board: { pieces: { label: string; x: number }[] } }
+    expect(response.status).toBe(200)
+    const view = await response.json() as { board: { pieces: { label: string; x: number }[] } }
     expect(view.board.pieces).toHaveLength(1)
     expect(view.board.pieces[0]?.label).toBe('Red army')
     expect(view.board.pieces[0]?.x).toBe(200)
@@ -1051,38 +1052,38 @@ describe('board', () => {
 
   it('refuses a piece type that does not exist', async () => {
     const { gameId, starter } = await startedGame('Ukjentbrikke')
-    const response = await app.inject({
+    const response = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/board/pieces`,
       headers: bearer(starter),
       payload: { assetId: '../../../etc/passwd', x: 0, y: 0 },
     })
 
-    expect(response.statusCode).toBe(400)
-    expect((response.json() as { error: string }).error).toBe('BOARD_ASSET_NOT_FOUND')
+    expect(response.status).toBe(400)
+    expect((await response.json() as { error: string }).error).toBe('BOARD_ASSET_NOT_FOUND')
   })
 
   it('both players see the same board', async () => {
     const { gameId, starter, waiting } = await startedGame('Deltbrett')
-    await app.inject({
+    await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/board/pieces`,
       headers: bearer(starter),
       payload: { assetId: 'cities/redcity2', x: 500, y: 500 },
     })
 
-    const theirs = await app.inject({
+    const theirs = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/board`,
       headers: bearer(waiting),
     })
-    expect((theirs.json() as { pieces: unknown[] }).pieces).toHaveLength(1)
+    expect((await theirs.json() as { pieces: unknown[] }).pieces).toHaveLength(1)
   })
 
   it('the other player can move a piece, and it ends up on top', async () => {
     const { gameId, starter, waiting } = await startedGame('Flyttbrett')
     for (const assetId of ['figures/redarmy', 'figures/bluearmy']) {
-      await app.inject({
+      await inject(app, {
         method: 'POST',
         url: `/api/games/${gameId}/board/pieces`,
         headers: bearer(starter),
@@ -1094,15 +1095,15 @@ describe('board', () => {
     const bottom = board?.board.pieces[0]
     if (bottom === undefined) throw new Error('no piece')
 
-    const moved = await app.inject({
+    const moved = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/board/pieces/${bottom.id}/move`,
       headers: bearer(waiting),
       payload: { x: 700, y: 800 },
     })
 
-    expect(moved.statusCode).toBe(200)
-    const view = moved.json() as { board: { pieces: { id: string; x: number }[] } }
+    expect(moved.status).toBe(200)
+    const view = await moved.json() as { board: { pieces: { id: string; x: number }[] } }
     expect(view.board.pieces.at(-1)?.id).toBe(bottom.id)
     expect(view.board.pieces.at(-1)?.x).toBe(700)
   })
@@ -1116,8 +1117,8 @@ describe('player stats (#43)', () => {
   }
 
   async function ids(gameId: string, token: string): Promise<{ me: string; other: string }> {
-    const response = await app.inject({ method: 'GET', url: `/api/games/${gameId}`, headers: bearer(token) })
-    const view = response.json() as StatView
+    const response = await inject(app, { method: 'GET', url: `/api/games/${gameId}`, headers: bearer(token) })
+    const view = await response.json() as StatView
     const other = view.opponents[0]
     if (other === undefined) throw new Error('expected an opponent in the game')
     return { me: view.you.playerId, other: other.playerId }
@@ -1127,24 +1128,24 @@ describe('player stats (#43)', () => {
     const { gameId, starter } = await startedGame('Stats')
     const { me, other } = await ids(gameId, starter)
 
-    const setOther = await app.inject({
+    const setOther = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/players/${other}/stat`,
       headers: bearer(starter),
       payload: { stat: 'coins', value: 5 },
     })
-    expect(setOther.statusCode).toBe(200)
-    const afterOther = setOther.json() as StatView
+    expect(setOther.status).toBe(200)
+    const afterOther = await setOther.json() as StatView
     expect(afterOther.opponents.find((o) => o.playerId === other)?.stats.coins).toBe(5)
 
-    const setMine = await app.inject({
+    const setMine = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/players/${me}/stat`,
       headers: bearer(starter),
       payload: { stat: 'trade', value: 3 },
     })
-    expect(setMine.statusCode).toBe(200)
-    expect((setMine.json() as StatView).you.stats.trade).toBe(3)
+    expect(setMine.status).toBe(200)
+    expect((await setMine.json() as StatView).you.stats.trade).toBe(3)
   })
 
   it('refuses a non-member', async () => {
@@ -1152,41 +1153,94 @@ describe('player stats (#43)', () => {
     const { other } = await ids(gameId, starter)
     const outsider = await register('stats-outsider')
 
-    const denied = await app.inject({
+    const denied = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/players/${other}/stat`,
       headers: bearer(outsider),
       payload: { stat: 'coins', value: 1 },
     })
-    expect(denied.statusCode).toBe(403)
-    expect((denied.json() as { error: string }).error).toBe('NO_ACCESS')
+    expect(denied.status).toBe(403)
+    expect((await denied.json() as { error: string }).error).toBe('NO_ACCESS')
   })
 
   it('rejects an unknown stat', async () => {
     const { gameId, starter } = await startedGame('StatsUnknown')
     const { other } = await ids(gameId, starter)
 
-    const rejected = await app.inject({
+    const rejected = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/players/${other}/stat`,
       headers: bearer(starter),
       payload: { stat: 'gold', value: 1 },
     })
-    expect(rejected.statusCode).toBe(400)
-    expect((rejected.json() as { error: string }).error).toBe('UNKNOWN_STAT')
+    expect(rejected.status).toBe(400)
+    expect((await rejected.json() as { error: string }).error).toBe('UNKNOWN_STAT')
   })
 
   it('rejects a negative value', async () => {
     const { gameId, starter } = await startedGame('StatsNegative')
     const { other } = await ids(gameId, starter)
 
-    const rejected = await app.inject({
+    const rejected = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/players/${other}/stat`,
       headers: bearer(starter),
       payload: { stat: 'coins', value: -3 },
     })
-    expect(rejected.statusCode).toBe(400)
-    expect((rejected.json() as { error: string }).error).toBe('INVALID_STAT_VALUE')
+    expect(rejected.status).toBe(400)
+    expect((await rejected.json() as { error: string }).error).toBe('INVALID_STAT_VALUE')
+  })
+})
+
+describe('HTTP error mapping', () => {
+  it('answers 304 with an empty body when an item is already revealed', async () => {
+    const { gameId, starter } = await startedGame('AlleredeAvslort')
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/HUTS`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    const state = await repo.findGame(gameId)
+    const hut = state?.players
+      .flatMap((player) => player.items)
+      .find((item) => item.sheetName === 'HUTS' && item.hidden)
+    if (hut === undefined) throw new Error('no hidden hut to reveal')
+
+    const first = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/items/reveal`,
+      headers: bearer(starter),
+      payload: { sheetName: 'HUTS', itemNumber: hut.itemNumber },
+    })
+    expect(first.status).toBe(200)
+
+    // Revealing it again: the engine returns ITEM_ALREADY_REVEALED → 304, which
+    // must carry no body (a 304 with a body throws when the Response is built).
+    const second = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/items/reveal`,
+      headers: bearer(starter),
+      payload: { sheetName: 'HUTS', itemNumber: hut.itemNumber },
+    })
+    expect(second.status).toBe(304)
+    expect(second.body).toBe('')
+  })
+
+  it('rejects a malformed JSON body with 400 before the handler runs', async () => {
+    const { gameId, starter } = await startedGame('UgyldigJson')
+    const res = await app.request(`/api/games/${gameId}/draw/HUTS`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${starter}` },
+      body: '{ not valid json',
+    })
+    expect(res.status).toBe(400)
+    expect((await res.json() as { error: string }).error).toBe('INVALID_JSON')
+  })
+
+  it('answers an unknown route with a JSON error body', async () => {
+    const res = await inject(app, { method: 'GET', url: '/api/does-not-exist' })
+    expect(res.status).toBe(404)
+    expect((await res.json() as { error: string }).error).toBe('NOT_FOUND')
   })
 })

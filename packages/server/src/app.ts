@@ -1,13 +1,14 @@
 /**
- * The Fastify app. Java: `CivilizationApplication` under Dropwizard.
+ * The Hono app. Java: `CivilizationApplication` under Dropwizard.
  */
 
-import cors from '@fastify/cors'
-import Fastify from 'fastify'
-import type { FastifyInstance } from 'fastify'
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import { logger } from 'hono/logger'
 
 import { TokenSigner } from './auth.js'
-import type { AppContext } from './context.js'
+import type { AppContext, Variables } from './context.js'
+import { sendError } from './errors.js'
 import { registerAuthRoutes } from './routes/auth.js'
 import { registerAdminRoutes } from './routes/admin.js'
 import { registerBoardRoutes } from './routes/board.js'
@@ -22,16 +23,43 @@ export interface CreateAppOptions {
   readonly tokenSecret: string
   readonly logger?: boolean
   /** Origins the client may call from. `true` lets everything through. */
-  // Not readonly string[]: @fastify/cors wants a mutable array
   readonly corsOrigin?: string | string[] | true
 }
 
-export async function createApp(options: CreateAppOptions): Promise<FastifyInstance> {
-  const app = Fastify({ logger: options.logger ?? false })
+export type App = Hono<{ Variables: Variables }>
 
-  await app.register(cors, {
-    origin: options.corsOrigin ?? true,
-    credentials: true,
+export function createApp(options: CreateAppOptions): App {
+  const app: App = new Hono<{ Variables: Variables }>()
+
+  if (options.logger === true) {
+    app.use('*', logger())
+  }
+
+  const corsOrigin = options.corsOrigin ?? true
+  app.use(
+    '/api/*',
+    cors({
+      origin: corsOrigin === true ? (origin) => origin ?? '*' : corsOrigin,
+      credentials: true,
+    }),
+  )
+
+  // Reject a malformed JSON body with 400 before any handler runs, as Fastify
+  // did. Without this a bad body silently falls back to `{}` and a route whose
+  // fields are all optional would mutate state from an invalid request. Empty
+  // bodies and non-JSON requests are left alone (handlers default them to `{}`).
+  app.use('/api/*', async (c, next) => {
+    const contentType = c.req.header('content-type')
+    if (contentType !== undefined && contentType.includes('application/json')) {
+      try {
+        // Hono caches the parsed result, so the handler's own c.req.json() reuses
+        // this without re-reading the body stream.
+        await c.req.json()
+      } catch {
+        return sendError(c, 400, 'INVALID_JSON', 'Request body is not valid JSON')
+      }
+    }
+    await next()
   })
 
   const context: AppContext = {
@@ -39,7 +67,15 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
     tokens: new TokenSigner(options.tokenSecret),
   }
 
-  app.get('/api/health', async () => ({ status: 'ok' }))
+  // Answer unmatched routes and unhandled throws with the same { error, message }
+  // shape every other error uses, so the client parser never chokes on plain text.
+  app.notFound((c) => sendError(c, 404, 'NOT_FOUND', `No route for ${c.req.method} ${c.req.path}`))
+  app.onError((error, c) => {
+    console.error(error)
+    return sendError(c, 500, 'INTERNAL_ERROR', 'Something went wrong')
+  })
+
+  app.get('/api/health', (c) => c.json({ status: 'ok' }))
 
   registerAuthRoutes(app, context)
   registerAdminRoutes(app, context)
@@ -53,10 +89,10 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
 
 /** Convenience for tests: an app backed by memory alone, with no file. */
 export async function createTestApp(): Promise<{
-  app: FastifyInstance
+  app: App
   repo: JsonFileRepository
 }> {
   const repo = new JsonFileRepository({ filePath: null })
-  const app = await createApp({ repo, tokenSecret: 'test-secret', logger: false })
+  const app = createApp({ repo, tokenSecret: 'test-secret', logger: false })
   return { app, repo }
 }

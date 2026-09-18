@@ -8,7 +8,16 @@
 
 import type { EngineError } from '@civ/engine'
 import { describeError } from '@civ/engine'
-import type { FastifyReply } from 'fastify'
+import type { Context } from 'hono'
+import type { ContentfulStatusCode, StatusCode } from 'hono/utils/http-status'
+
+/**
+ * Statuses the Fetch spec forbids a body on. A `Response` built with one of
+ * these and a non-null body throws, so we answer them empty — matching how
+ * Fastify's `reply.code(304).send(body)` stripped the payload. In practice only
+ * 304 (`ITEM_ALREADY_REVEALED`) reaches this from `statusFor`.
+ */
+const NULL_BODY_STATUSES = new Set([101, 204, 205, 304])
 
 export function statusFor(error: EngineError): number {
   switch (error.kind) {
@@ -70,17 +79,14 @@ export interface ErrorBody {
   readonly message: string
 }
 
-export function sendEngineError(reply: FastifyReply, error: EngineError): FastifyReply {
-  const body: ErrorBody = { error: error.kind, message: describeError(error) }
-  return reply.code(statusFor(error)).send(body)
+export function sendEngineError(c: Context, error: EngineError): Response {
+  return sendError(c, statusFor(error), error.kind, describeError(error))
 }
 
-export function sendError(
-  reply: FastifyReply,
-  status: number,
-  kind: string,
-  message: string,
-): FastifyReply {
+export function sendError(c: Context, status: number, kind: string, message: string): Response {
+  if (NULL_BODY_STATUSES.has(status)) {
+    return c.body(null, status as StatusCode)
+  }
   const body: ErrorBody = { error: kind, message }
-  return reply.code(status).send(body)
+  return c.json(body, status as ContentfulStatusCode)
 }

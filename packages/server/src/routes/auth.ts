@@ -6,8 +6,7 @@
  * the notification work.
  */
 
-import type { FastifyInstance } from 'fastify'
-
+import type { App } from '../app.js'
 import { hashPassword, needsUpgrade, newId, verifyPassword } from '../auth.js'
 import type { AppContext } from '../context.js'
 import { asRecord, authenticateWith, currentPlayer, requireString } from '../context.js'
@@ -31,25 +30,25 @@ export const toPlayerDto = (player: StoredPlayer): PlayerDto => ({
   disabled: player.disabled === true,
 })
 
-export function registerAuthRoutes(app: FastifyInstance, context: AppContext): void {
+export function registerAuthRoutes(app: App, context: AppContext): void {
   const authenticate = authenticateWith(context)
 
-  app.post('/api/auth/register', async (request, reply) => {
-    const body = asRecord(request.body)
+  app.post('/api/auth/register', async (c) => {
+    const body = asRecord(await c.req.json().catch(() => ({})))
     const username = requireString(body, 'username')
     const password = requireString(body, 'password')
     const email = requireString(body, 'email') ?? null
 
     if (username === undefined || password === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'username and password are required')
+      return sendError(c, 400, 'BAD_REQUEST', 'username and password are required')
     }
     if (password.length < 4) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'password must be at least 4 characters')
+      return sendError(c, 400, 'BAD_REQUEST', 'password must be at least 4 characters')
     }
 
     // Java: PlayerExistException, which became a 409 Conflict
     if ((await context.repo.findPlayerByUsername(username)) !== undefined) {
-      return sendError(reply, 409, 'PLAYER_EXISTS', `Username ${username} is taken`)
+      return sendError(c, 409, 'PLAYER_EXISTS', `Username ${username} is taken`)
     }
 
     const player: StoredPlayer = {
@@ -63,19 +62,22 @@ export function registerAuthRoutes(app: FastifyInstance, context: AppContext): v
     }
     await context.repo.createPlayer(player)
 
-    return reply.code(201).send({
-      token: context.tokens.sign(player.id),
-      player: toPlayerDto(player),
-    })
+    return c.json(
+      {
+        token: context.tokens.sign(player.id),
+        player: toPlayerDto(player),
+      },
+      201,
+    )
   })
 
-  app.post('/api/auth/login', async (request, reply) => {
-    const body = asRecord(request.body)
+  app.post('/api/auth/login', async (c) => {
+    const body = asRecord(await c.req.json().catch(() => ({})))
     const username = requireString(body, 'username')
     const password = requireString(body, 'password')
 
     if (username === undefined || password === undefined) {
-      return sendError(reply, 400, 'BAD_REQUEST', 'username and password are required')
+      return sendError(c, 400, 'BAD_REQUEST', 'username and password are required')
     }
 
     const player = await context.repo.findPlayerByUsername(username)
@@ -85,11 +87,11 @@ export function registerAuthRoutes(app: FastifyInstance, context: AppContext): v
     const valid = await verifyPassword(password, stored)
 
     if (player === undefined || !valid) {
-      return sendError(reply, 401, 'UNAUTHORIZED', 'Wrong username or password')
+      return sendError(c, 401, 'UNAUTHORIZED', 'Wrong username or password')
     }
 
     if (player.disabled === true) {
-      return sendError(reply, 403, 'ACCOUNT_DISABLED', 'This account is disabled')
+      return sendError(c, 403, 'ACCOUNT_DISABLED', 'This account is disabled')
     }
 
     // Old `playciv` accounts still carry an unsalted SHA-1 hash. Upgrade it to
@@ -99,27 +101,25 @@ export function registerAuthRoutes(app: FastifyInstance, context: AppContext): v
       try {
         await context.repo.updatePlayerPassword(player.id, await hashPassword(password))
       } catch (error) {
-        request.log.warn({ error }, 'Failed to upgrade legacy password hash')
+        console.warn('Failed to upgrade legacy password hash', error)
       }
     }
 
-    return reply.send({
+    return c.json({
       token: context.tokens.sign(player.id),
       player: toPlayerDto(player),
     })
   })
 
   /** Java: `/register/check/username`. */
-  app.get('/api/auth/username-available', async (request, reply) => {
-    const username = (request.query as Record<string, unknown> | undefined)?.['username']
+  app.get('/api/auth/username-available', async (c) => {
+    const username = c.req.query('username')
     if (typeof username !== 'string' || username.trim() === '') {
-      return sendError(reply, 400, 'BAD_REQUEST', 'username query parameter is required')
+      return sendError(c, 400, 'BAD_REQUEST', 'username query parameter is required')
     }
     const existing = await context.repo.findPlayerByUsername(username)
-    return reply.send({ available: existing === undefined })
+    return c.json({ available: existing === undefined })
   })
 
-  app.get('/api/auth/me', { preHandler: authenticate }, async (request, reply) =>
-    reply.send(toPlayerDto(currentPlayer(request))),
-  )
+  app.get('/api/auth/me', authenticate, async (c) => c.json(toPlayerDto(currentPlayer(c))))
 }

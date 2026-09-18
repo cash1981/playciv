@@ -4,13 +4,17 @@
  */
 
 import { highscore } from '@civ/engine'
-import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { Context } from 'hono'
 
-import type { AppContext } from '../context.js'
+import type { App } from '../app.js'
+import type { AppContext, Variables } from '../context.js'
 import { toPublicSummary } from './games.js'
 
-async function optionalViewerId(request: FastifyRequest, context: AppContext): Promise<string | undefined> {
-  const header = request.headers.authorization
+async function optionalViewerId(
+  c: Context<{ Variables: Variables }>,
+  context: AppContext,
+): Promise<string | undefined> {
+  const header = c.req.header('authorization')
   if (header === undefined || !header.startsWith('Bearer ')) return undefined
   const payload = context.tokens.verify(header.slice('Bearer '.length))
   if (payload === undefined) return undefined
@@ -20,23 +24,23 @@ async function optionalViewerId(request: FastifyRequest, context: AppContext): P
 
 const PUBLIC_CHAT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
 
-export function registerPublicRoutes(app: FastifyInstance, context: AppContext): void {
-  app.get('/api/public/games', async (request, reply) => {
+export function registerPublicRoutes(app: App, context: AppContext): void {
+  app.get('/api/public/games', async (c) => {
     const games = await context.repo.allGames()
-    const viewerId = await optionalViewerId(request, context)
-    return reply.send(
+    const viewerId = await optionalViewerId(c, context)
+    return c.json(
       [...games]
         .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
         .map((game) => toPublicSummary(game, viewerId)),
     )
   })
 
-  app.get('/api/highscore', async (_request, reply) => {
+  app.get('/api/highscore', async (c) => {
     const [games, players] = await Promise.all([
       context.repo.finishedGamesForHighscore(),
       context.repo.allPlayers(),
     ])
-    return reply.send(
+    return c.json(
       highscore(
         games,
         players.map((player) => player.username),
@@ -44,10 +48,10 @@ export function registerPublicRoutes(app: FastifyInstance, context: AppContext):
     )
   })
 
-  app.get('/api/chat', async (_request, reply) => {
+  app.get('/api/chat', async (c) => {
     const cutoff = Date.now() - PUBLIC_CHAT_MAX_AGE_MS
     const messages = await context.repo.chatFor(null)
-    return reply.send(
+    return c.json(
       messages
         .filter((message) => Date.parse(message.createdAt) >= cutoff)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))

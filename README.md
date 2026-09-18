@@ -84,8 +84,9 @@ source.
 
 ### `packages/server`
 
-Fastify on top of the engine. Java counterpart: `resource/*` and
-`application/*` under Dropwizard.
+Hono on top of the engine, so the same HTTP code runs on Node (local
+development, JSON-file storage) and on Cloudflare Workers (production, MongoDB).
+Java counterpart: `resource/*` and `application/*` under Dropwizard.
 
 | File | Responsibility |
 | --- | --- |

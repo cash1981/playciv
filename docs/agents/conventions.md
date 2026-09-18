@@ -69,7 +69,8 @@ Strict, with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
 Vitest. A test earns its place by failing when something real breaks.
 
 - Engine tests are pure: build state with the fixture, call the reducer, assert.
-- Server tests go through `fastify.inject`, never a real socket.
+- Server tests go through Hono's `app.request` (via the `inject` helper in
+  `packages/server/test/helpers.ts`), never a real socket.
 - Name tests as sentences: `it('the same player cannot join twice')`.
 - Do not assert on absolute pixel coordinates when a helper gives you the same
   number. `mapTop(board) + 300` survives a layout change; `491` does not.
