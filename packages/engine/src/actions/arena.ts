@@ -360,6 +360,12 @@ export function killArenaUnit(
   const player = found.value
 
   const battle = state.battle
+
+  // Participant guard: only combatants may kill an arena unit.
+  if (sideForPlayer(battle, input.playerId) === null) {
+    return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
+  }
+
   const arenaUnit = battle.arena.find((u) => u.id === input.arenaUnitId)
   if (arenaUnit === undefined) {
     return err({ kind: 'ARENA_UNIT_NOT_FOUND', arenaUnitId: input.arenaUnitId })
@@ -433,6 +439,12 @@ export function endBattleTurn(
   const player = found.value
 
   const battle = state.battle
+
+  // Participant guard: only combatants may end the battle turn.
+  if (sideForPlayer(battle, input.playerId) === null) {
+    return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
+  }
+
   const nextTurn: BattleSideId = battle.turn === 'attacker' ? 'defender' : 'attacker'
 
   const nextState = appendPublicLog(

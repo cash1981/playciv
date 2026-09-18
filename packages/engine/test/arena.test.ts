@@ -236,6 +236,30 @@ describe('killArenaUnit', () => {
     expect(it).toBeDefined()
     expect(isUnit(it!) && it.killed).toBe(false)
   })
+
+  it('rejects a non-participant trying to kill an arena unit', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+
+    const arenaUnitId = state.battle!.arena[0]!.id
+    // ITCHI is not part of the CASH1981 vs KARANDRAS1 battle
+    const error = unwrapErr(killArenaUnit(state, { playerId: ITCHI, arenaUnitId }))
+    expect(error.kind).toBe('NOT_IN_THIS_BATTLE')
+    // Unit stays in the arena
+    expect(state.battle!.arena).toHaveLength(1)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -377,6 +401,16 @@ describe('endBattleTurn', () => {
     expect(state.battle!.turn).toBe('defender')
 
     state = unwrap(endBattleTurn(state, { playerId: KARANDRAS1 }))
+    expect(state.battle!.turn).toBe('attacker')
+  })
+
+  it('rejects a non-participant trying to end the battle turn', () => {
+    let state = firstCivGame()
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    // ITCHI is not part of the CASH1981 vs KARANDRAS1 battle
+    const error = unwrapErr(endBattleTurn(state, { playerId: ITCHI }))
+    expect(error.kind).toBe('NOT_IN_THIS_BATTLE')
     expect(state.battle!.turn).toBe('attacker')
   })
 })

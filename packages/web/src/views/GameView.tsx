@@ -567,20 +567,24 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
               {defenderSummary?.label ?? 'Defender'} {battle.turn === 'defender' ? '← turn' : ''}
             </span>
             <span style={{ flex: 1 }} />
-            <button
-              className="small"
-              disabled={busy}
-              onClick={() => void run(() => api.endBattleTurn(gameId, rev))}
-            >
-              End turn
-            </button>
-            <button
-              className="small danger"
-              disabled={busy}
-              onClick={() => void run(() => api.endBattleArena(gameId, rev))}
-            >
-              End battle
-            </button>
+            {mySideInBattle !== null && (
+              <button
+                className="small"
+                disabled={busy}
+                onClick={() => void run(() => api.endBattleTurn(gameId, rev))}
+              >
+                End turn
+              </button>
+            )}
+            {mySideInBattle !== null && (
+              <button
+                className="small danger"
+                disabled={busy}
+                onClick={() => void run(() => api.endBattleArena(gameId, rev))}
+              >
+                End battle
+              </button>
+            )}
           </div>
 
           {/* Summary bar */}
@@ -610,6 +614,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
               run={run}
               draggingUnitId={draggingUnitId}
               onDropUnit={handleDropOnArena}
+              canManage={mySideInBattle !== null}
             />
             <ArenaColumn
               label={defenderSummary?.label ?? 'Defender'}
@@ -622,6 +627,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
               run={run}
               draggingUnitId={draggingUnitId}
               onDropUnit={handleDropOnArena}
+              canManage={mySideInBattle !== null}
             />
           </div>
 
@@ -684,10 +690,11 @@ interface ArenaColumnProps {
   readonly run: Run
   readonly draggingUnitId: string | null
   readonly onDropUnit: (side: BattleSideId, position: number) => void
+  readonly canManage: boolean
 }
 
 function ArenaColumn({
-  label, side, units, maxPositions, gameId, busy, rev, run, draggingUnitId, onDropUnit,
+  label, side, units, maxPositions, gameId, busy, rev, run, draggingUnitId, onDropUnit, canManage,
 }: ArenaColumnProps): React.JSX.Element {
   const [dragOver, setDragOver] = useState<number | null>(null)
 
@@ -708,7 +715,7 @@ function ArenaColumn({
             onDrop={() => { setDragOver(null); onDropUnit(side, pos) }}
           >
             {unit !== null ? (
-              <ArenaUnitCard unit={unit} gameId={gameId} busy={busy} rev={rev} run={run} />
+              <ArenaUnitCard unit={unit} gameId={gameId} busy={busy} rev={rev} run={run} canManage={canManage} />
             ) : (
               <div className="arena-slot-empty">
                 {isDragOver ? 'Drop here' : `Front ${pos}`}
@@ -727,9 +734,10 @@ interface ArenaUnitCardProps {
   readonly busy: boolean
   readonly rev: number
   readonly run: Run
+  readonly canManage: boolean
 }
 
-function ArenaUnitCard({ unit, gameId, busy, rev, run }: ArenaUnitCardProps): React.JSX.Element {
+function ArenaUnitCard({ unit, gameId, busy, rev, run, canManage }: ArenaUnitCardProps): React.JSX.Element {
   const [attack, setAttack] = useState(unit.attack)
   const [health, setHealth] = useState(unit.health)
   const attackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -776,14 +784,16 @@ function ArenaUnitCard({ unit, gameId, busy, rev, run }: ArenaUnitCardProps): Re
           />
         </label>
       </div>
-      <button
-        className="small danger"
-        disabled={busy}
-        style={{ marginTop: '0.3rem', width: '100%' }}
-        onClick={() => void run(() => api.killArenaUnit(gameId, unit.id, rev))}
-      >
-        Kill
-      </button>
+      {canManage && (
+        <button
+          className="small danger"
+          disabled={busy}
+          style={{ marginTop: '0.3rem', width: '100%' }}
+          onClick={() => void run(() => api.killArenaUnit(gameId, unit.id, rev))}
+        >
+          Kill
+        </button>
+      )}
     </div>
   )
 }
