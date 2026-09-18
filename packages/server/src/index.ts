@@ -2,8 +2,8 @@
  * Startup. Java: `CivilizationApplication.main` with Dropwizard and
  * `config.yml`; here it is environment variables.
  *
- *   PORT           defaults to 8787
- *   HOST           standard 127.0.0.1
+ *   PORT           defaults to 8787 (a host such as Render sets this)
+ *   HOST           defaults to 0.0.0.0 so a container host can route to it
  *   DATA_FILE      where state is mirrored, defaults to ./data/civ.json
  *                  — ignored when MONGO_URL is set
  *   MONGO_URL      a MongoDB connection string. When set, this replaces the
@@ -30,7 +30,7 @@ import { MongoRepository } from './store/mongo.js'
 import type { Repository } from './store/types.js'
 
 const port = Number(process.env['PORT'] ?? 8787)
-const host = process.env['HOST'] ?? '127.0.0.1'
+const host = process.env['HOST'] ?? '0.0.0.0'
 
 const tokenSecret = process.env['TOKEN_SECRET'] ?? randomBytes(32).toString('hex')
 if (process.env['TOKEN_SECRET'] === undefined) {
