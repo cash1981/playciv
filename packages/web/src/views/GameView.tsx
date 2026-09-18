@@ -6,13 +6,13 @@
  * them by accident.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { itemName } from '@civ/engine'
-import type { Item, SheetName } from '@civ/engine'
+import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
-import { api } from '../lib/api.js'
+import { ApiError, api } from '../lib/api.js'
 import type { PlayerDto, PlayerView } from '../lib/api.js'
 
 import { BoardView } from './BoardView.js'
@@ -56,6 +56,9 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [reloadCount, setReloadCount] = useState(0)
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(() => {
+    try { return localStorage.getItem('civ.autoRefresh') === 'true' } catch { return false }
+  })
 
   const reload = useCallback(async () => {
     try {
@@ -66,6 +69,13 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
       setError(errorMessage(caught))
     }
   }, [gameId, onUnauthorized])
+
+  useEffect(() => {
+    try { localStorage.setItem('civ.autoRefresh', String(autoRefresh)) } catch {}
+    if (!autoRefresh) return
+    const id = setInterval(() => { void reload() }, 30_000)
+    return () => clearInterval(id)
+  }, [autoRefresh, reload])
 
   useEffect(() => {
     void reload()
@@ -89,6 +99,10 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         setReloadCount((count) => count + 1)
       } catch (caught) {
         if (isUnauthorized(caught)) return onUnauthorized()
+        // On conflict: reload so rev is fresh before the next action
+        if (caught instanceof ApiError && caught.status === 409) {
+          await reload()
+        }
         setError(errorMessage(caught))
       } finally {
         setBusy(false)
@@ -134,11 +148,18 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
             </span>
           )}
           <span style={{ flex: 1 }} />
+          <button
+            className={'small' + (autoRefresh ? ' revealed' : '')}
+            onClick={() => setAutoRefresh((v) => !v)}
+            title="Auto-refresh every 30 seconds"
+          >
+            {autoRefresh ? 'Auto-refresh on' : 'Auto-refresh off'}
+          </button>
           {yourTurn ? (
             <span className="tag turn">Your turn</span>
           ) : (
             <span className="muted">
-              {view.opponents.find((opponent) => opponent.yourTurn)?.username ?? 'nobody'}’s turn
+              {view.opponents.find((opponent) => opponent.yourTurn)?.username ?? 'nobody'}'s turn
             </span>
           )}
         </div>
@@ -343,27 +364,96 @@ function HandItem({
   )
 }
 
+interface PendingPlacement {
+  readonly unitId: string
+  readonly side: BattleSideId
+  readonly position: number
+  readonly attack: number
+  readonly health: number
+}
+
 function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   const [count, setCount] = useState(3)
   const battlehand = view.you?.battlehand ?? []
   const barbarians = view.you?.barbarians ?? []
+  const battle = view.battle
+  const battleSummary = view.battleSummary ?? []
+  const rev = view.rev ?? 0
+  const myId = view.you?.playerId ?? ''
+
+  const [opponentId, setOpponentId] = useState('')
+  const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null)
+  const [pending, setPending] = useState<PendingPlacement | null>(null)
+
+  function handleDragStart(unitId: string): void {
+    setDraggingUnitId(unitId)
+  }
+
+  function handleDropOnArena(side: BattleSideId, position: number): void {
+    if (draggingUnitId === null) return
+    const unit = battlehand.find((u) => u.id === draggingUnitId) ?? barbarians.find((u) => u.id === draggingUnitId)
+    setPending({
+      unitId: draggingUnitId,
+      side,
+      position,
+      attack: unit?.attack ?? 0,
+      health: unit?.health ?? 0,
+    })
+    setDraggingUnitId(null)
+  }
+
+  function handleClickPlaceInArena(unitId: string, side: BattleSideId, position: number): void {
+    const unit = battlehand.find((u) => u.id === unitId) ?? barbarians.find((u) => u.id === unitId)
+    setPending({
+      unitId,
+      side,
+      position,
+      attack: unit?.attack ?? 0,
+      health: unit?.health ?? 0,
+    })
+  }
+
+  const attackerUnits = battle?.arena.filter((u) => u.side === 'attacker') ?? []
+  const defenderUnits = battle?.arena.filter((u) => u.side === 'defender') ?? []
+  const maxPositions = Math.max(
+    attackerUnits.reduce((m, u) => Math.max(m, u.position), -1),
+    defenderUnits.reduce((m, u) => Math.max(m, u.position), -1),
+    -1,
+  )
+
+  // Which side am I on?
+  const mySideInBattle: BattleSideId | null = battle
+    ? battle.attacker.playerId === myId
+      ? 'attacker'
+      : battle.defender.playerId === myId
+        ? 'defender'
+        : null
+    : null
+
+  // Next free position on my side (for click-to-place fallback)
+  const myNextPosition = mySideInBattle === 'attacker'
+    ? attackerUnits.reduce((m, u) => Math.max(m, u.position), -1) + 1
+    : defenderUnits.reduce((m, u) => Math.max(m, u.position), -1) + 1
+
+  const attackerSummary: BattleSideSummary | undefined = battleSummary.find((s) => s.side === 'attacker')
+  const defenderSummary: BattleSideSummary | undefined = battleSummary.find((s) => s.side === 'defender')
+
+  const allOpponents = [
+    { id: 'barbarians', username: 'Barbarians' },
+    ...view.opponents.map((o) => ({ id: o.playerId, username: o.username })),
+  ]
 
   return (
     <CollapsiblePanel id="battle" title="Battle">
 
+      {/* — Hand management — */}
       <div className="row">
         <input
-          type="number"
-          min={1}
-          max={20}
-          value={count}
-          onChange={(event) => setCount(Number(event.target.value))}
+          type="number" min={1} max={20} value={count}
+          onChange={(e) => setCount(Number(e.target.value))}
           style={{ width: '5rem' }}
         />
-        <button
-          disabled={busy}
-          onClick={() => void run(() => api.drawBattlehand(gameId, count))}
-        >
+        <button disabled={busy} onClick={() => void run(() => api.drawBattlehand(gameId, count))}>
           Draw battlehand
         </button>
         <button
@@ -372,19 +462,38 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
         >
           Reveal
         </button>
-        <button disabled={busy} onClick={() => void run(() => api.endBattle(gameId))}>
-          End battle
-        </button>
+        {battle === null && (
+          <button disabled={busy} onClick={() => void run(() => api.endBattle(gameId))}>
+            End battle
+          </button>
+        )}
       </div>
 
       <h3 style={{ marginTop: '0.8rem' }}>Battlehand ({battlehand.length})</h3>
       {battlehand.length === 0 && <p className="muted">Empty.</p>}
       <ul className="card-grid small">
         {battlehand.map((unit) => (
-          <ItemCard key={unit.id} item={unit} />
+          <ItemCard
+            key={unit.id}
+            item={unit}
+            draggable={battle !== null}
+            onDragStart={(e) => { e.dataTransfer.setData('text/plain', unit.id); handleDragStart(unit.id) }}
+          >
+            {battle !== null && mySideInBattle !== null &&
+              !(battle.defender.kind === 'barbarians' && battle.defender.playerId === myId) && (
+              <button
+                className="small"
+                disabled={busy || unit.inBattle}
+                onClick={() => handleClickPlaceInArena(unit.id, mySideInBattle, myNextPosition)}
+              >
+                {unit.inBattle ? 'In arena' : 'Place →'}
+              </button>
+            )}
+          </ItemCard>
         ))}
       </ul>
 
+      {/* — Barbarians — */}
       <h3 style={{ marginTop: '0.8rem' }}>Barbarians ({barbarians.length})</h3>
       <div className="row">
         <button
@@ -402,10 +511,290 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
       </div>
       <ul className="card-grid small">
         {barbarians.map((unit) => (
-          <ItemCard key={unit.id} item={unit} />
+          <ItemCard
+            key={unit.id}
+            item={unit}
+            draggable={battle !== null}
+            onDragStart={(e) => { e.dataTransfer.setData('text/plain', unit.id); handleDragStart(unit.id) }}
+          >
+            {battle !== null && battle.defender.kind === 'barbarians' && battle.defender.playerId === myId && (
+              <button
+                className="small"
+                disabled={busy || unit.inBattle}
+                onClick={() => handleClickPlaceInArena(unit.id, 'defender', myNextPosition)}
+              >
+                {unit.inBattle ? 'In arena' : 'Place →'}
+              </button>
+            )}
+          </ItemCard>
         ))}
       </ul>
+
+      {/* — Initiate battle — */}
+      {battle === null && (
+        <div style={{ marginTop: '1rem' }}>
+          <h3 style={{ marginTop: 0 }}>Start a battle</h3>
+          <div className="row">
+            <select
+              value={opponentId}
+              onChange={(e) => setOpponentId(e.target.value)}
+              style={{ width: 'auto' }}
+            >
+              <option value="">Opponent …</option>
+              {allOpponents.map((o) => (
+                <option key={o.id} value={o.id}>{o.username}</option>
+              ))}
+            </select>
+            <button
+              disabled={busy || opponentId === ''}
+              onClick={() => void run(() => api.initiateBattle(gameId, opponentId, rev))}
+            >
+              Start battle
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* — Arena — */}
+      {battle !== null && (
+        <div style={{ marginTop: '1rem' }}>
+          <div className="row" style={{ alignItems: 'center', gap: '1rem' }}>
+            <h3 style={{ margin: 0 }}>Arena</h3>
+            <span className={`tag${battle.turn === 'attacker' ? ' turn' : ''}`}>
+              {attackerSummary?.label ?? 'Attacker'} {battle.turn === 'attacker' ? '← turn' : ''}
+            </span>
+            <span className={`tag${battle.turn === 'defender' ? ' turn' : ''}`}>
+              {defenderSummary?.label ?? 'Defender'} {battle.turn === 'defender' ? '← turn' : ''}
+            </span>
+            <span style={{ flex: 1 }} />
+            {mySideInBattle !== null && (
+              <button
+                className="small"
+                disabled={busy}
+                onClick={() => void run(() => api.endBattleTurn(gameId, rev))}
+              >
+                End turn
+              </button>
+            )}
+            {mySideInBattle !== null && (
+              <button
+                className="small danger"
+                disabled={busy}
+                onClick={() => void run(() => api.endBattleArena(gameId, rev))}
+              >
+                End battle
+              </button>
+            )}
+          </div>
+
+          {/* Summary bar */}
+          {battleSummary.length > 0 && (
+            <div className="row battle-summary">
+              {battleSummary.map((s) => (
+                <div key={s.side} className="battle-summary-side">
+                  <strong>{s.label}</strong>
+                  <span>{s.unitCount} unit{s.unitCount !== 1 ? 's' : ''}</span>
+                  <span>ATK {s.totalAttack}{s.combatBonus !== 0 ? ` (${s.combatBonus > 0 ? '+' : ''}${s.combatBonus})` : ''}</span>
+                  <span>HP {s.totalHealth}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Arena grid: two columns */}
+          <div className="arena-grid">
+            <ArenaColumn
+              label={attackerSummary?.label ?? 'Attacker'}
+              side="attacker"
+              units={attackerUnits}
+              maxPositions={maxPositions}
+              gameId={gameId}
+              busy={busy}
+              rev={rev}
+              run={run}
+              draggingUnitId={draggingUnitId}
+              onDropUnit={handleDropOnArena}
+              canManage={mySideInBattle !== null}
+            />
+            <ArenaColumn
+              label={defenderSummary?.label ?? 'Defender'}
+              side="defender"
+              units={defenderUnits}
+              maxPositions={maxPositions}
+              gameId={gameId}
+              busy={busy}
+              rev={rev}
+              run={run}
+              draggingUnitId={draggingUnitId}
+              onDropUnit={handleDropOnArena}
+              canManage={mySideInBattle !== null}
+            />
+          </div>
+
+          {/* Pending placement confirmation */}
+          {pending !== null && (
+            <div className="arena-placement-form">
+              <strong>
+                {(() => {
+                  const u = battlehand.find((x) => x.id === pending.unitId) ?? barbarians.find((x) => x.id === pending.unitId)
+                  return `Place ${u !== undefined ? itemName(u) : 'unit'} on ${pending.side} front #${pending.position}`
+                })()}
+              </strong>
+              <div className="row" style={{ marginTop: '0.4rem' }}>
+                <label>
+                  ATK
+                  <input
+                    type="number" min={0} value={pending.attack}
+                    onChange={(e) => setPending({ ...pending, attack: Number(e.target.value) })}
+                    style={{ width: '4rem', marginLeft: '0.3rem' }}
+                  />
+                </label>
+                <label>
+                  HP
+                  <input
+                    type="number" min={0} value={pending.health}
+                    onChange={(e) => setPending({ ...pending, health: Number(e.target.value) })}
+                    style={{ width: '4rem', marginLeft: '0.3rem' }}
+                  />
+                </label>
+                <button
+                  disabled={busy}
+                  onClick={() => {
+                    const p = pending
+                    setPending(null)
+                    void run(() =>
+                      api.placeUnitInArena(gameId, p.unitId, p.side, p.position, p.attack, p.health, rev)
+                    )
+                  }}
+                >
+                  Confirm
+                </button>
+                <button onClick={() => setPending(null)}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </CollapsiblePanel>
+  )
+}
+
+interface ArenaColumnProps {
+  readonly label: string
+  readonly side: BattleSideId
+  readonly units: readonly ArenaUnit[]
+  readonly maxPositions: number
+  readonly gameId: string
+  readonly busy: boolean
+  readonly rev: number
+  readonly run: Run
+  readonly draggingUnitId: string | null
+  readonly onDropUnit: (side: BattleSideId, position: number) => void
+  readonly canManage: boolean
+}
+
+function ArenaColumn({
+  label, side, units, maxPositions, gameId, busy, rev, run, draggingUnitId, onDropUnit, canManage,
+}: ArenaColumnProps): React.JSX.Element {
+  const [dragOver, setDragOver] = useState<number | null>(null)
+
+  const positions = Array.from({ length: maxPositions + 2 }, (_, i) => i)
+
+  return (
+    <div className="arena-column">
+      <h4 className="arena-column-label">{label}</h4>
+      {positions.map((pos) => {
+        const unit = units.find((u) => u.position === pos) ?? null
+        const isDragOver = dragOver === pos && draggingUnitId !== null
+        return (
+          <div
+            key={pos}
+            className={`arena-slot${isDragOver ? ' drag-over' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(pos) }}
+            onDragLeave={() => setDragOver(null)}
+            onDrop={() => { setDragOver(null); onDropUnit(side, pos) }}
+          >
+            {unit !== null ? (
+              <ArenaUnitCard unit={unit} gameId={gameId} busy={busy} rev={rev} run={run} canManage={canManage} />
+            ) : (
+              <div className="arena-slot-empty">
+                {isDragOver ? 'Drop here' : `Front ${pos}`}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+interface ArenaUnitCardProps {
+  readonly unit: ArenaUnit
+  readonly gameId: string
+  readonly busy: boolean
+  readonly rev: number
+  readonly run: Run
+  readonly canManage: boolean
+}
+
+function ArenaUnitCard({ unit, gameId, busy, rev, run, canManage }: ArenaUnitCardProps): React.JSX.Element {
+  const [attack, setAttack] = useState(unit.attack)
+  const [health, setHealth] = useState(unit.health)
+  const attackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const healthTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sync when the server sends a fresh value
+  useEffect(() => { setAttack(unit.attack) }, [unit.attack])
+  useEffect(() => { setHealth(unit.health) }, [unit.health])
+
+  // Cancel pending timers on unmount
+  useEffect(() => {
+    return () => {
+      if (attackTimerRef.current !== null) clearTimeout(attackTimerRef.current)
+      if (healthTimerRef.current !== null) clearTimeout(healthTimerRef.current)
+    }
+  }, [])
+
+  function commitStat(key: 'attack' | 'health', value: number): void {
+    const timerRef = key === 'attack' ? attackTimerRef : healthTimerRef
+    if (timerRef.current !== null) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      void run(() => api.setArenaUnitStat(gameId, unit.id, key, value, rev))
+    }, 600)
+  }
+
+  return (
+    <div className="arena-unit-card">
+      <ItemCard item={unit.unit} />
+      <div className="row" style={{ marginTop: '0.3rem' }}>
+        <label>
+          ATK
+          <input
+            type="number" min={0} value={attack}
+            onChange={(e) => { const v = Number(e.target.value); setAttack(v); commitStat('attack', v) }}
+            style={{ width: '3.5rem', marginLeft: '0.3rem' }}
+          />
+        </label>
+        <label>
+          HP
+          <input
+            type="number" min={0} value={health}
+            onChange={(e) => { const v = Number(e.target.value); setHealth(v); commitStat('health', v) }}
+            style={{ width: '3.5rem', marginLeft: '0.3rem' }}
+          />
+        </label>
+      </div>
+      {canManage && (
+        <button
+          className="small danger"
+          disabled={busy}
+          style={{ marginTop: '0.3rem', width: '100%' }}
+          onClick={() => void run(() => api.killArenaUnit(gameId, unit.id, rev))}
+        >
+          Kill
+        </button>
+      )}
+    </div>
   )
 }
 

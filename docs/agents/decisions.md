@@ -634,3 +634,13 @@ Mongo is dropped. The Worker holds no database code or secrets — only `API_ORI
 (the Node server URL). `MONGO_URL`/`TOKEN_SECRET` live on Render. The spike was
 too shallow to catch this: it tested a connection and a trivial command, not a
 cursor query. Future platform spikes must exercise a real `find().toArray()`.
+
+---
+
+## Battle arena (issue #63)
+
+- **Advisory turn only.** `battle.turn` shows whose turn it is but is not enforced server-side. Players are trusted to follow the order; the marker is informational only.
+- **`killed` is not set on kill.** The Kill button removes a unit from the arena and clears `inBattle`, but does not set `killed: true`. Players manage their own cards (discard, reveal, keep) after a kill. This was an explicit decision to keep the engine simple and give players control.
+- **`rev` counter is game-global.** Every write to the game state increments `rev`, not just arena writes. This means a 409 can occur on arena actions even when the arena itself has not changed. The client reloads the view on 409 and shows an error; the user retries.
+- **Barbarians + existing barbarian hand.** If the player to the attacker's left already holds undiscarded barbarians, `initiateBattle` with `opponentId: 'barbarians'` will return `BARBARIANS_NOT_DISCARDED`. Known limitation — the initiating player must coordinate with the barbarian controller. Not an error in the old system (the feature was never implemented).
+- **Arena permissions are split on purpose (issue #65).** `killArenaUnit` and `endBattleTurn` (and `endBattleAction`) reject non-participants with `NOT_IN_THIS_BATTLE`. `setArenaUnitStat` deliberately stays open to any game member, since attack/health are manually tracked and spectators may need to correct a typo on either side's behalf. The UI mirrors this: "End turn"/"End battle" and the per-unit "Kill" button are hidden for non-participants; the attack/health inputs are not.

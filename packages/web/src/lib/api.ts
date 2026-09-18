@@ -244,6 +244,41 @@ export const api = {
   discardBarbarians: (gameId: string) =>
     post<PlayerView>(`/api/games/${gameId}/battle/barbarians/discard`),
 
+  // Battle arena (issue #63)
+  initiateBattle: (gameId: string, opponentId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/initiate`, { opponentId, rev }),
+  placeUnitInArena: (
+    gameId: string,
+    unitId: string,
+    side: 'attacker' | 'defender',
+    position: number,
+    attack: number,
+    health: number,
+    rev: number,
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/place`, {
+      unitId,
+      side,
+      position,
+      attack,
+      health,
+      rev,
+    }),
+  setArenaUnitStat: (
+    gameId: string,
+    arenaUnitId: string,
+    key: 'attack' | 'health',
+    value: number,
+    rev: number,
+  ) =>
+    patch<PlayerView>(`/api/games/${gameId}/battle/arena/${arenaUnitId}`, { key, value, rev }),
+  killArenaUnit: (gameId: string, arenaUnitId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/${arenaUnitId}/kill`, { rev }),
+  endBattleTurn: (gameId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/turn/end`, { rev }),
+  endBattleArena: (gameId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/end`, { rev }),
+
   availableTechs: (gameId: string) => get<TechItem[]>(`/api/games/${gameId}/techs/available`),
   revealedTechs: (gameId: string) => get<RevealedTechsDto[]>(`/api/games/${gameId}/techs/revealed`),
   chooseTech: (gameId: string, name: string) =>

@@ -74,6 +74,22 @@ export type EngineError =
   | { readonly kind: 'UNKNOWN_STAT'; readonly stat: string }
   /** `setPlayerStat` (issue #43) got a value that is not an allowed integer */
   | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number }
+  /** A battle is already active — only one at a time is allowed */
+  | { readonly kind: 'BATTLE_ALREADY_ACTIVE' }
+  /** An arena action was attempted but no battle is active */
+  | { readonly kind: 'NO_BATTLE_ACTIVE' }
+  /** The player is not a participant in the current battle */
+  | { readonly kind: 'NOT_IN_THIS_BATTLE'; readonly playerId: string }
+  /** The unit is already in the arena (already `inBattle`) */
+  | { readonly kind: 'UNIT_ALREADY_IN_BATTLE'; readonly unitId: string }
+  /** No arena unit with the given id was found */
+  | { readonly kind: 'ARENA_UNIT_NOT_FOUND'; readonly arenaUnitId: string }
+  /** An arena stat value is not a non-negative integer */
+  | { readonly kind: 'INVALID_ARENA_STAT_VALUE'; readonly value: number }
+  /** A player cannot initiate a battle against themselves */
+  | { readonly kind: 'CANNOT_BATTLE_YOURSELF'; readonly playerId: string }
+  /** That position is already occupied on this side */
+  | { readonly kind: 'ARENA_POSITION_OCCUPIED' }
 
 export function describeError(error: EngineError): string {
   switch (error.kind) {
@@ -141,5 +157,21 @@ export function describeError(error: EngineError): string {
       return `Unknown player stat: ${error.stat}`
     case 'INVALID_STAT_VALUE':
       return `Player stat must be a whole number; only Combat may be negative, got ${error.value}`
+    case 'BATTLE_ALREADY_ACTIVE':
+      return 'A battle is already in progress'
+    case 'NO_BATTLE_ACTIVE':
+      return 'No battle is currently active'
+    case 'NOT_IN_THIS_BATTLE':
+      return 'Player is not a participant in the current battle'
+    case 'UNIT_ALREADY_IN_BATTLE':
+      return 'This unit is already in the arena'
+    case 'ARENA_UNIT_NOT_FOUND':
+      return `No arena unit with id ${error.arenaUnitId}`
+    case 'INVALID_ARENA_STAT_VALUE':
+      return `Arena stat must be a non-negative whole number, got ${error.value}`
+    case 'CANNOT_BATTLE_YOURSELF':
+      return 'You cannot initiate a battle against yourself'
+    case 'ARENA_POSITION_OCCUPIED':
+      return 'That position is already occupied on this side'
   }
 }

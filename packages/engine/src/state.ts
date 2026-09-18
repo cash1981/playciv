@@ -13,6 +13,7 @@ import type { Board, BoardArea, BoardPiece } from './board.js'
 import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
 import type { PlayerTurn } from './turn.js'
 import type { Undo } from './undo.js'
+import type { Battle, BattleSideSummary } from './battle.js'
 
 export type GameType = 'WAW'
 
@@ -174,6 +175,17 @@ export interface GameState {
    * deal.
    */
   readonly wondersDealt: boolean
+  /**
+   * The currently active battle, or null if no battle is in progress.
+   * At most one battle may be active per game at a time.
+   */
+  readonly battle: Battle | null
+  /**
+   * Monotonically increasing revision counter. Incremented by `applyToGame`
+   * on every write. Used to detect concurrent edits: the server returns 409
+   * if the client's `rev` does not match the stored one.
+   */
+  readonly rev: number
 }
 
 // ---------------------------------------------------------------------------
@@ -397,6 +409,49 @@ export interface PlayerView {
   /** Derived from the player list, so it cannot drift out of step. */
   readonly boardAreas: readonly BoardArea[]
   readonly log: readonly (PublicLogEntry | GameLogEntry)[]
+  /**
+   * The active battle, or null. The arena is fully public — both sides see all
+   * units once placed. Units NOT in the arena remain subject to existing
+   * hidden-info rules (the hand, private techs).
+   */
+  readonly battle: Battle | null
+  /**
+   * Per-side totals derived from the arena. Empty when no battle is active.
+   * Derived rather than stored so it cannot drift out of step.
+   */
+  readonly battleSummary: readonly BattleSideSummary[]
+  /** Current revision counter — sent back so the client can include it in writes. */
+  readonly rev: number
+}
+
+function battleSummaries(state: GameState): readonly BattleSideSummary[] {
+  const { battle } = state
+  if (battle === null) return []
+
+  const sides = [
+    { sideId: 'attacker' as const, side: battle.attacker },
+    { sideId: 'defender' as const, side: battle.defender },
+  ]
+
+  return sides.map(({ sideId, side }) => {
+    const units = battle.arena.filter((u) => u.side === sideId)
+    const player = findPlayer(state, side.playerId)
+    const label =
+      side.kind === 'barbarians'
+        ? 'Barbarians'
+        : (player?.username ?? side.playerId)
+    const combatBonus = side.kind === 'player' ? (player?.stats.combat ?? 0) : 0
+    return {
+      side: sideId,
+      kind: side.kind,
+      playerId: side.playerId,
+      label,
+      unitCount: units.length,
+      totalHealth: units.reduce((sum, u) => sum + u.health, 0),
+      totalAttack: units.reduce((sum, u) => sum + u.attack, 0),
+      combatBonus,
+    }
+  })
 }
 
 export function toPlayerView(state: GameState, viewerId: string): PlayerView {
@@ -429,5 +484,8 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     log: state.log.map((entry) =>
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),
+    battle: state.battle,
+    battleSummary: battleSummaries(state),
+    rev: state.rev,
   }
 }

@@ -797,6 +797,21 @@ describe('log timestamps and order', () => {
   })
 })
 
+describe('arena rev guard', () => {
+  it('initiateBattle with a stale rev returns 409', async () => {
+    const { gameId, starter } = await startedGame('Rev-guard')
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/initiate`,
+      headers: bearer(starter),
+      payload: { opponentId: 'barbarians', rev: 9999 },
+    })
+    expect(response.status).toBe(409)
+    expect((await response.json() as { error: string }).error).toBe('CONFLICT')
+  })
+})
+
 /** A whole round through the API, as a smoke test for the entire stack. */
 describe('a whole round', () => {
   it('four players play through setup, draws, turns and an undo', async () => {

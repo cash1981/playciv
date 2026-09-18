@@ -13,9 +13,9 @@ _Last updated: 2026-09-18_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 356 engine, 81 server, 7 web |
+| `pnpm -r test` | passing — 375 engine, 82 server, 7 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes |
+| `main` pushed to `origin` | yes (feat/issue-63-battle-arena awaiting review) |
 
 ## Done
 
@@ -150,6 +150,9 @@ _Last updated: 2026-09-18_
   (`?page=&size=`, default 20, capped 100) so the browser never loads the whole
   history or every image at once. The `opponents` data stays on the view for the
   turn banner, Player status and the trade dropdown. Browser-verified.
+
+- **Issue #63.** Battle arena: initiate (attacker vs player or barbarians), drag-and-drop units from battlehand/barbarians to positional arena fronts, manual attack/health inputs per unit, kill button, advisory turn marker, per-side HP+attack summaries, `endBattleTurn` / `endBattleArena` actions, concurrent-write protection via `rev` counter (409 on mismatch), and a 30-second auto-refresh toggle (top-right, persisted in `localStorage`). No server-side turn enforcement. `battle: Battle | null` and `rev: number` added to `GameState` and `PlayerView`; migrated with `?? null` / `?? 0`. All checks pass on `feat/issue-63-battle-arena`.
+- **Issue #65.** `killArenaUnit` and `endBattleTurn` now reject non-participants with `NOT_IN_THIS_BATTLE`, matching `endBattleAction`'s existing guard. The "End turn", "End battle" and per-unit "Kill" buttons are hidden client-side for non-participants. `setArenaUnitStat` stays open to any game member on purpose (see `decisions.md`).
 
 ## In progress
 
