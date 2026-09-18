@@ -24,6 +24,8 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 - **Claimed paths:**
   - `packages/web/src/lib/formatTimestamp.ts` (new)
   - `packages/web/src/lib/formatTimestamp.test.ts` (new)
+  - `packages/web/src/views/ChatTimestamp.tsx` (new)
+  - `packages/web/src/views/ChatTimestamp.test.tsx` (new)
   - `packages/web/src/views/LogPanel.tsx`
   - `packages/web/src/views/LandingView.tsx`
   - `packages/web/src/views/BoardView.tsx` (header line only)

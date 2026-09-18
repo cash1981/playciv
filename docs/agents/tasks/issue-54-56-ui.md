@@ -49,6 +49,8 @@ still needed throughout the board, so only its header count usage is removed.
 
 - `packages/web/src/lib/formatTimestamp.ts` (new)
 - `packages/web/src/lib/formatTimestamp.test.ts` (new)
+- `packages/web/src/views/ChatTimestamp.tsx` (new)
+- `packages/web/src/views/ChatTimestamp.test.tsx` (new)
 - `packages/web/src/views/LogPanel.tsx`
 - `packages/web/src/views/LandingView.tsx`
 - `packages/web/src/views/BoardView.tsx` (header line only)
