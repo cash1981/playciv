@@ -49,12 +49,12 @@ const UNIT_COLUMNS: readonly StatColumn[] = [
 
 const MODIFIER_COLUMNS: readonly StatColumn[] = [
   { key: 'stacking', label: 'Stacking' },
-  { key: 'mvmt', label: 'Mvmt' },
+  { key: 'mvmt', label: 'Movement' },
   { key: 'combat', label: 'Combat', signed: true },
   { key: 'handSize', label: 'Hand Size' },
 ]
 
-const EFTA_COLUMNS: readonly StatColumn[] = [
+const INVESTMENT_COLUMNS: readonly StatColumn[] = [
   { key: 'efta', label: 'EftA' },
   { key: 'infra', label: 'Infra' },
   { key: 'mic', label: 'MIC' },
@@ -62,13 +62,13 @@ const EFTA_COLUMNS: readonly StatColumn[] = [
 ]
 
 const STATUS_GROUPS: readonly { readonly label: string; readonly columns: readonly StatColumn[] }[] = [
-  { label: 'Coins, Trade & Culture', columns: ACCOUNTING_COLUMNS },
-  { label: 'Units and Cards', columns: UNIT_COLUMNS },
-  { label: 'Default values', columns: MODIFIER_COLUMNS },
-  { label: 'Technology & Infrastructure', columns: EFTA_COLUMNS },
+  { label: 'Trade, Coins & Culture cards', columns: ACCOUNTING_COLUMNS },
+  { label: 'Units', columns: UNIT_COLUMNS },
+  { label: 'Modifier', columns: MODIFIER_COLUMNS },
+  { label: 'Investments', columns: INVESTMENT_COLUMNS },
 ]
 
-const COLUMN_COUNT = 2 + ACCOUNTING_COLUMNS.length + UNIT_COLUMNS.length + MODIFIER_COLUMNS.length + EFTA_COLUMNS.length
+const COLUMN_COUNT = 2 + ACCOUNTING_COLUMNS.length + UNIT_COLUMNS.length + MODIFIER_COLUMNS.length + INVESTMENT_COLUMNS.length
 
 export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Element {
   const rows: Row[] = []
