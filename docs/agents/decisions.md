@@ -608,3 +608,29 @@ is answered with an empty body because the Fetch spec forbids a body on that
 status. Malformed JSON is rejected with 400 by middleware, and unmatched routes
 and unhandled throws return the `{ error, message }` shape via `notFound`/
 `onError`.
+
+## 2026-09-18 — Cloudflare hosting: SPA on the Worker, API on a Node host
+
+**Decision.** Supersedes the hosting part of the previous entry. The API does
+NOT run on Cloudflare Workers. The Worker serves the built SPA as static assets
+and proxies `/api/*` to the Node server (`packages/server`) running on Render
+against MongoDB Atlas. `playciv.app` stays one origin. Local development is
+unchanged (`pnpm dev`, JSON file).
+
+**Why.** A deploy proved the MongoDB driver cannot run real queries on workerd:
+`client.connect()`, `db.command({ping})` and `estimatedDocumentCount()` work,
+but `find().toArray()` (which every real route uses) hangs and the Workers
+runtime cancels the request. The same `MongoRepository` code answers instantly
+on Node against the same Atlas cluster (verified: highscore returns the real
+`pbf` data, `public/games` returns `[]`), so it is a workerd limitation, not
+Atlas. The Atlas Data API (the old HTTP path off the driver) is discontinued and
+Hyperdrive does not support MongoDB. Moving storage to Cloudflare D1 was the
+all-Cloudflare alternative but means rewriting the whole repository and migrating
+the restored data, which the owner declined for now.
+
+**Consequences.** The Hono migration still stands and is not wasted: Hono runs
+on Node, and keeping it leaves the door open to an all-Workers backend later if
+Mongo is dropped. The Worker holds no database code or secrets — only `API_ORIGIN`
+(the Node server URL). `MONGO_URL`/`TOKEN_SECRET` live on Render. The spike was
+too shallow to catch this: it tested a connection and a trivial command, not a
+cursor query. Future platform spikes must exercise a real `find().toArray()`.

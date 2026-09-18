@@ -1,17 +1,18 @@
 {
-  // Cloudflare Worker for playciv.app. Stage 0 spike: serve the built SPA and
-  // prove that the MongoDB driver reaches Atlas and node:crypto scrypt runs on
-  // workerd, before porting the real API in Stage 1.
+  // Cloudflare Worker for playciv.app. Serves the built SPA as static assets and
+  // proxies /api/* to the Node API server. The API cannot run on the Worker: the
+  // MongoDB driver's cursor queries hang on workerd. See docs/agents/decisions.md.
   //
-  // Secrets (MONGO_URL, TOKEN_SECRET) are NOT set here — add them in the
-  // Cloudflare dashboard under the Worker's Settings > Variables and secrets,
-  // or with `wrangler secret put`. This file is committed, so it holds no
-  // secrets.
+  // API_ORIGIN (the Node server's base URL) is set in the Cloudflare dashboard
+  // under the Worker's Settings > Variables. This file is committed, no secrets.
   "name": "playciv",
   "main": "packages/worker/src/index.ts",
   "compatibility_date": "2026-09-18",
-  // node:crypto (scrypt) and the mongodb driver need Node built-ins on workerd.
-  "compatibility_flags": ["nodejs_compat"],
+  // The Node API's base URL. Not a secret (a public URL), so it lives in config
+  // rather than a dashboard variable, which keeps it in every deployed version.
+  "vars": {
+    "API_ORIGIN": "https://playciv-api.onrender.com"
+  },
   "assets": {
     // Built by `pnpm run build` (packages/web). Served for every non-/api path,
     // with index.html returned for unknown client-side routes.

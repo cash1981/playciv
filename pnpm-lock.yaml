@@ -81,13 +81,6 @@ importers:
         version: 7.3.6(@types/node@24.13.3)(tsx@4.23.13)
 
   packages/worker:
-    dependencies:
-      '@civ/server':
-        specifier: workspace:*
-        version: link:../server
-      mongodb:
-        specifier: ^7.6.0
-        version: 7.6.0
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20250920.0

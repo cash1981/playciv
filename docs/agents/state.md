@@ -26,9 +26,11 @@ _Last updated: 2026-09-17_
   Workers), scrypt passwords, HMAC bearer tokens, JSON-file repository standing
   in for MongoDB.
 - **Cloudflare deploy.** A `packages/worker` Cloudflare Worker serves the built
-  SPA (static assets) and runs the same Hono API against MongoDB Atlas;
-  `wrangler.jsonc` sets `nodejs_compat`. Local development is unchanged: `pnpm
-  dev` runs the Node server against the JSON file. See `decisions.md`.
+  SPA (static assets) and proxies `/api/*` to the Node server on Render (see
+  `render.yaml`), which runs the Hono API against MongoDB Atlas. The API cannot
+  run on the Worker itself — the MongoDB driver's cursor queries hang on workerd.
+  Local development is unchanged: `pnpm dev` runs the Node server against the
+  JSON file. See `decisions.md`.
 - **Client.** React and Vite: login, game list, game page, hand, draws, battle,
   techs, turn orders, log, undo votes, chat.
 - **Board.** 16 × 16 map from the PowerPoint template, free pixel placement,

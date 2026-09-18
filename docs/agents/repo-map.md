@@ -75,11 +75,11 @@ of step with what the server sends.
 ## packages/worker
 
 The Cloudflare Worker for production. Serves the built SPA (`packages/web/dist`)
-as static assets and routes `/api/*` to the same Hono app as the Node server,
-backed by MongoDB Atlas. Imports `createApp`/`MongoRepository` from `@civ/server`
-and reuses one Mongo connection per isolate. `wrangler.jsonc` (repo root) sets
-`nodejs_compat` and the assets binding. Secrets (`MONGO_URL`, `TOKEN_SECRET`) are
-set in the Cloudflare dashboard as runtime secrets, never committed.
+as static assets and proxies `/api/*` to the Node server on Render (the API
+cannot run on workerd — the MongoDB driver's cursor queries hang there). It holds
+no database code; its only config is `API_ORIGIN` (the Node server URL), set as a
+Worker variable. `wrangler.jsonc` (repo root) has the assets binding. The Node
+API deployment is described by `render.yaml`.
 
 ## tools
 
