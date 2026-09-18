@@ -489,6 +489,13 @@ export function endBattleAction(
 
   const battle = state.battle
 
+  // Participant guard: only combatants may end an active battle.
+  // This prevents a third player from accidentally wiping another pair's arena.
+  const isParticipant =
+    battle.attacker.playerId === input.playerId ||
+    battle.defender.playerId === input.playerId
+  if (!isParticipant) return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
+
   // Clear inBattle on all arena unit source cards, for both sides
   let nextState = state
   for (const arenaUnit of battle.arena) {
@@ -503,10 +510,13 @@ export function endBattleAction(
       )
       nextState = withPlayer(nextState, { ...owner, barbarians: updated })
     } else {
-      const updated = owner.battlehand.map((u) =>
+      const updatedBattlehand = owner.battlehand.map((u) =>
         u.id === arenaUnit.unit.id ? { ...u, inBattle: false } : u,
       )
-      nextState = withPlayer(nextState, { ...owner, battlehand: updated })
+      const updatedItems = owner.items.map((it) =>
+        it.id === arenaUnit.unit.id ? { ...it, inBattle: false } as typeof it : it,
+      )
+      nextState = withPlayer(nextState, { ...owner, battlehand: updatedBattlehand, items: updatedItems })
     }
   }
 

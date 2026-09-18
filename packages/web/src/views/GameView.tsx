@@ -513,7 +513,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
             draggable={battle !== null}
             onDragStart={(e) => { e.dataTransfer.setData('text/plain', unit.id); handleDragStart(unit.id) }}
           >
-            {battle !== null && (
+            {battle !== null && battle.defender.kind === 'barbarians' && battle.defender.playerId === myId && (
               <button
                 className="small"
                 disabled={busy || unit.inBattle}
@@ -586,7 +586,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
                 <div key={s.side} className="battle-summary-side">
                   <strong>{s.label}</strong>
                   <span>{s.unitCount} unit{s.unitCount !== 1 ? 's' : ''}</span>
-                  <span>ATK {s.totalAttack}{s.combatBonus > 0 ? ` (+${s.combatBonus})` : ''}</span>
+                  <span>ATK {s.totalAttack}{s.combatBonus !== 0 ? ` (${s.combatBonus > 0 ? '+' : ''}${s.combatBonus})` : ''}</span>
                   <span>HP {s.totalHealth}</span>
                 </div>
               ))}
@@ -625,7 +625,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
           {pending !== null && (
             <div className="arena-placement-form">
               <strong>
-                Place {dragUnit?.id !== undefined ? 'unit' : 'unit'} on {pending.side} front #{pending.position}
+                Place {dragUnit !== null ? itemName(dragUnit) : 'unit'} on {pending.side} front #{pending.position}
               </strong>
               <div className="row" style={{ marginTop: '0.4rem' }}>
                 <label>
@@ -725,13 +725,23 @@ interface ArenaUnitCardProps {
 function ArenaUnitCard({ unit, gameId, busy, rev, run }: ArenaUnitCardProps): React.JSX.Element {
   const [attack, setAttack] = useState(unit.attack)
   const [health, setHealth] = useState(unit.health)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const attackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const healthTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Sync when the server sends a fresh value
   useEffect(() => { setAttack(unit.attack) }, [unit.attack])
   useEffect(() => { setHealth(unit.health) }, [unit.health])
 
+  // Cancel pending timers on unmount
+  useEffect(() => {
+    return () => {
+      if (attackTimerRef.current !== null) clearTimeout(attackTimerRef.current)
+      if (healthTimerRef.current !== null) clearTimeout(healthTimerRef.current)
+    }
+  }, [])
+
   function commitStat(key: 'attack' | 'health', value: number): void {
+    const timerRef = key === 'attack' ? attackTimerRef : healthTimerRef
     if (timerRef.current !== null) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
       void run(() => api.setArenaUnitStat(gameId, unit.id, key, value, rev))

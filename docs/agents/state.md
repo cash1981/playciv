@@ -13,7 +13,7 @@ _Last updated: 2026-09-18_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 356 engine, 81 server, 3 web |
+| `pnpm -r test` | passing — 373 engine, 81 server, 3 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes (feat/issue-63-battle-arena awaiting review) |
 

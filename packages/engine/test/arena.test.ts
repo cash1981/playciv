@@ -9,16 +9,18 @@ import { describe, expect, it } from 'vitest'
 
 import {
   endBattleAction,
+  endBattleTurn,
   initiateBattle,
   killArenaUnit,
   placeUnitInArena,
+  setArenaUnitStat,
 } from '../src/actions/arena.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
 import { isUnit } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 
-import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
+import { CASH1981, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -203,10 +205,12 @@ describe('killArenaUnit', () => {
     const updated = findPlayer(state, CASH1981)!
     // inBattle cleared on battlehand
     const bh = updated.battlehand.find((u) => u.id === unit.id)
-    if (bh !== undefined) expect(bh.inBattle).toBe(false)
+    expect(bh).toBeDefined()
+    expect(bh!.inBattle).toBe(false)
     // inBattle cleared on items
     const it = updated.items.find((i) => i.id === unit.id)
-    if (it !== undefined) expect((it as { inBattle?: boolean }).inBattle).toBe(false)
+    expect(it).toBeDefined()
+    expect((it as { inBattle?: boolean }).inBattle).toBe(false)
   })
 
   it('does NOT set killed: true on the source card', () => {
@@ -229,7 +233,8 @@ describe('killArenaUnit', () => {
     state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId }))
 
     const it = findPlayer(state, CASH1981)!.items.find((i) => i.id === unit.id)
-    if (it !== undefined) expect((it as { killed?: boolean }).killed).toBeFalsy()
+    expect(it).toBeDefined()
+    expect(isUnit(it!) && it.killed).toBe(false)
   })
 })
 
@@ -260,7 +265,21 @@ describe('endBattleAction', () => {
 
     const updated = findPlayer(state, CASH1981)!
     const bh = updated.battlehand.find((u) => u.id === unit.id)
-    if (bh !== undefined) expect(bh.inBattle).toBe(false)
+    expect(bh).toBeDefined()
+    expect(bh!.inBattle).toBe(false)
+    // inBattle also cleared on items
+    const it = updated.items.find((i) => i.id === unit.id)
+    expect(it).toBeDefined()
+    expect((it as { inBattle?: boolean }).inBattle).toBe(false)
+  })
+
+  it('rejects a non-participant trying to end an active battle', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    // ITCHI is not part of the CASH1981 vs KARANDRAS1 battle
+    const error = unwrapErr(endBattleAction(state, { playerId: ITCHI }))
+    expect(error.kind).toBe('NOT_IN_THIS_BATTLE')
   })
 
   it('without active battle: clears inBattle on caller items only', () => {
@@ -270,10 +289,10 @@ describe('endBattleAction', () => {
     }
     state = unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 2 }))
 
-    // Manually mark a unit inBattle in items to simulate the scenario
+    // Verify there are units to test against
     const player = findPlayer(state, CASH1981)!
-    const unitId = player.items.filter(isUnit)[0]?.id
-    if (unitId === undefined) return // nothing to test without units
+    const units = player.items.filter(isUnit)
+    expect(units.length).toBeGreaterThan(0)
 
     // endBattleAction with no active battle clears inBattle on caller's items
     const after = unwrap(endBattleAction(state, { playerId: CASH1981 }))
@@ -282,6 +301,171 @@ describe('endBattleAction', () => {
     for (const item of afterPlayer.items) {
       if (isUnit(item)) expect(item.inBattle).toBe(false)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// setArenaUnitStat
+// ---------------------------------------------------------------------------
+
+describe('setArenaUnitStat', () => {
+  it('any game member can update attack; new value is stored and logged', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+
+    const arenaUnitId = state.battle!.arena[0]!.id
+
+    // KARANDRAS1 (not the one who placed the unit) updates the attack
+    state = unwrap(
+      setArenaUnitStat(state, { playerId: KARANDRAS1, arenaUnitId, key: 'attack', value: 5 }),
+    )
+
+    expect(state.battle!.arena[0]!.attack).toBe(5)
+    // The log should contain an entry about the update
+    const logEntry = state.log[state.log.length - 1]
+    expect(logEntry?.publicLog).toContain('attack')
+  })
+
+  it('returns INVALID_ARENA_STAT_VALUE for a negative value', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+
+    const arenaUnitId = state.battle!.arena[0]!.id
+    const error = unwrapErr(
+      setArenaUnitStat(state, { playerId: CASH1981, arenaUnitId, key: 'attack', value: -1 }),
+    )
+    expect(error.kind).toBe('INVALID_ARENA_STAT_VALUE')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// endBattleTurn
+// ---------------------------------------------------------------------------
+
+describe('endBattleTurn', () => {
+  it('flips battle.turn from attacker to defender and back', () => {
+    let state = firstCivGame()
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    expect(state.battle!.turn).toBe('attacker')
+
+    state = unwrap(endBattleTurn(state, { playerId: CASH1981 }))
+    expect(state.battle!.turn).toBe('defender')
+
+    state = unwrap(endBattleTurn(state, { playerId: KARANDRAS1 }))
+    expect(state.battle!.turn).toBe('attacker')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// initiateBattle — barbarians
+// ---------------------------------------------------------------------------
+
+describe('initiateBattle with barbarians', () => {
+  it('sets up a player-vs-barbarians battle and draws 3 units for the left player', () => {
+    const state = unwrap(
+      initiateBattle(firstCivGame(), { initiatorId: CASH1981, opponentId: 'barbarians' }),
+    )
+
+    expect(state.battle).not.toBeNull()
+    expect(state.battle!.attacker.kind).toBe('player')
+    expect(state.battle!.attacker.playerId).toBe(CASH1981)
+    expect(state.battle!.defender.kind).toBe('barbarians')
+
+    // The player to the left of CASH1981 in firstCivGame is KARANDRAS1 (index 1)
+    const controllerId = state.battle!.defender.playerId
+    const controller = findPlayer(state, controllerId)
+    expect(controller).toBeDefined()
+    expect(controller!.barbarians).toHaveLength(3)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// battleSummaries (via toPlayerView)
+// ---------------------------------------------------------------------------
+
+describe('battleSummaries', () => {
+  it('computes correct totals for attacker and defender sides', () => {
+    // Use a barbarians battle so the "defender" units are drawn automatically
+    // by the engine (no turn restriction). CASH1981 is attacker;
+    // KARANDRAS1 (player to the left) controls 3 barbarian units.
+    let state = withBattlehand(CASH1981, 3)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: 'barbarians' }))
+
+    // Place two attacker units (attack 3, health 5 each)
+    const cashUnits = findPlayer(state, CASH1981)!.battlehand
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: cashUnits[0]!.id,
+        side: 'attacker',
+        position: 0,
+        attack: 3,
+        health: 5,
+      }),
+    )
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: cashUnits[1]!.id,
+        side: 'attacker',
+        position: 1,
+        attack: 3,
+        health: 5,
+      }),
+    )
+
+    // KARANDRAS1 controls the barbarians — place one barbarian (attack 2, health 4)
+    const barbarianUnits = findPlayer(state, KARANDRAS1)!.barbarians
+    expect(barbarianUnits.length).toBeGreaterThan(0)
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: KARANDRAS1,
+        unitId: barbarianUnits[0]!.id,
+        side: 'defender',
+        position: 0,
+        attack: 2,
+        health: 4,
+      }),
+    )
+
+    const view = toPlayerView(state, CASH1981)
+    const attackerSummary = view.battleSummary.find((s) => s.side === 'attacker')
+    const defenderSummary = view.battleSummary.find((s) => s.side === 'defender')
+
+    expect(attackerSummary).toBeDefined()
+    expect(attackerSummary!.unitCount).toBe(2)
+    expect(attackerSummary!.totalAttack).toBe(6)
+    expect(attackerSummary!.totalHealth).toBe(10)
+
+    expect(defenderSummary).toBeDefined()
+    expect(defenderSummary!.unitCount).toBe(1)
+    expect(defenderSummary!.totalAttack).toBe(2)
+    expect(defenderSummary!.totalHealth).toBe(4)
   })
 })
 
@@ -332,6 +516,18 @@ describe('hidden information: battle arena', () => {
     )
     for (const item of cashPrivateItems) {
       expect(arenaUnitIds).not.toContain(item.id)
+    }
+
+    // Strengthen: none of CASH1981's private items (hand, not battlehand) appear
+    // in the arena or anywhere in KARANDRAS1's view.
+    // Note: battlehand IS intentionally exposed to opponents during battle
+    // (see opaque() in state.ts), so only the private items field is checked here.
+    const viewJson = JSON.stringify(view)
+    const cashPrivateOnlyItems = findPlayer(state, CASH1981)!.items.filter(
+      (i) => !cashPlayer.battlehand.some((u) => u.id === i.id) && i.id !== placed!.id,
+    )
+    for (const item of cashPrivateOnlyItems) {
+      expect(viewJson).not.toContain(item.id)
     }
   })
 })
