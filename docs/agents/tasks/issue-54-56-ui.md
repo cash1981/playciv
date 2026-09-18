@@ -3,7 +3,7 @@
 - **Slug:** `issue-54-56-ui`
 - **Branch:** `fix/issue-54-56-ui`
 - **Owner:** Codex
-- **Status:** approved
+- **Status:** in review
 
 ## Goal
 
@@ -55,13 +55,13 @@ still needed throughout the board, so only its header count usage is removed.
 
 ## Acceptance criteria
 
-- [ ] Game chat displays each valid `createdAt` timestamp as `dd.MM.yyyy HH:mm:ss`.
-- [ ] Lobby chat displays each valid `createdAt` timestamp in the same format.
-- [ ] Invalid timestamps are omitted rather than displaying an invalid date.
-- [ ] The board header reads exactly "Civilization Boardgame" and no longer displays dimensions or piece count.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: no projections or data payloads change.
-- [ ] Verified in the browser: game chat, lobby chat and board heading are visually checked.
+- [x] Game chat displays each valid `createdAt` timestamp as `dd.MM.yyyy HH:mm:ss`.
+- [x] Lobby chat displays each valid `createdAt` timestamp in the same format.
+- [x] Invalid timestamps are omitted rather than displaying an invalid date.
+- [x] The board header reads exactly "Civilization Boardgame" and no longer displays dimensions or piece count.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: no projections or data payloads change.
+- [x] Verified in the browser: game chat, lobby chat and board heading are visually checked.
 
 ## Open questions
 

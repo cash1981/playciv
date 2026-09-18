@@ -20,7 +20,7 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 - **Owner:** Codex (GPT-5)
 - **Branch:** `fix/issue-54-56-ui`
 - **Brief:** `docs/agents/tasks/issue-54-56-ui.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
   - `packages/web/src/lib/formatTimestamp.ts` (new)
   - `packages/web/src/lib/formatTimestamp.test.ts` (new)
