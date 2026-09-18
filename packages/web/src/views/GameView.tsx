@@ -385,10 +385,6 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null)
   const [pending, setPending] = useState<PendingPlacement | null>(null)
 
-  const dragUnit = draggingUnitId !== null
-    ? (battlehand.find((u) => u.id === draggingUnitId) ?? barbarians.find((u) => u.id === draggingUnitId) ?? null)
-    : null
-
   function handleDragStart(unitId: string): void {
     setDraggingUnitId(unitId)
   }
@@ -434,6 +430,11 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
         : null
     : null
 
+  // Next free position on my side (for click-to-place fallback)
+  const myNextPosition = mySideInBattle === 'attacker'
+    ? attackerUnits.reduce((m, u) => Math.max(m, u.position), -1) + 1
+    : defenderUnits.reduce((m, u) => Math.max(m, u.position), -1) + 1
+
   const attackerSummary: BattleSideSummary | undefined = battleSummary.find((s) => s.side === 'attacker')
   const defenderSummary: BattleSideSummary | undefined = battleSummary.find((s) => s.side === 'defender')
 
@@ -461,9 +462,11 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
         >
           Reveal
         </button>
-        <button disabled={busy} onClick={() => void run(() => api.endBattle(gameId))}>
-          End battle
-        </button>
+        {battle === null && (
+          <button disabled={busy} onClick={() => void run(() => api.endBattle(gameId))}>
+            End battle
+          </button>
+        )}
       </div>
 
       <h3 style={{ marginTop: '0.8rem' }}>Battlehand ({battlehand.length})</h3>
@@ -476,11 +479,12 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
             draggable={battle !== null}
             onDragStart={(e) => { e.dataTransfer.setData('text/plain', unit.id); handleDragStart(unit.id) }}
           >
-            {battle !== null && mySideInBattle !== null && (
+            {battle !== null && mySideInBattle !== null &&
+              !(battle.defender.kind === 'barbarians' && battle.defender.playerId === myId) && (
               <button
                 className="small"
                 disabled={busy || unit.inBattle}
-                onClick={() => handleClickPlaceInArena(unit.id, mySideInBattle, maxPositions + 1)}
+                onClick={() => handleClickPlaceInArena(unit.id, mySideInBattle, myNextPosition)}
               >
                 {unit.inBattle ? 'In arena' : 'Place →'}
               </button>
@@ -517,7 +521,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
               <button
                 className="small"
                 disabled={busy || unit.inBattle}
-                onClick={() => handleClickPlaceInArena(unit.id, 'defender', maxPositions + 1)}
+                onClick={() => handleClickPlaceInArena(unit.id, 'defender', myNextPosition)}
               >
                 {unit.inBattle ? 'In arena' : 'Place →'}
               </button>
@@ -625,7 +629,10 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
           {pending !== null && (
             <div className="arena-placement-form">
               <strong>
-                Place {dragUnit !== null ? itemName(dragUnit) : 'unit'} on {pending.side} front #{pending.position}
+                {(() => {
+                  const u = battlehand.find((x) => x.id === pending.unitId) ?? barbarians.find((x) => x.id === pending.unitId)
+                  return `Place ${u !== undefined ? itemName(u) : 'unit'} on ${pending.side} front #${pending.position}`
+                })()}
               </strong>
               <div className="row" style={{ marginTop: '0.4rem' }}>
                 <label>

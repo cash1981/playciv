@@ -398,6 +398,7 @@ describe('initiateBattle with barbarians', () => {
 
     // The player to the left of CASH1981 in firstCivGame is KARANDRAS1 (index 1)
     const controllerId = state.battle!.defender.playerId
+    expect(controllerId).toBe(KARANDRAS1)
     const controller = findPlayer(state, controllerId)
     expect(controller).toBeDefined()
     expect(controller!.barbarians).toHaveLength(3)

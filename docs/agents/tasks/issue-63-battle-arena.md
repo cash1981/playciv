@@ -143,7 +143,7 @@ this feature.
 | `initiateBattle(state, {initiatorId, opponentId\|'barbarians'})` | Errors if `state.battle !== null`; for barbarians draws 3 automatically (reuse `drawBarbariansForPlayer`), sets `turn: 'attacker'`. |
 | `placeUnitInArena(state, {playerId, unitId, side, position, attack, health})` | Finds unit in `battlehand` (player side) or `barbarians` (barbarian side); errors if `unit.inBattle`; sets `inBattle: true` on source; appends `ArenaUnit`; does NOT flip turn. |
 | `setArenaUnitStat(state, {playerId, arenaUnitId, key: 'attack'\|'health', value})` | Any game member may call. Validates non-negative integer. Logs editor + old→new. |
-| `killArenaUnit(state, {playerId, arenaUnitId})` | Removes from `arena`; sets `killed: true` on the source card in hand/barbarians. Does NOT move to `discardedItems` — players do that themselves (revival cards exist). Logs the kill publicly. |
+| `killArenaUnit(state, {playerId, arenaUnitId})` | Removes from `arena`; does NOT set `killed: true` on the source card (see `decisions.md` — players manage their own discards). Logs the kill publicly. |
 | `endBattleTurn(state, {playerId})` | Flips `turn`. Logs. |
 | `endBattle(state, {playerId})` (extends existing) | If `battle !== null`: clears `inBattle` on all arena units' source cards across both sides, sets `battle: null`; does NOT clear `killed`. If `battle === null`: existing behaviour (clear `inBattle` on caller's hand). |
 
@@ -223,14 +223,14 @@ highlight, battle-turn indicator.
       marked `inBattle` and cannot be placed again.
 - [ ] Attack and health in the arena are manually entered (seeded from card
       values but editable); any game member can edit them; every change is logged.
-- [ ] A unit can be killed (removed from the arena); `killed` is set on the
-      source card; the card is NOT auto-discarded.
+- [ ] A unit can be killed (removed from the arena); the source card stays in
+      the player's hand/barbarians — killed cards are NOT auto-discarded (players
+      manage that themselves; revival cards exist).
 - [ ] Battle turn flips when «End battle turn» is pressed; the turn marker is
       visible and updates immediately.
 - [ ] Summary (unit count, total HP, combat bonus) is shown per side and updates
       on every state change.
-- [ ] «End battle» clears the arena and resets `inBattle` on all involved units
-      without clearing `killed`.
+- [ ] «End battle» clears the arena and resets `inBattle` on all involved units.
 - [ ] The existing battlehand draw, reveal and barbarian mechanics work unchanged
       when no battle is active.
 - [ ] Concurrency: a `rev` mismatch returns 409 (tested with two concurrent

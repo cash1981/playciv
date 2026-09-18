@@ -15,28 +15,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
-### issue-63-battle-arena
-
-- **Owner:** Claude (Sonnet 4.6)
-- **Branch:** `feat/issue-63-battle-arena`
-- **Brief:** `docs/agents/tasks/issue-63-battle-arena.md`
-- **Status:** in review
-- **Claimed paths:**
-  - `packages/engine/src/battle.ts` (new)
-  - `packages/engine/src/actions/arena.ts` (new)
-  - `packages/engine/src/state.ts`
-  - `packages/engine/src/migrate.ts`
-  - `packages/engine/src/errors.ts`
-  - `packages/engine/src/index.ts`
-  - `packages/server/src/routes/arena.ts` (new)
-  - `packages/server/src/app.ts`
-  - `packages/server/src/errors.ts`
-  - `packages/web/src/lib/api.ts`
-  - `packages/web/src/views/GameView.tsx`
-  - `packages/web/src/views/ItemCard.tsx`
-  - `packages/web/src/styles.css`
-- **Notes:** Issue #63. Engine + server + web layers complete. All checks pass
-  (typecheck, test, build). Awaiting review gate before merge.
 
 ### revealed-panel
 
