@@ -12,6 +12,7 @@ import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { ChatMessageDto, LogEntryDto, PendingUndoDto, PlayerDto, PlayerView } from '../lib/api.js'
 import { formatTimestamp } from '../lib/formatTimestamp.js'
+import { ChatTimestamp } from './ChatTimestamp.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 
 interface Props {
@@ -140,9 +141,7 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
       <ul className="list scroll">
         {chat.map((entry) => (
           <li key={entry.id}>
-            <time className="log-time" dateTime={entry.createdAt}>
-              {formatTimestamp(entry.createdAt)}
-            </time>
+            <ChatTimestamp createdAt={entry.createdAt} />
             <strong>{entry.username}</strong>
             <span>{entry.message}</span>
           </li>
