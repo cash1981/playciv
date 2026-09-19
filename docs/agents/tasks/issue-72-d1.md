@@ -3,16 +3,18 @@
 - **Slug:** `issue-72-d1`
 - **Branch:** `feat/issue-72-d1`
 - **Owner:** orchestrator (DeepSeek), verified by a second agent
-- **Status:** in progress
+- **Status:** in review
 
 ## Goal
 
 The application's data lives in a Cloudflare D1 (SQLite) database instead of
 MongoDB Atlas, and the API runs on the Cloudflare Worker itself with a D1
-binding. The restored old `playciv` data — 554 players, 310 old `pbf` games,
-87,756 chat messages, 66,288 old `gamelog` entries and the single tournament —
-is migrated into D1 tables. The Render proxy, `render.yaml`, MongoDB Atlas and
-the `mongodb` driver are gone. Local `pnpm dev` keeps using the JSON file.
+binding. Only the restored old data the app actually uses is migrated: the 554
+`player` accounts and the 310 old `pbf` games (the full documents, for the
+highscore and possible future statistics). The old `chat`, `gamelog` and
+`tournament` data is deliberately dropped — the mongodump backup keeps it. The
+Render proxy, `render.yaml`, MongoDB Atlas and the `mongodb` driver are gone.
+Local `pnpm dev` keeps using the JSON file.
 
 ## Why
 
@@ -37,7 +39,8 @@ storage paths side by side.
   and `render.yaml` are removed.
 - A one-off migration script that reads the local mongodump JSON export
   (`Civilization/database backup/mongo`, gitignored) and produces a `dump.sql`
-  that is loaded into D1 with `wrangler d1 execute --remote --file`.
+  that is loaded into D1 with `wrangler d1 execute --remote --file`. It migrates
+  only `player` and `pbf` (the account records and the full old games).
 - Removing `MongoRepository`, the `mongodb` dependency and the two
   Mongo-only scripts (`seed:test-user`, `migrate:user-roles`); their jobs are
   either obsolete (roles now arrive in the migrated data) or served by the
@@ -52,8 +55,12 @@ storage paths side by side.
   engine's state shape and its `migrateGameState` history.
 - Migrating old `pbf` games into playable `GameState`. They stay read-only and
   are a highscore source only, exactly as the 2026-09-16 decision records.
-- A tournament feature. The old `tournament` document is archived as data, not
-  queried by the app.
+- Migrating the old `chat`, `gamelog` and `tournament` data. `chat` is a live
+  feature, so its table stays, but the 87,756 old messages are dropped along
+  with the 66,288 `gamelog` rows and the single `tournament` document. The owner
+  keeps the mongodump backup for anything that might be wanted later. Dropping
+  them is also what keeps the import under D1's free-tier daily row-write limit.
+- A tournament feature. The old document is not carried into D1 at all.
 - Changing local development off the JSON file. `pnpm dev` stays Node + JSON,
   per the owner's choice; D1 is production-only.
 
@@ -70,9 +77,6 @@ storage paths side by side.
   run against it: all 554 players already carry `role`/`disabled`, 552 still
   have unsalted SHA-1 passwords and 2 have scrypt. It contains no `game_state`,
   `game_revision` or `email_sent` documents, so those tables start empty.
-- Lobby chat in the dump has **no** `pbfId` field (83 documents) rather than an
-  explicit `null`; Mongo's `{ pbfId: null }` query matched missing fields, so
-  the SQL side must map a missing/absent `pbfId` to `NULL`.
 
 ## Approach
 
@@ -101,14 +105,16 @@ payload for the rest of the document.
   roster (`[{username, civName}]`).
 - `pbf_doc(pbf_id, seq, chunk, PK(pbf_id, seq))` — the full old document,
   normalised and chunked at 40 KB. A single `pbf` document reaches 123 KB,
-  above D1's ~100 KB per-statement limit, so it cannot be one SQL literal; the
-  app never reads this table.
-- `gamelog(id TEXT PK, game_id, username, public_log, created_at)` +
-  `INDEX gamelog_game ON gamelog(game_id)` — archival.
-- `tournament(id TEXT PK, doc TEXT)` — archival.
+  above D1's ~100 KB per-statement limit, so it cannot be one SQL literal.
+  Nothing reads it today; it keeps the old games available for future
+  statistics (most-researched tech, items, social policies) without the
+  mongodump.
 
-`created_at` for old players/games is derived from the ObjectId timestamp, as
-`MongoRepository` does today. Legacy `created` arrays become ISO strings.
+The `chat` table is kept for live chat, with no restored rows. There is no
+`gamelog` or `tournament` table: that data is dropped on purpose.
+
+`created_at` for old players is derived from the ObjectId timestamp, as
+`MongoRepository` did.
 
 ### `D1Repository`
 
@@ -134,7 +140,8 @@ the compare-and-set operations are written as guarded batches:
 `packages/worker/src/index.ts` serves assets for non-`/api` paths and, for
 `/api/*`, builds the Hono app with `new D1Repository(env.DB)` and calls
 `app.fetch`. `wrangler.jsonc` gains the `d1_databases` binding (name `playciv`,
-id `055e06d7-5d3b-4d4a-95aa-5d396c04b9bd`) and `migrations_dir`. The
+id `a289a3f1-e6b1-4831-b35d-9775e222ec69`, re-created for the reduced data) and
+`migrations_dir`. The
 `API_ORIGIN` var and proxy code are deleted, along with `render.yaml`.
 
 ### Migration script
@@ -145,11 +152,11 @@ normalizes extended JSON, maps each collection to its rows, and writes a
 `dump.sql` of `INSERT` statements. The pure mapping lives in
 `packages/server/src/migrate/rows.ts`, the SQL emission in
 `packages/server/src/migrate/sql.ts`, and all three are unit-tested with small
-fixtures. A missing dump directory or a missing required collection
-(`player`, `pbf`, `chat`) fails the run with a non-zero exit and leaves the
-output untouched (`run.ts` validates before writing; the file is moved into
-place from a temporary only on success, so a typo can never produce an empty
-dump).
+fixtures. A missing dump directory or a missing required collection (`player`, `pbf`)
+fails the run with a non-zero exit and leaves the output untouched (`run.ts`
+validates before writing; the file is moved into place from a temporary only on
+success, so a typo can never produce an empty dump). `chat`, `gamelog` and
+`tournament` are not mapped at all.
 
 ## Review fixes (first review round)
 
@@ -165,6 +172,17 @@ dump).
 - **Skipped D1 tests.** The root `engines` is raised to Node `>=24`
   (`node:sqlite` without a flag) and the `describe.skip` guards are removed, so
   a broken D1 path fails the suite loudly instead of reporting green.
+
+## Scope reduction (owner decision, 2026-09-20)
+
+The owner confirmed the old games are unplayable and that only the account
+records and the old `pbf` games are wanted. The full `pbf` document is kept
+(after reconsidering): it is 876 cheap chunk rows and preserves the option of
+later statistics — most-researched tech, items, social policies — that the
+highscore columns alone could not answer. Dropped on purpose: the 87,756 old
+chat messages (`chat` remains for live chat), the 66,288 `gamelog` rows and the
+one `tournament` document. Total writes fall from 466,478 to roughly 2,000, so
+the free-tier daily row limit is no longer the constraint.
 
 ## Claimed paths
 
@@ -204,9 +222,10 @@ dump).
       suite still passes unchanged on the JSON repo.
 - [x] The migration maps the real dump; the resulting `dump.sql` loads into a
       fresh SQLite database with the dump's row counts — 554 players, 310 `pbf`
-      (plus 876 `pbf_doc` chunks), 87,756 chat, 66,288 `gamelog`, 1 tournament,
-      83 lobby messages, 247 finished pbf games — asserted locally with
-      `node:sqlite` and again against the remote D1 database.
+      (plus 876 `pbf_doc` chunks), 247 finished pbf games — and emits no rows
+      for the dropped `chat`/`gamelog`/`tournament`, asserted locally with
+      `node:sqlite`. The remote D1 is re-created and imported with the same
+      counts once the daily write limit resets.
 - [x] Every generated SQL statement is under D1's per-statement limit
       (longest 40,106 bytes).
 - [x] No `mongodb` import remains in `@civ/server` or the Worker bundle.
@@ -225,6 +244,7 @@ dump).
 
 ## Open questions
 
-- Cloudflare remote access is done: the remote schema is applied and the data
-  imported into D1 (database `playciv`, id `055e06d7-5d3b-4d4a-95aa-5d396c04b9bd`).
-  Local development remains on the JSON file.
+- Cloudflare remote access is done. The old `playciv` database is deleted and
+  re-created with only the migrated tables; the reduced `dump.sql` is imported
+  once the free-tier daily row-write limit resets (00:00 UTC). Local
+  development remains on the JSON file.

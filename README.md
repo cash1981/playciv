@@ -270,10 +270,12 @@ guarded statements or one `batch()`, which D1 runs atomically:
   race writes neither.
 - `claimEmailSlot` is one conditional upsert.
 
-Tables: `player`, `game`, `game_revision`, `chat` (`game_id IS NULL` is lobby),
-`email_sent`, `pbf` + `pbf_doc` (the old games, read-only: a highscore source
-plus an archival copy of each document, chunked because one document can exceed
-D1's ~100 KB per-statement limit), and `gamelog` + `tournament` (archival only).
+Tables: `player`, `game`, `game_revision`, `chat` (`game_id IS NULL` is lobby,
+live from now on), `email_sent`, and `pbf` + `pbf_doc` (the old games,
+read-only: a highscore source plus the full document, chunked because one
+document can exceed D1's ~100 KB per-statement limit, kept for future
+statistics such as the most-researched tech). The old `chat`, `gamelog` and
+`tournament` data is deliberately not migrated — the mongodump backup keeps it.
 
 `player.username_lower` stores the username folded with JavaScript's
 Unicode-aware `toLowerCase`, and that is the column the login lookup queries —
@@ -297,7 +299,7 @@ wrangler d1 execute playciv --remote --file=packages/server/dump.sql
 
 The script never touches a database; the mapping is pure and unit-tested, and
 each generated statement stays under D1's per-statement limit. A missing dump
-directory or a missing `player`/`pbf`/`chat` file fails the run and leaves any
+directory or a missing `player`/`pbf` file fails the run and leaves any
 previous output untouched — it never writes an empty dump. The old `pbf` games
 stay read-only — Java's `PBF` shape is nothing like our `GameState`, so they are
 not migrated to playable form, exactly as before.

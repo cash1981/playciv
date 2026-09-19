@@ -1039,3 +1039,27 @@ branch had not shipped yet, so all three belong in it rather than later.
 - The root `engines` moves to Node `>=24`, where `node:sqlite` needs no flag,
   and the `describe.skip` guards are removed. A broken D1 path now fails the
   suite loudly rather than reporting green on a runtime that skipped it.
+
+---
+
+## 2026-09-20 — Only the old data the app uses is migrated (issue #72)
+
+**Decision.** The MongoDB migration carries over the `player` accounts and the
+full `pbf` games, and nothing else. The old `chat` (87,756 messages), `gamelog`
+(66,288 rows) and `tournament` (1 document) data is dropped; the `chat` table
+stays for live chat. The D1 database was deleted and re-created for this.
+
+**Why.** The old games are not playable (2026-09-16 decision) and the owner
+confirmed nothing links into them; only the accounts and the highscore source
+have value. The full `pbf` document is kept — reconsidering an earlier
+"highscore fields only" plan — because it is cheap (876 chunk rows) and keeps
+the option of later statistics (most-researched tech, items, social policies)
+open without the mongodump. The old chat/gamelog add no product value and were
+what pushed the first import over D1's free-tier daily row-write limit (466,478
+rows written); the reduced import writes about 2,000.
+
+**Consequences.** The D1 database now holds about 554 players and 310 old games
+(plus their archived, chunked documents), not the full restored database; the
+mongodump backup remains the only source for the dropped collections.
+`gamelog`/`tournament` have no tables at all, and `chat` is not back-filled. The
+migration's required collections are `player` and `pbf`.

@@ -13,7 +13,7 @@ _Last updated: 2026-09-20_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 411 engine, 137 server, 46 web |
+| `pnpm -r test` | passing - 411 engine, 137 server, 46 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
@@ -53,16 +53,17 @@ _Last updated: 2026-09-20_
   `pnpm dev` runs the Node server against the JSON file. See `decisions.md`.
 - **Storage is Cloudflare D1 (issue #72).** `D1Repository` implements
   `Repository` over the Worker's `DB` binding; MongoDB Atlas, the `mongodb`
-  driver, `render.yaml` and the Render proxy are gone. The restored `playciv`
-  export was migrated (554 players, 310 old `pbf` games, 87,756 chat, 66,288
-  `gamelog`, 1 tournament; 64 MB) and verified by count against the export.
-  Local dev keeps the JSON file; `D1Repository` is tested through a
-  `node:sqlite` adapter, and the root requires Node 24+. First review round
-  fixed Unicode username lookup (`0002_username_lower.sql`), made the migration
-  fail on a wrong `--dump` instead of writing an empty file, and stopped the D1
-  tests from skipping themselves. The remote D1 still needs
-  `wrangler d1 migrations apply playciv --remote` to apply `0002`. See
-  `tasks/issue-72-d1.md`.
+  driver, `render.yaml` and the Render proxy are gone. Only the data the app
+  uses is migrated: 554 `player` accounts and 310 old `pbf` games (full
+  documents archived chunked), 247 with a winner. The old `chat` (87,756),
+  `gamelog` (66,288) and `tournament` data is dropped — the mongodump backup
+  keeps it. The D1 database was deleted and re-created for this; the reduced
+  import (~2,000 rows) runs once the daily write limit resets. Local dev keeps
+  the JSON file; `D1Repository` is tested through a `node:sqlite` adapter, and
+  the root requires Node 24+. First review round fixed Unicode username lookup
+  (`0002_username_lower.sql`), made the migration fail on a wrong `--dump`
+  instead of writing an empty file, and stopped the D1 tests from skipping
+  themselves. See `tasks/issue-72-d1.md`.
 - **Client.** React and Vite: login, game list, game page, hand, draws, battle,
   techs, turn orders, log, undo votes, chat.
 - **Issues #54 and #56.** Game and lobby chat show local log-format timestamps;
