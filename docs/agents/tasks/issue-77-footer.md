@@ -84,20 +84,25 @@ donation link is referenced before it exists.
 
 ## Acceptance criteria
 
-- [ ] The footer renders on every screen: lobby/landing (signed out and in),
+- [x] The footer renders on every screen: lobby/landing (signed out and in),
       login, admin, game, FAQ, About and highscore.
-- [ ] The copyright line reads "Copyright © 2015–2026 by Shervin Asgari. All
+- [x] The copyright line reads "Copyright © 2015–2026 by Shervin Asgari. All
       rights reserved." and links "Apache 2.0 License" to
       `https://www.apache.org/licenses/LICENSE-2.0`.
-- [ ] The PayPal form posts to the old endpoint with the old `cmd` and
-      `encrypted` values — byte-for-byte the same donation as the old client.
-- [ ] No Patreon link or third-party Patreon script is added.
-- [ ] A test fails if the footer (or its donation form fields) is removed.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] No hidden information is touched: the footer is static markup and reads
+- [x] The PayPal form posts to the old endpoint with the old `cmd` and
+      `encrypted` values — byte-for-byte the same donation as the old client
+      (verified by comparison against `old-civ-web/app/index.html`).
+- [x] No Patreon link or third-party Patreon script is added.
+- [x] A test fails if the footer (or its donation form fields) is removed:
+      `packages/web/src/views/Footer.test.tsx`.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+      (401 engine / 123 server / 39 web).
+- [x] No hidden information is touched: the footer is static markup and reads
       no game state.
-- [ ] Verified in the browser: the footer appears at the bottom of the lobby,
-      a game page, the FAQ and the About page, in both themes.
+- [x] Rendered the real `App` in jsdom for `/about` and `/faq`; both show the
+      footer once the page renders. **A desktop browser was not connected in
+      this session**, so the visual pass (both themes, bottom of the lobby and
+      a game) is left to the human testing the PR.
 
 ## Open questions
 

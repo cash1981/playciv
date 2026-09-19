@@ -118,6 +118,9 @@ voting and chat.
 The client imports its types from `@civ/engine`, so it cannot drift out of step
 with what the server actually sends.
 
+Every page also carries the old site-wide footer: the copyright line, the
+Apache 2.0 license link and the PayPal donate button (issue #77).
+
 ## The board
 
 At the top of the game page sits an interactive board that replaces the Google
@@ -462,6 +465,13 @@ corrected on purpose:
 The new-game broadcast to every account is kept but behind
 `MAIL_BROADCAST_NEW_GAMES`, off by default. Sends are bounded by a five-second
 timeout so a slow provider cannot hold up an already-committed game action. See
+`docs/agents/decisions.md`.
+
+**The footer is PayPal only.** Issue #77 restored the old site-wide footer — the
+copyright line, the Apache 2.0 link and the exact encrypted PayPal hosted button
+from `old-civ-web`, on every page. The old footer also carried a Patreon button
+and its `becomePatronButton.bundle.js` script; those are dropped on purpose (the
+owner's decision), so no Patreon code runs on the page. See
 `docs/agents/decisions.md`.
 
 ## Deferred

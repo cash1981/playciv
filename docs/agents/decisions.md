@@ -847,3 +847,34 @@ behaviours were bugs that the message text itself contradicted.
 - Still open in production: `RESEND_API_KEY` and `MAIL_FROM` must be set on the
   host that runs `packages/server`, and the from-domain must be verified in
   Resend. Cloudflare alone proves nothing until the API itself moves there.
+
+---
+
+## 2026-09-19 — Site-wide footer: copyright, license and PayPal (issue #77)
+
+**Decision.** The client carries the old site-wide footer again: the copyright
+line, the Apache 2.0 license link and the old PayPal donate button, rendered
+under every screen the app shell can show.
+
+**Why.** Issue #77 — "Look at the old frontend and add copyright / apache
+license and donation footer on all pages". The old AngularJS footer sat outside
+`ng-view`, so it appeared on every route; the rewrite had dropped it, even
+though the game-ended email already tells players the donation link is "at the
+bottom of the site" (`packages/server/src/notifications.ts`). The React app has
+no `ng-view`, so the footer is one component that `App.tsx` renders in each of
+its branches.
+
+**Consequences.**
+- The PayPal form is the old **encrypted hosted button** (`cmd=_s-xclick` plus
+  the PKCS7 `encrypted` value), copied byte-for-byte from
+  `old-civ-web/app/index.html`. The human chose reusing it over a new donate
+  integration, so the donation still reaches the same account.
+- **Patreon is not ported.** The old footer also carried a "Become a Patron!"
+  link and Patreon's `becomePatronButton.bundle.js`. The human chose PayPal
+  only, so neither the link nor the third-party script comes across. This is
+  the deliberate difference from the old footer.
+- The copyright line is `2015–2026` (the human's choice) instead of the old
+  `2015–2021`; the wording is otherwise the old one and the license link is the
+  same Apache 2.0 URL the About page already uses.
+- Bootstrap's `pull-right` is not available here; the footer is its own flex
+  row so both the light and dark themes lay it out.

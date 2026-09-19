@@ -173,6 +173,34 @@ label > textarea {
   padding: 1rem;
 }
 
+/* --- Site footer (issue #77) ----------------------------------------------
+   Copyright, license and the old PayPal donate button, on every page. The old
+   AngularJS footer floated the form with Bootstrap's `pull-right`; here the
+   footer itself is the flex row. */
+
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.site-footer-legal {
+  margin: 0;
+}
+
+.site-footer-donate {
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
 .topbar {
   display: flex;
   align-items: center;
