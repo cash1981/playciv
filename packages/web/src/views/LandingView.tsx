@@ -78,7 +78,18 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
               const alreadyJoined = player !== null && game.youAreIn
               return (
                 <li key={game.id}>
-                  <strong>{game.name}</strong>
+                  <a
+                    href={`/game/${encodeURIComponent(game.id)}`}
+                    onClick={(event) => {
+                      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                        return
+                      }
+                      event.preventDefault()
+                      onOpenGame(game.id)
+                    }}
+                  >
+                    <strong>{game.name}</strong>
+                  </a>
                   <span className="muted">
                     {game.players.length}/{game.numOfPlayers}
                   </span>

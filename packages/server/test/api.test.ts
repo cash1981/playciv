@@ -387,6 +387,65 @@ describe('games', () => {
     expect(third.status).toBe(400)
     expect((await third.json() as { error: string }).error).toBe('GAME_IS_FULL')
   })
+
+  /**
+   * A withdrawn player is no longer `hasUserAccess` (issue #79's bug report):
+   * they should still be able to look at the game and its history afterwards,
+   * the same read-only way any other non-member can (issue #81), rather than
+   * getting a 403 from routes that used to require membership.
+   */
+  it('lets a withdrawn player keep viewing the game, read-only', async () => {
+    const creator = await register('withdraw-owner')
+    const gameId = await createGame(creator, 'Withdraw and watch', 2)
+    const leaver = await register('withdraw-leaver')
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/join`,
+      headers: bearer(leaver),
+      payload: {},
+    })
+
+    const withdrawn = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/withdraw`,
+      headers: bearer(leaver),
+      payload: {},
+    })
+    expect(withdrawn.status).toBe(200)
+
+    for (const url of [
+      `/api/games/${gameId}`,
+      `/api/games/${gameId}/revisions`,
+    ]) {
+      const response = await inject(app, { url, headers: bearer(leaver) })
+      expect(response.status).toBe(200)
+    }
+    const view = await (await inject(app, {
+      url: `/api/games/${gameId}`,
+      headers: bearer(leaver),
+    })).json() as { you: unknown }
+    expect(view.you).toBeNull()
+  })
+
+  /** issue #81: watching a game needs no account at all. */
+  it('lets an anonymous visitor read a game and its history, but not act on it', async () => {
+    const creator = await register('spectate-owner')
+    const gameId = await createGame(creator, 'Spectate me', 2)
+
+    const game = await inject(app, { url: `/api/games/${gameId}` })
+    expect(game.status).toBe(200)
+    expect((await game.json() as { you: unknown }).you).toBeNull()
+
+    const revisions = await inject(app, { url: `/api/games/${gameId}/revisions` })
+    expect(revisions.status).toBe(200)
+
+    const withdraw = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/withdraw`,
+      payload: {},
+    })
+    expect(withdraw.status).toBe(401)
+  })
 })
 
 describe('draws', () => {
@@ -826,13 +885,21 @@ describe('global game revisions', () => {
     expect(opaqueOwner).not.toHaveProperty('techsChosen')
     expect(opaqueOwner).not.toHaveProperty('socialPolicies')
 
+    // A non-member is a spectator, not an intruder (issue #81): the routes
+    // answer 200, projected the same way an opponent's view already is above.
     for (const url of [
       `/api/games/${gameId}/revisions`,
       `/api/games/${gameId}/revisions/${latest}`,
     ]) {
-      const forbidden = await inject(app, { url, headers: bearer(outsider) })
-      expect(forbidden.status).toBe(403)
+      const spectator = await inject(app, { url, headers: bearer(outsider) })
+      expect(spectator.status).toBe(200)
+      expect(spectator.body).not.toContain(secretCard?.id as string)
+      expect(spectator.body).not.toContain(secretLog as string)
     }
+    const anonymous = await inject(app, { url: `/api/games/${gameId}/revisions/${latest}` })
+    expect(anonymous.status).toBe(200)
+    const anonymousPayload = await anonymous.json<{ view: { you: unknown } }>()
+    expect(anonymousPayload.view.you).toBeNull()
   })
 
   it('creates a reliable baseline for an older game and deletes revisions with the game', async () => {

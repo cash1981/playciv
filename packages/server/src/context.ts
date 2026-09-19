@@ -47,6 +47,29 @@ export function authenticateWith(context: AppContext) {
   })
 }
 
+/**
+ * Like `authenticateWith`, but a missing, invalid or expired token is not an
+ * error — the route runs either way, with `currentPlayer` unavailable. For
+ * routes that project a `PlayerView`-shaped response, an absent viewer works
+ * the same way a non-member viewer already does: `toPlayerView` returns
+ * `you: null` and only public data (issue #81 — read-only viewing).
+ */
+export function authenticateOptionallyWith(context: AppContext) {
+  return createMiddleware<{ Variables: Variables }>(async (c, next) => {
+    const header = c.req.header('authorization')
+    if (header !== undefined && header.startsWith('Bearer ')) {
+      const payload = context.tokens.verify(header.slice('Bearer '.length))
+      if (payload !== undefined) {
+        const player = await context.repo.findPlayerById(payload.playerId)
+        if (player !== undefined && player.disabled !== true) {
+          c.set('player', player)
+        }
+      }
+    }
+    await next()
+  })
+}
+
 /** Requires a valid, currently enabled account with the persisted admin role. */
 export function requireAdminWith(context: AppContext) {
   const authenticate = authenticateWith(context)
@@ -87,7 +110,7 @@ export function stampLog(state: GameState, now: string): GameState {
 export function createGameRevision(
   before: GameState | undefined,
   state: GameState,
-  actor: StoredPlayer,
+  actor: Pick<StoredPlayer, 'id' | 'username'>,
   createdAt: string,
   fallbackDescription: string,
 ): GameRevision {

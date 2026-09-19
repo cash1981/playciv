@@ -27,9 +27,11 @@ import { CollapsiblePanel } from './CollapsiblePanel.js'
 
 interface Props {
   readonly gameId: string
-  readonly player: PlayerDto
+  /** `null` for a spectator watching without an account (issue #81). */
+  readonly player: PlayerDto | null
   readonly onUnauthorized: () => void
   readonly onDeleted: () => void
+  readonly onWithdrawn: () => void
 }
 
 /** What can be drawn. Techs are chosen, so they are not listed here. */
@@ -81,7 +83,7 @@ export async function loadHistoricalIfCurrent(
   return isCurrent() ? revision : null
 }
 
-export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): React.JSX.Element {
+export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdrawn }: Props): React.JSX.Element {
   const [view, setView] = useState<PlayerView | null>(null)
   const [revisions, setRevisions] = useState<readonly GameRevisionSummary[]>([])
   const [selectedRevision, setSelectedRevision] = useState<number | null>(null)
@@ -251,21 +253,40 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         </div>
 
         <div className="row" style={{ marginTop: '0.6rem' }}>
-          <button disabled={interactionBusy || !yourTurn} onClick={() => void run(() => api.endTurn(gameId))}>
-            End turn
-          </button>
-          <button disabled={interactionBusy || yourTurn} onClick={() => void run(() => api.takeTurn(gameId))}>
-            Take the turn
-          </button>
+          {you !== null && (
+            <>
+              <button disabled={interactionBusy || !yourTurn} onClick={() => void run(() => api.endTurn(gameId))}>
+                End turn
+              </button>
+              <button disabled={interactionBusy || yourTurn} onClick={() => void run(() => api.takeTurn(gameId))}>
+                Take the turn
+              </button>
+            </>
+          )}
+          {you === null && <span className="muted">Watching (not a player)</span>}
           <span style={{ flex: 1 }} />
-          <button
-            className="danger"
-            disabled={interactionBusy || !displayedView.active}
-            onClick={() => void run(() => api.withdraw(gameId))}
-          >
-            Withdraw
-          </button>
-          {(you?.gameCreator === true || player.role === 'admin') && (
+          {you !== null && (
+            <button
+              className="danger"
+              disabled={interactionBusy || !displayedView.active}
+              onClick={() => {
+                if (!window.confirm('Withdraw from this game?')) return
+                setBusy(true)
+                setError(null)
+                void api.withdraw(gameId).then(
+                  () => onWithdrawn(),
+                  (caught: unknown) => {
+                    if (isUnauthorized(caught)) return onUnauthorized()
+                    setError(errorMessage(caught))
+                    setBusy(false)
+                  },
+                )
+              }}
+            >
+              Withdraw
+            </button>
+          )}
+          {(you?.gameCreator === true || player?.role === 'admin') && (
             <button
               className="danger"
               disabled={interactionBusy}
@@ -330,13 +351,15 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
           reloadCount={reloadCount}
           historical={historical}
         />
-        <ChatPanel
-          gameId={gameId}
-          busy={busy}
-          run={run}
-          player={player}
-          reloadCount={reloadCount}
-        />
+        {player !== null && (
+          <ChatPanel
+            gameId={gameId}
+            busy={busy}
+            run={run}
+            player={player}
+            reloadCount={reloadCount}
+          />
+        )}
       </div>
     </>
   )

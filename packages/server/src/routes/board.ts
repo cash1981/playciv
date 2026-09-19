@@ -24,6 +24,7 @@ import type { AppContext } from '../context.js'
 import {
   applyToGame,
   asRecord,
+  authenticateOptionallyWith,
   authenticateWith,
   currentPlayer,
   optionalNumber,
@@ -36,16 +37,18 @@ const ROTATIONS = [0, 90, 180, 270]
 
 export function registerBoardRoutes(app: App, context: AppContext): void {
   const auth = authenticateWith(context)
+  const optionalAuth = authenticateOptionallyWith(context)
 
   const now = (): string => new Date().toISOString()
 
   /**
    * The catalogue of piece types. The client builds its palette from this so it
-   * never has to know the file names on disk.
+   * never has to know the file names on disk. Not game-specific and not
+   * secret, so a spectator's board view (issue #81) can load it too.
    */
-  app.get('/api/board/assets', auth, async (c) => c.json(BOARD_ASSETS))
+  app.get('/api/board/assets', optionalAuth, async (c) => c.json(BOARD_ASSETS))
 
-  app.get('/api/games/:gameId/board', auth, async (c) => {
+  app.get('/api/games/:gameId/board', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     return readGame(context, c, gameId, (state) => state.board)
   })

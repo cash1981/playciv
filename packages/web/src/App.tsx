@@ -188,6 +188,23 @@ export function App(): React.JSX.Element {
     )
   }
 
+  // A game is public too: watching one needs no account (issue #81). Signed-in
+  // members simply see more of it, via `PlayerView.you`.
+  if (screen.name === 'game') {
+    return (
+      <div className="app">
+        <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
+        <GameView
+          gameId={screen.gameId}
+          player={player}
+          onUnauthorized={signOut}
+          onDeleted={backToGames}
+          onWithdrawn={backToGames}
+        />
+      </div>
+    )
+  }
+
   if (player === null) {
     if (showLogin) {
       return (
@@ -215,21 +232,10 @@ export function App(): React.JSX.Element {
     <div className="app">
       <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
 
-      {screen.name === 'lobby' ? (
-        <LandingView player={player} onOpenGame={openGame} onSignIn={signOut} />
-      ) : screen.name === 'admin' ? (
-        player.role === 'admin' ? (
-          <AdminView player={player} onUnauthorized={signOut} onBack={backToGames} />
-        ) : (
-          <LandingView player={player} onOpenGame={openGame} onSignIn={signOut} />
-        )
+      {screen.name === 'admin' && player.role === 'admin' ? (
+        <AdminView player={player} onUnauthorized={signOut} onBack={backToGames} />
       ) : (
-        <GameView
-          gameId={screen.gameId}
-          player={player}
-          onUnauthorized={signOut}
-          onDeleted={backToGames}
-        />
+        <LandingView player={player} onOpenGame={openGame} onSignIn={signOut} />
       )}
     </div>
   )
