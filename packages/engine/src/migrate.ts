@@ -6,7 +6,7 @@
  * explicitly, and every storage implementation calls this when it reads a game.
  */
 
-import type { ArenaUnit } from './battle.js'
+import type { ArenaUnit, Battle } from './battle.js'
 import type { Board, BoardHistoryEntry, BoardPiece } from './board.js'
 import { createBoard } from './board.js'
 import type { GameState, Playerhand } from './state.js'
@@ -34,6 +34,9 @@ type MaybeOlderBoard = Omit<Board, 'areaRows' | 'history'> &
 /** An arena unit from before rotation or the undoable kill (issue #71) existed. */
 type MaybeOlderArenaUnit = Omit<ArenaUnit, 'rotation' | 'killed'> &
   Partial<Pick<ArenaUnit, 'rotation' | 'killed'>>
+
+/** A battle from before reinforcement tracked what it displaced (issue #75). */
+type MaybeOlderBattle = Omit<Battle, 'departedUnits'> & Partial<Pick<Battle, 'departedUnits'>>
 
 /**
  * Turns pieces that predate the history into one entry each.
@@ -65,6 +68,7 @@ export function migrateGameState(state: GameState): GameState {
   const older = state as MaybeOlder
   const fresh = createBoard()
   const board = older.board as MaybeOlderBoard | undefined
+  const battle = older.battle as MaybeOlderBattle | null | undefined
 
   // A game saved before `wondersDealt` existed is treated as having dealt if the
   // setup is complete or a wonder already exists anywhere (an old game put drawn
@@ -95,17 +99,18 @@ export function migrateGameState(state: GameState): GameState {
     publicTurns: older.publicTurns ?? {},
     wondersDealt: older.wondersDealt ?? (hasWonder || setupComplete),
     battle:
-      older.battle === null || older.battle === undefined
+      battle === null || battle === undefined
         ? null
         : {
-            ...older.battle,
-            arena: older.battle.arena.map(
+            ...battle,
+            arena: battle.arena.map(
               (unit: MaybeOlderArenaUnit): ArenaUnit => ({
                 ...unit,
                 rotation: unit.rotation ?? 0,
                 killed: unit.killed ?? false,
               }),
             ),
+            departedUnits: battle.departedUnits ?? [],
           },
     rev: older.rev ?? 0,
   }

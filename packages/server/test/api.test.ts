@@ -1104,6 +1104,7 @@ describe('arena place and rotate', () => {
     })
     expect(reinforced.status).toBe(200)
     const reinforcedView = await reinforced.json() as {
+      rev: number
       battle: { arena: { id: string; unit: { id: string }; killed: boolean; position: number }[] }
       you: { battlehand: { id: string; inBattle: boolean }[]; items: { id: string; inBattle?: boolean }[] }
     }
@@ -1114,10 +1115,24 @@ describe('arena place and rotate', () => {
     expect(reinforcedView.battle.arena[0]!.position).toBe(0)
     expect(reinforcedView.battle.arena[0]!.killed).toBe(false)
 
-    // The fallen card returns to hand, available — killing never
-    // auto-discards (issue #75); the player discards it themselves.
-    expect(reinforcedView.you.battlehand.find((u) => u.id === fallen!.id)?.inBattle).toBe(false)
-    expect(reinforcedView.you.items.find((u) => u.id === fallen!.id)?.inBattle).toBe(false)
+    // The fallen card stays locked (not discarded, not yet back in hand)
+    // for the rest of the battle — reinforcing a front does not free up
+    // what it displaces (issue #75's chosen design).
+    expect(reinforcedView.you.battlehand.find((u) => u.id === fallen!.id)?.inBattle).toBe(true)
+    expect(reinforcedView.you.items.find((u) => u.id === fallen!.id)?.inBattle).toBe(true)
+
+    // Ending the battle finally frees it, same as any other unit.
+    const ended = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end`,
+      headers: bearer(starter),
+      payload: { rev: reinforcedView.rev },
+    })
+    expect(ended.status).toBe(200)
+    const endedView = await ended.json() as {
+      you: { battlehand: { id: string; inBattle: boolean }[] }
+    }
+    expect(endedView.you.battlehand.find((u) => u.id === fallen!.id)?.inBattle).toBe(false)
   })
 })
 

@@ -180,7 +180,7 @@ describe('placeUnitInArena', () => {
     expect(error.kind).toBe('ARENA_POSITION_OCCUPIED')
   })
 
-  it('lets a new unit reinforce a front still held by a killed one, returning that card to hand', () => {
+  it('lets a new unit reinforce a front still held by a killed one, keeping that card locked until battle end', () => {
     let state = withBattlehand(CASH1981, 2)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
 
@@ -210,21 +210,26 @@ describe('placeUnitInArena', () => {
       }),
     )
 
-    // The fallen unit is gone, replaced by the reinforcement — one live unit
-    // on that front, not two.
+    // The fallen unit is gone from the visible arena, replaced by the
+    // reinforcement — one live unit on that front, not two.
     expect(state.battle!.arena).toHaveLength(1)
     expect(state.battle!.arena[0]!.unit.id).toBe(reinforcement!.id)
     expect(state.battle!.arena[0]!.killed).toBe(false)
 
-    // The fallen unit's card returns to hand, available like any other —
-    // killing never auto-discards (issue #75); the player discards it
-    // themselves if they want it gone.
-    const updated = findPlayer(state, CASH1981)!
-    const fallenInHand = updated.battlehand.find((u) => u.id === fallen!.id)
-    expect(fallenInHand?.inBattle).toBe(false)
-    const fallenInItems = updated.items.find((it) => it.id === fallen!.id)
-    expect((fallenInItems as { inBattle?: boolean } | undefined)?.inBattle).toBe(false)
+    // But its card is not available yet — reinforcing a front does not free
+    // up whatever it displaces mid-battle (issue #75's chosen design): the
+    // fallen unit moves to departedUnits, inBattle still true, and only
+    // returns to hand once the whole battle ends.
+    expect(state.battle!.departedUnits).toHaveLength(1)
+    expect(state.battle!.departedUnits[0]!.unit.id).toBe(fallen!.id)
+    const stillLocked = findPlayer(state, CASH1981)!.battlehand.find((u) => u.id === fallen!.id)
+    expect(stillLocked?.inBattle).toBe(true)
     expect(state.discardedItems.some((it) => it.id === fallen!.id)).toBe(false)
+
+    // Ending the battle finally frees it, same as any other unit.
+    state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    const freed = findPlayer(state, CASH1981)!.battlehand.find((u) => u.id === fallen!.id)
+    expect(freed?.inBattle).toBe(false)
   })
 })
 
@@ -363,7 +368,7 @@ describe('moveArenaUnit', () => {
     expect(error.kind).toBe('NOT_IN_THIS_BATTLE')
   })
 
-  it('reinforces a front held by a killed unit when moved onto it, finalizing the kill', () => {
+  it('reinforces a front held by a killed unit when moved onto it, keeping that card locked until battle end', () => {
     let state = withBattlehand(CASH1981, 2)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
 
@@ -398,10 +403,18 @@ describe('moveArenaUnit', () => {
     expect(state.battle!.arena).toHaveLength(1)
     expect(state.battle!.arena[0]!.unit.id).toBe(mover!.id)
     expect(state.battle!.arena[0]!.position).toBe(0)
-    // The fallen unit's card returns to hand, not discarded (issue #75).
+
+    // The fallen unit moves to departedUnits, still locked (not discarded,
+    // not yet returned to hand) until the battle ends (issue #75).
+    expect(state.battle!.departedUnits).toHaveLength(1)
+    expect(state.battle!.departedUnits[0]!.unit.id).toBe(fallen!.id)
     expect(state.discardedItems.some((it) => it.id === fallen!.id)).toBe(false)
-    const fallenInHand = findPlayer(state, CASH1981)!.battlehand.find((u) => u.id === fallen!.id)
-    expect(fallenInHand?.inBattle).toBe(false)
+    const updated = findPlayer(state, CASH1981)!
+    expect(updated.battlehand.find((u) => u.id === fallen!.id)?.inBattle).toBe(true)
+
+    state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    const freed = findPlayer(state, CASH1981)!.battlehand.find((u) => u.id === fallen!.id)
+    expect(freed?.inBattle).toBe(false)
   })
 })
 
@@ -932,6 +945,20 @@ describe('rotateArenaUnit', () => {
 
     const migrated = migrateGameState(older as unknown as GameState)
     expect(migrated.battle!.arena[0]!.killed).toBe(false)
+  })
+
+  it('migrating a saved battle backfills departedUnits: [] when missing', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    // Simulate a game saved before reinforcement tracked what it displaced
+    // (issue #75).
+    const olderBattle = state.battle as unknown as Record<string, unknown>
+    delete olderBattle['departedUnits']
+    const older = { ...state, battle: olderBattle }
+
+    const migrated = migrateGameState(older as unknown as GameState)
+    expect(migrated.battle!.departedUnits).toEqual([])
   })
 })
 

@@ -198,6 +198,7 @@ export function initiateBattle(
         defender: { kind: 'barbarians', playerId: left.playerId },
         turn: 'defender',
         arena: [],
+        departedUnits: [],
       },
     })
   }
@@ -225,6 +226,7 @@ export function initiateBattle(
       defender: { kind: 'player', playerId: input.opponentId },
       turn: 'defender',
       arena: [],
+      departedUnits: [],
     },
   })
 }
@@ -329,14 +331,16 @@ export function placeUnitInArena(
     nextState = withPlayer(state, { ...player, battlehand: updatedBattlehand, items: updatedItems })
   }
 
-  // Reinforcing a front: whatever it displaces returns to hand right away,
-  // the same as it would once the whole battle ends — there is no longer an
-  // arena slot for a kill toggle on it to act on either way.
+  // Reinforcing a front does not free up whatever it displaces — its card
+  // stays inBattle (unavailable) for the rest of this battle, exactly as if
+  // it were still standing. It moves to `departedUnits`, off the visible
+  // arena, and only actually returns to hand once the whole battle ends
+  // (issue #75), same as every other unit.
   let arena = battle.arena
+  let departedUnits = battle.departedUnits
   if (fallenUnit !== undefined) {
-    const fallenOwnerSide = fallenUnit.side === 'attacker' ? battle.attacker : battle.defender
-    nextState = returnArenaUnitCardToHand(nextState, fallenUnit, fallenOwnerSide)
     arena = arena.filter((u) => u.id !== fallenUnit.id)
+    departedUnits = [...departedUnits, fallenUnit]
   }
 
   // Create the arena unit
@@ -367,6 +371,7 @@ export function placeUnitInArena(
     battle: {
       ...battle,
       arena: [...arena, arenaUnit],
+      departedUnits,
     },
   })
 }
@@ -414,8 +419,9 @@ export function moveArenaUnit(
     (u) => u.id !== unit.id && u.side === unit.side && u.position === input.position,
   )
   // Same rule as placeUnitInArena: a killed unit does not hold its front
-  // open, so moving a unit onto it reinforces it (returning it to hand)
-  // rather than being blocked (issue #74).
+  // open, so moving a unit onto it reinforces it rather than being blocked
+  // (issue #74). Reinforcing does not free up the card it displaces — see
+  // the matching comment in placeUnitInArena.
   if (atTarget.some((u) => !u.killed)) {
     return err({ kind: 'ARENA_POSITION_OCCUPIED' })
   }
@@ -424,7 +430,7 @@ export function moveArenaUnit(
   const updatedUnit: ArenaUnit = { ...unit, position: input.position }
 
   const movePrefix = `${player.username} moves ${revealAll(unit.unit)} to`
-  let nextState = appendRollingArenaLog(
+  const nextState = appendRollingArenaLog(
     state,
     player.username,
     player.playerId,
@@ -433,10 +439,10 @@ export function moveArenaUnit(
   )
 
   let arena = battle.arena
+  let departedUnits = battle.departedUnits
   if (fallenUnit !== undefined) {
-    const fallenOwnerSide = fallenUnit.side === 'attacker' ? battle.attacker : battle.defender
-    nextState = returnArenaUnitCardToHand(nextState, fallenUnit, fallenOwnerSide)
     arena = arena.filter((u) => u.id !== fallenUnit.id)
+    departedUnits = [...departedUnits, fallenUnit]
   }
 
   return ok({
@@ -444,6 +450,7 @@ export function moveArenaUnit(
     battle: {
       ...battle,
       arena: arena.map((u) => (u.id === input.arenaUnitId ? updatedUnit : u)),
+      departedUnits,
     },
   })
 }
@@ -660,11 +667,13 @@ export interface KillArenaUnitInput {
 /**
  * Toggles `killed` on an arena unit (issue #71) rather than removing it
  * outright — a kill can be regretted, so it stays undoable (call this again)
- * right up until the battle ends. Nothing about the source card changes here;
- * `endBattleAction` is what actually discards a still-killed unit's card when
- * the battle closes. Still participant-only (issue #65's guard stands) —
- * being undoable lowers the risk, but deciding who is alive stays with the
- * two combatants.
+ * right up until its front is reinforced or the battle ends, whichever
+ * comes first (issue #74). Nothing about the source card changes here; when
+ * the unit does leave the arena, its card returns to hand exactly like an
+ * unkilled unit's — killing never auto-discards (issue #75), the player
+ * discards it themselves. Still participant-only (issue #65's guard
+ * stands) — being undoable lowers the risk, but deciding who is alive
+ * stays with the two combatants.
  */
 export function killArenaUnit(
   state: GameState,
@@ -813,9 +822,12 @@ export function endBattleAction(
 
   // Every arena unit's source card returns to the hand's "available" state,
   // killed or not — killing was never meant to auto-discard (issue #75); the
-  // player discards a killed unit themselves, same as any other card.
+  // player discards a killed unit themselves, same as any other card. This
+  // includes `departedUnits` (issue #74's reinforced-away units): their
+  // cards stayed locked for the rest of the battle, and this is the moment
+  // they finally free up too.
   let nextState = state
-  for (const arenaUnit of battle.arena) {
+  for (const arenaUnit of [...battle.arena, ...battle.departedUnits]) {
     const ownerSide =
       arenaUnit.side === 'attacker' ? battle.attacker : battle.defender
     nextState = returnArenaUnitCardToHand(nextState, arenaUnit, ownerSide)

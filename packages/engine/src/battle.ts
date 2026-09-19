@@ -91,6 +91,15 @@ export interface Battle {
    */
   readonly turn: BattleSideId
   readonly arena: readonly ArenaUnit[]
+  /**
+   * Units reinforced away from their front (issue #74) while the battle is
+   * still going. Their source card stays `inBattle` — unavailable — for the
+   * rest of the battle, exactly as if they were still standing; it only
+   * returns to hand when the battle actually ends (issue #75), the same
+   * moment every other arena unit's card does. Never rendered: once
+   * reinforced, a unit is gone from the visible arena for good.
+   */
+  readonly departedUnits: readonly ArenaUnit[]
 }
 
 /** Derived totals per side — computed in `toPlayerView`, never stored. */
