@@ -242,6 +242,11 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       null,
     )
     if (!saved) return sendError(c, 409, 'CONFLICT', 'Game id already exists')
+    // Java ran this in a raw thread so it never delayed the response, and it can
+    // reach every account when enabled — keep it off the request path.
+    void context.notifications
+      .gameCreated(stamped)
+      .catch((error) => console.error('New-game broadcast failed', error))
     return c.json(toSummary(stamped, me.id), 201)
   })
 
@@ -307,13 +312,19 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     const color = optionalString(asRecord(await c.req.json().catch(() => ({}))), 'color')
     const me = currentPlayer(c)
 
-    return applyToGame(context, c, gameId, (state) =>
-      joinGame(state, {
-        playerId: me.id,
-        username: me.username,
-        ...(me.email !== null ? { email: me.email } : {}),
-        ...(color !== undefined ? { color } : {}),
-      }),
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) =>
+        joinGame(state, {
+          playerId: me.id,
+          username: me.username,
+          ...(me.email !== null ? { email: me.email } : {}),
+          ...(color !== undefined ? { color } : {}),
+        }),
+      undefined,
+      { after: ({ after }) => context.notifications.playerJoined(after, me.id) },
     )
   })
 
@@ -327,14 +338,20 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     const winner = optionalString(asRecord(await c.req.json().catch(() => ({}))), 'winner')
     const me = currentPlayer(c)
 
-    return applyToGame(context, c, gameId, (state) =>
-      endGame(state, {
-        playerId: me.id,
-        // The engine still carries Java's username-shaped admin escape hatch;
-        // authorization is decided here from the persisted role.
-        username: me.role === 'admin' ? 'admin' : me.username,
-        ...(winner !== undefined ? { winner } : {}),
-      }),
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) =>
+        endGame(state, {
+          playerId: me.id,
+          // The engine still carries Java's username-shaped admin escape hatch;
+          // authorization is decided here from the persisted role.
+          username: me.role === 'admin' ? 'admin' : me.username,
+          ...(winner !== undefined ? { winner } : {}),
+        }),
+      undefined,
+      { after: ({ after }) => context.notifications.gameEnded(after) },
     )
   })
 
@@ -357,6 +374,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     if (!deleted) {
       return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
     }
+    await context.notifications.gameDeleted(game)
     return c.body(null, 204)
   })
 
@@ -460,6 +478,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       createdAt: new Date().toISOString(),
     }
     await context.repo.appendChat(entry)
+    await context.notifications.chatPosted(game, me.username, message)
     return c.json(entry, 201)
   })
 

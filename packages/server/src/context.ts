@@ -10,11 +10,15 @@ import { createMiddleware } from 'hono/factory'
 
 import type { TokenSigner } from './auth.js'
 import { sendEngineError, sendError } from './errors.js'
+import type { Notifications } from './notifications.js'
 import type { GameRevision, Repository, StoredPlayer } from './store/types.js'
 
 export interface AppContext {
   readonly repo: Repository
   readonly tokens: TokenSigner
+  readonly notifications: Notifications
+  /** Absolute base URL of the web app, used in email links. */
+  readonly appOrigin: string
 }
 
 /** The Hono context variables set once `authenticate` has run. */
@@ -191,14 +195,30 @@ export async function requireMembership(
  * same object simultaneously (most relevant to the battle arena).
  *
  * `rev` is always incremented on every successful write.
+ *
+ * `options.after` runs once the write has been committed. It exists for
+ * best-effort side effects such as email notifications: it is awaited, but a
+ * throw from it is logged and swallowed so a mail problem can never turn a
+ * successful game action into a failed request.
  */
+export interface ApplyToGameInfo {
+  readonly before: GameState
+  readonly after: GameState
+}
+
+export interface ApplyToGameOptions {
+  readonly record?: boolean
+  readonly description?: string
+  readonly after?: (info: ApplyToGameInfo) => Promise<void> | void
+}
+
 export async function applyToGame(
   context: AppContext,
   c: Context<{ Variables: Variables }>,
   gameId: string,
   action: (state: GameState) => { ok: true; value: GameState } | { ok: false; error: EngineError },
   clientRev?: number,
-  revisionOptions: { readonly record?: boolean; readonly description?: string } = {},
+  options: ApplyToGameOptions = {},
 ): Promise<Response> {
   const game = await context.repo.findGame(gameId)
   if (game === undefined) {
@@ -223,7 +243,7 @@ export async function applyToGame(
   const now = new Date().toISOString()
   const stamped = stampLog({ ...result.value, rev: game.rev + 1 }, now)
 
-  if (revisionOptions.record === false) {
+  if (options.record === false) {
     const saved = await context.repo.saveGameIfRevision(stamped, game.rev)
     if (!saved) {
       return sendError(
@@ -254,7 +274,7 @@ export async function applyToGame(
         stamped,
         actor,
         now,
-        revisionOptions.description ?? 'Game state updated',
+        options.description ?? 'Game state updated',
       ),
       game.rev,
     )
@@ -267,6 +287,16 @@ export async function applyToGame(
       )
     }
   }
+
+  if (options.after !== undefined) {
+    try {
+      await options.after({ before: game, after: stamped })
+    } catch (error) {
+      // A notification must never fail the game action that triggered it.
+      console.error('Post-apply notification hook failed', error)
+    }
+  }
+
   return c.json(toPlayerView(stamped, currentPlayer(c).id))
 }
 

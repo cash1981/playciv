@@ -35,6 +35,8 @@ interface Snapshot {
   readonly games: readonly GameState[]
   readonly chat: readonly ChatMessage[]
   readonly revisions?: readonly GameRevision[]
+  /** Java's two `emailSent` timestamps, kept as one keyed table. */
+  readonly emailSent?: Readonly<Record<string, string>>
 }
 
 export interface JsonFileRepositoryOptions {
@@ -48,6 +50,7 @@ export class JsonFileRepository implements Repository {
   private readonly players = new Map<string, StoredPlayer>()
   private readonly games = new Map<string, GameState>()
   private readonly revisions = new Map<string, GameRevision>()
+  private readonly emailSent = new Map<string, string>()
   private chat: ChatMessage[] = []
 
   private readonly filePath: string | null
@@ -81,6 +84,7 @@ export class JsonFileRepository implements Repository {
         ...player,
         role: player.role === 'admin' ? 'admin' : 'user',
         disabled: player.disabled === true,
+        disableEmail: player.disableEmail === true,
       })
     }
     if (normalizedPlayers) this.scheduleWrite()
@@ -91,6 +95,9 @@ export class JsonFileRepository implements Repository {
       this.revisions.set(this.revisionKey(revision.gameId, revision.revision), migrated)
     }
     this.chat = [...snapshot.chat]
+    for (const [scope, at] of Object.entries(snapshot.emailSent ?? {})) {
+      this.emailSent.set(scope, at)
+    }
   }
 
   async createPlayer(player: StoredPlayer): Promise<void> {
@@ -98,6 +105,7 @@ export class JsonFileRepository implements Repository {
       ...player,
       role: player.role === 'admin' ? 'admin' : 'user',
       disabled: player.disabled === true,
+      disableEmail: player.disableEmail === true,
     })
     this.scheduleWrite()
   }
@@ -221,6 +229,15 @@ export class JsonFileRepository implements Repository {
     return this.chat.filter((message) => message.gameId === gameId)
   }
 
+  async findEmailSentAt(scope: string): Promise<string | undefined> {
+    return this.emailSent.get(scope)
+  }
+
+  async saveEmailSentAt(scope: string, at: string): Promise<void> {
+    this.emailSent.set(scope, at)
+    this.scheduleWrite()
+  }
+
   async finishedGamesForHighscore(): Promise<readonly FinishedGame[]> {
     const summaries: FinishedGame[] = []
     for (const game of this.games.values()) {
@@ -266,6 +283,7 @@ export class JsonFileRepository implements Repository {
       games: [...this.games.values()],
       chat: this.chat,
       revisions: [...this.revisions.values()],
+      emailSent: Object.fromEntries(this.emailSent),
     }
 
     // Serialise the writes, so two quick changes cannot overlap

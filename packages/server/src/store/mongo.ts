@@ -37,6 +37,8 @@ interface PlayerDoc {
   readonly createdAt?: string
   readonly role?: StoredPlayer['role']
   readonly disabled?: boolean
+  /** Java `Player.disableEmail` — present on the restored legacy accounts. */
+  readonly disableEmail?: boolean
 }
 
 /** Java: `Chat`. `pbfId` is `null` for lobby chat. */
@@ -62,11 +64,18 @@ interface PbfDoc {
   readonly players?: readonly { readonly username: string; readonly civilization?: { readonly name?: string } | null }[]
 }
 
+/** One throttled-notification timestamp. Java kept these on Player/Playerhand. */
+interface EmailSentDoc {
+  readonly _id: string
+  readonly at: string
+}
+
 const PLAYER_COLLECTION = 'player'
 const CHAT_COLLECTION = 'chat'
 const GAME_COLLECTION = 'game_state'
 const PBF_COLLECTION = 'pbf'
 const REVISION_COLLECTION = 'game_revision'
+const EMAIL_SENT_COLLECTION = 'email_sent'
 
 type GameRevisionDoc = GameRevision & { readonly _id: string }
 
@@ -86,6 +95,7 @@ export class MongoRepository implements Repository {
   private readonly games: Collection<GameState & { _id: string }>
   private readonly pbf: Collection<PbfDoc>
   private readonly revisions: Collection<GameRevisionDoc>
+  private readonly emailSent: Collection<EmailSentDoc>
   private readonly transactionClient: MongoClient | undefined
   private readonly ownedClient: MongoClient | undefined
 
@@ -95,6 +105,7 @@ export class MongoRepository implements Repository {
     this.games = db.collection<GameState & { _id: string }>(GAME_COLLECTION)
     this.pbf = db.collection<PbfDoc>(PBF_COLLECTION)
     this.revisions = db.collection<GameRevisionDoc>(REVISION_COLLECTION)
+    this.emailSent = db.collection<EmailSentDoc>(EMAIL_SENT_COLLECTION)
     this.transactionClient = client ?? (db as Db & { readonly client?: MongoClient }).client
     this.ownedClient = client
   }
@@ -135,6 +146,7 @@ export class MongoRepository implements Repository {
       createdAt: player.createdAt,
       role: player.role === 'admin' ? 'admin' : 'user',
       disabled: player.disabled === true,
+      disableEmail: player.disableEmail === true,
     })
   }
 
@@ -176,6 +188,7 @@ export class MongoRepository implements Repository {
     if (changes.email !== undefined) set['email'] = changes.email
     if (changes.role !== undefined) set['role'] = changes.role
     if (changes.disabled !== undefined) set['disabled'] = changes.disabled
+    if (changes.disableEmail !== undefined) set['disableEmail'] = changes.disableEmail
     await this.players.updateOne({ _id: { $in: filters } }, { $set: set })
     return this.findPlayerById(id)
   }
@@ -350,6 +363,19 @@ export class MongoRepository implements Repository {
   }
 
   // ---------------------------------------------------------------------
+  // Notification throttles
+  // ---------------------------------------------------------------------
+
+  async findEmailSentAt(scope: string): Promise<string | undefined> {
+    const doc = await this.emailSent.findOne({ _id: scope })
+    return doc?.at
+  }
+
+  async saveEmailSentAt(scope: string, at: string): Promise<void> {
+    await this.emailSent.updateOne({ _id: scope }, { $set: { at } }, { upsert: true })
+  }
+
+  // ---------------------------------------------------------------------
   // Highscore
   // ---------------------------------------------------------------------
 
@@ -420,6 +446,7 @@ function toStoredPlayer(doc: PlayerDoc): StoredPlayer {
     createdAt: doc.createdAt ?? objectIdTimestamp(doc._id),
     role: doc.role === 'admin' ? 'admin' : 'user',
     disabled: doc.disabled === true,
+    disableEmail: doc.disableEmail === true,
   }
 }
 
