@@ -1164,6 +1164,54 @@ ul.history > li {
   padding: 0.15rem 0.35rem;
 }
 
+.government-select {
+  min-width: 9rem;
+  padding: 0.2rem 0.35rem;
+}
+
+.government-reference {
+  margin-top: 0.9rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.7rem;
+}
+
+.government-reference summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.government-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.7rem;
+}
+
+.government-card {
+  min-height: 10rem;
+  padding: 0.9rem;
+  border: 1px solid #8b693f;
+  border-radius: 0.45rem;
+  background: linear-gradient(145deg, #ddc18f, #b9915f);
+  color: #261b10;
+  box-shadow: inset 0 0 1.2rem rgb(72 42 14 / 18%);
+}
+
+.government-card h3 {
+  margin: 0 0 0.8rem;
+  border-bottom: 1px solid rgb(72 42 14 / 35%);
+  padding-bottom: 0.45rem;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.government-card p {
+  margin: 0.55rem 0 0;
+  line-height: 1.35;
+}
+
 .sort-indicator {
   font-size: 0.7rem;
   color: var(--accent);

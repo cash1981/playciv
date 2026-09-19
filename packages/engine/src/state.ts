@@ -14,6 +14,7 @@ import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
 import type { PlayerTurn } from './turn.js'
 import type { Undo } from './undo.js'
 import type { Battle, BattleSideSummary } from './battle.js'
+import type { Government } from './government.js'
 
 export type GameType = 'WAW'
 
@@ -84,6 +85,8 @@ export interface Playerhand {
   readonly gamenote: string | null
   /** The status board. New in this port — see {@link PlayerStats}. */
   readonly stats: PlayerStats
+  /** Public shared bookkeeping for the civilization's current government. */
+  readonly government: Government
 }
 
 /** Java: `GameLog.LogType`. */
@@ -332,6 +335,7 @@ export interface OpaquePlayerhand {
   readonly publicTurns: readonly PlayerTurn[]
   /** The status board (issue #43) is public, unlike the rest of the hand. */
   readonly stats: PlayerStats
+  readonly government: Government
   /** Derived from the board, so it cannot drift out of step. See `state.ts`. */
   readonly cultureMarkerLevel: number | null
   readonly cityCount: number
@@ -357,6 +361,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
       (turn) => turn.username === player.username,
     ),
     stats: player.stats,
+    government: player.government,
     cultureMarkerLevel: cultureMarkerLevelOf(state, player.playerId),
     cityCount: cityCountOf(state, player.playerId),
     buildingCount: buildingCountOf(state, player.playerId),

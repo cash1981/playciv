@@ -3,10 +3,13 @@
  *
  * Replaces the old shared asset spreadsheet. All values shown here are shared
  * bookkeeping that ANY member may edit for ANY player, saved through
- * `api.setPlayerStat`.
+ * `api.setPlayerStat` and `api.setPlayerGovernment`.
  */
 
 import { useEffect, useState } from 'react'
+
+import { GOVERNMENT_CARDS, GOVERNMENTS } from '@civ/engine'
+import type { Government } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerStats, PlayerView } from '../lib/api.js'
@@ -17,6 +20,7 @@ interface Props {
   readonly gameId: string
   readonly view: PlayerView
   readonly busy: boolean
+  readonly readOnly: boolean
   readonly run: Run
 }
 
@@ -26,6 +30,7 @@ interface Row {
   readonly color: string | null
   readonly yourTurn: boolean
   readonly civilizationName: string | null
+  readonly government: Government
   readonly stats: PlayerStats
 }
 
@@ -68,12 +73,12 @@ const STATUS_GROUPS: readonly { readonly label: string; readonly columns: readon
   { label: 'Investments', columns: INVESTMENT_COLUMNS },
 ]
 
-const COLUMN_COUNT = 2 + ACCOUNTING_COLUMNS.length + UNIT_COLUMNS.length + MODIFIER_COLUMNS.length + INVESTMENT_COLUMNS.length
+const COLUMN_COUNT = 3 + ACCOUNTING_COLUMNS.length + UNIT_COLUMNS.length + MODIFIER_COLUMNS.length + INVESTMENT_COLUMNS.length
 
 /** Keys of the first column in each group — used to draw vertical section dividers. */
 const GROUP_START_KEYS = new Set(STATUS_GROUPS.map((g) => g.columns[0]!.key))
 
-export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Element {
+export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element {
   const rows: Row[] = []
 
   if (view.you !== null) {
@@ -83,6 +88,7 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
       color: view.you.color,
       yourTurn: view.you.yourTurn,
       civilizationName: view.you.civilization?.name ?? null,
+      government: view.you.government,
       stats: view.you.stats,
     })
   }
@@ -94,6 +100,7 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
       color: opponent.color,
       yourTurn: opponent.yourTurn,
       civilizationName: opponent.civilization?.name ?? null,
+      government: opponent.government,
       stats: opponent.stats,
     })
   }
@@ -110,6 +117,7 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
             <tr>
               <th rowSpan={2}>Player</th>
               <th rowSpan={2}>Civilization</th>
+              <th rowSpan={2}>Government</th>
               {STATUS_GROUPS.map((group, i) => (
                 <th
                   key={group.label}
@@ -150,6 +158,27 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
                     <span className="muted">hidden</span>
                   )}
                 </td>
+                <td>
+                  <select
+                    className="government-select"
+                    aria-label={`${row.username} government`}
+                    value={row.government}
+                    disabled={busy || readOnly}
+                    onChange={(event) =>
+                      void run(() =>
+                        api.setPlayerGovernment(
+                          gameId,
+                          row.playerId,
+                          event.target.value as Government,
+                        ),
+                      )
+                    }
+                  >
+                    {GOVERNMENTS.map((government) => (
+                      <option key={government} value={government}>{government}</option>
+                    ))}
+                  </select>
+                </td>
                 {STATUS_GROUPS.flatMap((group) => group.columns).map((column) => (
                   <td
                     key={column.key}
@@ -158,7 +187,7 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
                     <StatCell
                       value={row.stats[column.key]}
                       signed={column.signed === true}
-                      disabled={busy}
+                      disabled={busy || readOnly}
                       onCommit={(value) =>
                         void run(() => api.setPlayerStat(gameId, row.playerId, column.key, value))
                       }
@@ -177,6 +206,20 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
           </tbody>
         </table>
       </div>
+      <details className="government-reference">
+        <summary>Government card reference</summary>
+        <p className="muted">
+          Card effects are shown for reference only; the status dropdown does not enforce them.
+        </p>
+        <div className="government-card-grid">
+          {GOVERNMENT_CARDS.map((card) => (
+            <article className="government-card" key={card.government}>
+              <h3>{card.government}</h3>
+              {card.effects.map((effect) => <p key={effect}>{effect}</p>)}
+            </article>
+          ))}
+        </div>
+      </details>
     </CollapsiblePanel>
   )
 }

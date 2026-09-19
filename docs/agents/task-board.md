@@ -31,6 +31,7 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
   - `packages/engine/src/create-game.ts`
   - `packages/engine/src/migrate.ts`
   - `packages/engine/src/actions/player.ts`
+  - `packages/engine/src/actions/game.ts`
   - `packages/engine/src/errors.ts`
   - `packages/engine/src/index.ts`
   - `packages/engine/test/player-government.test.ts`

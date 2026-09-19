@@ -364,7 +364,13 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
         <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         <TurnPanel gameId={gameId} busy={interactionBusy} run={run} reloadCount={reloadCount} historical={historical} />
-        <StatusPanel gameId={gameId} view={displayedView} busy={interactionBusy} run={run} />
+        <StatusPanel
+          gameId={gameId}
+          view={displayedView}
+          busy={interactionBusy}
+          readOnly={displayedView.you === null || replaying}
+          run={run}
+        />
         <RevealedPanel gameId={gameId} reloadCount={reloadCount} historical={historical} />
         <LogPanel
           gameId={gameId}

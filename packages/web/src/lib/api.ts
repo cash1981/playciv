@@ -13,6 +13,7 @@ import type {
   BoardHistoryEntry,
   BoardPiece,
   HighscoreResult,
+  Government,
   Item,
   PlayerStats,
   PlayerTurn,
@@ -31,6 +32,7 @@ export type {
   BoardHistoryEntry,
   BoardPiece,
   HighscoreResult,
+  Government,
   Item,
   PlayerStats,
   PlayerTurn,
@@ -366,6 +368,14 @@ export const api = {
     value: number,
   ) =>
     post<PlayerView>(`/api/games/${gameId}/players/${targetPlayerId}/stat`, { stat, value }),
+  setPlayerGovernment: (
+    gameId: string,
+    targetPlayerId: string,
+    government: Government,
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/players/${targetPlayerId}/government`, {
+      government,
+    }),
 
   initiateUndo: (gameId: string, logId: string) =>
     post<PlayerView>(`/api/games/${gameId}/undo/${logId}`),

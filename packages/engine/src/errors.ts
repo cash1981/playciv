@@ -74,6 +74,8 @@ export type EngineError =
   | { readonly kind: 'UNKNOWN_STAT'; readonly stat: string }
   /** `setPlayerStat` (issue #43) got a value that is not an allowed integer */
   | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number }
+  /** `setPlayerGovernment` got a value outside the Wisdom and Warfare cards. */
+  | { readonly kind: 'UNKNOWN_GOVERNMENT'; readonly government: string }
   /** A battle is already active — only one at a time is allowed */
   | { readonly kind: 'BATTLE_ALREADY_ACTIVE' }
   /** An arena action was attempted but no battle is active */
@@ -157,6 +159,8 @@ export function describeError(error: EngineError): string {
       return `Unknown player stat: ${error.stat}`
     case 'INVALID_STAT_VALUE':
       return `Player stat must be a whole number; only Combat may be negative, got ${error.value}`
+    case 'UNKNOWN_GOVERNMENT':
+      return `Unknown government: ${error.government}`
     case 'BATTLE_ALREADY_ACTIVE':
       return 'A battle is already in progress'
     case 'NO_BATTLE_ACTIVE':

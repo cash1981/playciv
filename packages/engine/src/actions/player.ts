@@ -16,6 +16,8 @@ import {
   startingCorner,
 } from '../board.js'
 import type { EngineError } from '../errors.js'
+import type { Government } from '../government.js'
+import { isGovernment, startingGovernmentFor } from '../government.js'
 import type { CivItem, Item, SocialPolicyItem, TechItem } from '../item.js'
 import { isTradable, isUnit, itemName, revealAll } from '../item.js'
 import {
@@ -257,6 +259,7 @@ function revealCivilization(
   let next = withPlayer(state, {
     ...player,
     civilization: civ,
+    government: startingGovernmentFor(civ.name),
     items: player.items.map((item) => (item.id === civ.id ? civ : item)),
     techsChosen: [...player.techsChosen, startingTech],
   })
@@ -844,6 +847,51 @@ export function setPlayerStat(state: GameState, input: SetPlayerStatInput): Acti
     editor.playerId === target.playerId
       ? `set their ${STAT_LABEL[input.stat]} to ${input.value}`
       : `set ${target.username}'s ${STAT_LABEL[input.stat]} to ${input.value}`
+
+  return ok(
+    appendLog(next, {
+      username: editor.username,
+      playerId: editor.playerId,
+      publicLog: `${editor.username} ${message}`,
+      privateLog: '',
+      createdAt: input.at ?? null,
+    }),
+  )
+}
+
+export interface SetPlayerGovernmentInput {
+  readonly editorPlayerId: string
+  readonly targetPlayerId: string
+  readonly government: Government
+  /** ISO timestamp for the log entry. The engine itself stays pure. */
+  readonly at?: string
+}
+
+/**
+ * Changes one player's public government marker. As with the numeric status
+ * board, any current player may maintain any other player's shared value.
+ */
+export function setPlayerGovernment(
+  state: GameState,
+  input: SetPlayerGovernmentInput,
+): ActionResult {
+  const editorAccess = requireAccess(state, input.editorPlayerId)
+  if (!editorAccess.ok) return editorAccess
+  const editor = editorAccess.value
+
+  const targetAccess = requireAccess(state, input.targetPlayerId)
+  if (!targetAccess.ok) return targetAccess
+  const target = targetAccess.value
+
+  if (!isGovernment(input.government)) {
+    return err({ kind: 'UNKNOWN_GOVERNMENT', government: String(input.government) })
+  }
+
+  const next = withPlayer(state, { ...target, government: input.government })
+  const message =
+    editor.playerId === target.playerId
+      ? `set their government to ${input.government}`
+      : `set ${target.username}'s government to ${input.government}`
 
   return ok(
     appendLog(next, {
