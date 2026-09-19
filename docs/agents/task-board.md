@@ -20,7 +20,7 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 - **Owner:** Codex (GPT-5)
 - **Branch:** `feat/issue-70`
 - **Brief:** `docs/agents/tasks/issue-70.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
   - `docs/agents/{tasks/issue-70.md,task-board.md,state.md,decisions.md}`
   - `packages/server/src/{context.ts,routes/games.ts,routes/play.ts,store/types.ts,store/json-file.ts,store/mongo.ts}`
