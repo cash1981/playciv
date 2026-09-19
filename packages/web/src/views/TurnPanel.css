@@ -1,0 +1,130 @@
+.turn-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0.7rem 0;
+  padding-bottom: 0.2rem;
+  overflow-x: auto;
+}
+
+.turn-tab {
+  flex: 0 0 auto;
+  min-width: 7rem;
+  border-bottom: 3px solid var(--turn-tab-color, var(--line));
+  border-radius: var(--radius) var(--radius) 0 0;
+  color: var(--text);
+}
+
+.turn-tab[aria-selected='true'] {
+  background: color-mix(in srgb, var(--turn-tab-color, var(--accent)) 24%, var(--panel-2));
+  border-color: var(--turn-tab-color, var(--accent));
+  font-weight: 600;
+}
+
+.turn-tab.private-log-tab {
+  --turn-tab-color: var(--accent);
+}
+
+.turn-toolbar {
+  margin-bottom: 0.8rem;
+}
+
+.turn-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.turn-toolbar select {
+  width: auto;
+  margin: 0;
+}
+
+.turn-phase {
+  margin-top: 0.8rem;
+}
+
+.turn-phase-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.turn-phase-heading h3 {
+  margin: 0;
+}
+
+.turn-phase-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.35rem;
+}
+
+.turn-markdown {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.turn-markdown .milkdown {
+  --crepe-color-background: var(--bg);
+  --crepe-color-on-background: var(--text);
+  --crepe-color-surface: var(--panel-2);
+  --crepe-color-surface-low: var(--panel);
+  --crepe-color-on-surface: var(--text);
+  --crepe-color-on-surface-variant: var(--muted);
+  --crepe-color-outline: var(--line);
+  --crepe-color-primary: var(--accent);
+  --crepe-color-secondary: var(--line);
+  --crepe-color-on-secondary: var(--text);
+  --crepe-color-inverse: var(--text);
+  --crepe-color-on-inverse: var(--bg);
+  --crepe-color-inline-code: var(--bad);
+  --crepe-color-error: var(--bad);
+  --crepe-color-hover: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
+  --crepe-color-selected: color-mix(in srgb, var(--accent) 22%, var(--panel-2));
+  --crepe-color-inline-area: var(--line);
+  --crepe-base-font-size: 15px;
+  --crepe-font-default: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  min-height: 8rem;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.turn-markdown .milkdown .ProseMirror {
+  min-height: 6rem;
+  padding: 0.65rem 0.8rem;
+}
+
+.turn-markdown[data-readonly='true'] .milkdown-top-bar {
+  display: none;
+}
+
+.turn-markdown[data-readonly='true'] {
+  background: var(--panel-2);
+}
+
+.turn-markdown[data-readonly='true'] .milkdown,
+.turn-markdown[data-readonly='true'] .milkdown .ProseMirror {
+  background: var(--panel-2);
+}
+
+.private-log-copy {
+  margin: 0 0 0.7rem;
+}
+
+@media (max-width: 600px) {
+  .turn-tab {
+    min-width: 6rem;
+  }
+
+  .turn-toolbar {
+    align-items: stretch;
+  }
+
+  .turn-toolbar .turn-toolbar-spacer {
+    display: none;
+  }
+}
