@@ -14,6 +14,7 @@ import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createTestApp } from '../src/app.js'
+import { runInBackground } from '../src/context.js'
 import type { Mailer, OutgoingEmail } from '../src/mail.js'
 import {
   GLOBAL_COOLDOWN_MS,
@@ -369,5 +370,34 @@ describe('new-game broadcast', () => {
     now = new Date(now.getTime() + GLOBAL_COOLDOWN_MS + 60_000)
     await notifications.gameCreated(state)
     expect(broadcastMailer.subjects('New Civilization game created')).toHaveLength(4)
+  })
+})
+
+describe('background tasks', () => {
+  it('hands the task to waitUntil when the runtime has one', async () => {
+    const waiting: Promise<unknown>[] = []
+    const context = {
+      executionCtx: {
+        waitUntil(task: Promise<unknown>): void {
+          waiting.push(task)
+        },
+      },
+    }
+
+    runInBackground(context, Promise.resolve())
+    expect(waiting).toHaveLength(1)
+    await Promise.all(waiting)
+  })
+
+  it('falls back to a floating promise when there is no execution context', () => {
+    // Node's adapter has no execution context; reading the getter throws, as
+    // Hono's `Context` does. That must not reach the caller.
+    const context = {
+      get executionCtx(): { waitUntil(task: Promise<unknown>): void } {
+        throw new Error('This context has no ExecutionContext')
+      },
+    }
+
+    expect(() => runInBackground(context, Promise.resolve())).not.toThrow()
   })
 })

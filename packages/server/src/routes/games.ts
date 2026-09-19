@@ -30,6 +30,7 @@ import {
   optionalString,
   readGame,
   requireString,
+  runInBackground,
   stampLog,
 } from '../context.js'
 import { sendEngineError, sendError } from '../errors.js'
@@ -243,10 +244,10 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     )
     if (!saved) return sendError(c, 409, 'CONFLICT', 'Game id already exists')
     // Java ran this in a raw thread so it never delayed the response, and it can
-    // reach every account when enabled — keep it off the request path.
-    void context.notifications
-      .gameCreated(stamped)
-      .catch((error) => console.error('New-game broadcast failed', error))
+    // reach every account when enabled — keep it off the request path. On a
+    // Worker the task must go through `waitUntil` or it is cancelled with the
+    // request; `runInBackground` handles both runtimes.
+    runInBackground(c, context.notifications.gameCreated(stamped))
     return c.json(toSummary(stamped, me.id), 201)
   })
 
