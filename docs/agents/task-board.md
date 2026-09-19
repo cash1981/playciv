@@ -17,7 +17,9 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); verification by a second agent
 - **Branch:** `feat/issue-72-d1`
 - **Brief:** `docs/agents/tasks/issue-72-d1.md`
-- **Status:** in progress
+- **Status:** in review — branch pushed, awaiting the second agent's verification
+  and the human's merge. The D1 database already holds the migrated data; the
+  Worker has not been deployed.
 - **Claimed paths:**
   - `packages/worker/migrations/` (new), `packages/worker/src/index.ts`, `packages/worker/package.json`
   - `wrangler.jsonc`, `render.yaml` (delete)
