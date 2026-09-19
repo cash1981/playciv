@@ -3,7 +3,7 @@
 - **Slug:** `issue-70`
 - **Branch:** `feat/issue-70`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -101,25 +101,25 @@ rule is introduced or changed.
 
 ## Acceptance criteria
 
-- [ ] Every successful shared state mutation creates exactly one stored
+- [x] Every successful shared state mutation creates exactly one stored
       revision, even when it creates multiple log entries or no log entry.
-- [ ] Private notes and chat create no replay revision.
-- [ ] Creation stores revision 0; an existing game gains one reliable baseline
+- [x] Private notes and chat create no replay revision.
+- [x] Creation stores revision 0; an existing game gains one reliable baseline
       at its current revision on first revision access/write.
-- [ ] JSON-file and MongoDB repositories can save, list, read and delete the
+- [x] JSON-file and MongoDB repositories can save, list, read and delete the
       same revision data; game deletion removes revision history.
-- [ ] Only current game members can list or read revisions.
-- [ ] Historical endpoints return projected data, never raw `GameState`.
-- [ ] Hidden hands, hidden techs, private logs and social policies remain
+- [x] Only current game members can list or read revisions.
+- [x] Historical endpoints return projected data, never raw `GameState`.
+- [x] Hidden hands, hidden techs, private logs and social policies remain
       private in historical views for at least two different viewers.
-- [ ] The global replay bar controls the complete game page and replaces the
+- [x] The global replay bar controls the complete game page and replaces the
       board-only replay UI.
-- [ ] All game-state mutations are disabled while replaying; returning to Live
+- [x] All game-state mutations are disabled while replaying; returning to Live
       shows the newest live state.
-- [ ] Auto-refresh can discover newer revisions without moving a historical
+- [x] Auto-refresh can discover newer revisions without moving a historical
       viewer back to Live.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Verified in the browser: backward/forward/live changes the entire page,
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Verified in the browser: backward/forward/live changes the entire page,
       replay is read-only, and a background live update is indicated without
       changing the selected historical revision.
 

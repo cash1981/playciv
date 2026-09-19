@@ -681,3 +681,29 @@ future turns remain deferred until there is an explicit publish model. Global
 revision storage and whole-game Back / Forward / Live replay are tracked in
 GitHub issue #70 and are not part of issue #69; the existing board-only replay
 controls remain unchanged.
+
+---
+
+## 2026-09-19 — Global revision storage and replay consistency (issue #70)
+
+**Decision.** Store immutable full `GameState` snapshots as repository records
+outside the live game, identified by the existing monotonic `rev`. Project every
+historical read through the same viewer-specific helpers as live state. Private
+notes and chat do not create checkpoints; note writes still advance `rev` as an
+optimistic-concurrency token, so stored checkpoint numbers may have gaps.
+
+**Why.** Full snapshots make every shared transition replayable without trying
+to reconstruct state from incomplete log text or board-only history. Keeping
+snapshots outside `GameState` prevents recursive history. Reusing live
+projections is the strongest available guarantee that old revisions preserve
+hidden hands, unrevealed technologies, social policies and private logs.
+
+**Consequences.** All game writes use repository compare-and-set semantics, so
+concurrent requests return 409 instead of silently overwriting one another.
+Existing games receive one baseline at the revision first encountered. MongoDB
+stores the game and checkpoint in one retryable transaction and therefore
+requires a replica set or sharded cluster; standalone Mongo is no longer a
+supported configuration for revisioned game storage. The global replay bar
+replaces board-only replay, while live board undo remains a normal shared
+transition. Chat stays live during replay and private notes are sanitized out of
+every stored snapshot.
