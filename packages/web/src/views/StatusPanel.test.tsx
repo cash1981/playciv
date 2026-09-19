@@ -51,7 +51,7 @@ describe('StatusPanel governments', () => {
     const alice = screen.getByRole('combobox', { name: 'Alice government' })
     expect((alice as HTMLSelectElement).value).toBe('Despotism')
     expect(alice.querySelectorAll('option')).toHaveLength(GOVERNMENTS.length)
-    fireEvent.click(screen.getAllByRole('button', { name: 'Show government card reference' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Show government card reference' })[0]!)
     const expectedEffects = GOVERNMENT_CARDS.flatMap((card) => card.effects)
     expect(document.querySelectorAll('.government-card p')).toHaveLength(expectedEffects.length)
     expect(document.querySelectorAll('.government-card img')).toHaveLength(GOVERNMENT_CARDS.length)

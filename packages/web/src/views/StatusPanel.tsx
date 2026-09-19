@@ -6,7 +6,7 @@
  * `api.setPlayerStat` and `api.setPlayerGovernment`.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { GOVERNMENT_CARDS, GOVERNMENTS } from '@civ/engine'
 import type { Government } from '@civ/engine'
@@ -80,6 +80,40 @@ const GROUP_START_KEYS = new Set(STATUS_GROUPS.map((g) => g.columns[0]!.key))
 
 export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element {
   const [showGovernmentReference, setShowGovernmentReference] = useState(false)
+  const governmentHelpRef = useRef<HTMLButtonElement | null>(null)
+  const governmentCloseRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!showGovernmentReference) return
+    governmentCloseRef.current?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setShowGovernmentReference(false)
+        return
+      }
+      if (event.key !== 'Tab') return
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-labelledby="government-reference-title"]')
+      if (dialog === null) return
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+      if (focusable.length === 0) return
+      const first = focusable[0]!
+      const last = focusable[focusable.length - 1]!
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [showGovernmentReference])
+
+  useEffect(() => {
+    if (!showGovernmentReference) governmentHelpRef.current?.focus()
+  }, [showGovernmentReference])
   const rows: Row[] = []
 
   if (view.you !== null) {
@@ -183,6 +217,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
                     <button
                       className="government-help"
                       type="button"
+                      ref={governmentHelpRef}
                       aria-label="Show government card reference"
                       title="Show government card reference"
                       onClick={() => setShowGovernmentReference(true)}
@@ -229,7 +264,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
           >
             <div className="government-reference-heading">
               <h2 id="government-reference-title">Government card reference</h2>
-              <button type="button" onClick={() => setShowGovernmentReference(false)}>Close</button>
+              <button ref={governmentCloseRef} type="button" onClick={() => setShowGovernmentReference(false)}>Close</button>
             </div>
         <p className="muted">
           Card effects are shown for reference only; the status dropdown does not enforce them.

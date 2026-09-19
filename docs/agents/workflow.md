@@ -141,12 +141,6 @@ https://github.com/cash1981/playciv/compare/main...feat/<slug>?expand=1
 The PR body should say what changed, why, what was verified, and what was
 deliberately left out. Link the task brief.
 
-After giving the human the PR/compare link, remove the dedicated local
-worktree so the human can check out the feature branch in the main checkout.
-First verify it is clean, then run `git worktree remove <feature-worktree>` from
-another checkout. This removes only the worktree; never delete the local or
-remote feature branch. Do not use `--force` for routine PR cleanup.
-
 **The human merges.** No agent merges to `main`, and no agent force-pushes
 `main`. If a PR needs changes, push more commits to the branch.
 
@@ -154,9 +148,11 @@ remote feature branch. Do not use `--force` for routine PR cleanup.
 
 - Update `state.md`: move the task from "in progress" to "done", one line.
 - Release the claim in `task-board.md`.
-- Delete the local branch once merged.
-- Delete the finished local worktree and its files once the branch is merged or
-  abandoned; do not leave stale worktrees or feature files behind.
+- After the PR/compare link has been supplied and the working tree is clean,
+  remove the dedicated local worktree from another checkout with
+  `git worktree remove <feature-worktree>`. This removes only the checkout;
+  keep the local and remote feature branches so the human can check out the
+  branch for testing. Do not use `--force` for routine cleanup.
 
 A task that leaves the board or the state file stale is not finished, because
 the next agent will act on what those files say.
