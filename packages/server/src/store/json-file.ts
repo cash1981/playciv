@@ -145,6 +145,13 @@ export class JsonFileRepository implements Repository {
     this.scheduleWrite()
   }
 
+  async saveGameIfRevision(game: GameState, expectedRevision: number): Promise<boolean> {
+    if (this.games.get(game.id)?.rev !== expectedRevision) return false
+    this.games.set(game.id, game)
+    this.scheduleWrite()
+    return true
+  }
+
   async saveGameWithRevision(
     game: GameState,
     revision: GameRevision,
@@ -164,11 +171,16 @@ export class JsonFileRepository implements Repository {
     return true
   }
 
-  async ensureGameRevision(revision: GameRevision): Promise<void> {
-    if ([...this.revisions.values()].some((entry) => entry.gameId === revision.gameId)) return
+  async ensureGameRevision(
+    revision: GameRevision,
+    expectedRevision: number,
+  ): Promise<boolean> {
+    if (this.games.get(revision.gameId)?.rev !== expectedRevision) return false
+    if ([...this.revisions.values()].some((entry) => entry.gameId === revision.gameId)) return true
     const key = this.revisionKey(revision.gameId, revision.revision)
     this.revisions.set(key, revision)
     this.scheduleWrite()
+    return true
   }
 
   async listGameRevisions(gameId: string): Promise<readonly GameRevision[]> {

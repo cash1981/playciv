@@ -616,6 +616,56 @@ describe('global game revisions', () => {
     expect(revisions.filter((revision) => revision.revision === before.rev + 1)).toHaveLength(1)
   })
 
+  it('does not let a private note overwrite a concurrent shared mutation', async () => {
+    const { gameId, starter } = await startedGame('Note revision race')
+    const before = await repo.findGame(gameId)
+    expect(before).toBeDefined()
+    if (before === undefined) throw new Error('started game was not stored')
+
+    const originalPrivateSave = repo.saveGameIfRevision.bind(repo)
+    const originalSharedSave = repo.saveGameWithRevision.bind(repo)
+    let arrivals = 0
+    let release: (() => void) | undefined
+    const bothArrived = new Promise<void>((resolve) => { release = resolve })
+    const waitForBoth = async (): Promise<void> => {
+      arrivals += 1
+      if (arrivals === 2) release?.()
+      await bothArrived
+    }
+    repo.saveGameIfRevision = async (...args) => {
+      await waitForBoth()
+      return originalPrivateSave(...args)
+    }
+    repo.saveGameWithRevision = async (...args) => {
+      await waitForBoth()
+      return originalSharedSave(...args)
+    }
+
+    const [note, shared] = await Promise.all([
+      inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/note`,
+        headers: bearer(starter),
+        payload: { note: 'must not replace the turn change' },
+      }),
+      inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/endturn`,
+        headers: bearer(starter),
+        payload: {},
+      }),
+    ])
+
+    expect([note.status, shared.status].sort()).toEqual([200, 409])
+    expect((await repo.findGame(gameId))?.rev).toBe(before.rev + 1)
+    if (shared.status === 200) {
+      const latest = (await repo.listGameRevisions(gameId)).at(-1)
+      expect(latest?.revision).toBe(before.rev + 1)
+      expect(latest?.state.players.find((player) => player.yourTurn)?.playerId)
+        .not.toBe(before.players.find((player) => player.yourTurn)?.playerId)
+    }
+  })
+
   it('refuses revisioned Mongo writes without a transaction-capable client', async () => {
     const creator = await register('mongo-transaction-owner')
     const gameId = await createGame(creator, 'Mongo transaction requirement', 2)
@@ -808,6 +858,38 @@ describe('global game revisions', () => {
       payload: {},
     })
     expect(deleted.status).toBe(204)
+    expect(await repo.listGameRevisions(gameId)).toEqual([])
+  })
+
+  it('does not recreate a baseline after the game is concurrently deleted', async () => {
+    const creator = await register('baseline-delete-owner')
+    const gameId = await createGame(creator, 'Baseline delete race', 2)
+    const stored = await repo.findGame(gameId)
+    expect(stored).toBeDefined()
+    if (stored === undefined) throw new Error('created game was not stored')
+    await repo.deleteGame(gameId)
+    await repo.saveGame({ ...stored, rev: 9 })
+
+    const originalEnsure = repo.ensureGameRevision.bind(repo)
+    let resume: (() => void) | undefined
+    let entered: (() => void) | undefined
+    const ensureEntered = new Promise<void>((resolve) => { entered = resolve })
+    const mayResume = new Promise<void>((resolve) => { resume = resolve })
+    repo.ensureGameRevision = async (...args) => {
+      entered?.()
+      await mayResume
+      return originalEnsure(...args)
+    }
+
+    const listing = inject(app, {
+      url: `/api/games/${gameId}/revisions`,
+      headers: bearer(creator),
+    })
+    await ensureEntered
+    expect(await repo.deleteGame(gameId)).toBe(true)
+    resume?.()
+
+    expect((await listing).status).toBe(404)
     expect(await repo.listGameRevisions(gameId)).toEqual([])
   })
 })

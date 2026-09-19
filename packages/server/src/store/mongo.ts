@@ -197,6 +197,14 @@ export class MongoRepository implements Repository {
     await this.games.replaceOne({ _id: game.id }, game, { upsert: true })
   }
 
+  async saveGameIfRevision(game: GameState, expectedRevision: number): Promise<boolean> {
+    const saved = await this.games.replaceOne(
+      { _id: game.id, rev: expectedRevision },
+      game,
+    )
+    return saved.matchedCount > 0
+  }
+
   async saveGameWithRevision(
     game: GameState,
     revision: GameRevision,
@@ -224,14 +232,36 @@ export class MongoRepository implements Repository {
     }
   }
 
-  async ensureGameRevision(revision: GameRevision): Promise<void> {
-    if (await this.revisions.findOne({ gameId: revision.gameId }, { projection: { _id: 1 } })) return
-    const id = revisionId(revision.gameId, revision.revision)
-    await this.revisions.updateOne(
-      { _id: id },
-      { $setOnInsert: revision },
-      { upsert: true },
-    )
+  async ensureGameRevision(
+    revision: GameRevision,
+    expectedRevision: number,
+  ): Promise<boolean> {
+    const ensureOnce = async (): Promise<boolean> => this.inTransaction(async (session) => {
+      const game = await this.games.findOne(
+        { _id: revision.gameId, rev: expectedRevision },
+        { projection: { _id: 1 }, session },
+      )
+      if (game === null) return false
+      const existing = await this.revisions.findOne(
+        { gameId: revision.gameId },
+        { projection: { _id: 1 }, session },
+      )
+      if (existing !== null) return true
+      await this.revisions.insertOne(
+        { ...revision, _id: revisionId(revision.gameId, revision.revision) },
+        { session },
+      )
+      return true
+    })
+    try {
+      return await ensureOnce()
+    } catch (error) {
+      // Two first history reads may race to create the same baseline. The
+      // unique revision id makes one insert lose; re-read transactionally so
+      // that a concurrent deletion still returns false rather than reviving it.
+      if (isDuplicateKeyError(error)) return ensureOnce()
+      throw error
+    }
   }
 
   async listGameRevisions(gameId: string): Promise<readonly GameRevision[]> {

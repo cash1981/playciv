@@ -71,6 +71,8 @@ export interface Repository {
   deletePlayer(id: string): Promise<boolean>
 
   saveGame(game: GameState): Promise<void>
+  /** Saves a non-revisioned change only while the live game is unchanged. */
+  saveGameIfRevision(game: GameState, expectedRevision: number): Promise<boolean>
   /**
    * Saves the live game and matching checkpoint only when the stored game is
    * still at `expectedRevision`. `null` means that the game must not exist.
@@ -80,8 +82,11 @@ export interface Repository {
     revision: GameRevision,
     expectedRevision: number | null,
   ): Promise<boolean>
-  /** Adds a baseline only when this game/revision is not already stored. */
-  ensureGameRevision(revision: GameRevision): Promise<void>
+  /**
+   * Adds a baseline only while the live game still exists at
+   * `expectedRevision`. Returns false when it changed or was deleted.
+   */
+  ensureGameRevision(revision: GameRevision, expectedRevision: number): Promise<boolean>
   listGameRevisions(gameId: string): Promise<readonly GameRevision[]>
   findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined>
   findGame(id: string): Promise<GameState | undefined>

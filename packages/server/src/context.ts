@@ -179,17 +179,36 @@ export async function applyToGame(
   const result = action(game)
   if (!result.ok) return sendEngineError(c, result.error)
 
-  // Increment rev on every successful write.
+  // Private notes do not create replay checkpoints, but they still advance the
+  // optimistic-concurrency token. Otherwise a note and a shared transition
+  // could both commit from the same base revision and one would be lost.
   const now = new Date().toISOString()
   const stamped = stampLog({ ...result.value, rev: game.rev + 1 }, now)
 
   if (revisionOptions.record === false) {
-    await context.repo.saveGame(stamped)
+    const saved = await context.repo.saveGameIfRevision(stamped, game.rev)
+    if (!saved) {
+      return sendError(
+        c,
+        409,
+        'CONFLICT',
+        `Game was modified concurrently (expected rev ${game.rev}). Reload and retry.`,
+      )
+    }
   } else {
     const actor = currentPlayer(c)
-    await context.repo.ensureGameRevision(
+    const baselineReady = await context.repo.ensureGameRevision(
       createGameRevision(undefined, game, actor, now, 'History starts here'),
+      game.rev,
     )
+    if (!baselineReady) {
+      return sendError(
+        c,
+        409,
+        'CONFLICT',
+        `Game was modified concurrently (expected rev ${game.rev}). Reload and retry.`,
+      )
+    }
     const saved = await context.repo.saveGameWithRevision(
       stamped,
       createGameRevision(

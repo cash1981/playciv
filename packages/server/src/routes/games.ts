@@ -247,9 +247,16 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     const game = await requireMembership(context, c, gameId)
     if (game instanceof Response) return game
     const me = currentPlayer(c)
-    await context.repo.ensureGameRevision(
+    const baselineReady = await context.repo.ensureGameRevision(
       createGameRevision(undefined, game, me, new Date().toISOString(), 'History starts here'),
+      game.rev,
     )
+    if (!baselineReady) {
+      const current = await context.repo.findGame(gameId)
+      return current === undefined
+        ? sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+        : sendError(c, 409, 'CONFLICT', 'Game changed while history was loading; retry')
+    }
     const revisions = await context.repo.listGameRevisions(gameId)
     return c.json(revisions.map((revision) => revisionSummary(revision, me.id)))
   })
@@ -263,9 +270,16 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       return sendError(c, 400, 'BAD_REQUEST', 'revision must be a non-negative integer')
     }
     const me = currentPlayer(c)
-    await context.repo.ensureGameRevision(
+    const baselineReady = await context.repo.ensureGameRevision(
       createGameRevision(undefined, game, me, new Date().toISOString(), 'History starts here'),
+      game.rev,
     )
+    if (!baselineReady) {
+      const current = await context.repo.findGame(gameId)
+      return current === undefined
+        ? sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+        : sendError(c, 409, 'CONFLICT', 'Game changed while history was loading; retry')
+    }
     const revision = await context.repo.findGameRevision(gameId, number)
     if (revision === undefined) {
       return sendError(c, 404, 'REVISION_NOT_FOUND', `No revision ${number} for game ${gameId}`)
