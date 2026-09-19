@@ -1,5 +1,5 @@
 ---
-description: Cross-references a change against the old system — the old backend (old-civ-rest, Java) and old client (old-civ-web, AngularJS) that together implement the business logic — and answers one question: does this match what the old system does? Read-only. Use whenever a change touches game rules, the deck, log texts, or a projection. Not a general code reviewer; use `reviewer` for that.
+description: "Cross-references a change against the old system — the old backend (old-civ-rest, Java) and old client (old-civ-web, AngularJS) that together implement the business logic — and answers one question: does this match what the old system does? Read-only. Use whenever a change touches game rules, the deck, log texts, or a projection. Not a general code reviewer."
 mode: subagent
 model: deepseek/deepseek-v4-pro
 permissions:

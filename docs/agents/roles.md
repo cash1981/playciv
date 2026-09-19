@@ -11,18 +11,21 @@ code is right.
 | **Reviewer** | strong (Opus) | **no** | no |
 | **Rules checker** | strong (Opus) | **no** | no |
 
-The orchestrator is the session you are talking to. The other three are defined
-once per agent host and spawned with that host's subagent tool:
+The orchestrator is the session you are talking to. The roles are defined once
+per agent host and spawned with that host's subagent tool:
 
-- Claude Code reads `.claude/agents/` (the `model:` lines name Claude models).
-- OpenCode reads `.opencode/agents/` (the `model:` lines name OpenCode models —
-  currently a cheap DeepSeek for the coder and a stronger one for the two
-  read-only roles). Keep the role structure the same in both; when a role's
-  model changes, change both.
+- Claude Code reads `.claude/agents/`: `coder`, `reviewer` and `rules-checker`.
+- OpenCode reads `.opencode/agents/`: `coder` and `rules-checker`. There is no
+  separate reviewer there — the owner runs the same model throughout, so a
+  second pass on a "stronger" model buys nothing, and the orchestrator does the
+  correctness check itself against the brief and the old system. Everything
+  below about *why* the reviewer is read-only still applies whenever a reviewer
+  role does exist.
 
 The model names in the table above are the Claude ones. The rule is the split,
 not the vendor: the coder runs on a cheaper model, the reviewer and rules
-checker on a stronger one that cannot write.
+checker on a stronger one that cannot write. OpenCode keeps the coder and
+rules-checker halves of that split.
 
 ## Why reviewers cannot write
 
