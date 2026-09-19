@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { draw } from '../src/actions/draw.js'
+import { discardBarbarians, draw, drawBarbarians } from '../src/actions/draw.js'
 import { revealedFeed } from '../src/actions/game.js'
 import { chooseTech, discardItem, revealItem, revealTech } from '../src/actions/player.js'
 import { itemName } from '../src/item.js'
@@ -187,5 +187,29 @@ describe('revealedFeed', () => {
 
     const feed = revealedFeed(stamped)
     expect(feed.map((entry) => entry.item.itemNumber)).toEqual([card.itemNumber, hut.itemNumber])
+  })
+
+  it('newest first even without a timestamp or a matching log entry, using seed order as a fallback (issue #68)', () => {
+    // discardBarbarians logs one free-text line naming no item (unlike
+    // discardItem, which logs a DISCARD entry per card and so already gets a
+    // distinct logOrder — that would resolve on the second sort key, not the
+    // one this test targets). None of the discarded barbarians get enriched
+    // with a createdAt or a logOrder, so they are genuinely tied and must
+    // fall through to the seed-order tiebreak.
+    let state = firstCivGame()
+    state = unwrap(drawBarbarians(state, CASH1981))
+    const barbarians = findPlayer(state, CASH1981)!.barbarians
+    expect(barbarians.length).toBeGreaterThan(1)
+
+    state = unwrap(discardBarbarians(state, CASH1981))
+
+    expect(state.log.some((entry) => entry.item !== null)).toBe(false)
+
+    const feed = revealedFeed(state)
+    const feedOrder = feed
+      .map((entry) => entry.item.itemNumber)
+      .filter((n) => barbarians.some((b) => b.itemNumber === n))
+    // Seeded in barbarians[] order (index 0..n-1); newest-first must reverse it.
+    expect(feedOrder).toEqual([...barbarians].reverse().map((b) => b.itemNumber))
   })
 })

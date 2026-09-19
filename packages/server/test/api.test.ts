@@ -812,6 +812,330 @@ describe('arena rev guard', () => {
   })
 })
 
+describe('arena place and rotate', () => {
+  it('places a unit and rotates it 90 degrees through the API', async () => {
+    const { gameId, starter, waiting } = await startedGame('Arena-rotate')
+
+    const drawn = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/INFANTRY`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(drawn.status).toBe(200)
+
+    const battlehand = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/draw`,
+      headers: bearer(starter),
+      payload: { numberOfUnits: 1 },
+    })
+    expect(battlehand.status).toBe(200)
+    const battlehandView = await battlehand.json() as {
+      rev: number
+      you: { battlehand: { id: string; attack: number; health: number }[] }
+    }
+    const unit = battlehandView.you.battlehand[0]!
+
+    // initiateBattle takes the opponent's playerId, not their token.
+    const waitingView = await inject(app, {
+      method: 'GET',
+      url: `/api/games/${gameId}`,
+      headers: bearer(waiting),
+    })
+    const waitingId = (await waitingView.json() as { you: { playerId: string } }).you.playerId
+
+    const initiated = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/initiate`,
+      headers: bearer(starter),
+      payload: { opponentId: waitingId, rev: battlehandView.rev },
+    })
+    expect(initiated.status).toBe(200)
+    const initiatedView = await initiated.json() as { rev: number }
+
+    const placed = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/place`,
+      headers: bearer(starter),
+      payload: {
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+        rev: initiatedView.rev,
+      },
+    })
+    expect(placed.status).toBe(200)
+    const placedView = await placed.json() as {
+      rev: number
+      battle: { arena: { id: string; rotation: number }[] }
+    }
+    const arenaUnitId = placedView.battle.arena[0]!.id
+    expect(placedView.battle.arena[0]!.rotation).toBe(0)
+
+    const rotated = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/${arenaUnitId}/rotate`,
+      headers: bearer(starter),
+      payload: { rev: placedView.rev },
+    })
+    expect(rotated.status).toBe(200)
+    const rotatedView = await rotated.json() as {
+      battle: { arena: { rotation: number; attack: number; health: number }[] }
+    }
+    // Counter-clockwise: the first press goes to 270°, not 90° (issue #68).
+    expect(rotatedView.battle.arena[0]!.rotation).toBe(270)
+    expect(rotatedView.battle.arena[0]!.attack).toBe(unit.attack + 1)
+    expect(rotatedView.battle.arena[0]!.health).toBe(unit.health + 1)
+  })
+
+  it('moves a placed unit, undoes a kill, and returns a unit to hand through the API', async () => {
+    const { gameId, starter, waiting } = await startedGame('Arena-move')
+
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/INFANTRY`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/ARTILLERY`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    const battlehand = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/draw`,
+      headers: bearer(starter),
+      payload: { numberOfUnits: 2 },
+    })
+    const battlehandView = await battlehand.json() as {
+      rev: number
+      you: { battlehand: { id: string; attack: number; health: number }[] }
+    }
+    const [unitA, unitB] = battlehandView.you.battlehand
+
+    const waitingView = await inject(app, {
+      method: 'GET',
+      url: `/api/games/${gameId}`,
+      headers: bearer(waiting),
+    })
+    const waitingId = (await waitingView.json() as { you: { playerId: string } }).you.playerId
+
+    const initiated = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/initiate`,
+      headers: bearer(starter),
+      payload: { opponentId: waitingId, rev: battlehandView.rev },
+    })
+    const initiatedView = await initiated.json() as { rev: number }
+
+    const placedA = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/place`,
+      headers: bearer(starter),
+      payload: { unitId: unitA!.id, side: 'attacker', position: 0, attack: unitA!.attack, health: unitA!.health, rev: initiatedView.rev },
+    })
+    const placedAView = await placedA.json() as { rev: number; battle: { arena: { id: string }[] } }
+    const arenaUnitAId = placedAView.battle.arena[0]!.id
+
+    const placedB = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/place`,
+      headers: bearer(starter),
+      payload: { unitId: unitB!.id, side: 'attacker', position: 1, attack: unitB!.attack, health: unitB!.health, rev: placedAView.rev },
+    })
+    const placedBView = await placedB.json() as { rev: number; battle: { arena: { id: string; position: number }[] } }
+    const arenaUnitBId = placedBView.battle.arena.find((u) => u.id !== arenaUnitAId)!.id
+
+    // Move A to front #2.
+    const moved = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/${arenaUnitAId}/move`,
+      headers: bearer(starter),
+      payload: { position: 2, rev: placedBView.rev },
+    })
+    expect(moved.status).toBe(200)
+    const movedView = await moved.json() as { rev: number; battle: { arena: { id: string; position: number }[] } }
+    expect(movedView.battle.arena.find((u) => u.id === arenaUnitAId)!.position).toBe(2)
+
+    // Kill A, then undo the kill — it stays in the arena throughout.
+    const killed = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/${arenaUnitAId}/kill`,
+      headers: bearer(starter),
+      payload: { rev: movedView.rev },
+    })
+    const killedView = await killed.json() as {
+      rev: number
+      battle: { arena: { id: string; killed: boolean }[] }
+      battleSummary: { side: string; unitCount: number }[]
+    }
+    expect(killedView.battle.arena).toHaveLength(2)
+    expect(killedView.battle.arena.find((u) => u.id === arenaUnitAId)!.killed).toBe(true)
+    // The killed unit no longer counts toward the living total.
+    expect(killedView.battleSummary.find((s) => s.side === 'attacker')!.unitCount).toBe(1)
+
+    const undone = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/${arenaUnitAId}/kill`,
+      headers: bearer(starter),
+      payload: { rev: killedView.rev },
+    })
+    const undoneView = await undone.json() as { rev: number; battle: { arena: { id: string; killed: boolean }[] } }
+    expect(undoneView.battle.arena.find((u) => u.id === arenaUnitAId)!.killed).toBe(false)
+
+    // Return B to hand — undoes its placement.
+    const returned = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/${arenaUnitBId}/return`,
+      headers: bearer(starter),
+      payload: { rev: undoneView.rev },
+    })
+    expect(returned.status).toBe(200)
+    const returnedView = await returned.json() as {
+      rev: number
+      battle: { arena: { id: string }[] }
+      you: { battlehand: { id: string; inBattle: boolean }[] }
+    }
+    expect(returnedView.battle.arena).toHaveLength(1)
+    expect(returnedView.you.battlehand.find((u) => u.id === unitB!.id)?.inBattle).toBe(false)
+
+    // Kill A again and end the battle: A's card returns to hand too, not
+    // discarded — killing never auto-discards (issue #75).
+    const killedAgain = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/${arenaUnitAId}/kill`,
+      headers: bearer(starter),
+      payload: { rev: returnedView.rev },
+    })
+    const killedAgainView = await killedAgain.json() as { rev: number }
+
+    const ended = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end`,
+      headers: bearer(starter),
+      payload: { rev: killedAgainView.rev },
+    })
+    expect(ended.status).toBe(200)
+    const endedView = await ended.json() as {
+      battle: unknown
+      you: { battlehand: { id: string; inBattle: boolean }[]; items: { id: string; inBattle?: boolean }[] }
+    }
+    expect(endedView.battle).toBeNull()
+    expect(endedView.you.battlehand.find((u) => u.id === unitA!.id)?.inBattle).toBe(false)
+    expect(endedView.you.items.find((u) => u.id === unitA!.id)?.inBattle).toBe(false)
+  })
+
+  it('lets a new unit reinforce a front a killed unit still holds', async () => {
+    const { gameId, starter, waiting } = await startedGame('Arena-reinforce')
+
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/INFANTRY`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/ARTILLERY`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    const battlehand = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/draw`,
+      headers: bearer(starter),
+      payload: { numberOfUnits: 2 },
+    })
+    const battlehandView = await battlehand.json() as {
+      rev: number
+      you: { battlehand: { id: string; attack: number; health: number }[] }
+    }
+    const [fallen, reinforcement] = battlehandView.you.battlehand
+
+    const waitingView = await inject(app, {
+      method: 'GET',
+      url: `/api/games/${gameId}`,
+      headers: bearer(waiting),
+    })
+    const waitingId = (await waitingView.json() as { you: { playerId: string } }).you.playerId
+
+    const initiated = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/initiate`,
+      headers: bearer(starter),
+      payload: { opponentId: waitingId, rev: battlehandView.rev },
+    })
+    const initiatedView = await initiated.json() as { rev: number }
+
+    const placedFallen = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/place`,
+      headers: bearer(starter),
+      payload: {
+        unitId: fallen!.id, side: 'attacker', position: 0,
+        attack: fallen!.attack, health: fallen!.health, rev: initiatedView.rev,
+      },
+    })
+    const placedFallenView = await placedFallen.json() as { rev: number; battle: { arena: { id: string }[] } }
+    const fallenArenaId = placedFallenView.battle.arena[0]!.id
+
+    const killed = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/${fallenArenaId}/kill`,
+      headers: bearer(starter),
+      payload: { rev: placedFallenView.rev },
+    })
+    const killedView = await killed.json() as { rev: number }
+
+    // Reinforce the same front (position 0) with a second unit.
+    const reinforced = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/place`,
+      headers: bearer(starter),
+      payload: {
+        unitId: reinforcement!.id, side: 'attacker', position: 0,
+        attack: reinforcement!.attack, health: reinforcement!.health, rev: killedView.rev,
+      },
+    })
+    expect(reinforced.status).toBe(200)
+    const reinforcedView = await reinforced.json() as {
+      rev: number
+      battle: { arena: { id: string; unit: { id: string }; killed: boolean; position: number }[] }
+      you: { battlehand: { id: string; inBattle: boolean }[]; items: { id: string; inBattle?: boolean }[] }
+    }
+
+    // One live unit on that front — the fallen one is gone, not stacked.
+    expect(reinforcedView.battle.arena).toHaveLength(1)
+    expect(reinforcedView.battle.arena[0]!.unit.id).toBe(reinforcement!.id)
+    expect(reinforcedView.battle.arena[0]!.position).toBe(0)
+    expect(reinforcedView.battle.arena[0]!.killed).toBe(false)
+
+    // The fallen card stays locked (not discarded, not yet back in hand)
+    // for the rest of the battle — reinforcing a front does not free up
+    // what it displaces (issue #75's chosen design).
+    expect(reinforcedView.you.battlehand.find((u) => u.id === fallen!.id)?.inBattle).toBe(true)
+    expect(reinforcedView.you.items.find((u) => u.id === fallen!.id)?.inBattle).toBe(true)
+
+    // Ending the battle finally frees it, same as any other unit.
+    const ended = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end`,
+      headers: bearer(starter),
+      payload: { rev: reinforcedView.rev },
+    })
+    expect(ended.status).toBe(200)
+    const endedView = await ended.json() as {
+      you: { battlehand: { id: string; inBattle: boolean }[] }
+    }
+    expect(endedView.you.battlehand.find((u) => u.id === fallen!.id)?.inBattle).toBe(false)
+  })
+})
+
 /** A whole round through the API, as a smoke test for the entire stack. */
 describe('a whole round', () => {
   it('four players play through setup, draws, turns and an undo', async () => {

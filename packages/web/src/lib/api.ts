@@ -240,7 +240,6 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/battle/draw`, { numberOfUnits }),
   revealBattlehand: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/battle/reveal`),
   endBattle: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/battle/end`),
-  drawBarbarians: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/battle/barbarians`),
   discardBarbarians: (gameId: string) =>
     post<PlayerView>(`/api/games/${gameId}/battle/barbarians/discard`),
 
@@ -274,6 +273,12 @@ export const api = {
     patch<PlayerView>(`/api/games/${gameId}/battle/arena/${arenaUnitId}`, { key, value, rev }),
   killArenaUnit: (gameId: string, arenaUnitId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/${arenaUnitId}/kill`, { rev }),
+  rotateArenaUnit: (gameId: string, arenaUnitId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/${arenaUnitId}/rotate`, { rev }),
+  moveArenaUnit: (gameId: string, arenaUnitId: string, position: number, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/${arenaUnitId}/move`, { position, rev }),
+  returnArenaUnitToHand: (gameId: string, arenaUnitId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/${arenaUnitId}/return`, { rev }),
   endBattleTurn: (gameId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/turn/end`, { rev }),
   endBattleArena: (gameId: string, rev: number) =>

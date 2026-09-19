@@ -96,7 +96,7 @@ Java counterpart: `resource/*` and `application/*` under Dropwizard.
 | `src/errors.ts` | `EngineError` → HTTP status |
 | `src/auth.ts` | scrypt passwords and HMAC-signed bearer tokens |
 | `src/routes/board.ts` | the board — place, move, rotate, front, back, remove, undo, history |
-| `src/routes/arena.ts` | battle arena — initiate, place units, set stats, kill, end turn, end battle |
+| `src/routes/arena.ts` | battle arena — initiate, place units, move, return to hand, set stats, rotate, kill, end turn, end battle |
 | `src/store/` | the storage interface and the JSON file implementation |
 
 The server holds no game rules. Every route loads the state, calls one pure

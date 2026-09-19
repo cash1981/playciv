@@ -6,6 +6,7 @@
  * never implemented arena tracking. See docs/agents/decisions.md.
  */
 
+import type { Rotation } from './board.js'
 import type { UnitItem } from './item.js'
 
 /** Which side of the arena. The initiator is always 'attacker'. */
@@ -60,6 +61,21 @@ export interface ArenaUnit {
   readonly health: number
   /** The playerId of whoever dragged the card into the arena. */
   readonly placedBy: string
+  /**
+   * Visual rotation of the card, in 90° steps. The physical card prints one
+   * unit level per edge (e.g. Archer/Catapult/Cannon/Mobile Artillery on an
+   * Artillery card); rotating it is how a player shows which level the unit
+   * is currently playing at. Purely cosmetic — it does not touch `attack` or
+   * `health`, which stay independently user-entered.
+   */
+  readonly rotation: Rotation
+  /**
+   * Marked, not removed, when killed — so a kill can be undone (issue #71)
+   * right up until the battle ends. The source card is only actually
+   * discarded, and this unit dropped from the arena, when the battle ends
+   * with this still `true`.
+   */
+  readonly killed: boolean
 }
 
 /** The one battle that may be active in a game at a time. */
@@ -75,6 +91,15 @@ export interface Battle {
    */
   readonly turn: BattleSideId
   readonly arena: readonly ArenaUnit[]
+  /**
+   * Units reinforced away from their front (issue #74) while the battle is
+   * still going. Their source card stays `inBattle` — unavailable — for the
+   * rest of the battle, exactly as if they were still standing; it only
+   * returns to hand when the battle actually ends (issue #75), the same
+   * moment every other arena unit's card does. Never rendered: once
+   * reinforced, a unit is gone from the visible arena for good.
+   */
+  readonly departedUnits: readonly ArenaUnit[]
 }
 
 /** Derived totals per side — computed in `toPlayerView`, never stored. */

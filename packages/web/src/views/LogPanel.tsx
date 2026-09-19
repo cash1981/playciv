@@ -1,51 +1,46 @@
 /**
- * The log, undo voting and chat.
+ * The log and undo voting.
  *
  * The public log comes from the server's `publicLog` field and never carries
  * the contents of a hidden card. The private log is filtered down to the
- * player's own entries on the server side.
+ * player's own entries on the server side. Chat lives in its own `ChatPanel`
+ * (issue #68).
  */
 
 import { useCallback, useEffect, useState } from 'react'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
-import type { ChatMessageDto, LogEntryDto, PendingUndoDto, PlayerDto, PlayerView } from '../lib/api.js'
+import type { LogEntryDto, PendingUndoDto, PlayerView } from '../lib/api.js'
 import { formatTimestamp } from '../lib/formatTimestamp.js'
-import { ChatTimestamp } from './ChatTimestamp.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 
 interface Props {
   readonly gameId: string
   readonly busy: boolean
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
-  readonly player: PlayerDto
   readonly reloadCount: number
 }
 
 type Tab = 'public' | 'private'
 
-export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): React.JSX.Element {
+export function LogPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('public')
   const [publicLog, setPublicLog] = useState<readonly LogEntryDto[]>([])
   const [privateLog, setPrivateLog] = useState<readonly LogEntryDto[]>([])
   const [pending, setPending] = useState<readonly PendingUndoDto[]>([])
-  const [chat, setChat] = useState<readonly ChatMessageDto[]>([])
-  const [message, setMessage] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      const [pub, priv, undos, messages] = await Promise.all([
+      const [pub, priv, undos] = await Promise.all([
         api.publicLog(gameId),
         api.privateLog(gameId),
         api.pendingUndos(gameId),
-        api.chat(gameId),
       ])
       setPublicLog(pub)
       setPrivateLog(priv)
       setPending(undos)
-      setChat(messages)
       setLoadError(null)
     } catch (caught) {
       setLoadError(errorMessage(caught))
@@ -59,7 +54,7 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
   const entries = tab === 'public' ? publicLog : privateLog
 
   return (
-    <CollapsiblePanel id="log" title="Log">
+    <CollapsiblePanel id="log" title="Log" defaultOpen={false}>
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="row">
@@ -136,40 +131,6 @@ export function LogPanel({ gameId, busy, run, player, reloadCount }: Props): Rea
         ))}
         {pending.length === 0 && <li className="muted">None.</li>}
       </ul>
-
-      <h3 style={{ marginTop: '1rem' }}>Chat</h3>
-      <ul className="list scroll">
-        {chat.map((entry) => (
-          <li key={entry.id}>
-            <ChatTimestamp createdAt={entry.createdAt} />
-            <strong>{entry.username}</strong>
-            <span>{entry.message}</span>
-          </li>
-        ))}
-        {chat.length === 0 && <li className="muted">Quiet in here.</li>}
-      </ul>
-      <form
-        className="row"
-        style={{ marginTop: '0.5rem' }}
-        onSubmit={(event) => {
-          event.preventDefault()
-          const text = message.trim()
-          if (text === '') return
-          void run(async () => {
-            await api.sendChat(gameId, text)
-            setMessage('')
-            await load()
-          })
-        }}
-      >
-        <input
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          placeholder={`Write as ${player.username} …`}
-          style={{ flex: 1 }}
-        />
-        <button disabled={busy || message.trim() === ''}>Send</button>
-      </form>
     </CollapsiblePanel>
   )
 }
