@@ -11,8 +11,21 @@ code is right.
 | **Reviewer** | strong (Opus) | **no** | no |
 | **Rules checker** | strong (Opus) | **no** | no |
 
-The orchestrator is the session you are talking to. The other three are defined
-in `.claude/agents/` and spawned with the Agent tool.
+The orchestrator is the session you are talking to. The roles are defined once
+per agent host and spawned with that host's subagent tool:
+
+- Claude Code reads `.claude/agents/`: `coder`, `reviewer` and `rules-checker`.
+- OpenCode reads `.opencode/agents/`: `coder` and `rules-checker`. There is no
+  separate reviewer there — the owner runs the same model throughout, so a
+  second pass on a "stronger" model buys nothing, and the orchestrator does the
+  correctness check itself against the brief and the old system. Everything
+  below about *why* the reviewer is read-only still applies whenever a reviewer
+  role does exist.
+
+The model names in the table above are the Claude ones. The rule is the split,
+not the vendor: the coder runs on a cheaper model, the reviewer and rules
+checker on a stronger one that cannot write. OpenCode keeps the coder and
+rules-checker halves of that split.
 
 ## Why reviewers cannot write
 
@@ -30,7 +43,9 @@ not:
 
 So the reviewer roles have `Read`, `Grep` and `Glob` and nothing else. No
 `Write`, no `Edit`, no `Bash`. They read a diff and return a verdict; the
-orchestrator acts on it.
+orchestrator acts on it. In OpenCode the same two roles additionally allow
+`external_directory`, because the diff is written outside the repository; a
+broad deny ahead of the allows still covers edit, shell and subagent.
 
 They have no Bash either, so they cannot run the tests. That is on purpose: the
 orchestrator runs the tests and hands over the real output. A reviewer that runs
