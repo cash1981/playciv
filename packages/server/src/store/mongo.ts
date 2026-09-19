@@ -300,15 +300,14 @@ export class MongoRepository implements Repository {
 
     const session = this.transactionClient.startSession()
     try {
-      session.startTransaction()
-      try {
-        const result = await work(session)
-        await session.commitTransaction()
-        return result
-      } catch (error) {
-        await session.abortTransaction()
-        throw error
+      // The driver's callback API retries TransientTransactionError and
+      // UnknownTransactionCommitResult. On retry, our revision filter observes
+      // the winning write and returns false, which the route maps to HTTP 409.
+      const result = await session.withTransaction(() => work(session))
+      if (result === undefined) {
+        throw new Error('MongoDB transaction completed without a result')
       }
+      return result
     } finally {
       await session.endSession()
     }
