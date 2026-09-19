@@ -395,12 +395,23 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
   const [draggingArenaUnitId, setDraggingArenaUnitId] = useState<string | null>(null)
 
   function handleDragStart(unitId: string): void {
+    setDraggingArenaUnitId(null)
     setDraggingUnitId(unitId)
   }
 
   function handleArenaDragStart(e: React.DragEvent<HTMLLIElement>, arenaUnitId: string): void {
     e.dataTransfer.setData('text/plain', arenaUnitId)
+    setDraggingUnitId(null)
     setDraggingArenaUnitId(arenaUnitId)
+  }
+
+  // A drop is the only place either state gets cleared on success; if the
+  // browser drops the drag outside any slot (or the user hits Escape), no
+  // drop event fires at all, so a dangling id would silently hijack the next
+  // unrelated drag. Clear both on dragend regardless of where the drag ended.
+  function handleDragEnd(): void {
+    setDraggingUnitId(null)
+    setDraggingArenaUnitId(null)
   }
 
   function placeInArena(unitId: string, side: BattleSideId, position: number): void {
@@ -413,6 +424,10 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
     if (draggingArenaUnitId !== null) {
       const arenaUnitId = draggingArenaUnitId
       setDraggingArenaUnitId(null)
+      // Dropping on the other side's row is not a legal move — a unit can
+      // only be repositioned within its own side.
+      const draggedUnit = battle?.arena.find((u) => u.id === arenaUnitId)
+      if (draggedUnit === undefined || draggedUnit.side !== side) return
       void run(() => api.moveArenaUnit(gameId, arenaUnitId, position, rev))
       return
     }
@@ -486,6 +501,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
             item={unit}
             draggable={battle !== null}
             onDragStart={(e) => { e.dataTransfer.setData('text/plain', unit.id); handleDragStart(unit.id) }}
+            onDragEnd={handleDragEnd}
           >
             {battle !== null && mySideInBattle !== null &&
               !(battle.defender.kind === 'barbarians' && battle.defender.playerId === myId) && (
@@ -524,6 +540,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
             item={unit}
             draggable={battle !== null}
             onDragStart={(e) => { e.dataTransfer.setData('text/plain', unit.id); handleDragStart(unit.id) }}
+            onDragEnd={handleDragEnd}
           >
             {battle !== null && battle.defender.kind === 'barbarians' && battle.defender.playerId === myId && (
               <button
@@ -623,6 +640,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
               draggingUnitId={draggingUnitId}
               draggingArenaUnitId={draggingArenaUnitId}
               onArenaDragStart={handleArenaDragStart}
+              onArenaDragEnd={handleDragEnd}
               onDropUnit={handleDropOnArena}
               canManage={mySideInBattle !== null}
               isOwnSide={mySideInBattle === 'attacker'}
@@ -639,6 +657,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
               draggingUnitId={draggingUnitId}
               draggingArenaUnitId={draggingArenaUnitId}
               onArenaDragStart={handleArenaDragStart}
+              onArenaDragEnd={handleDragEnd}
               onDropUnit={handleDropOnArena}
               canManage={mySideInBattle !== null}
               isOwnSide={mySideInBattle === 'defender'}
@@ -662,6 +681,7 @@ interface ArenaRowProps {
   readonly draggingUnitId: string | null
   readonly draggingArenaUnitId: string | null
   readonly onArenaDragStart: (e: React.DragEvent<HTMLLIElement>, arenaUnitId: string) => void
+  readonly onArenaDragEnd: () => void
   readonly onDropUnit: (side: BattleSideId, position: number) => void
   readonly canManage: boolean
   /** Whether the viewer controls this side — gates moving/returning units. */
@@ -670,7 +690,7 @@ interface ArenaRowProps {
 
 function ArenaRow({
   label, side, units, maxPositions, gameId, busy, rev, run,
-  draggingUnitId, draggingArenaUnitId, onArenaDragStart, onDropUnit, canManage, isOwnSide,
+  draggingUnitId, draggingArenaUnitId, onArenaDragStart, onArenaDragEnd, onDropUnit, canManage, isOwnSide,
 }: ArenaRowProps): React.JSX.Element {
   const [dragOver, setDragOver] = useState<number | null>(null)
 
@@ -701,6 +721,7 @@ function ArenaRow({
                   canManage={canManage}
                   canMove={isOwnSide}
                   onDragStart={(e) => onArenaDragStart(e, unit.id)}
+                  onDragEnd={onArenaDragEnd}
                 />
               ) : (
                 <div className="arena-slot-empty">
@@ -725,10 +746,11 @@ interface ArenaUnitCardProps {
   /** Whether the viewer controls this unit's side — gates move/return. */
   readonly canMove: boolean
   readonly onDragStart: (e: React.DragEvent<HTMLLIElement>) => void
+  readonly onDragEnd: () => void
 }
 
 function ArenaUnitCard({
-  unit, gameId, busy, rev, run, canManage, canMove, onDragStart,
+  unit, gameId, busy, rev, run, canManage, canMove, onDragStart, onDragEnd,
 }: ArenaUnitCardProps): React.JSX.Element {
   const [attack, setAttack] = useState(unit.attack)
   const [health, setHealth] = useState(unit.health)
@@ -768,6 +790,7 @@ function ArenaUnitCard({
         rotation={unit.rotation}
         draggable={canMove}
         onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
       />
       {unit.killed && <span className="tag discarded">DEAD</span>}
       <button

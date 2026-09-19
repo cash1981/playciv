@@ -26,6 +26,7 @@ export function ItemCard({
   reveal = 'all',
   draggable,
   onDragStart,
+  onDragEnd,
   /** Visual rotation in degrees — the physical card prints one unit level per edge. */
   rotation,
   children,
@@ -34,6 +35,7 @@ export function ItemCard({
   readonly reveal?: 'all' | 'public'
   readonly draggable?: boolean
   readonly onDragStart?: (e: React.DragEvent<HTMLLIElement>) => void
+  readonly onDragEnd?: (e: React.DragEvent<HTMLLIElement>) => void
   readonly rotation?: Rotation
   readonly children?: React.ReactNode
 }): React.JSX.Element {
@@ -42,7 +44,7 @@ export function ItemCard({
   const imageStyle = rotation ? { transform: `rotate(${rotation}deg)` } : undefined
 
   return (
-    <li className="card" draggable={draggable} onDragStart={onDragStart}>
+    <li className="card" draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd}>
       <div className="card-art">
         {url === null ? (
           <span className="card-art-fallback" style={imageStyle}>{label}</span>

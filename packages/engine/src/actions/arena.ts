@@ -12,7 +12,7 @@ import type { Rotation } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { UnitItem } from '../item.js'
 import { isUnit, revealAll } from '../item.js'
-import { appendLog, appendPublicLog } from '../log.js'
+import { appendItemLog, appendPublicLog } from '../log.js'
 import { nextId } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
@@ -64,29 +64,35 @@ function playerToLeft(state: GameState, ofPlayerId: string): Playerhand | undefi
 
 /**
  * Appends a log line for a repeatable arena adjustment (move, kill toggle),
- * dropping the immediately preceding entry first if it was the same kind of
- * adjustment on the same card — so nudging a unit back and forth, or
- * kill/undo-kill a few times, leaves one line instead of one per click
- * (issue #71). Only ever looks at the single most recent entry: it is a
- * clutter guard for the common case of a player changing their mind a few
- * times in a row, not a general log-history rewrite.
+ * dropping the immediately preceding entry first if `isSameAdjustment` says
+ * it was the same kind of change on the same card — so nudging a unit back
+ * and forth, or kill/undo-kill a few times, leaves one line instead of one
+ * per click (issue #71). Only ever looks at the single most recent entry:
+ * it is a clutter guard for a player changing their mind a few times in a
+ * row, not a general log-history rewrite.
+ *
+ * Deliberately never sets `item` on the entry — `initiateUndo` treats any
+ * log entry with a non-null `item` as undoable (its only gate), and an
+ * accepted undo on a "kills X"/"moves X" line would try to pull the card
+ * back into the player's hand or the deck while it is still referenced by
+ * `battle.arena`, corrupting the game. Matching on the plain message text is
+ * enough to catch same-unit repeats without opening that door; arena units
+ * are already fully public, so nothing is hidden by not carrying `item`.
  */
 function appendRollingArenaLog(
   state: GameState,
   username: string,
   playerId: string,
-  card: UnitItem,
-  tag: string,
   message: string,
+  isSameAdjustment: (previousPublicLog: string) => boolean,
 ): GameState {
-  const prefix = `${username} ${tag}`
   const last = state.log[state.log.length - 1]
-  const isSameRollingChange = last?.item?.id === card.id && last.publicLog.startsWith(prefix)
-  const trimmed = isSameRollingChange ? { ...state, log: state.log.slice(0, -1) } : state
+  const trimmed =
+    last !== undefined && isSameAdjustment(last.publicLog)
+      ? { ...state, log: state.log.slice(0, -1) }
+      : state
 
-  // Carried on `item` only for the same-rolling-change check above — arena
-  // units are already fully public, so this adds no new disclosure.
-  return appendLog(trimmed, { username, playerId, item: card, publicLog: `${username} ${message}` })
+  return appendPublicLog(trimmed, username, playerId, message)
 }
 
 // ---------------------------------------------------------------------------
@@ -364,13 +370,13 @@ export function moveArenaUnit(
 
   const updatedUnit: ArenaUnit = { ...unit, position: input.position }
 
+  const movePrefix = `${player.username} moves ${revealAll(unit.unit)} to`
   const nextState = appendRollingArenaLog(
     state,
     player.username,
     player.playerId,
-    unit.unit,
-    `moves ${revealAll(unit.unit)} to`,
     `moves ${revealAll(unit.unit)} to ${unit.side} front #${input.position}`,
+    (previous) => previous.startsWith(movePrefix),
   )
 
   return ok({
@@ -625,15 +631,19 @@ export function killArenaUnit(
   const killed = !arenaUnit.killed
   const updatedUnit: ArenaUnit = { ...arenaUnit, killed }
 
+  // Both directions of the toggle recognize each other as "the same
+  // adjustment" so kill/undo/kill/undo in a row collapses to one line —
+  // whichever the player last clicked — not one line per click.
+  const killedMessage = `kills ${revealAll(arenaUnit.unit)} in the arena`
+  const undoneMessage = `undoes the kill on ${revealAll(arenaUnit.unit)} in the arena`
+  const killedLog = `${player.username} ${killedMessage}`
+  const undoneLog = `${player.username} ${undoneMessage}`
   const nextState = appendRollingArenaLog(
     state,
     player.username,
     player.playerId,
-    arenaUnit.unit,
-    killed ? `kills ${revealAll(arenaUnit.unit)}` : `undoes the kill on ${revealAll(arenaUnit.unit)}`,
-    killed
-      ? `kills ${revealAll(arenaUnit.unit)} in the arena`
-      : `undoes the kill on ${revealAll(arenaUnit.unit)} in the arena`,
+    killed ? killedMessage : undoneMessage,
+    (previous) => previous === killedLog || previous === undoneLog,
   )
 
   return ok({
@@ -754,11 +764,17 @@ export function endBattleAction(
     if (owner === undefined) continue
 
     if (arenaUnit.killed) {
-      const discardedCard = { ...arenaUnit.unit, hidden: true }
+      // Match each source list's own discard convention: discardBarbarians
+      // clears ownerId (there is no "owner" once returned to the neutral
+      // pile); discardItem marks hidden instead. Logged so the owner sees it
+      // and revealedFeed attributes it correctly, same as any other discard.
+      let discardedCard: UnitItem
       if (ownerSide.kind === 'barbarians') {
+        discardedCard = { ...arenaUnit.unit, ownerId: null }
         const updated = owner.barbarians.filter((u) => u.id !== arenaUnit.unit.id)
         nextState = withPlayer(nextState, { ...owner, barbarians: updated })
       } else {
+        discardedCard = { ...arenaUnit.unit, hidden: true }
         const updatedBattlehand = owner.battlehand.filter((u) => u.id !== arenaUnit.unit.id)
         const updatedItems = owner.items.filter((it) => it.id !== arenaUnit.unit.id)
         nextState = withPlayer(nextState, {
@@ -767,6 +783,7 @@ export function endBattleAction(
           items: updatedItems,
         })
       }
+      nextState = appendItemLog(nextState, 'DISCARD', owner.username, ownerSide.playerId, discardedCard)
       nextState = { ...nextState, discardedItems: [...nextState.discardedItems, discardedCard] }
     } else if (ownerSide.kind === 'barbarians') {
       const updated = owner.barbarians.map((u) =>

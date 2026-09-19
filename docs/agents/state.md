@@ -13,7 +13,7 @@ _Last updated: 2026-09-18_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 381 engine, 83 server, 7 web |
+| `pnpm -r test` | passing — 394 engine, 84 server, 7 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #63 merged (PR #66), fix/issue-63-arena-ux awaiting review |
 
@@ -155,6 +155,7 @@ _Last updated: 2026-09-18_
 - **Issue #65.** `killArenaUnit` and `endBattleTurn` now reject non-participants with `NOT_IN_THIS_BATTLE`, matching `endBattleAction`'s existing guard. The "End turn", "End battle" and per-unit "Kill" buttons are hidden client-side for non-participants. `setArenaUnitStat` stays open to any game member on purpose (see `decisions.md`).
 - **Issue #63 UX pass.** Fixed three problems found testing the merged arena in the browser: the arena is now one shared bordered frame (was two separate boxes), placing a unit is immediate with no confirmation step (was easy to miss, looked broken), and arena cards are smaller with a horizontal scrollbar per side (was an ever-growing vertical stack). Also added a cosmetic Rotate button per arena unit (`ArenaUnit.rotation`, reusing the board's `Rotation`/`nextRotation`) so a card can be spun to whichever printed unit level it represents — independent of the manually-entered attack/health. Browser-verified with two live accounts.
 - **Issue #68.** Seven more fixes on the same branch: the standalone "End battle" cleanup button now hides once nothing is left `inBattle`; a unit disappears from the battlehand/barbarians list the moment it is placed in the arena; arena cards are back to full battlehand-card size; Rotate now turns counter-clockwise and suggests the next tier's attack/health (base + presses, wrapping after 360°, skipped for aircraft which print no level ladder); the Revealed and Discarded Items panel's fallback tiebreak (entries with no distinguishing timestamp) now also sorts newest-first; Battle/Techs/Revealed/Log default to collapsed; Chat is now its own collapsible panel with 10-per-page client-side pagination (`ChatPanel.tsx`, split out of `LogPanel.tsx`).
+- **Issue #71.** Five more fixes on the same branch: `initiateBattle` now opens the turn with the defender, not the attacker; a `CollapsiblePanel`'s open/closed state persists to `localStorage` across a reload; an arena card's own displayed name/number now tracks its live attack/health instead of the frozen printed snapshot; killing an arena unit is now an undoable toggle (`ArenaUnit.killed`) rather than an immediate removal, made permanent (source card discarded, matching each source's own discard convention) only when the battle actually ends; added `moveArenaUnit` (reposition) and `returnArenaUnitToHand` (undo a placement), both restricted to the unit's own side, with drag-and-drop support and a same-position/wrong-side no-op guard. A review round caught and fixed a real bug in the first pass: the "collapse repeated log lines" helper had carried the card on the log entry's `item` field for correlation, which made these entries reachable through the undo system and would have corrupted the game on an accepted undo — fixed to match on message text instead, never on `item`.
 
 ## In progress
 

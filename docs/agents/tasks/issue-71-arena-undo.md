@@ -4,7 +4,7 @@
 - **Branch:** `fix/issue-63-arena-ux` (continuation, per the human's request —
   same branch as issues #63, #65 and #68)
 - **Owner:** Claude (Sonnet 5)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -67,11 +67,20 @@ entirely new arena behaviour (see `docs/agents/decisions.md`).
     clears `inBattle`, i.e. undoes `placeUnitInArena` outright.
   Web: dragging an already-placed card (now `draggable` when it is the
   viewer's own side) moves it; a "× Return to hand" button undoes the
-  placement. "Only log the last change" is a new `appendRollingArenaLog`
-  helper (in `arena.ts`): if the immediately preceding log entry was the
-  same kind of adjustment on the same card, it is dropped before the new
-  one is appended. Used by `moveArenaUnit` and `killArenaUnit`; scoped to
-  the single most recent entry, not a general log rewrite.
+  placement. Dropping on the wrong side's row is a no-op rather than
+  repositioning the unit on its own side by mistake. `onDragEnd` clears the
+  drag-tracking state on both hand and arena cards, so a drag released
+  outside any slot cannot leave a stale id to hijack the next unrelated
+  drag. "Only log the last change" is a new `appendRollingArenaLog` helper
+  (in `arena.ts`): if the immediately preceding log entry matches a
+  caller-supplied predicate (same kind of adjustment on the same card, by
+  message text), it is dropped before the new one is appended. Used by
+  `moveArenaUnit` and `killArenaUnit`'s two directions; scoped to the
+  single most recent entry, not a general log rewrite. It never sets
+  `item` on these entries — an earlier version did, which made them
+  reachable through the undo system (`initiateUndo`'s only gate is
+  `entry.item !== null`) and would have corrupted the game on an accepted
+  undo. See `decisions.md`.
 
 ## Claimed paths
 
@@ -102,4 +111,12 @@ entirely new arena behaviour (see `docs/agents/decisions.md`).
       any time before the battle ends.
 - [ ] Repeated moves (or kill/undo-kill pairs) of the same unit do not pile
       up in the log.
+- [ ] No arena log entry (place aside — that one already carried the card
+      before this change) is undoable through `initiateUndo`.
+- [ ] Dropping a dragged unit on the opposing side's row is a no-op.
+- [ ] Releasing a drag outside any arena slot does not affect the next
+      unrelated drag-and-drop.
+- [ ] A killed unit's discard on end-battle matches its source list's own
+      convention (barbarian: `ownerId: null`; player card: `hidden: true`)
+      and is logged as a `DISCARD`.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.

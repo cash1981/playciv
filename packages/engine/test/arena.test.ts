@@ -236,6 +236,32 @@ describe('moveArenaUnit', () => {
     expect(state.log[state.log.length - 1]!.publicLog).toContain('front #3')
   })
 
+  it('does not carry the card on the log entry, so a move can never be undone', () => {
+    // initiateUndo's only gate is `entry.item !== null` — if a move entry
+    // carried the card (as an early version of the rolling-log helper did),
+    // accepting an undo vote on it would try to pull the unit back into the
+    // deck/hand while it is still referenced by battle.arena, corrupting the
+    // game. See docs/agents/decisions.md (issue #71).
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+    const arenaUnitId = state.battle!.arena[0]!.id
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId, position: 1 }))
+
+    expect(state.log[state.log.length - 1]!.item).toBeNull()
+  })
+
   it('errors on a position already held by another unit on the same side', () => {
     let state = withBattlehand(CASH1981, 2)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
@@ -404,6 +430,35 @@ describe('killArenaUnit', () => {
     expect(state.battle!.arena[0]!.killed).toBe(false)
   })
 
+  it('collapses a kill/undo-kill run into one log entry, whichever direction was last', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+    const logLengthAfterPlace = state.log.length
+
+    const arenaUnitId = state.battle!.arena[0]!.id
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId })) // killed: true
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId })) // killed: false
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId })) // killed: true
+
+    // Three toggles, but only one new log line beyond the placement.
+    expect(state.log.length).toBe(logLengthAfterPlace + 1)
+    expect(state.battle!.arena[0]!.killed).toBe(true)
+    expect(state.log[state.log.length - 1]!.publicLog).toContain('kills')
+    expect(state.log[state.log.length - 1]!.item).toBeNull()
+  })
+
   it('does NOT set killed: true on the source card', () => {
     let state = withBattlehand(CASH1981)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
@@ -528,6 +583,47 @@ describe('endBattleAction', () => {
     // The unkilled unit still returns to hand as before.
     const survivorHand = updated.battlehand.find((u) => u.id === survivor!.id)
     expect(survivorHand?.inBattle).toBe(false)
+
+    // The discard is logged, like any other discard.
+    const discardLog = state.log.find(
+      (entry) => entry.logType === 'DISCARD' && entry.item?.id === killedUnit!.id,
+    )
+    expect(discardLog).toBeDefined()
+  })
+
+  it('discards a killed barbarian unit the same way, clearing ownerId like discardBarbarians', () => {
+    let state = unwrap(
+      initiateBattle(firstCivGame(), { initiatorId: CASH1981, opponentId: 'barbarians' }),
+    )
+    // The player to CASH1981's left controls the barbarians (KARANDRAS1 in firstCivGame).
+    const controllerId = state.battle!.defender.playerId
+    const barbarianUnit = findPlayer(state, controllerId)!.barbarians[0]!
+
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: controllerId,
+        unitId: barbarianUnit.id,
+        side: 'defender',
+        position: 0,
+        attack: barbarianUnit.attack,
+        health: barbarianUnit.health,
+      }),
+    )
+    const arenaUnitId = state.battle!.arena[0]!.id
+    state = unwrap(killArenaUnit(state, { playerId: controllerId, arenaUnitId }))
+
+    state = unwrap(endBattleAction(state, { playerId: controllerId }))
+
+    const controller = findPlayer(state, controllerId)!
+    expect(controller.barbarians.some((u) => u.id === barbarianUnit.id)).toBe(false)
+    const discarded = state.discardedItems.find((it) => it.id === barbarianUnit.id)
+    expect(discarded).toBeDefined()
+    expect((discarded as { ownerId: string | null }).ownerId).toBeNull()
+
+    const discardLog = state.log.find(
+      (entry) => entry.logType === 'DISCARD' && entry.item?.id === barbarianUnit.id,
+    )
+    expect(discardLog).toBeDefined()
   })
 
   it('rejects a non-participant trying to end an active battle', () => {
@@ -805,6 +901,8 @@ describe('initiateBattle with barbarians', () => {
     expect(state.battle!.attacker.kind).toBe('player')
     expect(state.battle!.attacker.playerId).toBe(CASH1981)
     expect(state.battle!.defender.kind).toBe('barbarians')
+    // The defender (the barbarian controller) opens, same as vs. a player (issue #71).
+    expect(state.battle!.turn).toBe('defender')
 
     // The player to the left of CASH1981 in firstCivGame is KARANDRAS1 (index 1)
     const controllerId = state.battle!.defender.playerId
