@@ -15,6 +15,38 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
+### issue-43-governments
+
+- **Owner:** Codex
+- **Branch:** `feat/issue-43-governments`
+- **Brief:** `docs/agents/tasks/issue-43-governments.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `docs/agents/tasks/issue-43-governments.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+  - `docs/agents/decisions.md`
+  - `packages/engine/src/government.ts`
+  - `packages/engine/src/state.ts`
+  - `packages/engine/src/create-game.ts`
+  - `packages/engine/src/migrate.ts`
+  - `packages/engine/src/actions/player.ts`
+  - `packages/engine/src/errors.ts`
+  - `packages/engine/src/index.ts`
+  - `packages/engine/test/player-government.test.ts`
+  - `packages/engine/test/hidden-info.test.ts`
+  - `packages/server/src/routes/play.ts`
+  - `packages/server/src/errors.ts`
+  - `packages/server/test/api.test.ts`
+  - `packages/web/src/lib/api.ts`
+  - `packages/web/src/views/StatusPanel.tsx`
+  - `packages/web/src/views/StatusPanel.test.tsx`
+  - `packages/web/src/styles.css`
+- **Notes:** Completes issue #43 with public government bookkeeping and a
+  readable WaW government-card reference. The older revealed-panel and
+  citystate claims below are stale: PRs #59 and #57 are already merged into
+  `origin/main`.
+
 ### revealed-panel
 
 - **Owner:** Claude (Opus 4.8)
