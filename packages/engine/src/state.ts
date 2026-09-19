@@ -424,7 +424,8 @@ export interface PlayerView {
   readonly rev: number
 }
 
-function battleSummaries(state: GameState): readonly BattleSideSummary[] {
+/** Derived per-side totals for the active battle. Exported for `endBattleAction`'s winner check. */
+export function battleSummaries(state: GameState): readonly BattleSideSummary[] {
   const { battle } = state
   if (battle === null) return []
 

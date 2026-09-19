@@ -240,7 +240,6 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/battle/draw`, { numberOfUnits }),
   revealBattlehand: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/battle/reveal`),
   endBattle: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/battle/end`),
-  drawBarbarians: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/battle/barbarians`),
   discardBarbarians: (gameId: string) =>
     post<PlayerView>(`/api/games/${gameId}/battle/barbarians/discard`),
 

@@ -19,6 +19,7 @@ import {
   setArenaUnitStat,
 } from '../src/actions/arena.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
+import { endTurn, setPlayerStat } from '../src/actions/player.js'
 import { isUnit } from '../src/item.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -44,6 +45,28 @@ function withBattlehand(
   // Move them into the battlehand
   state = unwrap(drawUnitsForBattle(state, { playerId, numberOfDraws: count }))
   return state
+}
+
+/**
+ * Same as `withBattlehand`, but adds to an already-built state without
+ * resetting it — passing the turn to `playerId` and back, since `draw`
+ * requires it to be the drawing player's turn.
+ */
+function addBattlehand(
+  state: GameState,
+  playerId: string,
+  count: number = 3,
+): GameState {
+  const holder = state.players.find((p) => p.yourTurn)!.playerId
+  let next = unwrap(endTurn(state))
+  for (let i = 0; i < count; i++) {
+    next = unwrap(draw(next, { playerId, sheetName: 'INFANTRY' }))
+  }
+  next = unwrap(drawUnitsForBattle(next, { playerId, numberOfDraws: count }))
+  while (findPlayer(next, holder)!.yourTurn !== true) {
+    next = unwrap(endTurn(next))
+  }
+  return next
 }
 
 // ---------------------------------------------------------------------------
@@ -690,6 +713,117 @@ describe('endBattleAction', () => {
 
     const survivorHand = updated.battlehand.find((u) => u.id === survivor!.id)
     expect(survivorHand?.inBattle).toBe(false)
+  })
+
+  it('logs the winner as whichever side has more remaining HP', () => {
+    let state = withBattlehand(CASH1981)
+    state = addBattlehand(state, KARANDRAS1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const attackerUnit = findPlayer(state, CASH1981)!.battlehand[0]!
+    const defenderUnit = findPlayer(state, KARANDRAS1)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: attackerUnit.id,
+        side: 'attacker',
+        position: 0,
+        attack: attackerUnit.attack,
+        health: 5,
+      }),
+    )
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: KARANDRAS1,
+        unitId: defenderUnit.id,
+        side: 'defender',
+        position: 0,
+        attack: 1,
+        health: 2,
+      }),
+    )
+
+    state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+
+    const logEntry = state.log[state.log.length - 1]!
+    expect(logEntry.publicLog).toContain('cash1981 won with 5 HP vs 2 HP')
+  })
+
+  it('adds each side\'s combat bonus (issue #43 stat) to its HP before deciding the winner', () => {
+    let state = withBattlehand(CASH1981)
+    state = addBattlehand(state, KARANDRAS1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    state = unwrap(
+      setPlayerStat(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: KARANDRAS1,
+        stat: 'combat',
+        value: 5,
+      }),
+    )
+
+    const attackerUnit = findPlayer(state, CASH1981)!.battlehand[0]!
+    const defenderUnit = findPlayer(state, KARANDRAS1)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: attackerUnit.id,
+        side: 'attacker',
+        position: 0,
+        attack: attackerUnit.attack,
+        health: 5,
+      }),
+    )
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: KARANDRAS1,
+        unitId: defenderUnit.id,
+        side: 'defender',
+        position: 0,
+        attack: 1,
+        health: 2,
+      }),
+    )
+
+    state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+
+    // Defender's 2 HP + the 5-point combat bonus (7) beats the attacker's 5.
+    const logEntry = state.log[state.log.length - 1]!
+    expect(logEntry.publicLog).toContain('Karandras1 won with 7 HP vs 5 HP')
+  })
+
+  it('a draw goes to the defender', () => {
+    let state = withBattlehand(CASH1981)
+    state = addBattlehand(state, KARANDRAS1)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const attackerUnit = findPlayer(state, CASH1981)!.battlehand[0]!
+    const defenderUnit = findPlayer(state, KARANDRAS1)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: attackerUnit.id,
+        side: 'attacker',
+        position: 0,
+        attack: attackerUnit.attack,
+        health: 3,
+      }),
+    )
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: KARANDRAS1,
+        unitId: defenderUnit.id,
+        side: 'defender',
+        position: 0,
+        attack: 1,
+        health: 3,
+      }),
+    )
+
+    state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+
+    const logEntry = state.log[state.log.length - 1]!
+    expect(logEntry.publicLog).toContain('Karandras1 won with 3 HP vs 3 HP')
   })
 
   it('returns a killed barbarian unit to the barbarian list too, clearing inBattle', () => {

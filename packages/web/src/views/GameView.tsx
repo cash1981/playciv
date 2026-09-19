@@ -530,12 +530,6 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
       <h3 style={{ marginTop: '0.8rem' }}>Barbarians ({availableBarbarians.length})</h3>
       <div className="row">
         <button
-          disabled={busy || barbarians.length > 0}
-          onClick={() => void run(() => api.drawBarbarians(gameId))}
-        >
-          Draw 3
-        </button>
-        <button
           disabled={busy || barbarians.length === 0}
           onClick={() => void run(() => api.discardBarbarians(gameId))}
         >

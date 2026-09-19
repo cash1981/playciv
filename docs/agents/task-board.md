@@ -12,6 +12,22 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-79-barbarian-draw-and-winner
+
+- **Owner:** Claude (Sonnet 5)
+- **Branch:** `fix/issue-63-arena-ux`
+- **Brief:** `docs/agents/tasks/issue-79-barbarian-draw-and-winner.md`
+- **Status:** in review
+- **Claimed paths:**
+  - `packages/web/src/views/GameView.tsx`
+  - `packages/web/src/lib/api.ts`
+  - `packages/server/src/routes/play.ts`
+  - `packages/engine/src/state.ts`
+  - `packages/engine/src/actions/arena.ts`
+  - `packages/engine/test/arena.test.ts`
+- **Notes:** removes the manual barbarian-draw button and adds a battle-winner
+  log line to `endBattleAction`. Awaiting review-gate.
+
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 

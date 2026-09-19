@@ -17,7 +17,7 @@ import { nextId } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
-import { findPlayer, withPlayer } from '../state.js'
+import { battleSummaries, findPlayer, withPlayer } from '../state.js'
 import type { ArenaUnit, BattleSide, BattleSideId } from '../battle.js'
 import { drawBarbarians } from './draw.js'
 
@@ -835,11 +835,22 @@ export function endBattleAction(
     nextState = returnArenaUnitCardToHand(nextState, arenaUnit, ownerSide)
   }
 
+  // Winner: whichever side's remaining HP plus its combat bonus (issue #43's
+  // status-board `combat` stat, always 0 for barbarians) is higher; a draw
+  // goes to the defender, per the human's explicit tie-break rule.
+  const [attackerSummary, defenderSummary] = battleSummaries(state)
+  const attackerScore = attackerSummary!.totalHealth + attackerSummary!.combatBonus
+  const defenderScore = defenderSummary!.totalHealth + defenderSummary!.combatBonus
+  const [winner, winnerScore, loserScore] =
+    attackerScore > defenderScore
+      ? [attackerSummary!, attackerScore, defenderScore]
+      : [defenderSummary!, defenderScore, attackerScore]
+
   nextState = appendPublicLog(
     nextState,
     player.username,
     player.playerId,
-    `ends the battle`,
+    `ends the battle — ${winner.label} won with ${winnerScore} HP vs ${loserScore} HP`,
   )
 
   return ok({ ...nextState, battle: null })
