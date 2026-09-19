@@ -19,6 +19,10 @@ _Last updated: 2026-09-19_
 
 ## Done
 
+- **OpenCode agents.** The coder / reviewer / rules-checker roles now exist for
+  OpenCode under `.opencode/agents/`, mirroring `.claude/agents/`; the two
+  review roles are read-only and the coder cannot spawn subagents. Skills still
+  load from `.claude/skills/`. Review-approved; `chore/opencode-agents` PR to open.
 - **The port itself.** Deck, items, draws, reshuffle, hands, techs, social
   policy, trade, turns, undo voting, chat, game lifecycle. Every Java action
   class has a counterpart and a test file naming it.

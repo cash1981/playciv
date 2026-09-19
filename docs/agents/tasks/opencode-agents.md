@@ -3,7 +3,7 @@
 - **Slug:** `opencode-agents`
 - **Branch:** `chore/opencode-agents`
 - **Owner:** OpenCode (DeepSeek V4.1 Flash)
-- **Status:** in progress
+- **Status:** done — review approved, PR to open
 
 ## Goal
 
@@ -71,16 +71,19 @@ is the stronger one; swap the `model:` lines when the available models change.
 - `docs/agents/roles.md`
 - `docs/agents/repo-map.md`
 - `docs/agents/task-board.md` (own claim block only)
+- `docs/agents/workflow.md` (the review-gate mention only)
 
 ## Acceptance criteria
 
-- [ ] The three agent files exist under `.opencode/agents/` with `mode: subagent`.
-- [ ] `reviewer` and `rules-checker` cannot edit or run anything: a `deny` rule
+- [x] The three agent files exist under `.opencode/agents/` with `mode: subagent`.
+- [x] `reviewer` and `rules-checker` cannot edit or run anything: a `deny` rule
       covers `*` before the read-only allows.
-- [ ] `coder` cannot spawn subagents.
-- [ ] The bodies are the `.claude/agents/` texts, unchanged in substance.
-- [ ] `roles.md` names the OpenCode location; `repo-map.md` lists `.opencode/`.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (no code
+- [x] `coder` cannot spawn subagents.
+- [x] The bodies are the `.claude/agents/` texts, unchanged in substance (the
+      Claude-only preview-pane note is dropped from `coder`, since OpenCode has
+      no preview pane).
+- [x] `roles.md` names the OpenCode location; `repo-map.md` lists `.opencode/`.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (no code
       changed, so this is a no-regression check).
 
 ## Open questions

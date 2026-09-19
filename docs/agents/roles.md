@@ -17,8 +17,8 @@ once per agent host and spawned with that host's subagent tool:
 - Claude Code reads `.claude/agents/` (the `model:` lines name Claude models).
 - OpenCode reads `.opencode/agents/` (the `model:` lines name OpenCode models —
   currently a cheap DeepSeek for the coder and a stronger one for the two
-  read-only roles). The two sets are kept in step; change both when a role's
-  model changes.
+  read-only roles). Keep the role structure the same in both; when a role's
+  model changes, change both.
 
 The model names in the table above are the Claude ones. The rule is the split,
 not the vendor: the coder runs on a cheaper model, the reviewer and rules
@@ -40,7 +40,9 @@ not:
 
 So the reviewer roles have `Read`, `Grep` and `Glob` and nothing else. No
 `Write`, no `Edit`, no `Bash`. They read a diff and return a verdict; the
-orchestrator acts on it.
+orchestrator acts on it. In OpenCode the same two roles additionally allow
+`external_directory`, because the diff is written outside the repository; a
+broad deny ahead of the allows still covers edit, shell and subagent.
 
 They have no Bash either, so they cannot run the tests. That is on purpose: the
 orchestrator runs the tests and hands over the real output. A reviewer that runs
