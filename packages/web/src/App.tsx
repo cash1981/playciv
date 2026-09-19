@@ -18,6 +18,7 @@ import { AdminView } from './views/AdminView.js'
 import { Navigation } from './views/Navigation.js'
 import { FaqView } from './views/FaqView.js'
 import { AboutView } from './views/AboutView.js'
+import { Footer } from './views/Footer.js'
 import { applyTheme, saveTheme, storedTheme, type Theme } from './theme.js'
 import { confirmNavigation } from './lib/navigationGuard.js'
 
@@ -154,6 +155,7 @@ export function App(): React.JSX.Element {
     return (
       <div className="app">
         <p className="muted">Loading …</p>
+        <Footer />
       </div>
     )
   }
@@ -164,6 +166,7 @@ export function App(): React.JSX.Element {
       <div className="app">
         <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
         <FaqView />
+        <Footer />
       </div>
     )
   }
@@ -174,6 +177,7 @@ export function App(): React.JSX.Element {
       <div className="app">
         <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
         <AboutView />
+        <Footer />
       </div>
     )
   }
@@ -184,6 +188,7 @@ export function App(): React.JSX.Element {
       <div className="app">
         <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
         <HighscoreView />
+        <Footer />
       </div>
     )
   }
@@ -201,6 +206,7 @@ export function App(): React.JSX.Element {
           onDeleted={backToGames}
           onWithdrawn={backToGames}
         />
+        <Footer />
       </div>
     )
   }
@@ -217,6 +223,7 @@ export function App(): React.JSX.Element {
               setShowLogin(false)
             }}
           />
+          <Footer />
         </div>
       )
     }
@@ -224,6 +231,7 @@ export function App(): React.JSX.Element {
       <div className="app">
         <Navigation player={null} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
         <LandingView player={null} onOpenGame={openGame} onSignIn={() => setShowLogin(true)} />
+        <Footer />
       </div>
     )
   }
@@ -237,6 +245,7 @@ export function App(): React.JSX.Element {
       ) : (
         <LandingView player={player} onOpenGame={openGame} onSignIn={signOut} />
       )}
+      <Footer />
     </div>
   )
 }
