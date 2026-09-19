@@ -9,11 +9,15 @@ import { logger } from 'hono/logger'
 import { TokenSigner } from './auth.js'
 import type { AppContext, Variables } from './context.js'
 import { sendError } from './errors.js'
+import type { Mailer } from './mail.js'
+import { noopMailer } from './mail.js'
+import { DEFAULT_APP_ORIGIN, createNotifications } from './notifications.js'
 import { registerAuthRoutes } from './routes/auth.js'
 import { registerAdminRoutes } from './routes/admin.js'
 import { registerArenaRoutes } from './routes/arena.js'
 import { registerBoardRoutes } from './routes/board.js'
 import { registerGameRoutes } from './routes/games.js'
+import { registerNotificationRoutes } from './routes/notifications.js'
 import { registerPlayRoutes } from './routes/play.js'
 import { registerPublicRoutes } from './routes/public.js'
 import { JsonFileRepository } from './store/json-file.js'
@@ -25,6 +29,18 @@ export interface CreateAppOptions {
   readonly logger?: boolean
   /** Origins the client may call from. `true` lets everything through. */
   readonly corsOrigin?: string | string[] | true
+  /**
+   * Outgoing email. Defaults to a no-op, so tests and local development never
+   * reach a provider. The Node entry builds a Resend mailer from the
+   * environment.
+   */
+  readonly mailer?: Mailer
+  /** Absolute base URL of the web app, used in email links. */
+  readonly appOrigin?: string
+  /** Java emailed every account when a game was created; off by default. */
+  readonly broadcastNewGames?: boolean
+  /** Injectable clock for the notification cooldowns; for tests. */
+  readonly now?: () => Date
 }
 
 export type App = Hono<{ Variables: Variables }>
@@ -63,9 +79,18 @@ export function createApp(options: CreateAppOptions): App {
     await next()
   })
 
+  const appOrigin = (options.appOrigin ?? DEFAULT_APP_ORIGIN).replace(/\/+$/, '')
   const context: AppContext = {
     repo: options.repo,
     tokens: new TokenSigner(options.tokenSecret),
+    notifications: createNotifications({
+      repo: options.repo,
+      mailer: options.mailer ?? noopMailer,
+      appOrigin,
+      broadcastNewGames: options.broadcastNewGames === true,
+      ...(options.now !== undefined ? { now: options.now } : {}),
+    }),
+    appOrigin,
   }
 
   // Answer unmatched routes and unhandled throws with the same { error, message }
@@ -85,16 +110,21 @@ export function createApp(options: CreateAppOptions): App {
   registerArenaRoutes(app, context)
   registerBoardRoutes(app, context)
   registerPublicRoutes(app, context)
+  registerNotificationRoutes(app, context)
 
   return app
 }
 
+export type TestAppOptions = Omit<CreateAppOptions, 'repo' | 'tokenSecret' | 'logger'>
+
 /** Convenience for tests: an app backed by memory alone, with no file. */
-export async function createTestApp(): Promise<{
+export async function createTestApp(
+  options: TestAppOptions = {},
+): Promise<{
   app: App
   repo: JsonFileRepository
 }> {
   const repo = new JsonFileRepository({ filePath: null })
-  const app = createApp({ repo, tokenSecret: 'test-secret', logger: false })
+  const app = createApp({ repo, tokenSecret: 'test-secret', logger: false, ...options })
   return { app, repo }
 }

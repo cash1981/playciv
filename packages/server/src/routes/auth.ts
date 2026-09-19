@@ -20,6 +20,8 @@ export interface PlayerDto {
   readonly email: string | null
   readonly role: 'user' | 'admin'
   readonly disabled: boolean
+  /** Opted out of notification email. Set through the unsubscribe link. */
+  readonly disableEmail: boolean
 }
 
 export const toPlayerDto = (player: StoredPlayer): PlayerDto => ({
@@ -28,6 +30,7 @@ export const toPlayerDto = (player: StoredPlayer): PlayerDto => ({
   email: player.email,
   role: player.role ?? 'user',
   disabled: player.disabled === true,
+  disableEmail: player.disableEmail === true,
 })
 
 export function registerAuthRoutes(app: App, context: AppContext): void {

@@ -12,28 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-30-email-notifications
-
-- **Owner:** OpenCode (DeepSeek V4.1 Flash)
-- **Branch:** `feat/issue-30-email-notifications`
-- **Brief:** `docs/agents/tasks/issue-30-email-notifications.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/server/src/mail.ts` (new)
-  - `packages/server/src/notifications.ts` (new)
-  - `packages/server/src/routes/notifications.ts` (new)
-  - `packages/server/src/context.ts`, `app.ts`, `lib.ts`, `index.ts`
-  - `packages/server/src/routes/{auth,games,play}.ts`
-  - `packages/server/src/store/{types,json-file,mongo}.ts`
-  - `packages/server/test/notifications.test.ts` (new)
-  - `packages/server/.env.example`, `render.yaml`
-  - `README.md`, `docs/agents/decisions.md`, `docs/agents/state.md`
-  - `docs/agents/task-board.md` (own claim block only)
-- **Notes:** Resend mailer in the Node API. All the old triggers except
-  password reset, admin mass mail, player replace and tournaments. New-game
-  broadcast behind `MAIL_BROADCAST_NEW_GAMES`, off by default. Unsubscribe
-  endpoints are unauthenticated, as in Java.
-
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 

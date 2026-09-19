@@ -436,6 +436,19 @@ either advanced by array index (its legacy pre-2015 branch) or threw
 an unstarted game, and the legacy games that branch served are never loaded, so
 the engine returns a clear error instead. See `docs/agents/decisions.md`.
 
+**Transactional email is Resend, and unsubscribing works.** The old app sent
+through SendGrid (`SENDGRID_USERNAME`/`SENDGRID_PASSWORD`); the rewrite uses
+Resend (`RESEND_API_KEY`, from `noreply@playciv.app`). Every trigger the old
+system had is back — it-is-your-turn, new game, someone joined, chat, game
+ended, game deleted and the five turn-phase updates — with Java's 30-minute
+per-player-in-game and 3-hour per-account throttles. Two old behaviours were
+corrected on purpose: the unsubscribe link rides on **every** mail (Java's
+it-is-your-turn mail carried none), and `disableEmail` stops **all**
+notifications (Java checked it only for the new-game broadcast and the admin
+mass mail, so its "unsubscribe from ALL emails" link did not actually stop most
+mail). The new-game broadcast to every account is kept but behind
+`MAIL_BROADCAST_NEW_GAMES`, off by default. See `docs/agents/decisions.md`.
+
 ## Deferred
 
 - **Real MongoDB.** Replaced by a JSON file behind `Repository`, see above.

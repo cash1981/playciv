@@ -27,6 +27,11 @@ export interface StoredPlayer {
   /** Optional only at the boundary for seed/legacy records; repositories normalize it. */
   readonly role?: UserRole
   readonly disabled?: boolean
+  /**
+   * Java `Player.disableEmail` — set by the unsubscribe link. Opted-in by
+   * default; the legacy `player` documents already carry this field.
+   */
+  readonly disableEmail?: boolean
 }
 
 export interface PlayerUpdate {
@@ -34,6 +39,7 @@ export interface PlayerUpdate {
   readonly email?: string | null
   readonly role?: UserRole
   readonly disabled?: boolean
+  readonly disableEmail?: boolean
 }
 
 export interface ChatMessage {
@@ -95,6 +101,15 @@ export interface Repository {
 
   appendChat(message: ChatMessage): Promise<void>
   chatFor(gameId: string | null): Promise<readonly ChatMessage[]>
+
+  /**
+   * When a throttled notification was last sent to a scope. Java kept this on
+   * `Player.emailSent` (global, 3 h) and `Playerhand.emailSent` (per game,
+   * 30 min); here it is a small keyed table so it survives a restart without
+   * touching the engine state. Keys are built by `notifications.ts`.
+   */
+  findEmailSentAt(scope: string): Promise<string | undefined>
+  saveEmailSentAt(scope: string, at: string): Promise<void>
 
   /**
    * Finished, won games as a source for `highscore()`, roster included —

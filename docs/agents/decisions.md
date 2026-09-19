@@ -764,3 +764,44 @@ loses the item initiates the transfer manually after agreeing the result with
 the other players. The HTTP route also retains the old backend compatibility:
 explicit valid sheet names form singleton pools, non-lootable sheets return
 406, and unknown sheets return 404.
+
+---
+
+## 2026-09-19 — Email notifications use Resend, and unsubscribe actually unsubscribes (issue #30)
+
+**Decision.** Transactional email returns as a server-only subsystem behind a
+`Mailer` interface, with Resend as the provider (`RESEND_API_KEY`, from
+`noreply@playciv.app`, links built from `APP_ORIGIN`). Ported triggers: it is
+your turn (end-turn only), new game, someone joined, chat, game ended, game
+deleted and the five turn-phase updates, with Java's 30-minute
+per-player-in-game and 3-hour per-account throttles. The new-game broadcast is
+faithful but gated by `MAIL_BROADCAST_NEW_GAMES`, off by default. The engine
+stays pure — no clock, no I/O.
+
+**Why.** Issue #30 asks for Resend and names the turn email the priority; the
+owner then chose all the old triggers, the throttles and the unsubscribe links,
+and asked for the broadcast behind a switch. The old provider was SendGrid and
+the rewrite had no mailer at all. The API runs on Node on Render, not on the
+Cloudflare Worker (the Worker only proxies `/api/*` and never sees game state),
+so the key lives on Render with the rest of the API secrets.
+
+**Consequences.**
+- Throttle state lives in the repository (`mail:player:<id>` and
+  `mail:game:<gameId>:<playerId>`), not in `GameState`, so it never touches
+  engine purity or the revision/compare-and-set flow. Mongo uses an
+  `email_sent` collection; the JSON file persists a keyed map.
+- `StoredPlayer.disableEmail` is read from the legacy `player` documents and is
+  now honoured for **every** notification. Java only checked it for the
+  new-game broadcast and the admin mass mail, so its "unsubscribe from ALL
+  emails" link did not stop chat, join or phase mail. Two deliberate
+  improvements over Java: the unsubscribe link rides on every mail (Java's
+  `sendYourTurn` had none), and the setting actually applies.
+- The two unsubscribe endpoints keep Java's paths and its unauthenticated
+  access: `GET /api/admin/email/notification/:playerId/{stop,start}`. The only
+  action is to flip the account's own flag; the player id is opaque.
+- Small sends are awaited in the request; the new-game broadcast stays
+  fire-and-forget like Java's raw thread. When enabled it serialises per
+  account, which is slow at 553 accounts — intended for deliberate use, not a
+  default.
+- Out of scope, as agreed: password reset (separate issue), admin mass mail
+  (`AdminAction` is deferred), player replacement and tournament mail.
