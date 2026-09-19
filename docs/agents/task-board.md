@@ -12,6 +12,24 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### opencode-agents
+
+- **Owner:** OpenCode (DeepSeek V4.1 Flash)
+- **Branch:** `chore/opencode-agents`
+- **Brief:** `docs/agents/tasks/opencode-agents.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `.opencode/agents/coder.md` (new)
+  - `.opencode/agents/reviewer.md` (new)
+  - `.opencode/agents/rules-checker.md` (new)
+  - `docs/agents/tasks/opencode-agents.md` (new)
+  - `docs/agents/roles.md`
+  - `docs/agents/repo-map.md`
+  - `docs/agents/task-board.md` (own claim block only)
+- **Notes:** Ports the coder / reviewer / rules-checker roles to OpenCode
+  `.opencode/agents/`; the `.claude/` definitions are untouched. The two
+  read-only roles get a broad `deny` before the read-only allows.
+
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 

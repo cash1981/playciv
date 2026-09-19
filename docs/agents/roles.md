@@ -12,7 +12,17 @@ code is right.
 | **Rules checker** | strong (Opus) | **no** | no |
 
 The orchestrator is the session you are talking to. The other three are defined
-in `.claude/agents/` and spawned with the Agent tool.
+once per agent host and spawned with that host's subagent tool:
+
+- Claude Code reads `.claude/agents/` (the `model:` lines name Claude models).
+- OpenCode reads `.opencode/agents/` (the `model:` lines name OpenCode models —
+  currently a cheap DeepSeek for the coder and a stronger one for the two
+  read-only roles). The two sets are kept in step; change both when a role's
+  model changes.
+
+The model names in the table above are the Claude ones. The rule is the split,
+not the vendor: the coder runs on a cheaper model, the reviewer and rules
+checker on a stronger one that cannot write.
 
 ## Why reviewers cannot write
 
