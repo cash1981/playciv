@@ -13,7 +13,7 @@ _Last updated: 2026-09-19_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 400 engine, 116 server, 33 web |
+| `pnpm -r test` | passing — 401 engine, 123 server, 36 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
