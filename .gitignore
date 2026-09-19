@@ -16,6 +16,11 @@ coverage/
 # Lokal spilltilstand fra @civ/server
 /packages/server/data/
 
+# Generert D1-import fra mongodump-en (issue #72). Inneholder brukerdata.
+/dump.sql
+/packages/server/dump.sql
+/packages/server/dump-*.sql
+
 # Miljøvariabler og hemmeligheter — aldri commit. Malen .env.example er trygg.
 .env
 .env.*
