@@ -839,18 +839,24 @@ export function endBattleAction(
   // status-board `combat` stat, always 0 for barbarians) is higher; a draw
   // goes to the defender, per the human's explicit tie-break rule.
   const [attackerSummary, defenderSummary] = battleSummaries(state)
-  const attackerScore = attackerSummary!.totalHealth + attackerSummary!.combatBonus
-  const defenderScore = defenderSummary!.totalHealth + defenderSummary!.combatBonus
-  const [winner, winnerScore, loserScore] =
-    attackerScore > defenderScore
-      ? [attackerSummary!, attackerScore, defenderScore]
-      : [defenderSummary!, defenderScore, attackerScore]
+  const outcome =
+    attackerSummary === undefined || defenderSummary === undefined
+      ? null
+      : (() => {
+          const attackerScore = attackerSummary.totalHealth + attackerSummary.combatBonus
+          const defenderScore = defenderSummary.totalHealth + defenderSummary.combatBonus
+          return attackerScore > defenderScore
+            ? { winner: attackerSummary, winnerScore: attackerScore, loserScore: defenderScore }
+            : { winner: defenderSummary, winnerScore: defenderScore, loserScore: attackerScore }
+        })()
 
   nextState = appendPublicLog(
     nextState,
     player.username,
     player.playerId,
-    `ends the battle — ${winner.label} won with ${winnerScore} HP vs ${loserScore} HP`,
+    outcome === null
+      ? 'ends the battle'
+      : `ends the battle — ${outcome.winner.label} won with ${outcome.winnerScore} HP vs ${outcome.loserScore} HP`,
   )
 
   return ok({ ...nextState, battle: null })
