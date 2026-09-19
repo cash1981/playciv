@@ -3,7 +3,7 @@
 - **Slug:** `issue-77-footer`
 - **Branch:** `feat/issue-77-footer`
 - **Owner:** OpenCode (DeepSeek V4.1 Flash)
-- **Status:** in progress
+- **Status:** done — self-checked; PR open for the human to test
 
 ## Goal
 
