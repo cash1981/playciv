@@ -84,6 +84,11 @@ pure; the server owns I/O and the clock.
 - Config: `RESEND_API_KEY`, `MAIL_FROM` (default `noreply@playciv.app`),
   `APP_ORIGIN` (default `https://playciv.app`),
   `MAIL_BROADCAST_NEW_GAMES` (default off).
+- Background work goes through `runInBackground` (`context.ts`): it hands the
+  task to `executionCtx.waitUntil` when the runtime has one and falls back to a
+  floating promise on Node. This lets the mailer move from Render to a
+  Cloudflare Worker without changes (the Worker cancels a floating promise when
+  the request ends).
 
 **Links.** `gamelink(id)` becomes `APP_ORIGIN + /game/<id>` (the new route, not
 Java's `#/game/`). The unsubscribe link becomes
@@ -146,7 +151,7 @@ Java's `#/game/`). The unsubscribe link becomes
 - [x] A missing or failing mailer never fails the game request.
 - [x] No `Date.now()`/`Math.random()`/I/O added to `packages/engine`.
 - [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
-      (400 engine / 108 server / 33 web).
+      (400 engine / 110 server / 33 web).
 
 ## Open questions
 
