@@ -141,6 +141,12 @@ https://github.com/cash1981/playciv/compare/main...feat/<slug>?expand=1
 The PR body should say what changed, why, what was verified, and what was
 deliberately left out. Link the task brief.
 
+After giving the human the PR/compare link, remove the dedicated local
+worktree so the human can check out the feature branch in the main checkout.
+First verify it is clean, then run `git worktree remove <feature-worktree>` from
+another checkout. This removes only the worktree; never delete the local or
+remote feature branch. Do not use `--force` for routine PR cleanup.
+
 **The human merges.** No agent merges to `main`, and no agent force-pushes
 `main`. If a PR needs changes, push more commits to the branch.
 

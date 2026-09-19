@@ -79,5 +79,17 @@ Only after `/review-gate` has been approved. If it has not, say so and stop.
    with the real numbers, what was deliberately left out, and a link to the
    brief.
 
+7. **Release the local worktree after the PR link is supplied.** The human
+   needs to be able to check out the feature branch for testing, so remove the
+   dedicated worktree once the working tree is clean. Run this from another
+   checkout (never from inside the worktree being removed):
+
+   ```bash
+   git worktree remove <feature-worktree>
+   ```
+
+   This removes only the local checkout; keep the feature branch and its remote
+   branch. Do not use `--force` for routine PR cleanup.
+
 **The human merges.** Never merge to `main`, never force-push `main`. If the PR
 needs changes, push more commits to the branch.
