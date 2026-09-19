@@ -30,12 +30,16 @@ export function ItemCard({
   /** Visual rotation in degrees — the physical card prints one unit level per edge. */
   rotation,
   /**
-   * Shown instead of the computed label, without changing which image is
-   * looked up. The printed art is tied to `item`'s own attack/health
-   * (`itemImage` builds the filename from them), so a caller that wants to
-   * show a different current value — an arena unit's live stats, edited away
-   * from the card's own — must not also pass a mutated `item`: that would
-   * point the image lookup at a file that does not exist.
+   * Shown instead of the computed label (the caption text, and the fallback
+   * shown in place of missing art), without changing which image is looked
+   * up or its `alt` text. The printed art is tied to `item`'s own attack/
+   * health (`itemImage` builds the filename from them), so a caller that
+   * wants to show a different current value — an arena unit's live stats,
+   * edited away from the card's own — must not also pass a mutated `item`:
+   * that would point the image lookup at a file that does not exist. This
+   * also bypasses the `reveal === 'public'` gate, so only ever pass text
+   * that is already safe to show in full — arena stats are, since arena
+   * units are fully public once placed.
    */
   labelOverride,
   children,
@@ -49,7 +53,11 @@ export function ItemCard({
   readonly labelOverride?: string
   readonly children?: React.ReactNode
 }): React.JSX.Element {
-  const label = labelOverride ?? (reveal === 'all' ? revealAll(item) : itemName(item))
+  // The image's own description — kept separate from `label` so a caller
+  // overriding the caption (a live stat value, say) cannot also change what
+  // the alt text claims is pictured, since the art itself never changes.
+  const imageLabel = reveal === 'all' ? revealAll(item) : itemName(item)
+  const label = labelOverride ?? imageLabel
   const url = itemImageUrl(item)
   const imageStyle = rotation ? { transform: `rotate(${rotation}deg)` } : undefined
 
@@ -61,7 +69,7 @@ export function ItemCard({
         ) : (
           <img
             src={url}
-            alt={label}
+            alt={imageLabel}
             style={imageStyle}
             onError={(event) => {
               // A missing file should leave the name readable, not a broken icon

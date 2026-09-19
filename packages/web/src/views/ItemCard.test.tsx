@@ -30,7 +30,9 @@ describe('ItemCard', () => {
     const markup = renderToStaticMarkup(
       <ItemCard item={artillery} labelOverride="Artillery 9.9" />,
     )
-    expect(markup).toContain(itemImageUrl(artillery)!)
+    const url = itemImageUrl(artillery)
+    expect(url).not.toBeNull()
+    expect(markup).toContain(url ?? '')
     expect(markup).not.toContain('Artillery9.9')
     expect(markup).toContain('Artillery 9.9')
   })
