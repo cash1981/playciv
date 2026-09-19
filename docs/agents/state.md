@@ -6,14 +6,14 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-18_
+_Last updated: 2026-09-19_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 375 engine, 82 server, 7 web |
+| `pnpm -r test` | passing — 375 engine, 82 server, 18 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes (feat/issue-63-battle-arena awaiting review) |
 
@@ -153,6 +153,11 @@ _Last updated: 2026-09-18_
 
 - **Issue #63.** Battle arena: initiate (attacker vs player or barbarians), drag-and-drop units from battlehand/barbarians to positional arena fronts, manual attack/health inputs per unit, kill button, advisory turn marker, per-side HP+attack summaries, `endBattleTurn` / `endBattleArena` actions, concurrent-write protection via `rev` counter (409 on mismatch), and a 30-second auto-refresh toggle (top-right, persisted in `localStorage`). No server-side turn enforcement. `battle: Battle | null` and `rev: number` added to `GameState` and `PlayerView`; migrated with `?? null` / `?? 0`. All checks pass on `feat/issue-63-battle-arena`.
 - **Issue #65.** `killArenaUnit` and `endBattleTurn` now reject non-participants with `NOT_IN_THIS_BATTLE`, matching `endBattleAction`'s existing guard. The "End turn", "End battle" and per-unit "Kill" buttons are hidden client-side for non-participants. `setArenaUnitStat` stays open to any game member on purpose (see `decisions.md`).
+- **Issue #69.** Turn orders now use color-accented username tabs with a
+  per-player turn selector and five WYSIWYG Markdown phase editors. Only the
+  signed-in player's unlocked turn is editable; opponents remain read-only.
+  The redundant aggregate order list is gone, and a private, explicitly saved
+  **Private log** tab reuses `gamenote` without adding public log entries.
 
 ## In progress
 

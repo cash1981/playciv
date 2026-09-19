@@ -3,7 +3,7 @@
 - **Slug:** `issue-69-turn-orders`
 - **Branch:** `feat/issue-69-turn-orders`
 - **Owner:** Codex (GPT-5)
-- **Status:** review
+- **Status:** approved
 
 ## Goal
 
@@ -74,22 +74,22 @@ claim is not touched.
 
 ## Acceptance criteria
 
-- [ ] Every current player has one tab labelled with their username and accented
+- [x] Every current player has one tab labelled with their username and accented
       with their player color when available.
-- [ ] Selecting a player and turn shows that player's published five-phase
+- [x] Selecting a player and turn shows that player's published five-phase
       orders.
-- [ ] Only the signed-in player's selected turn can be edited, saved, locked or
+- [x] Only the signed-in player's selected turn can be edited, saved, locked or
       reopened; other player tabs are read-only.
-- [ ] All five phases use a WYSIWYG editor whose stored value remains Markdown.
-- [ ] Private log loads and saves only the signed-in player's `gamenote`, and
+- [x] All five phases use a WYSIWYG editor whose stored value remains Markdown.
+- [x] Private log loads and saves only the signed-in player's `gamenote`, and
       saving it creates no game-log entry.
-- [ ] The old "All orders" list is removed.
-- [ ] Lock and reopen behavior remains logged and covered by the existing engine
+- [x] The old "All orders" list is removed.
+- [x] Lock and reopen behavior remains logged and covered by the existing engine
       tests.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: another player's private log is never present in the
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: another player's private log is never present in the
       client projection; existing projection coverage remains passing.
-- [ ] Verified in the browser: player tabs, read-only opponent view, editable own
+- [x] Verified in the browser: player tabs, read-only opponent view, editable own
       orders, Markdown formatting, private-log persistence and responsive layout.
 
 ## Open questions

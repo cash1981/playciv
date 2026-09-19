@@ -15,24 +15,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
-### issue-69-turn-orders
-
-- **Owner:** Codex (GPT-5)
-- **Branch:** `feat/issue-69-turn-orders`
-- **Brief:** `docs/agents/tasks/issue-69-turn-orders.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `docs/agents/tasks/issue-69-turn-orders.md`
-  - `packages/web/package.json`
-  - `pnpm-lock.yaml`
-  - `packages/web/src/views/TurnPanel.tsx`
-  - `packages/web/src/views/TurnPanel.css` (new)
-  - `packages/web/src/views/MarkdownEditor.tsx` (new)
-  - `packages/web/src/views/TurnPanel.test.tsx` (new)
-- **Notes:** Issue #69. Username tabs and WYSIWYG Markdown editors for published
-  turn orders, plus a private unlogged planning tab backed by `gamenote`.
-
-
 ### revealed-panel
 
 - **Owner:** Claude (Opus 4.8)
