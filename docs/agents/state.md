@@ -57,7 +57,12 @@ _Last updated: 2026-09-20_
   export was migrated (554 players, 310 old `pbf` games, 87,756 chat, 66,288
   `gamelog`, 1 tournament; 64 MB) and verified by count against the export.
   Local dev keeps the JSON file; `D1Repository` is tested through a
-  `node:sqlite` adapter. See `tasks/issue-72-d1.md`.
+  `node:sqlite` adapter, and the root requires Node 24+. First review round
+  fixed Unicode username lookup (`0002_username_lower.sql`), made the migration
+  fail on a wrong `--dump` instead of writing an empty file, and stopped the D1
+  tests from skipping themselves. The remote D1 still needs
+  `wrangler d1 migrations apply playciv --remote` to apply `0002`. See
+  `tasks/issue-72-d1.md`.
 - **Client.** React and Vite: login, game list, game page, hand, draws, battle,
   techs, turn orders, log, undo votes, chat.
 - **Issues #54 and #56.** Game and lobby chat show local log-format timestamps;

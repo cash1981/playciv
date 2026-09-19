@@ -81,8 +81,13 @@ storage paths side by side.
 Hybrid: flat columns for the fields the queries and indices need, and a JSON
 payload for the rest of the document.
 
-- `player(id TEXT PK, username, email, password, created_at, role, disabled,
-  disable_email)` + `INDEX player_username ON player(username COLLATE NOCASE)`.
+- `player(id TEXT PK, username, username_lower, email, password, created_at,
+  role, disabled, disable_email)`. `username_lower` is `username` folded with
+  JavaScript's Unicode-aware `toLowerCase`, and is what `findPlayerByUsername`
+  queries (non-unique index); SQLite's ASCII-only `COLLATE NOCASE` is not used,
+  so `Åse`/`åse` behaves the same against D1 as locally. Added by
+  `0002_username_lower.sql`, which back-fills migrated rows with `lower()` —
+  exact for every restored name, non-ASCII ones included.
 - `game(id TEXT PK, rev, active, winner, num_of_players, state TEXT)` +
   `INDEX game_highscore ON game(active, winner)`.
 - `game_revision(game_id, revision, created_at, actor_id, actor_username,
@@ -134,16 +139,36 @@ id `055e06d7-5d3b-4d4a-95aa-5d396c04b9bd`) and `migrations_dir`. The
 
 ### Migration script
 
-`packages/server/src/migrate-to-d1.ts` (run with `tsx`) reads a dump directory,
+`packages/server/src/migrate-to-d1.ts` is a thin CLI over
+`packages/server/src/migrate/run.ts`. The core reads a dump directory,
 normalizes extended JSON, maps each collection to its rows, and writes a
 `dump.sql` of `INSERT` statements. The pure mapping lives in
 `packages/server/src/migrate/rows.ts`, the SQL emission in
-`packages/server/src/migrate/sql.ts`, and both are unit-tested with small
-fixtures.
+`packages/server/src/migrate/sql.ts`, and all three are unit-tested with small
+fixtures. A missing dump directory or a missing required collection
+(`player`, `pbf`, `chat`) fails the run with a non-zero exit and leaves the
+output untouched (`run.ts` validates before writing; the file is moved into
+place from a temporary only on success, so a typo can never produce an empty
+dump).
+
+## Review fixes (first review round)
+
+- **Unicode usernames.** `COLLATE NOCASE` is ASCII-only, so `Åse`/`åse` would
+  have behaved differently in production than locally. `0002_username_lower.sql`
+  stores JavaScript's `toLowerCase` in its own column, the repository queries
+  that, and a test registers `Åse` and finds `ÅSE`.
+- **Wrong `--dump` path.** The migration core validates the directory and the
+  required collections before writing, writes through a temporary file, and
+  refuses to emit an empty dump. `migrate-run.test.ts` covers a missing
+  directory, a missing required collection and the happy path, including that a
+  previous output file is left untouched on failure.
+- **Skipped D1 tests.** The root `engines` is raised to Node `>=24`
+  (`node:sqlite` without a flag) and the `describe.skip` guards are removed, so
+  a broken D1 path fails the suite loudly instead of reporting green.
 
 ## Claimed paths
 
-- `packages/worker/migrations/0001_initial.sql` (new)
+- `packages/worker/migrations/0001_initial.sql` (new), `packages/worker/migrations/0002_username_lower.sql` (new)
 - `packages/worker/src/index.ts`
 - `packages/worker/package.json`
 - `wrangler.jsonc`
@@ -154,12 +179,12 @@ fixtures.
 - `packages/server/src/lib.ts`
 - `packages/server/src/index.ts`
 - `packages/server/src/migrate-to-d1.ts` (new)
-- `packages/server/src/migrate/rows.ts` (new), `packages/server/src/migrate/sql.ts` (new)
+- `packages/server/src/migrate/rows.ts` (new), `packages/server/src/migrate/sql.ts` (new), `packages/server/src/migrate/run.ts` (new)
 - `packages/server/src/migrate-user-roles.ts` (delete)
 - `packages/server/src/seed-test-user.ts` (delete)
-- `packages/server/test/d1-sqlite-adapter.ts` (new)
+- `packages/server/test/d1-sqlite-adapter.ts` (new), `packages/server/test/migrations.ts` (new)
 - `packages/server/test/d1-repository.test.ts` (new)
-- `packages/server/test/migrate-dump.test.ts` (new)
+- `packages/server/test/migrate-dump.test.ts` (new), `packages/server/test/migrate-run.test.ts` (new)
 - `packages/server/test/api.test.ts`
 - `packages/server/package.json`
 - `packages/server/.env.example`
@@ -190,6 +215,12 @@ fixtures.
 - [x] Hidden information: no projection is touched; the existing hidden-info
       tests still pass, and the D1 test asserts a stored hidden hand does not
       reach another viewer's `toPlayerView`.
+- [x] Username lookup is Unicode case-insensitive against D1 exactly as it is
+      against the JSON file (`Åse` / `ÅSE` test).
+- [x] A wrong `--dump` path fails with a non-zero exit and leaves any previous
+      output untouched; covered by `migrate-run.test.ts`.
+- [x] The root `engines` requires Node `>=24`, and the D1 tests no longer skip
+      themselves on a supported runtime.
 - [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 
 ## Open questions

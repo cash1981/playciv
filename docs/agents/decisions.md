@@ -1010,3 +1010,32 @@ paths. D1 is also exportable (`wrangler d1 export`), so the move is reversible.
 - The old `seed:test-user` and `migrate:user-roles` scripts are removed with
   Mongo; roles now arrive with the migrated data and local accounts are created
   through the UI.
+
+---
+
+## 2026-09-20 — D1 storage: first review fixes (issue #72)
+
+**Decision.** Three findings from the first review round are fixed: username
+lookup is Unicode case-insensitive, the migration fails on a wrong dump path,
+and the D1 tests no longer skip themselves.
+
+**Why.** Each was a real gap between local and production behaviour, and the
+branch had not shipped yet, so all three belong in it rather than later.
+
+**Consequences.**
+- The earlier entry's "case-insensitively" lookup used SQLite `COLLATE NOCASE`,
+  which folds ASCII only. `player.username_lower` now stores JavaScript's
+  `toLowerCase` and `findPlayerByUsername` queries it, so `Åse`/`åse` behaves the
+  same against D1 as against the JSON file. The restored data includes four
+  non-ASCII names (`Mały`, `Mały Farciar`, `Schnüdel`, `歐派黨民`).
+  `0002_username_lower.sql` back-fills existing rows with `lower()`, which is
+  exact for them because none of their characters case-fold. Not UNIQUE: the
+  data already contains case-insensitive duplicates (`shogun75`, `rogerio_aa`),
+  exactly as the JSON repository tolerates.
+- `migrate/run.ts` validates the dump directory and the required
+  `player`/`pbf`/`chat` collections before writing, writes through a temporary
+  file, and refuses to emit an empty dump. A wrong `--dump` now exits non-zero
+  and leaves the previous output alone instead of silently emptying it.
+- The root `engines` moves to Node `>=24`, where `node:sqlite` needs no flag,
+  and the `describe.skip` guards are removed. A broken D1 path now fails the
+  suite loudly rather than reporting green on a runtime that skipped it.

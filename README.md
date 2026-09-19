@@ -275,6 +275,11 @@ Tables: `player`, `game`, `game_revision`, `chat` (`game_id IS NULL` is lobby),
 plus an archival copy of each document, chunked because one document can exceed
 D1's ~100 KB per-statement limit), and `gamelog` + `tournament` (archival only).
 
+`player.username_lower` stores the username folded with JavaScript's
+Unicode-aware `toLowerCase`, and that is the column the login lookup queries —
+SQLite's `COLLATE NOCASE` folds ASCII only, which would make `Åse`/`åse` behave
+differently in production than locally.
+
 The old accounts keep their passwords: Java's unsalted SHA-1
 (`DigestUtils.sha1Hex`) verifies and, on a successful login, is rewritten to
 salted scrypt. Old ids are `ObjectId` strings, new ones UUIDs.
@@ -291,12 +296,16 @@ wrangler d1 execute playciv --remote --file=packages/server/dump.sql
 ```
 
 The script never touches a database; the mapping is pure and unit-tested, and
-each generated statement stays under D1's per-statement limit. The old `pbf`
-games stay read-only — Java's `PBF` shape is nothing like our `GameState`, so
-they are not migrated to playable form, exactly as before.
+each generated statement stays under D1's per-statement limit. A missing dump
+directory or a missing `player`/`pbf`/`chat` file fails the run and leaves any
+previous output untouched — it never writes an empty dump. The old `pbf` games
+stay read-only — Java's `PBF` shape is nothing like our `GameState`, so they are
+not migrated to playable form, exactly as before.
 
 There is no database integration test in CI; the shared repository logic is
-covered by the JSON implementation and by the `node:sqlite` adapter.
+covered by the JSON implementation and by the `node:sqlite` adapter. The
+repository tests and the migration need Node 24 or newer (`node:sqlite` without
+a flag), which the root `engines` field requires.
 
 ### Highscore
 
