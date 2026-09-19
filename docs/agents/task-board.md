@@ -15,6 +15,21 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
+### issue-70
+
+- **Owner:** Codex (GPT-5)
+- **Branch:** `feat/issue-70`
+- **Brief:** `docs/agents/tasks/issue-70.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `docs/agents/{tasks/issue-70.md,task-board.md,state.md,decisions.md}`
+  - `packages/server/src/{context.ts,routes/games.ts,routes/play.ts,store/types.ts,store/json-file.ts,store/mongo.ts}`
+  - `packages/server/test/{api.test.ts,helpers.ts}`
+  - `packages/web/src/lib/api.ts`
+  - `packages/web/src/views/{BoardView.tsx,BoardView.test.tsx,GameView.tsx,TechPanel.tsx,TurnPanel.tsx,StatusPanel.tsx,RevealedPanel.tsx,LogPanel.tsx}`
+  - `packages/web/src/styles.css`
+- **Notes:** Owns shared `packages/web/src/lib/api.ts`; global revision storage and replay for issue #70.
+
 ### revealed-panel
 
 - **Owner:** Claude (Opus 4.8)
@@ -86,7 +101,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | free |
+| `packages/web/src/lib/api.ts` | issue-70 (Codex) |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.
