@@ -579,6 +579,76 @@ describe('draws', () => {
   })
 })
 
+describe('loot', () => {
+  it('maps Culture Card to the combined Culture I, II and III pool', async () => {
+    // Java: `DrawResourceTest.testLooting` sends the literal Culture Card,
+    // which `DrawResource.loot` maps to `SheetName.CULTURE_CARD`.
+    const { gameId, starter } = await startedGame('Loot culture')
+    const before = await repo.findGame(gameId)
+    const from = before?.players.find((player) => player.yourTurn)
+    const to = before?.players.find((player) => !player.yourTurn)
+    expect(from).toBeDefined()
+    expect(to).toBeDefined()
+
+    const drawn = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/CULTURE_2`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(drawn.status).toBe(200)
+
+    const looted = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/loot/CULTURE_CARD/${to?.playerId ?? ''}`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(looted.status).toBe(200)
+
+    const after = await repo.findGame(gameId)
+    const fromAfter = after?.players.find((player) => player.playerId === from?.playerId)
+    const toAfter = after?.players.find((player) => player.playerId === to?.playerId)
+    expect(fromAfter?.items.filter((item) => item.sheetName === 'CULTURE_2')).toHaveLength(0)
+    expect(toAfter?.items.filter((item) => item.sheetName === 'CULTURE_2')).toHaveLength(1)
+  })
+
+  it('keeps Huts and Villages as separate loot pools', async () => {
+    const { gameId, starter } = await startedGame('Loot tokens')
+    const before = await repo.findGame(gameId)
+    const from = before?.players.find((player) => player.yourTurn)
+    const to = before?.players.find((player) => !player.yourTurn)
+    expect(from).toBeDefined()
+    expect(to).toBeDefined()
+
+    for (const sheetName of ['HUTS', 'VILLAGES'] as const) {
+      const drawn = await inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/draw/${sheetName}`,
+        headers: bearer(starter),
+        payload: {},
+      })
+      expect(drawn.status).toBe(200)
+    }
+
+    const looted = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/loot/HUTS/${to?.playerId ?? ''}`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(looted.status).toBe(200)
+
+    const after = await repo.findGame(gameId)
+    const fromAfter = after?.players.find((player) => player.playerId === from?.playerId)
+    const toAfter = after?.players.find((player) => player.playerId === to?.playerId)
+    expect(fromAfter?.items.filter((item) => item.sheetName === 'HUTS')).toHaveLength(0)
+    expect(fromAfter?.items.filter((item) => item.sheetName === 'VILLAGES')).toHaveLength(1)
+    expect(toAfter?.items.filter((item) => item.sheetName === 'HUTS')).toHaveLength(1)
+    expect(toAfter?.items.filter((item) => item.sheetName === 'VILLAGES')).toHaveLength(0)
+  })
+})
+
 describe('hidden information over HTTP', () => {
   it('an opponent sees the number of cards, not their contents', async () => {
     const creator = await register('cash1981')

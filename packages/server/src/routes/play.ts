@@ -71,6 +71,23 @@ function parseSheetName(
   return sheetName
 }
 
+/** Java: `Culture Card` is one loot pool containing all three culture decks. */
+function parseLootSheets(
+  c: Context<{ Variables: Variables }>,
+  raw: string | undefined,
+): ReadonlySet<SheetName> | Response {
+  switch (raw) {
+    case 'CULTURE_CARD':
+      return new Set<SheetName>(['CULTURE_1', 'CULTURE_2', 'CULTURE_3'])
+    case 'HUTS':
+      return new Set<SheetName>(['HUTS'])
+    case 'VILLAGES':
+      return new Set<SheetName>(['VILLAGES'])
+    default:
+      return sendError(c, 400, 'BAD_REQUEST', 'Loot category must be CULTURE_CARD, HUTS or VILLAGES')
+  }
+}
+
 function parsePhase(
   c: Context<{ Variables: Variables }>,
   raw: string | undefined,
@@ -114,17 +131,17 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
   })
 
   /** Java: `DrawResource.loot`. */
-  app.post('/api/games/:gameId/loot/:sheetName/:targetPlayerId', auth, async (c) => {
+  app.post('/api/games/:gameId/loot/:category/:targetPlayerId', auth, async (c) => {
     const gameId = c.req.param('gameId')
     const targetPlayerId = c.req.param('targetPlayerId')
-    const sheetName = parseSheetName(c, c.req.param('sheetName'))
-    if (sheetName instanceof Response) return sheetName
+    const sheetNames = parseLootSheets(c, c.req.param('category'))
+    if (sheetNames instanceof Response) return sheetNames
 
     return applyToGame(context, c, gameId, (state) =>
       loot(state, {
         playerId: currentPlayer(c).id,
         targetPlayerId,
-        sheetNames: new Set([sheetName]),
+        sheetNames,
       }),
     )
   })

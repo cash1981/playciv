@@ -13,7 +13,7 @@ import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { ApiError, api } from '../lib/api.js'
-import type { GameRevisionSummary, GameRevisionView, PlayerDto, PlayerView } from '../lib/api.js'
+import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
 
 import { BoardView } from './BoardView.js'
 import { ChatPanel } from './ChatPanel.js'
@@ -52,6 +52,20 @@ const DRAWABLE: readonly { readonly sheet: SheetName; readonly label: string }[]
   { sheet: 'ANCIENT_WONDERS', label: 'Ancient wonder' },
   { sheet: 'MEDIEVAL_WONDERS', label: 'Medieval wonder' },
   { sheet: 'MODERN_WONDERS', label: 'Modern wonder' },
+]
+
+const LOOT_CATEGORIES: readonly {
+  readonly category: LootCategory
+  readonly label: string
+  readonly sheets: ReadonlySet<SheetName>
+}[] = [
+  {
+    category: 'CULTURE_CARD',
+    label: 'Culture Card',
+    sheets: new Set(['CULTURE_1', 'CULTURE_2', 'CULTURE_3']),
+  },
+  { category: 'HUTS', label: 'Huts', sheets: new Set(['HUTS']) },
+  { category: 'VILLAGES', label: 'Villages', sheets: new Set(['VILLAGES']) },
 ]
 
 export async function refreshBeforeLive(
@@ -479,6 +493,14 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
 
   return (
     <CollapsiblePanel id="hand" title={`Your hand (${items.length})`}>
+      <LootControls
+        items={items}
+        opponents={opponents}
+        busy={busy}
+        onLoot={(category, targetPlayerId) =>
+          void run(() => api.loot(gameId, category, targetPlayerId))
+        }
+      />
       {items.length === 0 && <p className="muted">Empty.</p>}
       <ul className="card-grid scroll">
         {items.map((item) => (
@@ -493,6 +515,60 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
         ))}
       </ul>
     </CollapsiblePanel>
+  )
+}
+
+export function LootControls({
+  items,
+  opponents,
+  busy,
+  onLoot,
+}: {
+  readonly items: readonly Item[]
+  readonly opponents: readonly {
+    readonly playerId: string
+    readonly username: string
+  }[]
+  readonly busy: boolean
+  readonly onLoot: (category: LootCategory, targetPlayerId: string) => void
+}): React.JSX.Element | null {
+  const [targetPlayerId, setTargetPlayerId] = useState('')
+  const available = LOOT_CATEGORIES.filter(({ sheets }) =>
+    items.some((item) => sheets.has(item.sheetName)),
+  )
+
+  if (available.length === 0) return null
+
+  return (
+    <section aria-label="Loot" style={{ marginBottom: '1rem' }}>
+      <h3 style={{ marginTop: 0 }}>Loot</h3>
+      <p className="muted">Send one randomly selected item from your hand to an opponent.</p>
+      <div className="row">
+        <select
+          aria-label="Player receiving loot"
+          value={targetPlayerId}
+          onChange={(event) => setTargetPlayerId(event.target.value)}
+          style={{ width: 'auto' }}
+        >
+          <option value="">Opponent …</option>
+          {opponents.map((opponent) => (
+            <option key={opponent.playerId} value={opponent.playerId}>
+              {opponent.username}
+            </option>
+          ))}
+        </select>
+        {available.map(({ category, label }) => (
+          <button
+            key={category}
+            className="small danger"
+            disabled={busy || targetPlayerId === ''}
+            onClick={() => onLoot(category, targetPlayerId)}
+          >
+            Loot {label}
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }
 
