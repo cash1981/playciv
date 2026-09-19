@@ -5,7 +5,7 @@
  * only says that "a hidden technology" was researched.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { SocialPolicyItem, TechItem } from '@civ/engine'
 
@@ -33,25 +33,30 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
   const [loadError, setLoadError] = useState<string | null>(null)
   const [chosenTech, setChosenTech] = useState('')
   const [chosenPolicy, setChosenPolicy] = useState('')
+  const requestEpoch = useRef(0)
 
   const load = useCallback(async () => {
+    const epoch = ++requestEpoch.current
     try {
       const [techs, all, socialPolicies] = await Promise.all([
         api.availableTechs(gameId),
         api.revealedTechs(gameId),
         api.socialPolicies(gameId),
       ])
+      if (epoch !== requestEpoch.current) return
       setAvailable(techs)
       setRevealed(all)
       setPolicies(socialPolicies)
       setLoadError(null)
     } catch (caught) {
+      if (epoch !== requestEpoch.current) return
       setLoadError(errorMessage(caught))
     }
   }, [gameId])
 
   useEffect(() => {
     if (historical !== null) {
+      requestEpoch.current += 1
       setAvailable(historical.availableTechs)
       setRevealed(historical.revealedTechs)
       setPolicies(historical.socialPolicies)

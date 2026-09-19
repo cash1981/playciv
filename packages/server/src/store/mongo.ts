@@ -13,7 +13,7 @@
  * around as plain strings elsewhere in this codebase.
  */
 
-import type { Collection, Db } from 'mongodb'
+import type { ClientSession, Collection, Db } from 'mongodb'
 import { MongoClient, ObjectId } from 'mongodb'
 
 import type { GameState } from '@civ/engine'
@@ -86,7 +86,8 @@ export class MongoRepository implements Repository {
   private readonly games: Collection<GameState & { _id: string }>
   private readonly pbf: Collection<PbfDoc>
   private readonly revisions: Collection<GameRevisionDoc>
-  private readonly client: MongoClient | undefined
+  private readonly transactionClient: MongoClient | undefined
+  private readonly ownedClient: MongoClient | undefined
 
   constructor(db: Db, client?: MongoClient) {
     this.players = db.collection<PlayerDoc>(PLAYER_COLLECTION)
@@ -94,7 +95,8 @@ export class MongoRepository implements Repository {
     this.games = db.collection<GameState & { _id: string }>(GAME_COLLECTION)
     this.pbf = db.collection<PbfDoc>(PBF_COLLECTION)
     this.revisions = db.collection<GameRevisionDoc>(REVISION_COLLECTION)
-    this.client = client
+    this.transactionClient = client ?? (db as Db & { readonly client?: MongoClient }).client
+    this.ownedClient = client
   }
 
   /** Connects a new client and returns a repository backed by `dbName`. */
@@ -106,7 +108,7 @@ export class MongoRepository implements Repository {
 
   /** Closes the client this repository opened in `connect`, if any. */
   async close(): Promise<void> {
-    await this.client?.close()
+    await this.ownedClient?.close()
   }
 
   // ---------------------------------------------------------------------
@@ -186,10 +188,10 @@ export class MongoRepository implements Repository {
 
   async saveGameWithRevision(game: GameState, revision: GameRevision): Promise<void> {
     const id = revisionId(revision.gameId, revision.revision)
-    await Promise.all([
-      this.games.replaceOne({ _id: game.id }, game, { upsert: true }),
-      this.revisions.replaceOne({ _id: id }, revision, { upsert: true }),
-    ])
+    await this.inTransaction(async (session) => {
+      await this.games.replaceOne({ _id: game.id }, game, { upsert: true, ...sessionOption(session) })
+      await this.revisions.replaceOne({ _id: id }, revision, { upsert: true, ...sessionOption(session) })
+    })
   }
 
   async ensureGameRevision(revision: GameRevision): Promise<void> {
@@ -223,11 +225,31 @@ export class MongoRepository implements Repository {
   }
 
   async deleteGame(id: string): Promise<boolean> {
-    const [result] = await Promise.all([
-      this.games.deleteOne({ _id: id }),
-      this.revisions.deleteMany({ gameId: id }),
-    ])
-    return result.deletedCount > 0
+    return this.inTransaction(async (session) => {
+      const result = await this.games.deleteOne({ _id: id }, sessionOption(session))
+      await this.revisions.deleteMany({ gameId: id }, sessionOption(session))
+      return result.deletedCount > 0
+    })
+  }
+
+  /** Production connections use a transaction; directly constructed test repositories run sequentially. */
+  private async inTransaction<T>(work: (session: ClientSession | undefined) => Promise<T>): Promise<T> {
+    if (this.transactionClient === undefined) return work(undefined)
+
+    const session = this.transactionClient.startSession()
+    try {
+      session.startTransaction()
+      try {
+        const result = await work(session)
+        await session.commitTransaction()
+        return result
+      } catch (error) {
+        await session.abortTransaction()
+        throw error
+      }
+    } finally {
+      await session.endSession()
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -313,6 +335,10 @@ export class MongoRepository implements Repository {
 
 function revisionId(gameId: string, revision: number): string {
   return `${gameId}:${revision}`
+}
+
+function sessionOption(session: ClientSession | undefined): { readonly session?: ClientSession } {
+  return session === undefined ? {} : { session }
 }
 
 function stripRevisionId(doc: GameRevisionDoc): GameRevision {

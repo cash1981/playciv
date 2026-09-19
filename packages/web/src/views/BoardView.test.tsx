@@ -5,7 +5,7 @@ import { findBoardAsset } from '@civ/engine'
 import type { BoardPiece } from '@civ/engine'
 
 import { BoardPalette } from './BoardView.js'
-import { GlobalReplayBar } from './GameView.js'
+import { GlobalReplayBar, refreshBeforeLive } from './GameView.js'
 
 const piece = (assetId: string, id: string): BoardPiece => ({
   id,
@@ -58,6 +58,21 @@ describe('global replay controls', () => {
     expect(markup).toContain('Revision 0')
     expect(markup).toContain('Newer revisions available')
     expect(markup).toContain('Game created')
+  })
+
+  it('refreshes the live cache before leaving a historical revision', async () => {
+    const events: string[] = []
+    await refreshBeforeLive(
+      async () => {
+        events.push('reload')
+        return true
+      },
+      () => events.push('live'),
+    )
+    expect(events).toEqual(['reload', 'live'])
+
+    await refreshBeforeLive(async () => false, () => events.push('must not leave replay'))
+    expect(events).toEqual(['reload', 'live'])
   })
 })
 

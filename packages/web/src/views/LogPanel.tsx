@@ -7,7 +7,7 @@
  * (issue #68).
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
@@ -32,8 +32,10 @@ export function LogPanel({ gameId, busy, run, reloadCount, historical = null, re
   const [privateLog, setPrivateLog] = useState<readonly LogEntryDto[]>([])
   const [pending, setPending] = useState<readonly PendingUndoDto[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  const requestEpoch = useRef(0)
 
   const load = useCallback(async () => {
+    const epoch = ++requestEpoch.current
     try {
       if (historical !== null) {
         setPublicLog(historical.publicLog)
@@ -47,11 +49,13 @@ export function LogPanel({ gameId, busy, run, reloadCount, historical = null, re
         api.privateLog(gameId),
         api.pendingUndos(gameId),
       ])
+      if (epoch !== requestEpoch.current) return
       setPublicLog(pub)
       setPrivateLog(priv)
       setPending(undos)
       setLoadError(null)
     } catch (caught) {
+      if (epoch !== requestEpoch.current) return
       setLoadError(errorMessage(caught))
     }
   }, [gameId, historical])

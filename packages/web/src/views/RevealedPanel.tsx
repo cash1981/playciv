@@ -12,7 +12,7 @@
  * items and non-hidden hand items — so the full card face is shown.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { revealAll } from '@civ/engine'
 import { errorMessage } from '../App.js'
@@ -33,8 +33,10 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
   const [page, setPage] = useState(1)
   const [data, setData] = useState<RevealedPage | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const requestEpoch = useRef(0)
 
   const load = useCallback(async () => {
+    const epoch = ++requestEpoch.current
     if (historical !== null) {
       const start = (page - 1) * PAGE_SIZE
       setData({
@@ -47,9 +49,12 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
       return
     }
     try {
-      setData(await api.revealed(gameId, page, PAGE_SIZE))
+      const next = await api.revealed(gameId, page, PAGE_SIZE)
+      if (epoch !== requestEpoch.current) return
+      setData(next)
       setLoadError(null)
     } catch (caught) {
+      if (epoch !== requestEpoch.current) return
       setLoadError(errorMessage(caught))
     }
   }, [gameId, historical, page])

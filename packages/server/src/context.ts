@@ -112,7 +112,13 @@ export function createGameRevision(
     publicDescription,
     privateDescriptions,
     logIds: entries.map((entry) => entry.id),
-    state,
+    // Private planning notes are deliberately outside revision capture. Blank
+    // both active and withdrawn hands before the immutable snapshot is stored.
+    state: {
+      ...state,
+      players: state.players.map((player) => ({ ...player, gamenote: '' })),
+      withdrawnPlayers: state.withdrawnPlayers.map((player) => ({ ...player, gamenote: '' })),
+    },
   }
 }
 

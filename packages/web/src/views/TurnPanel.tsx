@@ -397,13 +397,16 @@ export function TurnPanel({
   const privateEditorRef = useRef<MarkdownEditorHandle | null>(null)
   const visibleOwnTurnRef = useRef<number | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const requestEpoch = useRef(0)
 
   const load = useCallback(async () => {
+    const epoch = ++requestEpoch.current
     try {
       const [nextView, nextPublicTurns] = await Promise.all([
         api.game(gameId),
         api.publicTurns(gameId),
       ])
+      if (epoch !== requestEpoch.current) return
       setView(nextView)
       setPublicTurns(nextPublicTurns)
       if (!privateNoteDirtyRef.current) {
@@ -414,12 +417,14 @@ export function TurnPanel({
       }
       setLoadError(null)
     } catch (caught) {
+      if (epoch !== requestEpoch.current) return
       setLoadError(errorMessage(caught))
     }
   }, [gameId])
 
   useEffect(() => {
     if (historical !== null) {
+      requestEpoch.current += 1
       setView(historical.view)
       setPublicTurns(historical.publicTurns)
       setDrafts({})

@@ -594,7 +594,9 @@ describe('global game revisions', () => {
       headers: bearer(creator),
       payload: { message: 'outside history' },
     })
-    expect(await repo.listGameRevisions(gameId)).toHaveLength(1)
+    const afterPrivateWrites = await repo.listGameRevisions(gameId)
+    expect(afterPrivateWrites).toHaveLength(1)
+    expect(JSON.stringify(afterPrivateWrites)).not.toContain('private planning only')
 
     const other = await register('revision-other')
     const joined = await inject(app, {
@@ -607,6 +609,7 @@ describe('global game revisions', () => {
 
     const revisions = await repo.listGameRevisions(gameId)
     expect(revisions).toHaveLength(2)
+    expect(JSON.stringify(revisions)).not.toContain('private planning only')
     expect(revisions[1]?.revision).toBe((await repo.findGame(gameId))?.rev)
     expect(revisions[1]?.state.players).toHaveLength(2)
   })
@@ -727,8 +730,9 @@ describe('global game revisions', () => {
     const gameId = await createGame(creator, 'Baseline game', 2)
     const stored = await repo.findGame(gameId)
     expect(stored).toBeDefined()
+    if (stored === undefined) throw new Error('created game was not stored')
     await repo.deleteGame(gameId)
-    await repo.saveGame({ ...stored!, rev: 7 })
+    await repo.saveGame({ ...stored, rev: 7 })
 
     const listed = await inject(app, {
       url: `/api/games/${gameId}/revisions`,

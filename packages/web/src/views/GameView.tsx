@@ -52,6 +52,13 @@ const DRAWABLE: readonly { readonly sheet: SheetName; readonly label: string }[]
   { sheet: 'MODERN_WONDERS', label: 'Modern wonder' },
 ]
 
+export async function refreshBeforeLive(
+  reload: () => Promise<boolean | void>,
+  showLive: () => void,
+): Promise<void> {
+  if (await reload() === true) showLive()
+}
+
 export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): React.JSX.Element {
   const [view, setView] = useState<PlayerView | null>(null)
   const [revisions, setRevisions] = useState<readonly GameRevisionSummary[]>([])
@@ -63,6 +70,23 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
   const [autoRefresh, setAutoRefresh] = useState<boolean>(() => {
     try { return localStorage.getItem('civ.autoRefresh') === 'true' } catch { return false }
   })
+  const liveRevisionRef = useRef(-1)
+  const latestStoredRevisionRef = useRef(-1)
+  const activeGameIdRef = useRef(gameId)
+  activeGameIdRef.current = gameId
+
+  const applyLiveView = useCallback((nextView: PlayerView) => {
+    if (nextView.rev < liveRevisionRef.current) return
+    liveRevisionRef.current = nextView.rev
+    setView(nextView)
+  }, [])
+
+  const applyRevisionList = useCallback((nextRevisions: readonly GameRevisionSummary[]) => {
+    const latest = nextRevisions.at(-1)?.revision ?? -1
+    if (latest < latestStoredRevisionRef.current) return
+    latestStoredRevisionRef.current = latest
+    setRevisions(nextRevisions)
+  }, [])
 
   const reload = useCallback(async () => {
     try {
@@ -70,15 +94,18 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         api.game(gameId),
         api.revisions(gameId),
       ])
-      setView(nextView)
-      setRevisions(nextRevisions)
+      if (activeGameIdRef.current !== gameId) return false
+      applyLiveView(nextView)
+      applyRevisionList(nextRevisions)
       setReloadCount((count) => count + 1)
       setError(null)
+      return true
     } catch (caught) {
       if (isUnauthorized(caught)) return onUnauthorized()
       setError(errorMessage(caught))
+      return false
     }
-  }, [gameId, onUnauthorized])
+  }, [applyLiveView, applyRevisionList, gameId, onUnauthorized])
 
   const showRevision = useCallback(async (revision: number) => {
     setBusy(true)
@@ -93,6 +120,15 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
       setBusy(false)
     }
   }, [gameId, onUnauthorized])
+
+  useEffect(() => {
+    liveRevisionRef.current = -1
+    latestStoredRevisionRef.current = -1
+    setView(null)
+    setRevisions([])
+    setSelectedRevision(null)
+    setHistorical(null)
+  }, [gameId])
 
   useEffect(() => {
     try { localStorage.setItem('civ.autoRefresh', String(autoRefresh)) } catch {}
@@ -115,9 +151,10 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
       setError(null)
       try {
         const result = await action()
+        if (activeGameIdRef.current !== gameId) return
         if (result !== undefined && result !== null && typeof result === 'object' && 'you' in result) {
-          setView(result as PlayerView)
-          setRevisions(await api.revisions(gameId))
+          applyLiveView(result as PlayerView)
+          applyRevisionList(await api.revisions(gameId))
         } else {
           await reload()
         }
@@ -133,7 +170,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         setBusy(false)
       }
     },
-    [gameId, reload, onUnauthorized],
+    [applyLiveView, applyRevisionList, gameId, reload, onUnauthorized],
   )
 
   if (view === null) {
@@ -224,8 +261,14 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         busy={busy}
         onRevision={(revision) => void showRevision(revision)}
         onLive={() => {
-          setSelectedRevision(null)
-          setHistorical(null)
+          void (async () => {
+            setBusy(true)
+            await refreshBeforeLive(reload, () => {
+              setSelectedRevision(null)
+              setHistorical(null)
+            })
+            setBusy(false)
+          })()
         }}
       />
 
