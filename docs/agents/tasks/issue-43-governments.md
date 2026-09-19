@@ -3,7 +3,7 @@
 - **Slug:** `issue-43-governments`
 - **Branch:** `feat/issue-43-governments`
 - **Owner:** Codex
-- **Status:** done
+- **Status:** in progress — Social Policy and worktree follow-up
 
 ## Goal
 
@@ -98,6 +98,10 @@ are pictured in `Civilization/WaW/government.jpg`.
 - `packages/web/src/views/StatusPanel.test.tsx`
 - `packages/web/src/styles.css`
 - `packages/web/public/governments/`
+- `packages/web/src/views/TechPanel.tsx`
+- `packages/web/src/views/TechPanel.test.tsx`
+- `docs/agents/workflow.md`
+- `.agents/skills/feature/SKILL.md`
 
 ## Acceptance criteria
 
