@@ -228,10 +228,12 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     // there and would otherwise keep `createdAt: null` forever.
     const stamped = stampLog(joined.value, new Date().toISOString())
 
-    await context.repo.saveGameWithRevision(
+    const saved = await context.repo.saveGameWithRevision(
       stamped,
       createGameRevision(undefined, stamped, me, new Date().toISOString(), 'Game created'),
+      null,
     )
+    if (!saved) return sendError(c, 409, 'CONFLICT', 'Game id already exists')
     return c.json(toSummary(stamped, me.id), 201)
   })
 

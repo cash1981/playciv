@@ -190,7 +190,7 @@ export async function applyToGame(
     await context.repo.ensureGameRevision(
       createGameRevision(undefined, game, actor, now, 'History starts here'),
     )
-    await context.repo.saveGameWithRevision(
+    const saved = await context.repo.saveGameWithRevision(
       stamped,
       createGameRevision(
         game,
@@ -199,7 +199,16 @@ export async function applyToGame(
         now,
         revisionOptions.description ?? 'Game state updated',
       ),
+      game.rev,
     )
+    if (!saved) {
+      return sendError(
+        c,
+        409,
+        'CONFLICT',
+        `Game was modified concurrently (expected rev ${game.rev}). Reload and retry.`,
+      )
+    }
   }
   return c.json(toPlayerView(stamped, currentPlayer(c).id))
 }

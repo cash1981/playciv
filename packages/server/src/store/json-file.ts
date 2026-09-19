@@ -145,10 +145,23 @@ export class JsonFileRepository implements Repository {
     this.scheduleWrite()
   }
 
-  async saveGameWithRevision(game: GameState, revision: GameRevision): Promise<void> {
+  async saveGameWithRevision(
+    game: GameState,
+    revision: GameRevision,
+    expectedRevision: number | null,
+  ): Promise<boolean> {
+    const current = this.games.get(game.id)
+    const revisionKey = this.revisionKey(revision.gameId, revision.revision)
+    if (
+      (expectedRevision === null ? current !== undefined : current?.rev !== expectedRevision)
+      || this.revisions.has(revisionKey)
+    ) {
+      return false
+    }
     this.games.set(game.id, game)
-    this.revisions.set(this.revisionKey(revision.gameId, revision.revision), revision)
+    this.revisions.set(revisionKey, revision)
     this.scheduleWrite()
+    return true
   }
 
   async ensureGameRevision(revision: GameRevision): Promise<void> {

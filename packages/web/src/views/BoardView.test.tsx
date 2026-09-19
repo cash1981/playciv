@@ -2,10 +2,17 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { findBoardAsset } from '@civ/engine'
-import type { BoardPiece } from '@civ/engine'
+import type { BoardPiece, PlayerView } from '@civ/engine'
+
+import type { GameRevisionView } from '../lib/api.js'
 
 import { BoardPalette } from './BoardView.js'
-import { GlobalReplayBar, refreshBeforeLive } from './GameView.js'
+import {
+  GlobalReplayBar,
+  loadConsistentLive,
+  loadHistoricalIfCurrent,
+  refreshBeforeLive,
+} from './GameView.js'
 
 const piece = (assetId: string, id: string): BoardPiece => ({
   id,
@@ -73,6 +80,39 @@ describe('global replay controls', () => {
 
     await refreshBeforeLive(async () => false, () => events.push('must not leave replay'))
     expect(events).toEqual(['reload', 'live'])
+  })
+
+  it('reads revisions before the live game and retries a torn snapshot', async () => {
+    const events: string[] = []
+    let viewRevision = 3
+    const loaded = await loadConsistentLive(
+      async () => {
+        events.push('revisions')
+        return [{ ...revisions[1], revision: 4 }]
+      },
+      async () => {
+        events.push(`game-${viewRevision}`)
+        const view = { rev: viewRevision } as PlayerView
+        viewRevision = 4
+        return view
+      },
+    )
+
+    expect(events).toEqual(['revisions', 'game-3', 'revisions', 'game-4'])
+    expect(loaded.view.rev).toBe(4)
+    expect(loaded.revisions.at(-1)?.revision).toBe(4)
+  })
+
+  it('discards a historical response after navigation changes the active game', async () => {
+    let active = true
+    const pending = loadHistoricalIfCurrent(
+      async () => {
+        active = false
+        return { revision: 1 } as GameRevisionView
+      },
+      () => active,
+    )
+    await expect(pending).resolves.toBeNull()
   })
 })
 

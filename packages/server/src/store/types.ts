@@ -71,8 +71,15 @@ export interface Repository {
   deletePlayer(id: string): Promise<boolean>
 
   saveGame(game: GameState): Promise<void>
-  /** Saves the live game and its matching immutable checkpoint as one repository operation. */
-  saveGameWithRevision(game: GameState, revision: GameRevision): Promise<void>
+  /**
+   * Saves the live game and matching checkpoint only when the stored game is
+   * still at `expectedRevision`. `null` means that the game must not exist.
+   */
+  saveGameWithRevision(
+    game: GameState,
+    revision: GameRevision,
+    expectedRevision: number | null,
+  ): Promise<boolean>
   /** Adds a baseline only when this game/revision is not already stored. */
   ensureGameRevision(revision: GameRevision): Promise<void>
   listGameRevisions(gameId: string): Promise<readonly GameRevision[]>

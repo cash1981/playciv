@@ -102,8 +102,19 @@ export class MongoRepository implements Repository {
   /** Connects a new client and returns a repository backed by `dbName`. */
   static async connect(url: string, dbName: string): Promise<MongoRepository> {
     const client = new MongoClient(url)
-    await client.connect()
-    return new MongoRepository(client.db(dbName), client)
+    try {
+      await client.connect()
+      const topology = await client.db('admin').command({ hello: 1 })
+      if (topology['setName'] === undefined && topology['msg'] !== 'isdbgrid') {
+        throw new Error(
+          'MongoDB must be a replica set or sharded cluster because game revisions require transactions',
+        )
+      }
+      return new MongoRepository(client.db(dbName), client)
+    } catch (error) {
+      await client.close()
+      throw error
+    }
   }
 
   /** Closes the client this repository opened in `connect`, if any. */
@@ -186,12 +197,31 @@ export class MongoRepository implements Repository {
     await this.games.replaceOne({ _id: game.id }, game, { upsert: true })
   }
 
-  async saveGameWithRevision(game: GameState, revision: GameRevision): Promise<void> {
+  async saveGameWithRevision(
+    game: GameState,
+    revision: GameRevision,
+    expectedRevision: number | null,
+  ): Promise<boolean> {
     const id = revisionId(revision.gameId, revision.revision)
-    await this.inTransaction(async (session) => {
-      await this.games.replaceOne({ _id: game.id }, game, { upsert: true, ...sessionOption(session) })
-      await this.revisions.replaceOne({ _id: id }, revision, { upsert: true, ...sessionOption(session) })
-    })
+    try {
+      return await this.inTransaction(async (session) => {
+        if (expectedRevision === null) {
+          await this.games.insertOne({ ...game, _id: game.id }, { session })
+        } else {
+          const saved = await this.games.replaceOne(
+            { _id: game.id, rev: expectedRevision },
+            game,
+            { session },
+          )
+          if (saved.matchedCount === 0) return false
+        }
+        await this.revisions.insertOne({ ...revision, _id: id }, { session })
+        return true
+      })
+    } catch (error) {
+      if (isDuplicateKeyError(error)) return false
+      throw error
+    }
   }
 
   async ensureGameRevision(revision: GameRevision): Promise<void> {
@@ -232,9 +262,11 @@ export class MongoRepository implements Repository {
     })
   }
 
-  /** Production connections use a transaction; directly constructed test repositories run sequentially. */
-  private async inTransaction<T>(work: (session: ClientSession | undefined) => Promise<T>): Promise<T> {
-    if (this.transactionClient === undefined) return work(undefined)
+  /** Revisioned writes are never allowed to degrade to non-atomic operations. */
+  private async inTransaction<T>(work: (session: ClientSession) => Promise<T>): Promise<T> {
+    if (this.transactionClient === undefined) {
+      throw new Error('MongoRepository revisioned writes require a transaction-capable MongoClient')
+    }
 
     const session = this.transactionClient.startSession()
     try {
@@ -337,8 +369,12 @@ function revisionId(gameId: string, revision: number): string {
   return `${gameId}:${revision}`
 }
 
-function sessionOption(session: ClientSession | undefined): { readonly session?: ClientSession } {
-  return session === undefined ? {} : { session }
+function sessionOption(session: ClientSession): { readonly session: ClientSession } {
+  return { session }
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 11000
 }
 
 function stripRevisionId(doc: GameRevisionDoc): GameRevision {

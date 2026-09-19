@@ -79,6 +79,7 @@ rule is introduced or changed.
 - `docs/agents/task-board.md`
 - `docs/agents/state.md`
 - `docs/agents/decisions.md`
+- `README.md`
 - `packages/server/src/context.ts`
 - `packages/server/src/routes/games.ts`
 - `packages/server/src/routes/play.ts`

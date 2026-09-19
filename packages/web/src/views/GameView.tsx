@@ -59,6 +59,28 @@ export async function refreshBeforeLive(
   if (await reload() === true) showLive()
 }
 
+export async function loadConsistentLive(
+  loadRevisions: () => Promise<readonly GameRevisionSummary[]>,
+  loadView: () => Promise<PlayerView>,
+): Promise<{ readonly view: PlayerView; readonly revisions: readonly GameRevisionSummary[] }> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    // Read history first. A later game read is either at that revision or
+    // newer, whereas parallel reads could knowingly pair revision 4 with game 3.
+    const revisions = await loadRevisions()
+    const view = await loadView()
+    if (view.rev >= (revisions.at(-1)?.revision ?? -1)) return { view, revisions }
+  }
+  throw new Error('Could not load a consistent live game snapshot')
+}
+
+export async function loadHistoricalIfCurrent(
+  load: () => Promise<GameRevisionView>,
+  isCurrent: () => boolean,
+): Promise<GameRevisionView | null> {
+  const revision = await load()
+  return isCurrent() ? revision : null
+}
+
 export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): React.JSX.Element {
   const [view, setView] = useState<PlayerView | null>(null)
   const [revisions, setRevisions] = useState<readonly GameRevisionSummary[]>([])
@@ -72,6 +94,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
   })
   const liveRevisionRef = useRef(-1)
   const latestStoredRevisionRef = useRef(-1)
+  const revisionRequestEpochRef = useRef(0)
   const activeGameIdRef = useRef(gameId)
   activeGameIdRef.current = gameId
 
@@ -90,10 +113,10 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
 
   const reload = useCallback(async () => {
     try {
-      const [nextView, nextRevisions] = await Promise.all([
-        api.game(gameId),
-        api.revisions(gameId),
-      ])
+      const { view: nextView, revisions: nextRevisions } = await loadConsistentLive(
+        () => api.revisions(gameId),
+        () => api.game(gameId),
+      )
       if (activeGameIdRef.current !== gameId) return false
       applyLiveView(nextView)
       applyRevisionList(nextRevisions)
@@ -101,6 +124,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
       setError(null)
       return true
     } catch (caught) {
+      if (activeGameIdRef.current !== gameId) return false
       if (isUnauthorized(caught)) return onUnauthorized()
       setError(errorMessage(caught))
       return false
@@ -108,26 +132,38 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
   }, [applyLiveView, applyRevisionList, gameId, onUnauthorized])
 
   const showRevision = useCallback(async (revision: number) => {
+    const requestEpoch = ++revisionRequestEpochRef.current
     setBusy(true)
     setError(null)
     try {
-      setHistorical(await api.revision(gameId, revision))
+      const nextHistorical = await loadHistoricalIfCurrent(
+        () => api.revision(gameId, revision),
+        () => activeGameIdRef.current === gameId && revisionRequestEpochRef.current === requestEpoch,
+      )
+      if (nextHistorical === null) return
+      setHistorical(nextHistorical)
       setSelectedRevision(revision)
     } catch (caught) {
+      if (activeGameIdRef.current !== gameId || revisionRequestEpochRef.current !== requestEpoch) return
       if (isUnauthorized(caught)) return onUnauthorized()
       setError(errorMessage(caught))
     } finally {
-      setBusy(false)
+      if (activeGameIdRef.current === gameId && revisionRequestEpochRef.current === requestEpoch) {
+        setBusy(false)
+      }
     }
   }, [gameId, onUnauthorized])
 
   useEffect(() => {
+    revisionRequestEpochRef.current += 1
     liveRevisionRef.current = -1
     latestStoredRevisionRef.current = -1
     setView(null)
     setRevisions([])
     setSelectedRevision(null)
     setHistorical(null)
+    setBusy(false)
+    setError(null)
   }, [gameId])
 
   useEffect(() => {
@@ -141,25 +177,18 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
     void reload()
   }, [reload])
 
-  /**
-   * Runs an action and takes the new view from the response. Every writing
-   * endpoint answers with an updated `PlayerView`, so no extra fetch is needed.
-   */
+  /** Runs an action, then reloads a consistent live game/history pair. */
   const run = useCallback(
     async (action: () => Promise<PlayerView | unknown>) => {
       setBusy(true)
       setError(null)
       try {
-        const result = await action()
+        await action()
         if (activeGameIdRef.current !== gameId) return
-        if (result !== undefined && result !== null && typeof result === 'object' && 'you' in result) {
-          applyLiveView(result as PlayerView)
-          applyRevisionList(await api.revisions(gameId))
-        } else {
-          await reload()
-        }
-        setReloadCount((count) => count + 1)
+        await reload()
+        if (activeGameIdRef.current !== gameId) return
       } catch (caught) {
+        if (activeGameIdRef.current !== gameId) return
         if (isUnauthorized(caught)) return onUnauthorized()
         // On conflict: reload so rev is fresh before the next action
         if (caught instanceof ApiError && caught.status === 409) {
@@ -167,10 +196,10 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         }
         setError(errorMessage(caught))
       } finally {
-        setBusy(false)
+        if (activeGameIdRef.current === gameId) setBusy(false)
       }
     },
-    [applyLiveView, applyRevisionList, gameId, reload, onUnauthorized],
+    [gameId, reload, onUnauthorized],
   )
 
   if (view === null) {

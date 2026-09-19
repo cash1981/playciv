@@ -250,11 +250,18 @@ atomically through a temporary file that is swapped in. Enough to play locally,
 and games survive a restart. Delete the file to reset everything.
 
 **`MongoRepository`** runs against the old `playciv` database restored from
-production. Point at it with:
+production. Global game revisions require multi-document transactions, so the
+MongoDB server must be a replica set (a single-node replica set is enough for
+local development) or a sharded cluster. The server checks this at startup and
+fails clearly instead of running revision writes non-atomically. Point at a
+replica set with:
 
 ```bash
-MONGO_URL=mongodb://127.0.0.1:27017 MONGO_DB=playciv pnpm --filter @civ/server dev
+MONGO_URL=mongodb://127.0.0.1:27017/?replicaSet=rs0 MONGO_DB=playciv pnpm --filter @civ/server dev
 ```
+
+For a local server, start `mongod` with `--replSet rs0` and run
+`rs.initiate()` once in `mongosh` before starting the application.
 
 It reuses the existing collections rather than starting fresh:
 
@@ -268,16 +275,17 @@ It reuses the existing collections rather than starting fresh:
   not migrated to playable form.
 - **`game_state`** — a new collection holding new games in the engine's shape.
   The old `pbf` documents are never written to.
+- **`game_revision`** — immutable game snapshots committed transactionally
+  with the matching `game_state` update.
 
-There is no automated test for `MongoRepository` — CI has no database — so it is
-verified by hand against the live instance. The shared repository logic is
-covered by the JSON implementation, and the pure functions (password
-verification, highscore) have their own tests.
+There is no MongoDB integration test in CI because CI has no database. The
+shared repository logic is covered by the JSON implementation, and the pure
+functions (password verification, highscore) have their own tests.
 
 Seed a known test account with:
 
 ```bash
-MONGO_URL=mongodb://127.0.0.1:27017 pnpm --filter @civ/server seed:test-user
+MONGO_URL=mongodb://127.0.0.1:27017/?replicaSet=rs0 pnpm --filter @civ/server seed:test-user
 ```
 
 ### Highscore

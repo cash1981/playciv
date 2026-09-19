@@ -23,6 +23,7 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 - **Status:** in review
 - **Claimed paths:**
   - `docs/agents/{tasks/issue-70.md,task-board.md,state.md,decisions.md}`
+  - `README.md`
   - `packages/server/src/{context.ts,routes/games.ts,routes/play.ts,store/types.ts,store/json-file.ts,store/mongo.ts}`
   - `packages/server/test/{api.test.ts,helpers.ts}`
   - `packages/web/src/lib/api.ts`

@@ -8,11 +8,13 @@
  */
 
 import type { App } from '../src/app.js'
+import type { Db } from 'mongodb'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { itemName } from '@civ/engine'
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
+import { MongoRepository } from '../src/store/mongo.js'
 import { inject } from './helpers.js'
 
 let app: App
@@ -575,6 +577,64 @@ describe('hidden information over HTTP', () => {
 })
 
 describe('global game revisions', () => {
+  it('lets only one of two mutations from the same revision commit', async () => {
+    const { gameId, starter } = await startedGame('Revision race')
+    const before = await repo.findGame(gameId)
+    expect(before).toBeDefined()
+    if (before === undefined) throw new Error('started game was not stored')
+
+    const originalSave = repo.saveGameWithRevision.bind(repo)
+    let arrivals = 0
+    let release: (() => void) | undefined
+    const bothArrived = new Promise<void>((resolve) => { release = resolve })
+    repo.saveGameWithRevision = async (...args) => {
+      arrivals += 1
+      if (arrivals === 2) release?.()
+      await bothArrived
+      return originalSave(...args)
+    }
+
+    const responses = await Promise.all([
+      inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/endturn`,
+        headers: bearer(starter),
+        payload: {},
+      }),
+      inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/endturn`,
+        headers: bearer(starter),
+        payload: {},
+      }),
+    ])
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409])
+    const after = await repo.findGame(gameId)
+    expect(after?.rev).toBe(before.rev + 1)
+    const revisions = await repo.listGameRevisions(gameId)
+    expect(revisions.filter((revision) => revision.revision === before.rev + 1)).toHaveLength(1)
+  })
+
+  it('refuses revisioned Mongo writes without a transaction-capable client', async () => {
+    const creator = await register('mongo-transaction-owner')
+    const gameId = await createGame(creator, 'Mongo transaction requirement', 2)
+    const game = await repo.findGame(gameId)
+    const revision = (await repo.listGameRevisions(gameId))[0]
+    expect(game).toBeDefined()
+    expect(revision).toBeDefined()
+    if (game === undefined || revision === undefined) throw new Error('game fixture was not stored')
+
+    const db = { collection: () => ({}) } as unknown as Db
+    const mongo = new MongoRepository(db)
+    await expect(mongo.saveGameWithRevision(game, revision, game.rev)).rejects.toThrow(
+      'revisioned writes require a transaction-capable MongoClient',
+    )
+    await expect(mongo.deleteGame(game.id)).rejects.toThrow(
+      'revisioned writes require a transaction-capable MongoClient',
+    )
+  })
+
   it('stores creation and exactly one revision for each shared mutation, but not notes or chat', async () => {
     const creator = await register('revision-owner')
     const gameId = await createGame(creator, 'Revision ledger', 2)
