@@ -366,13 +366,31 @@ export class MongoRepository implements Repository {
   // Notification throttles
   // ---------------------------------------------------------------------
 
-  async findEmailSentAt(scope: string): Promise<string | undefined> {
-    const doc = await this.emailSent.findOne({ _id: scope })
-    return doc?.at
-  }
-
-  async saveEmailSentAt(scope: string, at: string): Promise<void> {
-    await this.emailSent.updateOne({ _id: scope }, { $set: { at } }, { upsert: true })
+  async claimEmailSlot(scope: string, waitMs: number, now: Date): Promise<boolean> {
+    const at = now.toISOString()
+    const cutoff = new Date(now.getTime() - waitMs).toISOString()
+    // An update re-evaluates its filter under the document lock, so only one of
+    // two concurrent callers can match an expired record. A future stamp is not
+    // `$lt cutoff`, so it suppresses — matching Java's `Math.abs`.
+    const expired = await this.emailSent.updateOne(
+      { _id: scope, $or: [{ at: { $lt: cutoff } }, { at: { $exists: false } }] },
+      { $set: { at } },
+    )
+    if (expired.matchedCount > 0) return true
+    // No expired record: create one only if none exists yet. The `_id` index
+    // decides the race; the loser either matches the new document (nothing to
+    // insert) or throws a duplicate-key error.
+    try {
+      const created = await this.emailSent.updateOne(
+        { _id: scope },
+        { $setOnInsert: { at } },
+        { upsert: true },
+      )
+      return created.upsertedCount === 1
+    } catch (error) {
+      if (isDuplicateKeyError(error)) return false
+      throw error
+    }
   }
 
   // ---------------------------------------------------------------------

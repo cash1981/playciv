@@ -13,7 +13,7 @@ _Last updated: 2026-09-19_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 400 engine, 110 server, 33 web |
+| `pnpm -r test` | passing — 400 engine, 116 server, 33 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
@@ -25,7 +25,7 @@ _Last updated: 2026-09-19_
   unauthenticated stop/start links. The new-game broadcast is behind
   `MAIL_BROADCAST_NEW_GAMES`, off by default; the two deliberate differences
   from Java (link on every mail, unsubscribe honoured everywhere) are in
-  `decisions.md` and `README.md`. 15 new server tests.
+  `decisions.md` and `README.md`. 21 new server tests.
 - **OpenCode agents.** OpenCode gets the `coder` and `rules-checker` roles under
   `.opencode/agents/`, mirroring `.claude/agents/`; the reviewer role is
   intentionally omitted because the owner runs the same model throughout, so the

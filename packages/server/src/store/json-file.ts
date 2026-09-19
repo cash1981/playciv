@@ -229,13 +229,20 @@ export class JsonFileRepository implements Repository {
     return this.chat.filter((message) => message.gameId === gameId)
   }
 
-  async findEmailSentAt(scope: string): Promise<string | undefined> {
-    return this.emailSent.get(scope)
-  }
-
-  async saveEmailSentAt(scope: string, at: string): Promise<void> {
-    this.emailSent.set(scope, at)
+  async claimEmailSlot(scope: string, waitMs: number, now: Date): Promise<boolean> {
+    // No `await` between the read and the write: JavaScript runs this body
+    // synchronously until the first await, so two concurrent callers cannot
+    // both pass the check. Do not reintroduce an await here.
+    const last = this.emailSent.get(scope)
+    if (last !== undefined) {
+      const lastMs = Date.parse(last)
+      // Java `CivUtil.shouldSend`: send only once the wait has fully elapsed;
+      // it used `Math.abs`, so a future stamp also suppresses.
+      if (!Number.isNaN(lastMs) && Math.abs(now.getTime() - lastMs) <= waitMs) return false
+    }
+    this.emailSent.set(scope, now.toISOString())
     this.scheduleWrite()
+    return true
   }
 
   async finishedGamesForHighscore(): Promise<readonly FinishedGame[]> {

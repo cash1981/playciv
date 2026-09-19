@@ -242,6 +242,36 @@ describe('chat', () => {
     await post('third message')
     expect(mailer.subjects('New Chat')).toHaveLength(2)
   })
+
+  it('excludes the author by player id even when the game keeps an old username', async () => {
+    const creator = await register('rename-a')
+    const gameId = await createGame(creator.token, 'rename mail', 3)
+    const other = await register('rename-b')
+    await join(other.token, gameId)
+
+    // An admin renames the account; the Playerhand inside the game keeps the
+    // name it was created with. Excluding by username would now mail the author
+    // their own message.
+    const state = await loadGame(gameId)
+    await repo.saveGame({
+      ...state,
+      players: state.players.map((player) =>
+        player.playerId === creator.id ? { ...player, username: 'old-name' } : player,
+      ),
+    })
+    mailer.sent.length = 0
+
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/chat`,
+      headers: bearer(creator.token),
+      payload: { message: 'hello' },
+    })
+
+    const mails = mailer.subjects('New Chat')
+    expect(mails).toHaveLength(1)
+    expect(mails[0]?.to).toBe('rename-b@example.com')
+  })
 })
 
 describe('turn-phase updates', () => {
@@ -267,6 +297,9 @@ describe('turn-phase updates', () => {
     expect(mails[0]?.text).toContain(
       'phase-a has updated start of turn with the following order\n:build a temple.',
     )
+    // The unsubscribe link must be the recipient's, not the author's: Java
+    // passed the author's id here, so the recipient's link was useless.
+    expect(mails[0]?.text).toContain(`/api/admin/email/notification/${other.id}/stop`)
   })
 
   it('uses the trade subject and body for the trade phase', async () => {
@@ -370,6 +403,39 @@ describe('new-game broadcast', () => {
     now = new Date(now.getTime() + GLOBAL_COOLDOWN_MS + 60_000)
     await notifications.gameCreated(state)
     expect(broadcastMailer.subjects('New Civilization game created')).toHaveLength(4)
+  })
+})
+
+describe('email cooldown', () => {
+  it('claims a slot atomically: two concurrent claims, one winner', async () => {
+    const at = new Date('2026-09-19T12:00:00.000Z')
+    const [first, second] = await Promise.all([
+      repo.claimEmailSlot('mail:test:atomic', IN_GAME_COOLDOWN_MS, at),
+      repo.claimEmailSlot('mail:test:atomic', IN_GAME_COOLDOWN_MS, at),
+    ])
+    expect([first, second].filter(Boolean)).toHaveLength(1)
+  })
+
+  it('sends a single mail when two chat messages race for the same slot', async () => {
+    const creator = await register('race-a')
+    const gameId = await createGame(creator.token, 'race mail', 3)
+    const other = await register('race-b')
+    await join(other.token, gameId)
+    mailer.sent.length = 0
+
+    const game = await loadGame(gameId)
+    const notifications = createNotifications({
+      repo,
+      mailer,
+      appOrigin: 'https://playciv.app',
+      now: () => now,
+    })
+    await Promise.all([
+      notifications.chatPosted(game, creator.id, 'race-a', 'one'),
+      notifications.chatPosted(game, creator.id, 'race-a', 'two'),
+    ])
+
+    expect(mailer.subjects('New Chat')).toHaveLength(1)
   })
 })
 

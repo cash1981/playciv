@@ -424,7 +424,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       undefined,
       {
         after: ({ after }) =>
-          context.notifications.phaseUpdated(after, actor.username, phase, order),
+          context.notifications.phaseUpdated(after, actor.id, actor.username, phase, order),
       },
     )
   })

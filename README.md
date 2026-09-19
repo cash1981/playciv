@@ -441,13 +441,28 @@ through SendGrid (`SENDGRID_USERNAME`/`SENDGRID_PASSWORD`); the rewrite uses
 Resend (`RESEND_API_KEY`, from `noreply@playciv.app`). Every trigger the old
 system had is back — it-is-your-turn, new game, someone joined, chat, game
 ended, game deleted and the five turn-phase updates — with Java's 30-minute
-per-player-in-game and 3-hour per-account throttles. Two old behaviours were
-corrected on purpose: the unsubscribe link rides on **every** mail (Java's
-it-is-your-turn mail carried none), and `disableEmail` stops **all**
-notifications (Java checked it only for the new-game broadcast and the admin
-mass mail, so its "unsubscribe from ALL emails" link did not actually stop most
-mail). The new-game broadcast to every account is kept but behind
-`MAIL_BROADCAST_NEW_GAMES`, off by default. See `docs/agents/decisions.md`.
+per-player-in-game and 3-hour per-account throttles. Several old behaviours were
+corrected on purpose:
+
+- The unsubscribe link rides on **every** mail (Java's it-is-your-turn mail
+  carried none), and it points at the **recipient's** id — Java passed the
+  author's id on the turn-phase mails, so the recipient's link unsubscribed the
+  wrong account.
+- `disableEmail` stops **all** notifications (Java checked it only for the
+  new-game broadcast and the admin mass mail, so its "unsubscribe from ALL
+  emails" link did not actually stop most mail).
+- The author of a chat message or phase order is excluded by their stable
+  player id, not by username (Java compared usernames, which stops matching
+  after an admin renames the account), and the mail goes to the account's
+  current email address rather than the address snapshotted into the game at
+  join time.
+- The cooldown is claimed in one atomic step, so two simultaneous actions
+  cannot both slip a mail past the 30-minute window.
+
+The new-game broadcast to every account is kept but behind
+`MAIL_BROADCAST_NEW_GAMES`, off by default. Sends are bounded by a five-second
+timeout so a slow provider cannot hold up an already-committed game action. See
+`docs/agents/decisions.md`.
 
 ## Deferred
 

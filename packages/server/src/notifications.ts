@@ -44,11 +44,17 @@ export interface Notifications {
   /** Java `GameAction.deleteGame` — every player. */
   gameDeleted(game: GameState): Promise<void>
   /** Java `GameAction.addChat` — the other players, 30 min per game. */
-  chatPosted(game: GameState, author: string, message: string): Promise<void>
+  chatPosted(
+    game: GameState,
+    authorPlayerId: string,
+    authorUsername: string,
+    message: string,
+  ): Promise<void>
   /** Java `TurnAction.update*` — the other players, 30 min per game. */
   phaseUpdated(
     game: GameState,
-    author: string,
+    authorPlayerId: string,
+    authorUsername: string,
     phase: TurnPhase,
     order: string,
   ): Promise<void>
@@ -103,17 +109,10 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       if (player.disableEmail === true) return
 
       if (throttle !== undefined) {
-        const nowMs = clock().getTime()
-        const last = await repo.findEmailSentAt(throttle.scope)
-        if (last !== undefined) {
-          const lastMs = Date.parse(last)
-          // Java `CivUtil.shouldSend`: send only once the wait has fully
-          // elapsed; it used `Math.abs`, so a future stamp also suppresses.
-          if (!Number.isNaN(lastMs) && Math.abs(nowMs - lastMs) <= throttle.waitMs) return
-        }
-        // Java claimed the window as part of deciding to send, whether or not
-        // the provider then accepted it.
-        await repo.saveEmailSentAt(throttle.scope, new Date(nowMs).toISOString())
+        // One atomic step: the repository decides and records the slot
+        // together, so two concurrent actions cannot both send.
+        const claimed = await repo.claimEmailSlot(throttle.scope, throttle.waitMs, clock())
+        if (!claimed) return
       }
 
       await mailer.send({ to: player.email, subject, text: body + unsubscribe(playerId) })
@@ -191,13 +190,21 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       await notifyPlayers(game, () => true, 'Game deleted', body)
     },
 
-    async chatPosted(game: GameState, author: string, message: string): Promise<void> {
+    async chatPosted(
+      game: GameState,
+      authorPlayerId: string,
+      authorUsername: string,
+      message: string,
+    ): Promise<void> {
       const body =
-        `${author} wrote in the chat: ${message}.\n` +
+        `${authorUsername} wrote in the chat: ${message}.\n` +
         `Login to ${gameLink(game.id)} to see the chat`
       await notifyPlayers(
         game,
-        (player) => player.username !== author,
+        // Exclude by stable id: Java compared usernames, but an admin can
+        // rename an account while the game keeps the old name, which would
+        // mail the author their own message.
+        (player) => player.playerId !== authorPlayerId,
         'New Chat',
         body,
         (player) => ({
@@ -209,7 +216,8 @@ export function createNotifications(config: NotificationsConfig): Notifications 
 
     async phaseUpdated(
       game: GameState,
-      author: string,
+      authorPlayerId: string,
+      authorUsername: string,
       phase: TurnPhase,
       order: string,
     ): Promise<void> {
@@ -217,12 +225,13 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       // Java: only the start-of-turn body put the newline before the colon.
       const orderText =
         phase === 'SOT'
-          ? `${author} has updated start of turn with the following order\n:${order}`
-          : `${author} has updated ${mail.noun} with the following order:\n${order}`
+          ? `${authorUsername} has updated start of turn with the following order\n:${order}`
+          : `${authorUsername} has updated ${mail.noun} with the following order:\n${order}`
       const body = `${orderText}.\n\nLogin to ${gameLink(game.id)} to see the order`
       await notifyPlayers(
         game,
-        (player) => player.username !== author,
+        // Stable id, not username — see `chatPosted`.
+        (player) => player.playerId !== authorPlayerId,
         mail.subject,
         body,
         (player) => ({

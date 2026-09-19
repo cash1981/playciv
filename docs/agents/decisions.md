@@ -805,3 +805,45 @@ so the key lives on Render with the rest of the API secrets.
   default.
 - Out of scope, as agreed: password reset (separate issue), admin mass mail
   (`AdminAction` is deferred), player replacement and tournament mail.
+
+---
+
+## 2026-09-19 — Email notifications: review round two (issue #30)
+
+**Decision.** A review of the first issue-#30 pass found three functional
+gaps; they are fixed here, and every resulting difference from Java is recorded
+because the project ports old behaviour deliberately.
+
+**Why.** The reference is what the old system *did*, and three of its email
+behaviours were bugs that the message text itself contradicted.
+
+**Consequences.**
+- **The author is excluded by player id, not username.** Java filtered
+  recipients by `getUsername()` equality (`GameAction.addChat`,
+  `TurnAction.update*`). An admin can now rename an account while the game
+  keeps the username it was created with, so username equality stops holding:
+  the author would receive their own mail and an unrelated player could be
+  excluded. `chatPosted` / `phaseUpdated` take `authorPlayerId` and compare
+  `playerId`.
+- **The unsubscribe link names the recipient.** Java's turn-phase mails passed
+  `playerhand.getPlayerId()` — the *author's* id — into `UNSUBSCRIBE`, so the
+  link on someone else's mail unsubscribed the author. Ours carries the
+  recipient's id.
+- **The address is the account's current one.** Java mailed
+  `Playerhand.getEmail()`, a snapshot copied at join time. We look the account
+  up so an admin's email change takes effect.
+- **The cooldown is atomic.** `Repository.claimEmailSlot(scope, waitMs, now)`
+  decides and records in one step. Java read `Player/Playerhand.emailSent` and
+  wrote it back separately; two simultaneous chat messages could both pass the
+  check. The JSON repository keeps the read-and-set synchronous (no `await`
+  between them); Mongo claims an expired row with a conditional `updateOne` and
+  creates a missing one with a guarded upsert, so only one caller wins.
+- **The Resend call has a five-second `AbortSignal` timeout.** Notifications
+  are sent after the game write is committed; without a bound, an unresponsive
+  provider could make the client time out on a request that had in fact
+  succeeded, and a retry would act on a state the player had not seen.
+- The stop/start HTML now matches Java's markup exactly, so the earlier
+  wrapper difference is gone.
+- Still open in production: `RESEND_API_KEY` and `MAIL_FROM` must be set on the
+  host that runs `packages/server`, and the from-domain must be verified in
+  Resend. Cloudflare alone proves nothing until the API itself moves there.

@@ -479,7 +479,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       createdAt: new Date().toISOString(),
     }
     await context.repo.appendChat(entry)
-    await context.notifications.chatPosted(game, me.username, message)
+    await context.notifications.chatPosted(game, me.id, me.username, message)
     return c.json(entry, 201)
   })
 

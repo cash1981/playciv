@@ -70,9 +70,13 @@ pure; the server owns I/O and the clock.
 - `packages/server/src/notifications.ts` (new) — builds the six messages, looks
   up authoritative `StoredPlayer.email`, honours `disableEmail`, applies the
   two throttles, appends the unsubscribe link, and never throws.
-- `Repository` gains `findEmailSentAt(scope)` / `saveEmailSentAt(scope, at)` for
-  throttle state, in both the JSON and Mongo implementations. Scope keys:
+- `Repository` gains `claimEmailSlot(scope, waitMs, now)` for throttle state, an
+  atomic claim, in both the JSON and Mongo implementations. Scope keys:
   `mail:player:<id>` (global 3 h) and `mail:game:<gameId>:<playerId>` (30 min).
+- The Resend mailer aborts after five seconds (`AbortSignal.timeout`), so a
+  slow provider cannot hold up a request whose game write is already committed.
+- `chatPosted` / `phaseUpdated` exclude the author by `playerId`, not username:
+  an admin rename would otherwise mail the author their own message.
 - `StoredPlayer` gains `disableEmail?`, and `PlayerUpdate` can set it. Mongo
   reads the legacy `disableEmail` already present on the old `player` documents.
 - `AppContext` gains `notifications`. `applyToGame` gains an optional `after`
@@ -98,9 +102,14 @@ Java's `#/game/`). The unsubscribe link becomes
 `README.md`:**
 
 - The unsubscribe link is on **every** mail; Java's `sendYourTurn` had none.
+- The unsubscribe link names the recipient; Java's turn-phase mails used the
+  author's id.
 - `disableEmail` is honoured for **all** notifications; Java checked it only for
   the new-game broadcast and the admin mass mail, so its "unsubscribe from ALL
   emails" link did not actually stop most mail.
+- The author is excluded by stable `playerId`, not username, and the mail goes
+  to the account's current address, not the `Playerhand` snapshot.
+- The cooldown is claimed atomically, so concurrent actions cannot both send.
 - Small sends are awaited rather than run on a raw thread; the new-game
   broadcast stays fire-and-forget, like Java.
 - Resend instead of SendGrid; `noreply@playciv.app` instead of
@@ -122,6 +131,7 @@ Java's `#/game/`). The unsubscribe link becomes
 - `packages/server/src/store/json-file.ts`
 - `packages/server/src/store/mongo.ts`
 - `packages/server/test/notifications.test.ts` (new)
+- `packages/server/test/mail.test.ts` (new)
 - `packages/server/.env.example`
 - `render.yaml`
 - `README.md` (the two difference sections only)
@@ -149,9 +159,15 @@ Java's `#/game/`). The unsubscribe link becomes
       the old HTML, and both work without a token.
 - [x] Every outgoing mail carries the unsubscribe link.
 - [x] A missing or failing mailer never fails the game request.
+- [x] The cooldown is claimed atomically: two concurrent chat messages send one
+      mail.
+- [x] A hanging provider is aborted after five seconds and never fails the
+      request.
+- [x] The author is excluded by player id, so a rename cannot mail them their
+      own message.
 - [x] No `Date.now()`/`Math.random()`/I/O added to `packages/engine`.
 - [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
-      (400 engine / 110 server / 33 web).
+      (400 engine / 116 server / 33 web).
 
 ## Open questions
 

@@ -103,13 +103,18 @@ export interface Repository {
   chatFor(gameId: string | null): Promise<readonly ChatMessage[]>
 
   /**
-   * When a throttled notification was last sent to a scope. Java kept this on
+   * Atomically claims a throttled-notification slot. Returns true when no send
+   * has been recorded for `scope` within `waitMs` (and records `now`), false
+   * while the cooldown is still active. Java kept these timestamps on
    * `Player.emailSent` (global, 3 h) and `Playerhand.emailSent` (per game,
    * 30 min); here it is a small keyed table so it survives a restart without
    * touching the engine state. Keys are built by `notifications.ts`.
+   *
+   * Must be atomic: two concurrent callers for the same scope must never both
+   * receive true, or a chat burst sends more than the one mail the cooldown
+   * promises.
    */
-  findEmailSentAt(scope: string): Promise<string | undefined>
-  saveEmailSentAt(scope: string, at: string): Promise<void>
+  claimEmailSlot(scope: string, waitMs: number, now: Date): Promise<boolean>
 
   /**
    * Finished, won games as a source for `highscore()`, roster included —

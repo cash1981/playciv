@@ -31,9 +31,19 @@ export const noopMailer: Mailer = {
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails'
 
+/**
+ * A send that hangs must not hold a game request open: the action is already
+ * committed by the time we send, so a slow provider would otherwise make the
+ * client time out on a request that in fact succeeded, and a retry could hit a
+ * new state. Five seconds is far above Resend's normal latency.
+ */
+const DEFAULT_TIMEOUT_MS = 5_000
+
 export interface ResendMailerOptions {
   readonly apiKey: string
   readonly from: string
+  /** Milliseconds before the request is aborted; defaults to 5 seconds. */
+  readonly timeoutMs?: number
   /** Injectable for tests; defaults to the global `fetch`. */
   readonly fetchImpl?: typeof fetch
 }
@@ -41,10 +51,11 @@ export interface ResendMailerOptions {
 /**
  * The Resend REST API the `resend` SDK wraps. Calling it directly keeps the
  * server free of a new dependency, and `fetch` is available on the Node
- * version the API runs on.
+ * version the API runs on and on Cloudflare Workers.
  */
 export function createResendMailer(options: ResendMailerOptions): Mailer {
   const doFetch = options.fetchImpl ?? fetch
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   return {
     async send(email: OutgoingEmail): Promise<void> {
       const response = await doFetch(RESEND_ENDPOINT, {
@@ -59,6 +70,7 @@ export function createResendMailer(options: ResendMailerOptions): Mailer {
           subject: email.subject,
           text: email.text,
         }),
+        signal: AbortSignal.timeout(timeoutMs),
       })
       if (!response.ok) {
         const detail = await response.text().catch(() => '')
