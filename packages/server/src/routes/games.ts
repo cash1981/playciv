@@ -22,6 +22,7 @@ import type { AppContext } from '../context.js'
 import {
   applyToGame,
   asRecord,
+  authenticateOptionallyWith,
   authenticateWith,
   createGameRevision,
   currentPlayer,
@@ -29,7 +30,6 @@ import {
   optionalString,
   readGame,
   requireString,
-  requireMembership,
   stampLog,
 } from '../context.js'
 import { sendEngineError, sendError } from '../errors.js'
@@ -166,8 +166,16 @@ function newestFirst<T extends { readonly createdAt: string | null }>(entries: r
     .map(({ entry }) => entry)
 }
 
+/** A spectator has no account, so revision history needs a placeholder actor. */
+const SPECTATOR = { id: '', username: 'Spectator' }
+
 export function registerGameRoutes(app: App, context: AppContext): void {
   const auth = authenticateWith(context)
+  // Read-only routes accept an absent or non-member viewer (issue #81): the
+  // response already comes from `toPlayerView`-shaped projections that treat
+  // an unrecognised viewer id as a non-player, so watching a game needs no
+  // account.
+  const optionalAuth = authenticateOptionallyWith(context)
 
   app.get('/api/games', auth, async (c) => {
     const games = await context.repo.allGames()
@@ -237,18 +245,21 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     return c.json(toSummary(stamped, me.id), 201)
   })
 
-  app.get('/api/games/:gameId', auth, async (c) => {
+  app.get('/api/games/:gameId', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     return readGame(context, c, gameId)
   })
 
-  app.get('/api/games/:gameId/revisions', auth, async (c) => {
+  app.get('/api/games/:gameId/revisions', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
-    const game = await requireMembership(context, c, gameId)
-    if (game instanceof Response) return game
-    const me = currentPlayer(c)
+    const game = await context.repo.findGame(gameId)
+    if (game === undefined) {
+      return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    }
+    const viewerId = c.get('player')?.id ?? ''
+    const actor = c.get('player') ?? SPECTATOR
     const baselineReady = await context.repo.ensureGameRevision(
-      createGameRevision(undefined, game, me, new Date().toISOString(), 'History starts here'),
+      createGameRevision(undefined, game, actor, new Date().toISOString(), 'History starts here'),
       game.rev,
     )
     if (!baselineReady) {
@@ -258,20 +269,23 @@ export function registerGameRoutes(app: App, context: AppContext): void {
         : sendError(c, 409, 'CONFLICT', 'Game changed while history was loading; retry')
     }
     const revisions = await context.repo.listGameRevisions(gameId)
-    return c.json(revisions.map((revision) => revisionSummary(revision, me.id)))
+    return c.json(revisions.map((revision) => revisionSummary(revision, viewerId)))
   })
 
-  app.get('/api/games/:gameId/revisions/:revision', auth, async (c) => {
+  app.get('/api/games/:gameId/revisions/:revision', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
-    const game = await requireMembership(context, c, gameId)
-    if (game instanceof Response) return game
+    const game = await context.repo.findGame(gameId)
+    if (game === undefined) {
+      return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    }
     const number = Number(c.req.param('revision'))
     if (!Number.isInteger(number) || number < 0) {
       return sendError(c, 400, 'BAD_REQUEST', 'revision must be a non-negative integer')
     }
-    const me = currentPlayer(c)
+    const viewerId = c.get('player')?.id ?? ''
+    const actor = c.get('player') ?? SPECTATOR
     const baselineReady = await context.repo.ensureGameRevision(
-      createGameRevision(undefined, game, me, new Date().toISOString(), 'History starts here'),
+      createGameRevision(undefined, game, actor, new Date().toISOString(), 'History starts here'),
       game.rev,
     )
     if (!baselineReady) {
@@ -284,7 +298,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     if (revision === undefined) {
       return sendError(c, 404, 'REVISION_NOT_FOUND', `No revision ${number} for game ${gameId}`)
     }
-    return c.json(projectedRevision(revision, me.id))
+    return c.json(projectedRevision(revision, viewerId))
   })
 
   /** Java: `GameResource.joinGame`. */
@@ -352,7 +366,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
    * page plus the total so the browser never loads the whole history or every
    * image at once. `page` is 1-based; `size` is clamped to 1..MAX_REVEALED_SIZE.
    */
-  app.get('/api/games/:gameId/revealed', auth, async (c) => {
+  app.get('/api/games/:gameId/revealed', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     const size = clampInt(c.req.query('size'), DEFAULT_REVEALED_SIZE, 1, MAX_REVEALED_SIZE)
     const page = clampInt(c.req.query('page'), 1, 1, Number.MAX_SAFE_INTEGER)
@@ -377,7 +391,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
    * insertion order, i.e. oldest first.
    */
   /** Java: `/{pbfId}/publiclog`. */
-  app.get('/api/games/:gameId/log/public', auth, async (c) => {
+  app.get('/api/games/:gameId/log/public', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     return readGame(context, c, gameId, (state) =>
       newestFirst(
@@ -396,7 +410,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
   })
 
   /** Java: `/{pbfId}/privatelog` — the player's own entries only. */
-  app.get('/api/games/:gameId/log/private', auth, async (c) => {
+  app.get('/api/games/:gameId/log/private', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     return readGame(context, c, gameId, (state, viewerId) =>
       newestFirst(

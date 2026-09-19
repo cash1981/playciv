@@ -27,9 +27,11 @@ import { CollapsiblePanel } from './CollapsiblePanel.js'
 
 interface Props {
   readonly gameId: string
-  readonly player: PlayerDto
+  /** `null` for a spectator watching without an account (issue #81). */
+  readonly player: PlayerDto | null
   readonly onUnauthorized: () => void
   readonly onDeleted: () => void
+  readonly onWithdrawn: () => void
 }
 
 /** What can be drawn. Techs are chosen, so they are not listed here. */
@@ -81,7 +83,7 @@ export async function loadHistoricalIfCurrent(
   return isCurrent() ? revision : null
 }
 
-export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): React.JSX.Element {
+export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdrawn }: Props): React.JSX.Element {
   const [view, setView] = useState<PlayerView | null>(null)
   const [revisions, setRevisions] = useState<readonly GameRevisionSummary[]>([])
   const [selectedRevision, setSelectedRevision] = useState<number | null>(null)
@@ -125,11 +127,14 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
       return true
     } catch (caught) {
       if (activeGameIdRef.current !== gameId) return false
-      if (isUnauthorized(caught)) return onUnauthorized()
+      // A spectator has no session to lose; an unauthorized response there
+      // just means an anonymous read hit a route that still requires an
+      // account, not that they were signed out.
+      if (isUnauthorized(caught) && player !== null) return onUnauthorized()
       setError(errorMessage(caught))
       return false
     }
-  }, [applyLiveView, applyRevisionList, gameId, onUnauthorized])
+  }, [applyLiveView, applyRevisionList, gameId, onUnauthorized, player])
 
   const showRevision = useCallback(async (revision: number) => {
     const requestEpoch = ++revisionRequestEpochRef.current
@@ -145,14 +150,14 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
       setSelectedRevision(revision)
     } catch (caught) {
       if (activeGameIdRef.current !== gameId || revisionRequestEpochRef.current !== requestEpoch) return
-      if (isUnauthorized(caught)) return onUnauthorized()
+      if (isUnauthorized(caught) && player !== null) return onUnauthorized()
       setError(errorMessage(caught))
     } finally {
       if (activeGameIdRef.current === gameId && revisionRequestEpochRef.current === requestEpoch) {
         setBusy(false)
       }
     }
-  }, [gameId, onUnauthorized])
+  }, [gameId, onUnauthorized, player])
 
   useEffect(() => {
     revisionRequestEpochRef.current += 1
@@ -189,7 +194,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         if (activeGameIdRef.current !== gameId) return
       } catch (caught) {
         if (activeGameIdRef.current !== gameId) return
-        if (isUnauthorized(caught)) return onUnauthorized()
+        if (isUnauthorized(caught) && player !== null) return onUnauthorized()
         // On conflict: reload so rev is fresh before the next action
         if (caught instanceof ApiError && caught.status === 409) {
           await reload()
@@ -199,7 +204,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         if (activeGameIdRef.current === gameId) setBusy(false)
       }
     },
-    [gameId, reload, onUnauthorized],
+    [gameId, reload, onUnauthorized, player],
   )
 
   if (view === null) {
@@ -251,21 +256,46 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         </div>
 
         <div className="row" style={{ marginTop: '0.6rem' }}>
-          <button disabled={interactionBusy || !yourTurn} onClick={() => void run(() => api.endTurn(gameId))}>
-            End turn
-          </button>
-          <button disabled={interactionBusy || yourTurn} onClick={() => void run(() => api.takeTurn(gameId))}>
-            Take the turn
-          </button>
+          {you !== null && (
+            <>
+              <button disabled={interactionBusy || !yourTurn} onClick={() => void run(() => api.endTurn(gameId))}>
+                End turn
+              </button>
+              <button disabled={interactionBusy || yourTurn} onClick={() => void run(() => api.takeTurn(gameId))}>
+                Take the turn
+              </button>
+            </>
+          )}
+          {you === null && <span className="muted">Watching (not a player)</span>}
           <span style={{ flex: 1 }} />
-          <button
-            className="danger"
-            disabled={interactionBusy || !displayedView.active}
-            onClick={() => void run(() => api.withdraw(gameId))}
-          >
-            Withdraw
-          </button>
-          {(you?.gameCreator === true || player.role === 'admin') && (
+          {you !== null && (
+            <button
+              className="danger"
+              disabled={interactionBusy || !displayedView.active}
+              onClick={() => {
+                if (!window.confirm('Withdraw from this game?')) return
+                setBusy(true)
+                setError(null)
+                void api.withdraw(gameId).then(
+                  () => {
+                    onWithdrawn()
+                    // Withdrawing already succeeded; if `onWithdrawn` (e.g.
+                    // navigating away) got vetoed by unsaved turn orders,
+                    // this view stays mounted and must not stay stuck busy.
+                    setBusy(false)
+                  },
+                  (caught: unknown) => {
+                    if (isUnauthorized(caught)) return onUnauthorized()
+                    setError(errorMessage(caught))
+                    setBusy(false)
+                  },
+                )
+              }}
+            >
+              Withdraw
+            </button>
+          )}
+          {(you?.gameCreator === true || player?.role === 'admin') && (
             <button
               className="danger"
               disabled={interactionBusy}
@@ -330,13 +360,15 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
           reloadCount={reloadCount}
           historical={historical}
         />
-        <ChatPanel
-          gameId={gameId}
-          busy={busy}
-          run={run}
-          player={player}
-          reloadCount={reloadCount}
-        />
+        {player !== null && (
+          <ChatPanel
+            gameId={gameId}
+            busy={busy}
+            run={run}
+            player={player}
+            reloadCount={reloadCount}
+          />
+        )}
       </div>
     </>
   )

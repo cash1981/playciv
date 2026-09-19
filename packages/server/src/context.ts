@@ -47,6 +47,44 @@ export function authenticateWith(context: AppContext) {
   })
 }
 
+/**
+ * Like `authenticateWith`, but a request with no bearer token at all is not
+ * an error — the route runs anyway, with `currentPlayer` unavailable. For
+ * routes that project a `PlayerView`-shaped response, an absent viewer works
+ * the same way a non-member viewer already does: `toPlayerView` returns
+ * `you: null` and only public data (issue #81 — read-only viewing).
+ *
+ * A token that *is* present but invalid, expired or disabled still answers
+ * 401/403 exactly like `authenticateWith` — silently downgrading it to
+ * "spectator" would hide a real player's expired session behind what looks
+ * like their own game turning read-only.
+ */
+export function authenticateOptionallyWith(context: AppContext) {
+  return createMiddleware<{ Variables: Variables }>(async (c, next) => {
+    const header = c.req.header('authorization')
+    if (header === undefined || !header.startsWith('Bearer ')) {
+      await next()
+      return
+    }
+
+    const payload = context.tokens.verify(header.slice('Bearer '.length))
+    if (payload === undefined) {
+      return sendError(c, 401, 'UNAUTHORIZED', 'Invalid or expired token')
+    }
+
+    const player = await context.repo.findPlayerById(payload.playerId)
+    if (player === undefined) {
+      return sendError(c, 401, 'UNAUTHORIZED', 'Unknown player')
+    }
+    if (player.disabled === true) {
+      return sendError(c, 403, 'ACCOUNT_DISABLED', 'This account is disabled')
+    }
+
+    c.set('player', player)
+    await next()
+  })
+}
+
 /** Requires a valid, currently enabled account with the persisted admin role. */
 export function requireAdminWith(context: AppContext) {
   const authenticate = authenticateWith(context)
@@ -87,7 +125,7 @@ export function stampLog(state: GameState, now: string): GameState {
 export function createGameRevision(
   before: GameState | undefined,
   state: GameState,
-  actor: StoredPlayer,
+  actor: Pick<StoredPlayer, 'id' | 'username'>,
   createdAt: string,
   fallbackDescription: string,
 ): GameRevision {

@@ -45,6 +45,7 @@ import type { AppContext, Variables } from '../context.js'
 import {
   applyToGame,
   asRecord,
+  authenticateOptionallyWith,
   authenticateWith,
   currentPlayer,
   optionalNumber,
@@ -83,6 +84,10 @@ function parsePhase(
 
 export function registerPlayRoutes(app: App, context: AppContext): void {
   const auth = authenticateWith(context)
+  // Read-only routes a spectator's panels also poll (issue #81): an absent
+  // viewer just sees the same "not a player" projection a signed-in
+  // non-member already gets.
+  const optionalAuth = authenticateOptionallyWith(context)
 
   // -------------------------------------------------------------------------
   // Drawing
@@ -161,7 +166,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
   // Techs and social policy
   // -------------------------------------------------------------------------
 
-  app.get('/api/games/:gameId/techs/available', auth, async (c) => {
+  app.get('/api/games/:gameId/techs/available', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     return readGame(context, c, gameId, (state, viewerId) =>
       remainingTechsForPlayer(state, viewerId),
@@ -169,7 +174,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
   })
 
   /** Java: `PlayerResource.getChosenTechFromPlayer` — `/tech/all`. */
-  app.get('/api/games/:gameId/techs/revealed', auth, async (c) => {
+  app.get('/api/games/:gameId/techs/revealed', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     return readGame(context, c, gameId, (state) => revealedTechsForAllPlayers(state))
   })
@@ -229,7 +234,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     )
   })
 
-  app.get('/api/games/:gameId/socialpolicies', auth, async (c) => {
+  app.get('/api/games/:gameId/socialpolicies', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     return readGame(context, c, gameId, (state) => state.socialPolicies)
   })
@@ -361,12 +366,12 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     return applyToGame(context, c, gameId, (state) => takeTurn(state, currentPlayer(c).id))
   })
 
-  app.get('/api/games/:gameId/turns/public', auth, async (c) => {
+  app.get('/api/games/:gameId/turns/public', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     return readGame(context, c, gameId, (state) => allPublicTurns(state))
   })
 
-  app.get('/api/games/:gameId/turns/mine', auth, async (c) => {
+  app.get('/api/games/:gameId/turns/mine', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     return readGame(context, c, gameId, (state, viewerId) => playersTurns(state, viewerId))
   })
@@ -467,33 +472,42 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     )
   })
 
-  /** Java: `PlayerResource.getAllUndoThatNeedsVoteFromPlayer`. */
-  app.get('/api/games/:gameId/undo/pending', auth, async (c) => {
+  /**
+   * Java: `PlayerResource.getAllUndoThatNeedsVoteFromPlayer`. A spectator has
+   * nothing to vote on, so it answers an empty list rather than requiring an
+   * account (issue #81).
+   */
+  app.get('/api/games/:gameId/undo/pending', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
-    const me = currentPlayer(c)
+    const me = c.get('player')
 
     return readGame(context, c, gameId, (state) =>
-      state.log
-        .filter((entry) => entry.undo !== null && !entry.undo.done)
-        // Only the ones this player has not voted on yet
-        .filter((entry) => !(me.id in (entry.undo?.votes ?? {})))
-        .map((entry) => ({
-          id: entry.id,
-          username: entry.username,
-          message: entry.publicLog,
-          votesRequired: entry.undo?.numberOfVotesRequired ?? 0,
-          votesCast: Object.keys(entry.undo?.votes ?? {}).length,
-        })),
+      me === undefined
+        ? []
+        : state.log
+            .filter((entry) => entry.undo !== null && !entry.undo.done)
+            // Only the ones this player has not voted on yet
+            .filter((entry) => !(me.id in (entry.undo?.votes ?? {})))
+            .map((entry) => ({
+              id: entry.id,
+              username: entry.username,
+              message: entry.publicLog,
+              votesRequired: entry.undo?.numberOfVotesRequired ?? 0,
+              votesCast: Object.keys(entry.undo?.votes ?? {}).length,
+            })),
     )
   })
 
-  app.get('/api/games/:gameId/undo/mine', auth, async (c) => {
+  app.get('/api/games/:gameId/undo/mine', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
+    const me = c.get('player')
     return readGame(context, c, gameId, (state) =>
-      playersActiveUndos(state, currentPlayer(c).username).map((entry) => ({
-        id: entry.id,
-        message: entry.publicLog,
-      })),
+      me === undefined
+        ? []
+        : playersActiveUndos(state, me.username).map((entry) => ({
+            id: entry.id,
+            message: entry.publicLog,
+          })),
     )
   })
 }

@@ -331,6 +331,12 @@ Here the split is in the types:
 
 Covered by `packages/engine/test/hidden-info.test.ts`.
 
+Every game is world-readable by its id: a signed-out visitor, or a signed-in
+player who is not one of its members, gets exactly this same non-member
+projection — `you: null`, opponents as counts, log entries in public form only
+(issue #81, "watch without logging in"). No account is required to read a
+game, only to act in one.
+
 ## Known differences from Java
 
 The old tests are the reference. Wherever Java and an expectation disagreed,

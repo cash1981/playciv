@@ -98,7 +98,5 @@ makes them the most likely collision in the repo.
 Work that is ready to start, most useful first. Taking one means moving it to
 "Live claims".
 
-| Slug | What | Brief |
-| --- | --- | --- |
-| `public-landing` | Landing page: active games, highscore, open chat | `tasks/public-landing.md` |
-| `anonymous-readonly` | Read-only access without an account, and the security pass that goes with it | `tasks/anonymous-readonly.md` |
+_Nothing queued._ `public-landing` shipped as issue #38's `LandingView`;
+`anonymous-readonly` shipped as issues #81/#82.
