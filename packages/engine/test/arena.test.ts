@@ -180,7 +180,7 @@ describe('placeUnitInArena', () => {
     expect(error.kind).toBe('ARENA_POSITION_OCCUPIED')
   })
 
-  it('lets a new unit reinforce a front still held by a killed one, finalizing the kill', () => {
+  it('lets a new unit reinforce a front still held by a killed one, returning that card to hand', () => {
     let state = withBattlehand(CASH1981, 2)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
 
@@ -216,16 +216,15 @@ describe('placeUnitInArena', () => {
     expect(state.battle!.arena[0]!.unit.id).toBe(reinforcement!.id)
     expect(state.battle!.arena[0]!.killed).toBe(false)
 
-    // The kill is now final: the fallen card is discarded, not sitting in
-    // hand available to "undo" back into a slot that no longer exists.
+    // The fallen unit's card returns to hand, available like any other —
+    // killing never auto-discards (issue #75); the player discards it
+    // themselves if they want it gone.
     const updated = findPlayer(state, CASH1981)!
-    expect(updated.battlehand.some((u) => u.id === fallen!.id)).toBe(false)
-    expect(updated.items.some((it) => it.id === fallen!.id)).toBe(false)
-    const discardLog = state.log.find(
-      (entry) => entry.logType === 'DISCARD' && entry.item?.id === fallen!.id,
-    )
-    expect(discardLog).toBeDefined()
-    expect(state.discardedItems.some((it) => it.id === fallen!.id)).toBe(true)
+    const fallenInHand = updated.battlehand.find((u) => u.id === fallen!.id)
+    expect(fallenInHand?.inBattle).toBe(false)
+    const fallenInItems = updated.items.find((it) => it.id === fallen!.id)
+    expect((fallenInItems as { inBattle?: boolean } | undefined)?.inBattle).toBe(false)
+    expect(state.discardedItems.some((it) => it.id === fallen!.id)).toBe(false)
   })
 })
 
@@ -399,7 +398,10 @@ describe('moveArenaUnit', () => {
     expect(state.battle!.arena).toHaveLength(1)
     expect(state.battle!.arena[0]!.unit.id).toBe(mover!.id)
     expect(state.battle!.arena[0]!.position).toBe(0)
-    expect(state.discardedItems.some((it) => it.id === fallen!.id)).toBe(true)
+    // The fallen unit's card returns to hand, not discarded (issue #75).
+    expect(state.discardedItems.some((it) => it.id === fallen!.id)).toBe(false)
+    const fallenInHand = findPlayer(state, CASH1981)!.battlehand.find((u) => u.id === fallen!.id)
+    expect(fallenInHand?.inBattle).toBe(false)
   })
 })
 
@@ -629,7 +631,7 @@ describe('endBattleAction', () => {
     expect((it as { inBattle?: boolean }).inBattle).toBe(false)
   })
 
-  it('discards a still-killed unit\'s source card instead of returning it to hand', () => {
+  it('returns a still-killed unit\'s source card to hand too, not just an unkilled one (issue #75)', () => {
     let state = withBattlehand(CASH1981, 2)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
 
@@ -661,23 +663,19 @@ describe('endBattleAction', () => {
     state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
 
     const updated = findPlayer(state, CASH1981)!
-    // The killed unit's card is gone from hand/items and sits in discardedItems.
-    expect(updated.battlehand.some((u) => u.id === killedUnit!.id)).toBe(false)
-    expect(updated.items.some((it) => it.id === killedUnit!.id)).toBe(false)
-    expect(state.discardedItems.some((it) => it.id === killedUnit!.id)).toBe(true)
+    // Killing never auto-discards: the killed unit's card is back in hand,
+    // just like the unkilled one — the player discards it themselves.
+    const killedInHand = updated.battlehand.find((u) => u.id === killedUnit!.id)
+    expect(killedInHand?.inBattle).toBe(false)
+    const killedInItems = updated.items.find((it) => it.id === killedUnit!.id)
+    expect((killedInItems as { inBattle?: boolean } | undefined)?.inBattle).toBe(false)
+    expect(state.discardedItems.some((it) => it.id === killedUnit!.id)).toBe(false)
 
-    // The unkilled unit still returns to hand as before.
     const survivorHand = updated.battlehand.find((u) => u.id === survivor!.id)
     expect(survivorHand?.inBattle).toBe(false)
-
-    // The discard is logged, like any other discard.
-    const discardLog = state.log.find(
-      (entry) => entry.logType === 'DISCARD' && entry.item?.id === killedUnit!.id,
-    )
-    expect(discardLog).toBeDefined()
   })
 
-  it('discards a killed barbarian unit the same way, clearing ownerId like discardBarbarians', () => {
+  it('returns a killed barbarian unit to the barbarian list too, clearing inBattle', () => {
     let state = unwrap(
       initiateBattle(firstCivGame(), { initiatorId: CASH1981, opponentId: 'barbarians' }),
     )
@@ -701,15 +699,9 @@ describe('endBattleAction', () => {
     state = unwrap(endBattleAction(state, { playerId: controllerId }))
 
     const controller = findPlayer(state, controllerId)!
-    expect(controller.barbarians.some((u) => u.id === barbarianUnit.id)).toBe(false)
-    const discarded = state.discardedItems.find((it) => it.id === barbarianUnit.id)
-    expect(discarded).toBeDefined()
-    expect((discarded as { ownerId: string | null }).ownerId).toBeNull()
-
-    const discardLog = state.log.find(
-      (entry) => entry.logType === 'DISCARD' && entry.item?.id === barbarianUnit.id,
-    )
-    expect(discardLog).toBeDefined()
+    const barbarianAfter = controller.barbarians.find((u) => u.id === barbarianUnit.id)
+    expect(barbarianAfter?.inBattle).toBe(false)
+    expect(state.discardedItems.some((it) => it.id === barbarianUnit.id)).toBe(false)
   })
 
   it('rejects a non-participant trying to end an active battle', () => {

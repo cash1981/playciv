@@ -1004,7 +1004,8 @@ describe('arena place and rotate', () => {
     expect(returnedView.battle.arena).toHaveLength(1)
     expect(returnedView.you.battlehand.find((u) => u.id === unitB!.id)?.inBattle).toBe(false)
 
-    // Kill A again and end the battle: A's card is discarded, not returned to hand.
+    // Kill A again and end the battle: A's card returns to hand too, not
+    // discarded — killing never auto-discards (issue #75).
     const killedAgain = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/battle/arena/${arenaUnitAId}/kill`,
@@ -1022,11 +1023,11 @@ describe('arena place and rotate', () => {
     expect(ended.status).toBe(200)
     const endedView = await ended.json() as {
       battle: unknown
-      you: { battlehand: { id: string }[]; items: { id: string }[] }
+      you: { battlehand: { id: string; inBattle: boolean }[]; items: { id: string; inBattle?: boolean }[] }
     }
     expect(endedView.battle).toBeNull()
-    expect(endedView.you.battlehand.some((u) => u.id === unitA!.id)).toBe(false)
-    expect(endedView.you.items.some((u) => u.id === unitA!.id)).toBe(false)
+    expect(endedView.you.battlehand.find((u) => u.id === unitA!.id)?.inBattle).toBe(false)
+    expect(endedView.you.items.find((u) => u.id === unitA!.id)?.inBattle).toBe(false)
   })
 
   it('lets a new unit reinforce a front a killed unit still holds', async () => {
@@ -1104,7 +1105,7 @@ describe('arena place and rotate', () => {
     expect(reinforced.status).toBe(200)
     const reinforcedView = await reinforced.json() as {
       battle: { arena: { id: string; unit: { id: string }; killed: boolean; position: number }[] }
-      you: { battlehand: { id: string }[]; items: { id: string }[] }
+      you: { battlehand: { id: string; inBattle: boolean }[]; items: { id: string; inBattle?: boolean }[] }
     }
 
     // One live unit on that front — the fallen one is gone, not stacked.
@@ -1113,9 +1114,10 @@ describe('arena place and rotate', () => {
     expect(reinforcedView.battle.arena[0]!.position).toBe(0)
     expect(reinforcedView.battle.arena[0]!.killed).toBe(false)
 
-    // The kill is final now: the fallen card is gone from hand/items.
-    expect(reinforcedView.you.battlehand.some((u) => u.id === fallen!.id)).toBe(false)
-    expect(reinforcedView.you.items.some((u) => u.id === fallen!.id)).toBe(false)
+    // The fallen card returns to hand, available — killing never
+    // auto-discards (issue #75); the player discards it themselves.
+    expect(reinforcedView.you.battlehand.find((u) => u.id === fallen!.id)?.inBattle).toBe(false)
+    expect(reinforcedView.you.items.find((u) => u.id === fallen!.id)?.inBattle).toBe(false)
   })
 })
 

@@ -12,7 +12,7 @@ import type { Rotation } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { UnitItem } from '../item.js'
 import { isUnit, revealAll } from '../item.js'
-import { appendItemLog, appendPublicLog } from '../log.js'
+import { appendPublicLog } from '../log.js'
 import { nextId } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
@@ -96,18 +96,18 @@ function appendRollingArenaLog(
 }
 
 /**
- * Finalizes a killed arena unit: discards its source card, matching each
- * source list's own discard convention (barbarian: `ownerId: null`, like
- * `discardBarbarians`; a player's own card: `hidden: true`, like
- * `discardItem`), and logs it as a `DISCARD`.
+ * Clears `inBattle` on an arena unit's source card, returning it to the
+ * hand's (or barbarian list's) "available" state — whether or not the unit
+ * was `killed`. Never discards: the player manages their own discards, kill
+ * or no kill, per the original issue-63 decision (issue #75 reverts the
+ * auto-discard tried in issue #71 — see `decisions.md`).
  *
- * Used both when the battle ends with the unit still `killed` (see
- * `endBattleAction`), and when a new unit is placed into a front still held
- * by a killed one (see `placeUnitInArena`) — reinforcing a front commits the
- * kill it displaces, since there is no longer an arena slot to undo it back
- * into (issue #71 follow-up).
+ * Used both when the battle ends (see `endBattleAction`) and when a new
+ * unit is placed into a front still held by a killed one (see
+ * `placeUnitInArena`/`moveArenaUnit`) — reinforcing a front frees up
+ * whatever it displaces, the same as it would once the whole battle ends.
  */
-function discardKilledArenaUnit(
+function returnArenaUnitCardToHand(
   state: GameState,
   arenaUnit: ArenaUnit,
   ownerSide: BattleSide,
@@ -115,24 +115,19 @@ function discardKilledArenaUnit(
   const owner = findPlayer(state, ownerSide.playerId)
   if (owner === undefined) return state
 
-  let discardedCard: UnitItem
-  let nextState = state
   if (ownerSide.kind === 'barbarians') {
-    discardedCard = { ...arenaUnit.unit, ownerId: null }
-    const updated = owner.barbarians.filter((u) => u.id !== arenaUnit.unit.id)
-    nextState = withPlayer(nextState, { ...owner, barbarians: updated })
-  } else {
-    discardedCard = { ...arenaUnit.unit, hidden: true }
-    const updatedBattlehand = owner.battlehand.filter((u) => u.id !== arenaUnit.unit.id)
-    const updatedItems = owner.items.filter((it) => it.id !== arenaUnit.unit.id)
-    nextState = withPlayer(nextState, {
-      ...owner,
-      battlehand: updatedBattlehand,
-      items: updatedItems,
-    })
+    const updated = owner.barbarians.map((u) =>
+      u.id === arenaUnit.unit.id ? { ...u, inBattle: false } : u,
+    )
+    return withPlayer(state, { ...owner, barbarians: updated })
   }
-  nextState = appendItemLog(nextState, 'DISCARD', owner.username, ownerSide.playerId, discardedCard)
-  return { ...nextState, discardedItems: [...nextState.discardedItems, discardedCard] }
+  const updatedBattlehand = owner.battlehand.map((u) =>
+    u.id === arenaUnit.unit.id ? { ...u, inBattle: false } : u,
+  )
+  const updatedItems = owner.items.map((it) =>
+    it.id === arenaUnit.unit.id ? { ...it, inBattle: false } as typeof it : it,
+  )
+  return withPlayer(state, { ...owner, battlehand: updatedBattlehand, items: updatedItems })
 }
 
 // ---------------------------------------------------------------------------
@@ -334,12 +329,13 @@ export function placeUnitInArena(
     nextState = withPlayer(state, { ...player, battlehand: updatedBattlehand, items: updatedItems })
   }
 
-  // Reinforcing a front: the fallen unit's card is finalized now, not left
-  // to be undone — there is no longer a slot for it to be undone back into.
+  // Reinforcing a front: whatever it displaces returns to hand right away,
+  // the same as it would once the whole battle ends — there is no longer an
+  // arena slot for a kill toggle on it to act on either way.
   let arena = battle.arena
   if (fallenUnit !== undefined) {
     const fallenOwnerSide = fallenUnit.side === 'attacker' ? battle.attacker : battle.defender
-    nextState = discardKilledArenaUnit(nextState, fallenUnit, fallenOwnerSide)
+    nextState = returnArenaUnitCardToHand(nextState, fallenUnit, fallenOwnerSide)
     arena = arena.filter((u) => u.id !== fallenUnit.id)
   }
 
@@ -418,8 +414,8 @@ export function moveArenaUnit(
     (u) => u.id !== unit.id && u.side === unit.side && u.position === input.position,
   )
   // Same rule as placeUnitInArena: a killed unit does not hold its front
-  // open, so moving a unit onto it reinforces (and finalizes) it rather
-  // than being blocked (issue #71 follow-up).
+  // open, so moving a unit onto it reinforces it (returning it to hand)
+  // rather than being blocked (issue #74).
   if (atTarget.some((u) => !u.killed)) {
     return err({ kind: 'ARENA_POSITION_OCCUPIED' })
   }
@@ -439,7 +435,7 @@ export function moveArenaUnit(
   let arena = battle.arena
   if (fallenUnit !== undefined) {
     const fallenOwnerSide = fallenUnit.side === 'attacker' ? battle.attacker : battle.defender
-    nextState = discardKilledArenaUnit(nextState, fallenUnit, fallenOwnerSide)
+    nextState = returnArenaUnitCardToHand(nextState, fallenUnit, fallenOwnerSide)
     arena = arena.filter((u) => u.id !== fallenUnit.id)
   }
 
@@ -777,11 +773,10 @@ export interface EndBattleInput {
  * Ends the active battle and cleans up.
  *
  * If a battle is active:
- *   - A unit still marked `killed` has its source card discarded outright
- *     (issue #71) — killing is undoable up to this point (see
- *     `killArenaUnit`), but this is the point of no return.
- *   - Every other arena unit's source card has `inBattle` cleared, so it
- *     returns to the hand's "available" state.
+ *   - Every arena unit's source card has `inBattle` cleared, killed or not,
+ *     so it returns to the hand's "available" state. Killing never
+ *     auto-discards (issue #75) — the player discards a killed unit
+ *     themselves, the same as any other card.
  *   - Sets `battle` to null.
  *
  * If no battle is active, falls back to the original `endBattle` behaviour in
@@ -816,33 +811,14 @@ export function endBattleAction(
     battle.defender.playerId === input.playerId
   if (!isParticipant) return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
 
-  // For each arena unit, either discard the source card (if still marked
-  // killed — issue #71: a kill is only final once the battle actually ends,
-  // so it should not silently reappear in hand afterwards) or clear its
-  // `inBattle` flag so it returns to the hand's "available" state.
+  // Every arena unit's source card returns to the hand's "available" state,
+  // killed or not — killing was never meant to auto-discard (issue #75); the
+  // player discards a killed unit themselves, same as any other card.
   let nextState = state
   for (const arenaUnit of battle.arena) {
     const ownerSide =
       arenaUnit.side === 'attacker' ? battle.attacker : battle.defender
-    const owner = findPlayer(nextState, ownerSide.playerId)
-    if (owner === undefined) continue
-
-    if (arenaUnit.killed) {
-      nextState = discardKilledArenaUnit(nextState, arenaUnit, ownerSide)
-    } else if (ownerSide.kind === 'barbarians') {
-      const updated = owner.barbarians.map((u) =>
-        u.id === arenaUnit.unit.id ? { ...u, inBattle: false } : u,
-      )
-      nextState = withPlayer(nextState, { ...owner, barbarians: updated })
-    } else {
-      const updatedBattlehand = owner.battlehand.map((u) =>
-        u.id === arenaUnit.unit.id ? { ...u, inBattle: false } : u,
-      )
-      const updatedItems = owner.items.map((it) =>
-        it.id === arenaUnit.unit.id ? { ...it, inBattle: false } as typeof it : it,
-      )
-      nextState = withPlayer(nextState, { ...owner, battlehand: updatedBattlehand, items: updatedItems })
-    }
+    nextState = returnArenaUnitCardToHand(nextState, arenaUnit, ownerSide)
   }
 
   nextState = appendPublicLog(
