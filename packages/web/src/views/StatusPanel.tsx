@@ -214,8 +214,16 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
         <div className="government-card-grid">
           {GOVERNMENT_CARDS.map((card) => (
             <article className="government-card" key={card.government}>
-              <h3>{card.government}</h3>
-              {card.effects.map((effect) => <p key={effect}>{effect}</p>)}
+              <img
+                className="government-card-image"
+                src={`/governments/${card.government.toLowerCase()}.jpg`}
+                alt={`${card.government} government card`}
+                loading="lazy"
+              />
+              <div className="government-card-copy">
+                <h3>{card.government}</h3>
+                {card.effects.map((effect) => <p key={effect}>{effect}</p>)}
+              </div>
             </article>
           ))}
         </div>

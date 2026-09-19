@@ -53,10 +53,15 @@ describe('StatusPanel governments', () => {
     expect(alice.querySelectorAll('option')).toHaveLength(GOVERNMENTS.length)
     const expectedEffects = GOVERNMENT_CARDS.flatMap((card) => card.effects)
     expect(document.querySelectorAll('.government-card p')).toHaveLength(expectedEffects.length)
+    expect(document.querySelectorAll('.government-card img')).toHaveLength(GOVERNMENT_CARDS.length)
 
     for (const card of GOVERNMENT_CARDS) {
       expect(card.effects.length).toBeGreaterThan(0)
       expect(screen.getByRole('heading', { name: card.government, hidden: true })).toBeTruthy()
+      expect(
+        screen.getByRole('img', { name: `${card.government} government card`, hidden: true })
+          .getAttribute('src'),
+      ).toBe(`/governments/${card.government.toLowerCase()}.jpg`)
       for (const effect of card.effects) {
         expect(screen.getByText(effect, { selector: '.government-card p' })).toBeTruthy()
       }

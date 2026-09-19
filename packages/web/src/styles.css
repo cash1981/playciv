@@ -1183,32 +1183,38 @@ ul.history > li {
 
 .government-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
+  align-items: start;
+  gap: 1.2rem;
   margin-top: 0.7rem;
 }
 
 .government-card {
-  min-height: 10rem;
-  padding: 0.9rem;
-  border: 1px solid #8b693f;
-  border-radius: 0.45rem;
-  background: linear-gradient(145deg, #ddc18f, #b9915f);
-  color: #261b10;
-  box-shadow: inset 0 0 1.2rem rgb(72 42 14 / 18%);
+  min-width: 0;
+}
+
+.government-card-image {
+  display: block;
+  width: 100%;
+  max-width: 20rem;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 0.7rem;
+  box-shadow: 0 0.45rem 1.1rem rgb(0 0 0 / 30%);
+}
+
+.government-card-copy {
+  max-width: 20rem;
+  margin: 0.7rem auto 0;
 }
 
 .government-card h3 {
-  margin: 0 0 0.8rem;
-  border-bottom: 1px solid rgb(72 42 14 / 35%);
-  padding-bottom: 0.45rem;
+  margin: 0 0 0.55rem;
   text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
 
 .government-card p {
-  margin: 0.55rem 0 0;
+  margin: 0.45rem 0 0;
   line-height: 1.35;
 }
 
