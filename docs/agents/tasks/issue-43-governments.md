@@ -3,7 +3,7 @@
 - **Slug:** `issue-43-governments`
 - **Branch:** `feat/issue-43-governments`
 - **Owner:** Codex
-- **Status:** done
+- **Status:** in progress — card-art follow-up
 
 ## Goal
 
@@ -70,7 +70,8 @@ are pictured in `Civilization/WaW/government.jpg`.
   whitelist validation and public logging.
 - Expose a dedicated player-government route and typed web API call.
 - Render the dropdown and semantic card-reference grid in `StatusPanel`; use
-  card text rather than treating the old tech-card PNGs as government art.
+  the supplied `Civilization/Moderator/governments/waw` card images alongside
+  semantic card text for accessibility and searchability.
 
 ## Claimed paths
 
@@ -96,6 +97,7 @@ are pictured in `Civilization/WaW/government.jpg`.
 - `packages/web/src/views/StatusPanel.tsx`
 - `packages/web/src/views/StatusPanel.test.tsx`
 - `packages/web/src/styles.css`
+- `packages/web/public/governments/`
 
 ## Acceptance criteria
 
