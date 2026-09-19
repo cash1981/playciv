@@ -79,6 +79,7 @@ const COLUMN_COUNT = 3 + ACCOUNTING_COLUMNS.length + UNIT_COLUMNS.length + MODIF
 const GROUP_START_KEYS = new Set(STATUS_GROUPS.map((g) => g.columns[0]!.key))
 
 export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element {
+  const [showGovernmentReference, setShowGovernmentReference] = useState(false)
   const rows: Row[] = []
 
   if (view.you !== null) {
@@ -159,25 +160,36 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
                   )}
                 </td>
                 <td>
-                  <select
-                    className="government-select"
-                    aria-label={`${row.username} government`}
-                    value={row.government}
-                    disabled={busy || readOnly}
-                    onChange={(event) =>
-                      void run(() =>
-                        api.setPlayerGovernment(
-                          gameId,
-                          row.playerId,
-                          event.target.value as Government,
-                        ),
-                      )
-                    }
-                  >
-                    {GOVERNMENTS.map((government) => (
-                      <option key={government} value={government}>{government}</option>
-                    ))}
-                  </select>
+                  <span className="government-control">
+                    <select
+                      className="government-select"
+                      aria-label={`${row.username} government`}
+                      value={row.government}
+                      disabled={busy || readOnly}
+                      onChange={(event) =>
+                        void run(() =>
+                          api.setPlayerGovernment(
+                            gameId,
+                            row.playerId,
+                            event.target.value as Government,
+                          ),
+                        )
+                      }
+                    >
+                      {GOVERNMENTS.map((government) => (
+                        <option key={government} value={government}>{government}</option>
+                      ))}
+                    </select>
+                    <button
+                      className="government-help"
+                      type="button"
+                      aria-label="Show government card reference"
+                      title="Show government card reference"
+                      onClick={() => setShowGovernmentReference(true)}
+                    >
+                      ?
+                    </button>
+                  </span>
                 </td>
                 {STATUS_GROUPS.flatMap((group) => group.columns).map((column) => (
                   <td
@@ -206,8 +218,19 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
           </tbody>
         </table>
       </div>
-      <details className="government-reference">
-        <summary>Government card reference</summary>
+      {showGovernmentReference && (
+        <div className="government-reference-backdrop" role="presentation" onClick={() => setShowGovernmentReference(false)}>
+          <section
+            className="government-reference"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="government-reference-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="government-reference-heading">
+              <h2 id="government-reference-title">Government card reference</h2>
+              <button type="button" onClick={() => setShowGovernmentReference(false)}>Close</button>
+            </div>
         <p className="muted">
           Card effects are shown for reference only; the status dropdown does not enforce them.
         </p>
@@ -227,7 +250,9 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
             </article>
           ))}
         </div>
-      </details>
+          </section>
+        </div>
+      )}
     </CollapsiblePanel>
   )
 }
