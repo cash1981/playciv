@@ -3,7 +3,7 @@
 - **Slug:** `issue-78-loot`
 - **Branch:** `feat/issue-78-loot`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -77,20 +77,20 @@ Add focused engine, server and component tests.
 
 ## Acceptance criteria
 
-- [ ] Hand UI offers Culture Card, Huts and Villages loot only when the player
+- [x] Hand UI offers Culture Card, Huts and Villages loot only when the player
       holds at least one item in that category.
-- [ ] The player selects an opponent and deliberately starts the loot action.
-- [ ] Culture Card randomly selects across Culture I, II and III as one pool.
-- [ ] Huts and Villages each select from only their matching sheet.
-- [ ] The transferred item is removed from the acting player's hand, added to
+- [x] The player selects an opponent and deliberately starts the loot action.
+- [x] Culture Card randomly selects across Culture I, II and III as one pool.
+- [x] Huts and Villages each select from only their matching sheet.
+- [x] The transferred item is removed from the acting player's hand, added to
       the selected opponent's hand, and uses the existing old-system log text.
-- [ ] No battle timing, winner or loot-count rules are added.
-- [ ] Tests cover the combined culture pool, the HTTP mapping and the UI.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: loot controls derive only from the viewer's own full
+- [x] No battle timing, winner or loot-count rules are added.
+- [x] Tests cover the combined culture pool, the HTTP mapping and the UI.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: loot controls derive only from the viewer's own full
       hand and opaque opponent identities; existing projection guarantees stay
       unchanged.
-- [ ] Verified in the browser: category visibility, opponent selection and the
+- [x] Verified in the browser: category visibility, opponent selection and the
       resulting hand/log update are observed.
 
 ## Open questions

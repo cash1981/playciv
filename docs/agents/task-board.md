@@ -15,28 +15,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
-### issue-78-loot
-
-- **Owner:** Codex
-- **Branch:** `feat/issue-78-loot`
-- **Brief:** `docs/agents/tasks/issue-78-loot.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `docs/agents/tasks/issue-78-loot.md`
-  - `docs/agents/task-board.md`
-  - `packages/engine/src/actions/draw.ts`
-  - `packages/engine/test/draw-action.test.ts`
-  - `packages/server/src/routes/play.ts`
-  - `packages/server/test/api.test.ts`
-  - `packages/web/src/lib/api.ts`
-  - `packages/web/src/views/GameView.tsx`
-  - `packages/web/src/views/LootControls.test.tsx`
-  - `docs/agents/state.md`
-  - `docs/agents/decisions.md`
-- **Notes:** Issue #78. Ports the old manual My Items loot controls exactly:
-  Culture Card is one random pool across Culture I/II/III; Huts and Villages
-  are separate. No new battle timing, winner or loot-count rules.
-
 ### revealed-panel
 
 - **Owner:** Claude (Opus 4.8)
@@ -108,7 +86,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | issue-78-loot |
+| `packages/web/src/lib/api.ts` | free |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.
