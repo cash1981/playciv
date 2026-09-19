@@ -11,7 +11,7 @@ import type { SocialPolicyItem, TechItem } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
-import type { PlayerView, RevealedTechsDto } from '../lib/api.js'
+import type { GameRevisionView, PlayerView, RevealedTechsDto } from '../lib/api.js'
 import { TechTree } from './TechTree.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { ItemCard } from './ItemCard.js'
@@ -23,9 +23,10 @@ interface Props {
   readonly view: PlayerView
   /** Bumped by GameView after each action, so the lists are fetched again. */
   readonly reloadCount: number
+  readonly historical?: GameRevisionView | null
 }
 
-export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): React.JSX.Element {
+export function TechPanel({ gameId, busy, run, view, reloadCount, historical = null }: Props): React.JSX.Element {
   const [available, setAvailable] = useState<readonly TechItem[]>([])
   const [revealed, setRevealed] = useState<readonly RevealedTechsDto[]>([])
   const [policies, setPolicies] = useState<readonly SocialPolicyItem[]>([])
@@ -50,8 +51,15 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
   }, [gameId])
 
   useEffect(() => {
+    if (historical !== null) {
+      setAvailable(historical.availableTechs)
+      setRevealed(historical.revealedTechs)
+      setPolicies(historical.socialPolicies)
+      setLoadError(null)
+      return
+    }
     void load()
-  }, [load, reloadCount])
+  }, [historical, load, reloadCount])
 
   const yourTechs = view.you?.techsChosen ?? []
   const yourPolicies = view.you?.socialPolicies ?? []

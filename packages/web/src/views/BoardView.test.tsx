@@ -5,6 +5,7 @@ import { findBoardAsset } from '@civ/engine'
 import type { BoardPiece } from '@civ/engine'
 
 import { BoardPalette } from './BoardView.js'
+import { GlobalReplayBar } from './GameView.js'
 
 const piece = (assetId: string, id: string): BoardPiece => ({
   id,
@@ -18,6 +19,46 @@ const piece = (assetId: string, id: string): BoardPiece => ({
   height: 1,
   rotation: 0,
   placedBy: null,
+})
+
+describe('global replay controls', () => {
+  const revisions = [
+    {
+      gameId: 'game',
+      revision: 0,
+      createdAt: '2026-09-19T10:00:00.000Z',
+      actor: { playerId: 'one', username: 'Alice' },
+      publicDescription: 'Game created',
+      privateDescription: null,
+      logIds: [],
+    },
+    {
+      gameId: 'game',
+      revision: 1,
+      createdAt: '2026-09-19T10:01:00.000Z',
+      actor: { playerId: 'two', username: 'Bob' },
+      publicDescription: 'Bob joined',
+      privateDescription: null,
+      logIds: ['log-1'],
+    },
+  ] as const
+
+  it('shows one global Back, Forward and Live timeline', () => {
+    const markup = renderToStaticMarkup(
+      <GlobalReplayBar
+        revisions={revisions}
+        selectedRevision={0}
+        busy={false}
+        onRevision={() => undefined}
+        onLive={() => undefined}
+      />,
+    )
+    expect(markup).toContain('Forward')
+    expect(markup).toContain('Live')
+    expect(markup).toContain('Revision 0')
+    expect(markup).toContain('Newer revisions available')
+    expect(markup).toContain('Game created')
+  })
 })
 
 describe('BoardPalette finite supplies', () => {

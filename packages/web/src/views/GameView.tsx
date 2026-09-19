@@ -13,7 +13,7 @@ import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { ApiError, api } from '../lib/api.js'
-import type { PlayerDto, PlayerView } from '../lib/api.js'
+import type { GameRevisionSummary, GameRevisionView, PlayerDto, PlayerView } from '../lib/api.js'
 
 import { BoardView } from './BoardView.js'
 import { ChatPanel } from './ChatPanel.js'
@@ -54,6 +54,9 @@ const DRAWABLE: readonly { readonly sheet: SheetName; readonly label: string }[]
 
 export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): React.JSX.Element {
   const [view, setView] = useState<PlayerView | null>(null)
+  const [revisions, setRevisions] = useState<readonly GameRevisionSummary[]>([])
+  const [selectedRevision, setSelectedRevision] = useState<number | null>(null)
+  const [historical, setHistorical] = useState<GameRevisionView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [reloadCount, setReloadCount] = useState(0)
@@ -63,11 +66,31 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
 
   const reload = useCallback(async () => {
     try {
-      setView(await api.game(gameId))
+      const [nextView, nextRevisions] = await Promise.all([
+        api.game(gameId),
+        api.revisions(gameId),
+      ])
+      setView(nextView)
+      setRevisions(nextRevisions)
+      setReloadCount((count) => count + 1)
       setError(null)
     } catch (caught) {
       if (isUnauthorized(caught)) return onUnauthorized()
       setError(errorMessage(caught))
+    }
+  }, [gameId, onUnauthorized])
+
+  const showRevision = useCallback(async (revision: number) => {
+    setBusy(true)
+    setError(null)
+    try {
+      setHistorical(await api.revision(gameId, revision))
+      setSelectedRevision(revision)
+    } catch (caught) {
+      if (isUnauthorized(caught)) return onUnauthorized()
+      setError(errorMessage(caught))
+    } finally {
+      setBusy(false)
     }
   }, [gameId, onUnauthorized])
 
@@ -94,6 +117,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         const result = await action()
         if (result !== undefined && result !== null && typeof result === 'object' && 'you' in result) {
           setView(result as PlayerView)
+          setRevisions(await api.revisions(gameId))
         } else {
           await reload()
         }
@@ -109,7 +133,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         setBusy(false)
       }
     },
-    [reload, onUnauthorized],
+    [gameId, reload, onUnauthorized],
   )
 
   if (view === null) {
@@ -121,24 +145,19 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
     )
   }
 
-  const you = view.you
+  const replaying = selectedRevision !== null && historical !== null
+  const displayedView = replaying ? historical.view : view
+  const interactionBusy = busy || replaying
+  const you = displayedView.you
   const yourTurn = you?.yourTurn === true
-
-  /**
-   * The public log, flattened for the board's replay view. Private entries
-   * carry `privateLog` as well, but the board shows only what everyone can see.
-   */
-  const boardLog = view.log
-    .map((entry) => ({ id: entry.id, message: entry.publicLog }))
-    .filter((entry) => entry.message !== '')
 
   return (
     <>
       <div className="panel">
         <div className="row">
-          <h1 style={{ margin: 0 }}>{view.name}</h1>
-          {!view.active && <span className="tag">ended</span>}
-          {view.winner !== null && <span className="tag revealed">{view.winner} won</span>}
+          <h1 style={{ margin: 0 }}>{displayedView.name}</h1>
+          {!displayedView.active && <span className="tag">ended</span>}
+          {displayedView.winner !== null && <span className="tag revealed">{displayedView.winner} won</span>}
           {you?.civilization != null && (
             <span className="tag revealed">{you.civilization.name}</span>
           )}
@@ -160,22 +179,22 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
             <span className="tag turn">Your turn</span>
           ) : (
             <span className="muted">
-              {view.opponents.find((opponent) => opponent.yourTurn)?.username ?? 'nobody'}'s turn
+              {displayedView.opponents.find((opponent) => opponent.yourTurn)?.username ?? 'nobody'}'s turn
             </span>
           )}
         </div>
 
         <div className="row" style={{ marginTop: '0.6rem' }}>
-          <button disabled={busy || !yourTurn} onClick={() => void run(() => api.endTurn(gameId))}>
+          <button disabled={interactionBusy || !yourTurn} onClick={() => void run(() => api.endTurn(gameId))}>
             End turn
           </button>
-          <button disabled={busy || yourTurn} onClick={() => void run(() => api.takeTurn(gameId))}>
+          <button disabled={interactionBusy || yourTurn} onClick={() => void run(() => api.takeTurn(gameId))}>
             Take the turn
           </button>
           <span style={{ flex: 1 }} />
           <button
             className="danger"
-            disabled={busy || !view.active}
+            disabled={interactionBusy || !displayedView.active}
             onClick={() => void run(() => api.withdraw(gameId))}
           >
             Withdraw
@@ -183,7 +202,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
           {(you?.gameCreator === true || player.role === 'admin') && (
             <button
               className="danger"
-              disabled={busy}
+              disabled={interactionBusy}
               onClick={() => {
                 if (window.confirm('Delete this game permanently?')) {
                   void run(async () => {
@@ -199,30 +218,42 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         </div>
       </div>
 
+      <GlobalReplayBar
+        revisions={revisions}
+        selectedRevision={selectedRevision}
+        busy={busy}
+        onRevision={(revision) => void showRevision(revision)}
+        onLive={() => {
+          setSelectedRevision(null)
+          setHistorical(null)
+        }}
+      />
+
       {error !== null && <div className="error">{error}</div>}
 
       {/* The board sits above everything else */}
       <BoardView
         gameId={gameId}
-        board={view.board}
-        numOfPlayers={view.numOfPlayers}
-        areas={view.boardAreas}
-        busy={busy}
+        board={displayedView.board}
+        numOfPlayers={displayedView.numOfPlayers}
+        areas={displayedView.boardAreas}
+        busy={interactionBusy}
+        readOnly={replaying}
         run={run}
-        log={boardLog}
       />
 
       <div className="panel-stack">
-        <DrawPanel gameId={gameId} busy={busy} yourTurn={yourTurn} run={run} view={view} />
-        <HandPanel gameId={gameId} busy={busy} run={run} view={view} />
-        <BattlePanel gameId={gameId} busy={busy} run={run} view={view} />
-        <TechPanel gameId={gameId} busy={busy} run={run} view={view} reloadCount={reloadCount} />
-        <TurnPanel gameId={gameId} busy={busy} run={run} reloadCount={reloadCount} />
-        <StatusPanel gameId={gameId} view={view} busy={busy} run={run} />
-        <RevealedPanel gameId={gameId} reloadCount={reloadCount} />
+        <DrawPanel gameId={gameId} busy={interactionBusy} yourTurn={yourTurn} run={run} view={displayedView} />
+        <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
+        <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
+        <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
+        <TurnPanel gameId={gameId} busy={interactionBusy} run={run} reloadCount={reloadCount} historical={historical} />
+        <StatusPanel gameId={gameId} view={displayedView} busy={interactionBusy} run={run} />
+        <RevealedPanel gameId={gameId} reloadCount={reloadCount} historical={historical} />
         <LogPanel
           gameId={gameId}
           busy={busy}
+          readOnly={replaying}
           run={run}
           reloadCount={reloadCount}
         />
@@ -232,9 +263,71 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
           run={run}
           player={player}
           reloadCount={reloadCount}
+          historical={historical}
         />
       </div>
     </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+
+export function GlobalReplayBar({
+  revisions,
+  selectedRevision,
+  busy,
+  onRevision,
+  onLive,
+}: {
+  readonly revisions: readonly GameRevisionSummary[]
+  readonly selectedRevision: number | null
+  readonly busy: boolean
+  readonly onRevision: (revision: number) => void
+  readonly onLive: () => void
+}): React.JSX.Element | null {
+  if (revisions.length === 0) return null
+  const selectedIndex = selectedRevision === null
+    ? revisions.length - 1
+    : revisions.findIndex((entry) => entry.revision === selectedRevision)
+  const current = revisions[Math.max(0, selectedIndex)]
+  const hasNewer = selectedRevision !== null && selectedIndex < revisions.length - 1
+  const canGoBack = selectedIndex > 0
+  const canGoForward = selectedRevision !== null && selectedIndex >= 0 && selectedIndex < revisions.length - 1
+
+  return (
+    <div className="panel replay-bar global-replay-bar" aria-label="Game revision history">
+      <button
+        className="small"
+        disabled={busy || !canGoBack}
+        onClick={() => {
+          const previous = revisions[selectedIndex - 1]
+          if (previous !== undefined) onRevision(previous.revision)
+        }}
+      >
+        ◀ Back
+      </button>
+      <button
+        className="small"
+        disabled={busy || !canGoForward}
+        onClick={() => {
+          const next = revisions[selectedIndex + 1]
+          if (next !== undefined) onRevision(next.revision)
+        }}
+      >
+        Forward ▶
+      </button>
+      <button className="small primary" disabled={busy || selectedRevision === null} onClick={onLive}>
+        Live
+      </button>
+      <span className={selectedRevision === null ? 'tag turn' : 'tag'}>
+        {selectedRevision === null ? 'Live' : `Revision ${selectedRevision}`}
+      </span>
+      {hasNewer && <span className="tag revealed">Newer revisions available</span>}
+      <span className="muted replay-what">
+        {current?.privateDescription ?? current?.publicDescription ?? ''}
+        {current !== undefined && ` — ${current.actor.username}`}
+      </span>
+    </div>
   )
 }
 

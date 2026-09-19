@@ -13,8 +13,8 @@
  *   palette to board   HTML5 drag and drop, which gives a drag image for free
  *   piece on board     pointer events, for smooth dragging and pointer capture
  *
- * The replay controls step through `board.history`, rebuilding the pieces from
- * an empty board. While replaying, the board is read-only.
+ * Global replay is owned by GameView; this component only renders the supplied
+ * live or historical board. Live board undo remains available.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -38,7 +38,6 @@ import {
   locationOf,
   mapHeight,
   mapTop,
-  piecesAtStep,
   remainingBoardAssetCount,
 } from '@civ/engine'
 import type { Board, BoardArea, BoardAsset, BoardPiece } from '@civ/engine'
@@ -53,17 +52,8 @@ interface Props {
   readonly numOfPlayers: number
   readonly areas: readonly BoardArea[]
   readonly busy: boolean
+  readonly readOnly?: boolean
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
-  /** The public log, so replay can show what was known at each step. */
-  readonly log: readonly { readonly id: string; readonly message: string }[]
-}
-
-function formatTimestamp(value: string | null): string {
-  if (value === null) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const pad = (part: number): string => String(part).padStart(2, '0')
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
 const CATEGORY_LABEL: Readonly<Record<BoardAsset['category'], string>> = {
@@ -178,17 +168,14 @@ export function BoardView({
   numOfPlayers,
   areas,
   busy,
+  readOnly = false,
   run,
-  log,
 }: Props): React.JSX.Element {
   const [assets, setAssets] = useState<readonly BoardAsset[]>([])
   const [category, setCategory] = useState<BoardAsset['category']>('figure')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [zoom, setZoom] = useState(0.4)
   const [loadError, setLoadError] = useState<string | null>(null)
-
-  /** `null` means live. A number is the history step being shown. */
-  const [replayStep, setReplayStep] = useState<number | null>(null)
 
   const surfaceRef = useRef<HTMLDivElement>(null)
   /**
@@ -216,26 +203,7 @@ export function BoardView({
       .catch((caught: unknown) => setLoadError(errorMessage(caught)))
   }, [])
 
-  const history = board.history
-  const replaying = replayStep !== null
-
-  // Step past the end when new changes arrive, so the view does not stick
-  useEffect(() => {
-    setReplayStep((step) => (step !== null && step > history.length ? history.length : step))
-  }, [history.length])
-
-  const pieces = useMemo(
-    () => (replayStep === null ? board.pieces : piecesAtStep(history, replayStep)),
-    [board.pieces, history, replayStep],
-  )
-
-  const visibleLog = useMemo(() => {
-    if (replayStep === null || replayStep === 0) {
-      return replayStep === 0 ? [] : log
-    }
-    const entry = history[replayStep - 1]
-    return entry === undefined ? log : log.slice(0, entry.logLength)
-  }, [history, log, replayStep])
+  const pieces = board.pieces
 
   const width = boardWidth(board)
   const height = boardHeight(board)
@@ -279,7 +247,7 @@ export function BoardView({
 
   function onDrop(event: React.DragEvent): void {
     event.preventDefault()
-    if (replaying) return
+    if (busy || readOnly) return
 
     const assetId = event.dataTransfer.getData('text/civ-asset')
     if (assetId === '') return
@@ -295,7 +263,7 @@ export function BoardView({
   // --- moving a piece on the board -----------------------------------------
 
   function onPiecePointerDown(event: React.PointerEvent, piece: BoardPiece): void {
-    if (busy || replaying) return
+    if (busy || readOnly) return
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
 
@@ -360,7 +328,7 @@ export function BoardView({
         </label>
         <button
           className="small"
-          disabled={busy || replaying || history.length === 0}
+          disabled={busy || readOnly || board.history.length === 0}
           title="Take back the last change to the board"
           onClick={() => void run(() => api.undoBoard(gameId))}
         >
@@ -368,18 +336,12 @@ export function BoardView({
         </button>
       </div>
 
-      <ReplayBar
-        history={history}
-        step={replayStep}
-        onStep={setReplayStep}
-      />
-
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="board-layout">
         <div className="board-scroll">
           <div
-            className={`board-frame${replaying ? ' replaying' : ''}`}
+            className={`board-frame${readOnly ? ' replaying' : ''}`}
             style={{ width: width * zoom + 28, height: height * zoom + 28 }}
           >
             <ColumnLabels board={board} zoom={zoom} edge="top" offset={mapStart * zoom} />
@@ -501,7 +463,7 @@ export function BoardView({
                       ...(piece.rotation !== 0
                         ? { transform: `rotate(${piece.rotation}deg)` }
                         : {}),
-                      ...(replaying ? { cursor: 'default' } : {}),
+                      ...(readOnly ? { cursor: 'default' } : {}),
                     }}
                     onPointerDown={(event) => {
                       event.stopPropagation()
@@ -527,7 +489,7 @@ export function BoardView({
             assets={assets}
             category={category}
             onCategoryChange={setCategory}
-            replaying={replaying}
+            replaying={readOnly}
             pieces={pieces}
             numOfPlayers={numOfPlayers}
           />
@@ -547,7 +509,7 @@ export function BoardView({
               <div className="row" style={{ marginBottom: '0.4rem' }}>
                 <button
                   className="small"
-                  disabled={busy || replaying}
+                  disabled={busy || readOnly}
                   title="Turn a quarter step clockwise"
                   onClick={() => void run(() => api.rotatePiece(gameId, selected.id))}
                 >
@@ -558,7 +520,7 @@ export function BoardView({
                   <button
                     key={rotation}
                     className="small"
-                    disabled={busy || replaying || selected.rotation === rotation}
+                    disabled={busy || readOnly || selected.rotation === rotation}
                     onClick={() => void run(() => api.rotatePiece(gameId, selected.id, rotation))}
                   >
                     {rotation}°
@@ -568,21 +530,21 @@ export function BoardView({
               <div className="row">
                 <button
                   className="small"
-                  disabled={busy || replaying}
+                  disabled={busy || readOnly}
                   onClick={() => void run(() => api.pieceToFront(gameId, selected.id))}
                 >
                   To front
                 </button>
                 <button
                   className="small"
-                  disabled={busy || replaying}
+                  disabled={busy || readOnly}
                   onClick={() => void run(() => api.pieceToBack(gameId, selected.id))}
                 >
                   To back
                 </button>
                 <button
                   className="small danger"
-                  disabled={busy || replaying}
+                  disabled={busy || readOnly}
                   onClick={() => {
                     setSelectedId(null)
                     void run(() => api.removePiece(gameId, selected.id))
@@ -594,112 +556,9 @@ export function BoardView({
             </>
           )}
 
-          <h3 style={{ marginTop: '1rem' }}>History ({history.length})</h3>
-          <ul className="list scroll history">
-            {[...history].reverse().map((entry, reverseIndex) => {
-              const index = history.length - reverseIndex
-              const timestamp = formatTimestamp(entry.at)
-              return (
-                <li key={entry.id}>
-                  <button
-                    className={`link${replayStep === index ? ' current' : ''}`}
-                    onClick={() => setReplayStep(index)}
-                    title="Show the board as it was here"
-                  >
-                    {timestamp !== '' ? `${timestamp} — ${entry.description}` : entry.description}
-                  </button>
-                </li>
-              )
-            })}
-            {history.length === 0 && <li className="muted">Nothing has happened yet.</li>}
-          </ul>
-
-          {replaying && (
-            <>
-              <h3 style={{ marginTop: '1rem' }}>Log at this point</h3>
-              <ul className="list scroll">
-                {visibleLog.slice(-8).map((entry) => (
-                  <li key={entry.id}>{entry.message}</li>
-                ))}
-                {visibleLog.length === 0 && <li className="muted">Nothing logged yet.</li>}
-              </ul>
-            </>
-          )}
         </aside>
       </div>
     </section>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Replay controls
-// ---------------------------------------------------------------------------
-
-function ReplayBar({
-  history,
-  step,
-  onStep,
-}: {
-  readonly history: readonly { readonly id: string; readonly description: string }[]
-  readonly step: number | null
-  readonly onStep: (step: number | null) => void
-}): React.JSX.Element | null {
-  if (history.length === 0) return null
-
-  const current = step ?? history.length
-  const atStart = current <= 0
-  const atEnd = current >= history.length
-
-  return (
-    <div className="replay-bar">
-      <button
-        className="small"
-        disabled={atStart}
-        title="Back to the start"
-        onClick={() => onStep(0)}
-      >
-        ⏮
-      </button>
-      <button
-        className="small"
-        disabled={atStart}
-        onClick={() => onStep(Math.max(0, current - 1))}
-      >
-        ◀ Back
-      </button>
-      <input
-        type="range"
-        min={0}
-        max={history.length}
-        value={current}
-        onChange={(event) => onStep(Number(event.target.value))}
-        style={{ flex: 1, minWidth: '6rem' }}
-      />
-      <button
-        className="small"
-        disabled={atEnd}
-        onClick={() => onStep(Math.min(history.length, current + 1))}
-      >
-        Forward ▶
-      </button>
-      <span className="muted" style={{ whiteSpace: 'nowrap' }}>
-        {current} / {history.length}
-      </span>
-      {step === null ? (
-        <span className="tag turn">Live</span>
-      ) : (
-        <button className="small primary" onClick={() => onStep(null)}>
-          Back to now
-        </button>
-      )}
-      <span className="muted replay-what">
-        {step === null
-          ? (history.at(-1)?.description ?? '')
-          : current === 0
-            ? 'Before anything happened'
-            : (history[current - 1]?.description ?? '')}
-      </span>
-    </div>
   )
 }
 

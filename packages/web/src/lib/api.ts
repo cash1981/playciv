@@ -125,6 +125,27 @@ export interface RevealedTechsDto {
   readonly techs: readonly { readonly name: string; readonly level: number }[]
 }
 
+export interface GameRevisionSummary {
+  readonly gameId: string
+  readonly revision: number
+  readonly createdAt: string
+  readonly actor: { readonly playerId: string; readonly username: string }
+  readonly publicDescription: string
+  readonly privateDescription: string | null
+  readonly logIds: readonly string[]
+}
+
+export interface GameRevisionView extends GameRevisionSummary {
+  readonly view: PlayerView
+  readonly availableTechs: readonly TechItem[]
+  readonly revealedTechs: readonly RevealedTechsDto[]
+  readonly socialPolicies: readonly SocialPolicyItem[]
+  readonly publicTurns: readonly PlayerTurn[]
+  readonly revealed: readonly RevealedEntry[]
+  readonly publicLog: readonly LogEntryDto[]
+  readonly privateLog: readonly LogEntryDto[]
+}
+
 /** An error from the server, with the engine's error code intact. */
 export class ApiError extends Error {
   readonly status: number
@@ -220,6 +241,9 @@ export const api = {
   createGame: (name: string, numOfPlayers: number) =>
     post<GameSummary>('/api/games', { name, numOfPlayers }),
   game: (gameId: string) => get<PlayerView>(`/api/games/${gameId}`),
+  revisions: (gameId: string) => get<GameRevisionSummary[]>(`/api/games/${gameId}/revisions`),
+  revision: (gameId: string, revision: number) =>
+    get<GameRevisionView>(`/api/games/${gameId}/revisions/${revision}`),
   join: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/join`),
   withdraw: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/withdraw`),
   endGame: (gameId: string, winner?: string) =>

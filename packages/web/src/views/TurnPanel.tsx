@@ -14,7 +14,7 @@ import type { PlayerTurn, TurnPhase } from '@civ/engine'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { NavigationAttempt } from '../lib/navigationGuard.js'
-import type { PlayerView } from '../lib/api.js'
+import type { GameRevisionView, PlayerView } from '../lib/api.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
 import type { MarkdownEditorComponent, MarkdownEditorHandle } from './MarkdownEditor.js'
@@ -26,6 +26,7 @@ interface Props {
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
   readonly reloadCount: number
   readonly editorComponent?: MarkdownEditorComponent | undefined
+  readonly historical?: GameRevisionView | null
 }
 
 export interface TurnPlayerTab {
@@ -186,7 +187,7 @@ export function TurnOrderWorkspace({
   editorComponent: EditorComponent = MarkdownEditor,
 }: WorkspaceProps): React.JSX.Element {
   const locked = current?.disabled === true
-  const editable = player.own && !locked
+  const editable = player.own && !locked && !busy
   const savedValues = providedSavedValues ?? current?.orders ?? emptyOrders()
   const localEditorRefs = useRef<Record<TurnPhase, MarkdownEditorHandle | null>>({
     SOT: null,
@@ -220,7 +221,7 @@ export function TurnOrderWorkspace({
           </select>
         </label>
         {player.own && (
-          <button type="button" className="small" onClick={onNewTurn}>
+          <button type="button" className="small" disabled={busy} onClick={onNewTurn}>
             New turn
           </button>
         )}
@@ -317,6 +318,7 @@ interface PrivateLogWorkspaceProps {
   readonly tabPanelId: string
   readonly labelledBy: string
   readonly editorComponent?: MarkdownEditorComponent | undefined
+  readonly readOnly?: boolean
 }
 
 /** The viewer's existing unlogged `gamenote`, kept separate from public orders. */
@@ -329,6 +331,7 @@ export function PrivateLogWorkspace({
   editorRef: providedEditorRef,
   tabPanelId,
   labelledBy,
+  readOnly = false,
   editorComponent: EditorComponent = MarkdownEditor,
 }: PrivateLogWorkspaceProps): React.JSX.Element {
   const localEditorRef = useRef<MarkdownEditorHandle>(null)
@@ -350,7 +353,7 @@ export function PrivateLogWorkspace({
           value={note}
           onChange={onChange}
           onDirty={onDirty}
-          readOnly={false}
+          readOnly={readOnly}
           ariaLabel="Private log"
           placeholder="Write private plans and reminders …"
         />
@@ -365,6 +368,7 @@ export function TurnPanel({
   run,
   reloadCount,
   editorComponent,
+  historical = null,
 }: Props): React.JSX.Element {
   const [view, setView] = useState<PlayerView | null>(null)
   const [publicTurns, setPublicTurns] = useState<readonly PlayerTurn[]>([])
@@ -415,8 +419,23 @@ export function TurnPanel({
   }, [gameId])
 
   useEffect(() => {
+    if (historical !== null) {
+      setView(historical.view)
+      setPublicTurns(historical.publicTurns)
+      setDrafts({})
+      draftsRef.current = {}
+      setLiveDirtyKeys({})
+      liveDirtyKeysRef.current = {}
+      setPrivateNote('')
+      privateNoteRef.current = ''
+      privateSavedNoteRef.current = ''
+      setPrivateNoteDirty(false)
+      privateNoteDirtyRef.current = false
+      setLoadError(null)
+      return
+    }
     void load()
-  }, [load, reloadCount])
+  }, [historical, load, reloadCount])
 
   const players = useMemo<readonly TurnPlayerTab[]>(() => {
     if (view === null) return []
@@ -768,6 +787,7 @@ export function TurnPanel({
               tabPanelId={privatePanelId}
               labelledBy={privateTabId}
               editorComponent={editorComponent}
+              readOnly={busy}
             />
           ) : selectedPlayer !== undefined ? (
             <TurnOrderWorkspace
