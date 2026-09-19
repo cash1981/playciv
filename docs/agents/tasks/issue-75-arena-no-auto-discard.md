@@ -70,16 +70,16 @@ existed.
 
 ## Acceptance criteria
 
-- [ ] Ending a battle with a unit still `killed` returns its card to hand
+- [x] Ending a battle with a unit still `killed` returns its card to hand
       (`inBattle: false`), the same as an unkilled unit's — not discarded.
-- [ ] Reinforcing a front held by a killed unit (issue #74) keeps that
+- [x] Reinforcing a front held by a killed unit (issue #74) keeps that
       unit's card locked (`inBattle: true`) for the rest of the battle —
       not discarded, and not yet back in hand either.
-- [ ] Ending the battle afterwards returns a reinforced-away unit's card to
+- [x] Ending the battle afterwards returns a reinforced-away unit's card to
       hand too, at the same time as everything else.
-- [ ] No `DISCARD` log entry or `discardedItems` entry is produced by either
+- [x] No `DISCARD` log entry or `discardedItems` entry is produced by either
       path.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass — and
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass — and
       note: `packages/server` consumes `@civ/engine` via its compiled
       `dist/`, so rebuild the engine (`pnpm --filter @civ/engine build`, or
       just run `pnpm -r typecheck` which triggers it) before trusting a
