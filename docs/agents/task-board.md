@@ -18,8 +18,9 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Branch:** `feat/issue-72-d1`
 - **Brief:** `docs/agents/tasks/issue-72-d1.md`
 - **Status:** in review — branch pushed, awaiting the second agent's verification
-  and the human's merge. The D1 database already holds the migrated data; the
-  Worker has not been deployed.
+  and the human's merge. The D1 database was deleted and re-created for the
+  reduced data; the ~2,000-row import runs once the free-tier daily row-write
+  limit resets (00:00 UTC). The Worker has not been deployed.
 - **Claimed paths:**
   - `packages/worker/migrations/` (new), `packages/worker/src/index.ts`, `packages/worker/package.json`
   - `wrangler.jsonc`, `render.yaml` (delete)
