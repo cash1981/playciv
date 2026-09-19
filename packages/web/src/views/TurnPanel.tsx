@@ -24,6 +24,7 @@ interface Props {
   readonly busy: boolean
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
   readonly reloadCount: number
+  readonly editorComponent?: MarkdownEditorComponent | undefined
 }
 
 export interface TurnPlayerTab {
@@ -53,13 +54,14 @@ interface WorkspaceProps {
   readonly onTurnNumberChange: (turnNumber: number) => void
   readonly onNewTurn: () => void
   readonly onPhaseChange: (phase: TurnPhase, markdown: string) => void
+  readonly onPhaseDirty?: (phase: TurnPhase) => void
   readonly tabPanelId: string
   readonly labelledBy: string
   readonly savedValues?: Readonly<Record<TurnPhase, string>>
   readonly phaseStatuses?: Readonly<Record<TurnPhase, SaveStatus>>
   readonly editorRefs?: MutableRefObject<Record<TurnPhase, MarkdownEditorHandle | null>>
   readonly hasUnsavedChanges?: boolean
-  readonly editorComponent?: MarkdownEditorComponent
+  readonly editorComponent?: MarkdownEditorComponent | undefined
 }
 
 export type SaveStatus = 'saved' | 'unsaved' | 'saving' | 'failed'
@@ -173,6 +175,7 @@ export function TurnOrderWorkspace({
   onTurnNumberChange,
   onNewTurn,
   onPhaseChange,
+  onPhaseDirty,
   tabPanelId,
   labelledBy,
   savedValues: providedSavedValues,
@@ -271,6 +274,7 @@ export function TurnOrderWorkspace({
             }}
             value={values[phase]}
             onChange={(markdown) => onPhaseChange(phase, markdown)}
+            onDirty={() => onPhaseDirty?.(phase)}
             readOnly={!editable}
             ariaLabel={`${TURN_PHASE_LABEL[phase]} orders for ${player.username}, turn ${turnNumber}`}
             placeholder={`Write ${TURN_PHASE_LABEL[phase]} orders …`}
@@ -306,11 +310,12 @@ interface PrivateLogWorkspaceProps {
   readonly note: string
   readonly dirty: boolean
   readonly onChange: (markdown: string) => void
+  readonly onDirty?: (() => void) | undefined
   readonly saveStatus?: SaveStatus
   readonly editorRef?: MutableRefObject<MarkdownEditorHandle | null>
   readonly tabPanelId: string
   readonly labelledBy: string
-  readonly editorComponent?: MarkdownEditorComponent
+  readonly editorComponent?: MarkdownEditorComponent | undefined
 }
 
 /** The viewer's existing unlogged `gamenote`, kept separate from public orders. */
@@ -318,6 +323,7 @@ export function PrivateLogWorkspace({
   note,
   dirty,
   onChange,
+  onDirty,
   saveStatus = dirty ? 'unsaved' : 'saved',
   editorRef: providedEditorRef,
   tabPanelId,
@@ -332,24 +338,33 @@ export function PrivateLogWorkspace({
       <p className="muted private-log-copy">
         Only you can see this planning space. Saving it does not add an entry to the game log.
       </p>
-      <div className="turn-phase-heading private-log-heading">
-        <h3>Private log</h3>
-        <SaveStatusBadge status={saveStatus} label="Private log" />
-      </div>
-      <EditorComponent
-        key="private-log"
-        ref={editorRef}
-        value={note}
-        onChange={onChange}
-        readOnly={false}
-        ariaLabel="Private log"
-        placeholder="Write private plans and reminders …"
-      />
+      <section className="turn-phase private-log-phase" data-save-status={saveStatus}>
+        <div className="turn-phase-heading private-log-heading">
+          <h3>Private log</h3>
+          <SaveStatusBadge status={saveStatus} label="Private log" />
+        </div>
+        <EditorComponent
+          key="private-log"
+          ref={editorRef}
+          value={note}
+          onChange={onChange}
+          onDirty={onDirty}
+          readOnly={false}
+          ariaLabel="Private log"
+          placeholder="Write private plans and reminders …"
+        />
+      </section>
     </div>
   )
 }
 
-export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.Element {
+export function TurnPanel({
+  gameId,
+  busy,
+  run,
+  reloadCount,
+  editorComponent,
+}: Props): React.JSX.Element {
   const [view, setView] = useState<PlayerView | null>(null)
   const [publicTurns, setPublicTurns] = useState<readonly PlayerTurn[]>([])
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
@@ -359,9 +374,14 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
   const [privateNote, setPrivateNote] = useState('')
   const [privateNoteDirty, setPrivateNoteDirty] = useState(false)
   const [saveStatuses, setSaveStatuses] = useState<Record<string, SaveStatus>>({})
+  const [savedPhaseValues, setSavedPhaseValues] = useState<Record<string, string>>({})
+  const [liveDirtyKeys, setLiveDirtyKeys] = useState<Record<string, true>>({})
   const draftsRef = useRef<Record<string, string>>({})
+  const savedPhaseValuesRef = useRef<Record<string, string>>({})
+  const liveDirtyKeysRef = useRef<Record<string, true>>({})
   const privateNoteDirtyRef = useRef(false)
   const privateNoteRef = useRef('')
+  const privateSavedNoteRef = useRef('')
   const editorRefs = useRef<Record<TurnPhase, MarkdownEditorHandle | null>>({
     SOT: null,
     TRADE: null,
@@ -370,6 +390,7 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
     RESEARCH: null,
   })
   const privateEditorRef = useRef<MarkdownEditorHandle | null>(null)
+  const visibleOwnTurnRef = useRef<number | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -382,6 +403,7 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
       setPublicTurns(nextPublicTurns)
       if (!privateNoteDirtyRef.current) {
         const loadedNote = nextView.you?.gamenote ?? ''
+        privateSavedNoteRef.current = loadedNote
         privateNoteRef.current = loadedNote
         setPrivateNote(loadedNote)
       }
@@ -440,6 +462,7 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
 
   const selectedPlayer =
     players.find((player) => player.username === selectedUsername) ?? players[0]
+  visibleOwnTurnRef.current = selectedPlayer?.own === true ? turnNumber : null
   const selectedPlayerIndex = selectedPlayer === undefined ? -1 : players.indexOf(selectedPlayer)
   const selectedTurns =
     selectedPlayer === undefined || view === null
@@ -457,26 +480,39 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
   for (const phase of TURN_PHASES) {
     values[phase] =
       selectedPlayer?.own === true
-        ? (drafts[`${turnNumber}:${phase}`] ?? current?.orders[phase] ?? '')
+        ? (drafts[`${turnNumber}:${phase}`] ??
+          savedPhaseValues[`${turnNumber}:${phase}`] ??
+          current?.orders[phase] ??
+          '')
         : (current?.orders[phase] ?? '')
   }
-
-  const savedValues = emptyOrders()
-  for (const phase of TURN_PHASES) savedValues[phase] = current?.orders[phase] ?? ''
 
   const phaseKey = (number: number, phase: TurnPhase): string => `${number}:${phase}`
   const serverTurnFor = (number: number): PlayerTurn | undefined =>
     (view?.you?.playerTurns ?? []).find((turn) => turn.turnNumber === number)
+  const savedPhaseValue = (number: number, phase: TurnPhase): string =>
+    savedPhaseValues[phaseKey(number, phase)] ?? serverTurnFor(number)?.orders[phase] ?? ''
+  const savedValues = emptyOrders()
+  for (const phase of TURN_PHASES) {
+    savedValues[phase] =
+      selectedPlayer?.own === true
+        ? savedPhaseValue(turnNumber, phase)
+        : (current?.orders[phase] ?? '')
+  }
   const dirtyPhaseKeys = Object.entries(drafts).filter(([key, markdown]) => {
     const separator = key.indexOf(':')
     const number = Number(key.slice(0, separator))
     const phase = key.slice(separator + 1) as TurnPhase
-    return markdown !== (serverTurnFor(number)?.orders[phase] ?? '')
+    return markdown !== savedPhaseValue(number, phase)
   })
   const selectedOwnTurnDirty =
     selectedPlayer?.own === true &&
-    TURN_PHASES.some((phase) => values[phase] !== savedValues[phase])
-  const hasUnsavedChanges = dirtyPhaseKeys.length > 0 || privateNoteDirty
+    TURN_PHASES.some(
+      (phase) =>
+        values[phase] !== savedValues[phase] || liveDirtyKeys[phaseKey(turnNumber, phase)] === true,
+    )
+  const hasUnsavedChanges =
+    dirtyPhaseKeys.length > 0 || Object.keys(liveDirtyKeys).length > 0 || privateNoteDirty
 
   useEffect(() => {
     if (!hasUnsavedChanges) return
@@ -504,31 +540,99 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
   }
 
   const setPrivateNoteValue = (markdown: string): void => {
+    const dirty = markdown !== privateSavedNoteRef.current
     privateNoteRef.current = markdown
+    privateNoteDirtyRef.current = dirty
+    setPrivateNoteDirty(dirty)
+    setPrivateNote(markdown)
+    setSaveStatuses((existing) => ({
+      ...existing,
+      ['private']: dirty ? 'unsaved' : 'saved',
+    }))
+  }
+
+  const markPrivateNoteDirty = (): void => {
     privateNoteDirtyRef.current = true
     setPrivateNoteDirty(true)
-    setPrivateNote(markdown)
     setSaveStatuses((existing) => ({ ...existing, ['private']: 'unsaved' }))
   }
 
+  const markLiveDirty = (key: string): void => {
+    if (liveDirtyKeysRef.current[key] === true) return
+    const next = { ...liveDirtyKeysRef.current, [key]: true as const }
+    liveDirtyKeysRef.current = next
+    setLiveDirtyKeys(next)
+    setSaveStatuses((existing) => ({ ...existing, [key]: 'unsaved' }))
+  }
+
+  const clearLiveDirty = (key: string): void => {
+    if (liveDirtyKeysRef.current[key] !== true) return
+    const next = { ...liveDirtyKeysRef.current }
+    delete next[key]
+    liveDirtyKeysRef.current = next
+    setLiveDirtyKeys(next)
+  }
+
   const setDraftValue = (key: string, markdown: string): void => {
+    const separator = key.indexOf(':')
+    const number = Number(key.slice(0, separator))
+    const phase = key.slice(separator + 1) as TurnPhase
+    const saved =
+      savedPhaseValuesRef.current[key] ?? serverTurnFor(number)?.orders[phase] ?? ''
+    if (markdown === saved) {
+      const next = { ...draftsRef.current }
+      delete next[key]
+      draftsRef.current = next
+      setDrafts(next)
+      clearLiveDirty(key)
+      setSaveStatuses((existing) => ({ ...existing, [key]: 'saved' }))
+      return
+    }
     draftsRef.current = { ...draftsRef.current, [key]: markdown }
     setDrafts((existing) => ({ ...existing, [key]: markdown }))
     setSaveStatuses((existing) => ({ ...existing, [key]: 'unsaved' }))
   }
 
+  const reconcileSuccessfulPhase = (
+    key: string,
+    submission: { readonly turn: number; readonly phase: TurnPhase; readonly markdown: string },
+  ): void => {
+    const currentMarkdown =
+      visibleOwnTurnRef.current === submission.turn
+        ? (editorRefs.current[submission.phase]?.getMarkdown() ?? draftsRef.current[key])
+        : draftsRef.current[key]
+    if (currentMarkdown !== undefined && currentMarkdown !== submission.markdown) {
+      if (draftsRef.current[key] !== currentMarkdown) setDraftValue(key, currentMarkdown)
+      setSaveStatuses((existing) => ({ ...existing, [key]: 'unsaved' }))
+      return
+    }
+
+    const nextSaved = { ...savedPhaseValuesRef.current, [key]: submission.markdown }
+    savedPhaseValuesRef.current = nextSaved
+    setSavedPhaseValues(nextSaved)
+    const nextDrafts = { ...draftsRef.current }
+    delete nextDrafts[key]
+    draftsRef.current = nextDrafts
+    setDrafts(nextDrafts)
+    clearLiveDirty(key)
+    setSaveStatuses((existing) => ({ ...existing, [key]: 'saved' }))
+  }
+
   const saveAll = (): void => {
     if (view?.you === null || view === null) return
 
-    const submissions = new Map<string, { readonly turn: number; readonly phase: TurnPhase; readonly markdown: string }>()
+    const submissions = new Map<
+      string,
+      { readonly turn: number; readonly phase: TurnPhase; readonly markdown: string }
+    >()
     for (const [key] of dirtyPhaseKeys) {
       const separator = key.indexOf(':')
       const number = Number(key.slice(0, separator))
       const phase = key.slice(separator + 1) as TurnPhase
       const markdown =
-        number === turnNumber
-          ? (editorRefs.current[phase]?.getMarkdown() ?? drafts[key] ?? '')
-          : (drafts[key] ?? '')
+        selectedPlayer?.own === true && number === turnNumber
+          ? (editorRefs.current[phase]?.getMarkdown() ?? draftsRef.current[key] ?? '')
+          : (draftsRef.current[key] ?? '')
       submissions.set(key, { turn: number, phase, markdown })
     }
     if (selectedPlayer?.own === true) {
@@ -538,19 +642,27 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
         if (markdown !== savedValues[phase]) {
           submissions.set(key, { turn: turnNumber, phase, markdown })
           setDraftValue(key, markdown)
+        } else if (liveDirtyKeysRef.current[key] === true) {
+          const nextDrafts = { ...draftsRef.current }
+          delete nextDrafts[key]
+          draftsRef.current = nextDrafts
+          setDrafts(nextDrafts)
+          clearLiveDirty(key)
+          setSaveStatuses((existing) => ({ ...existing, [key]: 'saved' }))
         }
       }
     }
 
     const latestPrivateNote = privateEditorRef.current?.getMarkdown() ?? privateNoteRef.current
-    const serverPrivateNote = view.you.gamenote ?? ''
-    const privateNeedsSave = privateNoteDirty || latestPrivateNote !== serverPrivateNote
+    const privateNeedsSave =
+      privateNoteDirty || latestPrivateNote !== privateSavedNoteRef.current
     if (privateNeedsSave && latestPrivateNote !== privateNoteRef.current) {
       privateNoteRef.current = latestPrivateNote
       setPrivateNote(latestPrivateNote)
       privateNoteDirtyRef.current = true
       setPrivateNoteDirty(true)
     }
+    const privateSubmission = latestPrivateNote
 
     const keys = [...submissions.keys()]
     const savingStatuses = Object.fromEntries(keys.map((key) => [key, 'saving' as const]))
@@ -562,39 +674,44 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
       let lastView: PlayerView | unknown = undefined
       for (const [key, submission] of submissions) {
         try {
-          lastView = await api.updateTurn(gameId, submission.turn, submission.phase, submission.markdown)
+          lastView = await api.updateTurn(
+            gameId,
+            submission.turn,
+            submission.phase,
+            submission.markdown,
+          )
+          reconcileSuccessfulPhase(key, submission)
         } catch (caught) {
           failed.add(key)
+          setSaveStatuses((existing) => ({ ...existing, [key]: 'failed' }))
           console.error(`Failed to save ${submission.phase}`, caught)
         }
       }
       if (privateNeedsSave) {
-        const submitted = privateEditorRef.current?.getMarkdown() ?? latestPrivateNote
-        privateNoteRef.current = submitted
         try {
-          lastView = await api.saveNote(gameId, submitted)
-          if (privateNoteRef.current === submitted) {
+          lastView = await api.saveNote(gameId, privateSubmission)
+          privateSavedNoteRef.current = privateSubmission
+          const currentPrivateNote =
+            privateEditorRef.current?.getMarkdown() ?? privateNoteRef.current
+          if (currentPrivateNote === privateSubmission) {
+            privateNoteRef.current = privateSubmission
             privateNoteDirtyRef.current = false
             setPrivateNoteDirty(false)
+            setSaveStatuses((existing) => ({ ...existing, ['private']: 'saved' }))
+          } else {
+            if (privateNoteRef.current !== currentPrivateNote) {
+              setPrivateNoteValue(currentPrivateNote)
+            } else {
+              markPrivateNoteDirty()
+            }
+            setSaveStatuses((existing) => ({ ...existing, ['private']: 'unsaved' }))
           }
         } catch (caught) {
           failed.add('private')
+          setSaveStatuses((existing) => ({ ...existing, ['private']: 'failed' }))
           console.error('Failed to save private log', caught)
         }
       }
-      setSaveStatuses((existing) => {
-        const next = { ...existing }
-        for (const key of keys) {
-          const submitted = submissions.get(key)?.markdown
-          next[key] = failed.has(key)
-            ? 'failed'
-            : draftsRef.current[key] === submitted
-              ? 'saved'
-              : 'unsaved'
-        }
-        if (privateNeedsSave) next['private'] = failed.has('private') ? 'failed' : 'saved'
-        return next
-      })
       if (failed.size > 0) throw new Error('Some changes could not be saved')
       return lastView
     })
@@ -611,7 +728,7 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
             <button
               type="button"
               className="primary turn-save-all"
-              disabled={busy || view.you === null}
+              disabled={busy || view.you === null || !hasUnsavedChanges}
               onClick={saveAll}
             >
               Save all changes
@@ -633,10 +750,12 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
               note={privateNote}
               dirty={privateNoteDirty}
               onChange={setPrivateNoteValue}
+              onDirty={markPrivateNoteDirty}
               saveStatus={saveStatuses['private'] ?? (privateNoteDirty ? 'unsaved' : 'saved')}
               editorRef={privateEditorRef}
               tabPanelId={privatePanelId}
               labelledBy={privateTabId}
+              editorComponent={editorComponent}
             />
           ) : selectedPlayer !== undefined ? (
             <TurnOrderWorkspace
@@ -654,7 +773,7 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
                 TURN_PHASES.map((phase) => {
                   const key = phaseKey(turnNumber, phase)
                   const dirty = values[phase] !== savedValues[phase]
-                  return [key, saveStatuses[key] ?? (dirty ? 'unsaved' : 'saved')]
+                  return [phase, saveStatuses[key] ?? (dirty ? 'unsaved' : 'saved')]
                 }),
               ) as Record<TurnPhase, SaveStatus>}
               editorRefs={editorRefs}
@@ -668,8 +787,10 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
                 const key = phaseKey(turnNumber, phase)
                 setDraftValue(key, markdown)
               }}
+              onPhaseDirty={(phase) => markLiveDirty(phaseKey(turnNumber, phase))}
               tabPanelId={playerPanelId(selectedPlayerIndex)}
               labelledBy={playerTabId(selectedPlayerIndex)}
+              editorComponent={editorComponent}
             />
           ) : null}
         </>

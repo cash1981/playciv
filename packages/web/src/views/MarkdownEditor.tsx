@@ -11,6 +11,7 @@ export interface MarkdownEditorHandle {
 export interface MarkdownEditorProps {
   readonly value: string
   readonly onChange: (markdown: string) => void
+  readonly onDirty?: (() => void) | undefined
   readonly readOnly: boolean
   readonly ariaLabel: string
   readonly placeholder?: string
@@ -26,6 +27,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     {
       value,
       onChange,
+      onDirty,
       readOnly,
       ariaLabel,
       placeholder = 'Write in Markdown …',
@@ -35,6 +37,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const rootRef = useRef<HTMLDivElement>(null)
     const editorRef = useRef<CrepeBuilder | null>(null)
     const onChangeRef = useRef(onChange)
+    const onDirtyRef = useRef(onDirty)
     const readOnlyRef = useRef(readOnly)
     const latestMarkdownRef = useRef(value)
     const lastEmittedRef = useRef(value)
@@ -43,6 +46,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const [editorError, setEditorError] = useState(false)
 
     onChangeRef.current = onChange
+    onDirtyRef.current = onDirty
     readOnlyRef.current = readOnly
     if (previousValueRef.current !== value) {
       previousValueRef.current = value
@@ -163,6 +167,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         className="turn-markdown"
         data-readonly={readOnly ? 'true' : 'false'}
         aria-label={ariaLabel}
+        onInputCapture={() => onDirtyRef.current?.()}
       >
         <div ref={rootRef} hidden={!ready} />
         {!ready && (

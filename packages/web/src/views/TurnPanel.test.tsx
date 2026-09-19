@@ -104,11 +104,16 @@ const history: Readonly<Record<TurnPhase, readonly string[]>> = {
   RESEARCH: [],
 }
 
-const turn = (username: string, disabled = false): PlayerTurn => ({
-  turnNumber: 3,
+const turn = (
+  username: string,
+  disabled = false,
+  turnNumber = 3,
+  turnOrders: Readonly<Record<TurnPhase, string>> = orders,
+): PlayerTurn => ({
+  turnNumber,
   username,
   disabled,
-  orders,
+  orders: turnOrders,
   history,
 })
 
@@ -116,7 +121,7 @@ const noop = (): void => undefined
 const run = async (): Promise<void> => undefined
 
 const DelayedEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-  function DelayedEditor({ value, onChange, readOnly, ariaLabel }, ref) {
+  function DelayedEditor({ value, onChange, onDirty, readOnly, ariaLabel }, ref) {
     const markdownRef = useRef(value)
     const onChangeRef = useRef(onChange)
     const [, renderVersion] = useState(0)
@@ -135,6 +140,7 @@ const DelayedEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
           const markdown = event.target.value
           markdownRef.current = markdown
           renderVersion((version) => version + 1)
+          onDirty?.()
           setTimeout(() => onChangeRef.current(markdown), 200)
         }}
       />
@@ -383,6 +389,42 @@ describe('TurnOrderWorkspace', () => {
     expect(screen.queryByRole('button', { name: 'Save movement' })).toBeNull()
   })
 
+  it('maps keyed phase statuses to the matching phase border and badge', () => {
+    render(
+      <TurnOrderWorkspace
+        gameId="game-1"
+        busy={false}
+        run={run}
+        player={{ username: 'cash1981', color: 'Red', own: true }}
+        turnNumber={3}
+        turnNumbers={[3]}
+        current={turn('cash1981')}
+        values={orders}
+        onTurnNumberChange={noop}
+        onNewTurn={noop}
+        onPhaseChange={noop}
+        tabPanelId="panel"
+        labelledBy="tab"
+        phaseStatuses={{
+          SOT: 'saved',
+          TRADE: 'saving',
+          CM: 'saved',
+          MOVEMENT: 'failed',
+          RESEARCH: 'unsaved',
+        }}
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    expect(screen.getByText('Saving trade…').closest('section')?.dataset['saveStatus']).toBe('saving')
+    expect(screen.getByText('Save failed: movement').closest('section')?.dataset['saveStatus']).toBe(
+      'failed',
+    )
+    expect(screen.getByText('Unsaved changes: research').closest('section')?.dataset['saveStatus']).toBe(
+      'unsaved',
+    )
+  })
+
   it('keeps a delayed edit attached to the turn where it was written', () => {
     vi.useFakeTimers()
 
@@ -447,6 +489,7 @@ describe('PrivateLogWorkspace', () => {
     expect(markup).toContain('does not add an entry to the game log')
     expect(markup).toContain('Private log')
     expect(markup).toContain('Unsaved changes: Private log')
+    expect(markup).toContain('class="turn-phase private-log-phase" data-save-status="unsaved"')
     expect(markup).toContain('aria-label="Private log"')
     expect(markup).not.toContain('Publish')
   })
@@ -454,17 +497,32 @@ describe('PrivateLogWorkspace', () => {
 })
 
 describe('TurnPanel save all changes', () => {
-  it('publishes the latest text from every changed phase with one button', async () => {
-    const playerView = {
+  const viewFor = (
+    ownTurns: readonly PlayerTurn[] = [turn('cash1981', false, 1)],
+    opponents: PlayerView['opponents'] = [],
+    gamenote: string | null = null,
+  ): PlayerView =>
+    ({
       you: {
         username: 'cash1981',
         color: 'Red',
         playernumber: 1,
-        gamenote: null,
-        playerTurns: [turn('cash1981')],
+        gamenote,
+        playerTurns: ownTurns,
       },
-      opponents: [],
-    } as unknown as PlayerView
+      opponents,
+    }) as unknown as PlayerView
+
+  const runIgnoringAggregateError = async (action: () => Promise<unknown>): Promise<void> => {
+    try {
+      await action()
+    } catch {
+      // TurnPanel exposes the aggregate error through the real GameView runner.
+    }
+  }
+
+  it('publishes the latest text from every changed phase with one button', async () => {
+    const playerView = viewFor()
     const updateTurn = vi.spyOn(api, 'updateTurn').mockResolvedValue(playerView)
     vi.spyOn(api, 'game').mockResolvedValue(playerView)
     vi.spyOn(api, 'publicTurns').mockResolvedValue([])
@@ -473,23 +531,192 @@ describe('TurnPanel save all changes', () => {
       <TurnPanel
         gameId="game-1"
         busy={false}
-        run={async (action) => {
-          await action()
-        }}
+        run={runIgnoringAggregateError}
         reloadCount={0}
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    const saveAll = await screen.findByRole('button', { name: 'Save all changes' })
+    vi.useFakeTimers()
+    fireEvent.change(screen.getByRole('textbox', { name: /movement orders.*turn 1/i }), {
+      target: { value: 'Move immediately' },
+    })
+    expect((saveAll as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Save all changes' }))
+    await act(async () => Promise.resolve())
+
+    expect(updateTurn).toHaveBeenCalledWith('game-1', 1, 'MOVEMENT', 'Move immediately')
+    act(() => vi.advanceTimersByTime(200))
+    expect((saveAll as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Saved movement')).toBeTruthy()
+  })
+
+  it('never reads an opponent editor while saving an own-turn draft', async () => {
+    const playerView = viewFor([], [
+      { username: 'Andrius', color: 'Blue', playernumber: 2 } as PlayerView['opponents'][number],
+    ])
+    const ownTurn = turn('cash1981', false, 1, { ...orders, MOVEMENT: 'Own baseline' })
+    const loadedView = viewFor([ownTurn], playerView.opponents)
+    const opponentTurn = turn('Andrius', false, 1, {
+      ...orders,
+      MOVEMENT: 'Opponent private strategy',
+    })
+    const updateTurn = vi.spyOn(api, 'updateTurn').mockResolvedValue(loadedView)
+    vi.spyOn(api, 'game').mockResolvedValue(loadedView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([opponentTurn])
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    await screen.findByRole('tab', { name: 'Andrius' })
+    vi.useFakeTimers()
+    fireEvent.change(screen.getByRole('textbox', { name: /movement orders for cash1981.*turn 1/i }), {
+      target: { value: 'Own new movement' },
+    })
+    act(() => vi.advanceTimersByTime(200))
+    fireEvent.click(screen.getByRole('tab', { name: 'Andrius' }))
+    expect(
+      (screen.getByRole('textbox', {
+        name: /movement orders for Andrius.*turn 1/i,
+      }) as HTMLTextAreaElement).value,
+    ).toBe('Opponent private strategy')
+    fireEvent.click(screen.getByRole('button', { name: 'Save all changes' }))
+    await act(async () => Promise.resolve())
+
+    expect(updateTurn).toHaveBeenCalledWith('game-1', 1, 'MOVEMENT', 'Own new movement')
+    expect(updateTurn).not.toHaveBeenCalledWith(
+      'game-1',
+      1,
+      'MOVEMENT',
+      'Opponent private strategy',
+    )
+  })
+
+  it('removes successful drafts so a retry only sends the failed phase', async () => {
+    const playerView = viewFor()
+    let failMovement = true
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const updateTurn = vi
+      .spyOn(api, 'updateTurn')
+      .mockImplementation(async (_gameId, _turnNumber, phase) => {
+        if (phase === 'MOVEMENT' && failMovement) throw new Error('movement failed')
+        return playerView
+      })
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([])
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={DelayedEditor}
       />,
     )
 
     await screen.findByRole('button', { name: 'Save all changes' })
-    const movement = screen
-      .getAllByLabelText(/movement orders for cash1981, turn 1/i)
-      .find((element) => element instanceof HTMLTextAreaElement)
-    expect(movement).toBeDefined()
-    fireEvent.change(movement as HTMLTextAreaElement, { target: { value: 'Move immediately' } })
+    vi.useFakeTimers()
+    fireEvent.change(screen.getByRole('textbox', { name: /start of turn orders.*turn 1/i }), {
+      target: { value: 'New setup' },
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: /movement orders.*turn 1/i }), {
+      target: { value: 'New movement' },
+    })
+    act(() => vi.advanceTimersByTime(200))
     fireEvent.click(screen.getByRole('button', { name: 'Save all changes' }))
+    expect(screen.getByText('Saving start of turn…')).toBeTruthy()
+    expect(screen.getByText('Saving movement…')).toBeTruthy()
+    await act(async () => Promise.resolve())
+    await act(async () => Promise.resolve())
 
-    await waitFor(() =>
-      expect(updateTurn).toHaveBeenCalledWith('game-1', 1, 'MOVEMENT', 'Move immediately'),
+    expect(screen.getByText('Saved start of turn')).toBeTruthy()
+    expect(screen.getByText('Save failed: movement')).toBeTruthy()
+    failMovement = false
+    fireEvent.click(screen.getByRole('button', { name: 'Save all changes' }))
+    await act(async () => Promise.resolve())
+    await act(async () => Promise.resolve())
+
+    expect(updateTurn.mock.calls.filter((call) => call[2] === 'SOT')).toHaveLength(1)
+    expect(updateTurn.mock.calls.filter((call) => call[2] === 'MOVEMENT')).toHaveLength(2)
+    expect(screen.getByText('Saved movement')).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Save all changes' }) as HTMLButtonElement).disabled).toBe(
+      true,
     )
+  })
+
+  it('marks the private log unsaved when it changes during an in-flight save', async () => {
+    const playerView = viewFor()
+    let resolveSave: ((view: PlayerView) => void) | undefined
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([])
+    vi.spyOn(api, 'saveNote').mockImplementation(
+      () =>
+        new Promise<PlayerView>((resolve) => {
+          resolveSave = resolve
+        }),
+    )
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Private log' }))
+    vi.useFakeTimers()
+    const editor = screen.getByRole('textbox', { name: 'Private log' })
+    fireEvent.change(editor, { target: { value: 'Submitted note' } })
+    act(() => vi.advanceTimersByTime(200))
+    fireEvent.click(screen.getByRole('button', { name: 'Save all changes' }))
+    fireEvent.change(editor, { target: { value: 'Newer unsaved note' } })
+    await act(async () => {
+      resolveSave?.(playerView)
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText('Unsaved changes: Private log')).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Save all changes' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+  })
+
+  it('disables locking and enables beforeunload on the first editor input', async () => {
+    const playerView = viewFor()
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([])
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    const lock = await screen.findByRole('button', { name: 'Lock the turn' })
+    vi.useFakeTimers()
+    fireEvent.change(screen.getByRole('textbox', { name: /movement orders.*turn 1/i }), {
+      target: { value: 'Not emitted yet' },
+    })
+
+    expect((lock as HTMLButtonElement).disabled).toBe(true)
+    const beforeUnload = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(beforeUnload)
+    expect(beforeUnload.defaultPrevented).toBe(true)
   })
 })
