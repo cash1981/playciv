@@ -58,7 +58,7 @@ export function RevealedPanel({ gameId, reloadCount }: Props): React.JSX.Element
   }, [data, page, totalPages])
 
   return (
-    <CollapsiblePanel id="revealed" title={`Revealed and Discarded Items (${total})`}>
+    <CollapsiblePanel id="revealed" title={`Revealed and Discarded Items (${total})`} defaultOpen={false}>
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <ul className="card-grid scroll">

@@ -353,15 +353,17 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
   })
 
   // Newest first: by timestamp, then by log position for entries stamped in the
-  // same request (matching the public-log route), then by seed order so rows the
-  // log never named keep a stable order.
+  // same request (matching the public-log route), then by seed order (later
+  // seed = more recently added to the public set) for rows the log never
+  // named, so those still read newest-first rather than in insertion order
+  // (issue #68).
   return [...rows.values()]
     .map((row, index) => ({ row, index }))
     .sort(
       (a, b) =>
         (b.row.createdAt ?? '').localeCompare(a.row.createdAt ?? '') ||
         b.row.logOrder - a.row.logOrder ||
-        a.index - b.index,
+        b.index - a.index,
     )
     .map(({ row }) => ({
       item: row.item,

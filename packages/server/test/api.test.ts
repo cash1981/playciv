@@ -882,8 +882,13 @@ describe('arena place and rotate', () => {
       payload: { rev: placedView.rev },
     })
     expect(rotated.status).toBe(200)
-    const rotatedView = await rotated.json() as { battle: { arena: { rotation: number }[] } }
-    expect(rotatedView.battle.arena[0]!.rotation).toBe(90)
+    const rotatedView = await rotated.json() as {
+      battle: { arena: { rotation: number; attack: number; health: number }[] }
+    }
+    // Counter-clockwise: the first press goes to 270°, not 90° (issue #68).
+    expect(rotatedView.battle.arena[0]!.rotation).toBe(270)
+    expect(rotatedView.battle.arena[0]!.attack).toBe(unit.attack + 1)
+    expect(rotatedView.battle.arena[0]!.health).toBe(unit.health + 1)
   })
 })
 

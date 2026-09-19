@@ -57,7 +57,7 @@ export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): Reac
   const yourPolicies = view.you?.socialPolicies ?? []
 
   return (
-    <CollapsiblePanel id="techs" title="Techs">
+    <CollapsiblePanel id="techs" title="Techs" defaultOpen={false}>
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="row">

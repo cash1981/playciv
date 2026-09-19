@@ -188,4 +188,37 @@ describe('revealedFeed', () => {
     const feed = revealedFeed(stamped)
     expect(feed.map((entry) => entry.item.itemNumber)).toEqual([card.itemNumber, hut.itemNumber])
   })
+
+  it('newest first even without a timestamp, using seed order as a fallback (issue #68)', () => {
+    // The engine never stamps createdAt itself (the server does, on write), so
+    // two discards in one engine-level test both leave it null. The fallback
+    // tiebreak must still put the later discard first, not first-discarded-first.
+    let state = firstCivGame()
+    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'HUTS' }))
+    const hut = handItem(state, 'HUTS')
+    state = unwrap(
+      discardItem(state, {
+        playerId: CASH1981,
+        sheetName: 'HUTS',
+        itemNumber: hut.itemNumber,
+        name: itemName(hut),
+      }),
+    )
+
+    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CULTURE_1' }))
+    const card = handItem(state, 'CULTURE_1')
+    state = unwrap(
+      discardItem(state, {
+        playerId: CASH1981,
+        sheetName: 'CULTURE_1',
+        itemNumber: card.itemNumber,
+        name: itemName(card),
+      }),
+    )
+
+    expect(state.log.every((entry) => entry.createdAt === null)).toBe(true)
+
+    const feed = revealedFeed(state)
+    expect(feed.map((entry) => entry.item.itemNumber)).toEqual([card.itemNumber, hut.itemNumber])
+  })
 })

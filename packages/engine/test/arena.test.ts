@@ -390,7 +390,7 @@ describe('setArenaUnitStat', () => {
 })
 
 describe('rotateArenaUnit', () => {
-  it('is placed at rotation 0 and cycles 0 → 90 → 180 → 270 → 0', () => {
+  it('is placed at rotation 0 and cycles counter-clockwise 0 → 270 → 180 → 90 → 0', () => {
     let state = withBattlehand(CASH1981)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
 
@@ -409,34 +409,38 @@ describe('rotateArenaUnit', () => {
     const arenaUnitId = state.battle!.arena[0]!.id
     expect(state.battle!.arena[0]!.rotation).toBe(0)
 
-    for (const expected of [90, 180, 270, 0]) {
+    for (const expected of [270, 180, 90, 0]) {
       // Any game member may rotate — not just the two combatants.
       state = unwrap(rotateArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId }))
       expect(state.battle!.arena[0]!.rotation).toBe(expected)
     }
   })
 
-  it('does not change attack or health', () => {
+  it('suggests attack/health one higher per press, from the base card, wrapping after 360°', () => {
     let state = withBattlehand(CASH1981)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
 
     const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    // Seed the arena with different attack/health than the base card, so a
+    // reset to base+bonus is distinguishable from "left untouched".
     state = unwrap(
       placeUnitInArena(state, {
         playerId: CASH1981,
         unitId: unit.id,
         side: 'attacker',
         position: 0,
-        attack: unit.attack,
-        health: unit.health,
+        attack: unit.attack + 10,
+        health: unit.health + 10,
       }),
     )
 
     const arenaUnitId = state.battle!.arena[0]!.id
-    state = unwrap(rotateArenaUnit(state, { playerId: CASH1981, arenaUnitId }))
 
-    expect(state.battle!.arena[0]!.attack).toBe(unit.attack)
-    expect(state.battle!.arena[0]!.health).toBe(unit.health)
+    for (const bonus of [1, 2, 3, 0]) {
+      state = unwrap(rotateArenaUnit(state, { playerId: CASH1981, arenaUnitId }))
+      expect(state.battle!.arena[0]!.attack).toBe(unit.attack + bonus)
+      expect(state.battle!.arena[0]!.health).toBe(unit.health + bonus)
+    }
   })
 
   it('returns ARENA_UNIT_NOT_FOUND for an unknown arena unit', () => {

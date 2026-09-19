@@ -1232,7 +1232,7 @@ ul.history > li {
 }
 
 .arena-slot {
-  flex: 0 0 6rem;
+  flex: 0 0 7.5rem;
   border: 1px dashed var(--line);
   border-radius: 3px;
   padding: 0.25rem;
@@ -1255,26 +1255,22 @@ ul.history > li {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  width: 6rem;
+  width: 7.5rem;
 }
 
 .arena-unit-card .card {
   margin: 0;
-  padding: 0.3rem;
-  gap: 0.25rem;
 }
 
+/* Same size as a battlehand card (`.card-grid.small`) — issue #68 asked for
+   this explicitly, rather than the further-shrunk size tried earlier. */
 .arena-unit-card .card-art {
-  min-height: 2.6rem;
+  min-height: 4rem;
 }
 
 .arena-unit-card .card-art img {
-  max-height: 3.2rem;
+  max-height: 7rem;
   transition: transform 0.15s ease;
-}
-
-.arena-unit-card .card-caption {
-  font-size: 0.7rem;
 }
 
 .arena-unit-card label {

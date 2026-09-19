@@ -15,6 +15,28 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
+### issue-68-battle-fixes
+
+- **Owner:** Claude (Sonnet 5)
+- **Branch:** `fix/issue-63-arena-ux` (continuation of the still-open PR #67,
+  per the human's request to fix issue #68 in the same branch)
+- **Brief:** `docs/agents/tasks/issue-68-battle-fixes.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/GameView.tsx`
+  - `packages/web/src/views/LogPanel.tsx`
+  - `packages/web/src/views/ChatPanel.tsx` (new)
+  - `packages/web/src/views/TechPanel.tsx`
+  - `packages/web/src/views/RevealedPanel.tsx`
+  - `packages/web/src/styles.css`
+  - `packages/engine/src/actions/arena.ts`
+  - `packages/engine/src/actions/game.ts`
+  - `packages/engine/test/arena.test.ts`
+  - `packages/engine/test/revealed-feed.test.ts`
+  - `packages/server/test/api.test.ts`
+- **Notes:** Seven fixes — see the brief. Rotate direction/stat-preview
+  revises (not reverts) the issue-63 UX pass's "cosmetic only" rotate.
+
 ### revealed-panel
 
 - **Owner:** Claude (Opus 4.8)

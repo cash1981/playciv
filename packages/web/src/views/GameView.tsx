@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { itemName } from '@civ/engine'
+import { isUnit, itemName } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -16,6 +16,7 @@ import { ApiError, api } from '../lib/api.js'
 import type { PlayerDto, PlayerView } from '../lib/api.js'
 
 import { BoardView } from './BoardView.js'
+import { ChatPanel } from './ChatPanel.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import { RevealedPanel } from './RevealedPanel.js'
@@ -223,6 +224,12 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
           gameId={gameId}
           busy={busy}
           run={run}
+          reloadCount={reloadCount}
+        />
+        <ChatPanel
+          gameId={gameId}
+          busy={busy}
+          run={run}
           player={player}
           reloadCount={reloadCount}
         />
@@ -368,6 +375,16 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
   const [count, setCount] = useState(3)
   const battlehand = view.you?.battlehand ?? []
   const barbarians = view.you?.barbarians ?? []
+  // A unit already placed in the arena is shown there, not in the hand — once
+  // it is on the field it should disappear from the source list so it is
+  // clear which units are still available to place (issue #68).
+  const availableBattlehand = battlehand.filter((u) => !u.inBattle)
+  const availableBarbarians = barbarians.filter((u) => !u.inBattle)
+  // Whether the standalone (non-arena) "end battle" clean-up has anything to
+  // do — clearing inBattle can only matter if a unit somehow still has it set
+  // outside of an active arena (issue #68: this button stayed enabled with
+  // nothing to end).
+  const hasStandaloneInBattleUnit = (view.you?.items ?? []).some((item) => isUnit(item) && item.inBattle)
   const battle = view.battle
   const battleSummary = view.battleSummary ?? []
   const rev = view.rev ?? 0
@@ -423,7 +440,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
   ]
 
   return (
-    <CollapsiblePanel id="battle" title="Battle">
+    <CollapsiblePanel id="battle" title="Battle" defaultOpen={false}>
 
       {/* — Hand management — */}
       <div className="row">
@@ -441,17 +458,17 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
         >
           Reveal
         </button>
-        {battle === null && (
+        {battle === null && hasStandaloneInBattleUnit && (
           <button disabled={busy} onClick={() => void run(() => api.endBattle(gameId))}>
             End battle
           </button>
         )}
       </div>
 
-      <h3 style={{ marginTop: '0.8rem' }}>Battlehand ({battlehand.length})</h3>
-      {battlehand.length === 0 && <p className="muted">Empty.</p>}
+      <h3 style={{ marginTop: '0.8rem' }}>Battlehand ({availableBattlehand.length})</h3>
+      {availableBattlehand.length === 0 && <p className="muted">Empty.</p>}
       <ul className="card-grid small">
-        {battlehand.map((unit) => (
+        {availableBattlehand.map((unit) => (
           <ItemCard
             key={unit.id}
             item={unit}
@@ -462,10 +479,10 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
               !(battle.defender.kind === 'barbarians' && battle.defender.playerId === myId) && (
               <button
                 className="small"
-                disabled={busy || unit.inBattle}
+                disabled={busy}
                 onClick={() => placeInArena(unit.id, mySideInBattle, myNextPosition)}
               >
-                {unit.inBattle ? 'In arena' : 'Place →'}
+                Place →
               </button>
             )}
           </ItemCard>
@@ -473,7 +490,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
       </ul>
 
       {/* — Barbarians — */}
-      <h3 style={{ marginTop: '0.8rem' }}>Barbarians ({barbarians.length})</h3>
+      <h3 style={{ marginTop: '0.8rem' }}>Barbarians ({availableBarbarians.length})</h3>
       <div className="row">
         <button
           disabled={busy || barbarians.length > 0}
@@ -489,7 +506,7 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
         </button>
       </div>
       <ul className="card-grid small">
-        {barbarians.map((unit) => (
+        {availableBarbarians.map((unit) => (
           <ItemCard
             key={unit.id}
             item={unit}
@@ -499,10 +516,10 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
             {battle !== null && battle.defender.kind === 'barbarians' && battle.defender.playerId === myId && (
               <button
                 className="small"
-                disabled={busy || unit.inBattle}
+                disabled={busy}
                 onClick={() => placeInArena(unit.id, 'defender', myNextPosition)}
               >
-                {unit.inBattle ? 'In arena' : 'Place →'}
+                Place →
               </button>
             )}
           </ItemCard>

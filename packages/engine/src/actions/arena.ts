@@ -8,6 +8,7 @@
  */
 
 import { nextRotation } from '../board.js'
+import type { Rotation } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { UnitItem } from '../item.js'
 import { isUnit, revealAll } from '../item.js'
@@ -350,9 +351,25 @@ export interface RotateArenaUnitInput {
 }
 
 /**
- * Rotates an arena unit's card 90°. Any game member may call this, same as
- * `setArenaUnitStat` — it is cosmetic (which printed level reads right-side
- * up), not a combat value, so it needs no participant guard.
+ * How many rotate presses (0–3) a unit is at, derived purely from its stored
+ * `rotation` — no separate counter field needed. Counting counter-clockwise
+ * from 0° (the direction the rotate button turns, see below) so a fresh unit
+ * is always level 0 and a full 360° cycle returns to it.
+ */
+function rotationLevel(rotation: Rotation): 0 | 1 | 2 | 3 {
+  return (((360 - rotation) / 90) % 4) as 0 | 1 | 2 | 3
+}
+
+/**
+ * Rotates an arena unit's card 90° counter-clockwise ("left") — issue #68:
+ * rotating left is the upgrade direction — and suggests the next tier's
+ * attack/health (base + 1 per press, wrapping back to the base values after a
+ * full 360°). Any game member may call this, same as `setArenaUnitStat`; it
+ * is not a participant-only action.
+ *
+ * The suggestion is seeded from the card's pristine snapshot (`unit.unit`),
+ * not the currently-edited arena values, and overwrites them — the player
+ * can still hand-edit attack/health afterwards via the existing inputs.
  */
 export function rotateArenaUnit(
   state: GameState,
@@ -370,14 +387,17 @@ export function rotateArenaUnit(
     return err({ kind: 'ARENA_UNIT_NOT_FOUND', arenaUnitId: input.arenaUnitId })
   }
 
-  const rotation = nextRotation(unit.rotation)
-  const updatedUnit: ArenaUnit = { ...unit, rotation }
+  const rotation = nextRotation(unit.rotation, false)
+  const bonus = rotationLevel(rotation)
+  const attack = unit.unit.attack + bonus
+  const health = unit.unit.health + bonus
+  const updatedUnit: ArenaUnit = { ...unit, rotation, attack, health }
 
   const nextState = appendPublicLog(
     state,
     player.username,
     player.playerId,
-    `rotates ${revealAll(unit.unit)} to ${rotation}°`,
+    `rotates ${revealAll(unit.unit)} to ${rotation}° (${attack}.${health})`,
   )
 
   return ok({
