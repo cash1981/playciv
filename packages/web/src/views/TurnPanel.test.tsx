@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 
-import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
+import { createRef, forwardRef, useImperativeHandle, useRef, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { PlayerTurn, TurnPhase } from '@civ/engine'
 
 import { api } from '../lib/api.js'
+import { MarkdownEditor } from './MarkdownEditor.js'
 import type {
   MarkdownEditorHandle,
   MarkdownEditorProps,
@@ -17,6 +18,73 @@ import {
   TurnOrderWorkspace,
   TurnTabs,
 } from './TurnPanel.js'
+
+interface MockCrepeBuilderRecord {
+  created: boolean
+  destroyed: boolean
+  markdown: string
+}
+
+const milkdownLifecycle = vi.hoisted(() => ({
+  create: (): Promise<void> => Promise.resolve(),
+  getMarkdownCalls: 0,
+  instances: [] as MockCrepeBuilderRecord[],
+}))
+
+vi.mock('@milkdown/crepe/builder', () => ({
+  CrepeBuilder: class MockCrepeBuilder implements MockCrepeBuilderRecord {
+    created = false
+    destroyed = false
+    markdown: string
+    readonly editor = {
+      action: (command: { readonly markdown?: string }): void => {
+        if (command.markdown !== undefined) this.markdown = command.markdown
+      },
+    }
+
+    constructor(options: { readonly defaultValue: string }) {
+      this.markdown = options.defaultValue
+      milkdownLifecycle.instances.push(this)
+    }
+
+    addFeature(): this {
+      return this
+    }
+
+    setReadonly(): this {
+      return this
+    }
+
+    on(register: (listener: { markdownUpdated: (callback: () => void) => void }) => void): void {
+      register({ markdownUpdated: () => undefined })
+    }
+
+    async create(): Promise<void> {
+      await milkdownLifecycle.create()
+      this.created = true
+    }
+
+    getMarkdown(): string {
+      milkdownLifecycle.getMarkdownCalls += 1
+      if (!this.created) throw new Error('getMarkdown called before create completed')
+      return this.markdown
+    }
+
+    destroy(): Promise<void> {
+      this.destroyed = true
+      return Promise.resolve()
+    }
+  },
+}))
+
+vi.mock('@milkdown/crepe/feature/link-tooltip', () => ({ linkTooltip: {} }))
+vi.mock('@milkdown/crepe/feature/list-item', () => ({ listItem: {} }))
+vi.mock('@milkdown/crepe/feature/placeholder', () => ({ placeholder: {} }))
+vi.mock('@milkdown/crepe/feature/toolbar', () => ({ toolbar: {} }))
+vi.mock('@milkdown/crepe/feature/top-bar', () => ({ topBar: {} }))
+vi.mock('@milkdown/kit/utils', () => ({
+  replaceAll: (markdown: string): { readonly markdown: string } => ({ markdown }),
+}))
 
 const orders: Readonly<Record<TurnPhase, string>> = {
   SOT: '**Build** a city',
@@ -74,8 +142,86 @@ const DelayedEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
 
 afterEach(() => {
   cleanup()
+  milkdownLifecycle.create = () => Promise.resolve()
+  milkdownLifecycle.getMarkdownCalls = 0
+  milkdownLifecycle.instances.length = 0
   vi.useRealTimers()
   vi.restoreAllMocks()
+})
+
+describe('MarkdownEditor lifecycle', () => {
+  it('saves from the fallback and unmounts safely while Crepe is still loading', async () => {
+    let resolveCreate: (() => void) | undefined
+    milkdownLifecycle.create = () =>
+      new Promise<void>((resolve) => {
+        resolveCreate = resolve
+      })
+    const editorRef = createRef<MarkdownEditorHandle>()
+    const saved: string[] = []
+    const { unmount } = render(
+      <>
+        <MarkdownEditor
+          ref={editorRef}
+          value="Initial"
+          onChange={noop}
+          readOnly={false}
+          ariaLabel="Lifecycle editor"
+        />
+        <button type="button" onClick={() => saved.push(editorRef.current?.getMarkdown() ?? '')}>
+          Save lifecycle editor
+        </button>
+      </>,
+    )
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Lifecycle editor' }), {
+      target: { value: 'Written while loading' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save lifecycle editor' }))
+
+    expect(saved).toEqual(['Written while loading'])
+    expect(milkdownLifecycle.getMarkdownCalls).toBe(0)
+    await waitFor(() => expect(milkdownLifecycle.instances).toHaveLength(1))
+    unmount()
+    expect(milkdownLifecycle.getMarkdownCalls).toBe(0)
+
+    await act(async () => {
+      resolveCreate?.()
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(milkdownLifecycle.instances[0]?.destroyed).toBe(true))
+    expect(milkdownLifecycle.getMarkdownCalls).toBe(0)
+  })
+
+  it('keeps fallback saving available after Crepe initialization rejects', async () => {
+    milkdownLifecycle.create = () => Promise.reject(new Error('create failed'))
+    const editorRef = createRef<MarkdownEditorHandle>()
+    const saved: string[] = []
+    render(
+      <>
+        <MarkdownEditor
+          ref={editorRef}
+          value="Initial"
+          onChange={noop}
+          readOnly={false}
+          ariaLabel="Rejected editor"
+        />
+        <button type="button" onClick={() => saved.push(editorRef.current?.getMarkdown() ?? '')}>
+          Save rejected editor
+        </button>
+      </>,
+    )
+
+    expect(
+      await screen.findByText('Rich editing is unavailable; plain Markdown is active.'),
+    ).toBeTruthy()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Rejected editor' }), {
+      target: { value: 'Fallback Markdown' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save rejected editor' }))
+
+    expect(saved).toEqual(['Fallback Markdown'])
+    expect(milkdownLifecycle.getMarkdownCalls).toBe(0)
+  })
 })
 
 describe('TurnPanel player tabs', () => {

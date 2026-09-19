@@ -35,6 +35,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const rootRef = useRef<HTMLDivElement>(null)
     const editorRef = useRef<CrepeBuilder | null>(null)
     const onChangeRef = useRef(onChange)
+    const readOnlyRef = useRef(readOnly)
     const latestMarkdownRef = useRef(value)
     const lastEmittedRef = useRef(value)
     const previousValueRef = useRef(value)
@@ -42,6 +43,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const [editorError, setEditorError] = useState(false)
 
     onChangeRef.current = onChange
+    readOnlyRef.current = readOnly
     if (previousValueRef.current !== value) {
       previousValueRef.current = value
       latestMarkdownRef.current = value
@@ -64,8 +66,6 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       if (root === null) return
 
       let mounted = true
-      let created = false
-      let editor: CrepeBuilder | null = null
 
       void Promise.all([
         import('@milkdown/crepe/builder'),
@@ -74,6 +74,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         import('@milkdown/crepe/feature/placeholder'),
         import('@milkdown/crepe/feature/toolbar'),
         import('@milkdown/crepe/feature/top-bar'),
+        import('@milkdown/kit/utils'),
         import('@milkdown/crepe/theme/common/link-tooltip.css'),
         import('@milkdown/crepe/theme/common/list-item.css'),
         import('@milkdown/crepe/theme/common/placeholder.css'),
@@ -90,9 +91,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           { placeholder: placeholderFeature },
           { toolbar },
           { topBar },
+          { replaceAll },
         ]) => {
           if (!mounted) return undefined
-          editor = new CrepeBuilder({
+          const nextEditor = new CrepeBuilder({
             root,
             defaultValue: latestMarkdownRef.current,
           })
@@ -102,35 +104,43 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             .addFeature(topBar)
             .addFeature(placeholderFeature, { text: placeholder, mode: 'block' })
             .setReadonly(readOnly)
-
-          editor.on((listener) => {
+          nextEditor.on((listener) => {
             listener.markdownUpdated((_context, markdown, previousMarkdown) => {
               if (mounted && markdown !== previousMarkdown) emitMarkdown(markdown)
             })
           })
-          editorRef.current = editor
-          return editor.create()
+          return nextEditor.create().then(() => ({ editor: nextEditor, replaceAll }))
         },
       )
-        .then(() => {
-          created = true
+        .then((created) => {
+          if (created === undefined) return
           if (!mounted) {
-            if (editor !== null) void editor.destroy()
+            void created.editor.destroy()
             return
           }
+          const pendingMarkdown = latestMarkdownRef.current
+          if (created.editor.getMarkdown() !== pendingMarkdown) {
+            created.editor.editor.action(created.replaceAll(pendingMarkdown, true))
+          }
+          created.editor.setReadonly(readOnlyRef.current)
+          editorRef.current = created.editor
           setReady(true)
         })
         .catch(() => {
+          editorRef.current = null
           if (mounted) setEditorError(true)
         })
 
       return () => {
+        mounted = false
         // Milkdown batches markdownUpdated. Flush the current document before
         // changing tabs/turns so the keyed draft cannot lose the final keystrokes.
-        if (editor !== null) emitMarkdown(editor.getMarkdown())
-        mounted = false
+        const readyEditor = editorRef.current
+        if (readyEditor !== null) emitMarkdown(readyEditor.getMarkdown())
         editorRef.current = null
-        if (created && editor !== null) void editor.destroy()
+        if (readyEditor !== null) {
+          void readyEditor.destroy()
+        }
       }
       // A parent keys editors by draft identity. Recreating only on a key change
       // prevents a delayed callback from being routed into another turn's draft.

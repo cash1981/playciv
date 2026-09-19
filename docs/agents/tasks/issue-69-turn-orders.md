@@ -3,7 +3,7 @@
 - **Slug:** `issue-69-turn-orders`
 - **Branch:** `feat/issue-69-turn-orders`
 - **Owner:** Codex (GPT-5)
-- **Status:** approved
+- **Status:** review
 
 ## Goal
 
