@@ -453,10 +453,19 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
         : null
     : null
 
-  // Next free position on my side (for click-to-place fallback)
+  // Next free position on my side (for click-to-place fallback). A front
+  // held only by a killed unit is reinforceable — offer it first, rather
+  // than always opening a new front, so the click path (not just drag) can
+  // reinforce a fallen unit's position.
+  function nextPositionFor(units: readonly ArenaUnit[]): number {
+    const livePositions = new Set(units.filter((u) => !u.killed).map((u) => u.position))
+    const reinforceable = units.find((u) => u.killed && !livePositions.has(u.position))
+    if (reinforceable !== undefined) return reinforceable.position
+    return units.reduce((m, u) => Math.max(m, u.position), -1) + 1
+  }
   const myNextPosition = mySideInBattle === 'attacker'
-    ? attackerUnits.reduce((m, u) => Math.max(m, u.position), -1) + 1
-    : defenderUnits.reduce((m, u) => Math.max(m, u.position), -1) + 1
+    ? nextPositionFor(attackerUnits)
+    : nextPositionFor(defenderUnits)
 
   const attackerSummary: BattleSideSummary | undefined = battleSummary.find((s) => s.side === 'attacker')
   const defenderSummary: BattleSideSummary | undefined = battleSummary.find((s) => s.side === 'defender')
@@ -749,7 +758,7 @@ interface ArenaUnitCardProps {
   readonly onDragEnd: () => void
 }
 
-function ArenaUnitCard({
+export function ArenaUnitCard({
   unit, gameId, busy, rev, run, canManage, canMove, onDragStart, onDragEnd,
 }: ArenaUnitCardProps): React.JSX.Element {
   const [attack, setAttack] = useState(unit.attack)

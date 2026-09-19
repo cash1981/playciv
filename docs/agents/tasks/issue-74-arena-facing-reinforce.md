@@ -60,5 +60,7 @@ new arena presentation and interaction (see `docs/agents/decisions.md`).
 - [ ] Placing a new unit on a front that only holds a killed unit succeeds;
       the killed unit's card is discarded and it is no longer in the arena.
 - [ ] Moving an existing unit onto such a front behaves the same way.
+- [ ] The click-to-place fallback (not just drag-and-drop) can also
+      reinforce a front held only by a killed unit.
 - [ ] A front with a still-living unit remains blocked as before.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
