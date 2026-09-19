@@ -6,8 +6,6 @@
  * compare-and-set writes are exercised the way they run in production.
  */
 
-import { readFileSync } from 'node:fs'
-
 import { createGame, itemName, joinGame, toPlayerView } from '@civ/engine'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -16,17 +14,12 @@ import type { App } from '../src/app.js'
 import { createGameRevision } from '../src/context.js'
 import { D1Repository } from '../src/store/d1.js'
 import type { ChatMessage, GameRevision, StoredPlayer } from '../src/store/types.js'
-import { createD1Adapter, nodeSqliteAvailable } from './d1-sqlite-adapter.js'
+import { createD1Adapter } from './d1-sqlite-adapter.js'
 import type { D1Adapter } from './d1-sqlite-adapter.js'
 import { bearer, inject } from './helpers.js'
+import { readMigrations } from './migrations.js'
 
-const schema = readFileSync(
-  new URL('../../worker/migrations/0001_initial.sql', import.meta.url),
-  'utf8',
-)
-
-// `node:sqlite` needs Node 22.5+. Skip rather than fail on an older runtime.
-const suite = (await nodeSqliteAvailable()) ? describe : describe.skip
+const schema = readMigrations()
 
 const ACTOR = { id: 'p1', username: 'Alice' }
 
@@ -34,7 +27,7 @@ function fixtureGame(name = 'Repo fixture') {
   return createGame({ name, numOfPlayers: 2, seed: `${name}:seed` })
 }
 
-suite('D1Repository', () => {
+describe('D1Repository', () => {
   let adapter: D1Adapter
   let repo: D1Repository
 
@@ -95,10 +88,30 @@ suite('D1Repository', () => {
 
     await repo.updatePlayerPassword('p1', 'new:hash')
     expect((await repo.findPlayerById('p1'))?.passwordHash).toBe('new:hash')
+    // A rename updates the folded lookup column too.
+    expect((await repo.findPlayerByUsername('alicia'))?.id).toBe('p1')
 
     expect(await repo.deletePlayer('p1')).toBe(true)
     expect(await repo.deletePlayer('p1')).toBe(false)
     expect(await repo.findPlayerById('p1')).toBeUndefined()
+  })
+
+  it('matches usernames with Unicode case, like the JSON repository', async () => {
+    await repo.createPlayer({
+      id: 'u-ase',
+      username: 'Åse',
+      email: null,
+      passwordHash: 'hash',
+      createdAt: '2020-01-01T00:00:00.000Z',
+    })
+
+    // SQLite's NOCASE would miss these; JavaScript's toLowerCase does not.
+    expect((await repo.findPlayerByUsername('åse'))?.id).toBe('u-ase')
+    expect((await repo.findPlayerByUsername('ÅSE'))?.id).toBe('u-ase')
+
+    await repo.updatePlayer('u-ase', { username: 'Ändring' })
+    expect((await repo.findPlayerByUsername('ändring'))?.id).toBe('u-ase')
+    expect(await repo.findPlayerByUsername('Åse')).toBeUndefined()
   })
 
   it('saves a game and inserts exactly one revision for a new game', async () => {
@@ -266,7 +279,7 @@ suite('D1Repository', () => {
   })
 })
 
-suite('D1Repository through the API', () => {
+describe('D1Repository through the API', () => {
   let adapter: D1Adapter
   let app: App
   let repo: D1Repository

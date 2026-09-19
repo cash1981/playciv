@@ -4,8 +4,6 @@
  * committed schema.
  */
 
-import { readFileSync } from 'node:fs'
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { DumpDoc } from '../src/migrate/rows.js'
@@ -26,15 +24,11 @@ import {
   tournamentRow,
 } from '../src/migrate/rows.js'
 import { insertStatement, sqlValue } from '../src/migrate/sql.js'
-import { createD1Adapter, nodeSqliteAvailable } from './d1-sqlite-adapter.js'
+import { createD1Adapter } from './d1-sqlite-adapter.js'
 import type { D1Adapter } from './d1-sqlite-adapter.js'
+import { readMigrations } from './migrations.js'
 
-const schema = readFileSync(
-  new URL('../../worker/migrations/0001_initial.sql', import.meta.url),
-  'utf8',
-)
-
-const suite = (await nodeSqliteAvailable()) ? describe : describe.skip
+const schema = readMigrations()
 
 const OID = '55223c74e4b00485f8dd926e'
 
@@ -114,7 +108,7 @@ const revisionDoc: DumpDoc = {
   state: { id: 'game-1', rev: 7 },
 }
 
-suite('dump mapping', () => {
+describe('dump mapping', () => {
   it('normalises extended JSON and reads ObjectIds', () => {
     expect(oidOf({ $oid: OID })).toBe(OID)
     expect(oidOf('plain')).toBe('plain')
@@ -142,6 +136,7 @@ suite('dump mapping', () => {
     expect(playerRow(playerDoc)).toEqual({
       id: OID,
       username: 'cash',
+      username_lower: 'cash',
       email: 'shervin@asgari.no',
       password: 'fc1c:deadbeef',
       created_at: '2015-04-06T07:57:40.000Z',
@@ -149,7 +144,10 @@ suite('dump mapping', () => {
       disabled: 0,
       disable_email: 1,
     })
-    expect(playerRow({ _id: 'u1', username: 'new' })).toMatchObject({
+    expect(playerRow({ _id: 'u1', username: 'Åse' })).toMatchObject({
+      username: 'Åse',
+      // Unicode folding here, not SQLite's ASCII-only lower().
+      username_lower: 'åse',
       role: 'user',
       disabled: 0,
       disable_email: 0,
@@ -232,7 +230,7 @@ suite('dump mapping', () => {
   })
 })
 
-suite('generated SQL loads into the committed schema', () => {
+describe('generated SQL loads into the committed schema', () => {
   let adapter: D1Adapter
 
   beforeEach(async () => {

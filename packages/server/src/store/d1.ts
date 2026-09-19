@@ -49,6 +49,8 @@ export interface D1Database {
 interface PlayerRow {
   readonly id: string
   readonly username: string
+  /** `username` folded with JavaScript's Unicode-aware `toLowerCase`. */
+  readonly username_lower: string
   readonly email: string | null
   readonly password: string
   readonly created_at: string
@@ -97,6 +99,10 @@ interface OkRow {
   readonly ok: number
 }
 
+const PLAYER_SELECT = `SELECT id, username, username_lower, email, password, created_at,
+                              role, disabled, disable_email
+                       FROM player`
+
 export class D1Repository implements Repository {
   private readonly db: D1Database
 
@@ -111,12 +117,13 @@ export class D1Repository implements Repository {
   async createPlayer(player: StoredPlayer): Promise<void> {
     await this.db
       .prepare(
-        `INSERT INTO player (id, username, email, password, created_at, role, disabled, disable_email)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO player (id, username, username_lower, email, password, created_at, role, disabled, disable_email)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         player.id,
         player.username,
+        player.username.toLowerCase(),
         player.email,
         player.passwordHash,
         player.createdAt,
@@ -129,30 +136,25 @@ export class D1Repository implements Repository {
 
   async findPlayerById(id: string): Promise<StoredPlayer | undefined> {
     const row = await this.db
-      .prepare(`SELECT id, username, email, password, created_at, role, disabled, disable_email
-                FROM player WHERE id = ?`)
+      .prepare(`${PLAYER_SELECT} WHERE id = ?`)
       .bind(id)
       .first<PlayerRow>()
     return row === null ? undefined : toStoredPlayer(row)
   }
 
   async findPlayerByUsername(username: string): Promise<StoredPlayer | undefined> {
-    // `player.username` is declared COLLATE NOCASE, so this equals Java's
-    // case-insensitive lookup. Old accounts may collide on case; the first is
-    // returned, as the JSON repository's scan does.
+    // Fold with JavaScript's `toLowerCase`, not SQLite's ASCII-only NOCASE, so
+    // this matches the JSON repository for `Åse` / `åse` too. Old accounts may
+    // collide on case; the first is returned, as the JSON scan does.
     const row = await this.db
-      .prepare(`SELECT id, username, email, password, created_at, role, disabled, disable_email
-                FROM player WHERE username = ? LIMIT 1`)
-      .bind(username)
+      .prepare(`${PLAYER_SELECT} WHERE username_lower = ? LIMIT 1`)
+      .bind(username.toLowerCase())
       .first<PlayerRow>()
     return row === null ? undefined : toStoredPlayer(row)
   }
 
   async allPlayers(): Promise<readonly StoredPlayer[]> {
-    const rows = await this.db
-      .prepare(`SELECT id, username, email, password, created_at, role, disabled, disable_email
-                FROM player ORDER BY id`)
-      .all<PlayerRow>()
+    const rows = await this.db.prepare(`${PLAYER_SELECT} ORDER BY id`).all<PlayerRow>()
     return rows.results.map(toStoredPlayer)
   }
 
@@ -169,6 +171,8 @@ export class D1Repository implements Repository {
     if (changes.username !== undefined) {
       sets.push('username = ?')
       values.push(changes.username)
+      sets.push('username_lower = ?')
+      values.push(changes.username.toLowerCase())
     }
     if (changes.email !== undefined) {
       sets.push('email = ?')

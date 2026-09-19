@@ -12,6 +12,8 @@
 export interface PlayerRow {
   readonly id: string
   readonly username: string
+  /** `username` folded with JavaScript's Unicode-aware `toLowerCase`. */
+  readonly username_lower: string
   readonly email: string | null
   readonly password: string
   readonly created_at: string
@@ -166,9 +168,14 @@ function requireId(doc: DumpDoc, collection: string): string {
 
 export function playerRow(doc: DumpDoc): PlayerRow {
   const id = requireId(doc, 'player')
+  const username = stringField(doc, 'username') ?? ''
   return {
     id,
-    username: stringField(doc, 'username') ?? '',
+    username,
+    // JavaScript folding, so D1 matches the JSON repository for non-ASCII names.
+    // `0002_username_lower.sql` back-fills migrated rows with SQLite's ASCII
+    // `lower()`, which is exact for every restored username.
+    username_lower: username.toLowerCase(),
     email: stringField(doc, 'email'),
     password: stringField(doc, 'password') ?? '',
     created_at: stringField(doc, 'createdAt') ?? createdAtFromObjectId(id),

@@ -7,8 +7,9 @@
  * wrapped in a transaction, matching D1's atomicity — the guarded
  * compare-and-set writes rely on that.
  *
- * `node:sqlite` landed in Node 22.5; `nodeSqliteAvailable()` lets the suite skip
- * itself on an older runtime instead of failing to import.
+ * `node:sqlite` is available without a flag from Node 24, which the root
+ * `engines` field now requires; a runtime without it fails the suite loudly
+ * rather than skipping the D1 coverage.
  */
 
 import type { D1Database, D1PreparedStatement, D1Result } from '../src/store/d1.js'
@@ -20,15 +21,6 @@ let sqliteModule: SqliteModule | undefined
 async function loadSqlite(): Promise<SqliteModule> {
   if (sqliteModule === undefined) sqliteModule = await import('node:sqlite')
   return sqliteModule
-}
-
-export async function nodeSqliteAvailable(): Promise<boolean> {
-  try {
-    await loadSqlite()
-    return true
-  } catch {
-    return false
-  }
 }
 
 export interface D1Adapter {
