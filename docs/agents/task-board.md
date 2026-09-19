@@ -15,6 +15,26 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
+### issue-77-footer
+
+- **Owner:** OpenCode (DeepSeek V4.1 Flash)
+- **Branch:** `feat/issue-77-footer`
+- **Brief:** `docs/agents/tasks/issue-77-footer.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/App.tsx`
+  - `packages/web/src/views/Footer.tsx` (new)
+  - `packages/web/src/views/Footer.test.tsx` (new)
+  - `packages/web/src/styles.css`
+  - `docs/agents/tasks/issue-77-footer.md` (new)
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+  - `docs/agents/decisions.md`
+  - `README.md`
+- **Notes:** Issue #77. Adds the old footer (copyright, Apache 2.0 link, PayPal
+  donate button) to every page; Patreon is dropped per the human. `styles.css`
+  overlaps a stale `revealed-panel` claim whose PR #59 is already merged.
+
 ### revealed-panel
 
 - **Owner:** Claude (Opus 4.8)
