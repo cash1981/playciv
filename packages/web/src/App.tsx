@@ -6,7 +6,7 @@
  * carry it.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { ApiError, api, storeToken, storedToken } from './lib/api.js'
 import type { PlayerDto } from './lib/api.js'
@@ -52,6 +52,7 @@ export function App(): React.JSX.Element {
   const [checking, setChecking] = useState(true)
   const [screen, setScreen] = useState<Screen>(() => screenFromPath(window.location.pathname))
   const [theme, setTheme] = useState<Theme>(() => storedTheme())
+  const lastPathRef = useRef(window.location.pathname)
 
   useEffect(() => {
     applyTheme(theme)
@@ -61,9 +62,13 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     const onPopState = () => {
       if (!confirmNavigation()) {
-        window.history.forward()
+        // The browser has already moved to the new entry by the time popstate
+        // fires. Replacing the URL avoids guessing whether the user moved
+        // backward or forward and does not trigger another popstate event.
+        window.history.pushState(null, '', lastPathRef.current)
         return
       }
+      lastPathRef.current = window.location.pathname
       setScreen(screenFromPath(window.location.pathname))
     }
     window.addEventListener('popstate', onPopState)
@@ -89,30 +94,35 @@ export function App(): React.JSX.Element {
     setPlayer(null)
     setShowLogin(false)
     window.history.replaceState(null, '', '/')
+    lastPathRef.current = '/'
     setScreen({ name: 'lobby' })
   }, [])
 
   const openGame = useCallback((gameId: string) => {
     if (!confirmNavigation()) return
     window.history.pushState(null, '', `/game/${encodeURIComponent(gameId)}`)
+    lastPathRef.current = window.location.pathname
     setScreen({ name: 'game', gameId })
   }, [])
 
   const openAdmin = useCallback(() => {
     if (!confirmNavigation()) return
     window.history.pushState(null, '', '/admin')
+    lastPathRef.current = '/admin'
     setScreen({ name: 'admin' })
   }, [])
 
   const backToGames = useCallback(() => {
     if (!confirmNavigation()) return
     window.history.replaceState(null, '', '/')
+    lastPathRef.current = '/'
     setScreen({ name: 'lobby' })
   }, [])
 
   const openHighscore = useCallback(() => {
     if (!confirmNavigation()) return
     window.history.pushState(null, '', '/highscore')
+    lastPathRef.current = '/highscore'
     setScreen({ name: 'highscore' })
   }, [])
 
@@ -126,10 +136,12 @@ export function App(): React.JSX.Element {
     } else if (path === '/faq') {
       if (!confirmNavigation()) return
       window.history.pushState(null, '', '/faq')
+      lastPathRef.current = '/faq'
       setScreen({ name: 'faq' })
     } else {
       if (!confirmNavigation()) return
       window.history.pushState(null, '', path)
+      lastPathRef.current = window.location.pathname
       setScreen({ name: 'lobby' })
     }
   }, [backToGames, openAdmin, openHighscore])
