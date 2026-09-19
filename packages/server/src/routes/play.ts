@@ -6,6 +6,7 @@
 import type { PlayerStats, SheetName } from '@civ/engine'
 import {
   ALL_WONDERS,
+  CULTURE_CARD,
   chooseSocialPolicy,
   chooseTech,
   discardBarbarians,
@@ -71,21 +72,23 @@ function parseSheetName(
   return sheetName
 }
 
-/** Java: `Culture Card` is one loot pool containing all three culture decks. */
+/** Java: `Culture Card` is one loot pool; every other valid sheet stays a singleton. */
 function parseLootSheets(
   c: Context<{ Variables: Variables }>,
   raw: string | undefined,
 ): ReadonlySet<SheetName> | Response {
-  switch (raw) {
-    case 'CULTURE_CARD':
-      return new Set<SheetName>(['CULTURE_1', 'CULTURE_2', 'CULTURE_3'])
-    case 'HUTS':
-      return new Set<SheetName>(['HUTS'])
-    case 'VILLAGES':
-      return new Set<SheetName>(['VILLAGES'])
-    default:
-      return sendError(c, 400, 'BAD_REQUEST', 'Loot category must be CULTURE_CARD, HUTS or VILLAGES')
+  if (raw === 'CULTURE_CARD' || raw === 'Culture Card') {
+    return CULTURE_CARD
   }
+
+  if (raw === undefined) {
+    return sendError(c, 404, 'ITEM_NOT_FOUND', 'Could not find item')
+  }
+  const sheetName = findSheetName(raw)
+  if (sheetName === undefined) {
+    return sendError(c, 404, 'ITEM_NOT_FOUND', `Could not find item ${raw}`)
+  }
+  return new Set([sheetName])
 }
 
 function parsePhase(

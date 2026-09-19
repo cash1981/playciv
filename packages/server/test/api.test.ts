@@ -580,27 +580,63 @@ describe('draws', () => {
 })
 
 describe('loot', () => {
-  it('maps Culture Card to the combined Culture I, II and III pool', async () => {
-    // Java: `DrawResourceTest.testLooting` sends the literal Culture Card,
-    // which `DrawResource.loot` maps to `SheetName.CULTURE_CARD`.
-    const { gameId, starter } = await startedGame('Loot culture')
+  it.each(['CULTURE_1', 'CULTURE_2', 'CULTURE_3'] as const)(
+    'maps Culture Card to a combined pool containing %s',
+    async (sheetName) => {
+      // Java: `DrawResourceTest.testLooting` sends the literal Culture Card,
+      // which `DrawResource.loot` maps to `SheetName.CULTURE_CARD`.
+      const { gameId, starter } = await startedGame(`Loot combined ${sheetName}`)
+      const before = await repo.findGame(gameId)
+      const from = before?.players.find((player) => player.yourTurn)
+      const to = before?.players.find((player) => !player.yourTurn)
+      expect(from).toBeDefined()
+      expect(to).toBeDefined()
+
+      const drawn = await inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/draw/${sheetName}`,
+        headers: bearer(starter),
+        payload: {},
+      })
+      expect(drawn.status).toBe(200)
+
+      const looted = await inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/loot/CULTURE_CARD/${to?.playerId ?? ''}`,
+        headers: bearer(starter),
+        payload: {},
+      })
+      expect(looted.status).toBe(200)
+
+      const after = await repo.findGame(gameId)
+      const fromAfter = after?.players.find((player) => player.playerId === from?.playerId)
+      const toAfter = after?.players.find((player) => player.playerId === to?.playerId)
+      expect(fromAfter?.items.filter((item) => item.sheetName === sheetName)).toHaveLength(0)
+      expect(toAfter?.items.filter((item) => item.sheetName === sheetName)).toHaveLength(1)
+    },
+  )
+
+  it('accepts explicit culture sheets as singleton loot pools', async () => {
+    const { gameId, starter } = await startedGame('Loot explicit culture')
     const before = await repo.findGame(gameId)
     const from = before?.players.find((player) => player.yourTurn)
     const to = before?.players.find((player) => !player.yourTurn)
     expect(from).toBeDefined()
     expect(to).toBeDefined()
 
-    const drawn = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/draw/CULTURE_2`,
-      headers: bearer(starter),
-      payload: {},
-    })
-    expect(drawn.status).toBe(200)
+    for (const sheetName of ['CULTURE_1', 'CULTURE_2', 'CULTURE_3'] as const) {
+      const drawn = await inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/draw/${sheetName}`,
+        headers: bearer(starter),
+        payload: {},
+      })
+      expect(drawn.status).toBe(200)
+    }
 
     const looted = await inject(app, {
       method: 'POST',
-      url: `/api/games/${gameId}/loot/CULTURE_CARD/${to?.playerId ?? ''}`,
+      url: `/api/games/${gameId}/loot/CULTURE_1/${to?.playerId ?? ''}`,
       headers: bearer(starter),
       payload: {},
     })
@@ -609,8 +645,57 @@ describe('loot', () => {
     const after = await repo.findGame(gameId)
     const fromAfter = after?.players.find((player) => player.playerId === from?.playerId)
     const toAfter = after?.players.find((player) => player.playerId === to?.playerId)
-    expect(fromAfter?.items.filter((item) => item.sheetName === 'CULTURE_2')).toHaveLength(0)
-    expect(toAfter?.items.filter((item) => item.sheetName === 'CULTURE_2')).toHaveLength(1)
+    expect(fromAfter?.items.filter((item) => item.sheetName === 'CULTURE_1')).toHaveLength(0)
+    expect(fromAfter?.items.filter((item) => item.sheetName === 'CULTURE_2')).toHaveLength(1)
+    expect(fromAfter?.items.filter((item) => item.sheetName === 'CULTURE_3')).toHaveLength(1)
+    expect(toAfter?.items.filter((item) => item.sheetName === 'CULTURE_1')).toHaveLength(1)
+    expect(toAfter?.items.filter((item) => item.sheetName === 'CULTURE_2')).toHaveLength(0)
+    expect(toAfter?.items.filter((item) => item.sheetName === 'CULTURE_3')).toHaveLength(0)
+  })
+
+  it('passes a valid non-lootable sheet to the reducer', async () => {
+    // Java: `DrawResourceTest.testThatYouCannotLootInvalidItem` expects 406.
+    const { gameId, starter } = await startedGame('Loot artillery')
+    const before = await repo.findGame(gameId)
+    const to = before?.players.find((player) => !player.yourTurn)
+    expect(to).toBeDefined()
+
+    const drawn = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/ARTILLERY`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(drawn.status).toBe(200)
+
+    const looted = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/loot/ARTILLERY/${to?.playerId ?? ''}`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(looted.status).toBe(406)
+    expect(await looted.json()).toMatchObject({ error: 'ITEM_NOT_LOOTABLE' })
+  })
+
+  it('returns 404 for an unknown loot sheet', async () => {
+    // Java: `DrawResourceTest.testThatYouCannotDrawInvalidSheet` expects 404.
+    const { gameId, starter } = await startedGame('Loot unknown')
+    const before = await repo.findGame(gameId)
+    const to = before?.players.find((player) => !player.yourTurn)
+    expect(to).toBeDefined()
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/loot/foobar/${to?.playerId ?? ''}`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(response.status).toBe(404)
+    expect(await response.json()).toEqual({
+      error: 'ITEM_NOT_FOUND',
+      message: 'Could not find item foobar',
+    })
   })
 
   it('keeps Huts and Villages as separate loot pools', async () => {
