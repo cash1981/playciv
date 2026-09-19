@@ -83,7 +83,7 @@ export function updateTurn(state: GameState, input: UpdateTurnInput): ActionResu
   }
 
   const logType = PHASE_LOG_TYPE[input.phase]
-  const texts = createLogTexts(logType, player.username, null, 0)
+  const texts = createLogTexts(logType, player.username, null, 0, input.turnNumber)
   return ok(
     appendLog(next, { username: player.username, playerId: player.playerId, logType, ...texts }),
   )

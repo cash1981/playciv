@@ -31,6 +31,13 @@ describe('updateTurn', () => {
     { phase: 'MOVEMENT', order: 'Movement: A6 -> A5' },
     { phase: 'RESEARCH', order: 'Research: Done' },
   ]
+  const phaseNames: Readonly<Record<TurnPhase, string>> = {
+    SOT: 'start of turn',
+    TRADE: 'trade',
+    CM: 'city management',
+    MOVEMENT: 'movement',
+    RESEARCH: 'research',
+  }
 
   for (const { phase, order } of cases) {
     it(`${phase} is stored on the turn and in publicTurns`, () => {
@@ -47,6 +54,7 @@ describe('updateTurn', () => {
       expect(Object.keys(state.publicTurns)).toEqual(['1cash1981'])
       expect(state.publicTurns['1cash1981']?.orders[phase]).toBe(order)
       expect(state.log.at(-1)?.logType).toBe(phase)
+      expect(state.log.at(-1)?.publicLog).toBe(`Turn 1 - cash1981 has updated ${phaseNames[phase]} phase`)
     })
   }
 

@@ -1,0 +1,251 @@
+.turn-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0.7rem 0;
+  padding-bottom: 0.2rem;
+  overflow-x: auto;
+}
+
+.turn-tab {
+  flex: 0 0 auto;
+  min-width: 7rem;
+  border-bottom: 3px solid var(--turn-tab-color, var(--line));
+  border-radius: var(--radius) var(--radius) 0 0;
+  color: var(--text);
+}
+
+.turn-tab[aria-selected='true'] {
+  background: color-mix(in srgb, var(--turn-tab-color, var(--accent)) 24%, var(--panel-2));
+  border-color: var(--turn-tab-color, var(--accent));
+  font-weight: 600;
+}
+
+.turn-tab.private-log-tab {
+  --turn-tab-color: var(--accent);
+}
+
+.turn-toolbar {
+  margin-bottom: 0.8rem;
+}
+
+.turn-save-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0.8rem 0 0.35rem;
+}
+
+.turn-save-all {
+  min-width: 10rem;
+}
+
+.turn-unsaved-summary,
+.turn-save-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.turn-save-hint {
+  color: var(--bad);
+}
+
+.turn-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.turn-toolbar select {
+  width: auto;
+  margin: 0;
+}
+
+.turn-phase {
+  margin-top: 0.8rem;
+  padding: 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.turn-phase[data-save-status='unsaved'] {
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.turn-phase[data-save-status='saving'] {
+  border-color: var(--accent);
+}
+
+.turn-phase[data-save-status='failed'] {
+  border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+
+.turn-phase-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.turn-phase-heading h3 {
+  margin: 0;
+}
+
+.turn-save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.turn-save-status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.turn-save-status-unsaved {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.turn-save-status-unsaved .turn-save-status-dot {
+  background: var(--warn);
+}
+
+.turn-save-status-saving .turn-save-status-dot {
+  background: var(--accent);
+  animation: turn-save-pulse 0.9s ease-in-out infinite alternate;
+}
+
+.turn-save-status-saved .turn-save-status-dot {
+  background: var(--good);
+}
+
+.turn-save-status-failed {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.turn-save-status-failed .turn-save-status-dot {
+  background: var(--bad);
+}
+
+@keyframes turn-save-pulse {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+.turn-phase-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.35rem;
+}
+
+.turn-markdown {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.turn-markdown .milkdown {
+  --crepe-color-background: var(--bg);
+  --crepe-color-on-background: var(--text);
+  --crepe-color-surface: var(--panel-2);
+  --crepe-color-surface-low: var(--panel);
+  --crepe-color-on-surface: var(--text);
+  --crepe-color-on-surface-variant: var(--muted);
+  --crepe-color-outline: var(--line);
+  --crepe-color-primary: var(--accent);
+  --crepe-color-secondary: var(--line);
+  --crepe-color-on-secondary: var(--text);
+  --crepe-color-inverse: var(--text);
+  --crepe-color-on-inverse: var(--bg);
+  --crepe-color-inline-code: var(--bad);
+  --crepe-color-error: var(--bad);
+  --crepe-color-hover: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
+  --crepe-color-selected: color-mix(in srgb, var(--accent) 22%, var(--panel-2));
+  --crepe-color-inline-area: var(--line);
+  --crepe-base-font-size: 15px;
+  --crepe-font-default: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  min-height: 8rem;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.turn-markdown .milkdown .ProseMirror {
+  min-height: 6rem;
+  padding: 0.65rem 0.8rem;
+}
+
+.turn-markdown-fallback {
+  min-height: 8rem;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  resize: vertical;
+}
+
+.editor-status {
+  padding: 0.35rem 0.8rem;
+  font-size: 0.8rem;
+}
+
+.turn-markdown[data-readonly='true'] .milkdown-top-bar {
+  display: none;
+}
+
+.turn-markdown[data-readonly='true'] {
+  background: var(--panel-2);
+}
+
+.turn-markdown[data-readonly='true'] .milkdown,
+.turn-markdown[data-readonly='true'] .milkdown .ProseMirror {
+  background: var(--panel-2);
+}
+
+.private-log-copy {
+  margin: 0 0 0.7rem;
+}
+
+.private-log-heading {
+  margin-top: 0;
+}
+
+@media (max-width: 600px) {
+  .turn-tab {
+    min-width: 6rem;
+  }
+
+  .turn-toolbar {
+    align-items: stretch;
+  }
+
+  .turn-toolbar .turn-toolbar-spacer {
+    display: none;
+  }
+
+  .turn-toolbar > button {
+    flex: 1 1 auto;
+  }
+
+  .turn-save-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .turn-save-all {
+    width: 100%;
+  }
+
+  .turn-phase-actions .small {
+    width: 100%;
+  }
+}

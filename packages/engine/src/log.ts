@@ -51,6 +51,7 @@ export function createLogTexts(
   username: string,
   item: Item | null,
   itemNumber: number,
+  turnNumber?: number,
 ): LogTexts {
   const itemNumberText = `. Item number #${itemNumber}`
   const uniqueText = uniqueItemNumber(username, itemNumber)
@@ -112,17 +113,17 @@ export function createLogTexts(
       return { privateLog: text, publicLog: text }
     }
     case 'SOT':
-      return phase(username, 'start of turn')
+      return phase(username, 'start of turn', turnNumber)
     case 'SETUP':
-      return phase(username, 'setup')
+      return phase(username, 'setup', turnNumber)
     case 'TRADE':
-      return phase(username, 'trade')
+      return phase(username, 'trade', turnNumber)
     case 'CM':
-      return phase(username, 'city management')
+      return phase(username, 'city management', turnNumber)
     case 'MOVEMENT':
-      return phase(username, 'movement')
+      return phase(username, 'movement', turnNumber)
     case 'RESEARCH':
-      return phase(username, 'research')
+      return phase(username, 'research', turnNumber)
     // Java set no text for these in createAndSetLog
     case 'SHUFFLE':
     case 'WITHDRAW':
@@ -132,8 +133,9 @@ export function createLogTexts(
   }
 }
 
-function phase(username: string, name: string): LogTexts {
-  const text = `${username} has updated ${name} phase`
+function phase(username: string, name: string, turnNumber?: number): LogTexts {
+  const prefix = turnNumber === undefined ? '' : `Turn ${turnNumber} - `
+  const text = `${prefix}${username} has updated ${name} phase`
   return { privateLog: text, publicLog: text }
 }
 

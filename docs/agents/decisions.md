@@ -644,3 +644,25 @@ cursor query. Future platform spikes must exercise a real `find().toArray()`.
 - **`rev` counter is game-global.** Every write to the game state increments `rev`, not just arena writes. This means a 409 can occur on arena actions even when the arena itself has not changed. The client reloads the view on 409 and shows an error; the user retries.
 - **Barbarians + existing barbarian hand.** If the player to the attacker's left already holds undiscarded barbarians, `initiateBattle` with `opponentId: 'barbarians'` will return `BARBARIANS_NOT_DISCARDED`. Known limitation — the initiating player must coordinate with the barbarian controller. Not an error in the old system (the feature was never implemented).
 - **Arena permissions are split on purpose (issue #65).** `killArenaUnit` and `endBattleTurn` (and `endBattleAction`) reject non-participants with `NOT_IN_THIS_BATTLE`. `setArenaUnitStat` deliberately stays open to any game member, since attack/health are manually tracked and spectators may need to correct a typo on either side's behalf. The UI mirrors this: "End turn"/"End battle" and the per-unit "Kill" button are hidden for non-participants; the attack/health inputs are not.
+
+---
+
+## 2026-09-19 — Turn orders, private planning, and replay scope (issue #69)
+
+**Decision.** Published turn orders are browsed through one username tab per
+player. Only the signed-in player's unlocked turn is editable; every opponent
+tab is read-only. The five phase fields use WYSIWYG editors but continue storing
+Markdown. A final **Private log** tab reuses the existing player-private
+`gamenote` field and explicit `saveNote` action.
+
+**Why.** The owner wants published orders to be easy to scan per player while
+keeping future plans invisible until deliberately published. `gamenote` already
+has the required private, unlogged semantics, so it is the safe place for
+free-form planning without inventing a second persistence model.
+
+**Consequences.** Private-log saves never create public game-log entries, and
+another player's note never enters the client projection. Draft orders for
+future turns remain deferred until there is an explicit publish model. Global
+revision storage and whole-game Back / Forward / Live replay are tracked in
+GitHub issue #70 and are not part of issue #69; the existing board-only replay
+controls remain unchanged.
