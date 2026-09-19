@@ -5,10 +5,10 @@
  * plus `chat`. The log now lives inside `GameState`, so what remains is
  * players, games and chat.
  *
- * The interface exists to keep Mongo out of the routes. The only implementation
- * today is `JsonFileRepository`, which holds everything in memory and mirrors
- * it to a JSON file. A Mongo implementation can sit beside it without the
- * routes changing.
+ * The interface exists to keep the database out of the routes. There are two
+ * implementations: `JsonFileRepository`, which holds everything in memory and
+ * mirrors it to a JSON file (local development), and `D1Repository`, which runs
+ * against Cloudflare D1 (production, on the Worker).
  */
 
 import type { FinishedGame, GameState } from '@civ/engine'
@@ -118,9 +118,9 @@ export interface Repository {
 
   /**
    * Finished, won games as a source for `highscore()`, roster included —
-   * `attempts` needs to know who lost, not just who won. `MongoRepository`
-   * reads this from both the old `pbf` collection and the new `game_state`
-   * one; `JsonFileRepository` derives it from `allGames()`.
+   * `attempts` needs to know who lost, not just who won. `D1Repository` reads
+   * this from both the migrated old `pbf` table and the live `game` one;
+   * `JsonFileRepository` derives it from `allGames()`.
    */
   finishedGamesForHighscore(): Promise<readonly FinishedGame[]>
 
