@@ -328,6 +328,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
           readOnly={replaying}
           run={run}
           reloadCount={reloadCount}
+          historical={historical}
         />
         <ChatPanel
           gameId={gameId}
@@ -335,7 +336,6 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
           run={run}
           player={player}
           reloadCount={reloadCount}
-          historical={historical}
         />
       </div>
     </>
