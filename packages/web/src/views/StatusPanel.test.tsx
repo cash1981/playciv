@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { DEFAULT_PLAYER_STATS, GOVERNMENTS } from '@civ/engine'
+import { DEFAULT_PLAYER_STATS, GOVERNMENT_CARDS, GOVERNMENTS } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
@@ -43,7 +43,7 @@ const run: Run = async (action) => {
 }
 
 describe('StatusPanel governments', () => {
-  it('shows every government in each dropdown and every reference card', () => {
+  it('shows every government in each dropdown and every reference card with all effects', () => {
     render(
       <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
     )
@@ -51,8 +51,15 @@ describe('StatusPanel governments', () => {
     const alice = screen.getByRole('combobox', { name: 'Alice government' })
     expect((alice as HTMLSelectElement).value).toBe('Despotism')
     expect(alice.querySelectorAll('option')).toHaveLength(GOVERNMENTS.length)
-    for (const government of GOVERNMENTS) {
-      expect(screen.getByRole('heading', { name: government, hidden: true })).toBeTruthy()
+    const expectedEffects = GOVERNMENT_CARDS.flatMap((card) => card.effects)
+    expect(document.querySelectorAll('.government-card p')).toHaveLength(expectedEffects.length)
+
+    for (const card of GOVERNMENT_CARDS) {
+      expect(card.effects.length).toBeGreaterThan(0)
+      expect(screen.getByRole('heading', { name: card.government, hidden: true })).toBeTruthy()
+      for (const effect of card.effects) {
+        expect(screen.getByText(effect, { selector: '.government-card p' })).toBeTruthy()
+      }
     }
   })
 

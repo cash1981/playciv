@@ -92,6 +92,7 @@ are pictured in `Civilization/WaW/government.jpg`.
 - `packages/server/src/errors.ts`
 - `packages/server/test/api.test.ts`
 - `packages/web/src/lib/api.ts`
+- `packages/web/src/views/GameView.tsx`
 - `packages/web/src/views/StatusPanel.tsx`
 - `packages/web/src/views/StatusPanel.test.tsx`
 - `packages/web/src/styles.css`
