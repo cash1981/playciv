@@ -457,9 +457,9 @@ mail). The new-game broadcast to every account is kept but behind
 - **Highscores and tournaments** — `GameAction.getCivHighscore`,
   `getPlayerHighScore`, `TournamentAction`. They query across games and need a
   proper data layer.
-- **Email notification** — `email/SendEmail`, plus `/newpassword` and
-  `/verify/{playerId}` in `AuthResource`. Java started a raw `new Thread(...)`
-  per notification.
+- **Password email** — `/newpassword` and `/verify/{playerId}` in `AuthResource`.
+  The mail service now exists (issue #30), but these two routes are a separate
+  issue.
 - **`AdminAction`** — swap a user in a game, delete games, bulk mail.
 - **Real time.** The client refetches after every action; there is no websocket.
   `todo.txt` in old-civ-rest wanted one for chat.
