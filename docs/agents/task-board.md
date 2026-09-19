@@ -15,23 +15,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
-### issue-43-governments-card-art
-
-- **Owner:** Codex
-- **Branch:** `feat/issue-43-governments`
-- **Brief:** `docs/agents/tasks/issue-43-governments.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `docs/agents/tasks/issue-43-governments.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`
-  - `packages/web/public/governments/`
-  - `packages/web/src/views/StatusPanel.tsx`
-  - `packages/web/src/views/StatusPanel.test.tsx`
-  - `packages/web/src/styles.css`
-- **Notes:** Follow-up requested by the human: use the supplied WaW government
-  card images alongside the accessible text instead of the synthetic card box.
-
 ### revealed-panel
 
 - **Owner:** Claude (Opus 4.8)
