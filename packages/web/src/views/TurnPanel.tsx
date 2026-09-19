@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, KeyboardEvent } from 'react'
 
 import { TURN_PHASES, TURN_PHASE_LABEL } from '@civ/engine'
 import type { PlayerTurn, TurnPhase } from '@civ/engine'
@@ -16,6 +16,7 @@ import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
+import type { MarkdownEditorComponent, MarkdownEditorHandle } from './MarkdownEditor.js'
 import './TurnPanel.css'
 
 interface Props {
@@ -52,7 +53,15 @@ interface WorkspaceProps {
   readonly onTurnNumberChange: (turnNumber: number) => void
   readonly onNewTurn: () => void
   readonly onPhaseChange: (phase: TurnPhase, markdown: string) => void
+  readonly tabPanelId: string
+  readonly labelledBy: string
+  readonly editorComponent?: MarkdownEditorComponent
 }
+
+const playerTabId = (index: number): string => `turn-orders-player-tab-${index}`
+const playerPanelId = (index: number): string => `turn-orders-player-panel-${index}`
+const privateTabId = 'turn-orders-private-tab'
+const privatePanelId = 'turn-orders-private-panel'
 
 const emptyOrders = (): Record<TurnPhase, string> => ({
   SOT: '',
@@ -84,9 +93,27 @@ export function TurnTabs({
   onSelectPlayer,
   onSelectPrivateLog,
 }: TurnTabsProps): React.JSX.Element {
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    const tabs = Array.from(
+      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [],
+    )
+    const currentIndex = tabs.indexOf(event.currentTarget)
+    if (currentIndex < 0 || tabs.length === 0) return
+    const nextIndex =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? tabs.length - 1
+          : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+    event.preventDefault()
+    tabs[nextIndex]?.focus()
+    tabs[nextIndex]?.click()
+  }
+
   return (
     <div className="turn-tabs" role="tablist" aria-label="Turn orders by player">
-      {players.map((player) => {
+      {players.map((player, index) => {
         const color = player.color?.toLowerCase() ?? 'var(--line)'
         const style = { '--turn-tab-color': color } as CSSProperties
         const active = !privateLogSelected && player.username === selectedUsername
@@ -95,10 +122,14 @@ export function TurnTabs({
             type="button"
             role="tab"
             aria-selected={active}
+            aria-controls={playerPanelId(index)}
+            id={playerTabId(index)}
+            tabIndex={active ? 0 : -1}
             className="turn-tab"
             style={style}
             key={player.username}
             onClick={() => onSelectPlayer(player)}
+            onKeyDown={handleKeyDown}
           >
             {player.username}
           </button>
@@ -109,8 +140,12 @@ export function TurnTabs({
           type="button"
           role="tab"
           aria-selected={privateLogSelected}
+          aria-controls={privatePanelId}
+          id={privateTabId}
+          tabIndex={privateLogSelected ? 0 : -1}
           className="turn-tab private-log-tab"
           onClick={onSelectPrivateLog}
+          onKeyDown={handleKeyDown}
         >
           Private log
         </button>
@@ -132,12 +167,27 @@ export function TurnOrderWorkspace({
   onTurnNumberChange,
   onNewTurn,
   onPhaseChange,
+  tabPanelId,
+  labelledBy,
+  editorComponent: EditorComponent = MarkdownEditor,
 }: WorkspaceProps): React.JSX.Element {
   const locked = current?.disabled === true
   const editable = player.own && !locked
+  const editorRefs = useRef<Record<TurnPhase, MarkdownEditorHandle | null>>({
+    SOT: null,
+    TRADE: null,
+    CM: null,
+    MOVEMENT: null,
+    RESEARCH: null,
+  })
 
   return (
-    <div className="turn-workspace">
+    <div
+      className="turn-workspace"
+      role="tabpanel"
+      id={tabPanelId}
+      aria-labelledby={labelledBy}
+    >
       <div className="row turn-toolbar">
         <label>
           Turn
@@ -181,7 +231,11 @@ export function TurnOrderWorkspace({
           <div className="turn-phase-heading">
             <h3>{TURN_PHASE_LABEL[phase]}</h3>
           </div>
-          <MarkdownEditor
+          <EditorComponent
+            key={`${player.username}:${turnNumber}:${phase}`}
+            ref={(handle) => {
+              editorRefs.current[phase] = handle
+            }}
             value={values[phase]}
             onChange={(markdown) => onPhaseChange(phase, markdown)}
             readOnly={!editable}
@@ -194,9 +248,11 @@ export function TurnOrderWorkspace({
                 type="button"
                 className="small"
                 disabled={busy || locked}
-                onClick={() =>
-                  void run(() => api.updateTurn(gameId, turnNumber, phase, values[phase]))
-                }
+                onClick={() => {
+                  const submitted = editorRefs.current[phase]?.getMarkdown() ?? values[phase]
+                  onPhaseChange(phase, submitted)
+                  void run(() => api.updateTurn(gameId, turnNumber, phase, submitted))
+                }}
               >
                 Save {TURN_PHASE_LABEL[phase]}
               </button>
@@ -215,7 +271,10 @@ interface PrivateLogWorkspaceProps {
   readonly note: string
   readonly dirty: boolean
   readonly onChange: (markdown: string) => void
-  readonly onSaved: () => void
+  readonly onSaved: (submitted: string) => void
+  readonly tabPanelId: string
+  readonly labelledBy: string
+  readonly editorComponent?: MarkdownEditorComponent
 }
 
 /** The viewer's existing unlogged `gamenote`, kept separate from public orders. */
@@ -227,13 +286,20 @@ export function PrivateLogWorkspace({
   dirty,
   onChange,
   onSaved,
+  tabPanelId,
+  labelledBy,
+  editorComponent: EditorComponent = MarkdownEditor,
 }: PrivateLogWorkspaceProps): React.JSX.Element {
+  const editorRef = useRef<MarkdownEditorHandle>(null)
+
   return (
-    <div role="tabpanel">
+    <div role="tabpanel" id={tabPanelId} aria-labelledby={labelledBy}>
       <p className="muted private-log-copy">
         Only you can see this planning space. Saving it does not add an entry to the game log.
       </p>
-      <MarkdownEditor
+      <EditorComponent
+        key="private-log"
+        ref={editorRef}
         value={note}
         onChange={onChange}
         readOnly={false}
@@ -245,13 +311,17 @@ export function PrivateLogWorkspace({
           type="button"
           className="small"
           disabled={busy || !dirty}
-          onClick={() =>
+          onClick={() => {
+            const submitted = editorRef.current?.getMarkdown() ?? note
+            onChange(submitted)
             void run(async () => {
-              const nextView = await api.saveNote(gameId, note)
-              onSaved()
+              const nextView = await api.saveNote(gameId, submitted)
+              const latest = editorRef.current?.getMarkdown() ?? submitted
+              if (latest !== submitted) onChange(latest)
+              onSaved(submitted)
               return nextView
             })
-          }
+          }}
         >
           Save private log
         </button>
@@ -270,6 +340,7 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
   const [privateNote, setPrivateNote] = useState('')
   const [privateNoteDirty, setPrivateNoteDirty] = useState(false)
   const privateNoteDirtyRef = useRef(false)
+  const privateNoteRef = useRef('')
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -280,7 +351,11 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
       ])
       setView(nextView)
       setPublicTurns(nextPublicTurns)
-      if (!privateNoteDirtyRef.current) setPrivateNote(nextView.you?.gamenote ?? '')
+      if (!privateNoteDirtyRef.current) {
+        const loadedNote = nextView.you?.gamenote ?? ''
+        privateNoteRef.current = loadedNote
+        setPrivateNote(loadedNote)
+      }
       setLoadError(null)
     } catch (caught) {
       setLoadError(errorMessage(caught))
@@ -336,6 +411,7 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
 
   const selectedPlayer =
     players.find((player) => player.username === selectedUsername) ?? players[0]
+  const selectedPlayerIndex = selectedPlayer === undefined ? -1 : players.indexOf(selectedPlayer)
   const selectedTurns =
     selectedPlayer === undefined || view === null
       ? []
@@ -372,6 +448,7 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
   }
 
   const setPrivateNoteValue = (markdown: string): void => {
+    privateNoteRef.current = markdown
     privateNoteDirtyRef.current = true
     setPrivateNoteDirty(true)
     setPrivateNote(markdown)
@@ -401,36 +478,39 @@ export function TurnPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.
               note={privateNote}
               dirty={privateNoteDirty}
               onChange={setPrivateNoteValue}
-              onSaved={() => {
+              onSaved={(submitted) => {
+                if (privateNoteRef.current !== submitted) return
                 privateNoteDirtyRef.current = false
                 setPrivateNoteDirty(false)
               }}
+              tabPanelId={privatePanelId}
+              labelledBy={privateTabId}
             />
           ) : selectedPlayer !== undefined ? (
-            <div role="tabpanel">
-              <TurnOrderWorkspace
-                gameId={gameId}
-                busy={busy}
-                run={run}
-                player={selectedPlayer}
-                turnNumber={turnNumber}
-                turnNumbers={turnNumbers}
-                current={current}
-                values={values}
-                onTurnNumberChange={setTurnNumber}
-                onNewTurn={() =>
-                  setTurnNumber(
-                    Math.max(turnNumber, ...selectedTurns.map((turn) => turn.turnNumber)) + 1,
-                  )
-                }
-                onPhaseChange={(phase, markdown) =>
-                  setDrafts((existing) => ({
-                    ...existing,
-                    [`${turnNumber}:${phase}`]: markdown,
-                  }))
-                }
-              />
-            </div>
+            <TurnOrderWorkspace
+              gameId={gameId}
+              busy={busy}
+              run={run}
+              player={selectedPlayer}
+              turnNumber={turnNumber}
+              turnNumbers={turnNumbers}
+              current={current}
+              values={values}
+              onTurnNumberChange={setTurnNumber}
+              onNewTurn={() =>
+                setTurnNumber(
+                  Math.max(turnNumber, ...selectedTurns.map((turn) => turn.turnNumber)) + 1,
+                )
+              }
+              onPhaseChange={(phase, markdown) =>
+                setDrafts((existing) => ({
+                  ...existing,
+                  [`${turnNumber}:${phase}`]: markdown,
+                }))
+              }
+              tabPanelId={playerPanelId(selectedPlayerIndex)}
+              labelledBy={playerTabId(selectedPlayerIndex)}
+            />
           ) : null}
         </>
       )}
