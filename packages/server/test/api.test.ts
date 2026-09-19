@@ -574,6 +574,180 @@ describe('hidden information over HTTP', () => {
   })
 })
 
+describe('global game revisions', () => {
+  it('stores creation and exactly one revision for each shared mutation, but not notes or chat', async () => {
+    const creator = await register('revision-owner')
+    const gameId = await createGame(creator, 'Revision ledger', 2)
+
+    const initial = await repo.listGameRevisions(gameId)
+    expect(initial.map((entry) => entry.revision)).toEqual([0])
+
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/note`,
+      headers: bearer(creator),
+      payload: { note: 'private planning only' },
+    })
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/chat`,
+      headers: bearer(creator),
+      payload: { message: 'outside history' },
+    })
+    expect(await repo.listGameRevisions(gameId)).toHaveLength(1)
+
+    const other = await register('revision-other')
+    const joined = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/join`,
+      headers: bearer(other),
+      payload: {},
+    })
+    expect(joined.status).toBe(200)
+
+    const revisions = await repo.listGameRevisions(gameId)
+    expect(revisions).toHaveLength(2)
+    expect(revisions[1]?.revision).toBe((await repo.findGame(gameId))?.rev)
+    expect(revisions[1]?.state.players).toHaveLength(2)
+  })
+
+  it('authorizes against current membership and projects each historical viewer separately', async () => {
+    const creator = await register('history-alice')
+    const gameId = await createGame(creator, 'Private history', 2)
+    const other = await register('history-bob')
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/join`,
+      headers: bearer(other),
+      payload: {},
+    })
+    const outsider = await register('history-mallory')
+    const state = await repo.findGame(gameId)
+    const owner = state?.players.find((entry) => entry.yourTurn)
+    expect(owner).toBeDefined()
+    const ownerToken = owner?.username === 'history-alice' ? creator : other
+    const viewerToken = ownerToken === creator ? other : creator
+
+    const drawn = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/CULTURE_1`,
+      headers: bearer(ownerToken),
+      payload: {},
+    })
+    expect(drawn.status).toBe(200)
+    const afterDraw = await repo.findGame(gameId)
+    const secretCard = afterDraw?.players.find((entry) => entry.yourTurn)?.items[0]
+    const secretLog = afterDraw?.log.find((entry) => entry.item?.id === secretCard?.id)?.privateLog
+    expect(secretCard).toBeDefined()
+    expect(secretLog).toBeTruthy()
+
+    const availableTechs = await inject(app, {
+      url: `/api/games/${gameId}/techs/available`,
+      headers: bearer(ownerToken),
+    })
+    const secretTech = (await availableTechs.json<{ name: string }[]>())[0]?.name
+    expect(secretTech).toBeDefined()
+    expect((await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/techs/choose`,
+      headers: bearer(ownerToken),
+      payload: { name: secretTech },
+    })).status).toBe(200)
+    const policies = await inject(app, {
+      url: `/api/games/${gameId}/socialpolicies`,
+      headers: bearer(ownerToken),
+    })
+    const secretPolicy = (await policies.json<{ name: string }[]>())[0]?.name
+    expect(secretPolicy).toBeDefined()
+    expect((await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/socialpolicy/choose`,
+      headers: bearer(ownerToken),
+      payload: { name: secretPolicy },
+    })).status).toBe(200)
+    const withSecrets = await repo.findGame(gameId)
+    const secretOwner = withSecrets?.players.find((entry) => entry.playerId === owner?.playerId)
+    const secretTechId = secretOwner?.techsChosen[0]?.id
+    const secretPolicyId = secretOwner?.socialPolicies[0]?.id
+    expect(secretTechId).toBeDefined()
+    expect(secretPolicyId).toBeDefined()
+
+    const list = await inject(app, {
+      url: `/api/games/${gameId}/revisions`,
+      headers: bearer(ownerToken),
+    })
+    expect(list.status).toBe(200)
+    expect(list.body).not.toContain('"state"')
+    expect(list.body).not.toContain('privateDescriptions')
+    const summaries = await list.json<{ revision: number }[]>()
+    const latest = summaries.at(-1)?.revision
+    expect(latest).toBeDefined()
+
+    const own = await inject(app, {
+      url: `/api/games/${gameId}/revisions/${latest}`,
+      headers: bearer(ownerToken),
+    })
+    const otherView = await inject(app, {
+      url: `/api/games/${gameId}/revisions/${latest}`,
+      headers: bearer(viewerToken),
+    })
+    expect(own.status).toBe(200)
+    expect(otherView.status).toBe(200)
+    expect(own.body).toContain(secretCard?.id as string)
+    expect(own.body).toContain(secretLog as string)
+    expect(otherView.body).not.toContain(secretCard?.id as string)
+    expect(otherView.body).not.toContain(secretLog as string)
+    expect(otherView.body).not.toContain('private planning only')
+    const ownPayload = await own.json<{
+      view: { you: { techsChosen: { id: string }[]; socialPolicies: { id: string }[] } }
+    }>()
+    expect(ownPayload.view.you.techsChosen[0]?.id).toBe(secretTechId)
+    expect(ownPayload.view.you.socialPolicies[0]?.id).toBe(secretPolicyId)
+    const otherPayload = await otherView.json<{
+      view: { opponents: Record<string, unknown>[] }
+    }>()
+    const opaqueOwner = otherPayload.view.opponents.find(
+      (entry) => entry['playerId'] === owner?.playerId,
+    )
+    expect(opaqueOwner).toBeDefined()
+    expect(opaqueOwner).not.toHaveProperty('techsChosen')
+    expect(opaqueOwner).not.toHaveProperty('socialPolicies')
+
+    for (const url of [
+      `/api/games/${gameId}/revisions`,
+      `/api/games/${gameId}/revisions/${latest}`,
+    ]) {
+      const forbidden = await inject(app, { url, headers: bearer(outsider) })
+      expect(forbidden.status).toBe(403)
+    }
+  })
+
+  it('creates a reliable baseline for an older game and deletes revisions with the game', async () => {
+    const creator = await register('baseline-owner')
+    const gameId = await createGame(creator, 'Baseline game', 2)
+    const stored = await repo.findGame(gameId)
+    expect(stored).toBeDefined()
+    await repo.deleteGame(gameId)
+    await repo.saveGame({ ...stored!, rev: 7 })
+
+    const listed = await inject(app, {
+      url: `/api/games/${gameId}/revisions`,
+      headers: bearer(creator),
+    })
+    expect(listed.status).toBe(200)
+    expect((await listed.json<{ revision: number }[]>()).map((entry) => entry.revision)).toEqual([7])
+
+    const deleted = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/delete`,
+      headers: bearer(creator),
+      payload: {},
+    })
+    expect(deleted.status).toBe(204)
+    expect(await repo.listGameRevisions(gameId)).toEqual([])
+  })
+})
+
 describe('revealed and discarded items feed', () => {
   interface RevealedEntryDto {
     readonly item: { readonly id: string; readonly sheetName: string }

@@ -10,7 +10,7 @@ import { createMiddleware } from 'hono/factory'
 
 import type { TokenSigner } from './auth.js'
 import { sendEngineError, sendError } from './errors.js'
-import type { Repository, StoredPlayer } from './store/types.js'
+import type { GameRevision, Repository, StoredPlayer } from './store/types.js'
 
 export interface AppContext {
   readonly repo: Repository
@@ -84,6 +84,38 @@ export function stampLog(state: GameState, now: string): GameState {
   }
 }
 
+export function createGameRevision(
+  before: GameState | undefined,
+  state: GameState,
+  actor: StoredPlayer,
+  createdAt: string,
+  fallbackDescription: string,
+): GameRevision {
+  const previousIds = new Set(before?.log.map((entry) => entry.id) ?? [])
+  const entries = state.log.filter((entry) => !previousIds.has(entry.id))
+  const publicDescription = entries
+    .map((entry) => entry.publicLog)
+    .filter((description) => description !== '')
+    .join(' · ') || fallbackDescription
+  const privateDescriptions: Record<string, string> = {}
+  for (const entry of entries) {
+    if (entry.playerId === null || entry.privateLog === '') continue
+    privateDescriptions[entry.playerId] = [privateDescriptions[entry.playerId], entry.privateLog]
+      .filter((description): description is string => description !== undefined && description !== '')
+      .join(' · ')
+  }
+  return {
+    gameId: state.id,
+    revision: state.rev,
+    createdAt,
+    actor: { playerId: actor.id, username: actor.username },
+    publicDescription,
+    privateDescriptions,
+    logIds: entries.map((entry) => entry.id),
+    state,
+  }
+}
+
 /**
  * Requires the caller to be a player in the game before anything else runs.
  * The engine's `endTurn` deliberately lets anyone with the turn pass it on
@@ -122,6 +154,7 @@ export async function applyToGame(
   gameId: string,
   action: (state: GameState) => { ok: true; value: GameState } | { ok: false; error: EngineError },
   clientRev?: number,
+  revisionOptions: { readonly record?: boolean; readonly description?: string } = {},
 ): Promise<Response> {
   const game = await context.repo.findGame(gameId)
   if (game === undefined) {
@@ -141,9 +174,27 @@ export async function applyToGame(
   if (!result.ok) return sendEngineError(c, result.error)
 
   // Increment rev on every successful write.
-  const stamped = stampLog({ ...result.value, rev: game.rev + 1 }, new Date().toISOString())
+  const now = new Date().toISOString()
+  const stamped = stampLog({ ...result.value, rev: game.rev + 1 }, now)
 
-  await context.repo.saveGame(stamped)
+  if (revisionOptions.record === false) {
+    await context.repo.saveGame(stamped)
+  } else {
+    const actor = currentPlayer(c)
+    await context.repo.ensureGameRevision(
+      createGameRevision(undefined, game, actor, now, 'History starts here'),
+    )
+    await context.repo.saveGameWithRevision(
+      stamped,
+      createGameRevision(
+        game,
+        stamped,
+        actor,
+        now,
+        revisionOptions.description ?? 'Game state updated',
+      ),
+    )
+  }
   return c.json(toPlayerView(stamped, currentPlayer(c).id))
 }
 

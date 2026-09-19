@@ -44,6 +44,22 @@ export interface ChatMessage {
   readonly createdAt: string
 }
 
+/** One immutable full-state checkpoint. Raw snapshots never leave the repository layer. */
+export interface GameRevision {
+  readonly gameId: string
+  readonly revision: number
+  readonly createdAt: string
+  readonly actor: { readonly playerId: string; readonly username: string }
+  readonly publicDescription: string
+  readonly privateDescriptions: Readonly<Record<string, string>>
+  readonly logIds: readonly string[]
+  readonly state: GameState
+}
+
+export type GameRevisionSummary = Omit<GameRevision, 'state' | 'privateDescriptions'> & {
+  readonly privateDescription: string | null
+}
+
 export interface Repository {
   createPlayer(player: StoredPlayer): Promise<void>
   findPlayerById(id: string): Promise<StoredPlayer | undefined>
@@ -55,6 +71,12 @@ export interface Repository {
   deletePlayer(id: string): Promise<boolean>
 
   saveGame(game: GameState): Promise<void>
+  /** Saves the live game and its matching immutable checkpoint as one repository operation. */
+  saveGameWithRevision(game: GameState, revision: GameRevision): Promise<void>
+  /** Adds a baseline only when this game/revision is not already stored. */
+  ensureGameRevision(revision: GameRevision): Promise<void>
+  listGameRevisions(gameId: string): Promise<readonly GameRevision[]>
+  findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined>
   findGame(id: string): Promise<GameState | undefined>
   allGames(): Promise<readonly GameState[]>
   deleteGame(id: string): Promise<boolean>

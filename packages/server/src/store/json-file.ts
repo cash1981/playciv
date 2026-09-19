@@ -18,6 +18,7 @@ import { migrateGameState } from '@civ/engine'
 import type {
   ChatMessage,
   FinishedGame,
+  GameRevision,
   PlayerUpdate,
   Repository,
   StoredPlayer,
@@ -33,6 +34,7 @@ interface Snapshot {
   readonly players: readonly SnapshotPlayer[]
   readonly games: readonly GameState[]
   readonly chat: readonly ChatMessage[]
+  readonly revisions?: readonly GameRevision[]
 }
 
 export interface JsonFileRepositoryOptions {
@@ -45,6 +47,7 @@ export interface JsonFileRepositoryOptions {
 export class JsonFileRepository implements Repository {
   private readonly players = new Map<string, StoredPlayer>()
   private readonly games = new Map<string, GameState>()
+  private readonly revisions = new Map<string, GameRevision>()
   private chat: ChatMessage[] = []
 
   private readonly filePath: string | null
@@ -83,6 +86,10 @@ export class JsonFileRepository implements Repository {
     if (normalizedPlayers) this.scheduleWrite()
     // Games saved before a field existed must be filled in before use
     for (const game of snapshot.games) this.games.set(game.id, migrateGameState(game))
+    for (const revision of snapshot.revisions ?? []) {
+      const migrated = { ...revision, state: migrateGameState(revision.state) }
+      this.revisions.set(this.revisionKey(revision.gameId, revision.revision), migrated)
+    }
     this.chat = [...snapshot.chat]
   }
 
@@ -138,6 +145,29 @@ export class JsonFileRepository implements Repository {
     this.scheduleWrite()
   }
 
+  async saveGameWithRevision(game: GameState, revision: GameRevision): Promise<void> {
+    this.games.set(game.id, game)
+    this.revisions.set(this.revisionKey(revision.gameId, revision.revision), revision)
+    this.scheduleWrite()
+  }
+
+  async ensureGameRevision(revision: GameRevision): Promise<void> {
+    if ([...this.revisions.values()].some((entry) => entry.gameId === revision.gameId)) return
+    const key = this.revisionKey(revision.gameId, revision.revision)
+    this.revisions.set(key, revision)
+    this.scheduleWrite()
+  }
+
+  async listGameRevisions(gameId: string): Promise<readonly GameRevision[]> {
+    return [...this.revisions.values()]
+      .filter((revision) => revision.gameId === gameId)
+      .sort((left, right) => left.revision - right.revision)
+  }
+
+  async findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined> {
+    return this.revisions.get(this.revisionKey(gameId, revision))
+  }
+
   async findGame(id: string): Promise<GameState | undefined> {
     return this.games.get(id)
   }
@@ -148,7 +178,12 @@ export class JsonFileRepository implements Repository {
 
   async deleteGame(id: string): Promise<boolean> {
     const deleted = this.games.delete(id)
-    if (deleted) this.scheduleWrite()
+    if (deleted) {
+      for (const [key, revision] of this.revisions) {
+        if (revision.gameId === id) this.revisions.delete(key)
+      }
+      this.scheduleWrite()
+    }
     return deleted
   }
 
@@ -205,6 +240,7 @@ export class JsonFileRepository implements Repository {
       players: [...this.players.values()],
       games: [...this.games.values()],
       chat: this.chat,
+      revisions: [...this.revisions.values()],
     }
 
     // Serialise the writes, so two quick changes cannot overlap
@@ -217,5 +253,9 @@ export class JsonFileRepository implements Repository {
     })
 
     return this.writing
+  }
+
+  private revisionKey(gameId: string, revision: number): string {
+    return `${gameId}:${revision}`
   }
 }

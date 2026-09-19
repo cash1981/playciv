@@ -405,7 +405,14 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
   app.post('/api/games/:gameId/note', auth, async (c) => {
     const gameId = c.req.param('gameId')
     const note = optionalString(asRecord(await c.req.json().catch(() => ({}))), 'note') ?? ''
-    return applyToGame(context, c, gameId, (state) => saveNote(state, currentPlayer(c).id, note))
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) => saveNote(state, currentPlayer(c).id, note),
+      undefined,
+      { record: false },
+    )
   })
 
   /**

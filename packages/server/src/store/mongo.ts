@@ -22,6 +22,7 @@ import { migrateGameState } from '@civ/engine'
 import type {
   ChatMessage,
   FinishedGame,
+  GameRevision,
   PlayerUpdate,
   Repository,
   StoredPlayer,
@@ -65,6 +66,9 @@ const PLAYER_COLLECTION = 'player'
 const CHAT_COLLECTION = 'chat'
 const GAME_COLLECTION = 'game_state'
 const PBF_COLLECTION = 'pbf'
+const REVISION_COLLECTION = 'game_revision'
+
+type GameRevisionDoc = GameRevision & { readonly _id: string }
 
 /** Java: `Chat.getCreatedInMillis` reading a Jackson `LocalDateTime` array. */
 function isoFromLegacyCreated(created: readonly number[]): string | undefined {
@@ -81,6 +85,7 @@ export class MongoRepository implements Repository {
   private readonly chat: Collection<ChatDoc>
   private readonly games: Collection<GameState & { _id: string }>
   private readonly pbf: Collection<PbfDoc>
+  private readonly revisions: Collection<GameRevisionDoc>
   private readonly client: MongoClient | undefined
 
   constructor(db: Db, client?: MongoClient) {
@@ -88,6 +93,7 @@ export class MongoRepository implements Repository {
     this.chat = db.collection<ChatDoc>(CHAT_COLLECTION)
     this.games = db.collection<GameState & { _id: string }>(GAME_COLLECTION)
     this.pbf = db.collection<PbfDoc>(PBF_COLLECTION)
+    this.revisions = db.collection<GameRevisionDoc>(REVISION_COLLECTION)
     this.client = client
   }
 
@@ -178,6 +184,34 @@ export class MongoRepository implements Repository {
     await this.games.replaceOne({ _id: game.id }, game, { upsert: true })
   }
 
+  async saveGameWithRevision(game: GameState, revision: GameRevision): Promise<void> {
+    const id = revisionId(revision.gameId, revision.revision)
+    await Promise.all([
+      this.games.replaceOne({ _id: game.id }, game, { upsert: true }),
+      this.revisions.replaceOne({ _id: id }, revision, { upsert: true }),
+    ])
+  }
+
+  async ensureGameRevision(revision: GameRevision): Promise<void> {
+    if (await this.revisions.findOne({ gameId: revision.gameId }, { projection: { _id: 1 } })) return
+    const id = revisionId(revision.gameId, revision.revision)
+    await this.revisions.updateOne(
+      { _id: id },
+      { $setOnInsert: revision },
+      { upsert: true },
+    )
+  }
+
+  async listGameRevisions(gameId: string): Promise<readonly GameRevision[]> {
+    const docs = await this.revisions.find({ gameId }).sort({ revision: 1 }).toArray()
+    return docs.map(stripRevisionId)
+  }
+
+  async findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined> {
+    const doc = await this.revisions.findOne({ _id: revisionId(gameId, revision) })
+    return doc === null ? undefined : stripRevisionId(doc)
+  }
+
   async findGame(id: string): Promise<GameState | undefined> {
     const doc = await this.games.findOne({ _id: id })
     return doc === null ? undefined : migrateGameState(stripMongoId(doc))
@@ -189,7 +223,10 @@ export class MongoRepository implements Repository {
   }
 
   async deleteGame(id: string): Promise<boolean> {
-    const result = await this.games.deleteOne({ _id: id })
+    const [result] = await Promise.all([
+      this.games.deleteOne({ _id: id }),
+      this.revisions.deleteMany({ gameId: id }),
+    ])
     return result.deletedCount > 0
   }
 
@@ -272,6 +309,15 @@ export class MongoRepository implements Repository {
   async flush(): Promise<void> {
     // Nothing to flush; there is no in-memory buffer to mirror.
   }
+}
+
+function revisionId(gameId: string, revision: number): string {
+  return `${gameId}:${revision}`
+}
+
+function stripRevisionId(doc: GameRevisionDoc): GameRevision {
+  const { _id: _ignored, ...revision } = doc
+  return { ...revision, state: migrateGameState(revision.state) }
 }
 
 function toStoredPlayer(doc: PlayerDoc): StoredPlayer {

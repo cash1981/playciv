@@ -5,10 +5,13 @@
 
 import type { GameState } from '@civ/engine'
 import {
+  allPublicTurns,
   createGame,
   endGame,
   joinGame,
+  remainingTechsForPlayer,
   revealedFeed,
+  revealedTechsForAllPlayers,
   toPlayerView,
   withdrawFromGame,
 } from '@civ/engine'
@@ -20,15 +23,17 @@ import {
   applyToGame,
   asRecord,
   authenticateWith,
+  createGameRevision,
   currentPlayer,
   optionalNumber,
   optionalString,
   readGame,
   requireString,
+  requireMembership,
   stampLog,
 } from '../context.js'
 import { sendEngineError, sendError } from '../errors.js'
-import type { ChatMessage } from '../store/types.js'
+import type { ChatMessage, GameRevision } from '../store/types.js'
 
 /** The summary the game list shows. Java: `PbfDTO`. */
 export interface GameSummary {
@@ -101,6 +106,66 @@ function clampInt(raw: string | undefined, fallback: number, min: number, max: n
   return Math.min(Math.max(value, min), max)
 }
 
+function revisionSummary(revision: GameRevision, viewerId: string) {
+  return {
+    gameId: revision.gameId,
+    revision: revision.revision,
+    createdAt: revision.createdAt,
+    actor: revision.actor,
+    publicDescription: revision.publicDescription,
+    privateDescription: revision.privateDescriptions[viewerId] ?? null,
+    logIds: revision.logIds,
+  }
+}
+
+function projectedRevision(revision: GameRevision, viewerId: string) {
+  const state = revision.state
+  const projected = toPlayerView(state, viewerId)
+  const view = projected.you === null
+    ? projected
+    : { ...projected, you: { ...projected.you, gamenote: '' } }
+  return {
+    ...revisionSummary(revision, viewerId),
+    view,
+    availableTechs: remainingTechsForPlayer(state, viewerId),
+    revealedTechs: revealedTechsForAllPlayers(state),
+    socialPolicies: state.socialPolicies,
+    publicTurns: allPublicTurns(state),
+    revealed: revealedFeed(state),
+    publicLog: newestFirst(
+      state.log.filter((entry) => entry.publicLog !== '').map((entry) => ({
+        id: entry.id,
+        username: entry.username,
+        logType: entry.logType,
+        message: entry.publicLog,
+        createdAt: entry.createdAt,
+        hasUndo: entry.undo !== null,
+      })),
+    ),
+    privateLog: newestFirst(
+      state.log.filter((entry) => entry.playerId === viewerId && entry.privateLog !== '').map((entry) => ({
+        id: entry.id,
+        username: entry.username,
+        logType: entry.logType,
+        message: entry.privateLog,
+        createdAt: entry.createdAt,
+        hasUndo: entry.undo !== null,
+        canUndo: false,
+      })),
+    ),
+  }
+}
+
+function newestFirst<T extends { readonly createdAt: string | null }>(entries: readonly T[]): T[] {
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .sort(
+      (a, b) =>
+        (b.entry.createdAt ?? '').localeCompare(a.entry.createdAt ?? '') || b.index - a.index,
+    )
+    .map(({ entry }) => entry)
+}
+
 export function registerGameRoutes(app: App, context: AppContext): void {
   const auth = authenticateWith(context)
 
@@ -163,13 +228,47 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     // there and would otherwise keep `createdAt: null` forever.
     const stamped = stampLog(joined.value, new Date().toISOString())
 
-    await context.repo.saveGame(stamped)
+    await context.repo.saveGameWithRevision(
+      stamped,
+      createGameRevision(undefined, stamped, me, new Date().toISOString(), 'Game created'),
+    )
     return c.json(toSummary(stamped, me.id), 201)
   })
 
   app.get('/api/games/:gameId', auth, async (c) => {
     const gameId = c.req.param('gameId')
     return readGame(context, c, gameId)
+  })
+
+  app.get('/api/games/:gameId/revisions', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const game = await requireMembership(context, c, gameId)
+    if (game instanceof Response) return game
+    const me = currentPlayer(c)
+    await context.repo.ensureGameRevision(
+      createGameRevision(undefined, game, me, new Date().toISOString(), 'History starts here'),
+    )
+    const revisions = await context.repo.listGameRevisions(gameId)
+    return c.json(revisions.map((revision) => revisionSummary(revision, me.id)))
+  })
+
+  app.get('/api/games/:gameId/revisions/:revision', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const game = await requireMembership(context, c, gameId)
+    if (game instanceof Response) return game
+    const number = Number(c.req.param('revision'))
+    if (!Number.isInteger(number) || number < 0) {
+      return sendError(c, 400, 'BAD_REQUEST', 'revision must be a non-negative integer')
+    }
+    const me = currentPlayer(c)
+    await context.repo.ensureGameRevision(
+      createGameRevision(undefined, game, me, new Date().toISOString(), 'History starts here'),
+    )
+    const revision = await context.repo.findGameRevision(gameId, number)
+    if (revision === undefined) {
+      return sendError(c, 404, 'REVISION_NOT_FOUND', `No revision ${number} for game ${gameId}`)
+    }
+    return c.json(projectedRevision(revision, me.id))
   })
 
   /** Java: `GameResource.joinGame`. */
@@ -261,18 +360,6 @@ export function registerGameRoutes(app: App, context: AppContext): void {
    * entries: `Array.prototype.sort` keeps their relative order, which is the
    * insertion order, i.e. oldest first.
    */
-  function newestFirst<T extends { readonly createdAt: string | null }>(
-    entries: readonly T[],
-  ): T[] {
-    return entries
-      .map((entry, index) => ({ entry, index }))
-      .sort(
-        (a, b) =>
-          (b.entry.createdAt ?? '').localeCompare(a.entry.createdAt ?? '') || b.index - a.index,
-      )
-      .map(({ entry }) => entry)
-  }
-
   /** Java: `/{pbfId}/publiclog`. */
   app.get('/api/games/:gameId/log/public', auth, async (c) => {
     const gameId = c.req.param('gameId')
