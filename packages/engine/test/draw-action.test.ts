@@ -389,6 +389,34 @@ describe('loot', () => {
     })
     expect(unwrapErr(result).kind).toBe('ITEM_NOT_LOOTABLE')
   })
+
+  it('treats Culture I, II and III as one random Culture Card pool', () => {
+    // Java: `SheetName.CULTURE_CARD` is the EnumSet CULTURE_1/2/3 passed by
+    // `DrawResource.loot` for the old client's single Culture Card button.
+    let state = firstCivGame()
+    for (const sheetName of ['CULTURE_1', 'CULTURE_2', 'CULTURE_3'] as const) {
+      state = unwrap(draw(state, { playerId: CASH1981, sheetName }))
+    }
+
+    const receivedSheet = (rng: number): SheetName => {
+      const looted = unwrap(
+        loot({ ...state, rng }, {
+          playerId: CASH1981,
+          targetPlayerId: KARANDRAS1,
+          sheetNames: new Set(['CULTURE_1', 'CULTURE_2', 'CULTURE_3']),
+        }),
+      )
+      const received = handOf(looted, KARANDRAS1).at(-1)
+      if (received === undefined) throw new Error('the target received no loot')
+      return received.sheetName
+    }
+
+    // These fixed seeds select each of the three candidate positions. This
+    // proves one pool is shuffled rather than silently preferring one level.
+    expect(new Set([receivedSheet(0), receivedSheet(1), receivedSheet(5)])).toEqual(
+      new Set<SheetName>(['CULTURE_1', 'CULTURE_2', 'CULTURE_3']),
+    )
+  })
 })
 
 /** Java: `DrawAction.draw` checked the turn and refused to draw technologies. */

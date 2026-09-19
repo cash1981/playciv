@@ -740,3 +740,27 @@ drawing, etc.) still fail server-side with 401, same as ever, but the client
 no longer treats that 401 as "sign out" — since there was no session to lose,
 it now just surfaces the error inline instead of bouncing an anonymous
 spectator back to the lobby.
+
+---
+
+## 2026-09-19 — Loot remains a manual hand action (issue #78)
+
+**Decision.** Loot is exposed in the player's own hand, matching the old My
+Items UI. The acting player selects the opponent who receives one random item
+from one of the three old categories: Culture Card, Huts or Villages. Culture
+Card is one combined candidate pool containing Culture I, II and III; players
+cannot choose a culture level. No battle timing, winner, entitlement or loot
+count is enforced.
+
+**Why.** The old AngularJS client had one Culture Card button plus separate
+Huts and Villages buttons. The Java resource mapped the literal `Culture Card`
+to `SheetName.CULTURE_CARD`, which is exactly Culture I/II/III, and the action
+shuffled the matching items from the acting player's hand. Neither layer tied
+the operation to battle state or recorded a pending loot entitlement, so adding
+such checks would invent rules rather than port the old system.
+
+**Consequences.** Battle resolution and loot stay independent. The player who
+loses the item initiates the transfer manually after agreeing the result with
+the other players. The HTTP route also retains the old backend compatibility:
+explicit valid sheet names form singleton pools, non-lootable sheets return
+406, and unknown sheets return 404.

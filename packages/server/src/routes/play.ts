@@ -6,6 +6,7 @@
 import type { PlayerStats, SheetName } from '@civ/engine'
 import {
   ALL_WONDERS,
+  CULTURE_CARD,
   chooseSocialPolicy,
   chooseTech,
   discardBarbarians,
@@ -71,6 +72,25 @@ function parseSheetName(
   return sheetName
 }
 
+/** Java: `Culture Card` is one loot pool; every other valid sheet stays a singleton. */
+function parseLootSheets(
+  c: Context<{ Variables: Variables }>,
+  raw: string | undefined,
+): ReadonlySet<SheetName> | Response {
+  if (raw === 'CULTURE_CARD' || raw === 'Culture Card') {
+    return CULTURE_CARD
+  }
+
+  if (raw === undefined) {
+    return sendError(c, 404, 'ITEM_NOT_FOUND', 'Could not find item')
+  }
+  const sheetName = findSheetName(raw)
+  if (sheetName === undefined) {
+    return sendError(c, 404, 'ITEM_NOT_FOUND', `Could not find item ${raw}`)
+  }
+  return new Set([sheetName])
+}
+
 function parsePhase(
   c: Context<{ Variables: Variables }>,
   raw: string | undefined,
@@ -114,17 +134,17 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
   })
 
   /** Java: `DrawResource.loot`. */
-  app.post('/api/games/:gameId/loot/:sheetName/:targetPlayerId', auth, async (c) => {
+  app.post('/api/games/:gameId/loot/:category/:targetPlayerId', auth, async (c) => {
     const gameId = c.req.param('gameId')
     const targetPlayerId = c.req.param('targetPlayerId')
-    const sheetName = parseSheetName(c, c.req.param('sheetName'))
-    if (sheetName instanceof Response) return sheetName
+    const sheetNames = parseLootSheets(c, c.req.param('category'))
+    if (sheetNames instanceof Response) return sheetNames
 
     return applyToGame(context, c, gameId, (state) =>
       loot(state, {
         playerId: currentPlayer(c).id,
         targetPlayerId,
-        sheetNames: new Set([sheetName]),
+        sheetNames,
       }),
     )
   })

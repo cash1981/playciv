@@ -50,6 +50,9 @@ export interface RevealedPage {
   readonly size: number
 }
 
+/** The three loot choices exposed by the old client. */
+export type LootCategory = 'CULTURE_CARD' | 'HUTS' | 'VILLAGES'
+
 export interface PlayerDto {
   readonly id: string
   readonly username: string
@@ -257,8 +260,8 @@ export const api = {
 
   draw: (gameId: string, sheetName: SheetName) =>
     post<PlayerView>(`/api/games/${gameId}/draw/${sheetName}`),
-  loot: (gameId: string, sheetName: SheetName, targetPlayerId: string) =>
-    post<PlayerView>(`/api/games/${gameId}/loot/${sheetName}/${targetPlayerId}`),
+  loot: (gameId: string, category: LootCategory, targetPlayerId: string) =>
+    post<PlayerView>(`/api/games/${gameId}/loot/${category}/${targetPlayerId}`),
 
   drawBattlehand: (gameId: string, numberOfUnits: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/draw`, { numberOfUnits }),
