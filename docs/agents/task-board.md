@@ -12,6 +12,28 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-72-d1
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash); verification by a second agent
+- **Branch:** `feat/issue-72-d1`
+- **Brief:** `docs/agents/tasks/issue-72-d1.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/worker/migrations/` (new), `packages/worker/src/index.ts`, `packages/worker/package.json`
+  - `wrangler.jsonc`, `render.yaml` (delete)
+  - `packages/server/src/store/d1.ts` (new), `packages/server/src/store/mongo.ts` (delete), `packages/server/src/store/types.ts`
+  - `packages/server/src/lib.ts`, `packages/server/src/index.ts`
+  - `packages/server/src/migrate-to-d1.ts` (new), `packages/server/src/migrate/` (new)
+  - `packages/server/src/migrate-user-roles.ts` (delete), `packages/server/src/seed-test-user.ts` (delete)
+  - `packages/server/test/d1-sqlite-adapter.ts`, `packages/server/test/d1-repository.test.ts`, `packages/server/test/migrate-dump.test.ts`, `packages/server/test/migrate-run.test.ts`, `packages/server/test/migrations.ts` (new)
+  - `packages/server/test/api.test.ts`, `packages/server/package.json`, `packages/server/.env.example`
+  - `package.json`, `pnpm-workspace.yaml`, `.gitignore`
+  - `README.md`, `docs/agents/repo-map.md`, `docs/agents/state.md`, `docs/agents/decisions.md`, `docs/agents/task-board.md`
+- **Notes:** Issue #72. Move storage to Cloudflare D1, run the API on the
+  Worker, migrate the restored `playciv` data, and drop Render + MongoDB. Local
+  dev keeps the JSON file and the `D1Repository` is unit-tested through
+  `node:sqlite`, so nothing here needs a live database or workerd.
+
 ### issue-40-signup-security-question
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
