@@ -28,6 +28,27 @@
   margin-bottom: 0.8rem;
 }
 
+.turn-save-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0.8rem 0 0.35rem;
+}
+
+.turn-save-all {
+  min-width: 10rem;
+}
+
+.turn-unsaved-summary,
+.turn-save-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.turn-save-hint {
+  color: var(--bad);
+}
+
 .turn-toolbar label {
   display: inline-flex;
   align-items: center;
@@ -42,6 +63,23 @@
 
 .turn-phase {
   margin-top: 0.8rem;
+  padding: 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.turn-phase[data-save-status='unsaved'] {
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.turn-phase[data-save-status='saving'] {
+  border-color: var(--accent);
+}
+
+.turn-phase[data-save-status='failed'] {
+  border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
 }
 
 .turn-phase-heading {
@@ -53,6 +91,55 @@
 
 .turn-phase-heading h3 {
   margin: 0;
+}
+
+.turn-save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.turn-save-status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.turn-save-status-unsaved {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.turn-save-status-unsaved .turn-save-status-dot {
+  background: var(--warn);
+}
+
+.turn-save-status-saving .turn-save-status-dot {
+  background: var(--accent);
+  animation: turn-save-pulse 0.9s ease-in-out infinite alternate;
+}
+
+.turn-save-status-saved .turn-save-status-dot {
+  background: var(--good);
+}
+
+.turn-save-status-failed {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.turn-save-status-failed .turn-save-status-dot {
+  background: var(--bad);
+}
+
+@keyframes turn-save-pulse {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
 }
 
 .turn-phase-actions {
@@ -128,6 +215,10 @@
   margin: 0 0 0.7rem;
 }
 
+.private-log-heading {
+  margin-top: 0;
+}
+
 @media (max-width: 600px) {
   .turn-tab {
     min-width: 6rem;
@@ -143,6 +234,15 @@
 
   .turn-toolbar > button {
     flex: 1 1 auto;
+  }
+
+  .turn-save-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .turn-save-all {
+    width: 100%;
   }
 
   .turn-phase-actions .small {

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PlayerTurn, TurnPhase } from '@civ/engine'
 
 import { api } from '../lib/api.js'
+import type { PlayerView } from '../lib/api.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
 import type {
   MarkdownEditorHandle,
@@ -15,6 +16,7 @@ import type {
 } from './MarkdownEditor.js'
 import {
   PrivateLogWorkspace,
+  TurnPanel,
   TurnOrderWorkspace,
   TurnTabs,
 } from './TurnPanel.js'
@@ -299,9 +301,10 @@ describe('TurnOrderWorkspace', () => {
     )
 
     expect(markup.match(/data-readonly="false"/g)).toHaveLength(5)
-    expect(markup.match(/Save /g)).toHaveLength(5)
     expect(markup).toContain('New turn')
     expect(markup).toContain('Lock the turn')
+    expect(markup.match(/Saved (start of turn|trade|city management|movement|research)/g)).toHaveLength(5)
+    expect(markup).not.toContain('Save start of turn')
     expect(markup).not.toContain('All orders')
   })
 
@@ -352,21 +355,16 @@ describe('TurnOrderWorkspace', () => {
 
     expect(markup.match(/data-readonly="true"/g)).toHaveLength(5)
     expect(markup).toContain('Reopen')
-    expect(markup).toContain('Save start of turn')
-    expect(markup).toContain('disabled=""')
+    expect(markup).not.toContain('Save start of turn')
   })
 
-  it('submits the latest editor document without waiting for the debounced callback', async () => {
+  it('shows each phase save status without per-phase save buttons', () => {
     vi.useFakeTimers()
-    const updateTurn = vi.spyOn(api, 'updateTurn').mockResolvedValue({} as never)
-    const execute = async (action: () => Promise<unknown>): Promise<void> => {
-      await action()
-    }
     render(
       <TurnOrderWorkspace
         gameId="game-1"
         busy={false}
-        run={execute}
+        run={run}
         player={{ username: 'cash1981', color: 'Red', own: true }}
         turnNumber={3}
         turnNumbers={[3]}
@@ -381,12 +379,8 @@ describe('TurnOrderWorkspace', () => {
       />,
     )
 
-    fireEvent.change(screen.getByLabelText(/movement orders for cash1981, turn 3/i), {
-      target: { value: 'Move immediately' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Save movement' }))
-
-    expect(updateTurn).toHaveBeenCalledWith('game-1', 3, 'MOVEMENT', 'Move immediately')
+    expect(screen.getAllByText(/^Saved (start of turn|trade|city management|movement|research)$/)).toHaveLength(5)
+    expect(screen.queryByRole('button', { name: 'Save movement' })).toBeNull()
   })
 
   it('keeps a delayed edit attached to the turn where it was written', () => {
@@ -441,13 +435,9 @@ describe('PrivateLogWorkspace', () => {
   it('describes the note as private and saves it explicitly', () => {
     const markup = renderToStaticMarkup(
       <PrivateLogWorkspace
-        gameId="game-1"
-        busy={false}
-        run={run}
         note="Plan the next research choice"
         dirty={true}
         onChange={noop}
-        onSaved={noop}
         tabPanelId="private-panel"
         labelledBy="private-tab"
       />,
@@ -455,66 +445,51 @@ describe('PrivateLogWorkspace', () => {
 
     expect(markup).toContain('Only you can see this planning space')
     expect(markup).toContain('does not add an entry to the game log')
-    expect(markup).toContain('Save private log')
+    expect(markup).toContain('Private log')
+    expect(markup).toContain('Unsaved changes: Private log')
     expect(markup).toContain('aria-label="Private log"')
     expect(markup).not.toContain('Publish')
   })
 
-  it('does not mark a newer edit clean when an earlier save completes', async () => {
-    vi.useFakeTimers()
-    let resolveSave: ((value: unknown) => void) | undefined
-    vi.spyOn(api, 'saveNote').mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveSave = resolve
-        }) as never,
+})
+
+describe('TurnPanel save all changes', () => {
+  it('publishes the latest text from every changed phase with one button', async () => {
+    const playerView = {
+      you: {
+        username: 'cash1981',
+        color: 'Red',
+        playernumber: 1,
+        gamenote: null,
+        playerTurns: [turn('cash1981')],
+      },
+      opponents: [],
+    } as unknown as PlayerView
+    const updateTurn = vi.spyOn(api, 'updateTurn').mockResolvedValue(playerView)
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([])
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={async (action) => {
+          await action()
+        }}
+        reloadCount={0}
+      />,
     )
 
-    function Harness(): React.JSX.Element {
-      const [note, setNote] = useState('Initial')
-      const [dirty, setDirty] = useState(true)
-      const noteRef = useRef(note)
-      const change = (markdown: string): void => {
-        noteRef.current = markdown
-        setNote(markdown)
-        setDirty(true)
-      }
-      return (
-        <PrivateLogWorkspace
-          gameId="game-1"
-          busy={false}
-          run={async (action) => {
-            await action()
-          }}
-          note={note}
-          dirty={dirty}
-          onChange={change}
-          onSaved={(submitted) => {
-            if (noteRef.current === submitted) setDirty(false)
-          }}
-          tabPanelId="private-panel"
-          labelledBy="private-tab"
-          editorComponent={DelayedEditor}
-        />
-      )
-    }
+    await screen.findByRole('button', { name: 'Save all changes' })
+    const movement = screen
+      .getAllByLabelText(/movement orders for cash1981, turn 1/i)
+      .find((element) => element instanceof HTMLTextAreaElement)
+    expect(movement).toBeDefined()
+    fireEvent.change(movement as HTMLTextAreaElement, { target: { value: 'Move immediately' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save all changes' }))
 
-    render(<Harness />)
-    const editor = screen.getByLabelText('Private log')
-    fireEvent.change(editor, { target: { value: 'Submitted text' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save private log' }))
-    fireEvent.change(editor, { target: { value: 'Newer unsaved text' } })
-
-    await act(async () => {
-      resolveSave?.({})
-      await Promise.resolve()
-    })
-
-    expect((screen.getByLabelText('Private log') as HTMLTextAreaElement).value).toBe(
-      'Newer unsaved text',
-    )
-    expect((screen.getByRole('button', { name: 'Save private log' }) as HTMLButtonElement).disabled).toBe(
-      false,
+    await waitFor(() =>
+      expect(updateTurn).toHaveBeenCalledWith('game-1', 1, 'MOVEMENT', 'Move immediately'),
     )
   })
 })
