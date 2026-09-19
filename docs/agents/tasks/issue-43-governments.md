@@ -3,7 +3,7 @@
 - **Slug:** `issue-43-governments`
 - **Branch:** `feat/issue-43-governments`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -99,22 +99,22 @@ are pictured in `Civilization/WaW/government.jpg`.
 
 ## Acceptance criteria
 
-- [ ] New and migrated players have a valid government.
-- [ ] Rome, Russia and Japan receive their documented starting governments when
+- [x] New and migrated players have a valid government.
+- [x] Rome, Russia and Japan receive their documented starting governments when
       their civilization is chosen; other civilizations receive Despotism.
-- [ ] Any game member can change any current player's government to one of the
+- [x] Any game member can change any current player's government to one of the
       eight allowed values, and the public log identifies editor, target and
       value.
-- [ ] Non-members and invalid government strings cannot mutate the game.
-- [ ] Player status shows an editable dropdown to members and a disabled one to
+- [x] Non-members and invalid government strings cannot mutate the game.
+- [x] Player status shows an editable dropdown to members and a disabled one to
       spectators/replay viewers.
-- [ ] The same panel contains readable information for all eight government
+- [x] The same panel contains readable information for all eight government
       cards.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: adding government to public projections does not add
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: adding government to public projections does not add
       any private hand, private log or unrevealed-tech data; the existing
       serialized projection test remains passing and asserts the public field.
-- [ ] Verified in the browser: changing a government updates the row and public
+- [x] Verified in the browser: changing a government updates the row and public
       log; the reference cards are readable at desktop and narrow widths; a
       spectator cannot edit.
 
