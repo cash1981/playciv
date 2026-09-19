@@ -127,11 +127,14 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
       return true
     } catch (caught) {
       if (activeGameIdRef.current !== gameId) return false
-      if (isUnauthorized(caught)) return onUnauthorized()
+      // A spectator has no session to lose; an unauthorized response there
+      // just means an anonymous read hit a route that still requires an
+      // account, not that they were signed out.
+      if (isUnauthorized(caught) && player !== null) return onUnauthorized()
       setError(errorMessage(caught))
       return false
     }
-  }, [applyLiveView, applyRevisionList, gameId, onUnauthorized])
+  }, [applyLiveView, applyRevisionList, gameId, onUnauthorized, player])
 
   const showRevision = useCallback(async (revision: number) => {
     const requestEpoch = ++revisionRequestEpochRef.current
@@ -147,14 +150,14 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
       setSelectedRevision(revision)
     } catch (caught) {
       if (activeGameIdRef.current !== gameId || revisionRequestEpochRef.current !== requestEpoch) return
-      if (isUnauthorized(caught)) return onUnauthorized()
+      if (isUnauthorized(caught) && player !== null) return onUnauthorized()
       setError(errorMessage(caught))
     } finally {
       if (activeGameIdRef.current === gameId && revisionRequestEpochRef.current === requestEpoch) {
         setBusy(false)
       }
     }
-  }, [gameId, onUnauthorized])
+  }, [gameId, onUnauthorized, player])
 
   useEffect(() => {
     revisionRequestEpochRef.current += 1
@@ -191,7 +194,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
         if (activeGameIdRef.current !== gameId) return
       } catch (caught) {
         if (activeGameIdRef.current !== gameId) return
-        if (isUnauthorized(caught)) return onUnauthorized()
+        if (isUnauthorized(caught) && player !== null) return onUnauthorized()
         // On conflict: reload so rev is fresh before the next action
         if (caught instanceof ApiError && caught.status === 409) {
           await reload()
@@ -201,7 +204,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
         if (activeGameIdRef.current === gameId) setBusy(false)
       }
     },
-    [gameId, reload, onUnauthorized],
+    [gameId, reload, onUnauthorized, player],
   )
 
   if (view === null) {
@@ -274,7 +277,13 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
                 setBusy(true)
                 setError(null)
                 void api.withdraw(gameId).then(
-                  () => onWithdrawn(),
+                  () => {
+                    onWithdrawn()
+                    // Withdrawing already succeeded; if `onWithdrawn` (e.g.
+                    // navigating away) got vetoed by unsaved turn orders,
+                    // this view stays mounted and must not stay stuck busy.
+                    setBusy(false)
+                  },
                   (caught: unknown) => {
                     if (isUnauthorized(caught)) return onUnauthorized()
                     setError(errorMessage(caught))

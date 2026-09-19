@@ -15,24 +15,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
-### issue-81-82-spectate-and-withdraw
-
-- **Owner:** Claude (Sonnet 5)
-- **Branch:** `feat/issue-81-82-spectate-and-withdraw`
-- **Brief:** `docs/agents/tasks/issue-81-82-spectate-and-withdraw.md`
-- **Status:** in review
-- **Claimed paths:**
-  - `packages/server/src/context.ts`
-  - `packages/server/src/routes/games.ts`
-  - `packages/server/src/routes/play.ts`
-  - `packages/server/src/routes/board.ts`
-  - `packages/server/test/api.test.ts`
-  - `packages/web/src/App.tsx`
-  - `packages/web/src/views/GameView.tsx`
-  - `packages/web/src/views/LandingView.tsx`
-- **Notes:** Issues #81 and #82. Read-only game viewing without membership or
-  an account, and a clean redirect to the games list after withdrawing.
-
 ### revealed-panel
 
 - **Owner:** Claude (Opus 4.8)
@@ -116,7 +98,5 @@ makes them the most likely collision in the repo.
 Work that is ready to start, most useful first. Taking one means moving it to
 "Live claims".
 
-| Slug | What | Brief |
-| --- | --- | --- |
-| `public-landing` | Landing page: active games, highscore, open chat | `tasks/public-landing.md` |
-| `anonymous-readonly` | Read-only access without an account, and the security pass that goes with it | `tasks/anonymous-readonly.md` |
+_Nothing queued._ `public-landing` shipped as issue #38's `LandingView`;
+`anonymous-readonly` shipped as issues #81/#82.

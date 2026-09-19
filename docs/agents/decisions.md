@@ -707,3 +707,36 @@ supported configuration for revisioned game storage. The global replay bar
 replaces board-only replay, while live board undo remains a normal shared
 transition. Chat stays live during replay and private notes are sanitized out of
 every stored snapshot.
+
+---
+
+## 2026-09-19 — Read-only games need no account (issues #81, #82)
+
+**Decision.** Every read-only route (the game itself, its revision history,
+techs, social policies, turn orders, undo status, the revealed feed and the
+board-piece catalogue) now accepts a request with no bearer token, in
+addition to one from any signed-in account regardless of membership. A token
+that *is* present but invalid, expired, or belongs to a disabled account still
+answers 401/403 exactly as before — only a genuinely absent token is treated
+as "spectator". Withdrawing from a game now navigates the client back to the
+games list on success, instead of trying to reload a game the withdrawn
+player can no longer act on.
+
+**Why.** The human asked for both directly: a withdrawn player landing on an
+error instead of the games list (issue #82), and no way to watch a game
+without an account (issue #81, "It should be able to watch without logging
+in"). The projection this relies on — `toPlayerView`/`opaque()` giving a
+non-member `you: null`, opponents as counts, and public-only log entries — was
+already proven safe for a non-member viewer before this change; the change
+only stops routes from rejecting such a viewer before reaching it.
+
+**Consequences.** Every game is now world-readable by its id to anyone who
+has the link, signed in or not — see the "Hidden information" section of
+`README.md`. The first visitor (anonymous or not) to open a game's history
+before anyone else has can create its revision baseline, which then shows
+"Spectator" as that entry's actor in the replay bar; harmless, but visible.
+Client write attempts by a viewer with no account (dragging a board piece,
+drawing, etc.) still fail server-side with 401, same as ever, but the client
+no longer treats that 401 as "sign out" — since there was no session to lose,
+it now just surfaces the error inline instead of bouncing an anonymous
+spectator back to the lobby.

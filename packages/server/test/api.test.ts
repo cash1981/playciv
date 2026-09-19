@@ -446,6 +446,22 @@ describe('games', () => {
     })
     expect(withdraw.status).toBe(401)
   })
+
+  /**
+   * A present-but-bad token must not be silently downgraded to "no account":
+   * that would hide a real player's expired session behind what looks like
+   * their own game turning read-only (issue #81 review finding).
+   */
+  it('still gives 401 for a garbled token on a read-only route, rather than treating it as a spectator', async () => {
+    const creator = await register('badtoken-owner')
+    const gameId = await createGame(creator, 'Bad token', 2)
+
+    const response = await inject(app, {
+      url: `/api/games/${gameId}`,
+      headers: bearer('tull.tull'),
+    })
+    expect(response.status).toBe(401)
+  })
 })
 
 describe('draws', () => {
@@ -898,6 +914,8 @@ describe('global game revisions', () => {
     }
     const anonymous = await inject(app, { url: `/api/games/${gameId}/revisions/${latest}` })
     expect(anonymous.status).toBe(200)
+    expect(anonymous.body).not.toContain(secretCard?.id as string)
+    expect(anonymous.body).not.toContain(secretLog as string)
     const anonymousPayload = await anonymous.json<{ view: { you: unknown } }>()
     expect(anonymousPayload.view.you).toBeNull()
   })

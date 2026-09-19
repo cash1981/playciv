@@ -139,3 +139,23 @@ it does not change what the projection reveals.
 None — the two behaviours were specified directly by the human in chat, and
 issue #81's "watch without logging in" is unambiguous once the existing
 non-member projection was confirmed already safe.
+
+## Review-gate findings (fixed)
+
+- A token that is present but invalid/expired/disabled now still answers
+  401/403 from `authenticateOptionallyWith`, instead of being silently
+  downgraded to "spectator" — only a genuinely absent token is. Otherwise a
+  real player's expired session would look like their own game turning
+  read-only. Covered by a new server test.
+- `GameView`'s `isUnauthorized` handling only signs out when `player !== null`
+  — a spectator has no session to lose, so a write attempt against a
+  member-only route now surfaces inline instead of bouncing them to the
+  lobby.
+- The withdraw button now clears `busy` after a successful withdraw even if
+  `onWithdrawn` (navigating away) is vetoed by unsaved turn orders, instead of
+  leaving the page stuck busy forever.
+- Documented the new "every game is world-readable by id" posture in
+  `README.md` and `docs/agents/decisions.md`.
+- Added `not.toContain` secret assertions to the anonymous-viewer case in the
+  revisions test, so it actually proves the new code path is safe rather than
+  only checking `you: null`.
