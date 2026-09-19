@@ -41,10 +41,13 @@ entirely new arena behaviour (see `docs/agents/decisions.md`).
   state (falling back to `defaultOpen` the first time an id is seen) and
   written on every change. Applies to every panel that uses the component,
   not just the battle ones.
-- **2 (rotate display).** `ArenaUnitCard` builds a `displayUnit` — the card's
-  pristine snapshot with `attack`/`health` overridden to the arena's current
-  values — and passes that to `ItemCard` instead of the frozen snapshot. The
-  name/number the card shows now always matches what the ATK/HP fields say.
+- **2 (rotate display).** `ItemCard` gained a `labelOverride` prop: the
+  caption text can be replaced without touching `item`, so `ArenaUnitCard`
+  can show the live attack/health without changing which image is looked
+  up. (First attempt cloned the card with `attack`/`health` overridden and
+  passed that to `ItemCard` — broke the art, since `itemImage()` derives the
+  filename from those same fields and most rotated/edited combinations have
+  no matching file on disk. See `decisions.md`.)
 - **3 (killed unit reappearing) and 5 (undoable kill).** These turned out to
   be the same design fix. `ArenaUnit` gains `killed: boolean`.
   `killArenaUnit` no longer removes the unit from the arena or touches
@@ -101,7 +104,8 @@ entirely new arena behaviour (see `docs/agents/decisions.md`).
       opponent and barbarians.
 - [ ] Collapsing/expanding any panel survives a page reload.
 - [ ] Rotating an arena unit changes what the card itself displays, not just
-      the ATK/HP inputs below it.
+      the ATK/HP inputs below it — and the card art never goes blank, for
+      any attack/health combination.
 - [ ] Killing a unit does not remove it from the arena or clear `inBattle`;
       calling kill again undoes it. A killed unit does not count in
       `battleSummary` totals.

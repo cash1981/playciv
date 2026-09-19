@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { isUnit, itemName } from '@civ/engine'
+import { isUnit, itemName, itemType } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -780,13 +780,18 @@ function ArenaUnitCard({
   // The card's own name/number label is otherwise frozen at the printed
   // values from the moment it was placed — show the live attack/health
   // instead, so rotating (or editing the stat fields) visibly changes what
-  // the card says it is (issue #71).
-  const displayUnit = { ...unit.unit, attack: unit.attack, health: unit.health }
+  // the card says it is (issue #71). This must stay a label-only override:
+  // the art itself (`item`) has to stay the pristine snapshot, because
+  // `itemImage()` builds the filename from the item's own attack/health —
+  // passing a mutated item points it at a card image that does not exist
+  // and the art goes blank (issue #71 follow-up).
+  const displayLabel = `${itemType(unit.unit)} ${unit.attack}.${unit.health}`
 
   return (
     <div className={`arena-unit-card${unit.killed ? ' killed' : ''}`}>
       <ItemCard
-        item={displayUnit}
+        item={unit.unit}
+        labelOverride={displayLabel}
         rotation={unit.rotation}
         draggable={canMove}
         onDragStart={onDragStart}

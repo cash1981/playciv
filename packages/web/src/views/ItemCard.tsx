@@ -29,6 +29,15 @@ export function ItemCard({
   onDragEnd,
   /** Visual rotation in degrees — the physical card prints one unit level per edge. */
   rotation,
+  /**
+   * Shown instead of the computed label, without changing which image is
+   * looked up. The printed art is tied to `item`'s own attack/health
+   * (`itemImage` builds the filename from them), so a caller that wants to
+   * show a different current value — an arena unit's live stats, edited away
+   * from the card's own — must not also pass a mutated `item`: that would
+   * point the image lookup at a file that does not exist.
+   */
+  labelOverride,
   children,
 }: {
   readonly item: Item
@@ -37,9 +46,10 @@ export function ItemCard({
   readonly onDragStart?: (e: React.DragEvent<HTMLLIElement>) => void
   readonly onDragEnd?: (e: React.DragEvent<HTMLLIElement>) => void
   readonly rotation?: Rotation
+  readonly labelOverride?: string
   readonly children?: React.ReactNode
 }): React.JSX.Element {
-  const label = reveal === 'all' ? revealAll(item) : itemName(item)
+  const label = labelOverride ?? (reveal === 'all' ? revealAll(item) : itemName(item))
   const url = itemImageUrl(item)
   const imageStyle = rotation ? { transform: `rotate(${rotation}deg)` } : undefined
 
