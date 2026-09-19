@@ -13,7 +13,7 @@ import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { ApiError, api } from '../lib/api.js'
-import type { PlayerDto, PlayerView } from '../lib/api.js'
+import type { GameRevisionSummary, GameRevisionView, PlayerDto, PlayerView } from '../lib/api.js'
 
 import { BoardView } from './BoardView.js'
 import { ChatPanel } from './ChatPanel.js'
@@ -52,24 +52,119 @@ const DRAWABLE: readonly { readonly sheet: SheetName; readonly label: string }[]
   { sheet: 'MODERN_WONDERS', label: 'Modern wonder' },
 ]
 
+export async function refreshBeforeLive(
+  reload: () => Promise<boolean | void>,
+  showLive: () => void,
+): Promise<void> {
+  if (await reload() === true) showLive()
+}
+
+export async function loadConsistentLive(
+  loadRevisions: () => Promise<readonly GameRevisionSummary[]>,
+  loadView: () => Promise<PlayerView>,
+): Promise<{ readonly view: PlayerView; readonly revisions: readonly GameRevisionSummary[] }> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    // Read history first. A later game read is either at that revision or
+    // newer, whereas parallel reads could knowingly pair revision 4 with game 3.
+    const revisions = await loadRevisions()
+    const view = await loadView()
+    if (view.rev >= (revisions.at(-1)?.revision ?? -1)) return { view, revisions }
+  }
+  throw new Error('Could not load a consistent live game snapshot')
+}
+
+export async function loadHistoricalIfCurrent(
+  load: () => Promise<GameRevisionView>,
+  isCurrent: () => boolean,
+): Promise<GameRevisionView | null> {
+  const revision = await load()
+  return isCurrent() ? revision : null
+}
+
 export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): React.JSX.Element {
   const [view, setView] = useState<PlayerView | null>(null)
+  const [revisions, setRevisions] = useState<readonly GameRevisionSummary[]>([])
+  const [selectedRevision, setSelectedRevision] = useState<number | null>(null)
+  const [historical, setHistorical] = useState<GameRevisionView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [reloadCount, setReloadCount] = useState(0)
   const [autoRefresh, setAutoRefresh] = useState<boolean>(() => {
     try { return localStorage.getItem('civ.autoRefresh') === 'true' } catch { return false }
   })
+  const liveRevisionRef = useRef(-1)
+  const latestStoredRevisionRef = useRef(-1)
+  const revisionRequestEpochRef = useRef(0)
+  const activeGameIdRef = useRef(gameId)
+  activeGameIdRef.current = gameId
+
+  const applyLiveView = useCallback((nextView: PlayerView) => {
+    if (nextView.rev < liveRevisionRef.current) return
+    liveRevisionRef.current = nextView.rev
+    setView(nextView)
+  }, [])
+
+  const applyRevisionList = useCallback((nextRevisions: readonly GameRevisionSummary[]) => {
+    const latest = nextRevisions.at(-1)?.revision ?? -1
+    if (latest < latestStoredRevisionRef.current) return
+    latestStoredRevisionRef.current = latest
+    setRevisions(nextRevisions)
+  }, [])
 
   const reload = useCallback(async () => {
     try {
-      setView(await api.game(gameId))
+      const { view: nextView, revisions: nextRevisions } = await loadConsistentLive(
+        () => api.revisions(gameId),
+        () => api.game(gameId),
+      )
+      if (activeGameIdRef.current !== gameId) return false
+      applyLiveView(nextView)
+      applyRevisionList(nextRevisions)
+      setReloadCount((count) => count + 1)
       setError(null)
+      return true
     } catch (caught) {
+      if (activeGameIdRef.current !== gameId) return false
       if (isUnauthorized(caught)) return onUnauthorized()
       setError(errorMessage(caught))
+      return false
+    }
+  }, [applyLiveView, applyRevisionList, gameId, onUnauthorized])
+
+  const showRevision = useCallback(async (revision: number) => {
+    const requestEpoch = ++revisionRequestEpochRef.current
+    setBusy(true)
+    setError(null)
+    try {
+      const nextHistorical = await loadHistoricalIfCurrent(
+        () => api.revision(gameId, revision),
+        () => activeGameIdRef.current === gameId && revisionRequestEpochRef.current === requestEpoch,
+      )
+      if (nextHistorical === null) return
+      setHistorical(nextHistorical)
+      setSelectedRevision(revision)
+    } catch (caught) {
+      if (activeGameIdRef.current !== gameId || revisionRequestEpochRef.current !== requestEpoch) return
+      if (isUnauthorized(caught)) return onUnauthorized()
+      setError(errorMessage(caught))
+    } finally {
+      if (activeGameIdRef.current === gameId && revisionRequestEpochRef.current === requestEpoch) {
+        setBusy(false)
+      }
     }
   }, [gameId, onUnauthorized])
+
+  useEffect(() => {
+    revisionRequestEpochRef.current += 1
+    liveRevisionRef.current = -1
+    latestStoredRevisionRef.current = -1
+    setView(null)
+    setRevisions([])
+    setSelectedRevision(null)
+    setHistorical(null)
+    setBusy(false)
+    setError(null)
+  }, [gameId])
 
   useEffect(() => {
     try { localStorage.setItem('civ.autoRefresh', String(autoRefresh)) } catch {}
@@ -82,23 +177,18 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
     void reload()
   }, [reload])
 
-  /**
-   * Runs an action and takes the new view from the response. Every writing
-   * endpoint answers with an updated `PlayerView`, so no extra fetch is needed.
-   */
+  /** Runs an action, then reloads a consistent live game/history pair. */
   const run = useCallback(
     async (action: () => Promise<PlayerView | unknown>) => {
       setBusy(true)
       setError(null)
       try {
-        const result = await action()
-        if (result !== undefined && result !== null && typeof result === 'object' && 'you' in result) {
-          setView(result as PlayerView)
-        } else {
-          await reload()
-        }
-        setReloadCount((count) => count + 1)
+        await action()
+        if (activeGameIdRef.current !== gameId) return
+        await reload()
+        if (activeGameIdRef.current !== gameId) return
       } catch (caught) {
+        if (activeGameIdRef.current !== gameId) return
         if (isUnauthorized(caught)) return onUnauthorized()
         // On conflict: reload so rev is fresh before the next action
         if (caught instanceof ApiError && caught.status === 409) {
@@ -106,10 +196,10 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         }
         setError(errorMessage(caught))
       } finally {
-        setBusy(false)
+        if (activeGameIdRef.current === gameId) setBusy(false)
       }
     },
-    [reload, onUnauthorized],
+    [gameId, reload, onUnauthorized],
   )
 
   if (view === null) {
@@ -121,24 +211,19 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
     )
   }
 
-  const you = view.you
+  const replaying = selectedRevision !== null && historical !== null
+  const displayedView = replaying ? historical.view : view
+  const interactionBusy = busy || replaying
+  const you = displayedView.you
   const yourTurn = you?.yourTurn === true
-
-  /**
-   * The public log, flattened for the board's replay view. Private entries
-   * carry `privateLog` as well, but the board shows only what everyone can see.
-   */
-  const boardLog = view.log
-    .map((entry) => ({ id: entry.id, message: entry.publicLog }))
-    .filter((entry) => entry.message !== '')
 
   return (
     <>
       <div className="panel">
         <div className="row">
-          <h1 style={{ margin: 0 }}>{view.name}</h1>
-          {!view.active && <span className="tag">ended</span>}
-          {view.winner !== null && <span className="tag revealed">{view.winner} won</span>}
+          <h1 style={{ margin: 0 }}>{displayedView.name}</h1>
+          {!displayedView.active && <span className="tag">ended</span>}
+          {displayedView.winner !== null && <span className="tag revealed">{displayedView.winner} won</span>}
           {you?.civilization != null && (
             <span className="tag revealed">{you.civilization.name}</span>
           )}
@@ -160,22 +245,22 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
             <span className="tag turn">Your turn</span>
           ) : (
             <span className="muted">
-              {view.opponents.find((opponent) => opponent.yourTurn)?.username ?? 'nobody'}'s turn
+              {displayedView.opponents.find((opponent) => opponent.yourTurn)?.username ?? 'nobody'}'s turn
             </span>
           )}
         </div>
 
         <div className="row" style={{ marginTop: '0.6rem' }}>
-          <button disabled={busy || !yourTurn} onClick={() => void run(() => api.endTurn(gameId))}>
+          <button disabled={interactionBusy || !yourTurn} onClick={() => void run(() => api.endTurn(gameId))}>
             End turn
           </button>
-          <button disabled={busy || yourTurn} onClick={() => void run(() => api.takeTurn(gameId))}>
+          <button disabled={interactionBusy || yourTurn} onClick={() => void run(() => api.takeTurn(gameId))}>
             Take the turn
           </button>
           <span style={{ flex: 1 }} />
           <button
             className="danger"
-            disabled={busy || !view.active}
+            disabled={interactionBusy || !displayedView.active}
             onClick={() => void run(() => api.withdraw(gameId))}
           >
             Withdraw
@@ -183,7 +268,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
           {(you?.gameCreator === true || player.role === 'admin') && (
             <button
               className="danger"
-              disabled={busy}
+              disabled={interactionBusy}
               onClick={() => {
                 if (window.confirm('Delete this game permanently?')) {
                   void run(async () => {
@@ -199,32 +284,51 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         </div>
       </div>
 
+      <GlobalReplayBar
+        revisions={revisions}
+        selectedRevision={selectedRevision}
+        busy={busy}
+        onRevision={(revision) => void showRevision(revision)}
+        onLive={() => {
+          void (async () => {
+            setBusy(true)
+            await refreshBeforeLive(reload, () => {
+              setSelectedRevision(null)
+              setHistorical(null)
+            })
+            setBusy(false)
+          })()
+        }}
+      />
+
       {error !== null && <div className="error">{error}</div>}
 
       {/* The board sits above everything else */}
       <BoardView
         gameId={gameId}
-        board={view.board}
-        numOfPlayers={view.numOfPlayers}
-        areas={view.boardAreas}
-        busy={busy}
+        board={displayedView.board}
+        numOfPlayers={displayedView.numOfPlayers}
+        areas={displayedView.boardAreas}
+        busy={interactionBusy}
+        readOnly={replaying}
         run={run}
-        log={boardLog}
       />
 
       <div className="panel-stack">
-        <DrawPanel gameId={gameId} busy={busy} yourTurn={yourTurn} run={run} view={view} />
-        <HandPanel gameId={gameId} busy={busy} run={run} view={view} />
-        <BattlePanel gameId={gameId} busy={busy} run={run} view={view} />
-        <TechPanel gameId={gameId} busy={busy} run={run} view={view} reloadCount={reloadCount} />
-        <TurnPanel gameId={gameId} busy={busy} run={run} reloadCount={reloadCount} />
-        <StatusPanel gameId={gameId} view={view} busy={busy} run={run} />
-        <RevealedPanel gameId={gameId} reloadCount={reloadCount} />
+        <DrawPanel gameId={gameId} busy={interactionBusy} yourTurn={yourTurn} run={run} view={displayedView} />
+        <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
+        <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
+        <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
+        <TurnPanel gameId={gameId} busy={interactionBusy} run={run} reloadCount={reloadCount} historical={historical} />
+        <StatusPanel gameId={gameId} view={displayedView} busy={interactionBusy} run={run} />
+        <RevealedPanel gameId={gameId} reloadCount={reloadCount} historical={historical} />
         <LogPanel
           gameId={gameId}
           busy={busy}
+          readOnly={replaying}
           run={run}
           reloadCount={reloadCount}
+          historical={historical}
         />
         <ChatPanel
           gameId={gameId}
@@ -235,6 +339,67 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted }: Props): 
         />
       </div>
     </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+
+export function GlobalReplayBar({
+  revisions,
+  selectedRevision,
+  busy,
+  onRevision,
+  onLive,
+}: {
+  readonly revisions: readonly GameRevisionSummary[]
+  readonly selectedRevision: number | null
+  readonly busy: boolean
+  readonly onRevision: (revision: number) => void
+  readonly onLive: () => void
+}): React.JSX.Element | null {
+  if (revisions.length === 0) return null
+  const selectedIndex = selectedRevision === null
+    ? revisions.length - 1
+    : revisions.findIndex((entry) => entry.revision === selectedRevision)
+  const current = revisions[Math.max(0, selectedIndex)]
+  const hasNewer = selectedRevision !== null && selectedIndex < revisions.length - 1
+  const canGoBack = selectedIndex > 0
+  const canGoForward = selectedRevision !== null && selectedIndex >= 0 && selectedIndex < revisions.length - 1
+
+  return (
+    <div className="panel replay-bar global-replay-bar" aria-label="Game revision history">
+      <button
+        className="small"
+        disabled={busy || !canGoBack}
+        onClick={() => {
+          const previous = revisions[selectedIndex - 1]
+          if (previous !== undefined) onRevision(previous.revision)
+        }}
+      >
+        ◀ Back
+      </button>
+      <button
+        className="small"
+        disabled={busy || !canGoForward}
+        onClick={() => {
+          const next = revisions[selectedIndex + 1]
+          if (next !== undefined) onRevision(next.revision)
+        }}
+      >
+        Forward ▶
+      </button>
+      <button className="small primary" disabled={busy || selectedRevision === null} onClick={onLive}>
+        Live
+      </button>
+      <span className={selectedRevision === null ? 'tag turn' : 'tag'}>
+        {selectedRevision === null ? 'Live' : `Revision ${selectedRevision}`}
+      </span>
+      {hasNewer && <span className="tag revealed">Newer revisions available</span>}
+      <span className="muted replay-what">
+        {current?.privateDescription ?? current?.publicDescription ?? ''}
+        {current !== undefined && ` — ${current.actor.username}`}
+      </span>
+    </div>
   )
 }
 

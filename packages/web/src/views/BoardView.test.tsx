@@ -2,9 +2,17 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { findBoardAsset } from '@civ/engine'
-import type { BoardPiece } from '@civ/engine'
+import type { BoardPiece, PlayerView } from '@civ/engine'
+
+import type { GameRevisionView } from '../lib/api.js'
 
 import { BoardPalette } from './BoardView.js'
+import {
+  GlobalReplayBar,
+  loadConsistentLive,
+  loadHistoricalIfCurrent,
+  refreshBeforeLive,
+} from './GameView.js'
 
 const piece = (assetId: string, id: string): BoardPiece => ({
   id,
@@ -18,6 +26,94 @@ const piece = (assetId: string, id: string): BoardPiece => ({
   height: 1,
   rotation: 0,
   placedBy: null,
+})
+
+describe('global replay controls', () => {
+  const revisions = [
+    {
+      gameId: 'game',
+      revision: 0,
+      createdAt: '2026-09-19T10:00:00.000Z',
+      actor: { playerId: 'one', username: 'Alice' },
+      publicDescription: 'Game created',
+      privateDescription: null,
+      logIds: [],
+    },
+    {
+      gameId: 'game',
+      revision: 1,
+      createdAt: '2026-09-19T10:01:00.000Z',
+      actor: { playerId: 'two', username: 'Bob' },
+      publicDescription: 'Bob joined',
+      privateDescription: null,
+      logIds: ['log-1'],
+    },
+  ] as const
+
+  it('shows one global Back, Forward and Live timeline', () => {
+    const markup = renderToStaticMarkup(
+      <GlobalReplayBar
+        revisions={revisions}
+        selectedRevision={0}
+        busy={false}
+        onRevision={() => undefined}
+        onLive={() => undefined}
+      />,
+    )
+    expect(markup).toContain('Forward')
+    expect(markup).toContain('Live')
+    expect(markup).toContain('Revision 0')
+    expect(markup).toContain('Newer revisions available')
+    expect(markup).toContain('Game created')
+  })
+
+  it('refreshes the live cache before leaving a historical revision', async () => {
+    const events: string[] = []
+    await refreshBeforeLive(
+      async () => {
+        events.push('reload')
+        return true
+      },
+      () => events.push('live'),
+    )
+    expect(events).toEqual(['reload', 'live'])
+
+    await refreshBeforeLive(async () => false, () => events.push('must not leave replay'))
+    expect(events).toEqual(['reload', 'live'])
+  })
+
+  it('reads revisions before the live game and retries a torn snapshot', async () => {
+    const events: string[] = []
+    let viewRevision = 3
+    const loaded = await loadConsistentLive(
+      async () => {
+        events.push('revisions')
+        return [{ ...revisions[1], revision: 4 }]
+      },
+      async () => {
+        events.push(`game-${viewRevision}`)
+        const view = { rev: viewRevision } as PlayerView
+        viewRevision = 4
+        return view
+      },
+    )
+
+    expect(events).toEqual(['revisions', 'game-3', 'revisions', 'game-4'])
+    expect(loaded.view.rev).toBe(4)
+    expect(loaded.revisions.at(-1)?.revision).toBe(4)
+  })
+
+  it('discards a historical response after navigation changes the active game', async () => {
+    let active = true
+    const pending = loadHistoricalIfCurrent(
+      async () => {
+        active = false
+        return { revision: 1 } as GameRevisionView
+      },
+      () => active,
+    )
+    await expect(pending).resolves.toBeNull()
+  })
 })
 
 describe('BoardPalette finite supplies', () => {

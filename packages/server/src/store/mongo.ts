@@ -13,7 +13,7 @@
  * around as plain strings elsewhere in this codebase.
  */
 
-import type { Collection, Db } from 'mongodb'
+import type { ClientSession, Collection, Db } from 'mongodb'
 import { MongoClient, ObjectId } from 'mongodb'
 
 import type { GameState } from '@civ/engine'
@@ -22,6 +22,7 @@ import { migrateGameState } from '@civ/engine'
 import type {
   ChatMessage,
   FinishedGame,
+  GameRevision,
   PlayerUpdate,
   Repository,
   StoredPlayer,
@@ -65,6 +66,9 @@ const PLAYER_COLLECTION = 'player'
 const CHAT_COLLECTION = 'chat'
 const GAME_COLLECTION = 'game_state'
 const PBF_COLLECTION = 'pbf'
+const REVISION_COLLECTION = 'game_revision'
+
+type GameRevisionDoc = GameRevision & { readonly _id: string }
 
 /** Java: `Chat.getCreatedInMillis` reading a Jackson `LocalDateTime` array. */
 function isoFromLegacyCreated(created: readonly number[]): string | undefined {
@@ -81,26 +85,41 @@ export class MongoRepository implements Repository {
   private readonly chat: Collection<ChatDoc>
   private readonly games: Collection<GameState & { _id: string }>
   private readonly pbf: Collection<PbfDoc>
-  private readonly client: MongoClient | undefined
+  private readonly revisions: Collection<GameRevisionDoc>
+  private readonly transactionClient: MongoClient | undefined
+  private readonly ownedClient: MongoClient | undefined
 
   constructor(db: Db, client?: MongoClient) {
     this.players = db.collection<PlayerDoc>(PLAYER_COLLECTION)
     this.chat = db.collection<ChatDoc>(CHAT_COLLECTION)
     this.games = db.collection<GameState & { _id: string }>(GAME_COLLECTION)
     this.pbf = db.collection<PbfDoc>(PBF_COLLECTION)
-    this.client = client
+    this.revisions = db.collection<GameRevisionDoc>(REVISION_COLLECTION)
+    this.transactionClient = client ?? (db as Db & { readonly client?: MongoClient }).client
+    this.ownedClient = client
   }
 
   /** Connects a new client and returns a repository backed by `dbName`. */
   static async connect(url: string, dbName: string): Promise<MongoRepository> {
     const client = new MongoClient(url)
-    await client.connect()
-    return new MongoRepository(client.db(dbName), client)
+    try {
+      await client.connect()
+      const topology = await client.db('admin').command({ hello: 1 })
+      if (topology['setName'] === undefined && topology['msg'] !== 'isdbgrid') {
+        throw new Error(
+          'MongoDB must be a replica set or sharded cluster because game revisions require transactions',
+        )
+      }
+      return new MongoRepository(client.db(dbName), client)
+    } catch (error) {
+      await client.close()
+      throw error
+    }
   }
 
   /** Closes the client this repository opened in `connect`, if any. */
   async close(): Promise<void> {
-    await this.client?.close()
+    await this.ownedClient?.close()
   }
 
   // ---------------------------------------------------------------------
@@ -178,6 +197,83 @@ export class MongoRepository implements Repository {
     await this.games.replaceOne({ _id: game.id }, game, { upsert: true })
   }
 
+  async saveGameIfRevision(game: GameState, expectedRevision: number): Promise<boolean> {
+    const saved = await this.games.replaceOne(
+      { _id: game.id, rev: expectedRevision },
+      game,
+    )
+    return saved.matchedCount > 0
+  }
+
+  async saveGameWithRevision(
+    game: GameState,
+    revision: GameRevision,
+    expectedRevision: number | null,
+  ): Promise<boolean> {
+    const id = revisionId(revision.gameId, revision.revision)
+    try {
+      return await this.inTransaction(async (session) => {
+        if (expectedRevision === null) {
+          await this.games.insertOne({ ...game, _id: game.id }, { session })
+        } else {
+          const saved = await this.games.replaceOne(
+            { _id: game.id, rev: expectedRevision },
+            game,
+            { session },
+          )
+          if (saved.matchedCount === 0) return false
+        }
+        await this.revisions.insertOne({ ...revision, _id: id }, { session })
+        return true
+      })
+    } catch (error) {
+      if (isDuplicateKeyError(error)) return false
+      throw error
+    }
+  }
+
+  async ensureGameRevision(
+    revision: GameRevision,
+    expectedRevision: number,
+  ): Promise<boolean> {
+    const ensureOnce = async (): Promise<boolean> => this.inTransaction(async (session) => {
+      const game = await this.games.findOne(
+        { _id: revision.gameId, rev: expectedRevision },
+        { projection: { _id: 1 }, session },
+      )
+      if (game === null) return false
+      const existing = await this.revisions.findOne(
+        { gameId: revision.gameId },
+        { projection: { _id: 1 }, session },
+      )
+      if (existing !== null) return true
+      await this.revisions.insertOne(
+        { ...revision, _id: revisionId(revision.gameId, revision.revision) },
+        { session },
+      )
+      return true
+    })
+    try {
+      return await ensureOnce()
+    } catch (error) {
+      // Two first history reads may race to create the same baseline. The
+      // unique revision id makes one insert lose; re-read transactionally so
+      // that a concurrent deletion still returns false rather than reviving it.
+      if (isDuplicateKeyError(error)) return ensureOnce()
+      throw error
+    }
+  }
+
+  async listGameRevisions(gameId: string): Promise<readonly GameRevision[]> {
+    const docs = await this.revisions.find({ gameId }).sort({ revision: 1 }).toArray()
+    return docs.map(stripRevisionId)
+  }
+
+  async findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined> {
+    const doc = await this.revisions.findOne({ _id: revisionId(gameId, revision) })
+    return doc === null ? undefined : stripRevisionId(doc)
+  }
+
   async findGame(id: string): Promise<GameState | undefined> {
     const doc = await this.games.findOne({ _id: id })
     return doc === null ? undefined : migrateGameState(stripMongoId(doc))
@@ -189,8 +285,32 @@ export class MongoRepository implements Repository {
   }
 
   async deleteGame(id: string): Promise<boolean> {
-    const result = await this.games.deleteOne({ _id: id })
-    return result.deletedCount > 0
+    return this.inTransaction(async (session) => {
+      const result = await this.games.deleteOne({ _id: id }, sessionOption(session))
+      await this.revisions.deleteMany({ gameId: id }, sessionOption(session))
+      return result.deletedCount > 0
+    })
+  }
+
+  /** Revisioned writes are never allowed to degrade to non-atomic operations. */
+  private async inTransaction<T>(work: (session: ClientSession) => Promise<T>): Promise<T> {
+    if (this.transactionClient === undefined) {
+      throw new Error('MongoRepository revisioned writes require a transaction-capable MongoClient')
+    }
+
+    const session = this.transactionClient.startSession()
+    try {
+      // The driver's callback API retries TransientTransactionError and
+      // UnknownTransactionCommitResult. On retry, our revision filter observes
+      // the winning write and returns false, which the route maps to HTTP 409.
+      const result = await session.withTransaction(() => work(session))
+      if (result === undefined) {
+        throw new Error('MongoDB transaction completed without a result')
+      }
+      return result
+    } finally {
+      await session.endSession()
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -272,6 +392,23 @@ export class MongoRepository implements Repository {
   async flush(): Promise<void> {
     // Nothing to flush; there is no in-memory buffer to mirror.
   }
+}
+
+function revisionId(gameId: string, revision: number): string {
+  return `${gameId}:${revision}`
+}
+
+function sessionOption(session: ClientSession): { readonly session: ClientSession } {
+  return { session }
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 11000
+}
+
+function stripRevisionId(doc: GameRevisionDoc): GameRevision {
+  const { _id: _ignored, ...revision } = doc
+  return { ...revision, state: migrateGameState(revision.state) }
 }
 
 function toStoredPlayer(doc: PlayerDoc): StoredPlayer {

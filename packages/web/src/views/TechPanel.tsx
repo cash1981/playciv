@@ -5,13 +5,13 @@
  * only says that "a hidden technology" was researched.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { SocialPolicyItem, TechItem } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
-import type { PlayerView, RevealedTechsDto } from '../lib/api.js'
+import type { GameRevisionView, PlayerView, RevealedTechsDto } from '../lib/api.js'
 import { TechTree } from './TechTree.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { ItemCard } from './ItemCard.js'
@@ -23,35 +23,48 @@ interface Props {
   readonly view: PlayerView
   /** Bumped by GameView after each action, so the lists are fetched again. */
   readonly reloadCount: number
+  readonly historical?: GameRevisionView | null
 }
 
-export function TechPanel({ gameId, busy, run, view, reloadCount }: Props): React.JSX.Element {
+export function TechPanel({ gameId, busy, run, view, reloadCount, historical = null }: Props): React.JSX.Element {
   const [available, setAvailable] = useState<readonly TechItem[]>([])
   const [revealed, setRevealed] = useState<readonly RevealedTechsDto[]>([])
   const [policies, setPolicies] = useState<readonly SocialPolicyItem[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [chosenTech, setChosenTech] = useState('')
   const [chosenPolicy, setChosenPolicy] = useState('')
+  const requestEpoch = useRef(0)
 
   const load = useCallback(async () => {
+    const epoch = ++requestEpoch.current
     try {
       const [techs, all, socialPolicies] = await Promise.all([
         api.availableTechs(gameId),
         api.revealedTechs(gameId),
         api.socialPolicies(gameId),
       ])
+      if (epoch !== requestEpoch.current) return
       setAvailable(techs)
       setRevealed(all)
       setPolicies(socialPolicies)
       setLoadError(null)
     } catch (caught) {
+      if (epoch !== requestEpoch.current) return
       setLoadError(errorMessage(caught))
     }
   }, [gameId])
 
   useEffect(() => {
+    if (historical !== null) {
+      requestEpoch.current += 1
+      setAvailable(historical.availableTechs)
+      setRevealed(historical.revealedTechs)
+      setPolicies(historical.socialPolicies)
+      setLoadError(null)
+      return
+    }
     void load()
-  }, [load, reloadCount])
+  }, [historical, load, reloadCount])
 
   const yourTechs = view.you?.techsChosen ?? []
   const yourPolicies = view.you?.socialPolicies ?? []

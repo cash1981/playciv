@@ -7,11 +7,11 @@
  * (issue #68).
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
-import type { LogEntryDto, PendingUndoDto, PlayerView } from '../lib/api.js'
+import type { GameRevisionView, LogEntryDto, PendingUndoDto, PlayerView } from '../lib/api.js'
 import { formatTimestamp } from '../lib/formatTimestamp.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 
@@ -20,32 +20,45 @@ interface Props {
   readonly busy: boolean
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
   readonly reloadCount: number
+  readonly historical?: GameRevisionView | null
+  readonly readOnly?: boolean
 }
 
 type Tab = 'public' | 'private'
 
-export function LogPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.Element {
+export function LogPanel({ gameId, busy, run, reloadCount, historical = null, readOnly = false }: Props): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('public')
   const [publicLog, setPublicLog] = useState<readonly LogEntryDto[]>([])
   const [privateLog, setPrivateLog] = useState<readonly LogEntryDto[]>([])
   const [pending, setPending] = useState<readonly PendingUndoDto[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  const requestEpoch = useRef(0)
 
   const load = useCallback(async () => {
+    const epoch = ++requestEpoch.current
     try {
+      if (historical !== null) {
+        setPublicLog(historical.publicLog)
+        setPrivateLog(historical.privateLog)
+        setPending([])
+        setLoadError(null)
+        return
+      }
       const [pub, priv, undos] = await Promise.all([
         api.publicLog(gameId),
         api.privateLog(gameId),
         api.pendingUndos(gameId),
       ])
+      if (epoch !== requestEpoch.current) return
       setPublicLog(pub)
       setPrivateLog(priv)
       setPending(undos)
       setLoadError(null)
     } catch (caught) {
+      if (epoch !== requestEpoch.current) return
       setLoadError(errorMessage(caught))
     }
-  }, [gameId])
+  }, [gameId, historical])
 
   useEffect(() => {
     void load()
@@ -91,7 +104,7 @@ export function LogPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.E
             {tab === 'private' && entry.canUndo === true && (
               <button
                 className="small"
-                disabled={busy}
+                disabled={busy || readOnly}
                 onClick={() => void run(() => api.initiateUndo(gameId, entry.id))}
               >
                 Ask for undo
@@ -114,14 +127,14 @@ export function LogPanel({ gameId, busy, run, reloadCount }: Props): React.JSX.E
               <span style={{ flex: 1 }} />
               <button
                 className="small"
-                disabled={busy}
+                disabled={busy || readOnly}
                 onClick={() => void run(() => api.voteUndo(gameId, undo.id, true))}
               >
                 Yes
               </button>
               <button
                 className="small danger"
-                disabled={busy}
+                disabled={busy || readOnly}
                 onClick={() => void run(() => api.voteUndo(gameId, undo.id, false))}
               >
                 No

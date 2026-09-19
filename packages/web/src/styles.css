@@ -863,6 +863,10 @@ ul.list > li:last-child {
   border-radius: var(--radius);
 }
 
+.global-replay-bar {
+  margin: 0.6rem 0 1rem;
+}
+
 .replay-bar input[type='range'] {
   padding: 0;
   accent-color: var(--accent);

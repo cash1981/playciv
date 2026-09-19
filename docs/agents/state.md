@@ -13,9 +13,9 @@ _Last updated: 2026-09-19_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 375 engine, 82 server, 18 web |
+| `pnpm -r test` | passing — 400 engine, 92 server, 33 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; issue #63 merged (PR #66), fix/issue-63-arena-ux awaiting review |
+| `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
 ## Done
 
@@ -164,6 +164,7 @@ _Last updated: 2026-09-19_
 - **Issue #74.** Two more fixes on the same branch: arena cards now face each other across the table (the attacker's row gets a base +180° visual rotation on top of its own printed-level rotation, since it renders above the defender's row); and a killed unit no longer blocks its own front — placing or moving a unit onto a front that still holds a killed one reinforces it, moving the fallen unit into `Battle.departedUnits` (see issue #75 below for what happens to its card).
 - **Issue #75.** Reverted the auto-discard-on-end-battle behaviour issue #71 had added, per the human's direct correction: ending a battle now returns every arena unit's card to hand exactly like an unkilled one's — `inBattle` cleared, nothing more — restoring the original issue-63 decision that the player discards a killed unit themselves. A follow-up design question (a reinforced-away unit's card becoming placeable again mid-battle would reopen the issue #68 bug) was put to the human directly: the card stays locked (`inBattle: true`) for the rest of the battle. `Battle` gained `departedUnits: readonly ArenaUnit[]` for this; `endBattleAction` frees `[...battle.arena, ...battle.departedUnits]` together, at the same moment. `ArenaUnit.killed`, the kill/undo-kill toggle, the DEAD tag, and `battleSummaries` excluding killed units from totals are unchanged.
 - **Issue #79.** Two more fixes on the same branch: removed the manual "Draw 3" barbarian button and its `POST /battle/barbarians` route/`api.drawBarbarians` client method — `initiateBattle` already auto-draws 3 barbarians for the left-side player, so the button only invited drawing early or twice; "Discard" stays. `endBattleAction` now logs the winner when a battle ends: each side's remaining HP plus its combat bonus (`PlayerStats.combat`, issue #43, always 0 for barbarians), higher wins, a draw goes to the defender — a new arena-only mechanic specified directly by the human, with no counterpart in the old system. `battleSummaries` is now exported from `state.ts` so `endBattleAction` can reuse it.
+- **Issue #70.** Added immutable full-game revision snapshots and secure viewer-specific historical endpoints, with compare-and-set writes and transactional Mongo persistence. A global Back / Forward / Live bar now replays the complete game page, keeps chat/private notes outside history, disables game mutations in replay, and preserves the selected revision while live updates arrive. Browser-verified and review-approved.
 
 ## In progress
 

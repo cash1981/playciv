@@ -12,12 +12,12 @@
  * items and non-hidden hand items — so the full card face is shown.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { revealAll } from '@civ/engine'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
-import type { RevealedEntry, RevealedPage } from '../lib/api.js'
+import type { GameRevisionView, RevealedEntry, RevealedPage } from '../lib/api.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { itemImageUrl } from './ItemCard.js'
 
@@ -26,21 +26,38 @@ const PAGE_SIZE = 20
 interface Props {
   readonly gameId: string
   readonly reloadCount: number
+  readonly historical?: GameRevisionView | null
 }
 
-export function RevealedPanel({ gameId, reloadCount }: Props): React.JSX.Element {
+export function RevealedPanel({ gameId, reloadCount, historical = null }: Props): React.JSX.Element {
   const [page, setPage] = useState(1)
   const [data, setData] = useState<RevealedPage | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const requestEpoch = useRef(0)
 
   const load = useCallback(async () => {
+    const epoch = ++requestEpoch.current
+    if (historical !== null) {
+      const start = (page - 1) * PAGE_SIZE
+      setData({
+        items: historical.revealed.slice(start, start + PAGE_SIZE),
+        total: historical.revealed.length,
+        page,
+        size: PAGE_SIZE,
+      })
+      setLoadError(null)
+      return
+    }
     try {
-      setData(await api.revealed(gameId, page, PAGE_SIZE))
+      const next = await api.revealed(gameId, page, PAGE_SIZE)
+      if (epoch !== requestEpoch.current) return
+      setData(next)
       setLoadError(null)
     } catch (caught) {
+      if (epoch !== requestEpoch.current) return
       setLoadError(errorMessage(caught))
     }
-  }, [gameId, page])
+  }, [gameId, historical, page])
 
   useEffect(() => {
     void load()
