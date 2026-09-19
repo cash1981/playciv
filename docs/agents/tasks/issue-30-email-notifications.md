@@ -3,7 +3,7 @@
 - **Slug:** `issue-30-email-notifications`
 - **Branch:** `feat/issue-30-email-notifications`
 - **Owner:** OpenCode (DeepSeek V4.1 Flash)
-- **Status:** in progress
+- **Status:** done — self-checked against the brief and the Java reference, PR to open
 
 ## Goal
 
@@ -126,26 +126,27 @@ Java's `#/game/`). The unsubscribe link becomes
 
 ## Acceptance criteria
 
-- [ ] Ending a turn emails the next player, subject `It is your turn`, body
+- [x] Ending a turn emails the next player, subject `It is your turn`, body
       `It's your turn to play in <name>!\n\nGo to <APP_ORIGIN>/game/<id> to start your turn`.
-- [ ] `taketurn` sends no mail (Java sent on end-turn only).
-- [ ] Joining emails the other players, subject `Game update`; the joiner is not
+- [x] `taketurn` sends no mail (Java sent on end-turn only).
+- [x] Joining emails the other players, subject `Game update`; the joiner is not
       emailed.
-- [ ] Chat emails the other players, subject `New Chat`, at most once per
+- [x] Chat emails the other players, subject `New Chat`, at most once per
       player per game per 30 minutes.
-- [ ] Turn-phase updates email the other players with Java's five subjects,
+- [x] Turn-phase updates email the other players with Java's five subjects,
       bodies and 30-minute throttle, and the actor is excluded.
-- [ ] Ending a game emails every player, subject `Game ended`; deleting one
+- [x] Ending a game emails every player, subject `Game ended`; deleting one
       emails every player, subject `Game deleted`.
-- [ ] The new-game broadcast is off unless `MAIL_BROADCAST_NEW_GAMES` is on, then
+- [x] The new-game broadcast is off unless `MAIL_BROADCAST_NEW_GAMES` is on, then
       emails opted-in players at most once per 3 hours each.
-- [ ] A player with `disableEmail` gets no notification, however triggered.
-- [ ] The stop link sets `disableEmail`, the start link clears it, both return
+- [x] A player with `disableEmail` gets no notification, however triggered.
+- [x] The stop link sets `disableEmail`, the start link clears it, both return
       the old HTML, and both work without a token.
-- [ ] Every outgoing mail carries the unsubscribe link.
-- [ ] A missing or failing mailer never fails the game request.
-- [ ] No `Date.now()`/`Math.random()`/I/O added to `packages/engine`.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Every outgoing mail carries the unsubscribe link.
+- [x] A missing or failing mailer never fails the game request.
+- [x] No `Date.now()`/`Math.random()`/I/O added to `packages/engine`.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+      (400 engine / 108 server / 33 web).
 
 ## Open questions
 

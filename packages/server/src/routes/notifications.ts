@@ -26,7 +26,9 @@ export function registerNotificationRoutes(app: App, context: AppContext): void 
     if (updated === undefined) {
       return c.html(page('<h1>Unknown player</h1>'), 400)
     }
-    const startUrl = `${context.appOrigin}/api/admin/email/notification/${playerId}/start`
+    const startUrl =
+      `${context.appOrigin}/api/admin/email/notification/` +
+      `${encodeURIComponent(playerId)}/start`
     return c.html(
       page(
         "<h1>You will no longer get anymore emails. Don't forget to check in once in a " +

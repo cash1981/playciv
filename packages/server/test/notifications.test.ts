@@ -4,7 +4,9 @@
  * deleteGame,addChat}` and `TurnAction.update*`.
  *
  * Every test drives the app through `app.request` with a fake mailer, so no
- * provider is ever contacted.
+ * provider is ever contacted. The one exception is the new-game broadcast: the
+ * route fires it in the background, so that test calls the notification service
+ * directly to avoid racing it.
  */
 
 import type { GameState } from '@civ/engine'
