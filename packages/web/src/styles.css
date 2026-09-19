@@ -1262,6 +1262,15 @@ ul.history > li {
   margin: 0;
 }
 
+/* Marked, not removed — a kill is undoable until the battle ends (issue #71). */
+.arena-unit-card.killed .card {
+  opacity: 0.45;
+}
+
+.arena-unit-card .tag {
+  align-self: center;
+}
+
 /* Same size as a battlehand card (`.card-grid.small`) — issue #68 asked for
    this explicitly, rather than the further-shrunk size tried earlier. */
 .arena-unit-card .card-art {

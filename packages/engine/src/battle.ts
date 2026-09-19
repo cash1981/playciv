@@ -69,6 +69,13 @@ export interface ArenaUnit {
    * `health`, which stay independently user-entered.
    */
   readonly rotation: Rotation
+  /**
+   * Marked, not removed, when killed — so a kill can be undone (issue #71)
+   * right up until the battle ends. The source card is only actually
+   * discarded, and this unit dropped from the arena, when the battle ends
+   * with this still `true`.
+   */
+  readonly killed: boolean
 }
 
 /** The one battle that may be active in a game at a time. */

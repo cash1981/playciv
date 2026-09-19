@@ -12,7 +12,7 @@ import type { Rotation } from '../board.js'
 import type { EngineError } from '../errors.js'
 import type { UnitItem } from '../item.js'
 import { isUnit, revealAll } from '../item.js'
-import { appendPublicLog } from '../log.js'
+import { appendLog, appendPublicLog } from '../log.js'
 import { nextId } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
@@ -62,6 +62,33 @@ function playerToLeft(state: GameState, ofPlayerId: string): Playerhand | undefi
   return state.players[(idx + 1) % state.players.length]
 }
 
+/**
+ * Appends a log line for a repeatable arena adjustment (move, kill toggle),
+ * dropping the immediately preceding entry first if it was the same kind of
+ * adjustment on the same card — so nudging a unit back and forth, or
+ * kill/undo-kill a few times, leaves one line instead of one per click
+ * (issue #71). Only ever looks at the single most recent entry: it is a
+ * clutter guard for the common case of a player changing their mind a few
+ * times in a row, not a general log-history rewrite.
+ */
+function appendRollingArenaLog(
+  state: GameState,
+  username: string,
+  playerId: string,
+  card: UnitItem,
+  tag: string,
+  message: string,
+): GameState {
+  const prefix = `${username} ${tag}`
+  const last = state.log[state.log.length - 1]
+  const isSameRollingChange = last?.item?.id === card.id && last.publicLog.startsWith(prefix)
+  const trimmed = isSameRollingChange ? { ...state, log: state.log.slice(0, -1) } : state
+
+  // Carried on `item` only for the same-rolling-change check above — arena
+  // units are already fully public, so this adds no new disclosure.
+  return appendLog(trimmed, { username, playerId, item: card, publicLog: `${username} ${message}` })
+}
+
 // ---------------------------------------------------------------------------
 // initiateBattle
 // ---------------------------------------------------------------------------
@@ -78,6 +105,9 @@ export interface InitiateBattleInput {
  * For barbarians: the system draws 3 barbarian units automatically (exactly as
  * `drawBarbarians` does, but for the player to the initiator's left). That
  * player is the barbarian controller.
+ *
+ * The battle turn opens with the defender (issue #71) — the initiator called
+ * the fight, so the side being called out gets to react first.
  *
  * Errors if a battle is already active, or if the initiator names themselves
  * as the opponent.
@@ -125,7 +155,7 @@ export function initiateBattle(
         id: battleId,
         attacker: { kind: 'player', playerId: input.initiatorId },
         defender: { kind: 'barbarians', playerId: left.playerId },
-        turn: 'attacker',
+        turn: 'defender',
         arena: [],
       },
     })
@@ -152,7 +182,7 @@ export function initiateBattle(
       id: battleId,
       attacker: { kind: 'player', playerId: input.initiatorId },
       defender: { kind: 'player', playerId: input.opponentId },
-      turn: 'attacker',
+      turn: 'defender',
       arena: [],
     },
   })
@@ -267,6 +297,7 @@ export function placeUnitInArena(
     health: input.health,
     placedBy: input.playerId,
     rotation: 0,
+    killed: false,
   }
 
   nextState = appendPublicLog(
@@ -281,6 +312,143 @@ export function placeUnitInArena(
     battle: {
       ...battle,
       arena: [...battle.arena, arenaUnit],
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// moveArenaUnit
+// ---------------------------------------------------------------------------
+
+export interface MoveArenaUnitInput {
+  readonly playerId: string
+  readonly arenaUnitId: string
+  readonly position: number
+}
+
+/**
+ * Moves an already-placed unit to a different front on the same side
+ * (issue #71) — the arrangement is only locked in once the battle ends, so a
+ * player can rethink their formation right up to that point. Restricted to
+ * the side's own participant, same as `placeUnitInArena`: rearranging an
+ * opponent's units is not a legitimate "any game member" action.
+ */
+export function moveArenaUnit(
+  state: GameState,
+  input: MoveArenaUnitInput,
+): ActionResult {
+  if (state.battle === null) return err({ kind: 'NO_BATTLE_ACTIVE' })
+
+  const found = requireAccess(state, input.playerId)
+  if (!found.ok) return found
+  const player = found.value
+
+  const battle = state.battle
+  const unit = battle.arena.find((u) => u.id === input.arenaUnitId)
+  if (unit === undefined) {
+    return err({ kind: 'ARENA_UNIT_NOT_FOUND', arenaUnitId: input.arenaUnitId })
+  }
+
+  if (sideForPlayer(battle, input.playerId) !== unit.side) {
+    return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
+  }
+
+  if (input.position === unit.position) return ok(state)
+
+  const positionOccupied = battle.arena.some(
+    (u) => u.id !== unit.id && u.side === unit.side && u.position === input.position,
+  )
+  if (positionOccupied) {
+    return err({ kind: 'ARENA_POSITION_OCCUPIED' })
+  }
+
+  const updatedUnit: ArenaUnit = { ...unit, position: input.position }
+
+  const nextState = appendRollingArenaLog(
+    state,
+    player.username,
+    player.playerId,
+    unit.unit,
+    `moves ${revealAll(unit.unit)} to`,
+    `moves ${revealAll(unit.unit)} to ${unit.side} front #${input.position}`,
+  )
+
+  return ok({
+    ...nextState,
+    battle: {
+      ...battle,
+      arena: battle.arena.map((u) => (u.id === input.arenaUnitId ? updatedUnit : u)),
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// returnArenaUnitToHand
+// ---------------------------------------------------------------------------
+
+export interface ReturnArenaUnitToHandInput {
+  readonly playerId: string
+  readonly arenaUnitId: string
+}
+
+/**
+ * Pulls a placed unit back out of the arena — undoes `placeUnitInArena`
+ * entirely (issue #71: the "x" button). Clears `inBattle` on the source card
+ * so it is playable again, and drops the arena entry. Same side restriction
+ * as `moveArenaUnit`. Works on a killed unit too: that simply undoes both the
+ * kill and the placement in one step.
+ */
+export function returnArenaUnitToHand(
+  state: GameState,
+  input: ReturnArenaUnitToHandInput,
+): ActionResult {
+  if (state.battle === null) return err({ kind: 'NO_BATTLE_ACTIVE' })
+
+  const found = requireAccess(state, input.playerId)
+  if (!found.ok) return found
+  const player = found.value
+
+  const battle = state.battle
+  const arenaUnit = battle.arena.find((u) => u.id === input.arenaUnitId)
+  if (arenaUnit === undefined) {
+    return err({ kind: 'ARENA_UNIT_NOT_FOUND', arenaUnitId: input.arenaUnitId })
+  }
+
+  if (sideForPlayer(battle, input.playerId) !== arenaUnit.side) {
+    return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
+  }
+
+  const owner = findPlayer(state, arenaUnit.placedBy)
+  let nextState = state
+  if (owner !== undefined) {
+    if (battle.defender.kind === 'barbarians' && arenaUnit.side === 'defender') {
+      const updated = owner.barbarians.map((u) =>
+        u.id === arenaUnit.unit.id ? { ...u, inBattle: false } : u,
+      )
+      nextState = withPlayer(nextState, { ...owner, barbarians: updated })
+    } else {
+      const updatedBattlehand = owner.battlehand.map((u) =>
+        u.id === arenaUnit.unit.id ? { ...u, inBattle: false } : u,
+      )
+      const updatedItems = owner.items.map((it) =>
+        it.id === arenaUnit.unit.id ? { ...it, inBattle: false } as typeof it : it,
+      )
+      nextState = withPlayer(nextState, { ...owner, battlehand: updatedBattlehand, items: updatedItems })
+    }
+  }
+
+  nextState = appendPublicLog(
+    nextState,
+    player.username,
+    player.playerId,
+    `returns ${revealAll(arenaUnit.unit)} to hand`,
+  )
+
+  return ok({
+    ...nextState,
+    battle: {
+      ...battle,
+      arena: battle.arena.filter((u) => u.id !== input.arenaUnitId),
     },
   })
 }
@@ -423,8 +591,15 @@ export interface KillArenaUnitInput {
   readonly arenaUnitId: string
 }
 
-// Removes the unit from the arena and clears inBattle on its source card.
-// killed is NOT set — players manage their own cards and discard manually.
+/**
+ * Toggles `killed` on an arena unit (issue #71) rather than removing it
+ * outright — a kill can be regretted, so it stays undoable (call this again)
+ * right up until the battle ends. Nothing about the source card changes here;
+ * `endBattleAction` is what actually discards a still-killed unit's card when
+ * the battle closes. Still participant-only (issue #65's guard stands) —
+ * being undoable lowers the risk, but deciding who is alive stays with the
+ * two combatants.
+ */
 export function killArenaUnit(
   state: GameState,
   input: KillArenaUnitInput,
@@ -437,7 +612,7 @@ export function killArenaUnit(
 
   const battle = state.battle
 
-  // Participant guard: only combatants may kill an arena unit.
+  // Participant guard: only combatants may kill (or undo a kill on) an arena unit.
   if (sideForPlayer(battle, input.playerId) === null) {
     return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
   }
@@ -447,45 +622,25 @@ export function killArenaUnit(
     return err({ kind: 'ARENA_UNIT_NOT_FOUND', arenaUnitId: input.arenaUnitId })
   }
 
-  // Mark killed on the source card — find its owner and update the hand
-  const ownerSide =
-    arenaUnit.side === 'attacker' ? battle.attacker : battle.defender
-  const owner = findPlayer(state, ownerSide.playerId)
+  const killed = !arenaUnit.killed
+  const updatedUnit: ArenaUnit = { ...arenaUnit, killed }
 
-  let nextState = state
-
-  // Clear inBattle on the source card — the unit returns to the hand's
-  // "available" state. Players discard killed units themselves (revival cards
-  // such as Oracle can bring units back). We do NOT set `killed: true` here.
-  if (owner !== undefined) {
-    if (ownerSide.kind === 'barbarians') {
-      const updatedBarbarians = owner.barbarians.map((u) =>
-        u.id === arenaUnit.unit.id ? { ...u, inBattle: false } : u,
-      )
-      nextState = withPlayer(nextState, { ...owner, barbarians: updatedBarbarians })
-    } else {
-      const updatedBattlehand = owner.battlehand.map((u) =>
-        u.id === arenaUnit.unit.id ? { ...u, inBattle: false } : u,
-      )
-      const updatedItems = owner.items.map((it) =>
-        it.id === arenaUnit.unit.id ? { ...it, inBattle: false } as typeof it : it,
-      )
-      nextState = withPlayer(nextState, { ...owner, battlehand: updatedBattlehand, items: updatedItems })
-    }
-  }
-
-  nextState = appendPublicLog(
-    nextState,
+  const nextState = appendRollingArenaLog(
+    state,
     player.username,
     player.playerId,
-    `kills ${revealAll(arenaUnit.unit)} in the arena`,
+    arenaUnit.unit,
+    killed ? `kills ${revealAll(arenaUnit.unit)}` : `undoes the kill on ${revealAll(arenaUnit.unit)}`,
+    killed
+      ? `kills ${revealAll(arenaUnit.unit)} in the arena`
+      : `undoes the kill on ${revealAll(arenaUnit.unit)} in the arena`,
   )
 
   return ok({
     ...nextState,
     battle: {
       ...battle,
-      arena: battle.arena.filter((u) => u.id !== input.arenaUnitId),
+      arena: battle.arena.map((u) => (u.id === input.arenaUnitId ? updatedUnit : u)),
     },
   })
 }
@@ -548,8 +703,11 @@ export interface EndBattleInput {
  * Ends the active battle and cleans up.
  *
  * If a battle is active:
- *   - Clears `inBattle` on all arena units' source cards (both sides).
- *   - Does NOT touch `killed` — players handle their own discard.
+ *   - A unit still marked `killed` has its source card discarded outright
+ *     (issue #71) — killing is undoable up to this point (see
+ *     `killArenaUnit`), but this is the point of no return.
+ *   - Every other arena unit's source card has `inBattle` cleared, so it
+ *     returns to the hand's "available" state.
  *   - Sets `battle` to null.
  *
  * If no battle is active, falls back to the original `endBattle` behaviour in
@@ -584,7 +742,10 @@ export function endBattleAction(
     battle.defender.playerId === input.playerId
   if (!isParticipant) return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
 
-  // Clear inBattle on all arena unit source cards, for both sides
+  // For each arena unit, either discard the source card (if still marked
+  // killed — issue #71: a kill is only final once the battle actually ends,
+  // so it should not silently reappear in hand afterwards) or clear its
+  // `inBattle` flag so it returns to the hand's "available" state.
   let nextState = state
   for (const arenaUnit of battle.arena) {
     const ownerSide =
@@ -592,7 +753,22 @@ export function endBattleAction(
     const owner = findPlayer(nextState, ownerSide.playerId)
     if (owner === undefined) continue
 
-    if (ownerSide.kind === 'barbarians') {
+    if (arenaUnit.killed) {
+      const discardedCard = { ...arenaUnit.unit, hidden: true }
+      if (ownerSide.kind === 'barbarians') {
+        const updated = owner.barbarians.filter((u) => u.id !== arenaUnit.unit.id)
+        nextState = withPlayer(nextState, { ...owner, barbarians: updated })
+      } else {
+        const updatedBattlehand = owner.battlehand.filter((u) => u.id !== arenaUnit.unit.id)
+        const updatedItems = owner.items.filter((it) => it.id !== arenaUnit.unit.id)
+        nextState = withPlayer(nextState, {
+          ...owner,
+          battlehand: updatedBattlehand,
+          items: updatedItems,
+        })
+      }
+      nextState = { ...nextState, discardedItems: [...nextState.discardedItems, discardedCard] }
+    } else if (ownerSide.kind === 'barbarians') {
       const updated = owner.barbarians.map((u) =>
         u.id === arenaUnit.unit.id ? { ...u, inBattle: false } : u,
       )

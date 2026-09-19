@@ -392,9 +392,15 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
 
   const [opponentId, setOpponentId] = useState('')
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null)
+  const [draggingArenaUnitId, setDraggingArenaUnitId] = useState<string | null>(null)
 
   function handleDragStart(unitId: string): void {
     setDraggingUnitId(unitId)
+  }
+
+  function handleArenaDragStart(e: React.DragEvent<HTMLLIElement>, arenaUnitId: string): void {
+    e.dataTransfer.setData('text/plain', arenaUnitId)
+    setDraggingArenaUnitId(arenaUnitId)
   }
 
   function placeInArena(unitId: string, side: BattleSideId, position: number): void {
@@ -404,6 +410,12 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
   }
 
   function handleDropOnArena(side: BattleSideId, position: number): void {
+    if (draggingArenaUnitId !== null) {
+      const arenaUnitId = draggingArenaUnitId
+      setDraggingArenaUnitId(null)
+      void run(() => api.moveArenaUnit(gameId, arenaUnitId, position, rev))
+      return
+    }
     if (draggingUnitId === null) return
     placeInArena(draggingUnitId, side, position)
     setDraggingUnitId(null)
@@ -609,8 +621,11 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
               rev={rev}
               run={run}
               draggingUnitId={draggingUnitId}
+              draggingArenaUnitId={draggingArenaUnitId}
+              onArenaDragStart={handleArenaDragStart}
               onDropUnit={handleDropOnArena}
               canManage={mySideInBattle !== null}
+              isOwnSide={mySideInBattle === 'attacker'}
             />
             <ArenaRow
               label={defenderSummary?.label ?? 'Defender'}
@@ -622,8 +637,11 @@ function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element
               rev={rev}
               run={run}
               draggingUnitId={draggingUnitId}
+              draggingArenaUnitId={draggingArenaUnitId}
+              onArenaDragStart={handleArenaDragStart}
               onDropUnit={handleDropOnArena}
               canManage={mySideInBattle !== null}
+              isOwnSide={mySideInBattle === 'defender'}
             />
           </div>
         </div>
@@ -642,12 +660,17 @@ interface ArenaRowProps {
   readonly rev: number
   readonly run: Run
   readonly draggingUnitId: string | null
+  readonly draggingArenaUnitId: string | null
+  readonly onArenaDragStart: (e: React.DragEvent<HTMLLIElement>, arenaUnitId: string) => void
   readonly onDropUnit: (side: BattleSideId, position: number) => void
   readonly canManage: boolean
+  /** Whether the viewer controls this side — gates moving/returning units. */
+  readonly isOwnSide: boolean
 }
 
 function ArenaRow({
-  label, side, units, maxPositions, gameId, busy, rev, run, draggingUnitId, onDropUnit, canManage,
+  label, side, units, maxPositions, gameId, busy, rev, run,
+  draggingUnitId, draggingArenaUnitId, onArenaDragStart, onDropUnit, canManage, isOwnSide,
 }: ArenaRowProps): React.JSX.Element {
   const [dragOver, setDragOver] = useState<number | null>(null)
 
@@ -659,7 +682,7 @@ function ArenaRow({
       <div className="arena-row-slots">
         {positions.map((pos) => {
           const unit = units.find((u) => u.position === pos) ?? null
-          const isDragOver = dragOver === pos && draggingUnitId !== null
+          const isDragOver = dragOver === pos && (draggingUnitId !== null || draggingArenaUnitId !== null)
           return (
             <div
               key={pos}
@@ -669,7 +692,16 @@ function ArenaRow({
               onDrop={() => { setDragOver(null); onDropUnit(side, pos) }}
             >
               {unit !== null ? (
-                <ArenaUnitCard unit={unit} gameId={gameId} busy={busy} rev={rev} run={run} canManage={canManage} />
+                <ArenaUnitCard
+                  unit={unit}
+                  gameId={gameId}
+                  busy={busy}
+                  rev={rev}
+                  run={run}
+                  canManage={canManage}
+                  canMove={isOwnSide}
+                  onDragStart={(e) => onArenaDragStart(e, unit.id)}
+                />
               ) : (
                 <div className="arena-slot-empty">
                   {isDragOver ? 'Drop here' : `#${pos}`}
@@ -690,9 +722,14 @@ interface ArenaUnitCardProps {
   readonly rev: number
   readonly run: Run
   readonly canManage: boolean
+  /** Whether the viewer controls this unit's side — gates move/return. */
+  readonly canMove: boolean
+  readonly onDragStart: (e: React.DragEvent<HTMLLIElement>) => void
 }
 
-function ArenaUnitCard({ unit, gameId, busy, rev, run, canManage }: ArenaUnitCardProps): React.JSX.Element {
+function ArenaUnitCard({
+  unit, gameId, busy, rev, run, canManage, canMove, onDragStart,
+}: ArenaUnitCardProps): React.JSX.Element {
   const [attack, setAttack] = useState(unit.attack)
   const [health, setHealth] = useState(unit.health)
   const attackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -718,9 +755,21 @@ function ArenaUnitCard({ unit, gameId, busy, rev, run, canManage }: ArenaUnitCar
     }, 600)
   }
 
+  // The card's own name/number label is otherwise frozen at the printed
+  // values from the moment it was placed — show the live attack/health
+  // instead, so rotating (or editing the stat fields) visibly changes what
+  // the card says it is (issue #71).
+  const displayUnit = { ...unit.unit, attack: unit.attack, health: unit.health }
+
   return (
-    <div className="arena-unit-card">
-      <ItemCard item={unit.unit} rotation={unit.rotation} />
+    <div className={`arena-unit-card${unit.killed ? ' killed' : ''}`}>
+      <ItemCard
+        item={displayUnit}
+        rotation={unit.rotation}
+        draggable={canMove}
+        onDragStart={onDragStart}
+      />
+      {unit.killed && <span className="tag discarded">DEAD</span>}
       <button
         className="small"
         disabled={busy}
@@ -751,7 +800,18 @@ function ArenaUnitCard({ unit, gameId, busy, rev, run, canManage }: ArenaUnitCar
           style={{ marginTop: '0.2rem', width: '100%' }}
           onClick={() => void run(() => api.killArenaUnit(gameId, unit.id, rev))}
         >
-          Kill
+          {unit.killed ? 'Undo kill' : 'Kill'}
+        </button>
+      )}
+      {canMove && (
+        <button
+          className="small"
+          disabled={busy}
+          style={{ marginTop: '0.2rem', width: '100%' }}
+          title="Return to hand — undoes placing this unit"
+          onClick={() => void run(() => api.returnArenaUnitToHand(gameId, unit.id, rev))}
+        >
+          × Return to hand
         </button>
       )}
     </div>

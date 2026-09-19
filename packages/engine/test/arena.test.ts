@@ -12,7 +12,9 @@ import {
   endBattleTurn,
   initiateBattle,
   killArenaUnit,
+  moveArenaUnit,
   placeUnitInArena,
+  returnArenaUnitToHand,
   rotateArenaUnit,
   setArenaUnitStat,
 } from '../src/actions/arena.js'
@@ -56,7 +58,8 @@ describe('initiateBattle', () => {
     expect(after.battle).not.toBeNull()
     expect(after.battle?.attacker.playerId).toBe(CASH1981)
     expect(after.battle?.defender.playerId).toBe(KARANDRAS1)
-    expect(after.battle?.turn).toBe('attacker')
+    // The initiator called the fight — the defender reacts first (issue #71).
+    expect(after.battle?.turn).toBe('defender')
     expect(after.battle?.arena).toHaveLength(0)
   })
 
@@ -179,11 +182,205 @@ describe('placeUnitInArena', () => {
 })
 
 // ---------------------------------------------------------------------------
+// moveArenaUnit
+// ---------------------------------------------------------------------------
+
+describe('moveArenaUnit', () => {
+  it('changes the position of an already-placed unit', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+
+    const arenaUnitId = state.battle!.arena[0]!.id
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId, position: 3 }))
+
+    expect(state.battle!.arena).toHaveLength(1)
+    expect(state.battle!.arena[0]!.position).toBe(3)
+  })
+
+  it('collapses repeated moves of the same unit into one log entry', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+    const logLengthAfterPlace = state.log.length
+
+    const arenaUnitId = state.battle!.arena[0]!.id
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId, position: 1 }))
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId, position: 2 }))
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId, position: 3 }))
+
+    // Three moves, but only one new log line beyond the placement.
+    expect(state.log.length).toBe(logLengthAfterPlace + 1)
+    expect(state.log[state.log.length - 1]!.publicLog).toContain('front #3')
+  })
+
+  it('errors on a position already held by another unit on the same side', () => {
+    let state = withBattlehand(CASH1981, 2)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const [unit1, unit2] = findPlayer(state, CASH1981)!.battlehand
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit1!.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit1!.attack,
+        health: unit1!.health,
+      }),
+    )
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit2!.id,
+        side: 'attacker',
+        position: 1,
+        attack: unit2!.attack,
+        health: unit2!.health,
+      }),
+    )
+
+    const movedUnitId = state.battle!.arena.find((u) => u.unit.id === unit2!.id)!.id
+    const error = unwrapErr(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: movedUnitId, position: 0 }))
+    expect(error.kind).toBe('ARENA_POSITION_OCCUPIED')
+  })
+
+  it('rejects moving a unit on the other side', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+
+    const arenaUnitId = state.battle!.arena[0]!.id
+    const error = unwrapErr(
+      moveArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId, position: 1 }),
+    )
+    expect(error.kind).toBe('NOT_IN_THIS_BATTLE')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// returnArenaUnitToHand
+// ---------------------------------------------------------------------------
+
+describe('returnArenaUnitToHand', () => {
+  it('removes the unit from the arena and clears inBattle, undoing placement', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+
+    const arenaUnitId = state.battle!.arena[0]!.id
+    state = unwrap(returnArenaUnitToHand(state, { playerId: CASH1981, arenaUnitId }))
+
+    expect(state.battle!.arena).toHaveLength(0)
+    const bh = findPlayer(state, CASH1981)!.battlehand.find((u) => u.id === unit.id)
+    expect(bh?.inBattle).toBe(false)
+  })
+
+  it('rejects returning a unit on the other side', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+
+    const arenaUnitId = state.battle!.arena[0]!.id
+    const error = unwrapErr(
+      returnArenaUnitToHand(state, { playerId: KARANDRAS1, arenaUnitId }),
+    )
+    expect(error.kind).toBe('NOT_IN_THIS_BATTLE')
+    expect(state.battle!.arena).toHaveLength(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // killArenaUnit
 // ---------------------------------------------------------------------------
 
 describe('killArenaUnit', () => {
-  it('removes the unit from the arena and clears inBattle on items and battlehand', () => {
+  it('toggles killed without removing the unit from the arena or touching inBattle', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+
+    const arenaUnitId = state.battle!.arena[0]!.id
+    expect(state.battle!.arena[0]!.killed).toBe(false)
+
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId }))
+
+    // Still in the arena, just marked killed.
+    expect(state.battle!.arena).toHaveLength(1)
+    expect(state.battle!.arena[0]!.killed).toBe(true)
+
+    const stillPlaced = findPlayer(state, CASH1981)!
+    const bh = stillPlaced.battlehand.find((u) => u.id === unit.id)
+    expect(bh?.inBattle).toBe(true)
+  })
+
+  it('is undoable — calling it again un-kills the unit', () => {
     let state = withBattlehand(CASH1981)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
 
@@ -201,19 +398,10 @@ describe('killArenaUnit', () => {
 
     const arenaUnitId = state.battle!.arena[0]!.id
     state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId }))
+    expect(state.battle!.arena[0]!.killed).toBe(true)
 
-    // Arena is empty
-    expect(state.battle?.arena).toHaveLength(0)
-
-    const updated = findPlayer(state, CASH1981)!
-    // inBattle cleared on battlehand
-    const bh = updated.battlehand.find((u) => u.id === unit.id)
-    expect(bh).toBeDefined()
-    expect(bh!.inBattle).toBe(false)
-    // inBattle cleared on items
-    const it = updated.items.find((i) => i.id === unit.id)
-    expect(it).toBeDefined()
-    expect((it as { inBattle?: boolean }).inBattle).toBe(false)
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId }))
+    expect(state.battle!.arena[0]!.killed).toBe(false)
   })
 
   it('does NOT set killed: true on the source card', () => {
@@ -260,8 +448,8 @@ describe('killArenaUnit', () => {
     // ITCHI is not part of the CASH1981 vs KARANDRAS1 battle
     const error = unwrapErr(killArenaUnit(state, { playerId: ITCHI, arenaUnitId }))
     expect(error.kind).toBe('NOT_IN_THIS_BATTLE')
-    // Unit stays in the arena
-    expect(state.battle!.arena).toHaveLength(1)
+    // Unit stays alive
+    expect(state.battle!.arena[0]!.killed).toBe(false)
   })
 })
 
@@ -298,6 +486,48 @@ describe('endBattleAction', () => {
     const it = updated.items.find((i) => i.id === unit.id)
     expect(it).toBeDefined()
     expect((it as { inBattle?: boolean }).inBattle).toBe(false)
+  })
+
+  it('discards a still-killed unit\'s source card instead of returning it to hand', () => {
+    let state = withBattlehand(CASH1981, 2)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const [killedUnit, survivor] = findPlayer(state, CASH1981)!.battlehand
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: killedUnit!.id,
+        side: 'attacker',
+        position: 0,
+        attack: killedUnit!.attack,
+        health: killedUnit!.health,
+      }),
+    )
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: survivor!.id,
+        side: 'attacker',
+        position: 1,
+        attack: survivor!.attack,
+        health: survivor!.health,
+      }),
+    )
+
+    const killedArenaUnitId = state.battle!.arena.find((u) => u.unit.id === killedUnit!.id)!.id
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId: killedArenaUnitId }))
+
+    state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+
+    const updated = findPlayer(state, CASH1981)!
+    // The killed unit's card is gone from hand/items and sits in discardedItems.
+    expect(updated.battlehand.some((u) => u.id === killedUnit!.id)).toBe(false)
+    expect(updated.items.some((it) => it.id === killedUnit!.id)).toBe(false)
+    expect(state.discardedItems.some((it) => it.id === killedUnit!.id)).toBe(true)
+
+    // The unkilled unit still returns to hand as before.
+    const survivorHand = updated.battlehand.find((u) => u.id === survivor!.id)
+    expect(survivorHand?.inBattle).toBe(false)
   })
 
   it('rejects a non-participant trying to end an active battle', () => {
@@ -504,6 +734,31 @@ describe('rotateArenaUnit', () => {
     const migrated = migrateGameState(older as unknown as GameState)
     expect(migrated.battle!.arena[0]!.rotation).toBe(0)
   })
+
+  it('migrating a saved battle backfills killed: false on arena units missing it', () => {
+    let state = withBattlehand(CASH1981)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+
+    // Simulate a game saved before undoable kills existed (issue #71).
+    const arenaUnit = state.battle!.arena[0]! as unknown as Record<string, unknown>
+    delete arenaUnit['killed']
+    const older = { ...state, battle: { ...state.battle, arena: [arenaUnit] } }
+
+    const migrated = migrateGameState(older as unknown as GameState)
+    expect(migrated.battle!.arena[0]!.killed).toBe(false)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -511,17 +766,18 @@ describe('rotateArenaUnit', () => {
 // ---------------------------------------------------------------------------
 
 describe('endBattleTurn', () => {
-  it('flips battle.turn from attacker to defender and back', () => {
+  it('flips battle.turn from defender to attacker and back', () => {
     let state = firstCivGame()
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
 
-    expect(state.battle!.turn).toBe('attacker')
-
-    state = unwrap(endBattleTurn(state, { playerId: CASH1981 }))
+    // The defender opens (issue #71).
     expect(state.battle!.turn).toBe('defender')
 
     state = unwrap(endBattleTurn(state, { playerId: KARANDRAS1 }))
     expect(state.battle!.turn).toBe('attacker')
+
+    state = unwrap(endBattleTurn(state, { playerId: CASH1981 }))
+    expect(state.battle!.turn).toBe('defender')
   })
 
   it('rejects a non-participant trying to end the battle turn', () => {
@@ -531,7 +787,7 @@ describe('endBattleTurn', () => {
     // ITCHI is not part of the CASH1981 vs KARANDRAS1 battle
     const error = unwrapErr(endBattleTurn(state, { playerId: ITCHI }))
     expect(error.kind).toBe('NOT_IN_THIS_BATTLE')
-    expect(state.battle!.turn).toBe('attacker')
+    expect(state.battle!.turn).toBe('defender')
   })
 })
 
@@ -621,6 +877,44 @@ describe('battleSummaries', () => {
     expect(defenderSummary!.unitCount).toBe(1)
     expect(defenderSummary!.totalAttack).toBe(2)
     expect(defenderSummary!.totalHealth).toBe(4)
+  })
+
+  it('excludes a killed unit from the totals, since it stays in the arena until the battle ends', () => {
+    let state = withBattlehand(CASH1981, 2)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const cashUnits = findPlayer(state, CASH1981)!.battlehand
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: cashUnits[0]!.id,
+        side: 'attacker',
+        position: 0,
+        attack: 3,
+        health: 5,
+      }),
+    )
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: cashUnits[1]!.id,
+        side: 'attacker',
+        position: 1,
+        attack: 3,
+        health: 5,
+      }),
+    )
+
+    const arenaUnitId = state.battle!.arena[0]!.id
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId }))
+
+    // Still 2 entries in the arena (undoable), but only 1 counts as alive.
+    expect(state.battle!.arena).toHaveLength(2)
+    const view = toPlayerView(state, CASH1981)
+    const attackerSummary = view.battleSummary.find((s) => s.side === 'attacker')
+    expect(attackerSummary!.unitCount).toBe(1)
+    expect(attackerSummary!.totalAttack).toBe(3)
+    expect(attackerSummary!.totalHealth).toBe(5)
   })
 })
 

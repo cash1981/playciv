@@ -12,7 +12,9 @@ import {
   endBattleTurn,
   initiateBattle,
   killArenaUnit,
+  moveArenaUnit,
   placeUnitInArena,
+  returnArenaUnitToHand,
   rotateArenaUnit,
   setArenaUnitStat,
 } from '@civ/engine'
@@ -145,9 +147,61 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
   })
 
   /**
-   * Kill (remove) an arena unit. Body: `{ rev: number }`.
-   * The unit is removed from the arena; `inBattle` is cleared on the source
-   * card so the player can discard/reveal it themselves.
+   * Move an already-placed unit to a different front on the same side.
+   * Body: `{ position: number, rev: number }`.
+   */
+  app.post('/api/games/:gameId/battle/arena/:arenaUnitId/move', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const arenaUnitId = c.req.param('arenaUnitId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const position = optionalNumber(body, 'position')
+    const clientRev = optionalNumber(body, 'rev')
+
+    if (position === undefined || !Number.isInteger(position) || position < 0) {
+      return sendError(c, 400, 'BAD_REQUEST', 'position must be a non-negative integer')
+    }
+
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) =>
+        moveArenaUnit(state, {
+          playerId: currentPlayer(c).id,
+          arenaUnitId,
+          position,
+        }),
+      clientRev,
+    )
+  })
+
+  /**
+   * Pull a placed unit back out of the arena, undoing the placement — the "x"
+   * button. Body: `{ rev: number }`.
+   */
+  app.post('/api/games/:gameId/battle/arena/:arenaUnitId/return', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const arenaUnitId = c.req.param('arenaUnitId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const clientRev = optionalNumber(body, 'rev')
+
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) =>
+        returnArenaUnitToHand(state, {
+          playerId: currentPlayer(c).id,
+          arenaUnitId,
+        }),
+      clientRev,
+    )
+  })
+
+  /**
+   * Toggle `killed` on an arena unit. Body: `{ rev: number }`.
+   * Undoable — call again to un-kill. The source card is only actually
+   * discarded when the battle ends with the unit still marked killed.
    */
   app.post('/api/games/:gameId/battle/arena/:arenaUnitId/kill', auth, async (c) => {
     const gameId = c.req.param('gameId')

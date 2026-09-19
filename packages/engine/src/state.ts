@@ -434,7 +434,9 @@ function battleSummaries(state: GameState): readonly BattleSideSummary[] {
   ]
 
   return sides.map(({ sideId, side }) => {
-    const units = battle.arena.filter((u) => u.side === sideId)
+    // A killed unit stays in the arena until the battle ends (issue #71, so a
+    // kill can be undone) but should not count toward the living totals.
+    const units = battle.arena.filter((u) => u.side === sideId && !u.killed)
     const player = findPlayer(state, side.playerId)
     const label =
       side.kind === 'barbarians'

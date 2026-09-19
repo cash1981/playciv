@@ -31,8 +31,9 @@ const withStats = (player: MaybeOlderPlayerhand): Playerhand => ({
 type MaybeOlderBoard = Omit<Board, 'areaRows' | 'history'> &
   Partial<Pick<Board, 'areaRows' | 'history'>>
 
-/** An arena unit from before the rotate button (issue #63 follow-up) existed. */
-type MaybeOlderArenaUnit = Omit<ArenaUnit, 'rotation'> & Partial<Pick<ArenaUnit, 'rotation'>>
+/** An arena unit from before rotation or the undoable kill (issue #71) existed. */
+type MaybeOlderArenaUnit = Omit<ArenaUnit, 'rotation' | 'killed'> &
+  Partial<Pick<ArenaUnit, 'rotation' | 'killed'>>
 
 /**
  * Turns pieces that predate the history into one entry each.
@@ -99,7 +100,11 @@ export function migrateGameState(state: GameState): GameState {
         : {
             ...older.battle,
             arena: older.battle.arena.map(
-              (unit: MaybeOlderArenaUnit): ArenaUnit => ({ ...unit, rotation: unit.rotation ?? 0 }),
+              (unit: MaybeOlderArenaUnit): ArenaUnit => ({
+                ...unit,
+                rotation: unit.rotation ?? 0,
+                killed: unit.killed ?? false,
+              }),
             ),
           },
     rev: older.rev ?? 0,

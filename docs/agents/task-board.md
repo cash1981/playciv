@@ -15,6 +15,26 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 
+### issue-71-arena-undo
+
+- **Owner:** Claude (Sonnet 5)
+- **Branch:** `fix/issue-63-arena-ux` (continuation of the still-open PR #67)
+- **Brief:** `docs/agents/tasks/issue-71-arena-undo.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/battle.ts`
+  - `packages/engine/src/actions/arena.ts`
+  - `packages/engine/src/state.ts` (`battleSummaries` only)
+  - `packages/engine/src/migrate.ts`
+  - `packages/engine/test/arena.test.ts`
+  - `packages/server/src/routes/arena.ts`
+  - `packages/server/test/api.test.ts`
+  - `packages/web/src/views/GameView.tsx`
+  - `packages/web/src/views/CollapsiblePanel.tsx`
+  - `packages/web/src/lib/api.ts`
+- **Notes:** Five fixes — see the brief. Kill is now an undoable toggle,
+  locked in only at end-battle; new move/return-to-hand actions.
+
 ---
 
 ## Format
