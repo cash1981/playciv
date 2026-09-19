@@ -2,8 +2,9 @@
 # talking to MongoDB Atlas. The SPA and the playciv.app domain live on Cloudflare;
 # the Cloudflare Worker proxies /api/* to this service.
 #
-# Set MONGO_URL and TOKEN_SECRET in the Render dashboard (they are marked
-# sync: false so they are not stored in the repo). Render provides PORT.
+# Set MONGO_URL, TOKEN_SECRET and RESEND_API_KEY in the Render dashboard (they
+# are marked sync: false so they are not stored in the repo). Render provides
+# PORT.
 services:
   - type: web
     name: playciv-api
@@ -22,3 +23,13 @@ services:
         sync: false
       - key: MONGO_DB
         value: playciv
+      # Resend API key for notification email (issue #30). Unset disables mail.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        value: noreply@playciv.app
+      - key: APP_ORIGIN
+        value: https://playciv.app
+      # Java emailed every account on game creation; keep it off until ready.
+      - key: MAIL_BROADCAST_NEW_GAMES
+        value: "false"
