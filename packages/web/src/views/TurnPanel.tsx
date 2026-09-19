@@ -13,6 +13,7 @@ import type { PlayerTurn, TurnPhase } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
+import type { NavigationAttempt } from '../lib/navigationGuard.js'
 import type { PlayerView } from '../lib/api.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
@@ -515,13 +516,24 @@ export function TurnPanel({
     dirtyPhaseKeys.length > 0 || Object.keys(liveDirtyKeys).length > 0 || privateNoteDirty
 
   useEffect(() => {
-    if (!hasUnsavedChanges) return
+    const warnNavigation = (event: Event): void => {
+      if (!hasUnsavedChanges) return
+      const detail = (event as CustomEvent<NavigationAttempt>).detail
+      if (!window.confirm('You have unsaved turn-order changes. Leave without saving?')) {
+        detail.allowed = false
+      }
+    }
     const warnBeforeLeaving = (event: BeforeUnloadEvent): void => {
+      if (!hasUnsavedChanges) return
       event.preventDefault()
       event.returnValue = ''
     }
+    window.addEventListener('civ:navigation-attempt', warnNavigation)
     window.addEventListener('beforeunload', warnBeforeLeaving)
-    return () => window.removeEventListener('beforeunload', warnBeforeLeaving)
+    return () => {
+      window.removeEventListener('civ:navigation-attempt', warnNavigation)
+      window.removeEventListener('beforeunload', warnBeforeLeaving)
+    }
   }, [hasUnsavedChanges])
 
   const selectPlayer = (player: TurnPlayerTab): void => {
@@ -601,15 +613,15 @@ export function TurnPanel({
       visibleOwnTurnRef.current === submission.turn
         ? (editorRefs.current[submission.phase]?.getMarkdown() ?? draftsRef.current[key])
         : draftsRef.current[key]
+    const nextSaved = { ...savedPhaseValuesRef.current, [key]: submission.markdown }
+    savedPhaseValuesRef.current = nextSaved
+    setSavedPhaseValues(nextSaved)
     if (currentMarkdown !== undefined && currentMarkdown !== submission.markdown) {
       if (draftsRef.current[key] !== currentMarkdown) setDraftValue(key, currentMarkdown)
       setSaveStatuses((existing) => ({ ...existing, [key]: 'unsaved' }))
       return
     }
 
-    const nextSaved = { ...savedPhaseValuesRef.current, [key]: submission.markdown }
-    savedPhaseValuesRef.current = nextSaved
-    setSavedPhaseValues(nextSaved)
     const nextDrafts = { ...draftsRef.current }
     delete nextDrafts[key]
     draftsRef.current = nextDrafts

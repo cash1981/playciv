@@ -19,6 +19,7 @@ import { Navigation } from './views/Navigation.js'
 import { FaqView } from './views/FaqView.js'
 import { AboutView } from './views/AboutView.js'
 import { applyTheme, saveTheme, storedTheme, type Theme } from './theme.js'
+import { confirmNavigation } from './lib/navigationGuard.js'
 
 type Screen =
   | { readonly name: 'lobby' }
@@ -58,7 +59,13 @@ export function App(): React.JSX.Element {
   }, [theme])
 
   useEffect(() => {
-    const onPopState = () => setScreen(screenFromPath(window.location.pathname))
+    const onPopState = () => {
+      if (!confirmNavigation()) {
+        window.history.forward()
+        return
+      }
+      setScreen(screenFromPath(window.location.pathname))
+    }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
@@ -77,6 +84,7 @@ export function App(): React.JSX.Element {
   }, [])
 
   const signOut = useCallback(() => {
+    if (!confirmNavigation()) return
     storeToken(null)
     setPlayer(null)
     setShowLogin(false)
@@ -85,21 +93,25 @@ export function App(): React.JSX.Element {
   }, [])
 
   const openGame = useCallback((gameId: string) => {
+    if (!confirmNavigation()) return
     window.history.pushState(null, '', `/game/${encodeURIComponent(gameId)}`)
     setScreen({ name: 'game', gameId })
   }, [])
 
   const openAdmin = useCallback(() => {
+    if (!confirmNavigation()) return
     window.history.pushState(null, '', '/admin')
     setScreen({ name: 'admin' })
   }, [])
 
   const backToGames = useCallback(() => {
+    if (!confirmNavigation()) return
     window.history.replaceState(null, '', '/')
     setScreen({ name: 'lobby' })
   }, [])
 
   const openHighscore = useCallback(() => {
+    if (!confirmNavigation()) return
     window.history.pushState(null, '', '/highscore')
     setScreen({ name: 'highscore' })
   }, [])
@@ -112,9 +124,11 @@ export function App(): React.JSX.Element {
     } else if (path === '/highscore') {
       openHighscore()
     } else if (path === '/faq') {
+      if (!confirmNavigation()) return
       window.history.pushState(null, '', '/faq')
       setScreen({ name: 'faq' })
     } else {
+      if (!confirmNavigation()) return
       window.history.pushState(null, '', path)
       setScreen({ name: 'lobby' })
     }

@@ -653,6 +653,47 @@ describe('TurnPanel save all changes', () => {
     )
   })
 
+  it('keeps a revert made during an in-flight save as an unsaved change', async () => {
+    const playerView = viewFor()
+    let resolveUpdate: ((view: PlayerView) => void) | undefined
+    const updateTurn = vi.spyOn(api, 'updateTurn').mockImplementation(
+      () =>
+        new Promise<PlayerView>((resolve) => {
+          resolveUpdate = resolve
+        }),
+    )
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([])
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    const editor = await screen.findByRole('textbox', { name: /movement orders.*turn 1/i })
+    vi.useFakeTimers()
+    fireEvent.change(editor, { target: { value: 'New movement' } })
+    act(() => vi.advanceTimersByTime(200))
+    fireEvent.click(screen.getByRole('button', { name: 'Save all changes' }))
+    fireEvent.change(editor, { target: { value: orders.MOVEMENT } })
+    act(() => vi.advanceTimersByTime(200))
+
+    await act(async () => {
+      resolveUpdate?.(playerView)
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText('Unsaved changes: movement')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Save all changes' }))
+    expect(updateTurn).toHaveBeenCalledTimes(2)
+    expect(updateTurn.mock.calls[1]).toEqual(['game-1', 1, 'MOVEMENT', orders.MOVEMENT])
+  })
+
   it('marks the private log unsaved when it changes during an in-flight save', async () => {
     const playerView = viewFor()
     let resolveSave: ((view: PlayerView) => void) | undefined
@@ -718,5 +759,33 @@ describe('TurnPanel save all changes', () => {
     const beforeUnload = new Event('beforeunload', { cancelable: true })
     window.dispatchEvent(beforeUnload)
     expect(beforeUnload.defaultPrevented).toBe(true)
+  })
+
+  it('vetoes SPA navigation when changes are unsaved', async () => {
+    const playerView = viewFor()
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([])
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    const editor = await screen.findByRole('textbox', { name: /movement orders.*turn 1/i })
+    vi.useFakeTimers()
+    fireEvent.change(editor, {
+      target: { value: 'Not saved' },
+    })
+    const detail = { allowed: true }
+    window.dispatchEvent(new CustomEvent('civ:navigation-attempt', { detail }))
+
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(detail.allowed).toBe(false)
   })
 })
