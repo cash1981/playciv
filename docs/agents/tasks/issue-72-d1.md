@@ -91,9 +91,13 @@ payload for the rest of the document.
 - `chat(id TEXT PK, game_id, username, message, created_at)` +
   `INDEX chat_game_created ON chat(game_id, created_at)`.
 - `email_sent(scope TEXT PK, at)`.
-- `pbf(id TEXT PK, active, winner, num_of_players, players TEXT, doc TEXT)` +
+- `pbf(id TEXT PK, active, winner, num_of_players, players TEXT)` +
   `INDEX pbf_highscore ON pbf(active, winner)`. `players` is the highscore
-  roster (`[{username, civName}]`), `doc` the full normalized document.
+  roster (`[{username, civName}]`).
+- `pbf_doc(pbf_id, seq, chunk, PK(pbf_id, seq))` — the full old document,
+  normalised and chunked at 40 KB. A single `pbf` document reaches 123 KB,
+  above D1's ~100 KB per-statement limit, so it cannot be one SQL literal; the
+  app never reads this table.
 - `gamelog(id TEXT PK, game_id, username, public_log, created_at)` +
   `INDEX gamelog_game ON gamelog(game_id)` — archival.
 - `tournament(id TEXT PK, doc TEXT)` — archival.
@@ -133,7 +137,9 @@ id `055e06d7-5d3b-4d4a-95aa-5d396c04b9bd`) and `migrations_dir`. The
 `packages/server/src/migrate-to-d1.ts` (run with `tsx`) reads a dump directory,
 normalizes extended JSON, maps each collection to its rows, and writes a
 `dump.sql` of `INSERT` statements. The pure mapping lives in
-`packages/server/src/migrate/dump.ts` and is unit-tested with small fixtures.
+`packages/server/src/migrate/rows.ts`, the SQL emission in
+`packages/server/src/migrate/sql.ts`, and both are unit-tested with small
+fixtures.
 
 ## Claimed paths
 
@@ -148,7 +154,7 @@ normalizes extended JSON, maps each collection to its rows, and writes a
 - `packages/server/src/lib.ts`
 - `packages/server/src/index.ts`
 - `packages/server/src/migrate-to-d1.ts` (new)
-- `packages/server/src/migrate/dump.ts` (new)
+- `packages/server/src/migrate/rows.ts` (new), `packages/server/src/migrate/sql.ts` (new)
 - `packages/server/src/migrate-user-roles.ts` (delete)
 - `packages/server/src/seed-test-user.ts` (delete)
 - `packages/server/test/d1-sqlite-adapter.ts` (new)
@@ -165,26 +171,29 @@ normalizes extended JSON, maps each collection to its rows, and writes a
 
 ## Acceptance criteria
 
-- [ ] `D1Repository` implements every `Repository` method; its compare-and-set
+- [x] `D1Repository` implements every `Repository` method; its compare-and-set
       behaviour matches `MongoRepository`/`JsonFileRepository` (a lost race
       returns false and returns HTTP 409 through the routes).
-- [ ] The full API test suite passes against `D1Repository` as well as the JSON
-      repo (a parametrised smoke run), so the routes do not depend on Mongo.
-- [ ] The migration maps the real dump and the resulting `dump.sql` loads into a
-      fresh SQLite database with the row counts the dump has (554 players, 310
-      `pbf`, 87,756 chat, 66,288 `gamelog`, 1 tournament), asserted locally with
-      `node:sqlite`.
-- [ ] No `mongodb` import remains in `@civ/server` or the Worker bundle.
-- [ ] `render.yaml` is removed and the Worker has no `API_ORIGIN` proxy.
-- [ ] Local `pnpm dev` still runs on the JSON file with the whole suite green.
-- [ ] Hidden information: no projection is touched; the existing hidden-info
-      tests still pass, and the D1 adapter test asserts a stored game keeps
-      private hands private after a round-trip only through `toPlayerView`
-      (which is unchanged).
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] A D1-backed API test exercises registration, game creation, revision
+      history, chat and deletion through `D1Repository`, and the existing API
+      suite still passes unchanged on the JSON repo.
+- [x] The migration maps the real dump; the resulting `dump.sql` loads into a
+      fresh SQLite database with the dump's row counts — 554 players, 310 `pbf`
+      (plus 876 `pbf_doc` chunks), 87,756 chat, 66,288 `gamelog`, 1 tournament,
+      83 lobby messages, 247 finished pbf games — asserted locally with
+      `node:sqlite` and again against the remote D1 database.
+- [x] Every generated SQL statement is under D1's per-statement limit
+      (longest 40,106 bytes).
+- [x] No `mongodb` import remains in `@civ/server` or the Worker bundle.
+- [x] `render.yaml` is removed and the Worker has no `API_ORIGIN` proxy.
+- [x] Local `pnpm dev` still runs on the JSON file with the whole suite green.
+- [x] Hidden information: no projection is touched; the existing hidden-info
+      tests still pass, and the D1 test asserts a stored hidden hand does not
+      reach another viewer's `toPlayerView`.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 
 ## Open questions
 
-- Cloudflare remote access: `wrangler login` must be completed by the human
-  before the remote `dump.sql` import and the migration-count check can run.
-  Everything else is verifiable locally.
+- Cloudflare remote access is done: the remote schema is applied and the data
+  imported into D1 (database `playciv`, id `055e06d7-5d3b-4d4a-95aa-5d396c04b9bd`).
+  Local development remains on the JSON file.

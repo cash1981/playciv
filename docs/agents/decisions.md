@@ -971,3 +971,42 @@ question or a captcha.
   challenge token or rotating question set.
 - Existing tests that register an account had `securityAnswer: 'writing'` added
   to their payloads.
+## 2026-09-19 — Storage moves from MongoDB Atlas to Cloudflare D1 (issue #72)
+
+**Decision.** Production storage is Cloudflare D1 (SQLite), reached through the
+Worker's `DB` binding, and the API runs on the Worker itself. `D1Repository`
+implements `Repository`; `MongoRepository`, the `mongodb` dependency,
+`render.yaml` and the Worker's `/api/*` proxy are removed. The Node entry point
+stays local-development-only on the JSON file.
+
+**Why.** The 2026-09-18 decision had to keep the API on Render because the
+MongoDB driver's cursor queries hang on workerd, which costs a 30–50 s
+free-tier cold start and keeps a second host and Atlas alive. The owner chose
+D1 and asked to cut Render and Mongo in one move rather than run two storage
+paths. D1 is also exportable (`wrangler d1 export`), so the move is reversible.
+
+**Consequences.**
+- The schema is hybrid: flat columns for what the routes query and index
+  (`player.username` case-insensitively, `game(active, winner)`,
+  `game_revision(game_id, revision)`, `chat(game_id, created_at)`,
+  `pbf(active, winner)`), and a JSON payload for the rest of each record. The
+  `Repository` boundary reads and writes whole games, so the state is not
+  normalised into per-field tables.
+- D1 has no interactive transactions between `await`s. Revisioned writes use one
+  `batch()` — atomic on D1 — with the game update guarded by `rev` and the
+  revision insert guarded by `EXISTS (game … rev = new)`, so a lost race writes
+  neither. `claimEmailSlot` is one conditional upsert. `MongoRepository`'s
+  requirement that Mongo be a replica set or sharded cluster goes away with it.
+- Migrated data, verified by count against the restored export: 554 players
+  (552 legacy SHA-1 passwords kept, 1 admin), 310 old `pbf` games (247 with a
+  winner), 87,756 chat messages (83 lobby), 66,288 `gamelog` rows and 1
+  tournament, in a 64 MB database. `gamelog` and `tournament` are archival —
+  the app never queries them. The old `pbf` documents are archived in the
+  chunked `pbf_doc` table because one document can exceed D1's ~100 KB
+  per-statement limit; `pbf` itself carries only the highscore fields.
+- Local development is unchanged: `pnpm dev` is Node plus the JSON file.
+  `D1Repository` is tested without a database through a `node:sqlite` adapter,
+  so CI (and a Windows machine that cannot run `workerd`) still covers it.
+- The old `seed:test-user` and `migrate:user-roles` scripts are removed with
+  Mongo; roles now arrive with the migrated data and local accounts are created
+  through the UI.

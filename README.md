@@ -85,7 +85,7 @@ source.
 ### `packages/server`
 
 Hono on top of the engine, so the same HTTP code runs on Node (local
-development, JSON-file storage) and on Cloudflare Workers (production, MongoDB).
+development, JSON-file storage) and on Cloudflare Workers (production, D1).
 Java counterpart: `resource/*` and `application/*` under Dropwizard.
 
 | File | Responsibility |
@@ -97,7 +97,8 @@ Java counterpart: `resource/*` and `application/*` under Dropwizard.
 | `src/auth.ts` | scrypt passwords, HMAC-signed bearer tokens and the reset-link signer |
 | `src/routes/board.ts` | the board — place, move, rotate, front, back, remove, undo, history |
 | `src/routes/arena.ts` | battle arena — initiate, place units, move, return to hand, set stats, rotate, kill, end turn, end battle |
-| `src/store/` | the storage interface and the JSON file implementation |
+| `src/store/` | the storage interface, `D1Repository` (production) and `JsonFileRepository` (local dev) |
+| `src/migrate/` | the one-off mapping from the old Mongo export to D1 rows |
 
 The server holds no game rules. Every route loads the state, calls one pure
 function from the engine, saves the result and answers with
@@ -105,8 +106,8 @@ function from the engine, saves the result and answers with
 even if it wanted to.
 
 Environment variables: `PORT` (8787), `HOST`, `DATA_FILE`, `TOKEN_SECRET`,
-`CORS_ORIGIN`, and `MONGO_URL` / `MONGO_DB` to run against MongoDB instead of
-the JSON file (see [Storage](#storage-a-json-file-or-mongodb)).
+`CORS_ORIGIN`. The Node server always uses the JSON file; production's D1 and
+mail secrets live in the Cloudflare dashboard (see [Storage](#storage-d1-in-production-a-json-file-locally)).
 
 ### `packages/web`
 
@@ -242,54 +243,60 @@ clicked to jump there.
 Games saved before the history existed get one synthetic `place` entry per piece
 at load time (`src/migrate.ts`), so replay is exact for them too.
 
-## Storage: a JSON file or MongoDB
+## Storage: D1 in production, a JSON file locally
 
-`packages/server/src/store/types.ts` defines a `Repository`. There are two
-implementations, chosen at startup by whether `MONGO_URL` is set.
+`packages/server/src/store/types.ts` defines a `Repository` with two
+implementations. Local development (`pnpm dev`) always uses the JSON file;
+production runs on the Cloudflare Worker against D1 (issue #72).
 
-**`JsonFileRepository`** (the default) keeps everything in `Map`s in memory and
-mirrors it to `packages/server/data/civ.json` after each change — debounced, and
-atomically through a temporary file that is swapped in. Enough to play locally,
-and games survive a restart. Delete the file to reset everything.
+**`JsonFileRepository`** keeps everything in `Map`s in memory and mirrors it to
+`packages/server/data/civ.json` after each change — debounced, and atomically
+through a temporary file that is swapped in. Enough to play locally, and games
+survive a restart. Delete the file to reset everything.
 
-**`MongoRepository`** runs against the old `playciv` database restored from
-production. Global game revisions require multi-document transactions, so the
-MongoDB server must be a replica set (a single-node replica set is enough for
-local development) or a sharded cluster. The server checks this at startup and
-fails clearly instead of running revision writes non-atomically. Point at a
-replica set with:
+**`D1Repository`** runs against Cloudflare D1 (SQLite) through the Worker's `DB`
+binding. The schema is hybrid: flat columns for the fields the app queries and
+indexes, and a JSON payload for the rest of each document — the `Repository`
+boundary always reads and writes a whole game, so the state itself is not
+normalised. `packages/worker/migrations/0001_initial.sql` is the single source
+of truth; the repository tests apply that same file to an in-memory SQLite
+database through Node's `node:sqlite`, so no live database is needed.
 
-```bash
-MONGO_URL=mongodb://127.0.0.1:27017/?replicaSet=rs0 MONGO_DB=playciv pnpm --filter @civ/server dev
-```
+D1 has no interactive transactions, so the compare-and-set writes are single
+guarded statements or one `batch()`, which D1 runs atomically:
 
-For a local server, start `mongod` with `--replSet rs0` and run
-`rs.initiate()` once in `mongosh` before starting the application.
+- `saveGameWithRevision` updates the live game only while `rev` is unchanged
+  and inserts the checkpoint guarded by `EXISTS (game … rev = new)`, so a lost
+  race writes neither.
+- `claimEmailSlot` is one conditional upsert.
 
-It reuses the existing collections rather than starting fresh:
+Tables: `player`, `game`, `game_revision`, `chat` (`game_id IS NULL` is lobby),
+`email_sent`, `pbf` + `pbf_doc` (the old games, read-only: a highscore source
+plus an archival copy of each document, chunked because one document can exceed
+D1's ~100 KB per-statement limit), and `gamelog` + `tournament` (archival only).
 
-- **`player`** — old accounts log in unchanged. Their passwords are Java's
-  unsalted SHA-1 (`DigestUtils.sha1Hex`); `verifyPassword` accepts that and, on
-  a successful login, rewrites the stored hash to salted scrypt. Old ids are
-  `ObjectId`s, new ones are UUID strings; lookups match both.
-- **`chat`** — old lobby and game chat is read back.
-- **`pbf`** — the old finished games, **read-only**, used only as a highscore
-  source. Java's `PBF` shape is nothing like our `GameState`, so old games are
-  not migrated to playable form.
-- **`game_state`** — a new collection holding new games in the engine's shape.
-  The old `pbf` documents are never written to.
-- **`game_revision`** — immutable game snapshots committed transactionally
-  with the matching `game_state` update.
+The old accounts keep their passwords: Java's unsalted SHA-1
+(`DigestUtils.sha1Hex`) verifies and, on a successful login, is rewritten to
+salted scrypt. Old ids are `ObjectId` strings, new ones UUIDs.
 
-There is no MongoDB integration test in CI because CI has no database. The
-shared repository logic is covered by the JSON implementation, and the pure
-functions (password verification, highscore) have their own tests.
+### Migrating the old data
 
-Seed a known test account with:
+The restored `playciv` MongoDB export lives outside git in
+`Civilization/database backup/mongo`. It becomes SQL with:
 
 ```bash
-MONGO_URL=mongodb://127.0.0.1:27017/?replicaSet=rs0 pnpm --filter @civ/server seed:test-user
+pnpm --filter @civ/server migrate:d1 -- --dump "<dump dir>"   # writes packages/server/dump.sql
+wrangler d1 migrations apply playciv --remote
+wrangler d1 execute playciv --remote --file=packages/server/dump.sql
 ```
+
+The script never touches a database; the mapping is pure and unit-tested, and
+each generated statement stays under D1's per-statement limit. The old `pbf`
+games stay read-only — Java's `PBF` shape is nothing like our `GameState`, so
+they are not migrated to playable form, exactly as before.
+
+There is no database integration test in CI; the shared repository logic is
+covered by the JSON implementation and by the `node:sqlite` adapter.
 
 ### Highscore
 
@@ -507,7 +514,6 @@ limit or rotating question. See `docs/agents/decisions.md`.
 
 ## Deferred
 
-- **Real MongoDB.** Replaced by a JSON file behind `Repository`, see above.
 - **Card artwork.** The hand is shown as text. `itemImage()` in the engine
   already gives the filenames under `Civilization/Moderator/`.
 - **Highscores and tournaments** — `GameAction.getCivHighscore`,

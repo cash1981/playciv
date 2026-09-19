@@ -48,11 +48,16 @@ _Last updated: 2026-09-20_
   Workers), scrypt passwords, HMAC bearer tokens, JSON-file repository standing
   in for MongoDB.
 - **Cloudflare deploy.** A `packages/worker` Cloudflare Worker serves the built
-  SPA (static assets) and proxies `/api/*` to the Node server on Render (see
-  `render.yaml`), which runs the Hono API against MongoDB Atlas. The API cannot
-  run on the Worker itself — the MongoDB driver's cursor queries hang on workerd.
-  Local development is unchanged: `pnpm dev` runs the Node server against the
-  JSON file. See `decisions.md`.
+  SPA (static assets) and runs the Hono API itself for `/api/*` against D1
+  (issue #72). It holds no second host. Local development is unchanged:
+  `pnpm dev` runs the Node server against the JSON file. See `decisions.md`.
+- **Storage is Cloudflare D1 (issue #72).** `D1Repository` implements
+  `Repository` over the Worker's `DB` binding; MongoDB Atlas, the `mongodb`
+  driver, `render.yaml` and the Render proxy are gone. The restored `playciv`
+  export was migrated (554 players, 310 old `pbf` games, 87,756 chat, 66,288
+  `gamelog`, 1 tournament; 64 MB) and verified by count against the export.
+  Local dev keeps the JSON file; `D1Repository` is tested through a
+  `node:sqlite` adapter. See `tasks/issue-72-d1.md`.
 - **Client.** React and Vite: login, game list, game page, hand, draws, battle,
   techs, turn orders, log, undo votes, chat.
 - **Issues #54 and #56.** Game and lobby chat show local log-format timestamps;
@@ -86,12 +91,12 @@ _Last updated: 2026-09-20_
 - **Card artwork.** 346 of 347 items have a picture; only Space Flight does
   not, because it is added in code rather than read from the spreadsheet. The
   hand renders as cards.
-- **MongoDB storage.** `MongoRepository` runs against the restored `playciv`
-  database, chosen by `MONGO_URL` with the JSON file as fallback. Reuses the
-  `player` and `chat` collections, reads old `pbf` games for highscore, stores
-  new games in `game_state`. Old SHA-1 logins verify and upgrade to scrypt.
-  `GET /api/highscore` ports Java's highscore. Verified against the live
-  database (Andrius 39/68, cash 36/58; legacy login upgrades end-to-end).
+- **MongoDB storage (superseded by D1, issue #72).** `MongoRepository` ran
+  against the restored `playciv` database, with the JSON file as fallback. It
+  reused `player`/`chat`, read old `pbf` games for highscore, and stored new
+  games in `game_state`. Old SHA-1 logins verify and upgrade to scrypt — that
+  behaviour is unchanged in `D1Repository`. Highscore matched Java
+  (Andrius 39/68, cash 36/58). See the D1 entry above.
 - **Highscore UI.** A public `/highscore` page (branch `feat/highscore-page`)
   porting `old-civ-web`'s: two-level Player/Civilization tabs over Total and
   2/3/4/5-player sub-tabs, sortable and paginated (10/page, default `totalWins`

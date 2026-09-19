@@ -44,8 +44,9 @@ the seed held in state. This is where the game lives.
 Hono over the engine, so one HTTP codebase runs on Node (local dev) and on
 Cloudflare Workers (production). Holds no game rules: each route loads state,
 calls one pure function, saves the result, and answers with a projection.
-`src/lib.ts` re-exports `createApp`, `MongoRepository` and `TokenSigner` for the
-Worker package; `src/index.ts` is the Node entry via `@hono/node-server`.
+`src/lib.ts` re-exports `createApp`, `D1Repository` and `TokenSigner` for the
+Worker package; `src/index.ts` is the Node entry via `@hono/node-server`, and
+runs against the JSON file only.
 
 | Path | What it holds |
 | --- | --- |
@@ -54,8 +55,9 @@ Worker package; `src/index.ts` is the Node entry via `@hono/node-server`.
 | `src/routes/play.ts` | Draws, battle, techs, social policy, reveals, trade, turns, undo. |
 | `src/routes/board.ts` | Place, move, rotate, stack, remove, undo, history. |
 | `src/errors.ts` | `EngineError` to HTTP status. The only place that mapping exists. |
-| `src/store/` | `Repository` interface and a JSON-file implementation standing in for MongoDB. |
-| `test/` | Vitest through Hono's `app.request` (via the `inject` helper in `test/helpers.ts`), no network. |
+| `src/store/` | `Repository` interface, `D1Repository` (production) and `JsonFileRepository` (local dev). |
+| `src/migrate/` | Pure mapping from the old mongodump export to D1 rows, and SQL emission. Run once with `migrate:d1`. |
+| `test/` | Vitest through Hono's `app.request` (via the `inject` helper in `test/helpers.ts`), no network. `D1Repository` runs against a `node:sqlite` adapter. |
 
 ## packages/web
 
@@ -76,11 +78,11 @@ of step with what the server sends.
 ## packages/worker
 
 The Cloudflare Worker for production. Serves the built SPA (`packages/web/dist`)
-as static assets and proxies `/api/*` to the Node server on Render (the API
-cannot run on workerd — the MongoDB driver's cursor queries hang there). It holds
-no database code; its only config is `API_ORIGIN` (the Node server URL), set as a
-Worker variable. `wrangler.jsonc` (repo root) has the assets binding. The Node
-API deployment is described by `render.yaml`.
+as static assets and runs the Hono API itself for `/api/*`, against the D1
+binding (`DB`). It replaced the Render + MongoDB proxy in issue #72. Its runtime
+secrets (`TOKEN_SECRET`, `RESEND_API_KEY`, …) are set in the Cloudflare
+dashboard. `wrangler.jsonc` (repo root) has the assets and D1 bindings; the D1
+schema is in `packages/worker/migrations/`.
 
 ## tools
 
