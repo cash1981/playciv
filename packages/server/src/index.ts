@@ -2,14 +2,14 @@
  * Startup. Java: `CivilizationApplication.main` with Dropwizard and
  * `config.yml`; here it is environment variables.
  *
- *   PORT           defaults to 8787 (a host such as Render sets this)
+ * The Node entry point is local development only (`pnpm dev`). Production runs
+ * the same Hono app on the Cloudflare Worker against D1 (`packages/worker`), so
+ * this file always uses the JSON-file repository — there is no MongoDB path any
+ * more (issue #72). See `docs/agents/decisions.md`.
+ *
+ *   PORT           defaults to 8787
  *   HOST           defaults to 0.0.0.0 so a container host can route to it
  *   DATA_FILE      where state is mirrored, defaults to ./data/civ.json
- *                  — ignored when MONGO_URL is set
- *   MONGO_URL      a MongoDB connection string. When set, this replaces the
- *                  JSON file: `player` and `chat` are reused, new games go
- *                  into `game_state`, and `pbf` is read for highscore only.
- *   MONGO_DB       database name, defaults to "playciv"
  *   TOKEN_SECRET   HMAC secret for session tokens
  *   CORS_ORIGIN    comma separated list, defaults to everything
  *   RESEND_API_KEY Resend API key. When unset, email is a no-op (as Java was
@@ -21,7 +21,7 @@
  *                  created (Java's behaviour). Off by default.
  *
  * For local development these can live in a gitignored `packages/server/.env`;
- * `./load-env.js` loads it. In production the host supplies them.
+ * `./load-env.js` loads it.
  */
 
 import './load-env.js'
@@ -36,8 +36,6 @@ import type { Mailer } from './mail.js'
 import { createResendMailer, noopMailer } from './mail.js'
 import { DEFAULT_APP_ORIGIN } from './notifications.js'
 import { JsonFileRepository } from './store/json-file.js'
-import { MongoRepository } from './store/mongo.js'
-import type { Repository } from './store/types.js'
 
 const port = Number(process.env['PORT'] ?? 8787)
 const host = process.env['HOST'] ?? '0.0.0.0'
@@ -53,23 +51,10 @@ if (process.env['TOKEN_SECRET'] === undefined) {
 const corsEnv = process.env['CORS_ORIGIN']
 const corsOrigin = corsEnv === undefined ? true : corsEnv.split(',').map((value) => value.trim())
 
-const mongoUrl = process.env['MONGO_URL']
-let repo: Repository
-let mongo: MongoRepository | undefined
-let dataFile: string | undefined
-
-if (mongoUrl !== undefined) {
-  const dbName = process.env['MONGO_DB'] ?? 'playciv'
-  mongo = await MongoRepository.connect(mongoUrl, dbName)
-  repo = mongo
-  console.log(`Storage: MongoDB (${dbName})`)
-} else {
-  dataFile = resolve(process.env['DATA_FILE'] ?? 'data/civ.json')
-  const json = new JsonFileRepository({ filePath: dataFile })
-  await json.load()
-  repo = json
-  console.log(`Storage: JSON file, mirrored to ${dataFile}`)
-}
+const dataFile = resolve(process.env['DATA_FILE'] ?? 'data/civ.json')
+const repo = new JsonFileRepository({ filePath: dataFile })
+await repo.load()
+console.log(`Storage: JSON file, mirrored to ${dataFile}`)
 
 const appOrigin = process.env['APP_ORIGIN'] ?? DEFAULT_APP_ORIGIN
 const mailFrom = process.env['MAIL_FROM'] ?? 'noreply@playciv.app'
@@ -96,13 +81,12 @@ const app = createApp({
 
 const server = serve({ fetch: app.fetch, port, hostname: host })
 
-// Flush pending changes and close any open connection before the process dies
+// Flush pending changes before the process dies
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     void (async () => {
       await new Promise<void>((resolveClose) => server.close(() => resolveClose()))
       await repo.flush()
-      await mongo?.close()
       process.exit(0)
     })()
   })
