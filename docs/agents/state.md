@@ -13,7 +13,7 @@ _Last updated: 2026-09-18_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 379 engine, 83 server, 7 web |
+| `pnpm -r test` | passing — 381 engine, 83 server, 7 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #63 merged (PR #66), fix/issue-63-arena-ux awaiting review |
 
@@ -154,6 +154,7 @@ _Last updated: 2026-09-18_
 - **Issue #63.** Battle arena: initiate (attacker vs player or barbarians), drag-and-drop units from battlehand/barbarians to positional arena fronts, manual attack/health inputs per unit, kill button, advisory turn marker, per-side HP+attack summaries, `endBattleTurn` / `endBattleArena` actions, concurrent-write protection via `rev` counter (409 on mismatch), and a 30-second auto-refresh toggle (top-right, persisted in `localStorage`). No server-side turn enforcement. `battle: Battle | null` and `rev: number` added to `GameState` and `PlayerView`; migrated with `?? null` / `?? 0`. All checks pass on `feat/issue-63-battle-arena`.
 - **Issue #65.** `killArenaUnit` and `endBattleTurn` now reject non-participants with `NOT_IN_THIS_BATTLE`, matching `endBattleAction`'s existing guard. The "End turn", "End battle" and per-unit "Kill" buttons are hidden client-side for non-participants. `setArenaUnitStat` stays open to any game member on purpose (see `decisions.md`).
 - **Issue #63 UX pass.** Fixed three problems found testing the merged arena in the browser: the arena is now one shared bordered frame (was two separate boxes), placing a unit is immediate with no confirmation step (was easy to miss, looked broken), and arena cards are smaller with a horizontal scrollbar per side (was an ever-growing vertical stack). Also added a cosmetic Rotate button per arena unit (`ArenaUnit.rotation`, reusing the board's `Rotation`/`nextRotation`) so a card can be spun to whichever printed unit level it represents — independent of the manually-entered attack/health. Browser-verified with two live accounts.
+- **Issue #68.** Seven more fixes on the same branch: the standalone "End battle" cleanup button now hides once nothing is left `inBattle`; a unit disappears from the battlehand/barbarians list the moment it is placed in the arena; arena cards are back to full battlehand-card size; Rotate now turns counter-clockwise and suggests the next tier's attack/health (base + presses, wrapping after 360°, skipped for aircraft which print no level ladder); the Revealed and Discarded Items panel's fallback tiebreak (entries with no distinguishing timestamp) now also sorts newest-first; Battle/Techs/Revealed/Log default to collapsed; Chat is now its own collapsible panel with 10-per-page client-side pagination (`ChatPanel.tsx`, split out of `LogPanel.tsx`).
 
 ## In progress
 

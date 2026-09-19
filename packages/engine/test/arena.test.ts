@@ -443,6 +443,32 @@ describe('rotateArenaUnit', () => {
     }
   })
 
+  it('leaves attack/health untouched for aircraft, which print no level ladder', () => {
+    let state = firstCivGame()
+    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'AIRCRAFT' }))
+    state = unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 1 }))
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const unit = findPlayer(state, CASH1981)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: unit.id,
+        side: 'attacker',
+        position: 0,
+        attack: unit.attack,
+        health: unit.health,
+      }),
+    )
+
+    const arenaUnitId = state.battle!.arena[0]!.id
+    state = unwrap(rotateArenaUnit(state, { playerId: CASH1981, arenaUnitId }))
+
+    expect(state.battle!.arena[0]!.rotation).toBe(270)
+    expect(state.battle!.arena[0]!.attack).toBe(unit.attack)
+    expect(state.battle!.arena[0]!.health).toBe(unit.health)
+  })
+
   it('returns ARENA_UNIT_NOT_FOUND for an unknown arena unit', () => {
     let state = withBattlehand(CASH1981)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))

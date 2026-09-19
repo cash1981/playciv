@@ -370,6 +370,7 @@ function rotationLevel(rotation: Rotation): 0 | 1 | 2 | 3 {
  * The suggestion is seeded from the card's pristine snapshot (`unit.unit`),
  * not the currently-edited arena values, and overwrites them — the player
  * can still hand-edit attack/health afterwards via the existing inputs.
+ * Aircraft print no level ladder, so rotation stays cosmetic-only for them.
  */
 export function rotateArenaUnit(
   state: GameState,
@@ -388,9 +389,13 @@ export function rotateArenaUnit(
   }
 
   const rotation = nextRotation(unit.rotation, false)
-  const bonus = rotationLevel(rotation)
-  const attack = unit.unit.attack + bonus
-  const health = unit.unit.health + bonus
+  // Aircraft print no level ladder (no Archer/Cannon/Catapult-style tiers), so
+  // there is no card face to justify a stat suggestion — rotation stays
+  // cosmetic-only for them, same as before issue #68.
+  const hasLevels = unit.unit.kind !== 'aircraft'
+  const bonus = hasLevels ? rotationLevel(rotation) : 0
+  const attack = hasLevels ? unit.unit.attack + bonus : unit.attack
+  const health = hasLevels ? unit.unit.health + bonus : unit.health
   const updatedUnit: ArenaUnit = { ...unit, rotation, attack, health }
 
   const nextState = appendPublicLog(

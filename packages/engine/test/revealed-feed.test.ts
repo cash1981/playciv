@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { draw } from '../src/actions/draw.js'
+import { discardBarbarians, draw, drawBarbarians } from '../src/actions/draw.js'
 import { revealedFeed } from '../src/actions/game.js'
 import { chooseTech, discardItem, revealItem, revealTech } from '../src/actions/player.js'
 import { itemName } from '../src/item.js'
@@ -189,36 +189,27 @@ describe('revealedFeed', () => {
     expect(feed.map((entry) => entry.item.itemNumber)).toEqual([card.itemNumber, hut.itemNumber])
   })
 
-  it('newest first even without a timestamp, using seed order as a fallback (issue #68)', () => {
-    // The engine never stamps createdAt itself (the server does, on write), so
-    // two discards in one engine-level test both leave it null. The fallback
-    // tiebreak must still put the later discard first, not first-discarded-first.
+  it('newest first even without a timestamp or a matching log entry, using seed order as a fallback (issue #68)', () => {
+    // discardBarbarians logs one free-text line naming no item (unlike
+    // discardItem, which logs a DISCARD entry per card and so already gets a
+    // distinct logOrder — that would resolve on the second sort key, not the
+    // one this test targets). None of the discarded barbarians get enriched
+    // with a createdAt or a logOrder, so they are genuinely tied and must
+    // fall through to the seed-order tiebreak.
     let state = firstCivGame()
-    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'HUTS' }))
-    const hut = handItem(state, 'HUTS')
-    state = unwrap(
-      discardItem(state, {
-        playerId: CASH1981,
-        sheetName: 'HUTS',
-        itemNumber: hut.itemNumber,
-        name: itemName(hut),
-      }),
-    )
+    state = unwrap(drawBarbarians(state, CASH1981))
+    const barbarians = findPlayer(state, CASH1981)!.barbarians
+    expect(barbarians.length).toBeGreaterThan(1)
 
-    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CULTURE_1' }))
-    const card = handItem(state, 'CULTURE_1')
-    state = unwrap(
-      discardItem(state, {
-        playerId: CASH1981,
-        sheetName: 'CULTURE_1',
-        itemNumber: card.itemNumber,
-        name: itemName(card),
-      }),
-    )
+    state = unwrap(discardBarbarians(state, CASH1981))
 
-    expect(state.log.every((entry) => entry.createdAt === null)).toBe(true)
+    expect(state.log.some((entry) => entry.item !== null)).toBe(false)
 
     const feed = revealedFeed(state)
-    expect(feed.map((entry) => entry.item.itemNumber)).toEqual([card.itemNumber, hut.itemNumber])
+    const feedOrder = feed
+      .map((entry) => entry.item.itemNumber)
+      .filter((n) => barbarians.some((b) => b.itemNumber === n))
+    // Seeded in barbarians[] order (index 0..n-1); newest-first must reverse it.
+    expect(feedOrder).toEqual([...barbarians].reverse().map((b) => b.itemNumber))
   })
 })

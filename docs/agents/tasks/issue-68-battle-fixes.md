@@ -4,7 +4,7 @@
 - **Branch:** `fix/issue-63-arena-ux` (same branch as the issue-63 UX pass, per
   the human's request — this is a continuation, not a new branch)
 - **Owner:** Claude (Sonnet 5)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -57,11 +57,19 @@ presentation work (see `docs/agents/decisions.md`).
   "presses so far" level purely from the resulting angle
   (`rotationLevel()`, no new field), then sets `attack`/`health` to the
   card's pristine snapshot values plus that level — wrapping back to the
-  base values after 4 presses (360°). This does **not** reuse `UnitItem
-  .level`/`unitLevelNames` (see `decisions.md` — that dormant field's bonus
-  formula does not match what was asked for here). The suggested values
-  overwrite the arena's current attack/health; the player can still hand-edit
-  them afterwards through the existing inputs.
+  base values after 4 presses (360°). Aircraft (`unit.unit.kind ===
+  'aircraft'`) print no level ladder, so the stat suggestion is skipped for
+  them; rotation stays cosmetic-only there, as it was for everyone before
+  this diff. This does **not** read or write `UnitItem.level`/
+  `unitLevelNames` — see `decisions.md` for why, and for a correction: the
+  bonus progression is arithmetically the same as Java's ported (but never
+  driven) `level - 1` formula, one press ahead of Java's level number; what's
+  new is only that a rotate button drives it and that it stays out of the
+  pristine card's own `level` field. The suggested values overwrite the
+  arena's current attack/health, including any damage already tracked as
+  reduced health — intentional, matching how rotating a physical card to a
+  new level replaces its stats outright. The player can still hand-edit the
+  values afterwards through the existing inputs.
 - **5 (revealed sort).** `revealedFeed`'s fallback tiebreak (used only when
   two rows have no distinguishing timestamp or log entry) was ascending by
   seed order, which put the oldest of a tied group first — the opposite of
