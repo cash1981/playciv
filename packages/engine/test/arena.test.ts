@@ -179,6 +179,54 @@ describe('placeUnitInArena', () => {
     )
     expect(error.kind).toBe('ARENA_POSITION_OCCUPIED')
   })
+
+  it('lets a new unit reinforce a front still held by a killed one, finalizing the kill', () => {
+    let state = withBattlehand(CASH1981, 2)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const [fallen, reinforcement] = findPlayer(state, CASH1981)!.battlehand
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: fallen!.id,
+        side: 'attacker',
+        position: 0,
+        attack: fallen!.attack,
+        health: fallen!.health,
+      }),
+    )
+    const fallenArenaId = state.battle!.arena[0]!.id
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId: fallenArenaId }))
+    expect(state.battle!.arena[0]!.killed).toBe(true)
+
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: reinforcement!.id,
+        side: 'attacker',
+        position: 0,
+        attack: reinforcement!.attack,
+        health: reinforcement!.health,
+      }),
+    )
+
+    // The fallen unit is gone, replaced by the reinforcement — one live unit
+    // on that front, not two.
+    expect(state.battle!.arena).toHaveLength(1)
+    expect(state.battle!.arena[0]!.unit.id).toBe(reinforcement!.id)
+    expect(state.battle!.arena[0]!.killed).toBe(false)
+
+    // The kill is now final: the fallen card is discarded, not sitting in
+    // hand available to "undo" back into a slot that no longer exists.
+    const updated = findPlayer(state, CASH1981)!
+    expect(updated.battlehand.some((u) => u.id === fallen!.id)).toBe(false)
+    expect(updated.items.some((it) => it.id === fallen!.id)).toBe(false)
+    const discardLog = state.log.find(
+      (entry) => entry.logType === 'DISCARD' && entry.item?.id === fallen!.id,
+    )
+    expect(discardLog).toBeDefined()
+    expect(state.discardedItems.some((it) => it.id === fallen!.id)).toBe(true)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -314,6 +362,44 @@ describe('moveArenaUnit', () => {
       moveArenaUnit(state, { playerId: KARANDRAS1, arenaUnitId, position: 1 }),
     )
     expect(error.kind).toBe('NOT_IN_THIS_BATTLE')
+  })
+
+  it('reinforces a front held by a killed unit when moved onto it, finalizing the kill', () => {
+    let state = withBattlehand(CASH1981, 2)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+
+    const [fallen, mover] = findPlayer(state, CASH1981)!.battlehand
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: fallen!.id,
+        side: 'attacker',
+        position: 0,
+        attack: fallen!.attack,
+        health: fallen!.health,
+      }),
+    )
+    const fallenArenaId = state.battle!.arena.find((u) => u.unit.id === fallen!.id)!.id
+    state = unwrap(killArenaUnit(state, { playerId: CASH1981, arenaUnitId: fallenArenaId }))
+
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: mover!.id,
+        side: 'attacker',
+        position: 1,
+        attack: mover!.attack,
+        health: mover!.health,
+      }),
+    )
+    const moverArenaId = state.battle!.arena.find((u) => u.unit.id === mover!.id)!.id
+
+    state = unwrap(moveArenaUnit(state, { playerId: CASH1981, arenaUnitId: moverArenaId, position: 0 }))
+
+    expect(state.battle!.arena).toHaveLength(1)
+    expect(state.battle!.arena[0]!.unit.id).toBe(mover!.id)
+    expect(state.battle!.arena[0]!.position).toBe(0)
+    expect(state.discardedItems.some((it) => it.id === fallen!.id)).toBe(true)
   })
 })
 

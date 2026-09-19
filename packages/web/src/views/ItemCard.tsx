@@ -12,7 +12,7 @@
  */
 
 import { itemImage, itemName, revealAll } from '@civ/engine'
-import type { Item, Rotation } from '@civ/engine'
+import type { Item } from '@civ/engine'
 
 /** File names may contain spaces and apostrophes, for example "Leonardo's Workshop". */
 export function itemImageUrl(item: Item): string | null {
@@ -27,7 +27,13 @@ export function ItemCard({
   draggable,
   onDragStart,
   onDragEnd,
-  /** Visual rotation in degrees — the physical card prints one unit level per edge. */
+  /**
+   * Visual rotation in degrees — the physical card prints one unit level per
+   * edge. A plain number rather than the engine's `Rotation` union, since a
+   * caller may add a base orientation on top of the stored value (e.g. an
+   * arena side facing its opponent) and the sum need not be one of the four
+   * named angles by construction, only by arithmetic.
+   */
   rotation,
   /**
    * Shown instead of the computed label (the caption text, and the fallback
@@ -49,7 +55,7 @@ export function ItemCard({
   readonly draggable?: boolean
   readonly onDragStart?: (e: React.DragEvent<HTMLLIElement>) => void
   readonly onDragEnd?: (e: React.DragEvent<HTMLLIElement>) => void
-  readonly rotation?: Rotation
+  readonly rotation?: number
   readonly labelOverride?: string
   readonly children?: React.ReactNode
 }): React.JSX.Element {

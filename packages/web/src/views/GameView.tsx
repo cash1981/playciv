@@ -787,12 +787,19 @@ function ArenaUnitCard({
   // and the art goes blank (issue #71 follow-up).
   const displayLabel = `${itemType(unit.unit)} ${unit.attack}.${unit.health}`
 
+  // The two sides sit face to face across the arena, like a real tabletop
+  // battle — the attacker's row is on top, so its cards are shown upside
+  // down (base +180°) to face the defender's row below, on top of whatever
+  // rotation the player has cycled to for that unit's own printed level.
+  const baseOrientation = unit.side === 'attacker' ? 180 : 0
+  const displayRotation = (unit.rotation + baseOrientation) % 360
+
   return (
     <div className={`arena-unit-card${unit.killed ? ' killed' : ''}`}>
       <ItemCard
         item={unit.unit}
         labelOverride={displayLabel}
-        rotation={unit.rotation}
+        rotation={displayRotation}
         draggable={canMove}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}

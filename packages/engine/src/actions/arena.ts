@@ -18,7 +18,7 @@ import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, withPlayer } from '../state.js'
-import type { ArenaUnit, BattleSideId } from '../battle.js'
+import type { ArenaUnit, BattleSide, BattleSideId } from '../battle.js'
 import { drawBarbarians } from './draw.js'
 
 type ActionResult = Result<GameState, EngineError>
@@ -93,6 +93,46 @@ function appendRollingArenaLog(
       : state
 
   return appendPublicLog(trimmed, username, playerId, message)
+}
+
+/**
+ * Finalizes a killed arena unit: discards its source card, matching each
+ * source list's own discard convention (barbarian: `ownerId: null`, like
+ * `discardBarbarians`; a player's own card: `hidden: true`, like
+ * `discardItem`), and logs it as a `DISCARD`.
+ *
+ * Used both when the battle ends with the unit still `killed` (see
+ * `endBattleAction`), and when a new unit is placed into a front still held
+ * by a killed one (see `placeUnitInArena`) — reinforcing a front commits the
+ * kill it displaces, since there is no longer an arena slot to undo it back
+ * into (issue #71 follow-up).
+ */
+function discardKilledArenaUnit(
+  state: GameState,
+  arenaUnit: ArenaUnit,
+  ownerSide: BattleSide,
+): GameState {
+  const owner = findPlayer(state, ownerSide.playerId)
+  if (owner === undefined) return state
+
+  let discardedCard: UnitItem
+  let nextState = state
+  if (ownerSide.kind === 'barbarians') {
+    discardedCard = { ...arenaUnit.unit, ownerId: null }
+    const updated = owner.barbarians.filter((u) => u.id !== arenaUnit.unit.id)
+    nextState = withPlayer(nextState, { ...owner, barbarians: updated })
+  } else {
+    discardedCard = { ...arenaUnit.unit, hidden: true }
+    const updatedBattlehand = owner.battlehand.filter((u) => u.id !== arenaUnit.unit.id)
+    const updatedItems = owner.items.filter((it) => it.id !== arenaUnit.unit.id)
+    nextState = withPlayer(nextState, {
+      ...owner,
+      battlehand: updatedBattlehand,
+      items: updatedItems,
+    })
+  }
+  nextState = appendItemLog(nextState, 'DISCARD', owner.username, ownerSide.playerId, discardedCard)
+  return { ...nextState, discardedItems: [...nextState.discardedItems, discardedCard] }
 }
 
 // ---------------------------------------------------------------------------
@@ -266,12 +306,16 @@ export function placeUnitInArena(
     return err({ kind: 'UNIT_ALREADY_IN_BATTLE', unitId: input.unitId })
   }
 
-  const positionOccupied = battle.arena.some(
+  const atPosition = battle.arena.filter(
     (u) => u.side === input.side && u.position === input.position,
   )
-  if (positionOccupied) {
+  // A killed unit does not hold its front open — reinforcing it is exactly
+  // how you get a second unit onto that front to fight back (issue #71
+  // follow-up). Only a still-living unit blocks the position.
+  if (atPosition.some((u) => !u.killed)) {
     return err({ kind: 'ARENA_POSITION_OCCUPIED' })
   }
+  const fallenUnit = atPosition.find((u) => u.killed)
 
   // Mark the unit inBattle in the source hand
   let nextState: GameState
@@ -288,6 +332,15 @@ export function placeUnitInArena(
       it.id === input.unitId ? { ...it, inBattle: true } as typeof it : it,
     )
     nextState = withPlayer(state, { ...player, battlehand: updatedBattlehand, items: updatedItems })
+  }
+
+  // Reinforcing a front: the fallen unit's card is finalized now, not left
+  // to be undone — there is no longer a slot for it to be undone back into.
+  let arena = battle.arena
+  if (fallenUnit !== undefined) {
+    const fallenOwnerSide = fallenUnit.side === 'attacker' ? battle.attacker : battle.defender
+    nextState = discardKilledArenaUnit(nextState, fallenUnit, fallenOwnerSide)
+    arena = arena.filter((u) => u.id !== fallenUnit.id)
   }
 
   // Create the arena unit
@@ -317,7 +370,7 @@ export function placeUnitInArena(
     ...nextState,
     battle: {
       ...battle,
-      arena: [...battle.arena, arenaUnit],
+      arena: [...arena, arenaUnit],
     },
   })
 }
@@ -361,17 +414,21 @@ export function moveArenaUnit(
 
   if (input.position === unit.position) return ok(state)
 
-  const positionOccupied = battle.arena.some(
+  const atTarget = battle.arena.filter(
     (u) => u.id !== unit.id && u.side === unit.side && u.position === input.position,
   )
-  if (positionOccupied) {
+  // Same rule as placeUnitInArena: a killed unit does not hold its front
+  // open, so moving a unit onto it reinforces (and finalizes) it rather
+  // than being blocked (issue #71 follow-up).
+  if (atTarget.some((u) => !u.killed)) {
     return err({ kind: 'ARENA_POSITION_OCCUPIED' })
   }
+  const fallenUnit = atTarget.find((u) => u.killed)
 
   const updatedUnit: ArenaUnit = { ...unit, position: input.position }
 
   const movePrefix = `${player.username} moves ${revealAll(unit.unit)} to`
-  const nextState = appendRollingArenaLog(
+  let nextState = appendRollingArenaLog(
     state,
     player.username,
     player.playerId,
@@ -379,11 +436,18 @@ export function moveArenaUnit(
     (previous) => previous.startsWith(movePrefix),
   )
 
+  let arena = battle.arena
+  if (fallenUnit !== undefined) {
+    const fallenOwnerSide = fallenUnit.side === 'attacker' ? battle.attacker : battle.defender
+    nextState = discardKilledArenaUnit(nextState, fallenUnit, fallenOwnerSide)
+    arena = arena.filter((u) => u.id !== fallenUnit.id)
+  }
+
   return ok({
     ...nextState,
     battle: {
       ...battle,
-      arena: battle.arena.map((u) => (u.id === input.arenaUnitId ? updatedUnit : u)),
+      arena: arena.map((u) => (u.id === input.arenaUnitId ? updatedUnit : u)),
     },
   })
 }
@@ -764,27 +828,7 @@ export function endBattleAction(
     if (owner === undefined) continue
 
     if (arenaUnit.killed) {
-      // Match each source list's own discard convention: discardBarbarians
-      // clears ownerId (there is no "owner" once returned to the neutral
-      // pile); discardItem marks hidden instead. Logged so the owner sees it
-      // and revealedFeed attributes it correctly, same as any other discard.
-      let discardedCard: UnitItem
-      if (ownerSide.kind === 'barbarians') {
-        discardedCard = { ...arenaUnit.unit, ownerId: null }
-        const updated = owner.barbarians.filter((u) => u.id !== arenaUnit.unit.id)
-        nextState = withPlayer(nextState, { ...owner, barbarians: updated })
-      } else {
-        discardedCard = { ...arenaUnit.unit, hidden: true }
-        const updatedBattlehand = owner.battlehand.filter((u) => u.id !== arenaUnit.unit.id)
-        const updatedItems = owner.items.filter((it) => it.id !== arenaUnit.unit.id)
-        nextState = withPlayer(nextState, {
-          ...owner,
-          battlehand: updatedBattlehand,
-          items: updatedItems,
-        })
-      }
-      nextState = appendItemLog(nextState, 'DISCARD', owner.username, ownerSide.playerId, discardedCard)
-      nextState = { ...nextState, discardedItems: [...nextState.discardedItems, discardedCard] }
+      nextState = discardKilledArenaUnit(nextState, arenaUnit, ownerSide)
     } else if (ownerSide.kind === 'barbarians') {
       const updated = owner.barbarians.map((u) =>
         u.id === arenaUnit.unit.id ? { ...u, inBattle: false } : u,
