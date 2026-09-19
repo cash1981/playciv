@@ -411,10 +411,14 @@ describe('moveArenaUnit', () => {
     expect(state.discardedItems.some((it) => it.id === fallen!.id)).toBe(false)
     const updated = findPlayer(state, CASH1981)!
     expect(updated.battlehand.find((u) => u.id === fallen!.id)?.inBattle).toBe(true)
+    const lockedInItems = updated.items.find((it) => it.id === fallen!.id)
+    expect((lockedInItems as { inBattle?: boolean } | undefined)?.inBattle).toBe(true)
 
     state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
-    const freed = findPlayer(state, CASH1981)!.battlehand.find((u) => u.id === fallen!.id)
-    expect(freed?.inBattle).toBe(false)
+    const freedPlayer = findPlayer(state, CASH1981)!
+    expect(freedPlayer.battlehand.find((u) => u.id === fallen!.id)?.inBattle).toBe(false)
+    const freedInItems = freedPlayer.items.find((it) => it.id === fallen!.id)
+    expect((freedInItems as { inBattle?: boolean } | undefined)?.inBattle).toBe(false)
   })
 })
 

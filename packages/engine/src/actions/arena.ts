@@ -102,10 +102,11 @@ function appendRollingArenaLog(
  * or no kill, per the original issue-63 decision (issue #75 reverts the
  * auto-discard tried in issue #71 — see `decisions.md`).
  *
- * Used both when the battle ends (see `endBattleAction`) and when a new
- * unit is placed into a front still held by a killed one (see
- * `placeUnitInArena`/`moveArenaUnit`) — reinforcing a front frees up
- * whatever it displaces, the same as it would once the whole battle ends.
+ * Only called from `endBattleAction`, for every unit still in `battle.arena`
+ * or `battle.departedUnits`. Reinforcing a front (`placeUnitInArena`,
+ * `moveArenaUnit`) does not call this — it moves the displaced unit into
+ * `departedUnits` instead, and its card stays locked until the battle ends
+ * (issue #75).
  */
 function returnArenaUnitCardToHand(
   state: GameState,
@@ -668,11 +669,12 @@ export interface KillArenaUnitInput {
  * Toggles `killed` on an arena unit (issue #71) rather than removing it
  * outright — a kill can be regretted, so it stays undoable (call this again)
  * right up until its front is reinforced or the battle ends, whichever
- * comes first (issue #74). Nothing about the source card changes here; when
- * the unit does leave the arena, its card returns to hand exactly like an
- * unkilled unit's — killing never auto-discards (issue #75), the player
- * discards it themselves. Still participant-only (issue #65's guard
- * stands) — being undoable lowers the risk, but deciding who is alive
+ * comes first (issue #74). Nothing about the source card changes here.
+ * Reinforcing moves the unit to `departedUnits`, where its card stays
+ * locked (`inBattle: true`) until the battle ends; the source card is never
+ * auto-discarded either way (issue #75) — the player discards it
+ * themselves once it is back in hand. Still participant-only (issue #65's
+ * guard stands) — being undoable lowers the risk, but deciding who is alive
  * stays with the two combatants.
  */
 export function killArenaUnit(
