@@ -43,14 +43,6 @@ export interface RevisionRow {
   readonly state: string
 }
 
-export interface ChatRow {
-  readonly id: string
-  readonly game_id: string | null
-  readonly username: string
-  readonly message: string
-  readonly created_at: string
-}
-
 export interface EmailSentRow {
   readonly scope: string
   readonly at: string
@@ -68,19 +60,6 @@ export interface PbfDocRow {
   readonly pbf_id: string
   readonly seq: number
   readonly chunk: string
-}
-
-export interface GamelogRow {
-  readonly id: string
-  readonly game_id: string | null
-  readonly username: string
-  readonly public_log: string
-  readonly created_at: string | null
-}
-
-export interface TournamentRow {
-  readonly id: string
-  readonly doc: string
 }
 
 export type DumpDoc = Readonly<Record<string, unknown>>
@@ -127,31 +106,8 @@ function numberField(doc: DumpDoc, key: string): number | null {
 }
 
 /**
- * Java's `Chat.getCreatedInMillis`: a Jackson `LocalDateTime` as
- * `[year, month, day, hour, minute, second, nano]`. Copied from the Mongo
- * repository so migrated rows get byte-identical timestamps.
+ * A legacy record's `_id` timestamp, the same fallback `MongoRepository` used.
  */
-export function isoFromLegacyCreated(created: unknown): string | undefined {
-  if (!Array.isArray(created)) return undefined
-  const [year, month, day, hour, minute, second, nano] = created
-  if (typeof year !== 'number' || typeof month !== 'number' || typeof day !== 'number') {
-    return undefined
-  }
-  const date = new Date(
-    Date.UTC(
-      year,
-      month - 1,
-      day,
-      typeof hour === 'number' ? hour : 0,
-      typeof minute === 'number' ? minute : 0,
-      typeof second === 'number' ? second : 0,
-      typeof nano === 'number' ? Math.floor(nano / 1_000_000) : 0,
-    ),
-  )
-  return date.toISOString()
-}
-
-/** A legacy record's `_id` timestamp, the same fallback `MongoRepository` used. */
 export function createdAtFromObjectId(id: string): string {
   if (!/^[0-9a-fA-F]{24}$/.test(id)) return EPOCH
   const seconds = Number.parseInt(id.slice(0, 8), 16)
@@ -217,20 +173,6 @@ export function revisionRow(doc: DumpDoc): RevisionRow {
   }
 }
 
-export function chatRow(doc: DumpDoc): ChatRow {
-  const id = requireId(doc, 'chat')
-  return {
-    id,
-    // The old lobby documents omit `pbfId` entirely; Mongo's `{ pbfId: null }`
-    // matched a missing field, so both null and absent become SQL NULL.
-    game_id: stringField(doc, 'pbfId'),
-    username: stringField(doc, 'username') ?? '',
-    message: stringField(doc, 'message') ?? '',
-    created_at:
-      stringField(doc, 'createdAt') ?? isoFromLegacyCreated(doc['created']) ?? EPOCH,
-  }
-}
-
 export function emailSentRow(doc: DumpDoc): EmailSentRow {
   return {
     scope: oidOf(doc['_id']) ?? stringField(doc, 'scope') ?? '',
@@ -278,19 +220,3 @@ export function pbfDocChunks(doc: DumpDoc): readonly PbfDocRow[] {
   return chunks
 }
 
-export function gamelogRow(doc: DumpDoc): GamelogRow {
-  return {
-    id: requireId(doc, 'gamelog'),
-    game_id: stringField(doc, 'pbfId'),
-    username: stringField(doc, 'username') ?? '',
-    public_log: stringField(doc, 'publicLog') ?? '',
-    created_at: stringField(doc, 'createdAt') ?? isoFromLegacyCreated(doc['created']) ?? null,
-  }
-}
-
-export function tournamentRow(doc: DumpDoc): TournamentRow {
-  return {
-    id: requireId(doc, 'tournament'),
-    doc: JSON.stringify(normalizeExtendedJson(doc)),
-  }
-}

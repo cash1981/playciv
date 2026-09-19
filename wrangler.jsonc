@@ -20,7 +20,7 @@
     {
       "binding": "DB",
       "database_name": "playciv",
-      "database_id": "055e06d7-5d3b-4d4a-95aa-5d396c04b9bd",
+      "database_id": "a289a3f1-e6b1-4831-b35d-9775e222ec69",
       "migrations_dir": "packages/worker/migrations"
     }
   ],

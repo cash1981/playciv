@@ -83,27 +83,12 @@ CREATE INDEX pbf_highscore ON pbf (active, winner);
 -- The full old `pbf` document, archived in ~40 KB chunks (one row per chunk).
 -- A single large document exceeds D1's ~100 KB per-statement limit, so it
 -- cannot be one SQL literal; chunking keeps every byte without a statement ever
--- getting close to the limit. The app never reads this table.
+-- getting close to the limit. The app does not read this today, but it keeps
+-- the old games available for future statistics (most-researched tech, items,
+-- social policies) without the mongodump.
 CREATE TABLE pbf_doc (
   pbf_id TEXT NOT NULL,
   seq    INTEGER NOT NULL,
   chunk  TEXT NOT NULL,
   PRIMARY KEY (pbf_id, seq)
-);
-
--- Archival only. The app keeps its log inside GameState and does not query
--- these two; they exist so no restored data is left behind in the move.
-CREATE TABLE gamelog (
-  id         TEXT PRIMARY KEY,
-  game_id    TEXT,
-  username   TEXT NOT NULL,
-  public_log TEXT NOT NULL,
-  created_at TEXT
-);
-
-CREATE INDEX gamelog_game ON gamelog (game_id);
-
-CREATE TABLE tournament (
-  id  TEXT PRIMARY KEY,
-  doc TEXT NOT NULL
 );

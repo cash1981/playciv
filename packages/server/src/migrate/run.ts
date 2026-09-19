@@ -13,15 +13,12 @@ import { resolve } from 'node:path'
 
 import type { DumpDoc } from './rows.js'
 import {
-  chatRow,
   emailSentRow,
   gameRow,
-  gamelogRow,
   pbfDocChunks,
   pbfRow,
   playerRow,
   revisionRow,
-  tournamentRow,
 } from './rows.js'
 import { insertStatement } from './sql.js'
 
@@ -46,7 +43,6 @@ const COLLECTIONS: readonly Collection[] = [
   { name: 'player', map: (doc) => one('player', playerRow(doc)) },
   { name: 'game_state', map: (doc) => one('game', gameRow(doc)) },
   { name: 'game_revision', map: (doc) => one('game_revision', revisionRow(doc)) },
-  { name: 'chat', map: (doc) => one('chat', chatRow(doc)) },
   { name: 'email_sent', map: (doc) => one('email_sent', emailSentRow(doc)) },
   {
     name: 'pbf',
@@ -55,28 +51,25 @@ const COLLECTIONS: readonly Collection[] = [
       ...pbfDocChunks(doc).map((row) => ({ table: 'pbf_doc', row })),
     ],
   },
-  { name: 'gamelog', map: (doc) => one('gamelog', gamelogRow(doc)) },
-  { name: 'tournament', map: (doc) => one('tournament', tournamentRow(doc)) },
 ]
 
 /**
- * Without these there is nothing meaningful to migrate. The new collections
- * (`game_state`, `game_revision`, `email_sent`) may legitimately be absent from
- * an old export, and `gamelog`/`tournament` are archival, so those stay
- * optional.
+ * The two old collections the app actually uses: accounts and the highscore
+ * source. The new collections (`game_state`, `game_revision`, `email_sent`) may
+ * legitimately be absent from an old export and stay optional. `chat` is not
+ * migrated at all — the table stays for live chat, but the 87k restored
+ * messages are dropped deliberately, as are the unused `gamelog` and
+ * `tournament` collections.
  */
-export const REQUIRED_COLLECTIONS = ['player', 'pbf', 'chat'] as const
+export const REQUIRED_COLLECTIONS = ['player', 'pbf'] as const
 
 const TABLES = [
   'player',
   'game',
   'game_revision',
-  'chat',
   'email_sent',
   'pbf',
   'pbf_doc',
-  'gamelog',
-  'tournament',
 ] as const
 
 const STATEMENTS_PER_FLUSH = 5000

@@ -8,12 +8,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { DumpDoc } from '../src/migrate/rows.js'
 import {
-  chatRow,
   createdAtFromObjectId,
   emailSentRow,
   gameRow,
-  gamelogRow,
-  isoFromLegacyCreated,
   normalizeExtendedJson,
   oidOf,
   PBF_DOC_CHUNK_SIZE,
@@ -21,7 +18,6 @@ import {
   pbfRow,
   playerRow,
   revisionRow,
-  tournamentRow,
 } from '../src/migrate/rows.js'
 import { insertStatement, sqlValue } from '../src/migrate/sql.js'
 import { createD1Adapter } from './d1-sqlite-adapter.js'
@@ -44,21 +40,6 @@ const playerDoc: DumpDoc = {
   disabled: false,
 }
 
-const chatDoc: DumpDoc = {
-  _id: { $oid: '5522898fe4b0ccde6ea0526a' },
-  pbfId: 'game-1',
-  username: 'cash',
-  message: 'hello',
-  created: [2015, 4, 6, 13, 26, 39, 604_000_000],
-}
-
-const lobbyDoc: DumpDoc = {
-  _id: { $oid: '5522898fe4b0ccde6ea0526b' },
-  username: 'cash',
-  message: 'lobby only',
-  created: [2015, 4, 6, 13, 26, 40, 0],
-}
-
 const pbfDoc: DumpDoc = {
   _id: { $oid: '55227c5fe4b0acc8e3f26dad' },
   name: 'PBF beta test',
@@ -69,21 +50,6 @@ const pbfDoc: DumpDoc = {
     { username: 'cash', civilization: { name: 'Greeks' } },
     { username: 'bob' },
   ],
-}
-
-const gamelogDoc: DumpDoc = {
-  _id: { $oid: '55227c5fe4b0acc8e3f26dae' },
-  publicLog: 'System: cash joined the game',
-  pbfId: 'game-1',
-  username: 'System',
-  created: [2015, 4, 6, 12, 30, 23, 780_000_000],
-}
-
-const tournamentDoc: DumpDoc = {
-  _id: { $oid: '59745cefd231530004d7f391' },
-  name: 'First tournament',
-  tournamentNumber: 1,
-  players: [{ playerId: 'p1', username: 'cash', paid: true }],
 }
 
 const gameDoc: DumpDoc = {
@@ -119,13 +85,6 @@ describe('dump mapping', () => {
     })
   })
 
-  it('converts a Jackson LocalDateTime array to an ISO string in UTC', () => {
-    expect(isoFromLegacyCreated([2015, 4, 6, 13, 26, 39, 604_000_000])).toBe(
-      '2015-04-06T13:26:39.604Z',
-    )
-    expect(isoFromLegacyCreated('nope')).toBeUndefined()
-  })
-
   it('derives a legacy creation time from the ObjectId', () => {
     // 0x55223c74 = 1428307060 seconds.
     expect(createdAtFromObjectId(OID)).toBe('2015-04-06T07:57:40.000Z')
@@ -155,17 +114,6 @@ describe('dump mapping', () => {
     })
   })
 
-  it('maps chat, treating a missing pbfId as lobby', () => {
-    expect(chatRow(chatDoc)).toEqual({
-      id: '5522898fe4b0ccde6ea0526a',
-      game_id: 'game-1',
-      username: 'cash',
-      message: 'hello',
-      created_at: '2015-04-06T13:26:39.604Z',
-    })
-    expect(chatRow(lobbyDoc).game_id).toBeNull()
-  })
-
   it('maps a pbf game with its highscore roster', () => {
     const row = pbfRow(pbfDoc)
     expect(row.id).toBe('55227c5fe4b0acc8e3f26dad')
@@ -178,7 +126,7 @@ describe('dump mapping', () => {
     ])
   })
 
-  it('archives the full pbf document in chunks under the statement limit', () => {
+  it('keeps the full pbf document in chunks under the statement limit', () => {
     const chunks = pbfDocChunks(pbfDoc)
     expect(chunks.length).toBeGreaterThanOrEqual(1)
     expect(chunks.map((chunk) => chunk.seq)).toEqual([...Array(chunks.length).keys()])
@@ -188,18 +136,10 @@ describe('dump mapping', () => {
     }
     const reassembled = chunks.map((chunk) => chunk.chunk).join('')
     expect(JSON.parse(reassembled)['_id']).toBe('55227c5fe4b0acc8e3f26dad')
+    expect(reassembled).toContain('PBF beta test')
   })
 
-  it('maps gamelog, tournament, an empty-winner game and a revision', () => {
-    expect(gamelogRow(gamelogDoc)).toEqual({
-      id: '55227c5fe4b0acc8e3f26dae',
-      game_id: 'game-1',
-      username: 'System',
-      public_log: 'System: cash joined the game',
-      created_at: '2015-04-06T12:30:23.780Z',
-    })
-    expect(JSON.parse(tournamentRow(tournamentDoc).doc)['tournamentNumber']).toBe(1)
-
+  it('maps an empty-winner game and a revision', () => {
     const game = gameRow(gameDoc)
     expect(game.rev).toBe(7)
     expect(game.active).toBe(0)
@@ -241,15 +181,11 @@ describe('generated SQL loads into the committed schema', () => {
     adapter.close()
   })
 
-  it('inserts every mapped row and keeps the lobby chat NULL', async () => {
+  it('inserts every mapped row and the highscore query sees the old games', async () => {
     const statements = [
       insertStatement('player', playerRow(playerDoc)),
-      insertStatement('chat', chatRow(chatDoc)),
-      insertStatement('chat', chatRow(lobbyDoc)),
       insertStatement('pbf', pbfRow(pbfDoc)),
       ...pbfDocChunks(pbfDoc).map((row) => insertStatement('pbf_doc', row)),
-      insertStatement('gamelog', gamelogRow(gamelogDoc)),
-      insertStatement('tournament', tournamentRow(tournamentDoc)),
       insertStatement('game', gameRow(gameDoc)),
       insertStatement('game_revision', revisionRow(revisionDoc)),
       insertStatement('email_sent', emailSentRow({ _id: 's', at: '2020-01-01T00:00:00.000Z' })),
@@ -263,19 +199,18 @@ describe('generated SQL loads into the committed schema', () => {
       return row?.n ?? -1
     }
     expect(await count('player')).toBe(1)
-    expect(await count('chat')).toBe(2)
     expect(await count('pbf')).toBe(1)
     expect(await count('pbf_doc')).toBe(pbfDocChunks(pbfDoc).length)
-    expect(await count('gamelog')).toBe(1)
-    expect(await count('tournament')).toBe(1)
     expect(await count('game')).toBe(1)
     expect(await count('game_revision')).toBe(1)
     expect(await count('email_sent')).toBe(1)
 
-    const lobby = await adapter.db
-      .prepare(`SELECT COUNT(*) AS n FROM chat WHERE game_id IS NULL`)
-      .first<{ n: number }>()
-    expect(lobby?.n).toBe(1)
+    // The old data that was deliberately dropped has no tables to land in.
+    for (const dropped of ['gamelog', 'tournament']) {
+      await expect(
+        adapter.db.prepare(`SELECT COUNT(*) AS n FROM ${dropped}`).first(),
+      ).rejects.toThrow()
+    }
 
     // The highscore index query can see the migrated pbf row.
     const finished = await adapter.db

@@ -51,15 +51,6 @@ async function writeMinimalDump(dir: string): Promise<void> {
       players: [{ username: 'Åse', civilization: { name: 'Greeks' } }],
     },
   ])
-  await writeDump(dir, 'chat', [
-    {
-      _id: { $oid: '5522898fe4b0ccde6ea0526a' },
-      pbfId: 'game-1',
-      username: 'Åse',
-      message: 'hi',
-      created: [2020, 1, 1, 0, 0, 0, 0],
-    },
-  ])
 }
 
 describe('migrateDumpToSql', () => {
@@ -78,7 +69,7 @@ describe('migrateDumpToSql', () => {
   it('refuses a directory without the required collections', async () => {
     const dir = await tempDir()
     const out = join(dir, 'dump.sql')
-    // Only `player` exists; `pbf` and `chat` are required.
+    // Only `player` exists; `pbf` is required.
     await writeDump(dir, 'player', [{ _id: { $oid: OID }, username: 'cash' }])
 
     await expect(migrateDumpToSql({ dumpDir: dir, out })).rejects.toThrow(
@@ -97,13 +88,16 @@ describe('migrateDumpToSql', () => {
 
     expect(result.rows['player']).toBe(1)
     expect(result.rows['pbf']).toBe(1)
-    expect(result.rows['chat']).toBe(1)
     expect(result.rows['pbf_doc']).toBeGreaterThanOrEqual(1)
 
     const sql = await readFile(out, 'utf8')
     expect(sql).toContain(`INSERT INTO player`)
     expect(sql).toContain(`'Åse'`)
     expect(sql).toContain(`'åse'`)
+    // The old, deliberately dropped collections are never emitted.
+    expect(sql).not.toContain('INSERT INTO chat')
+    expect(sql).not.toContain('INSERT INTO gamelog')
+    expect(sql).not.toContain('INSERT INTO tournament')
     expect(await exists(`${out}.tmp`)).toBe(false)
   })
 })
