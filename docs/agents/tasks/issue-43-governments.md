@@ -3,7 +3,7 @@
 - **Slug:** `issue-43-governments`
 - **Branch:** `feat/issue-43-governments`
 - **Owner:** Codex
-- **Status:** in progress — Social Policy and worktree follow-up
+- **Status:** done — Social Policy and worktree follow-up
 
 ## Goal
 

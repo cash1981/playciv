@@ -20,7 +20,7 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 - **Owner:** Codex
 - **Branch:** `feat/issue-43-governments`
 - **Brief:** `docs/agents/tasks/issue-43-governments.md`
-- **Status:** in progress
+- **Status:** done
 - **Claimed paths:**
   - `docs/agents/task-board.md`
   - `docs/agents/tasks/issue-43-governments.md`
@@ -31,10 +31,9 @@ snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
   - `packages/web/src/views/TechPanel.test.tsx`
   - `packages/web/src/styles.css`
   - `packages/web/public/governments/`
-- **Notes:** Investigate the reported missing Social Policy chooser, make the
-  chooser discoverable/available, reduce supplied Government card artwork to
-  the approximate size used by hand cards, and document worktree cleanup after
-  PR creation without deleting the feature branch.
+- **Notes:** Social Policy is discoverable in the open Techs panel; Government
+  cards open from a `?` help button in an accessible modal; worktree cleanup
+  instructions preserve the feature branch.
 
 ### revealed-panel
 
