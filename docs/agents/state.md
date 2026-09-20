@@ -13,11 +13,16 @@ _Last updated: 2026-09-20_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 414 engine, 161 server, 47 web |
+| `pnpm -r test` | passing - 414 engine, 161 server, 48 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
 ## Done
+
+- **Turn-order reveal follow-up.** Reveal now waits for saved phase content,
+  logs `Turn <n> - <username> revealed <phase> phase`, and requires a new
+  reveal after editing a published phase. Branch
+  `fix/turn-order-reveal-followup`, review-approved and pushed; awaiting merge.
 
 - **Cloudflare observability config.** `wrangler.jsonc` now persists the
   dashboard-supplied invocation-log and trace settings; Wrangler dry-run

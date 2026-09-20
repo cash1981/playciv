@@ -3,7 +3,7 @@
 - **Slug:** `turn-order-reveal-followup`
 - **Branch:** `fix/turn-order-reveal-followup`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** review-approved
 
 ## Goal
 
@@ -50,11 +50,11 @@ implementation had no reveal action or equivalent public log entry.
 
 ## Acceptance criteria
 
-- [ ] Reveal is disabled for a phase with unsaved or in-flight changes.
-- [ ] Reveal becomes enabled after that phase is saved.
-- [ ] A reveal appends `Turn <n> - <username> revealed <phase> phase` to the public log.
-- [ ] Editing and saving a revealed phase requires a second reveal.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
+- [x] Reveal is disabled for a phase with unsaved or in-flight changes.
+- [x] Reveal becomes enabled after that phase is saved.
+- [x] A reveal appends `Turn <n> - <username> revealed <phase> phase` to the public log.
+- [x] Editing and saving a revealed phase requires a second reveal.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
 
 ## Open questions
 
