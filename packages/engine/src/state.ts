@@ -146,6 +146,12 @@ export interface GameState {
   readonly id: string
   readonly name: string
   readonly gameType: GameType
+  /**
+   * ISO timestamp of when the game was created, stamped by the server. `null`
+   * for games saved before the field existed (migrated games show no date).
+   * Public data, like `winner`.
+   */
+  readonly createdAt: string | null
   readonly numOfPlayers: number
   readonly active: boolean
   readonly winner: string | null

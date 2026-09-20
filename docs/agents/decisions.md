@@ -1080,3 +1080,100 @@ save, so this is a documented product change rather than a ported rule.
 
 **Consequences.** Public projections mask both the current text and history of
 unrevealed phases. The reveal action is restricted to the owner of the turn.
+## 2026-09-20 — The game list is two tabs with sortable, paged tables
+
+**Decision.** The front page splits its single list into **Active games** and
+**Finished games** tabs, each a sortable table paged at ten rows, with the old
+search box and "Show my games" filter above them. `GameState` gains
+`createdAt: string | null`; the server stamps it at creation and
+`migrateGameState` defaults a missing one to `null`.
+
+**Why.** `old-civ-web/app/views/list.html` had exactly this split: an Active
+Games tab (`dir-paginate`, 30 per page, a search box and "Show my games") and a
+Finished Games tab (an `ng-table`, 10 per page, sortable by Created / Name /
+Number of players). The rewrite collapsed both into one un-paged list. The
+human asked for the old behaviour back, with a sortable table on **both** tabs,
+the old search + "Show my games", and 10 rows per page. `GameState.createdAt` is
+needed because the rewrite never carried `PBF.created` across, so the old
+Created column had nothing to read.
+
+**Consequences.** Deliberate differences from the old client:
+- "Show my games" is a real filter on membership (`youAreIn`). The old
+  controller implemented it by typing the username into the free-text search
+  (`GameListController.showMyGames`), which also matched a username appearing
+  elsewhere in another game's text.
+- Both tables default to **Name ascending** — the order the server already
+  returns and the active list already showed. The old finished table's default
+  sort was `totalWins desc` (`finishedGamesList`, a copy-paste from the highscore
+  controller), a field that does not exist on a game, so it was a no-op.
+- `#` is the row's position in the whole filtered/sorted list, not the old
+  active table's page-local `$index`.
+- Migrated games read back with `createdAt: null` and render an empty Created
+  cell. `createdAt` is public data (like `winner`), so no projection changes and
+  no hidden information is affected.
+- The old client only offered Join to a signed-in user; a signed-out visitor
+  keeps the existing "Sign in to join" hint instead of a button that cannot work.
+
+---
+
+## 2026-09-20 — The game-list search and sort span both tabs
+
+**Decision.** The search box and "Show my games" sit above both game-list tabs
+and apply to whichever is open; the search matches the game name, its type and
+every player's username; **Type** is a sortable column; and a numeric column
+opens descending on its first click. Signing out clears "Show my games" with the
+checkbox that set it. The `Open` / `Full` actions stay as the rewrite introduced
+them. The finished caption counts finished games only.
+
+**Why.** `old-civ-web`'s `list.html` put the search and "Show my games" inside
+the Active Games tab only, and its Finished Games tab (`ng-table`) sorted only
+Created / Name / Number of players. The human asked for one filter row over both
+tabs and a sortable table on both; the review that read the old controller
+found the remaining differences below. Signing out used to leave "Show my games"
+ticked while the checkbox that set it disappeared, so a filtered — often empty —
+list had no visible control; `GameList` now resets that filter when the player
+becomes `null`. The old caption labelled the *all games* count as "finished";
+the human asked to correct it and explicitly asked for no README note about it.
+
+**Consequences.** Deliberate differences from the old client:
+- The search matches name / type / usernames only. The old active tab's search
+  (`filter` in `GameListController`) matched every property on the game object.
+- "Show my games" is a real membership (`youAreIn`) filter, not the old trick of
+  typing the username into the search text.
+- Both tabs are sortable; the old finished table sorted only Created / Name /
+  Number of players, so **Type** is a new sortable column.
+- A numeric column opens **descending** on the first click. The old `ng-table`
+  opened every column ascending; keeping the highscore's numbers-descending rule
+  on every numeric column is the human's choice.
+- The `Open` / `Full` actions are inherited from the rewrite, not the old client.
+- The caption counts finished games, not all games.
+
+---
+
+## 2026-09-20 — Lobby chat serves three months newest first and sits at the bottom
+
+**Decision.** The front page's lobby chat is the last panel, below the highscore.
+`GET /api/chat` returns the last ~3 months of messages (90 days) **newest first**
+and with no message cap; the web `LobbyChat` component pages them ten at a time
+through the shared `Pager`.
+
+**Why.** The human tested the front page. The chat belongs at the bottom, and the
+old route's 14-day window, 50-message cap and oldest-first order were carried
+over from the old backend. With a client-side pager the cap only hides history,
+so the route returns everything in the window and the pager bounds what is
+displayed. Newest-first puts the latest message at the top of page 1, which is
+what a chat reader expects.
+
+**Consequences.**
+- `LobbyChat.tsx` (new) owns its own message input and page state; `LandingView`
+  keeps the fetched `chat` array and the `reload`. After a successful send the
+  input clears and the pager returns to page 1; the page is clamped if the list
+  shrinks under it.
+- `PUBLIC_CHAT_MAX_AGE_MS` is `90 * 24 * 60 * 60 * 1000` and the route no longer
+  slices to 50. A busy lobby therefore loads up to three months of messages in
+  one request — the cap is on display, not on the query. A server test feeds 60
+  recent messages to prove the cap is gone.
+- The same pass fixed the table-overflow bug: the games panel is full width
+  rather than one `.grid` track, `SortableTable` wraps its `<table>` in
+  `.table-scroll` (`overflow-x: auto`), and `.panel` gets `min-width: 0`. A wide
+  table now scrolls inside its panel instead of drawing over the chat column.

@@ -132,31 +132,33 @@ describe('public landing endpoints', () => {
     expect(matchingGame?.youAreIn).toBe(true)
   })
 
-  it('limits anonymous lobby chat to the latest two weeks and 50 messages', async () => {
+  it('serves the last three months of lobby chat newest first, with no message cap', async () => {
     const now = Date.now()
     await repo.appendChat({
       id: 'old-chat',
       gameId: null,
       username: 'old-user',
       message: 'too old',
-      createdAt: new Date(now - 15 * 24 * 60 * 60 * 1000).toISOString(),
+      createdAt: new Date(now - 91 * 24 * 60 * 60 * 1000).toISOString(),
     })
-    for (let index = 0; index < 51; index += 1) {
+    // 60 recent messages, the newest last: more than the 50 the old route
+    // capped at, so a cap that came back would fail this test.
+    for (let index = 0; index < 60; index += 1) {
       await repo.appendChat({
         id: `recent-chat-${index}`,
         gameId: null,
         username: 'recent-user',
         message: `recent ${index}`,
-        createdAt: new Date(now - (50 - index) * 1000).toISOString(),
+        createdAt: new Date(now - (59 - index) * 1000).toISOString(),
       })
     }
 
     const response = await inject(app, { method: 'GET', url: '/api/chat' })
     expect(response.status).toBe(200)
     const messages = await response.json() as { message: string }[]
-    expect(messages).toHaveLength(50)
-    expect(messages[0]?.message).toBe('recent 0')
-    expect(messages.at(-1)?.message).toBe('recent 49')
+    expect(messages).toHaveLength(60)
+    expect(messages[0]?.message).toBe('recent 59')
+    expect(messages.at(-1)?.message).toBe('recent 0')
     expect(response.body).not.toContain('too old')
   })
 })
@@ -248,6 +250,28 @@ describe('games', () => {
     // out a colour. Seating them directly left the creator without one, and a
     // player with no colour has no leader marker for the culture track.
     expect(view.you?.color).toBe('Green')
+  })
+
+  it('a new game summary carries its createdAt, signed in and public', async () => {
+    const token = await register('created-at')
+    const gameId = await createGame(token, 'Stamped game')
+
+    const mine = await inject(app, {
+      method: 'GET',
+      url: '/api/games',
+      headers: bearer(token),
+    })
+    const summary = (await mine.json() as { id: string; createdAt: string | null }[]).find(
+      (game) => game.id === gameId,
+    )
+    expect(typeof summary?.createdAt).toBe('string')
+    expect(Number.isNaN(Date.parse(String(summary?.createdAt)))).toBe(false)
+
+    const publicGames = await inject(app, { method: 'GET', url: '/api/public/games' })
+    const publicSummary = (
+      await publicGames.json() as { id: string; createdAt: string | null }[]
+    ).find((game) => game.id === gameId)
+    expect(typeof publicSummary?.createdAt).toBe('string')
   })
 
   it('two games cannot share a name', async () => {

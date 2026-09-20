@@ -39,6 +39,11 @@ export interface CreateGameOptions {
   /** Seed for shuffling and itemNumber. A string gives the same game every time. */
   readonly seed: Rng | string
   readonly players?: readonly NewPlayer[]
+  /**
+   * When the game was created. The engine is pure, so the caller passes the
+   * timestamp; `null` when it has none (the old client never carried one).
+   */
+  readonly createdAt?: string | null
 }
 
 export function emptyPlayerhand(player: NewPlayer, playernumber: number): Playerhand {
@@ -113,6 +118,7 @@ export function createGame(options: CreateGameOptions): GameState {
     id: gameId,
     name: options.name,
     gameType,
+    createdAt: options.createdAt ?? null,
     numOfPlayers: options.numOfPlayers,
     active: true,
     winner: null,

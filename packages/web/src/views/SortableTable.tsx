@@ -1,82 +1,119 @@
 /**
- * The highscore table. A faithful port of the old-civ-web ng-table: four
- * columns, click a header to sort, default `totalWins` descending, ten rows
- * per page with a pager.
+ * A sortable, paged table. The highscore was the first user (port of
+ * old-civ-web's ng-table); the game list reuses the same component, so the
+ * columns and the page size are props now.
  *
- * The one deliberate difference from ng-table: `WinnerEntry.percentWin` is a
- * preformatted string (`"50.0 %"`), and the original sorted it as text, which
- * puts `"100.0 %"` before `"50.0 %"`. We sort the three numeric columns
- * (`totalWins`, `attempts`, `percentWin`) numerically and only `username` as
- * text. This is a UI choice, not a game rule.
+ * The one deliberate difference from ng-table: `sortValue` sorts numbers
+ * numerically and strings with `localeCompare`. The highscore's `percentWin` is
+ * a preformatted string (`"50.0 %"`), which the original sorted as text — that
+ * puts `"100.0 %"` before `"50.0 %"`, so its column supplies a number. This is
+ * a UI choice, not a game rule.
+ *
+ * The table is wrapped in `div.table-scroll` so a wide table (the game list has
+ * seven columns) scrolls inside its panel instead of overflowing the page.
  */
 
 import { useMemo, useState } from 'react'
 
-import type { WinnerEntry } from '../lib/api.js'
+import { Pager } from './Pager.js'
 
-type Column = 'username' | 'totalWins' | 'attempts' | 'percentWin'
 type Direction = 'asc' | 'desc'
 
-const PAGE_SIZE = 10
-
-interface Props {
-  readonly rows: readonly WinnerEntry[]
-  /** "Username" for players, "Civilization" for civs. */
-  readonly nameHeader: string
+export interface SortableColumn<T> {
+  readonly key: string
+  readonly header: string
+  /** Omit to make the column unsortable. */
+  readonly sortValue?: (row: T) => string | number
+  readonly render: (row: T, index: number) => React.ReactNode
+  /**
+   * Direction when this column is first selected; defaults to ascending.
+   * A numeric column sets `desc` here explicitly.
+   */
+  readonly initialDirection?: 'asc' | 'desc'
 }
 
-/** The leading number of a `percentWin` string like "50.0 %"; 0 when absent. */
-function percentValue(entry: WinnerEntry): number {
-  return Number.parseFloat(entry.percentWin) || 0
+interface Props<T> {
+  readonly rows: readonly T[]
+  readonly columns: readonly SortableColumn<T>[]
+  readonly rowKey: (row: T, index: number) => string
+  readonly initialSortKey: string
+  readonly emptyMessage: string
+  readonly pageSize?: number
 }
 
-function compare(a: WinnerEntry, b: WinnerEntry, column: Column): number {
-  switch (column) {
-    case 'username':
-      return a.username.localeCompare(b.username)
-    case 'totalWins':
-      return a.totalWins - b.totalWins
-    case 'attempts':
-      return a.attempts - b.attempts
-    case 'percentWin':
-      return percentValue(a) - percentValue(b)
-  }
+const DEFAULT_PAGE_SIZE = 10
+
+function compareValues(a: string | number, b: string | number): number {
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+  return String(a).localeCompare(String(b))
 }
 
-export function SortableTable({ rows, nameHeader }: Props): React.JSX.Element {
-  const [column, setColumn] = useState<Column>('totalWins')
-  const [direction, setDirection] = useState<Direction>('desc')
+/**
+ * The direction a column opens with, taken from the column definition. It must
+ * not depend on a sample row: an empty table (the finished tab before any game
+ * has ended) still has to open a numeric column descending on the first click.
+ */
+function defaultDirection<T>(column: SortableColumn<T>): Direction {
+  return column.initialDirection ?? 'asc'
+}
+
+export function SortableTable<T>({
+  rows,
+  columns,
+  rowKey,
+  initialSortKey,
+  emptyMessage,
+  pageSize = DEFAULT_PAGE_SIZE,
+}: Props<T>): React.JSX.Element {
+  const [sortKey, setSortKey] = useState(initialSortKey)
+  const [direction, setDirection] = useState<Direction>(() => {
+    const initial = columns.find((column) => column.key === initialSortKey)
+    return initial === undefined ? 'asc' : defaultDirection(initial)
+  })
   const [page, setPage] = useState(1)
 
   const sorted = useMemo(() => {
+    const column = columns.find((entry) => entry.key === sortKey)
+    const sortValue = column?.sortValue
+    if (sortValue === undefined) return [...rows]
     const factor = direction === 'asc' ? 1 : -1
-    return [...rows].sort((a, b) => compare(a, b, column) * factor)
-  }, [rows, column, direction])
+    return [...rows].sort((a, b) => compareValues(sortValue(a), sortValue(b)) * factor)
+  }, [rows, columns, sortKey, direction])
 
-  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize))
   const current = Math.min(page, pageCount)
-  const visible = sorted.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
+  const visible = sorted.slice((current - 1) * pageSize, current * pageSize)
 
-  function sortBy(next: Column): void {
-    if (next === column) {
+  function sortBy(column: SortableColumn<T>): void {
+    if (column.key === sortKey) {
       setDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
     } else {
-      setColumn(next)
-      // Numbers open descending (highest first); the name opens ascending.
-      setDirection(next === 'username' ? 'asc' : 'desc')
+      setSortKey(column.key)
+      setDirection(defaultDirection(column))
     }
     setPage(1)
   }
 
-  const header = (label: string, key: Column) => {
-    const active = column === key
+  const header = (column: SortableColumn<T>) => {
+    // The game list's Action column right-aligns its header to match the cells.
+    const className = column.key === 'action' ? 'action-cell' : undefined
+    if (column.sortValue === undefined) {
+      return (
+        <th key={column.key} scope="col" className={className}>
+          {column.header}
+        </th>
+      )
+    }
+    const active = column.key === sortKey
     return (
       <th
+        key={column.key}
         scope="col"
+        className={className}
         aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
-        <button type="button" className="sort" onClick={() => sortBy(key)}>
-          {label}
+        <button type="button" className="sort" onClick={() => sortBy(column)}>
+          {column.header}
           <span className="sort-indicator">{active ? (direction === 'asc' ? '▲' : '▼') : ''}</span>
         </button>
       </th>
@@ -85,58 +122,42 @@ export function SortableTable({ rows, nameHeader }: Props): React.JSX.Element {
 
   return (
     <>
-      <table className="highscore-table">
-        <thead>
-          <tr>
-            {header(nameHeader, 'username')}
-            {header('Total wins', 'totalWins')}
-            {header('Number of attempts', 'attempts')}
-            {header('Efficiency', 'percentWin')}
-          </tr>
-        </thead>
-        <tbody>
-          {visible.length === 0 ? (
-            <tr>
-              <td colSpan={4} className="muted">
-                No games yet.
-              </td>
-            </tr>
-          ) : (
-            visible.map((entry) => (
-              <tr key={entry.username}>
-                <td>{entry.username}</td>
-                <td>{entry.totalWins}</td>
-                <td>{entry.attempts}</td>
-                <td>{entry.percentWin}</td>
+      <div className="table-scroll">
+        <table className="data-table">
+          <thead>
+            <tr>{columns.map(header)}</tr>
+          </thead>
+          <tbody>
+            {visible.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} className="muted">
+                  {emptyMessage}
+                </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : (
+              visible.map((row, localIndex) => {
+                // `index` is the row's position in the whole sorted list, not the
+                // page, so a `#` column numbers across pages.
+                const index = (current - 1) * pageSize + localIndex
+                return (
+                  <tr key={rowKey(row, index)}>
+                    {columns.map((column) => (
+                      <td
+                        key={column.key}
+                        className={column.key === 'action' ? 'action-cell' : undefined}
+                      >
+                        {column.render(row, index)}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
 
-      {pageCount > 1 && (
-        <div className="pager">
-          <button
-            type="button"
-            className="small"
-            disabled={current <= 1}
-            onClick={() => setPage(current - 1)}
-          >
-            Prev
-          </button>
-          <span className="muted">
-            Page {current} of {pageCount}
-          </span>
-          <button
-            type="button"
-            className="small"
-            disabled={current >= pageCount}
-            onClick={() => setPage(current + 1)}
-          >
-            Next
-          </button>
-        </div>
-      )}
+      <Pager page={current} pageCount={pageCount} onPage={setPage} />
     </>
   )
 }

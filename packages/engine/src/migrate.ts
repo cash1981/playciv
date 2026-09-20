@@ -17,9 +17,14 @@ import { migratePlayerTurn } from './turn.js'
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev'
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt'
 > &
-  Partial<Pick<GameState, 'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev'>>
+  Partial<
+    Pick<
+      GameState,
+      'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt'
+    >
+  >
 
 /** A hand from before the status board or governments (issue #43) existed. */
 type MaybeOlderPlayerhand = Omit<Playerhand, 'stats' | 'government'> &
@@ -90,6 +95,7 @@ export function migrateGameState(state: GameState): GameState {
 
   return {
     ...state,
+    createdAt: older.createdAt ?? null,
     log: state.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
     players: state.players.map(withPlayerDefaults),
     board:

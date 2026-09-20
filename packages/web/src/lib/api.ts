@@ -78,6 +78,7 @@ export interface GameSummary {
   readonly id: string
   readonly name: string
   readonly gameType: string
+  readonly createdAt: string | null
   readonly numOfPlayers: number
   readonly active: boolean
   readonly winner: string | null
@@ -90,6 +91,7 @@ export interface PublicGameSummary {
   readonly id: string
   readonly name: string
   readonly gameType: string
+  readonly createdAt: string | null
   readonly numOfPlayers: number
   readonly active: boolean
   readonly winner: string | null
