@@ -18,7 +18,8 @@
   "dependencies": {
     "@civ/engine": "workspace:*",
     "@hono/node-server": "^1.13.0",
-    "hono": "^4.6.0"
+    "hono": "^4.6.0",
+    "marked": "^18.0.13"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
