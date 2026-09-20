@@ -12,6 +12,21 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### turn-order-reveal-followup
+
+- **Owner:** Codex (human approved overlap with the merged reveal hotfix paths)
+- **Branch:** `fix/turn-order-reveal-followup`
+- **Brief:** `docs/agents/tasks/turn-order-reveal-followup.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/actions/turn.ts`
+  - `packages/engine/test/turn-action.test.ts`
+  - `packages/web/src/views/TurnPanel.tsx`
+  - `packages/web/src/views/TurnPanel.test.tsx`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+  - `docs/agents/tasks/turn-order-reveal-followup.md`
+
 ### issue-40-signup-security-question
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
