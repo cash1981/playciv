@@ -12,6 +12,21 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### cloudflare-observability
+
+- **Owner:** Codex
+- **Branch:** `chore/cloudflare-observability`
+- **Brief:** `docs/agents/tasks/cloudflare-observability.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `wrangler.jsonc`
+  - `docs/agents/tasks/cloudflare-observability.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+- **Notes:** Persist the exact Worker observability settings suggested by the
+  Cloudflare dashboard. This follows the already-merged issue-72 work (PR #91),
+  whose stale claim below no longer represents an unmerged change.
+
 ### issue-72-d1
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); verification by a second agent
