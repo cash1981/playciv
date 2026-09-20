@@ -788,3 +788,117 @@ loses the item initiates the transfer manually after agreeing the result with
 the other players. The HTTP route also retains the old backend compatibility:
 explicit valid sheet names form singleton pools, non-lootable sheets return
 406, and unknown sheets return 404.
+
+---
+
+## 2026-09-19 — Email notifications use Resend, and unsubscribe actually unsubscribes (issue #30)
+
+**Decision.** Transactional email returns as a server-only subsystem behind a
+`Mailer` interface, with Resend as the provider (`RESEND_API_KEY`, from
+`noreply@playciv.app`, links built from `APP_ORIGIN`). Ported triggers: it is
+your turn (end-turn only), new game, someone joined, chat, game ended, game
+deleted and the five turn-phase updates, with Java's 30-minute
+per-player-in-game and 3-hour per-account throttles. The new-game broadcast is
+faithful but gated by `MAIL_BROADCAST_NEW_GAMES`, off by default. The engine
+stays pure — no clock, no I/O.
+
+**Why.** Issue #30 asks for Resend and names the turn email the priority; the
+owner then chose all the old triggers, the throttles and the unsubscribe links,
+and asked for the broadcast behind a switch. The old provider was SendGrid and
+the rewrite had no mailer at all. The API runs on Node on Render, not on the
+Cloudflare Worker (the Worker only proxies `/api/*` and never sees game state),
+so the key lives on Render with the rest of the API secrets.
+
+**Consequences.**
+- Throttle state lives in the repository (`mail:player:<id>` and
+  `mail:game:<gameId>:<playerId>`), not in `GameState`, so it never touches
+  engine purity or the revision/compare-and-set flow. Mongo uses an
+  `email_sent` collection; the JSON file persists a keyed map.
+- `StoredPlayer.disableEmail` is read from the legacy `player` documents and is
+  now honoured for **every** notification. Java only checked it for the
+  new-game broadcast and the admin mass mail, so its "unsubscribe from ALL
+  emails" link did not stop chat, join or phase mail. Two deliberate
+  improvements over Java: the unsubscribe link rides on every mail (Java's
+  `sendYourTurn` had none), and the setting actually applies.
+- The two unsubscribe endpoints keep Java's paths and its unauthenticated
+  access: `GET /api/admin/email/notification/:playerId/{stop,start}`. The only
+  action is to flip the account's own flag; the player id is opaque.
+- Small sends are awaited in the request; the new-game broadcast stays
+  fire-and-forget like Java's raw thread. When enabled it serialises per
+  account, which is slow at 553 accounts — intended for deliberate use, not a
+  default.
+- Out of scope, as agreed: password reset (separate issue), admin mass mail
+  (`AdminAction` is deferred), player replacement and tournament mail.
+
+---
+
+## 2026-09-19 — Email notifications: review round two (issue #30)
+
+**Decision.** A review of the first issue-#30 pass found three functional
+gaps; they are fixed here, and every resulting difference from Java is recorded
+because the project ports old behaviour deliberately.
+
+**Why.** The reference is what the old system *did*, and three of its email
+behaviours were bugs that the message text itself contradicted.
+
+**Consequences.**
+- **The author is excluded by player id, not username.** Java filtered
+  recipients by `getUsername()` equality (`GameAction.addChat`,
+  `TurnAction.update*`). An admin can now rename an account while the game
+  keeps the username it was created with, so username equality stops holding:
+  the author would receive their own mail and an unrelated player could be
+  excluded. `chatPosted` / `phaseUpdated` take `authorPlayerId` and compare
+  `playerId`.
+- **The unsubscribe link names the recipient.** Java's turn-phase mails passed
+  `playerhand.getPlayerId()` — the *author's* id — into `UNSUBSCRIBE`, so the
+  link on someone else's mail unsubscribed the author. Ours carries the
+  recipient's id.
+- **The address is the account's current one.** Java mailed
+  `Playerhand.getEmail()`, a snapshot copied at join time. We look the account
+  up so an admin's email change takes effect.
+- **The cooldown is atomic.** `Repository.claimEmailSlot(scope, waitMs, now)`
+  decides and records in one step. Java read `Player/Playerhand.emailSent` and
+  wrote it back separately; two simultaneous chat messages could both pass the
+  check. The JSON repository keeps the read-and-set synchronous (no `await`
+  between them); Mongo claims an expired row with a conditional `updateOne` and
+  creates a missing one with a guarded upsert, so only one caller wins.
+- **The Resend call has a five-second `AbortSignal` timeout.** Notifications
+  are sent after the game write is committed; without a bound, an unresponsive
+  provider could make the client time out on a request that had in fact
+  succeeded, and a retry would act on a state the player had not seen.
+- The stop/start HTML now matches Java's markup exactly, so the earlier
+  wrapper difference is gone.
+- Still open in production: `RESEND_API_KEY` and `MAIL_FROM` must be set on the
+  host that runs `packages/server`, and the from-domain must be verified in
+  Resend. Cloudflare alone proves nothing until the API itself moves there.
+
+---
+
+## 2026-09-19 — Site-wide footer: copyright, license and PayPal (issue #77)
+
+**Decision.** The client carries the old site-wide footer again: the copyright
+line, the Apache 2.0 license link and the old PayPal donate button, rendered
+under every screen the app shell can show.
+
+**Why.** Issue #77 — "Look at the old frontend and add copyright / apache
+license and donation footer on all pages". The old AngularJS footer sat outside
+`ng-view`, so it appeared on every route; the rewrite had dropped it, even
+though the game-ended email already tells players the donation link is "at the
+bottom of the site" (`packages/server/src/notifications.ts`). The React app has
+no `ng-view`, so the footer is one component that `App.tsx` renders in each of
+its branches.
+
+**Consequences.**
+- The PayPal form is the old **encrypted hosted button** (`cmd=_s-xclick` plus
+  the PKCS7 `encrypted` value), copied byte-for-byte from
+  `old-civ-web/app/index.html`. The human chose reusing it over a new donate
+  integration, so the donation still reaches the same account.
+- **Patreon is not ported.** The old footer also carried a "Become a Patron!"
+  link and Patreon's `becomePatronButton.bundle.js`. The human chose PayPal
+  only, so neither the link nor the third-party script comes across. This is
+  the deliberate difference from the old footer.
+- The copyright line is `2015–2026` (the human's choice) instead of the old
+  `2015–2021`; the wording is otherwise the old one and the license link is the
+  same Apache 2.0 URL the About page already uses.
+- Bootstrap's `pull-right` is not available here; the footer is its own flex
+  row so both the light and dark themes lay it out.

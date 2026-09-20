@@ -374,8 +374,13 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     if (membership instanceof Response) return membership
 
     const player = currentPlayer(c)
-    return applyToGame(context, c, gameId, (state) =>
-      endTurn(state, { playerId: player.id, username: player.username }),
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) => endTurn(state, { playerId: player.id, username: player.username }),
+      undefined,
+      { after: ({ before, after }) => context.notifications.turnEnded(before, after) },
     )
   })
 
@@ -410,9 +415,18 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
 
     const turnNumber = optionalNumber(body, 'turnNumber') ?? 1
     const order = optionalString(body, 'order') ?? ''
+    const actor = currentPlayer(c)
 
-    return applyToGame(context, c, gameId, (state) =>
-      updateTurn(state, { playerId: currentPlayer(c).id, turnNumber, phase, order }),
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) => updateTurn(state, { playerId: actor.id, turnNumber, phase, order }),
+      undefined,
+      {
+        after: ({ after }) =>
+          context.notifications.phaseUpdated(after, actor.id, actor.username, phase, order),
+      },
     )
   })
 

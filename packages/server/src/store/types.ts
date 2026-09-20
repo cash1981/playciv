@@ -27,6 +27,11 @@ export interface StoredPlayer {
   /** Optional only at the boundary for seed/legacy records; repositories normalize it. */
   readonly role?: UserRole
   readonly disabled?: boolean
+  /**
+   * Java `Player.disableEmail` — set by the unsubscribe link. Opted-in by
+   * default; the legacy `player` documents already carry this field.
+   */
+  readonly disableEmail?: boolean
 }
 
 export interface PlayerUpdate {
@@ -34,6 +39,7 @@ export interface PlayerUpdate {
   readonly email?: string | null
   readonly role?: UserRole
   readonly disabled?: boolean
+  readonly disableEmail?: boolean
 }
 
 export interface ChatMessage {
@@ -95,6 +101,20 @@ export interface Repository {
 
   appendChat(message: ChatMessage): Promise<void>
   chatFor(gameId: string | null): Promise<readonly ChatMessage[]>
+
+  /**
+   * Atomically claims a throttled-notification slot. Returns true when no send
+   * has been recorded for `scope` within `waitMs` (and records `now`), false
+   * while the cooldown is still active. Java kept these timestamps on
+   * `Player.emailSent` (global, 3 h) and `Playerhand.emailSent` (per game,
+   * 30 min); here it is a small keyed table so it survives a restart without
+   * touching the engine state. Keys are built by `notifications.ts`.
+   *
+   * Must be atomic: two concurrent callers for the same scope must never both
+   * receive true, or a chat burst sends more than the one mail the cooldown
+   * promises.
+   */
+  claimEmailSlot(scope: string, waitMs: number, now: Date): Promise<boolean>
 
   /**
    * Finished, won games as a source for `highscore()`, roster included —

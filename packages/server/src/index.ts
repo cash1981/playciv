@@ -12,6 +12,13 @@
  *   MONGO_DB       database name, defaults to "playciv"
  *   TOKEN_SECRET   HMAC secret for session tokens
  *   CORS_ORIGIN    comma separated list, defaults to everything
+ *   RESEND_API_KEY Resend API key. When unset, email is a no-op (as Java was
+ *                  when its SendGrid variables were missing).
+ *   MAIL_FROM      from address, defaults to noreply@playciv.app
+ *   APP_ORIGIN     base URL of the web app, defaults to https://playciv.app.
+ *                  Used in the links inside notification email.
+ *   MAIL_BROADCAST_NEW_GAMES  "true" to email every account when a game is
+ *                  created (Java's behaviour). Off by default.
  *
  * For local development these can live in a gitignored `packages/server/.env`;
  * `./load-env.js` loads it. In production the host supplies them.
@@ -25,6 +32,9 @@ import { resolve } from 'node:path'
 import { serve } from '@hono/node-server'
 
 import { createApp } from './app.js'
+import type { Mailer } from './mail.js'
+import { createResendMailer, noopMailer } from './mail.js'
+import { DEFAULT_APP_ORIGIN } from './notifications.js'
 import { JsonFileRepository } from './store/json-file.js'
 import { MongoRepository } from './store/mongo.js'
 import type { Repository } from './store/types.js'
@@ -61,7 +71,28 @@ if (mongoUrl !== undefined) {
   console.log(`Storage: JSON file, mirrored to ${dataFile}`)
 }
 
-const app = createApp({ repo, tokenSecret, logger: true, corsOrigin })
+const appOrigin = process.env['APP_ORIGIN'] ?? DEFAULT_APP_ORIGIN
+const mailFrom = process.env['MAIL_FROM'] ?? 'noreply@playciv.app'
+const broadcastNewGames = process.env['MAIL_BROADCAST_NEW_GAMES'] === 'true'
+
+let mailer: Mailer = noopMailer
+const resendKey = process.env['RESEND_API_KEY']
+if (resendKey === undefined || resendKey === '') {
+  console.warn('RESEND_API_KEY is not set — email notifications are disabled.')
+} else {
+  mailer = createResendMailer({ apiKey: resendKey, from: mailFrom })
+  console.log(`Email: Resend, from ${mailFrom}`)
+}
+
+const app = createApp({
+  repo,
+  tokenSecret,
+  logger: true,
+  corsOrigin,
+  mailer,
+  appOrigin,
+  broadcastNewGames,
+})
 
 const server = serve({ fetch: app.fetch, port, hostname: host })
 

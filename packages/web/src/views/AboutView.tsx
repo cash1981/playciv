@@ -65,7 +65,7 @@ export function AboutView(): React.JSX.Element {
       <section className="panel" aria-labelledby="about-contact-heading">
         <h2 id="about-contact-heading">Contact</h2>
         <p>
-          You can contact me at <b>cash '@' playciv.com</b>
+          You can contact me at <b>cash '@' playciv.app</b>
         </p>
       </section>
     </main>
