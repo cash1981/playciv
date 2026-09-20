@@ -1,4 +1,7 @@
-/** Signing in and registering. Java: `AuthResource` and the AngularJS login page. */
+/**
+ * Signing in, registering and the forgot-password form. Java: `AuthResource`
+ * and the AngularJS login page. Issue #37 added the third mode.
+ */
 
 import { useState } from 'react'
 
@@ -10,19 +13,38 @@ interface Props {
   readonly onSignedIn: (player: PlayerDto) => void
 }
 
+type Mode = 'login' | 'register' | 'forgot'
+
 export function LoginView({ onSignedIn }: Props): React.JSX.Element {
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [mode, setMode] = useState<Mode>('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  function switchMode(next: Mode): void {
+    setMode(next)
+    setError(null)
+    setNotice(null)
+  }
 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault()
     setError(null)
+    setNotice(null)
     setBusy(true)
     try {
+      if (mode === 'forgot') {
+        await api.forgotPassword(email, password)
+        // The server answers 200 whether or not the address is registered, so
+        // this message is intentionally the same either way.
+        setNotice('Email verification is sent. Check your inbox and open the link.')
+        setPassword('')
+        return
+      }
+
       const result =
         mode === 'login'
           ? await api.login(username, password)
@@ -42,20 +64,30 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
       <p className="muted">Civilization the boardgame. Sign in to continue.</p>
 
       {error !== null && <div className="error">{error}</div>}
+      {notice !== null && <div className="notice">{notice}</div>}
 
       <form className="panel" onSubmit={submit}>
-        <label>
-          Username
-          <input
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            autoComplete="username"
-            required
-          />
-        </label>
+        {mode === 'forgot' && (
+          <p className="muted">
+            Enter your email and your new password. An email will be sent with a verification
+            link.
+          </p>
+        )}
+
+        {mode !== 'forgot' && (
+          <label>
+            Username
+            <input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoComplete="username"
+              required
+            />
+          </label>
+        )}
 
         <label>
-          Password
+          {mode === 'forgot' ? 'New password' : 'Password'}
           <input
             type="password"
             value={password}
@@ -65,7 +97,7 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
           />
         </label>
 
-        {mode === 'register' && (
+        {mode !== 'login' && (
           <label>
             Email
             <input
@@ -73,23 +105,29 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
+              required={mode === 'forgot'}
             />
           </label>
         )}
 
         <div className="row">
           <button className="primary" type="submit" disabled={busy}>
-            {mode === 'login' ? 'Sign in' : 'Register'}
+            {mode === 'login' ? 'Sign in' : mode === 'register' ? 'Register' : 'Send'}
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode(mode === 'login' ? 'register' : 'login')
-              setError(null)
-            }}
-          >
-            {mode === 'login' ? 'Create an account' : 'I have an account'}
-          </button>
+          {mode === 'login' ? (
+            <>
+              <button type="button" onClick={() => switchMode('register')}>
+                Create an account
+              </button>
+              <button type="button" onClick={() => switchMode('forgot')}>
+                Forgot password?
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => switchMode('login')}>
+              I have an account
+            </button>
+          )}
         </div>
       </form>
     </div>

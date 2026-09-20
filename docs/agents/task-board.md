@@ -12,6 +12,29 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-37-password-reset
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash); verification by a second agent
+- **Branch:** `feat/issue-37-password-reset`
+- **Brief:** `docs/agents/tasks/issue-37-password-reset.md`
+- **Status:** in review — implemented and pushed, awaiting the second agent's
+  verification and the human's merge.
+- **Claimed paths:**
+  - `packages/server/src/auth.ts`
+  - `packages/server/src/routes/auth.ts`
+  - `packages/server/test/auth-password-reset.test.ts` (new)
+  - `packages/web/src/views/LoginView.tsx`
+  - `packages/web/src/views/LoginView.test.tsx` (new)
+  - `packages/web/src/lib/api.ts`
+  - `docs/agents/tasks/issue-37-password-reset.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
+- **Notes:** Issue #37. Owner approved a signed, expiring reset-token link: the
+  email carries a HMAC-signed payload (player id + hashed new password + expiry);
+  nothing is stored server-side. The weak old `verify/{playerId}` link is not
+  ported, and no `Repository` change is needed, so this does not collide with the
+  D1 branch (#72).
+
 Recently done on `feat/game-fixes` (PR to open): core game bug fixes, tile
 snap-on-move, duplicate start-player removal, zoom panning, tech-tree layout.
 

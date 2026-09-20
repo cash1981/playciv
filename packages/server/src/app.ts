@@ -6,7 +6,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 
-import { TokenSigner } from './auth.js'
+import { ResetTokenSigner, TokenSigner } from './auth.js'
 import type { AppContext, Variables } from './context.js'
 import { sendError } from './errors.js'
 import type { Mailer } from './mail.js'
@@ -83,6 +83,7 @@ export function createApp(options: CreateAppOptions): App {
   const context: AppContext = {
     repo: options.repo,
     tokens: new TokenSigner(options.tokenSecret),
+    resetTokens: new ResetTokenSigner(options.tokenSecret),
     notifications: createNotifications({
       repo: options.repo,
       mailer: options.mailer ?? noopMailer,

@@ -184,7 +184,7 @@ export function storeToken(token: string | null): void {
 }
 
 async function request<T>(
-  method: 'DELETE' | 'GET' | 'PATCH' | 'POST',
+  method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT',
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -218,6 +218,7 @@ async function request<T>(
 const get = <T>(path: string): Promise<T> => request<T>('GET', path)
 const post = <T>(path: string, body?: unknown): Promise<T> => request<T>('POST', path, body ?? {})
 const patch = <T>(path: string, body: unknown): Promise<T> => request<T>('PATCH', path, body)
+const put = <T>(path: string, body: unknown): Promise<T> => request<T>('PUT', path, body)
 const del = <T>(path: string): Promise<T> => request<T>('DELETE', path)
 
 export interface AuthResponse {
@@ -230,6 +231,12 @@ export const api = {
     post<AuthResponse>('/api/auth/register', { username, password, email }),
   login: (username: string, password: string) =>
     post<AuthResponse>('/api/auth/login', { username, password }),
+  /** Issue #37. Java `AuthResource.newPassword`; answers 200 either way. */
+  forgotPassword: (email: string, newPassword: string) =>
+    put<{ readonly ok: boolean }>('/api/auth/newpassword', {
+      email,
+      newpassword: newPassword,
+    }),
   me: () => get<PlayerDto>('/api/auth/me'),
 
   adminUsers: () => get<AdminUserDto[]>('/api/admin/users'),

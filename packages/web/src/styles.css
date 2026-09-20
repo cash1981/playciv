@@ -326,6 +326,15 @@ label > textarea {
   margin-bottom: 1rem;
 }
 
+.notice {
+  background: var(--panel);
+  border: 1px solid var(--good);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 1rem;
+}
+
 .tag {
   display: inline-block;
   font-size: 0.75rem;

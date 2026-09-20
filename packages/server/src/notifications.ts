@@ -58,6 +58,13 @@ export interface Notifications {
     phase: TurnPhase,
     order: string,
   ): Promise<void>
+  /**
+   * Java `PlayerAction.newPassword(ForgotpassDTO)` — the reset verification
+   * link. Transactional: it ignores `disableEmail` and carries no unsubscribe
+   * line, because unsubscribing from game mail must not lock a user out of
+   * their own account.
+   */
+  passwordReset(email: string, link: string): Promise<void>
 }
 
 /**
@@ -239,6 +246,22 @@ export function createNotifications(config: NotificationsConfig): Notifications 
           waitMs: IN_GAME_COOLDOWN_MS,
         }),
       )
+    },
+
+    async passwordReset(email: string, link: string): Promise<void> {
+      try {
+        // Java `SendEmail.sendMessage` body, on our own host. No unsubscribe
+        // line: this is the one mail that must always reach the account.
+        await mailer.send({
+          to: email,
+          subject: 'Please verify your email',
+          text:
+            'Your password was requested to be changed. If you want to change your password ' +
+            `then please press this link: ${link}`,
+        })
+      } catch (error) {
+        console.error(`Password-reset email to ${email} failed`, error)
+      }
     },
   }
 }
