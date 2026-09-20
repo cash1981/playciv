@@ -398,6 +398,11 @@ tests match on them.
 
 ## Deliberate improvements
 
+**Turn orders are revealed per phase.** The old client published every saved
+turn-order phase immediately. The port keeps each phase private until its
+owner clicks Reveal, then publishes only that phase; existing saved turns are
+migrated as already public.
+
 **The password reset link is a signed, expiring token.** Java emailed
 `/api/auth/verify/{playerId}` and stored the pending password in plaintext on
 the player record, so anyone who knew a public player id could complete a reset.

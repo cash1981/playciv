@@ -27,6 +27,8 @@ export interface PlayerTurn {
   /** Java: `disabled` — set once the player has locked the turn. */
   readonly disabled: boolean
   readonly orders: Readonly<Record<TurnPhase, string>>
+  /** Each phase is published independently by the player who owns the turn. */
+  readonly revealed: Readonly<Record<TurnPhase, boolean>>
   /**
    * Java used a `Set<String>` per phase, so without order. Insertion order is
    * kept here, since a history without order is worth little.
@@ -50,12 +52,21 @@ const emptyHistory = (): Record<TurnPhase, readonly string[]> => ({
   RESEARCH: [],
 })
 
+const emptyRevealed = (): Record<TurnPhase, boolean> => ({
+  SOT: false,
+  TRADE: false,
+  CM: false,
+  MOVEMENT: false,
+  RESEARCH: false,
+})
+
 export function createPlayerTurn(username: string, turnNumber: number): PlayerTurn {
   return {
     turnNumber,
     username,
     disabled: false,
     orders: emptyOrders(),
+    revealed: emptyRevealed(),
     history: emptyHistory(),
   }
 }
@@ -87,12 +98,38 @@ export function withOrder(turn: PlayerTurn, phase: TurnPhase, order: string): Pl
   return {
     ...turn,
     orders: { ...turn.orders, [phase]: order },
+    // A changed order must be explicitly published again.
+    revealed: { ...turn.revealed, [phase]: false },
     history: {
       ...turn.history,
       // Java used a Set, so the same order twice made only one entry
       [phase]: existing.includes(order) ? existing : [...existing, order],
     },
   }
+}
+
+/** Backfills the phase flags on games saved before turn-order reveal existed. */
+export function migratePlayerTurn(turn: PlayerTurn): PlayerTurn {
+  return {
+    ...turn,
+    revealed: Object.fromEntries(
+      TURN_PHASES.map((phase) => [phase, turn.revealed?.[phase] ?? true]),
+    ) as Record<TurnPhase, boolean>,
+  }
+}
+
+/** Masks unpublished phases before a turn is sent to another player. */
+export function publicTurn(turn: PlayerTurn): PlayerTurn {
+  const orders = { ...turn.orders }
+  const history = { ...turn.history }
+  for (const phase of TURN_PHASES) {
+    // Missing flags are treated as public for callers holding an old state
+    // object that has not passed through migration yet.
+    if (turn.revealed?.[phase] !== false) continue
+    orders[phase] = ''
+    history[phase] = []
+  }
+  return { ...turn, orders, history }
 }
 
 /**

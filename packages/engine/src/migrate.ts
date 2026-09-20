@@ -12,6 +12,7 @@ import { createBoard } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
+import { migratePlayerTurn } from './turn.js'
 
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
@@ -26,6 +27,7 @@ type MaybeOlderPlayerhand = Omit<Playerhand, 'stats' | 'government'> &
 
 const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   ...player,
+  playerTurns: player.playerTurns.map(migratePlayerTurn),
   stats: { ...DEFAULT_PLAYER_STATS, ...player.stats },
   government: player.government ?? DEFAULT_GOVERNMENT,
 })
@@ -99,7 +101,9 @@ export function migrateGameState(state: GameState): GameState {
             history: board.history ?? historyForImportedPieces(board.pieces),
           },
     withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withPlayerDefaults),
-    publicTurns: older.publicTurns ?? {},
+    publicTurns: Object.fromEntries(
+      Object.entries(older.publicTurns ?? {}).map(([key, turn]) => [key, migratePlayerTurn(turn)]),
+    ),
     wondersDealt: older.wondersDealt ?? (hasWonder || setupComplete),
     battle:
       battle === null || battle === undefined

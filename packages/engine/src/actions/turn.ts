@@ -23,6 +23,7 @@ import {
   compareTurns,
   createPlayerTurn,
   publicTurnKey,
+  publicTurn,
   sameTurn,
   withOrder,
   withoutCurrentOrderInHistory,
@@ -59,9 +60,8 @@ export interface UpdateTurnInput {
 /**
  * Java: `updateTurn` + `updatePrivatePlayerturn` + `addTurnInPBF`.
  *
- * The order is stored both on the player's private turn list and in
- * `publicTurns`, which is what everyone sees. It is not hidden information —
- * turn orders are the point of a play-by-forum game.
+ * The order is stored on the player's private turn list. The public copy keeps
+ * the turn identity but masks each phase until it is explicitly revealed.
  */
 export function updateTurn(state: GameState, input: UpdateTurnInput): ActionResult {
   const access = requireAccess(state, input.playerId)
@@ -79,7 +79,7 @@ export function updateTurn(state: GameState, input: UpdateTurnInput): ActionResu
 
   const next: GameState = {
     ...withPlayer(state, { ...player, playerTurns }),
-    publicTurns: { ...state.publicTurns, [publicTurnKey(updated)]: updated },
+    publicTurns: { ...state.publicTurns, [publicTurnKey(updated)]: publicTurn(updated) },
   }
 
   const logType = PHASE_LOG_TYPE[input.phase]
@@ -87,6 +87,39 @@ export function updateTurn(state: GameState, input: UpdateTurnInput): ActionResu
   return ok(
     appendLog(next, { username: player.username, playerId: player.playerId, logType, ...texts }),
   )
+}
+
+export interface RevealTurnOrderInput {
+  readonly playerId: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+}
+
+/** Publishes one phase of the caller's turn order. */
+export function revealTurnOrder(state: GameState, input: RevealTurnOrderInput): ActionResult {
+  const access = requireAccess(state, input.playerId)
+  if (!access.ok) return access
+  const player = access.value
+  const turn = player.playerTurns.find((candidate) => candidate.turnNumber === input.turnNumber)
+  if (turn === undefined) return err({ kind: 'TURN_NOT_FOUND', turnNumber: input.turnNumber })
+
+  const updated: PlayerTurn = {
+    ...turn,
+    revealed: { ...turn.revealed, [input.phase]: true },
+  }
+  const next: GameState = {
+    ...withPlayer(state, {
+      ...player,
+      playerTurns: player.playerTurns.map((candidate) =>
+        sameTurn(candidate, updated) ? updated : candidate,
+      ),
+    }),
+    publicTurns: {
+      ...state.publicTurns,
+      [publicTurnKey(updated)]: publicTurn(updated),
+    },
+  }
+  return ok(next)
 }
 
 export interface AddTurnInput {
@@ -146,7 +179,7 @@ export function lockOrUnlockTurn(state: GameState, input: LockTurnInput): Action
       state.publicTurns,
       publicTurnKey(updated),
     )
-      ? { ...state.publicTurns, [publicTurnKey(updated)]: updated }
+      ? { ...state.publicTurns, [publicTurnKey(updated)]: publicTurn(updated) }
       : state.publicTurns,
   }
 
@@ -165,7 +198,7 @@ export function lockOrUnlockTurn(state: GameState, input: LockTurnInput): Action
 export function allPublicTurns(state: GameState): readonly PlayerTurn[] {
   return Object.values(state.publicTurns)
     .sort(compareTurns)
-    .map(withoutCurrentOrderInHistory)
+    .map((turn) => withoutCurrentOrderInHistory(publicTurn(turn)))
 }
 
 /**

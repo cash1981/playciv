@@ -1,8 +1,8 @@
 /**
  * Turn orders. Java: `TurnAction` and the turn tabs in old-civ-web.
  *
- * Orders are public as soon as they are saved. The private log is the separate
- * unlogged planning space backed by `Playerhand.gamenote`.
+ * Orders are private until each phase is explicitly revealed. The private log
+ * is the separate unlogged planning space backed by `Playerhand.gamenote`.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -56,6 +56,7 @@ interface WorkspaceProps {
   readonly onTurnNumberChange: (turnNumber: number) => void
   readonly onNewTurn: () => void
   readonly onPhaseChange: (phase: TurnPhase, markdown: string) => void
+  readonly onRevealPhase?: (phase: TurnPhase) => void
   readonly onPhaseDirty?: (phase: TurnPhase) => void
   readonly tabPanelId: string
   readonly labelledBy: string
@@ -177,6 +178,7 @@ export function TurnOrderWorkspace({
   onTurnNumberChange,
   onNewTurn,
   onPhaseChange,
+  onRevealPhase,
   onPhaseDirty,
   tabPanelId,
   labelledBy,
@@ -260,13 +262,32 @@ export function TurnOrderWorkspace({
           <div className="turn-phase-heading">
             <h3>{TURN_PHASE_LABEL[phase]}</h3>
             {player.own && (
-              <SaveStatusBadge
-                status={
-                  phaseStatuses?.[phase] ??
-                    (values[phase] !== savedValues[phase] ? 'unsaved' : 'saved')
-                }
-                label={TURN_PHASE_LABEL[phase]}
-              />
+              <>
+                <SaveStatusBadge
+                  status={
+                    phaseStatuses?.[phase] ??
+                      (values[phase] !== savedValues[phase] ? 'unsaved' : 'saved')
+                  }
+                  label={TURN_PHASE_LABEL[phase]}
+                />
+                <button
+                  type="button"
+                  className="small"
+                  disabled={
+                    busy ||
+                    locked ||
+                    current === undefined ||
+                    values[phase] === '' ||
+                    current.revealed[phase]
+                  }
+                  onClick={() => onRevealPhase?.(phase)}
+                >
+                  {current?.revealed[phase] ? 'Revealed' : 'Reveal'}
+                </button>
+              </>
+            )}
+            {!player.own && current !== undefined && (
+              <span className="tag">{current.revealed[phase] ? 'revealed' : 'private'}</span>
             )}
           </div>
           <EditorComponent
@@ -823,6 +844,9 @@ export function TurnPanel({
               onPhaseChange={(phase, markdown) => {
                 const key = phaseKey(turnNumber, phase)
                 setDraftValue(key, markdown)
+              }}
+              onRevealPhase={(phase) => {
+                void run(() => api.revealTurnOrder(gameId, turnNumber, phase))
               }}
               onPhaseDirty={(phase) => markLiveDirty(phaseKey(turnNumber, phase))}
               tabPanelId={playerPanelId(selectedPlayerIndex)}

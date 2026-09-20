@@ -1063,3 +1063,20 @@ rows written); the reduced import writes about 2,000.
 mongodump backup remains the only source for the dropped collections.
 `gamelog`/`tournament` have no tables at all, and `chat` is not back-filled. The
 migration's required collections are `player` and `pbf`.
+
+---
+
+## 2026-09-20 — Turn orders are revealed per phase
+
+**Decision.** A saved turn-order phase remains private until its owner clicks
+Reveal. Each of SOT, TRADE, CM, MOVEMENT and RESEARCH has an independent
+reveal flag; changing a published phase makes it private again until it is
+revealed again. Games saved before this hotfix are migrated with their existing
+orders treated as public.
+
+**Why.** The requested hotfix needs planning orders to stay hidden until the
+player deliberately publishes them. The old Java/client system published on
+save, so this is a documented product change rather than a ported rule.
+
+**Consequences.** Public projections mask both the current text and history of
+unrevealed phases. The reveal action is restricted to the owner of the turn.

@@ -79,7 +79,7 @@ export interface Playerhand {
   readonly barbarians: readonly UnitItem[]
   readonly battlehand: readonly UnitItem[]
   readonly socialPolicies: readonly SocialPolicyItem[]
-  /** Java: `playerTurns` — the player's own turn orders, private until shared. */
+  /** Java: `playerTurns` — the player's own turn orders, private until revealed. */
   readonly playerTurns: readonly PlayerTurn[]
   /** Java: `gamenote` — the player's private note about the game. */
   readonly gamenote: string | null
@@ -160,8 +160,8 @@ export interface GameState {
   readonly techs: readonly TechItem[]
   readonly socialPolicies: readonly SocialPolicyItem[]
   /**
-   * Java: `publicTurns`, keyed on `turnNumber + username`. Turn orders become
-   * public the moment they are updated.
+   * Java: `publicTurns`, keyed on `turnNumber + username`. It stores a masked
+   * public copy until each phase is revealed.
    */
   readonly publicTurns: Readonly<Record<string, PlayerTurn>>
   readonly log: readonly GameLogEntry[]
@@ -329,8 +329,8 @@ export interface OpaquePlayerhand {
    */
   readonly revealedTechs: readonly TechItem[]
   /**
-   * The turn orders that have been shared. `gamenote` and `playerTurns` are
-   * private and do not appear here.
+   * Public turn-order copies. `gamenote` and `playerTurns` are private and do
+   * not appear here.
    */
   readonly publicTurns: readonly PlayerTurn[]
   /** The status board (issue #43) is public, unlike the rest of the hand. */

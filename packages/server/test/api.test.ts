@@ -1759,6 +1759,22 @@ describe('a whole round', () => {
     })
     expect(turn.status).toBe(200)
 
+    const privatePublicTurns = await inject(app, {
+      method: 'GET',
+      url: `/api/games/${gameId}/turns/public`,
+      headers: bearer(tokens['Chul'] as string),
+    })
+    expect(privatePublicTurns.status).toBe(200)
+    expect(privatePublicTurns.body).not.toContain('Build city at L4')
+
+    const reveal = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/turns/reveal`,
+      headers: bearer(starter),
+      payload: { turnNumber: 1, phase: 'SOT' },
+    })
+    expect(reveal.status).toBe(200)
+
     const publicTurns = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}/turns/public`,
