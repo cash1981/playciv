@@ -1177,3 +1177,39 @@ what a chat reader expects.
   rather than one `.grid` track, `SortableTable` wraps its `<table>` in
   `.table-scroll` (`overflow-x: auto`), and `.panel` gets `min-width: 0`. A wide
   table now scrolls inside its panel instead of drawing over the chat column.
+
+---
+
+## 2026-09-21 - Admin email broadcast (issue #92)
+
+**Decision.** The old `GameAction.sendMailToAll` is exposed as
+`POST /api/admin/email/broadcast` (admin only) with a WYSIWYG Markdown body
+rendered to HTML by `marked`, an editable subject defaulting to
+"Message from cash at playciv.app", and a checkbox that also mails players who
+have unsubscribed. The composer lives on the admin page (`/admin`).
+
+**Why.** Java really had the method, but its only caller - `PUT /admin/mail` -
+had the `gameAction.sendMailToAll(msg)` line commented out and always answered
+204, and no old-client UI existed, so the feature was dead. Issue #92 asked for
+it back as a Markdown editor on the admin page. `marked` was chosen because it
+is pure JS with no Node built-ins, so it runs on Cloudflare Workers.
+
+**Consequences.**
+- The body is Markdown rendered to HTML, with the Markdown source as the
+  plain-text fallback; each mail keeps Java's `Hello <username>` greeting and the
+  unsubscribe footer (a real link in the HTML part).
+- No sanitising of the rendered HTML: only an admin can reach the route, and an
+  admin already controls every account, so the content is trusted. The
+  recipient's username is escaped, because it sits outside the admin's Markdown
+  and an admin may have set it to raw HTML through the user editor.
+- Sends run in-request, one provider call per recipient, exactly like the old
+  `sendMailToAll` and the existing game mails. A very large account list could
+  hit the Worker's subrequest/CPU limits; that is a known limitation, not fixed
+  here. One recipient's failure is logged and swallowed - never thrown out of
+  the loop - and counts as `skipped`, so `skipped` means "not sent".
+- Disabled accounts are not filtered. Java's `sendMailToAll` filtered only on
+  `disableEmail`, and the game mails behave the same, so this does too.
+- Deliberate differences from Java: the default subject uses the current domain
+  (`playciv.app`, not `playciv.com`); the plain-text greeting is followed by a
+  blank line rather than Java's single `\n`; and the unsubscribe link is on
+  every mail, as with the other notifications.

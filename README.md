@@ -539,6 +539,21 @@ column, and a numeric column opens **descending** on the first click where
 `ng-table` opened every column ascending. The **Open** and **Full** actions come
 from the rewrite, not the old client. See `docs/agents/decisions.md`.
 
+**The admin broadcast is reachable, with a Markdown body.** The old
+`GameAction.sendMailToAll` existed but was dead: its only endpoint,
+`PUT /admin/mail`, had the call commented out and always answered 204, and no
+old-client UI ever used it. Issue #92 exposes it as
+`POST /api/admin/email/broadcast` (admin only), with an editable subject
+defaulting to "Message from cash at playciv.app", a WYSIWYG Markdown editor
+whose body is rendered to HTML by `marked` (the Markdown source stays as the
+plain-text fallback), and a checkbox to also mail players who have unsubscribed.
+Each mail keeps the `Hello <username>` greeting and the unsubscribe link. The
+rendered HTML is not sanitised: only an admin can reach the route and an admin
+already controls every account, so the content is trusted. Sends run in-request,
+one provider call per recipient, so a very large account list could hit the
+Worker's subrequest/CPU limits — a known limitation, not fixed here. See
+`docs/agents/decisions.md`.
+
 ## Deferred
 
 - **Card artwork.** The hand is shown as text. `itemImage()` in the engine
@@ -546,7 +561,7 @@ from the rewrite, not the old client. See `docs/agents/decisions.md`.
 - **Highscores and tournaments** — `GameAction.getCivHighscore`,
   `getPlayerHighScore`, `TournamentAction`. They query across games and need a
   proper data layer.
-- **`AdminAction`** — swap a user in a game, delete games, bulk mail.
+- **`AdminAction`** — swap a user in a game, delete games.
 - **Real time.** The client refetches after every action; there is no websocket.
   `todo.txt` in old-civ-rest wanted one for chat.
 
