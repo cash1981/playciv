@@ -219,8 +219,6 @@ _Nothing queued._
   already in place (Luna) and confirmed working. 297 engine + 51 server tests
   pass. Branch pushed; PR still to open.
 
-- **`gh` is not installed**, so pull requests are opened through the compare
-  link rather than the CLI. SSH push works.
 - **Space Flight has no artwork.** Nothing to fix; there is no such card.
 - **Card images are large** — up to 1 MB each, straight from the old client.
   Fine locally, wasteful over a network. Nobody has decided to optimise them.

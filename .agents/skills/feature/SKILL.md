@@ -68,12 +68,15 @@ Only after `/review-gate` has been approved. If it has not, say so and stop.
    git push -u origin feat/<slug>
    ```
 
-6. **Open the pull request.** `gh` is not installed here, so give the human the
-   link:
+6. **Open the pull request.** `gh` is on the PATH; use it:
 
+   ```bash
+   gh pr create --base main --head feat/<slug> --title "<title>" \
+     --body-file <file>
    ```
-   https://github.com/cash1981/playciv/compare/main...feat/<slug>?expand=1
-   ```
+
+   If `gh` is ever unavailable, give the human the link instead:
+   `https://github.com/cash1981/playciv/compare/main...feat/<slug>?expand=1`.
 
    Draft the PR body for them to paste: what changed, why, what was verified
    with the real numbers, what was deliberately left out, and a link to the
