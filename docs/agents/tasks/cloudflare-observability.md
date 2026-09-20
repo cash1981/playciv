@@ -3,7 +3,7 @@
 - **Slug:** `cloudflare-observability`
 - **Branch:** `chore/cloudflare-observability`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** review-approved
 
 ## Goal
 
@@ -52,13 +52,13 @@ sampling and persistence values.
 
 ## Acceptance criteria
 
-- [ ] `wrangler.jsonc` contains the dashboard-supplied `logs` and `traces`
+- [x] `wrangler.jsonc` contains the dashboard-supplied `logs` and `traces`
       settings exactly.
-- [ ] `pnpm --filter @civ/worker dry-run` accepts the configuration.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: not applicable; no application data or projection is
+- [x] `pnpm --filter @civ/worker dry-run` accepts the configuration.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: not applicable; no application data or projection is
       changed.
-- [ ] Browser verification: not applicable; this is deploy configuration only.
+- [x] Browser verification: not applicable; this is deploy configuration only.
 
 ## Open questions
 

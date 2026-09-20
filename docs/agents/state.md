@@ -19,6 +19,9 @@ _Last updated: 2026-09-20_
 
 ## Done
 
+- **Cloudflare observability config.** `wrangler.jsonc` now persists the
+  dashboard-supplied invocation-log and trace settings; Wrangler dry-run
+  accepts the config. Branch `chore/cloudflare-observability`, review-approved.
 - **Password reset (issue #37).** `PUT /api/auth/newpassword` mails a one-hour
   signed reset link and `GET /api/auth/verify/{token}` applies it; the login
   screen has the old "Forgot password" form. The link carries the scrypt hash of
