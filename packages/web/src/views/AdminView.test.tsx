@@ -74,7 +74,8 @@ describe('admin email broadcast form (issue #92)', () => {
   it('sends the subject, body and checkbox and shows the counts', async () => {
     renderView()
 
-    fireEvent.change(subjectField(), { target: { value: 'A message' } })
+    // Padded subject: the trim is what reaches the API.
+    fireEvent.change(subjectField(), { target: { value: '  A message  ' } })
     fireEvent.change(bodyField(), { target: { value: 'Hello **everyone**' } })
     fireEvent.click(screen.getByLabelText('Also send to players who have unsubscribed'))
     fireEvent.click(sendButton())

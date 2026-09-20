@@ -159,7 +159,7 @@ export function AdminView({
     setSentNotice(null)
     try {
       const { sent, skipped } = await api.broadcastEmail(
-        emailSubject,
+        emailSubject.trim(),
         emailBody,
         includeUnsubscribed,
       )
