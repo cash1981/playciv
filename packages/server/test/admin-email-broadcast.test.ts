@@ -102,8 +102,9 @@ describe('admin email broadcast', () => {
 
     const mail = mailer.sent.find((candidate) => candidate.to === 'opted-in@example.com')
     expect(mail?.subject).toBe('Message from cash at playciv.app')
-    // Plain-text fallback keeps the Markdown source.
-    expect(mail?.text).toContain('Hello opted-in\n\n**Bold** news')
+    // Plain-text fallback keeps the Markdown source, after Java's single
+    // newline greeting.
+    expect(mail?.text).toContain('Hello opted-in\n**Bold** news')
     expect(mail?.text).toContain(`/api/admin/email/notification/${optedIn.id}/stop`)
     // HTML body renders the Markdown and carries a clickable unsubscribe link.
     expect(mail?.html).toContain('<p>Hello opted-in</p>')

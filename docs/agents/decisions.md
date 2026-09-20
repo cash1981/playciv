@@ -1210,6 +1210,5 @@ is pure JS with no Node built-ins, so it runs on Cloudflare Workers.
 - Disabled accounts are not filtered. Java's `sendMailToAll` filtered only on
   `disableEmail`, and the game mails behave the same, so this does too.
 - Deliberate differences from Java: the default subject uses the current domain
-  (`playciv.app`, not `playciv.com`); the plain-text greeting is followed by a
-  blank line rather than Java's single `\n`; and the unsubscribe link is on
-  every mail, as with the other notifications.
+  (`playciv.app`, not `playciv.com`); and the unsubscribe link is on every mail,
+  as with the other notifications.

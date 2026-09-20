@@ -314,8 +314,8 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         }
 
         // Java: "Hello " + username + "\n" + msg, then sendMessage appended the
-        // unsubscribe footer. The greeting is personalised per recipient.
-        const text = `Hello ${player.username}\n\n${options.markdown}${unsubscribe(player.id)}`
+        // unsubscribe footer. A single newline after the greeting, as Java had.
+        const text = `Hello ${player.username}\n${options.markdown}${unsubscribe(player.id)}`
         const html =
           `<p>Hello ${escapeHtml(player.username)}</p>` +
           renderMarkdown(options.markdown) +
