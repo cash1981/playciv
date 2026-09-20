@@ -13,7 +13,7 @@ _Last updated: 2026-09-20_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 414 engine, 161 server, 48 web |
+| `pnpm -r test` | passing - 418 engine, 162 server, 65 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
@@ -220,6 +220,24 @@ _Last updated: 2026-09-20_
 - **Issue #43 Governments.** Player status now stores a public government per player, defaults and migrates to Despotism, applies the Rome/Russia/Japan starting exceptions, and lets any member update the shared value with a public log entry. The supplied artwork and accessible text for all eight *Wisdom and Warfare* cards open from a `?` help button in a keyboard-accessible modal; Social Policy remains discoverable in the open Techs panel. Spectator and replay controls are read-only; browser-verified and review-approved.
 - **Issue #77.** A site-wide footer under every screen: the copyright line, the Apache 2.0 license link and the old PayPal donate button (the exact encrypted hosted button from `old-civ-web`). Patreon is dropped on purpose; see `decisions.md`.
 - **Issue #40.** The register form asks the old fixed question ("What is China's starting tech?") and `POST /api/auth/register` now requires a `securityAnswer` field, accepting only `writing` case-insensitive, so a direct API call can no longer skip the gate the old client enforced alone. The client refuses a wrong answer before calling the API, as `RegisterController.js` did. The question is a speed bump, not a security boundary, and server enforcement is a deliberate improvement over Java — recorded in `decisions.md` and `README.md`. Review-approved on branch `feat/issue-40-signup-security-question`, PR to open; the route is covered by the Hono tests and the form by `LoginView.test.tsx` (no browser connection was available for a manual pass).
+- **Game list tabs.** The front page splits its single list into **Active games**
+  and **Finished games** tabs, each a sortable table paged at ten rows, with the
+  old search box and a real "Show my games" membership filter; this is
+  `old-civ-web`'s `list.html` split, rebuilt on the shared `SortableTable` (now
+  generic, with `Tabs`/`Pager` split out). `GameState.createdAt` is new, stamped
+  by the server on create and defaulted to `null` by `migrateGameState`, so the
+  old Created column has a source. A follow-up fixed the "Show my games" filter
+  surviving a sign-out, made a numeric column open descending even on an empty
+  table (direction now comes from the column, not a sample row), right-aligned
+  the Action header, dropped the Players cell's trailing line break, memoised
+  the column arrays, and added a **Beta** badge after the *Play Civilization*
+  heading. Branch `feat/games-list-tabs`; the deliberate differences from the old
+  client and the createdAt addition are in `decisions.md` and `README.md`. 4 new
+  engine tests, 1 server test, 13 web tests. A second follow-up made the games
+  panel full width (the table had drawn over the chat column), moved the lobby
+  chat to the bottom as its own `LobbyChat` panel with the shared pager (ten per
+  page), and changed `GET /api/chat` to return ~3 months newest first with no
+  50-message cap; 1 server test replaced, 5 new web tests.
 
 ## In progress
 

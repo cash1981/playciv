@@ -528,6 +528,17 @@ without it. The comparison is the old one — `toUpperCase()` on the raw value, 
 trimming — and it is a speed bump, not a security boundary: no captcha, rate
 limit or rotating question. See `docs/agents/decisions.md`.
 
+**The game-list search and sort span both tabs.** `old-civ-web`'s `list.html`
+put the search box and "Show my games" inside the Active Games tab only, and its
+Finished Games tab (`ng-table`) sorted only Created / Name / Number of players.
+Here both controls sit above the tabs and apply to whichever is open:
+"Show my games" is a real membership filter, and the search matches the game
+name, its type and any player's username (`filter` in AngularJS matched every
+property on the game). Both tabs are sortable, so **Type** is a new sortable
+column, and a numeric column opens **descending** on the first click where
+`ng-table` opened every column ascending. The **Open** and **Full** actions come
+from the rewrite, not the old client. See `docs/agents/decisions.md`.
+
 ## Deferred
 
 - **Card artwork.** The hand is shown as text. `itemImage()` in the engine

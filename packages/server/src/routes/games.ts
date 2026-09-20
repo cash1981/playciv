@@ -41,6 +41,7 @@ export interface GameSummary {
   readonly id: string
   readonly name: string
   readonly gameType: string
+  readonly createdAt: string | null
   readonly numOfPlayers: number
   readonly active: boolean
   readonly winner: string | null
@@ -54,6 +55,7 @@ export interface PublicGameSummary {
   readonly id: string
   readonly name: string
   readonly gameType: string
+  readonly createdAt: string | null
   readonly numOfPlayers: number
   readonly active: boolean
   readonly winner: string | null
@@ -67,6 +69,7 @@ function toSummary(game: GameState, viewerId: string): GameSummary {
     id: game.id,
     name: game.name,
     gameType: game.gameType,
+    createdAt: game.createdAt,
     numOfPlayers: game.numOfPlayers,
     active: game.active,
     winner: game.winner,
@@ -84,6 +87,7 @@ export function toPublicSummary(game: GameState, viewerId?: string): PublicGameS
     id: game.id,
     name: game.name,
     gameType: game.gameType,
+    createdAt: game.createdAt,
     numOfPlayers: game.numOfPlayers,
     active: game.active,
     winner: game.winner,
@@ -217,6 +221,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       // keeps two games with the same name from getting the same deck.
       seed: `${name}:${newId()}`,
       players: [],
+      createdAt: new Date().toISOString(),
     })
 
     // Java: createNewGame finished with joinGame(..., gameCreator = true).

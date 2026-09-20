@@ -277,6 +277,9 @@ label > textarea {
   border-radius: var(--radius);
   padding: 0.85rem;
   margin-bottom: 1rem;
+  /* Grid items default to `min-width: auto`, which lets a wide child (the
+     game table) push past its track. Allow the panel to shrink instead. */
+  min-width: 0;
 }
 
 .grid {
@@ -292,6 +295,23 @@ label > textarea {
 
 .landing-intro p {
   margin: 0 0 0.8rem;
+}
+
+/* The "not finished yet" badge next to the Play Civilization heading. The word
+   carries the meaning; the accent colours only make it stand out in either
+   theme. */
+.beta-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.45em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: middle;
 }
 
 /*
@@ -1055,9 +1075,10 @@ ul.history > li {
   }
 }
 
-/* --- Highscore -------------------------------------------------------------
-   Port of old-civ-web's highscore.html: nested pill tabs over sortable,
-   paginated tables. The pills replace uib-tabset; the table replaces ng-table.
+/* --- Pill tabs and sortable tables -----------------------------------------
+   Port of old-civ-web's highscore.html and list.html: pill tabs over sortable,
+   paginated tables. The pills replace uib-tabset; `.data-table` replaces
+   ng-table and is shared by the highscore and the game list.
    --------------------------------------------------------------------------- */
 
 .tabs {
@@ -1096,34 +1117,40 @@ ul.history > li {
   font-weight: 600;
 }
 
-.highscore-table {
+.data-table {
   width: 100%;
   border-collapse: collapse;
   text-align: center;
 }
 
-.highscore-table th,
-.highscore-table td {
+/* The game table has seven columns and can be wider than its panel; scroll it
+   sideways inside the panel rather than let it overflow the page. */
+.table-scroll {
+  overflow-x: auto;
+}
+
+.data-table th,
+.data-table td {
   padding: 0.4rem 0.5rem;
   border-bottom: 1px solid var(--line);
 }
 
-.highscore-table tbody tr:nth-child(odd) {
+.data-table tbody tr:nth-child(odd) {
   background: var(--panel-2);
 }
 
-.highscore-table tbody tr:hover {
+.data-table tbody tr:hover {
   background: var(--line);
 }
 
-.highscore-table th {
+.data-table th {
   color: var(--muted);
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
-.highscore-table th .sort {
+.data-table th .sort {
   width: 100%;
   display: inline-flex;
   align-items: center;
@@ -1139,8 +1166,34 @@ ul.history > li {
   cursor: pointer;
 }
 
-.highscore-table th .sort:hover {
+.data-table th .sort:hover {
   color: var(--accent);
+}
+
+/* The game list's Action header and cells sit to the right of the table. */
+.data-table .action-cell {
+  text-align: right;
+}
+
+/* The game list's search box and "Show my games" checkbox, above the tabs. */
+.games-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.7rem;
+}
+
+.games-filter input[type='search'] {
+  flex: 1 1 12rem;
+  min-width: 8rem;
+}
+
+/* The Finished tab's count, the old ng-table caption. */
+.games-caption {
+  margin: 0 0 0.7rem;
+  text-align: center;
+  font-weight: 600;
 }
 
 /* --- Player status --------------------------------------------------------- */

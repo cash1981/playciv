@@ -22,7 +22,10 @@ async function optionalViewerId(
   return player?.disabled === true ? undefined : player?.id
 }
 
-const PUBLIC_CHAT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
+// The lobby chat window is ~3 months. The old client showed 14 days capped at
+// 50 messages; the web pager now bounds what is displayed, so the route returns
+// every message in the window, newest first.
+const PUBLIC_CHAT_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000
 
 export function registerPublicRoutes(app: App, context: AppContext): void {
   app.get('/api/public/games', async (c) => {
@@ -54,8 +57,7 @@ export function registerPublicRoutes(app: App, context: AppContext): void {
     return c.json(
       messages
         .filter((message) => Date.parse(message.createdAt) >= cutoff)
-        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-        .slice(0, 50),
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     )
   })
 }

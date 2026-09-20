@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { api } from '../lib/api.js'
-import type { PlayerDto, PublicGameSummary } from '../lib/api.js'
-import { ChatTimestamp } from './ChatTimestamp.js'
+import type { ChatMessageDto, PlayerDto, PublicGameSummary } from '../lib/api.js'
+import { GameList } from './GameList.js'
 import { HighscoreView } from './HighscoreView.js'
+import { LobbyChat } from './LobbyChat.js'
 
 interface Props {
   readonly player: PlayerDto | null
@@ -16,8 +17,7 @@ interface Props {
 
 export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.Element {
   const [games, setGames] = useState<readonly PublicGameSummary[]>([])
-  const [chat, setChat] = useState<readonly { readonly id: string; readonly username: string; readonly message: string; readonly createdAt: string }[]>([])
-  const [message, setMessage] = useState('')
+  const [chat, setChat] = useState<readonly ChatMessageDto[]>([])
   const [name, setName] = useState('')
   const [numOfPlayers, setNumOfPlayers] = useState(4)
   const [error, setError] = useState<string | null>(null)
@@ -38,24 +38,52 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
     void reload()
   }, [reload])
 
-  async function run(action: () => Promise<unknown>): Promise<void> {
-    setBusy(true)
-    setError(null)
-    try {
-      await action()
-      await reload()
-    } catch (caught) {
-      if (isUnauthorized(caught)) return onSignIn()
-      setError(errorMessage(caught))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const run = useCallback(
+    async (action: () => Promise<unknown>): Promise<void> => {
+      setBusy(true)
+      setError(null)
+      try {
+        await action()
+        await reload()
+      } catch (caught) {
+        if (isUnauthorized(caught)) return onSignIn()
+        setError(errorMessage(caught))
+        // Re-throw so a caller that owns its own input (the chat box) knows the
+        // action failed and can keep the text instead of clearing it.
+        throw caught
+      } finally {
+        setBusy(false)
+      }
+    },
+    [reload, onSignIn],
+  )
+
+  // Stable identity so `GameList`'s memoised column arrays (and through them
+  // `SortableTable`'s sort memo) survive a re-render.
+  const joinGame = useCallback(
+    (gameId: string): void => {
+      void run(async () => {
+        await api.join(gameId)
+        onOpenGame(gameId)
+      }).catch(() => undefined)
+    },
+    [run, onOpenGame],
+  )
+
+  const sendChat = useCallback(
+    (text: string): Promise<void> =>
+      run(async () => {
+        await api.sendLobbyChat(text)
+      }),
+    [run],
+  )
 
   return (
     <>
       <section className="landing-intro">
-        <h1>Play Civilization</h1>
+        <h1>
+          Play Civilization <span className="beta-badge">Beta</span>
+        </h1>
         <p className="muted">
           Browse active and finished games, compare the highscore and follow the lobby chat.
         </p>
@@ -68,103 +96,18 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
 
       {error !== null && <div className="error">{error}</div>}
 
-      <div className="grid">
-        <section className="panel">
-          <h2>Active and finished games</h2>
-          {games.length === 0 && <p className="muted">No games yet.</p>}
-          <ul className="list">
-            {games.map((game) => {
-              const full = game.players.length >= game.numOfPlayers
-              const alreadyJoined = player !== null && game.youAreIn
-              return (
-                <li key={game.id}>
-                  <a
-                    href={`/game/${encodeURIComponent(game.id)}`}
-                    onClick={(event) => {
-                      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-                        return
-                      }
-                      event.preventDefault()
-                      onOpenGame(game.id)
-                    }}
-                  >
-                    <strong>{game.name}</strong>
-                  </a>
-                  <span className="muted">
-                    {game.players.length}/{game.numOfPlayers}
-                  </span>
-                  {!game.active && <span className="tag">ended</span>}
-                  {game.winner !== null && <span className="tag revealed">{game.winner} won</span>}
-                  {game.active && game.nameOfUsersTurn !== '' && (
-                    <span className="tag">{game.nameOfUsersTurn}’s turn</span>
-                  )}
-                  <span className="spacer" style={{ flex: 1 }} />
-                  {player !== null && alreadyJoined && (
-                    <button className="small" onClick={() => onOpenGame(game.id)}>
-                      Open
-                    </button>
-                  )}
-                  {player !== null && !alreadyJoined && game.active && (
-                    <button
-                      className="small"
-                      disabled={busy || full}
-                      onClick={() => void run(async () => {
-                        await api.join(game.id)
-                        onOpenGame(game.id)
-                      })}
-                    >
-                      {full ? 'Full' : 'Join'}
-                    </button>
-                  )}
-                  {player === null && game.active && !full && (
-                    <span className="muted">Sign in to join</span>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        </section>
-
-        <section className="panel">
-          <h2>Lobby chat</h2>
-          <ul className="list scroll">
-            {chat.map((entry) => (
-              <li key={entry.id}>
-                <ChatTimestamp createdAt={entry.createdAt} />
-                <strong>{entry.username}</strong>{' '}
-                <span>{entry.message}</span>
-              </li>
-            ))}
-            {chat.length === 0 && <li className="muted">Quiet in here.</li>}
-          </ul>
-          {player === null ? (
-            <p className="muted">Sign in to join the conversation.</p>
-          ) : (
-            <form
-              className="row"
-              style={{ marginTop: '0.5rem' }}
-              onSubmit={(event) => {
-                event.preventDefault()
-                const text = message.trim()
-                if (text === '') return
-                void run(async () => {
-                  await api.sendLobbyChat(text)
-                  setMessage('')
-                })
-              }}
-            >
-              <input
-                aria-label="Lobby chat message"
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                placeholder={`Write as ${player.username} …`}
-                style={{ flex: 1 }}
-              />
-              <button disabled={busy || message.trim() === ''}>Send</button>
-            </form>
-          )}
-        </section>
-      </div>
+      {/* Full width, not in `.grid`: the seven-column game table is wider than a
+          grid column's share and used to draw over the chat panel. */}
+      <section className="panel">
+        <h2>Active and finished games</h2>
+        <GameList
+          games={games}
+          player={player}
+          busy={busy}
+          onOpenGame={onOpenGame}
+          onJoin={joinGame}
+        />
+      </section>
 
       {player !== null && (
         <section className="panel">
@@ -177,7 +120,7 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
                 const created = await api.createGame(name, numOfPlayers)
                 setName('')
                 onOpenGame(created.id)
-              })
+              }).catch(() => undefined)
             }}
           >
             <input
@@ -200,6 +143,11 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
       )}
 
       <HighscoreView />
+
+      <section className="panel">
+        <h2>Lobby chat</h2>
+        <LobbyChat messages={chat} player={player} busy={busy} onSend={sendChat} />
+      </section>
     </>
   )
 }
