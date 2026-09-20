@@ -302,7 +302,12 @@ describe('D1Repository through the API', () => {
     const response = await inject(app, {
       method: 'POST',
       url: '/api/auth/register',
-      payload: { username, password: 'hemmelig', email: `${username}@example.com` },
+      payload: {
+        username,
+        password: 'hemmelig',
+        email: `${username}@example.com`,
+        securityAnswer: 'writing',
+      },
     })
     expect(response.status).toBe(201)
     return (await response.json<{ token: string }>()).token
