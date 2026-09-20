@@ -29,8 +29,8 @@ _Last updated: 2026-09-21_
   greeting and the unsubscribe link; one send failure is logged and skipped. The
   untrusted-HTML and in-request-volume caveats are in `decisions.md` and
   `README.md`. 8 new server tests (the broadcast plus the mailer's HTML field)
-  and 4 web tests. Branch `feat/issue-92-admin-email-broadcast`, awaiting
-  review.
+  and 4 web tests. Review-approved on branch `feat/issue-92-admin-email-broadcast`;
+  PR to open.
 
 - **Cloudflare observability config.** `wrangler.jsonc` now persists the
   dashboard-supplied invocation-log and trace settings; Wrangler dry-run

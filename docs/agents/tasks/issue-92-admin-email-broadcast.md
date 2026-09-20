@@ -3,7 +3,7 @@
 - **Slug:** `issue-92-admin-email-broadcast`
 - **Branch:** `feat/issue-92-admin-email-broadcast`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
-- **Status:** in progress
+- **Status:** review-approved — implemented and checked on the branch; PR to open.
 
 ## Goal
 
@@ -194,19 +194,23 @@ pattern `TurnPanel.tsx` uses — so the test can inject a plain textarea.
 
 ## Acceptance criteria
 
-- [ ] An admin can send a subject and a Markdown body to every player with an
+- [x] An admin can send a subject and a Markdown body to every player with an
       email; a non-admin gets 403.
-- [ ] Recipients receive HTML (e.g. `**bold**` becomes `<strong>bold</strong>`)
+- [x] Recipients receive HTML (e.g. `**bold**` becomes `<strong>bold</strong>`)
       with the Markdown source as the plain-text fallback.
-- [ ] Opted-out players receive it only when the checkbox is ticked.
-- [ ] Each mail keeps the `Hello <username>` greeting and the unsubscribe link.
-- [ ] Server tests cover the filtering, the validation and the HTML; the web
+- [x] Opted-out players receive it only when the checkbox is ticked.
+- [x] Each mail keeps the `Hello <username>` greeting and the unsubscribe link.
+- [x] Server tests cover the filtering, the validation and the HTML; the web
       test covers the form.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: not applicable — the route is admin-only and no game
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: not applicable — the route is admin-only and no game
       projection changes.
 - [ ] Verified in the browser: compose and send to a test account (HTML arrives),
-      then tick the checkbox and confirm an opted-out account receives it.
+      then tick the checkbox and confirm an opted-out account receives it. — no
+      browser was connected in the coding session; the route is exercised
+      end-to-end through Hono (`app.request`) with a fake mailer, and the form by
+      `AdminView.test.tsx`. Delivery itself could not be observed (local mailer
+      is a no-op without `RESEND_API_KEY`).
 
 ## Open questions
 

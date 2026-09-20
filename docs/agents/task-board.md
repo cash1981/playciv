@@ -17,7 +17,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
 - **Branch:** `feat/issue-92-admin-email-broadcast`
 - **Brief:** `docs/agents/tasks/issue-92-admin-email-broadcast.md`
-- **Status:** in review — implemented on the branch; awaiting the review gate.
+- **Status:** review-approved — implemented and checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/server/src/mail.ts`
   - `packages/server/src/markdown.ts` (new)
