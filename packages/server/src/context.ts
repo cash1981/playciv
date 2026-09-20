@@ -8,7 +8,7 @@ import { hasUserAccess, toPlayerView } from '@civ/engine'
 import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
 
-import type { TokenSigner } from './auth.js'
+import type { ResetTokenSigner, TokenSigner } from './auth.js'
 import { sendEngineError, sendError } from './errors.js'
 import type { Notifications } from './notifications.js'
 import type { GameRevision, Repository, StoredPlayer } from './store/types.js'
@@ -16,6 +16,8 @@ import type { GameRevision, Repository, StoredPlayer } from './store/types.js'
 export interface AppContext {
   readonly repo: Repository
   readonly tokens: TokenSigner
+  /** Signs the password-reset links (issue #37); a key separate from `tokens`. */
+  readonly resetTokens: ResetTokenSigner
   readonly notifications: Notifications
   /** Absolute base URL of the web app, used in email links. */
   readonly appOrigin: string

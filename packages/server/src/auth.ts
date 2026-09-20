@@ -116,4 +116,72 @@ export class TokenSigner {
   }
 }
 
+/** What a password-reset link carries. Never the plaintext password. */
+export interface ResetTokenPayload {
+  readonly playerId: string
+  /** The scrypt hash to install once the link is opened. */
+  readonly passwordHash: string
+  readonly expiresAt: number
+}
+
+const RESET_KEY_LABEL = 'password-reset'
+
+/**
+ * Signs a password-reset link (issue #37). Deliberately uses a key *derived*
+ * from the session secret rather than the secret itself: `TokenSigner.verify`
+ * accepts any signed body carrying a `playerId` and a future `expiresAt`, which
+ * this payload also has, so sharing the key would let a reset link authenticate
+ * as the user. `ttlMs` defaults to one hour.
+ */
+export class ResetTokenSigner {
+  private readonly key: string
+  private readonly ttlMs: number
+
+  constructor(secret: string, ttlMs = 60 * 60 * 1000) {
+    this.key = createHmac('sha256', secret).update(RESET_KEY_LABEL).digest('hex')
+    this.ttlMs = ttlMs
+  }
+
+  sign(
+    payload: { readonly playerId: string; readonly passwordHash: string },
+    now = Date.now(),
+  ): string {
+    const body = base64url(JSON.stringify({ ...payload, expiresAt: now + this.ttlMs }))
+    return `${body}.${this.signature(body)}`
+  }
+
+  verify(token: string, now = Date.now()): ResetTokenPayload | undefined {
+    const [body, signature] = token.split('.')
+    if (body === undefined || signature === undefined) return undefined
+
+    const expected = this.signature(body)
+    if (
+      signature.length !== expected.length ||
+      !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+    ) {
+      return undefined
+    }
+
+    let payload: ResetTokenPayload
+    try {
+      payload = JSON.parse(fromBase64url(body)) as ResetTokenPayload
+    } catch {
+      return undefined
+    }
+
+    if (
+      typeof payload.playerId !== 'string' ||
+      typeof payload.passwordHash !== 'string' ||
+      payload.expiresAt < now
+    ) {
+      return undefined
+    }
+    return payload
+  }
+
+  private signature(body: string): string {
+    return createHmac('sha256', this.key).update(body).digest('base64url')
+  }
+}
+
 export const newId = (): string => randomUUID()
