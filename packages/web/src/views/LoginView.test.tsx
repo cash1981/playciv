@@ -9,7 +9,10 @@ import { LoginView } from './LoginView.js'
 vi.mock('../lib/api.js', () => ({
   api: {
     login: vi.fn(),
-    register: vi.fn(),
+    register: vi.fn().mockResolvedValue({
+      token: 'token',
+      player: { id: 'p1', username: 'cash1981', email: null, role: 'user', disabled: false },
+    }),
     forgotPassword: vi.fn().mockResolvedValue({ ok: true }),
   },
   storeToken: vi.fn(),
@@ -37,5 +40,46 @@ describe('LoginView forgot password (issue #37)', () => {
       expect(vi.mocked(api.forgotPassword)).toHaveBeenCalledWith('cash@playciv.com', 'hemmelig')
     })
     expect(await screen.findByText(/Email verification is sent/)).toBeTruthy()
+  })
+})
+
+/** Fill the register form; `answer` is typed into the security-question field. */
+function fillRegisterForm(answer: string): void {
+  fireEvent.click(screen.getByRole('button', { name: 'Create an account' }))
+  fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'cash1981' } })
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'hemmelig' } })
+  fireEvent.change(screen.getByLabelText('Email'), {
+    target: { value: 'cash@playciv.com' },
+  })
+  fireEvent.change(
+    screen.getByLabelText("Security Question: What is China's starting tech?"),
+    { target: { value: answer } },
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+}
+
+describe('LoginView register security question (issue #40)', () => {
+  it('refuses a wrong answer without calling the API', async () => {
+    render(<LoginView onSignedIn={vi.fn()} />)
+    fillRegisterForm('the wheel')
+
+    expect(await screen.findByText('Wrong answer to the security question')).toBeTruthy()
+    expect(vi.mocked(api.register)).not.toHaveBeenCalled()
+  })
+
+  it('sends the answer to the API when it is right', async () => {
+    const onSignedIn = vi.fn()
+    render(<LoginView onSignedIn={onSignedIn} />)
+    fillRegisterForm('writing')
+
+    await waitFor(() => {
+      expect(vi.mocked(api.register)).toHaveBeenCalledWith(
+        'cash1981',
+        'hemmelig',
+        'cash@playciv.com',
+        'writing',
+      )
+    })
+    expect(onSignedIn).toHaveBeenCalled()
   })
 })

@@ -20,6 +20,7 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [email, setEmail] = useState('')
+  const [securityAnswer, setSecurityAnswer] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -45,10 +46,17 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
         return
       }
 
+      // Issue #40. The old client refused a wrong answer before sending
+      // anything (`RegisterController.js:37`); the server checks it again.
+      if (mode === 'register' && securityAnswer.toUpperCase() !== 'WRITING') {
+        setError('Wrong answer to the security question')
+        return
+      }
+
       const result =
         mode === 'login'
           ? await api.login(username, password)
-          : await api.register(username, password, email)
+          : await api.register(username, password, email, securityAnswer)
       storeToken(result.token)
       onSignedIn(result.player)
     } catch (caught) {
@@ -106,6 +114,16 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
               required={mode === 'forgot'}
+            />
+          </label>
+        )}
+
+        {mode === 'register' && (
+          <label>
+            Security Question: What is China&apos;s starting tech?
+            <input
+              value={securityAnswer}
+              onChange={(event) => setSecurityAnswer(event.target.value)}
             />
           </label>
         )}
