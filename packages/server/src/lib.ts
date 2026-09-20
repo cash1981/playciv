@@ -5,8 +5,9 @@
  */
 
 export { createApp, createTestApp } from './app.js'
-export type { CreateAppOptions, TestAppOptions } from './app.js'
-export { MongoRepository } from './store/mongo.js'
+export type { App, CreateAppOptions, TestAppOptions } from './app.js'
+export { D1Repository } from './store/d1.js'
+export type { D1Database, D1PreparedStatement, D1Result } from './store/d1.js'
 export { TokenSigner } from './auth.js'
 export { createResendMailer, noopMailer } from './mail.js'
 export type { Mailer, OutgoingEmail } from './mail.js'

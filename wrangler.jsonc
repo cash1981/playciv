@@ -1,18 +1,29 @@
 {
   // Cloudflare Worker for playciv.app. Serves the built SPA as static assets and
-  // proxies /api/* to the Node API server. The API cannot run on the Worker: the
-  // MongoDB driver's cursor queries hang on workerd. See docs/agents/decisions.md.
+  // runs the Hono API itself against D1 for /api/*. There is no second host any
+  // more — the Render proxy and MongoDB were removed in issue #72. See
+  // docs/agents/decisions.md.
   //
-  // API_ORIGIN (the Node server's base URL) is set in the Cloudflare dashboard
-  // under the Worker's Settings > Variables. This file is committed, no secrets.
+  // Runtime secrets (TOKEN_SECRET required; RESEND_API_KEY, MAIL_FROM,
+  // APP_ORIGIN, MAIL_BROADCAST_NEW_GAMES optional) are set in the Cloudflare
+  // dashboard under the Worker's Settings > Variables, not here. This file is
+  // committed and holds no secrets.
   "name": "playciv",
   "main": "packages/worker/src/index.ts",
   "compatibility_date": "2026-09-18",
-  // The Node API's base URL. Not a secret (a public URL), so it lives in config
-  // rather than a dashboard variable, which keeps it in every deployed version.
-  "vars": {
-    "API_ORIGIN": "https://playciv-api.onrender.com"
-  },
+  // The API hashes passwords with node:crypto's scrypt, which needs the Node
+  // compatibility layer on workerd.
+  "compatibility_flags": ["nodejs_compat"],
+  // D1 migrations live with the Worker; applied with
+  // `wrangler d1 migrations apply playciv --remote`.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "playciv",
+      "database_id": "a289a3f1-e6b1-4831-b35d-9775e222ec69",
+      "migrations_dir": "packages/worker/migrations"
+    }
+  ],
   "assets": {
     // Built by `pnpm run build` (packages/web). Served for every non-/api path,
     // with index.html returned for unknown client-side routes.

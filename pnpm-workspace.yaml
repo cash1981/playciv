@@ -1,6 +1,8 @@
 packages:
   - packages/*
 
-# esbuild needs its postinstall script to fetch the platform binary (vitest)
+# esbuild needs its postinstall script to fetch the platform binary (vitest);
+# workerd fetches its platform binary the same way (wrangler / miniflare).
 allowBuilds:
   esbuild: true
+  workerd: true

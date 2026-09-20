@@ -13,7 +13,7 @@ _Last updated: 2026-09-20_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 411 engine, 137 server, 46 web |
+| `pnpm -r test` | passing - 411 engine, 161 server, 46 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
@@ -48,11 +48,22 @@ _Last updated: 2026-09-20_
   Workers), scrypt passwords, HMAC bearer tokens, JSON-file repository standing
   in for MongoDB.
 - **Cloudflare deploy.** A `packages/worker` Cloudflare Worker serves the built
-  SPA (static assets) and proxies `/api/*` to the Node server on Render (see
-  `render.yaml`), which runs the Hono API against MongoDB Atlas. The API cannot
-  run on the Worker itself — the MongoDB driver's cursor queries hang on workerd.
-  Local development is unchanged: `pnpm dev` runs the Node server against the
-  JSON file. See `decisions.md`.
+  SPA (static assets) and runs the Hono API itself for `/api/*` against D1
+  (issue #72). It holds no second host. Local development is unchanged:
+  `pnpm dev` runs the Node server against the JSON file. See `decisions.md`.
+- **Storage is Cloudflare D1 (issue #72).** `D1Repository` implements
+  `Repository` over the Worker's `DB` binding; MongoDB Atlas, the `mongodb`
+  driver, `render.yaml` and the Render proxy are gone. Only the data the app
+  uses is migrated: 554 `player` accounts and 310 old `pbf` games (full
+  documents archived chunked), 247 with a winner. The old `chat` (87,756),
+  `gamelog` (66,288) and `tournament` data is dropped — the mongodump backup
+  keeps it. The re-created D1 database now holds the reduced import, verified by
+  count (554 players, 310 `pbf`, 876 `pbf_doc` chunks, 247 finished). Local dev keeps
+  the JSON file; `D1Repository` is tested through a `node:sqlite` adapter, and
+  the root requires Node 24+. First review round fixed Unicode username lookup
+  (`0002_username_lower.sql`), made the migration fail on a wrong `--dump`
+  instead of writing an empty file, and stopped the D1 tests from skipping
+  themselves. See `tasks/issue-72-d1.md`.
 - **Client.** React and Vite: login, game list, game page, hand, draws, battle,
   techs, turn orders, log, undo votes, chat.
 - **Issues #54 and #56.** Game and lobby chat show local log-format timestamps;
@@ -86,12 +97,12 @@ _Last updated: 2026-09-20_
 - **Card artwork.** 346 of 347 items have a picture; only Space Flight does
   not, because it is added in code rather than read from the spreadsheet. The
   hand renders as cards.
-- **MongoDB storage.** `MongoRepository` runs against the restored `playciv`
-  database, chosen by `MONGO_URL` with the JSON file as fallback. Reuses the
-  `player` and `chat` collections, reads old `pbf` games for highscore, stores
-  new games in `game_state`. Old SHA-1 logins verify and upgrade to scrypt.
-  `GET /api/highscore` ports Java's highscore. Verified against the live
-  database (Andrius 39/68, cash 36/58; legacy login upgrades end-to-end).
+- **MongoDB storage (superseded by D1, issue #72).** `MongoRepository` ran
+  against the restored `playciv` database, with the JSON file as fallback. It
+  reused `player`/`chat`, read old `pbf` games for highscore, and stored new
+  games in `game_state`. Old SHA-1 logins verify and upgrade to scrypt — that
+  behaviour is unchanged in `D1Repository`. Highscore matched Java
+  (Andrius 39/68, cash 36/58). See the D1 entry above.
 - **Highscore UI.** A public `/highscore` page (branch `feat/highscore-page`)
   porting `old-civ-web`'s: two-level Player/Civilization tabs over Total and
   2/3/4/5-player sub-tabs, sortable and paginated (10/page, default `totalWins`

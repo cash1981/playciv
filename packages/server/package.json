@@ -13,14 +13,12 @@
     "test": "vitest run",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/src/index.js",
-    "seed:test-user": "tsx src/seed-test-user.ts",
-    "migrate:user-roles": "tsx src/migrate-user-roles.ts"
+    "migrate:d1": "tsx src/migrate-to-d1.ts"
   },
   "dependencies": {
     "@civ/engine": "workspace:*",
     "@hono/node-server": "^1.13.0",
-    "hono": "^4.6.0",
-    "mongodb": "^7.6.0"
+    "hono": "^4.6.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
