@@ -278,11 +278,22 @@ export function TurnOrderWorkspace({
                     locked ||
                     current === undefined ||
                     values[phase] === '' ||
+                    values[phase] !== savedValues[phase] ||
+                    (phaseStatuses?.[phase] !== undefined && phaseStatuses[phase] !== 'saved') ||
                     current.revealed[phase]
+                  }
+                  title={
+                    values[phase] !== savedValues[phase]
+                      ? 'Save this phase before revealing it'
+                      : undefined
                   }
                   onClick={() => onRevealPhase?.(phase)}
                 >
-                  {current?.revealed[phase] ? 'Revealed' : 'Reveal'}
+                  {current?.revealed[phase]
+                    ? 'Revealed'
+                    : values[phase] !== savedValues[phase]
+                      ? 'Save before reveal'
+                      : 'Reveal'}
                 </button>
               </>
             )}

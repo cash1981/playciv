@@ -25,6 +25,7 @@ import {
   publicTurnKey,
   publicTurn,
   sameTurn,
+  TURN_PHASE_LABEL,
   withOrder,
   withoutCurrentOrderInHistory,
 } from '../turn.js'
@@ -119,7 +120,16 @@ export function revealTurnOrder(state: GameState, input: RevealTurnOrderInput): 
       [publicTurnKey(updated)]: publicTurn(updated),
     },
   }
-  return ok(next)
+  const message = `Turn ${input.turnNumber} - ${player.username} revealed ${TURN_PHASE_LABEL[input.phase]} phase`
+  return ok(
+    appendLog(next, {
+      username: player.username,
+      playerId: player.playerId,
+      logType: PHASE_LOG_TYPE[input.phase],
+      privateLog: message,
+      publicLog: message,
+    }),
+  )
 }
 
 export interface AddTurnInput {

@@ -134,6 +134,14 @@ describe('updateTurn', () => {
 
     expect(state.publicTurns['1cash1981']?.orders).toMatchObject({ SOT: '', TRADE: 'public' })
     expect(playersTurns(state, CASH1981)[0]?.orders).toMatchObject({ SOT: 'secret', TRADE: 'public' })
+    expect(state.log.at(-1)?.publicLog).toBe('Turn 1 - cash1981 revealed trade phase')
+
+    state = unwrap(
+      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'TRADE', order: 'new public' }),
+    )
+    expect(state.publicTurns['1cash1981']?.orders.TRADE).toBe('')
+    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'TRADE' }))
+    expect(state.publicTurns['1cash1981']?.orders.TRADE).toBe('new public')
   })
 
   it('does not let another player reveal the owner\'s phase', () => {

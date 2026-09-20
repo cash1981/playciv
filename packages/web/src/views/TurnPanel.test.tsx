@@ -350,6 +350,33 @@ describe('TurnOrderWorkspace', () => {
     expect(onRevealPhase).toHaveBeenCalledWith('SOT')
   })
 
+  it('disables reveal until the phase has been saved', () => {
+    render(
+      <TurnOrderWorkspace
+        gameId="game-1"
+        busy={false}
+        run={run}
+        player={{ username: 'cash1981', color: 'Red', own: true }}
+        turnNumber={3}
+        turnNumbers={[3]}
+        current={turn('cash1981')}
+        values={{ ...orders, CM: 'New unsaved plan' }}
+        savedValues={orders}
+        onTurnNumberChange={noop}
+        onNewTurn={noop}
+        onPhaseChange={noop}
+        tabPanelId="panel"
+        labelledBy="tab"
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    expect(
+      (screen.getByRole('button', { name: 'Save before reveal' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    expect(screen.getAllByRole('button', { name: 'Reveal' })).toHaveLength(4)
+  })
+
   it('renders another player orders read-only without publishing controls', () => {
     const markup = renderToStaticMarkup(
       <TurnOrderWorkspace
