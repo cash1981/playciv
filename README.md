@@ -387,6 +387,17 @@ movement/combat/stacking values, hand size and EftA/Infra/MIC/PE modifiers.
 Every value is editable by any member of the game, with every edit written to
 the public log; new games start with the standard unit and modifier defaults.
 
+**Government is structured public bookkeeping.** The old app had no government
+field, endpoint or dedicated UI; players recorded it only through the embedded
+Google spreadsheet. The rewrite stores each player's government as a public
+field in game state. Any game member may change any player's government from
+the status panel, and each change is written to the public log. New and migrated
+players default to Despotism; choosing Romans, Russians or Japanese sets the
+documented Republic, Communism or Feudalism starting exception respectively.
+The panel also shows the text of all eight *Wisdom and Warfare* government cards
+as a reference. Their effects are not enforced by the engine: unlocks, Anarchy,
+change timing and card effects remain table-managed rules.
+
 **A stable `id` per item instance.** Java identified items by value equality
 (`@EqualsAndHashCode` on name/description/type), which meant two identical
 `Infantry 1.3` were "equal" and `discardedItems.remove(item)` could remove the

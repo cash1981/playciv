@@ -148,9 +148,11 @@ deliberately left out. Link the task brief.
 
 - Update `state.md`: move the task from "in progress" to "done", one line.
 - Release the claim in `task-board.md`.
-- Delete the local branch once merged.
-- Delete the finished local worktree and its files once the branch is merged or
-  abandoned; do not leave stale worktrees or feature files behind.
+- After the PR/compare link has been supplied and the working tree is clean,
+  remove the dedicated local worktree from another checkout with
+  `git worktree remove <feature-worktree>`. This removes only the checkout;
+  keep the local and remote feature branches so the human can check out the
+  branch for testing. Do not use `--force` for routine cleanup.
 
 A task that leaves the board or the state file stale is not finished, because
 the next agent will act on what those files say.

@@ -485,6 +485,30 @@ does not make the values affect engine rules.
 
 ---
 
+## 2026-09-19 — Government becomes structured public bookkeeping (issue #43)
+
+**Decision.** Add one public Government field per player and show it as a
+dropdown in Player status. Any current game member may change any current
+player's value, and every change is written to the public log. New and migrated
+players start in Despotism; revealing Romans, Russians or Japanese selects the
+documented Republic, Communism or Feudalism exception respectively. The same
+panel presents the text of all eight *Wisdom and Warfare* government cards as a
+public reference.
+
+**Why.** The old backend and Angular client had no government model, route or
+dedicated government UI. The only support was the old client's per-game Google
+spreadsheet integration, where players maintained the value themselves. The
+human explicitly authorized replacing that unstructured sheet entry with basic
+in-app bookkeeping and asked that the available card information be readable.
+
+**Consequences.** This is an intentional addition beyond the old application's
+structured model, while preserving its shared manual-bookkeeping semantics.
+The engine does not enforce government unlocks, the direct-change timing rule,
+forced Anarchy or any printed government effect; the reference text does not
+drive game logic. Those effects remain table-managed until separately specified.
+
+---
+
 ## 2026-09-17 — Issue #49 uses finite supplies for public board assets
 
 **Decision.** The board palette enforces the physical building supplies from

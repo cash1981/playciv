@@ -101,6 +101,8 @@ describe('toPlayerView', () => {
     const view = toPlayerView(firstCivGame(), 'onlooker')
     expect(view.you).toBeNull()
     expect(view.opponents).toHaveLength(4)
+    expect(view.opponents.every((opponent) => opponent.government === 'Despotism')).toBe(true)
+    expect(view.opponents.every((opponent) => !('items' in opponent))).toBe(true)
   })
 
   it('a hidden technology stays out of another player\'s public techs view', () => {

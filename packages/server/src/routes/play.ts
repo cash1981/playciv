@@ -3,7 +3,7 @@
  * drawing, battle, techs, social policy, revealing, trading, turns and undo.
  */
 
-import type { PlayerStats, SheetName } from '@civ/engine'
+import type { Government, PlayerStats, SheetName } from '@civ/engine'
 import {
   ALL_WONDERS,
   CULTURE_CARD,
@@ -32,6 +32,7 @@ import {
   revealedTechsForAllPlayers,
   saveNote,
   setPlayerStat,
+  setPlayerGovernment,
   takeTurn,
   tradeToPlayer,
   updateTurn,
@@ -478,6 +479,24 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
         targetPlayerId,
         stat: stat as keyof PlayerStats,
         value,
+      }),
+    )
+  })
+
+  /** Shared government bookkeeping, parallel to the numeric status values. */
+  app.post('/api/games/:gameId/players/:targetPlayerId/government', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const targetPlayerId = c.req.param('targetPlayerId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const government = requireString(body, 'government')
+    if (government === undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'government is required')
+    }
+    return applyToGame(context, c, gameId, (state) =>
+      setPlayerGovernment(state, {
+        editorPlayerId: currentPlayer(c).id,
+        targetPlayerId,
+        government: government as Government,
       }),
     )
   })

@@ -2091,6 +2091,74 @@ describe('player stats (#43)', () => {
   })
 })
 
+describe('player governments (#43)', () => {
+  interface GovernmentView {
+    you: { playerId: string; government: string }
+    opponents: { playerId: string; government: string }[]
+    log: { publicLog: string }[]
+  }
+
+  async function ids(gameId: string, token: string): Promise<{ me: string; other: string }> {
+    const response = await inject(app, {
+      method: 'GET',
+      url: `/api/games/${gameId}`,
+      headers: bearer(token),
+    })
+    const view = await response.json() as GovernmentView
+    const other = view.opponents[0]
+    if (other === undefined) throw new Error('expected an opponent in the game')
+    return { me: view.you.playerId, other: other.playerId }
+  }
+
+  it('lets a member set another player government and returns the public update', async () => {
+    const { gameId, starter } = await startedGame('Governments')
+    const { other } = await ids(gameId, starter)
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/government`,
+      headers: bearer(starter),
+      payload: { government: 'Monarchy' },
+    })
+
+    expect(response.status).toBe(200)
+    const view = await response.json() as GovernmentView
+    expect(view.opponents.find((player) => player.playerId === other)?.government).toBe('Monarchy')
+    expect(view.log.at(-1)?.publicLog).toContain('government to Monarchy')
+  })
+
+  it('refuses a non-member', async () => {
+    const { gameId, starter } = await startedGame('GovernmentGuard')
+    const { other } = await ids(gameId, starter)
+    const outsider = await register('government-outsider')
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/government`,
+      headers: bearer(outsider),
+      payload: { government: 'Republic' },
+    })
+
+    expect(response.status).toBe(403)
+    expect((await response.json() as { error: string }).error).toBe('NO_ACCESS')
+  })
+
+  it('rejects a value outside the replacement government cards', async () => {
+    const { gameId, starter } = await startedGame('GovernmentUnknown')
+    const { other } = await ids(gameId, starter)
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/government`,
+      headers: bearer(starter),
+      payload: { government: 'Empire' },
+    })
+
+    expect(response.status).toBe(400)
+    expect((await response.json() as { error: string }).error).toBe('UNKNOWN_GOVERNMENT')
+  })
+})
+
 describe('HTTP error mapping', () => {
   it('answers 304 with an empty body when an item is already revealed', async () => {
     const { gameId, starter } = await startedGame('AlleredeAvslort')

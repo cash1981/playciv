@@ -1192,6 +1192,95 @@ ul.history > li {
   padding: 0.15rem 0.35rem;
 }
 
+.government-select {
+  min-width: 9rem;
+  padding: 0.2rem 0.35rem;
+}
+
+.government-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.government-help {
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--accent);
+  background: transparent;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.government-reference-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 65%);
+}
+
+.government-reference {
+  width: min(90vw, 72rem);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--panel);
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 45%);
+}
+
+.government-reference-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.government-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
+  align-items: start;
+  gap: 1.2rem;
+  margin-top: 0.7rem;
+}
+
+.government-card {
+  min-width: 0;
+}
+
+.government-card-image {
+  display: block;
+  width: 100%;
+  max-width: 20rem;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 0.7rem;
+  box-shadow: 0 0.45rem 1.1rem rgb(0 0 0 / 30%);
+}
+
+.government-card-copy {
+  max-width: 20rem;
+  margin: 0.7rem auto 0;
+}
+
+.government-card h3 {
+  margin: 0 0 0.55rem;
+  text-align: center;
+}
+
+.government-card p {
+  margin: 0.45rem 0 0;
+  line-height: 1.35;
+}
+
 .sort-indicator {
   font-size: 0.7rem;
   color: var(--accent);

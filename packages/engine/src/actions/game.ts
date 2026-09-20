@@ -15,6 +15,7 @@
 
 import type { EngineError } from '../errors.js'
 import type { Item } from '../item.js'
+import { DEFAULT_GOVERNMENT } from '../government.js'
 import { compareItems } from '../item.js'
 import { appendInfoLog, appendPrivatePublicLog, appendPublicLog } from '../log.js'
 import { shuffle } from '../random.js'
@@ -98,6 +99,7 @@ export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
       playerTurns: [],
       gamenote: null,
       stats: DEFAULT_PLAYER_STATS,
+      government: DEFAULT_GOVERNMENT,
     }
     next = state
   }

@@ -11,6 +11,7 @@ import type { Board, BoardHistoryEntry, BoardPiece } from './board.js'
 import { createBoard } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
+import { DEFAULT_GOVERNMENT } from './government.js'
 
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
@@ -19,12 +20,14 @@ type MaybeOlder = Omit<
 > &
   Partial<Pick<GameState, 'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev'>>
 
-/** A hand from before the status board (issue #43) existed. */
-type MaybeOlderPlayerhand = Omit<Playerhand, 'stats'> & Partial<Pick<Playerhand, 'stats'>>
+/** A hand from before the status board or governments (issue #43) existed. */
+type MaybeOlderPlayerhand = Omit<Playerhand, 'stats' | 'government'> &
+  Partial<Pick<Playerhand, 'stats' | 'government'>>
 
-const withStats = (player: MaybeOlderPlayerhand): Playerhand => ({
+const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   ...player,
   stats: { ...DEFAULT_PLAYER_STATS, ...player.stats },
+  government: player.government ?? DEFAULT_GOVERNMENT,
 })
 
 /** A board from before the player areas and the history existed. */
@@ -86,7 +89,7 @@ export function migrateGameState(state: GameState): GameState {
   return {
     ...state,
     log: state.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
-    players: state.players.map(withStats),
+    players: state.players.map(withPlayerDefaults),
     board:
       board === undefined
         ? fresh
@@ -95,7 +98,7 @@ export function migrateGameState(state: GameState): GameState {
             areaRows: board.areaRows ?? fresh.areaRows,
             history: board.history ?? historyForImportedPieces(board.pieces),
           },
-    withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withStats),
+    withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withPlayerDefaults),
     publicTurns: older.publicTurns ?? {},
     wondersDealt: older.wondersDealt ?? (hasWonder || setupComplete),
     battle:

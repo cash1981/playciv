@@ -3,10 +3,13 @@
  *
  * Replaces the old shared asset spreadsheet. All values shown here are shared
  * bookkeeping that ANY member may edit for ANY player, saved through
- * `api.setPlayerStat`.
+ * `api.setPlayerStat` and `api.setPlayerGovernment`.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+
+import { GOVERNMENT_CARDS, GOVERNMENTS } from '@civ/engine'
+import type { Government } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerStats, PlayerView } from '../lib/api.js'
@@ -17,6 +20,7 @@ interface Props {
   readonly gameId: string
   readonly view: PlayerView
   readonly busy: boolean
+  readonly readOnly: boolean
   readonly run: Run
 }
 
@@ -26,6 +30,7 @@ interface Row {
   readonly color: string | null
   readonly yourTurn: boolean
   readonly civilizationName: string | null
+  readonly government: Government
   readonly stats: PlayerStats
 }
 
@@ -68,12 +73,47 @@ const STATUS_GROUPS: readonly { readonly label: string; readonly columns: readon
   { label: 'Investments', columns: INVESTMENT_COLUMNS },
 ]
 
-const COLUMN_COUNT = 2 + ACCOUNTING_COLUMNS.length + UNIT_COLUMNS.length + MODIFIER_COLUMNS.length + INVESTMENT_COLUMNS.length
+const COLUMN_COUNT = 3 + ACCOUNTING_COLUMNS.length + UNIT_COLUMNS.length + MODIFIER_COLUMNS.length + INVESTMENT_COLUMNS.length
 
 /** Keys of the first column in each group — used to draw vertical section dividers. */
 const GROUP_START_KEYS = new Set(STATUS_GROUPS.map((g) => g.columns[0]!.key))
 
-export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Element {
+export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element {
+  const [showGovernmentReference, setShowGovernmentReference] = useState(false)
+  const governmentHelpRef = useRef<HTMLButtonElement | null>(null)
+  const governmentCloseRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!showGovernmentReference) return
+    governmentCloseRef.current?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setShowGovernmentReference(false)
+        return
+      }
+      if (event.key !== 'Tab') return
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-labelledby="government-reference-title"]')
+      if (dialog === null) return
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+      if (focusable.length === 0) return
+      const first = focusable[0]!
+      const last = focusable[focusable.length - 1]!
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [showGovernmentReference])
+
+  useEffect(() => {
+    if (!showGovernmentReference) governmentHelpRef.current?.focus()
+  }, [showGovernmentReference])
   const rows: Row[] = []
 
   if (view.you !== null) {
@@ -83,6 +123,7 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
       color: view.you.color,
       yourTurn: view.you.yourTurn,
       civilizationName: view.you.civilization?.name ?? null,
+      government: view.you.government,
       stats: view.you.stats,
     })
   }
@@ -94,6 +135,7 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
       color: opponent.color,
       yourTurn: opponent.yourTurn,
       civilizationName: opponent.civilization?.name ?? null,
+      government: opponent.government,
       stats: opponent.stats,
     })
   }
@@ -110,6 +152,7 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
             <tr>
               <th rowSpan={2}>Player</th>
               <th rowSpan={2}>Civilization</th>
+              <th rowSpan={2}>Government</th>
               {STATUS_GROUPS.map((group, i) => (
                 <th
                   key={group.label}
@@ -150,6 +193,39 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
                     <span className="muted">hidden</span>
                   )}
                 </td>
+                <td>
+                  <span className="government-control">
+                    <select
+                      className="government-select"
+                      aria-label={`${row.username} government`}
+                      value={row.government}
+                      disabled={busy || readOnly}
+                      onChange={(event) =>
+                        void run(() =>
+                          api.setPlayerGovernment(
+                            gameId,
+                            row.playerId,
+                            event.target.value as Government,
+                          ),
+                        )
+                      }
+                    >
+                      {GOVERNMENTS.map((government) => (
+                        <option key={government} value={government}>{government}</option>
+                      ))}
+                    </select>
+                    <button
+                      className="government-help"
+                      type="button"
+                      ref={governmentHelpRef}
+                      aria-label="Show government card reference"
+                      title="Show government card reference"
+                      onClick={() => setShowGovernmentReference(true)}
+                    >
+                      ?
+                    </button>
+                  </span>
+                </td>
                 {STATUS_GROUPS.flatMap((group) => group.columns).map((column) => (
                   <td
                     key={column.key}
@@ -158,7 +234,7 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
                     <StatCell
                       value={row.stats[column.key]}
                       signed={column.signed === true}
-                      disabled={busy}
+                      disabled={busy || readOnly}
                       onCommit={(value) =>
                         void run(() => api.setPlayerStat(gameId, row.playerId, column.key, value))
                       }
@@ -177,6 +253,41 @@ export function StatusPanel({ gameId, view, busy, run }: Props): React.JSX.Eleme
           </tbody>
         </table>
       </div>
+      {showGovernmentReference && (
+        <div className="government-reference-backdrop" role="presentation" onClick={() => setShowGovernmentReference(false)}>
+          <section
+            className="government-reference"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="government-reference-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="government-reference-heading">
+              <h2 id="government-reference-title">Government card reference</h2>
+              <button ref={governmentCloseRef} type="button" onClick={() => setShowGovernmentReference(false)}>Close</button>
+            </div>
+        <p className="muted">
+          Card effects are shown for reference only; the status dropdown does not enforce them.
+        </p>
+        <div className="government-card-grid">
+          {GOVERNMENT_CARDS.map((card) => (
+            <article className="government-card" key={card.government}>
+              <img
+                className="government-card-image"
+                src={`/governments/${card.government.toLowerCase()}.jpg`}
+                alt={`${card.government} government card`}
+                loading="lazy"
+              />
+              <div className="government-card-copy">
+                <h3>{card.government}</h3>
+                {card.effects.map((effect) => <p key={effect}>{effect}</p>)}
+              </div>
+            </article>
+          ))}
+        </div>
+          </section>
+        </div>
+      )}
     </CollapsiblePanel>
   )
 }

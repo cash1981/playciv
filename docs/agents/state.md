@@ -185,10 +185,8 @@ _Last updated: 2026-09-19_
   the old explicit-sheet and error behaviour. Browser-verified and
   review-approved.
 - **Issues #81 and #82.** Every read-only game route (`GET /api/games/:gameId`, its revision history, techs, social policies, turn orders, undo status, the revealed feed, the board-piece catalogue) now accepts a request with no bearer token, not just one from a signed-in non-member — `toPlayerView`/`opaque()` already projected a non-member safely, this only stops the routes rejecting one before reaching it. A present-but-invalid/expired/disabled token still 401s/403s exactly as before, so a real player's expired session cannot be mistaken for their own game turning read-only. The client renders the game screen for a signed-out visitor, hides the four write-only action buttons for a non-member, no longer treats a spectator's failed write as a sign-out, and the game list links each name to `/game/:id`. Withdrawing now navigates back to the games list on success instead of trying to reload a game the withdrawn player can no longer act on. Review-approved (one round of findings, all fixed); browser-verified with a real second account withdrawing, and an anonymous request against a live game.
-- **Issue #77.** A site-wide footer under every screen: the copyright line, the
-  Apache 2.0 license link and the old PayPal donate button (the exact encrypted
-  hosted button from `old-civ-web`). Patreon is dropped on purpose; see
-  `decisions.md`.
+- **Issue #43 Governments.** Player status now stores a public government per player, defaults and migrates to Despotism, applies the Rome/Russia/Japan starting exceptions, and lets any member update the shared value with a public log entry. The supplied artwork and accessible text for all eight *Wisdom and Warfare* cards open from a `?` help button in a keyboard-accessible modal; Social Policy remains discoverable in the open Techs panel. Spectator and replay controls are read-only; browser-verified and review-approved.
+- **Issue #77.** A site-wide footer under every screen: the copyright line, the Apache 2.0 license link and the old PayPal donate button (the exact encrypted hosted button from `old-civ-web`). Patreon is dropped on purpose; see `decisions.md`.
 
 ## In progress
 
