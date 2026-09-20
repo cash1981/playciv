@@ -227,8 +227,8 @@ export interface AuthResponse {
 }
 
 export const api = {
-  register: (username: string, password: string, email: string) =>
-    post<AuthResponse>('/api/auth/register', { username, password, email }),
+  register: (username: string, password: string, email: string, securityAnswer: string) =>
+    post<AuthResponse>('/api/auth/register', { username, password, email, securityAnswer }),
   login: (username: string, password: string) =>
     post<AuthResponse>('/api/auth/login', { username, password }),
   /** Issue #37. Java `AuthResource.newPassword`; answers 200 either way. */

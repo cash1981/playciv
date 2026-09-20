@@ -7,7 +7,7 @@
  */
 
 import type { App } from '../app.js'
-import { hashPassword, needsUpgrade, newId, verifyPassword } from '../auth.js'
+import { hashPassword, isSecurityAnswer, needsUpgrade, newId, verifyPassword } from '../auth.js'
 import type { AppContext } from '../context.js'
 import { asRecord, authenticateWith, currentPlayer, requireString } from '../context.js'
 import { sendError } from '../errors.js'
@@ -54,6 +54,13 @@ export function registerAuthRoutes(app: App, context: AppContext): void {
     }
     if (password.length < 4) {
       return sendError(c, 400, 'BAD_REQUEST', 'password must be at least 4 characters')
+    }
+
+    // Issue #40: the old gate lived only in the AngularJS client, so a direct
+    // POST skipped it. Old client: growl.error('Wrong answer to the security
+    // question')
+    if (!isSecurityAnswer(body['securityAnswer'])) {
+      return sendError(c, 400, 'WRONG_SECURITY_ANSWER', 'Wrong answer to the security question')
     }
 
     // Java: PlayerExistException, which became a 409 Conflict

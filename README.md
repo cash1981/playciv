@@ -495,6 +495,16 @@ and its `becomePatronButton.bundle.js` script; those are dropped on purpose (the
 owner's decision), so no Patreon code runs on the page. See
 `docs/agents/decisions.md`.
 
+**The signup security question is enforced on the server too.** The old
+registration form's fixed question — "What is China's starting tech?", answered
+`writing` — lived only in the AngularJS controller
+(`RegisterController.js:37-40`), so a direct POST to `/api/auth/register` skipped
+it; the Java backend had no check at all. Issue #40 restores the question in the
+register form and enforces the same answer server-side, so a bot cannot register
+without it. The comparison is the old one — `toUpperCase()` on the raw value, no
+trimming — and it is a speed bump, not a security boundary: no captcha, rate
+limit or rotating question. See `docs/agents/decisions.md`.
+
 ## Deferred
 
 - **Real MongoDB.** Replaced by a JSON file behind `Repository`, see above.

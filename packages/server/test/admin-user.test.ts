@@ -24,7 +24,12 @@ async function register(username: string): Promise<{ id: string; token: string }
   const response = await inject(app, {
     method: 'POST',
     url: '/api/auth/register',
-    payload: { username, password: 'secret', email: `${username}@example.com` },
+    payload: {
+      username,
+      password: 'secret',
+      email: `${username}@example.com`,
+      securityAnswer: 'writing',
+    },
   })
   expect(response.status).toBe(201)
   const body = await response.json() as { token: string; player: { id: string } }
