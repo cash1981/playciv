@@ -1147,3 +1147,33 @@ the human asked to correct it and explicitly asked for no README note about it.
   on every numeric column is the human's choice.
 - The `Open` / `Full` actions are inherited from the rewrite, not the old client.
 - The caption counts finished games, not all games.
+
+---
+
+## 2026-09-20 — Lobby chat serves three months newest first and sits at the bottom
+
+**Decision.** The front page's lobby chat is the last panel, below the highscore.
+`GET /api/chat` returns the last ~3 months of messages (90 days) **newest first**
+and with no message cap; the web `LobbyChat` component pages them ten at a time
+through the shared `Pager`.
+
+**Why.** The human tested the front page. The chat belongs at the bottom, and the
+old route's 14-day window, 50-message cap and oldest-first order were carried
+over from the old backend. With a client-side pager the cap only hides history,
+so the route returns everything in the window and the pager bounds what is
+displayed. Newest-first puts the latest message at the top of page 1, which is
+what a chat reader expects.
+
+**Consequences.**
+- `LobbyChat.tsx` (new) owns its own message input and page state; `LandingView`
+  keeps the fetched `chat` array and the `reload`. After a successful send the
+  input clears and the pager returns to page 1; the page is clamped if the list
+  shrinks under it.
+- `PUBLIC_CHAT_MAX_AGE_MS` is `90 * 24 * 60 * 60 * 1000` and the route no longer
+  slices to 50. A busy lobby therefore loads up to three months of messages in
+  one request — the cap is on display, not on the query. A server test feeds 60
+  recent messages to prove the cap is gone.
+- The same pass fixed the table-overflow bug: the games panel is full width
+  rather than one `.grid` track, `SortableTable` wraps its `<table>` in
+  `.table-scroll` (`overflow-x: auto`), and `.panel` gets `min-width: 0`. A wide
+  table now scrolls inside its panel instead of drawing over the chat column.

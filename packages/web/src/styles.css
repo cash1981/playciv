@@ -277,6 +277,9 @@ label > textarea {
   border-radius: var(--radius);
   padding: 0.85rem;
   margin-bottom: 1rem;
+  /* Grid items default to `min-width: auto`, which lets a wide child (the
+     game table) push past its track. Allow the panel to shrink instead. */
+  min-width: 0;
 }
 
 .grid {
@@ -1118,6 +1121,12 @@ ul.history > li {
   width: 100%;
   border-collapse: collapse;
   text-align: center;
+}
+
+/* The game table has seven columns and can be wider than its panel; scroll it
+   sideways inside the panel rather than let it overflow the page. */
+.table-scroll {
+  overflow-x: auto;
 }
 
 .data-table th,

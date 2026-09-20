@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { api } from '../lib/api.js'
-import type { PlayerDto, PublicGameSummary } from '../lib/api.js'
-import { ChatTimestamp } from './ChatTimestamp.js'
+import type { ChatMessageDto, PlayerDto, PublicGameSummary } from '../lib/api.js'
 import { GameList } from './GameList.js'
 import { HighscoreView } from './HighscoreView.js'
+import { LobbyChat } from './LobbyChat.js'
 
 interface Props {
   readonly player: PlayerDto | null
@@ -17,8 +17,7 @@ interface Props {
 
 export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.Element {
   const [games, setGames] = useState<readonly PublicGameSummary[]>([])
-  const [chat, setChat] = useState<readonly { readonly id: string; readonly username: string; readonly message: string; readonly createdAt: string }[]>([])
-  const [message, setMessage] = useState('')
+  const [chat, setChat] = useState<readonly ChatMessageDto[]>([])
   const [name, setName] = useState('')
   const [numOfPlayers, setNumOfPlayers] = useState(4)
   const [error, setError] = useState<string | null>(null)
@@ -49,6 +48,9 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
       } catch (caught) {
         if (isUnauthorized(caught)) return onSignIn()
         setError(errorMessage(caught))
+        // Re-throw so a caller that owns its own input (the chat box) knows the
+        // action failed and can keep the text instead of clearing it.
+        throw caught
       } finally {
         setBusy(false)
       }
@@ -63,9 +65,17 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
       void run(async () => {
         await api.join(gameId)
         onOpenGame(gameId)
-      })
+      }).catch(() => undefined)
     },
     [run, onOpenGame],
+  )
+
+  const sendChat = useCallback(
+    (text: string): Promise<void> =>
+      run(async () => {
+        await api.sendLobbyChat(text)
+      }),
+    [run],
   )
 
   return (
@@ -86,58 +96,18 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
 
       {error !== null && <div className="error">{error}</div>}
 
-      <div className="grid">
-        <section className="panel">
-          <h2>Active and finished games</h2>
-          <GameList
-            games={games}
-            player={player}
-            busy={busy}
-            onOpenGame={onOpenGame}
-            onJoin={joinGame}
-          />
-        </section>
-
-        <section className="panel">
-          <h2>Lobby chat</h2>
-          <ul className="list scroll">
-            {chat.map((entry) => (
-              <li key={entry.id}>
-                <ChatTimestamp createdAt={entry.createdAt} />
-                <strong>{entry.username}</strong>{' '}
-                <span>{entry.message}</span>
-              </li>
-            ))}
-            {chat.length === 0 && <li className="muted">Quiet in here.</li>}
-          </ul>
-          {player === null ? (
-            <p className="muted">Sign in to join the conversation.</p>
-          ) : (
-            <form
-              className="row"
-              style={{ marginTop: '0.5rem' }}
-              onSubmit={(event) => {
-                event.preventDefault()
-                const text = message.trim()
-                if (text === '') return
-                void run(async () => {
-                  await api.sendLobbyChat(text)
-                  setMessage('')
-                })
-              }}
-            >
-              <input
-                aria-label="Lobby chat message"
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                placeholder={`Write as ${player.username} …`}
-                style={{ flex: 1 }}
-              />
-              <button disabled={busy || message.trim() === ''}>Send</button>
-            </form>
-          )}
-        </section>
-      </div>
+      {/* Full width, not in `.grid`: the seven-column game table is wider than a
+          grid column's share and used to draw over the chat panel. */}
+      <section className="panel">
+        <h2>Active and finished games</h2>
+        <GameList
+          games={games}
+          player={player}
+          busy={busy}
+          onOpenGame={onOpenGame}
+          onJoin={joinGame}
+        />
+      </section>
 
       {player !== null && (
         <section className="panel">
@@ -150,7 +120,7 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
                 const created = await api.createGame(name, numOfPlayers)
                 setName('')
                 onOpenGame(created.id)
-              })
+              }).catch(() => undefined)
             }}
           >
             <input
@@ -173,6 +143,11 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
       )}
 
       <HighscoreView />
+
+      <section className="panel">
+        <h2>Lobby chat</h2>
+        <LobbyChat messages={chat} player={player} busy={busy} onSend={sendChat} />
+      </section>
     </>
   )
 }

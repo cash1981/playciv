@@ -8,6 +8,9 @@
  * a preformatted string (`"50.0 %"`), which the original sorted as text — that
  * puts `"100.0 %"` before `"50.0 %"`, so its column supplies a number. This is
  * a UI choice, not a game rule.
+ *
+ * The table is wrapped in `div.table-scroll` so a wide table (the game list has
+ * seven columns) scrolls inside its panel instead of overflowing the page.
  */
 
 import { useMemo, useState } from 'react'
@@ -119,38 +122,40 @@ export function SortableTable<T>({
 
   return (
     <>
-      <table className="data-table">
-        <thead>
-          <tr>{columns.map(header)}</tr>
-        </thead>
-        <tbody>
-          {visible.length === 0 ? (
-            <tr>
-              <td colSpan={columns.length} className="muted">
-                {emptyMessage}
-              </td>
-            </tr>
-          ) : (
-            visible.map((row, localIndex) => {
-              // `index` is the row's position in the whole sorted list, not the
-              // page, so a `#` column numbers across pages.
-              const index = (current - 1) * pageSize + localIndex
-              return (
-                <tr key={rowKey(row, index)}>
-                  {columns.map((column) => (
-                    <td
-                      key={column.key}
-                      className={column.key === 'action' ? 'action-cell' : undefined}
-                    >
-                      {column.render(row, index)}
-                    </td>
-                  ))}
-                </tr>
-              )
-            })
-          )}
-        </tbody>
-      </table>
+      <div className="table-scroll">
+        <table className="data-table">
+          <thead>
+            <tr>{columns.map(header)}</tr>
+          </thead>
+          <tbody>
+            {visible.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} className="muted">
+                  {emptyMessage}
+                </td>
+              </tr>
+            ) : (
+              visible.map((row, localIndex) => {
+                // `index` is the row's position in the whole sorted list, not the
+                // page, so a `#` column numbers across pages.
+                const index = (current - 1) * pageSize + localIndex
+                return (
+                  <tr key={rowKey(row, index)}>
+                    {columns.map((column) => (
+                      <td
+                        key={column.key}
+                        className={column.key === 'action' ? 'action-cell' : undefined}
+                      >
+                        {column.render(row, index)}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <Pager page={current} pageCount={pageCount} onPage={setPage} />
     </>

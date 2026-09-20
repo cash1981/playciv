@@ -13,7 +13,7 @@ _Last updated: 2026-09-20_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 415 engine, 162 server, 59 web |
+| `pnpm -r test` | passing - 418 engine, 162 server, 65 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
@@ -228,7 +228,11 @@ _Last updated: 2026-09-20_
   the column arrays, and added a **Beta** badge after the *Play Civilization*
   heading. Branch `feat/games-list-tabs`; the deliberate differences from the old
   client and the createdAt addition are in `decisions.md` and `README.md`. 4 new
-  engine tests, 1 server test, 13 web tests.
+  engine tests, 1 server test, 13 web tests. A second follow-up made the games
+  panel full width (the table had drawn over the chat column), moved the lobby
+  chat to the bottom as its own `LobbyChat` panel with the shared pager (ten per
+  page), and changed `GET /api/chat` to return ~3 months newest first with no
+  50-message cap; 1 server test replaced, 5 new web tests.
 
 ## In progress
 

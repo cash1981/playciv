@@ -3,7 +3,8 @@
 - **Slug:** `games-list-tabs`
 - **Branch:** `feat/games-list-tabs`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
-- **Status:** in review — the first review round's follow-up is folded in
+- **Status:** in review — the first review round's follow-up and Follow-up 2
+  (front-page layout and lobby chat) are folded in
 
 ## Goal
 
@@ -216,6 +217,56 @@ branch.
   theme variables (`--accent` / `--accent-text`) so it reads in both themes,
   keep it accessible (the word "Beta", not colour alone), and keep the diff
   small.
+
+## Follow-up 2: front-page layout and lobby chat
+
+The human tested the front page and hit these.
+
+**The table overflowed its panel.** `.grid` is a two-column grid and
+`.data-table` is wider than its column's share; a grid item's default
+`min-width: auto` lets it push past its track, so the table drew over the Lobby
+chat column. Fixes:
+
+- `LandingView`: drop the `.grid` wrapper around the games panel; the games
+  panel is full width.
+- `SortableTable`: wrap the `<table>` in a `div.table-scroll` (`overflow-x:
+  auto`) so a wide table scrolls inside its panel instead of overflowing the
+  layout.
+- `styles.css`: add `.table-scroll`, and `min-width: 0` on `.panel` so no future
+  grid use can overflow the same way.
+
+**Lobby chat moves to the very bottom** of the front page, after the highscore
+(new order: intro, error, games, New game (signed in), highscore, Lobby chat).
+
+**Lobby chat gets the shared pager.** Extract it into
+`packages/web/src/views/LobbyChat.tsx`:
+
+- Props: `messages` (newest first), `player`, `busy`, `onSend(message)`.
+- Internal `message` state and `page` state (1-based, 10 per page, shared
+  `Pager`).
+- Render the current page's messages, the pager, then the send form (or the
+  "Sign in to join the conversation." note when signed out).
+- After a successful send, clear the input and return to page 1; clamp the page
+  if the list shrinks.
+
+`LandingView` keeps the `chat` state and the `reload`, and renders `LobbyChat`
+in the bottom panel.
+
+**Only the last three months of lobby chat are fetched.** In
+`packages/server/src/routes/public.ts` the window is ~3 months (90 days) and the
+messages are returned **newest first** instead of the old 14 days / oldest-first
+50. The count cap goes away: the pager bounds what is shown. Record the change
+in `decisions.md`.
+
+Tests:
+
+- `packages/server/test/api.test.ts`: replace the "latest two weeks and 50
+  messages" test with one for the new window ("three months") and newest-first
+  order, and assert there is no 50-message cap (e.g. 60 recent messages come
+  back).
+- `packages/web/src/views/LobbyChat.test.tsx` (new): newest-first, 10 per page
+  with a working Prev/Next, the send form calls `onSend` with the trimmed text
+  and clears, and a signed-out visitor sees the note instead of the form.
 
 ## Open questions
 
