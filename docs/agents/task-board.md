@@ -17,7 +17,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); verification by a second agent
 - **Branch:** `feat/issue-37-password-reset`
 - **Brief:** `docs/agents/tasks/issue-37-password-reset.md`
-- **Status:** in progress
+- **Status:** in review — implemented and pushed, awaiting the second agent's
+  verification and the human's merge.
 - **Claimed paths:**
   - `packages/server/src/auth.ts`
   - `packages/server/src/routes/auth.ts`

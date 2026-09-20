@@ -90,11 +90,11 @@ Java counterpart: `resource/*` and `application/*` under Dropwizard.
 
 | File | Responsibility |
 | --- | --- |
-| `src/routes/auth.ts` | `AuthResource` — registration and login |
+| `src/routes/auth.ts` | `AuthResource` — registration, login and password reset |
 | `src/routes/games.ts` | `GameResource` — create, list, join, withdraw, end, log, chat |
 | `src/routes/play.ts` | `DrawResource` + `PlayerResource` — draws, battle, tech, reveals, trade, turns, undo |
 | `src/errors.ts` | `EngineError` → HTTP status |
-| `src/auth.ts` | scrypt passwords and HMAC-signed bearer tokens |
+| `src/auth.ts` | scrypt passwords, HMAC-signed bearer tokens and the reset-link signer |
 | `src/routes/board.ts` | the board — place, move, rotate, front, back, remove, undo, history |
 | `src/routes/arena.ts` | battle arena — initiate, place units, move, return to hand, set stats, rotate, kill, end turn, end battle |
 | `src/store/` | the storage interface and the JSON file implementation |
@@ -380,6 +380,16 @@ tests match on them.
 
 ## Deliberate improvements
 
+**The password reset link is a signed, expiring token.** Java emailed
+`/api/auth/verify/{playerId}` and stored the pending password in plaintext on
+the player record, so anyone who knew a public player id could complete a reset.
+Here the email carries a one-hour HMAC token holding the id and the scrypt hash
+of the new password: nothing is stored, the plaintext is never persisted, and an
+unknown email answers 200 so accounts cannot be enumerated. The reset mail also
+ignores the unsubscribe flag and carries no unsubscribe link, because
+unsubscribing from game mail must not lock a user out of their own account. See
+`docs/agents/decisions.md`.
+
 **A player status board instead of a shared spreadsheet.** The old app embedded
 a per-game Google Sheet that players kept by hand. That is now an in-app "Player
 status" panel: shared bookkeeping includes coins, trade, culture, unit counts,
@@ -482,9 +492,6 @@ owner's decision), so no Patreon code runs on the page. See
 - **Highscores and tournaments** — `GameAction.getCivHighscore`,
   `getPlayerHighScore`, `TournamentAction`. They query across games and need a
   proper data layer.
-- **Password email** — `/newpassword` and `/verify/{playerId}` in `AuthResource`.
-  The mail service now exists (issue #30), but these two routes are a separate
-  issue.
 - **`AdminAction`** — swap a user in a game, delete games, bulk mail.
 - **Real time.** The client refetches after every action; there is no websocket.
   `todo.txt` in old-civ-rest wanted one for chat.

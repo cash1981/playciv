@@ -878,3 +878,41 @@ its branches.
   same Apache 2.0 URL the About page already uses.
 - Bootstrap's `pull-right` is not available here; the footer is its own flex
   row so both the light and dark themes lay it out.
+
+---
+
+## 2026-09-20 — Password reset uses a signed, expiring link (issue #37)
+
+**Decision.** `PUT /api/auth/newpassword { email, newpassword }` looks the
+account up by email and mails a verification link; `GET /api/auth/verify/{token}`
+applies the change and answers the old HTML confirmation. The link carries a
+one-hour HMAC-signed token (`ResetTokenSigner`) with the player id and the
+**scrypt hash** of the new password. Nothing is stored, Java's
+`/verify/{playerId}` and its plaintext `Player.newPassword` are not ported, and
+an unknown email answers 200.
+
+**Why.** Issue #37 asks for the old forgot-password flow now that the mailer
+exists (issue #30). The old link was just the player id, which is public in game
+state, the log and the highscore, so anyone who knew it could complete a reset;
+and the pending password sat in plaintext on the player record. The owner
+approved a signed token instead.
+
+**Consequences.**
+- `ResetTokenSigner` derives its key from `TOKEN_SECRET`
+  (`HMAC(secret, 'password-reset')`), *not* the session secret: `TokenSigner`
+  accepts any signed body with a `playerId` and a future `expiresAt`, which this
+  payload has, so sharing the key would turn a reset link into a session. A test
+  proves the link is not a bearer token.
+- No `Repository` change: the token is self-contained, so the branch does not
+  collide with the unmerged D1 branch (#72).
+- The link is idempotent rather than single-use. A replay re-installs the same
+  hash, so it cannot set anything new; a stolen link is only useful until it
+  expires.
+- Unknown emails answer 200 (Java answered 404), so accounts cannot be
+  enumerated; email lookup is case-insensitive (Java was exact); the new
+  password must be at least 4 characters, matching registration.
+- The reset mail is transactional: `Notifications.passwordReset` ignores
+  `disableEmail` and carries no unsubscribe line, because unsubscribing from
+  game mail must not lock a user out of their own account.
+- The verification page is server HTML, exactly like the old route; there is no
+  SPA route for it.

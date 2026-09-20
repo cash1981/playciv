@@ -13,12 +13,20 @@ _Last updated: 2026-09-19_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 401 engine, 123 server, 39 web |
+| `pnpm -r test` | passing — 401 engine, 127 server, 41 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
 ## Done
 
+- **Password reset (issue #37).** `PUT /api/auth/newpassword` mails a one-hour
+  signed reset link and `GET /api/auth/verify/{token}` applies it; the login
+  screen has the old "Forgot password" form. The link carries the scrypt hash of
+  the new password, so nothing is stored server-side and the plaintext is never
+  persisted; an unknown email answers 200 so accounts cannot be enumerated. Four
+  new server tests and one web test. Deliberate differences from Java are in
+  `decisions.md` and `README.md`. Branch `feat/issue-37-password-reset`,
+  awaiting review.
 - **Email notifications (issue #30).** Resend mailer in the Node API with every
   old trigger (your turn, new game, join, chat, game ended, game deleted, the
   five turn-phase updates), the 30 min / 3 h throttles, `disableEmail` and the
