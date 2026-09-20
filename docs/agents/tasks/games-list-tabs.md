@@ -110,7 +110,7 @@ Deliberate differences from the old client, to record in `decisions.md`:
     /** Omit to make the column unsortable. */
     readonly sortValue?: (row: T) => string | number
     readonly render: (row: T, index: number) => React.ReactNode
-    /** Direction when this column is first selected; numbers default desc. */
+    /** Direction when this column is first selected; defaults to ascending. */
     readonly initialDirection?: 'asc' | 'desc'
   }
   interface Props<T> {
