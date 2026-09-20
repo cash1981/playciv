@@ -17,10 +17,11 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); verification by a second agent
 - **Branch:** `feat/issue-72-d1`
 - **Brief:** `docs/agents/tasks/issue-72-d1.md`
-- **Status:** in review — branch pushed, awaiting the second agent's verification
-  and the human's merge. The D1 database was deleted and re-created for the
-  reduced data; the ~2,000-row import runs once the free-tier daily row-write
-  limit resets (00:00 UTC). The Worker has not been deployed.
+- **Status:** in review — branch pushed, rebased onto `main` (issues #37, #40
+  and #43) and awaiting the second agent's verification and the human's merge.
+  The re-created D1 database holds the reduced import, verified by count (554
+  players, 310 `pbf`, 876 `pbf_doc` chunks, 247 finished). The Worker has not
+  been deployed.
 - **Claimed paths:**
   - `packages/worker/migrations/` (new), `packages/worker/src/index.ts`, `packages/worker/package.json`
   - `wrangler.jsonc`, `render.yaml` (delete)

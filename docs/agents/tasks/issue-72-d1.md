@@ -225,7 +225,7 @@ the free-tier daily row limit is no longer the constraint.
       (plus 876 `pbf_doc` chunks), 247 finished pbf games — and emits no rows
       for the dropped `chat`/`gamelog`/`tournament`, asserted locally with
       `node:sqlite`. The remote D1 is re-created and imported with the same
-      counts once the daily write limit resets.
+      counts, verified against the live database.
 - [x] Every generated SQL statement is under D1's per-statement limit
       (longest 40,106 bytes).
 - [x] No `mongodb` import remains in `@civ/server` or the Worker bundle.
@@ -244,7 +244,7 @@ the free-tier daily row limit is no longer the constraint.
 
 ## Open questions
 
-- Cloudflare remote access is done. The old `playciv` database is deleted and
+- Cloudflare remote access is done. The old `playciv` database was deleted and
   re-created with only the migrated tables; the reduced `dump.sql` is imported
-  once the free-tier daily row-write limit resets (00:00 UTC). Local
-  development remains on the JSON file.
+  and verified by count (554 players, 310 `pbf`, 876 `pbf_doc` chunks, 247
+  finished). Local development remains on the JSON file.

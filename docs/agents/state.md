@@ -57,8 +57,8 @@ _Last updated: 2026-09-20_
   uses is migrated: 554 `player` accounts and 310 old `pbf` games (full
   documents archived chunked), 247 with a winner. The old `chat` (87,756),
   `gamelog` (66,288) and `tournament` data is dropped — the mongodump backup
-  keeps it. The D1 database was deleted and re-created for this; the reduced
-  import (~2,000 rows) runs once the daily write limit resets. Local dev keeps
+  keeps it. The re-created D1 database now holds the reduced import, verified by
+  count (554 players, 310 `pbf`, 876 `pbf_doc` chunks, 247 finished). Local dev keeps
   the JSON file; `D1Repository` is tested through a `node:sqlite` adapter, and
   the root requires Node 24+. First review round fixed Unicode username lookup
   (`0002_username_lower.sql`), made the migration fail on a wrong `--dump`
