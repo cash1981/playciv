@@ -245,6 +245,12 @@ export const api = {
   updateAdminUser: (userId: string, changes: AdminUserUpdate) =>
     patch<AdminUserDto>(`/api/admin/users/${userId}`, changes),
   deleteAdminUser: (userId: string) => del<void>(`/api/admin/users/${userId}`),
+  /** Issue #92. Sends one personalised mail per eligible account. */
+  broadcastEmail: (subject: string, markdown: string, includeUnsubscribed: boolean) =>
+    post<{ readonly sent: number; readonly skipped: number }>(
+      '/api/admin/email/broadcast',
+      { subject, markdown, includeUnsubscribed },
+    ),
   /** Public: the server route needs no bearer token. */
   highscore: () => get<HighscoreResult>('/api/highscore'),
   publicGames: () => get<PublicGameSummary[]>('/api/public/games'),
