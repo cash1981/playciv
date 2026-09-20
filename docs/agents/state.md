@@ -6,14 +6,14 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-19_
+_Last updated: 2026-09-20_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 401 engine, 127 server, 41 web |
+| `pnpm -r test` | passing — 411 engine, 137 server, 46 web (on `feat/issue-40-signup-security-question`) |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
@@ -198,7 +198,15 @@ _Last updated: 2026-09-19_
 
 ## In progress
 
-_Nothing._
+- **Issue #40 signup security question.** The register form on the login screen
+  asks the old fixed question ("What is China's starting tech?") and refuses a
+  wrong answer before calling the API, exactly as the old AngularJS controller
+  did; `POST /api/auth/register` enforces the same answer server-side (`writing`,
+  case-insensitive, no trimming), so a bot that POSTs straight to the endpoint is
+  rejected with `WRONG_SECURITY_ANSWER`. The old gate lived only in the client
+  and the Java backend had none, so server enforcement is a deliberate
+  improvement — see `decisions.md` and `README.md`. Branch
+  `feat/issue-40-signup-security-question`, implemented, awaiting review.
 
 ## Next, in order
 

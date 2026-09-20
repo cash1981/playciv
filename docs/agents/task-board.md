@@ -17,7 +17,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
 - **Branch:** `feat/issue-40-signup-security-question`
 - **Brief:** `docs/agents/tasks/issue-40-signup-security-question.md`
-- **Status:** in progress
+- **Status:** in review — implemented on the branch, awaiting the review gate.
 - **Claimed paths:**
   - `packages/server/src/auth.ts` (`isSecurityAnswer` only)
   - `packages/server/src/routes/auth.ts` (the register handler only)

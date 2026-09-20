@@ -940,3 +940,34 @@ approved a signed token instead.
   game mail must not lock a user out of their own account.
 - The verification page is server HTML, exactly like the old route; there is no
   SPA route for it.
+
+---
+
+## 2026-09-20 — The signup security question is enforced server-side too (issue #40)
+
+**Decision.** `POST /api/auth/register` now requires a `securityAnswer` field and
+accepts only `writing`, case-insensitive. The register form on the login screen
+shows the old fixed question — "Security Question: What is China's starting
+tech?" — binds the answer, and refuses a wrong one before calling the API, the
+way the old client did.
+
+**Why.** Issue #40: the old registration form had a fixed security question, and
+the rewrite had none. The gate lived only in AngularJS
+(`RegisterController.js:37-40`, `if(!$scope.securityQuestion ||
+$scope.securityQuestion.toUpperCase() !== "WRITING") { growl.error(...); return; }`),
+so a bot that POSTed straight to the endpoint skipped it entirely. The old Java
+backend (`AuthResource.java` `register`) had no check at all. The human chose the
+same fixed question, enforced on **both** client and server, over a rotating
+question or a captcha.
+
+**Consequences.**
+- `isSecurityAnswer` in `packages/server/src/auth.ts` compares the **raw** value
+  with `toUpperCase()` and does **not** trim, so ` writing` is rejected exactly
+  as the old controller rejected it. Ported as-is, not "fixed".
+- Server enforcement is a deliberate improvement over Java, which never saw the
+  answer; recorded here and in `README.md`.
+- The question and its answer are public — this is a speed bump against trivial
+  bots, not a security boundary, and there is deliberately no rate limiting,
+  challenge token or rotating question set.
+- Existing tests that register an account had `securityAnswer: 'writing'` added
+  to their payloads.

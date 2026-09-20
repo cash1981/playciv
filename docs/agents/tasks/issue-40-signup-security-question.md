@@ -3,7 +3,7 @@
 - **Slug:** `issue-40-signup-security-question`
 - **Branch:** `feat/issue-40-signup-security-question`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
-- **Status:** in progress
+- **Status:** in review
 
 ## Goal
 
@@ -133,15 +133,18 @@ client and server** (2026-09-20), rather than a rotating question or a captcha.
 
 ## Acceptance criteria
 
-- [ ] Registering with no `securityAnswer` gives 400 and creates no account.
-- [ ] Registering with the wrong answer gives 400 and creates no account.
-- [ ] `writing`, `Writing` and `WRITING` are all accepted.
-- [ ] The login screen's register form shows the question and blocks a wrong
+- [x] Registering with no `securityAnswer` gives 400 and creates no account.
+- [x] Registering with the wrong answer gives 400 and creates no account.
+- [x] `writing`, `Writing` and `WRITING` are all accepted.
+- [x] The login screen's register form shows the question and blocks a wrong
       answer before calling the API.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: not applicable — no projection or game state changes.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: not applicable — no projection or game state changes.
 - [ ] Verified in the browser: register with a wrong answer (error shown, no
-      account) and with `writing` (account created, signed in).
+      account) and with `writing` (account created, signed in). — the coder's
+      environment had no browser connection; the route was exercised end to end
+      over HTTP instead (400 wrong/missing, 201 `writing`/`WRITING`, no account
+      on rejection), and the form behaviour is covered by `LoginView.test.tsx`.
 
 ## Open questions
 
