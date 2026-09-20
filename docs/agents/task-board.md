@@ -12,6 +12,34 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-40-signup-security-question
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
+- **Branch:** `feat/issue-40-signup-security-question`
+- **Brief:** `docs/agents/tasks/issue-40-signup-security-question.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/server/src/auth.ts` (`isSecurityAnswer` only)
+  - `packages/server/src/routes/auth.ts` (the register handler only)
+  - `packages/server/test/auth-register.test.ts` (new)
+  - `packages/server/test/api.test.ts`
+  - `packages/server/test/admin-user.test.ts`
+  - `packages/server/test/board-api.test.ts`
+  - `packages/server/test/notifications.test.ts`
+  - `packages/server/test/auth-password-reset.test.ts`
+  - `packages/web/src/lib/api.ts` (`register` only)
+  - `packages/web/src/views/LoginView.tsx`
+  - `packages/web/src/views/LoginView.test.tsx`
+  - `docs/agents/tasks/issue-40-signup-security-question.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
+- **Notes:** Issue #40. The human chose the old fixed question
+  ("What is China's starting tech?" / "writing", case-insensitive) enforced on
+  both client and server. The old gate was client-only; server enforcement is a
+  deliberate improvement recorded in `decisions.md` and `README.md`. The
+  claimed test files are only touched to add `securityAnswer: 'writing'` to
+  existing registration payloads.
+
 ### issue-37-password-reset
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); verification by a second agent
