@@ -10,13 +10,20 @@
  * Deliberate differences from the old client (see `decisions.md`):
  * - "Show my games" is a real filter on membership (`youAreIn`), not the old
  *   trick of typing the username into the free-text search.
+ * - The search and "Show my games" apply to both tabs (old: the active tab
+ *   only), and the search matches name / type / usernames (the old filter
+ *   matched every property on the game).
  * - Both tables default to Name ascending, the order the server returns, not
  *   the old finished table's no-op `totalWins desc`.
+ * - `Type` is sortable (the old finished table sorted only Created / Name /
+ *   Number of players), and a numeric column opens descending on the first
+ *   click (old ng-table: ascending).
  * - `#` is the row's position in the whole filtered/sorted list, not the old
  *   active table's page-local `$index`.
+ * - The `Open` / `Full` actions come from the rewrite, not the old client.
  */
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { PlayerDto, PublicGameSummary } from '../lib/api.js'
 import { formatTimestamp } from '../lib/formatTimestamp.js'
@@ -154,15 +161,19 @@ function columnsFor(options: ColumnOptions): readonly SortableColumn<PublicGameS
       header: 'Number of players',
       sortValue: (game) => game.numOfPlayers,
       render: (game) => game.numOfPlayers,
+      // Numeric, so it opens descending on the first click.
+      initialDirection: 'desc',
     },
     {
       key: 'players',
       header: 'Players',
+      // No trailing `<br />`: the separator goes between a username and the
+      // next one, so the cell has no blank last line.
       render: (game) =>
-        game.players.map((entry) => (
+        game.players.map((entry, index) => (
           <span key={entry.username}>
+            {index > 0 && <br />}
             {entry.username}
-            <br />
           </span>
         )),
     },
@@ -185,6 +196,13 @@ export function GameList({ games, player, busy, onOpenGame, onJoin }: Props): Re
   const [query, setQuery] = useState('')
   const [onlyMine, setOnlyMine] = useState(false)
 
+  // Signing out hides the checkbox, so the filter it set has to go with it —
+  // otherwise a signed-out visitor is left with a filtered (often empty) list
+  // and no control to clear it. `query` stays: the search box is still shown.
+  useEffect(() => {
+    if (player === null) setOnlyMine(false)
+  }, [player])
+
   const matching = games.filter(
     (game) => matchesQuery(game, query) && (!onlyMine || game.youAreIn),
   )
@@ -194,8 +212,16 @@ export function GameList({ games, player, busy, onOpenGame, onJoin }: Props): Re
   // fixed count of the finished games.
   const finishedTotal = games.reduce((count, game) => (game.active ? count : count + 1), 0)
 
-  const activeColumns = columnsFor({ withAction: true, player, busy, onOpenGame, onJoin })
-  const finishedColumns = columnsFor({ withAction: false, player, busy, onOpenGame, onJoin })
+  // Stable between renders so `SortableTable`'s sort memo is not invalidated
+  // every time this panel renders.
+  const activeColumns = useMemo(
+    () => columnsFor({ withAction: true, player, busy, onOpenGame, onJoin }),
+    [player, busy, onOpenGame, onJoin],
+  )
+  const finishedColumns = useMemo(
+    () => columnsFor({ withAction: false, player, busy, onOpenGame, onJoin }),
+    [player, busy, onOpenGame, onJoin],
+  )
 
   return (
     <div className="game-list">

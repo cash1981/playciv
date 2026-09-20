@@ -294,6 +294,23 @@ label > textarea {
   margin: 0 0 0.8rem;
 }
 
+/* The "not finished yet" badge next to the Play Civilization heading. The word
+   carries the meaning; the accent colours only make it stand out in either
+   theme. */
+.beta-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.45em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
 /*
  * The game panels stack one per line, each using the full width. With the
  * panels collapsible, a multi-column grid made an expanded section (e.g. Turn
@@ -1144,8 +1161,8 @@ ul.history > li {
   color: var(--accent);
 }
 
-/* The game list's Action cell sits to the right of the table. */
-.data-table td.action-cell {
+/* The game list's Action header and cells sit to the right of the table. */
+.data-table .action-cell {
   text-align: right;
 }
 

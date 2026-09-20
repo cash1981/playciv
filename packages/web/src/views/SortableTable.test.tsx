@@ -2,8 +2,9 @@
 
 /**
  * The shared sortable/paged table. The highscore's behaviour is guarded here
- * too, since it now runs through this component: text sorts ascending first,
- * numbers descending first, and the pager shows one page at a time.
+ * too, since it now runs through this component: a column's opening direction
+ * comes from its own `initialDirection` (ascending by default), and the pager
+ * shows one page at a time.
  */
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -19,7 +20,13 @@ interface Row {
 
 const columns: readonly SortableColumn<Row>[] = [
   { key: 'name', header: 'Name', sortValue: (row) => row.name, render: (row) => row.name },
-  { key: 'score', header: 'Score', sortValue: (row) => row.score, render: (row) => row.score },
+  {
+    key: 'score',
+    header: 'Score',
+    sortValue: (row) => row.score,
+    render: (row) => row.score,
+    initialDirection: 'desc',
+  },
 ]
 
 const rows: readonly Row[] = [
@@ -58,6 +65,36 @@ describe('SortableTable', () => {
     // Clicking the active column again flips the direction.
     fireEvent.click(screen.getByRole('button', { name: /score/i }))
     expect(bodyRows().map((cells) => cells[1])).toEqual(['10', '20', '30'])
+  })
+
+  it('opens a numeric column descending even when the table starts empty', () => {
+    const { rerender } = render(
+      <SortableTable
+        rows={[]}
+        columns={columns}
+        rowKey={(row) => row.name}
+        initialSortKey="name"
+        emptyMessage="Nothing here"
+      />,
+    )
+
+    // With no rows to sample, the direction must still come from the column.
+    fireEvent.click(screen.getByRole('button', { name: /score/i }))
+    expect(screen.getByRole('button', { name: /score/i }).closest('th')?.getAttribute('aria-sort')).toBe(
+      'descending',
+    )
+
+    // The chosen direction sticks once rows arrive.
+    rerender(
+      <SortableTable
+        rows={rows}
+        columns={columns}
+        rowKey={(row) => row.name}
+        initialSortKey="name"
+        emptyMessage="Nothing here"
+      />,
+    )
+    expect(bodyRows().map((cells) => cells[1])).toEqual(['30', '20', '10'])
   })
 
   it('uses the initial sort direction of the named column', () => {

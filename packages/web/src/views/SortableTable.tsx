@@ -22,7 +22,10 @@ export interface SortableColumn<T> {
   /** Omit to make the column unsortable. */
   readonly sortValue?: (row: T) => string | number
   readonly render: (row: T, index: number) => React.ReactNode
-  /** Direction when this column is first selected; numbers default desc. */
+  /**
+   * Direction when this column is first selected; defaults to ascending.
+   * A numeric column sets `desc` here explicitly.
+   */
   readonly initialDirection?: 'asc' | 'desc'
 }
 
@@ -42,15 +45,13 @@ function compareValues(a: string | number, b: string | number): number {
   return String(a).localeCompare(String(b))
 }
 
-/** Numbers open descending (highest first); text opens ascending. */
-function defaultDirection<T>(column: SortableColumn<T>, rows: readonly T[]): Direction {
-  if (column.initialDirection !== undefined) return column.initialDirection
-  const sample = rows[0]
-  const sortValue = column.sortValue
-  if (sample !== undefined && sortValue !== undefined) {
-    return typeof sortValue(sample) === 'number' ? 'desc' : 'asc'
-  }
-  return 'asc'
+/**
+ * The direction a column opens with, taken from the column definition. It must
+ * not depend on a sample row: an empty table (the finished tab before any game
+ * has ended) still has to open a numeric column descending on the first click.
+ */
+function defaultDirection<T>(column: SortableColumn<T>): Direction {
+  return column.initialDirection ?? 'asc'
 }
 
 export function SortableTable<T>({
@@ -64,7 +65,7 @@ export function SortableTable<T>({
   const [sortKey, setSortKey] = useState(initialSortKey)
   const [direction, setDirection] = useState<Direction>(() => {
     const initial = columns.find((column) => column.key === initialSortKey)
-    return initial === undefined ? 'asc' : defaultDirection(initial, rows)
+    return initial === undefined ? 'asc' : defaultDirection(initial)
   })
   const [page, setPage] = useState(1)
 
@@ -85,15 +86,17 @@ export function SortableTable<T>({
       setDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
     } else {
       setSortKey(column.key)
-      setDirection(defaultDirection(column, rows))
+      setDirection(defaultDirection(column))
     }
     setPage(1)
   }
 
   const header = (column: SortableColumn<T>) => {
+    // The game list's Action column right-aligns its header to match the cells.
+    const className = column.key === 'action' ? 'action-cell' : undefined
     if (column.sortValue === undefined) {
       return (
-        <th key={column.key} scope="col">
+        <th key={column.key} scope="col" className={className}>
           {column.header}
         </th>
       )
@@ -103,6 +106,7 @@ export function SortableTable<T>({
       <th
         key={column.key}
         scope="col"
+        className={className}
         aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
         <button type="button" className="sort" onClick={() => sortBy(column)}>

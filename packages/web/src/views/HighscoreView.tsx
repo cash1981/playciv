@@ -77,8 +77,8 @@ export function HighscoreView(): React.JSX.Element {
 
   const nameHeader = top === 'players' ? 'Username' : 'Civilization'
   // Stable so `SortableTable`'s sort memo is not invalidated every render; only
-  // the name header depends on `top`. The three numeric columns override the
-  // string/text default and open descending, as before.
+  // the name header depends on `top`. Every column names its opening direction:
+  // the name ascending and the three numeric columns descending, as before.
   const columns = useMemo<readonly SortableColumn<WinnerEntry>[]>(
     () => [
       {

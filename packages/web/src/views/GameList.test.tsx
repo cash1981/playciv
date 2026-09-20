@@ -114,6 +114,26 @@ describe('GameList', () => {
     expect(screen.queryByLabelText('Show my games')).toBeNull()
   })
 
+  it('clears "Show my games" when the player signs out', () => {
+    const games = [
+      game({ id: 'mine', name: 'Mine', youAreIn: true }),
+      game({ id: 'other', name: 'Other' }),
+    ]
+
+    const { rerender } = render(
+      <GameList games={games} player={player} busy={false} onOpenGame={noop} onJoin={noop} />,
+    )
+    fireEvent.click(screen.getByLabelText('Show my games'))
+    expect(names()).toEqual(['Mine'])
+
+    rerender(<GameList games={games} player={null} busy={false} onOpenGame={noop} onJoin={noop} />)
+
+    // The filter is cleared with the control, so the list is not left
+    // silently filtered with no way back.
+    expect(screen.queryByLabelText('Show my games')).toBeNull()
+    expect(names()).toEqual(['Mine', 'Other'])
+  })
+
   it('pages ten active games at a time', () => {
     const games = Array.from({ length: 12 }, (_, index) =>
       game({ id: `game-${index}`, name: `Game ${String(index).padStart(2, '0')}` }),

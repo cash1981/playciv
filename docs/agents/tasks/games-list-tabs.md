@@ -3,7 +3,7 @@
 - **Slug:** `games-list-tabs`
 - **Branch:** `feat/games-list-tabs`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
-- **Status:** in progress
+- **Status:** in review — the first review round's follow-up is folded in
 
 ## Goal
 
@@ -59,7 +59,8 @@ Deliberate differences from the old client, to record in `decisions.md`:
 - The two game summaries (`GameSummary`, `PublicGameSummary`) expose `createdAt`.
 - A generalised `SortableTable<T>` with a `Pager` and a shared `Tabs`
   component, and a new `GameList` panel that renders the two tabs.
-- `LandingView` renders `GameList` in place of its current single list.
+- `LandingView` renders `GameList` in place of its current single list, and a
+  small "Beta" sticker after the *Play Civilization* heading.
 - Web tests for the new behaviour.
 
 **Out:**
@@ -183,6 +184,38 @@ Deliberate differences from the old client, to record in `decisions.md`:
 - [ ] `docs/agents/decisions.md` records the createdAt addition and the
       deliberate differences from the old client above; `state.md` and the task
       board are updated.
+
+## Follow-up
+
+The first review round and the human raised these; fold them into the same
+branch.
+
+- **Fix** `GameList`'s "Show my games": a signed-in user who ticks it and signs
+  out must not be left with a filtered (often empty) list and no visible
+  control. Reset `onlyMine` (and any other filter state that only makes sense
+  while signed in) when `player` becomes `null`.
+- **Fix** the numeric-column direction: with an empty row set, clicking a
+  numeric header must still open descending. Decide numeric-ness from the
+  column, not from a row sample.
+- **Record** the game-list UI deviations from old-civ-web in `decisions.md`:
+  the search and "Show my games" apply to both tabs (old: active only) and the
+  search matches name / type / usernames (old: every property); `Type` is
+  sortable (the old finished table sorted only Created / Name / Number of
+  players); numeric columns open descending on the first click (old ng-table:
+  ascending); and the `Open` / `Full` actions are inherited from the rewrite,
+  not the old client. Add the README "Deliberate improvements" note for these
+  — but **not** for the caption (next point).
+- **Keep** the corrected finished caption (finished games only). The user asked
+  to fix the old bug (the old caption labelled the *all games* count as
+  "finished") and explicitly asked for **no** README text about it.
+- **Polish**: drop the trailing `<br />` on the last username in the Players
+  cell; right-align the Action header to match its cells; memoize the two
+  column arrays so the table's sort memo is not invalidated every render.
+- **Beta sticker** (human request): a small, tasteful "Beta" badge immediately
+  after the *Play Civilization* heading in `LandingView`. Use the existing
+  theme variables (`--accent` / `--accent-text`) so it reads in both themes,
+  keep it accessible (the word "Beta", not colour alone), and keep the diff
+  small.
 
 ## Open questions
 

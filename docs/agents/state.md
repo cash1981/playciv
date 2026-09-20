@@ -13,7 +13,7 @@ _Last updated: 2026-09-20_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 415 engine, 162 server, 57 web |
+| `pnpm -r test` | passing - 415 engine, 162 server, 59 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
@@ -221,9 +221,14 @@ _Last updated: 2026-09-20_
   `old-civ-web`'s `list.html` split, rebuilt on the shared `SortableTable` (now
   generic, with `Tabs`/`Pager` split out). `GameState.createdAt` is new, stamped
   by the server on create and defaulted to `null` by `migrateGameState`, so the
-  old Created column has a source. Branch `feat/games-list-tabs`; the deliberate
-  differences from the old client and the createdAt addition are in
-  `decisions.md`. 4 new engine tests, 1 server test, 11 web tests.
+  old Created column has a source. A follow-up fixed the "Show my games" filter
+  surviving a sign-out, made a numeric column open descending even on an empty
+  table (direction now comes from the column, not a sample row), right-aligned
+  the Action header, dropped the Players cell's trailing line break, memoised
+  the column arrays, and added a **Beta** badge after the *Play Civilization*
+  heading. Branch `feat/games-list-tabs`; the deliberate differences from the old
+  client and the createdAt addition are in `decisions.md` and `README.md`. 4 new
+  engine tests, 1 server test, 13 web tests.
 
 ## In progress
 

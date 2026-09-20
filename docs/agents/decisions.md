@@ -1113,3 +1113,37 @@ Created column had nothing to read.
   no hidden information is affected.
 - The old client only offered Join to a signed-in user; a signed-out visitor
   keeps the existing "Sign in to join" hint instead of a button that cannot work.
+
+---
+
+## 2026-09-20 — The game-list search and sort span both tabs
+
+**Decision.** The search box and "Show my games" sit above both game-list tabs
+and apply to whichever is open; the search matches the game name, its type and
+every player's username; **Type** is a sortable column; and a numeric column
+opens descending on its first click. Signing out clears "Show my games" with the
+checkbox that set it. The `Open` / `Full` actions stay as the rewrite introduced
+them. The finished caption counts finished games only.
+
+**Why.** `old-civ-web`'s `list.html` put the search and "Show my games" inside
+the Active Games tab only, and its Finished Games tab (`ng-table`) sorted only
+Created / Name / Number of players. The human asked for one filter row over both
+tabs and a sortable table on both; the review that read the old controller
+found the remaining differences below. Signing out used to leave "Show my games"
+ticked while the checkbox that set it disappeared, so a filtered — often empty —
+list had no visible control; `GameList` now resets that filter when the player
+becomes `null`. The old caption labelled the *all games* count as "finished";
+the human asked to correct it and explicitly asked for no README note about it.
+
+**Consequences.** Deliberate differences from the old client:
+- The search matches name / type / usernames only. The old active tab's search
+  (`filter` in `GameListController`) matched every property on the game object.
+- "Show my games" is a real membership (`youAreIn`) filter, not the old trick of
+  typing the username into the search text.
+- Both tabs are sortable; the old finished table sorted only Created / Name /
+  Number of players, so **Type** is a new sortable column.
+- A numeric column opens **descending** on the first click. The old `ng-table`
+  opened every column ascending; keeping the highscore's numbers-descending rule
+  on every numeric column is the human's choice.
+- The `Open` / `Full` actions are inherited from the rewrite, not the old client.
+- The caption counts finished games, not all games.

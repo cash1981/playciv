@@ -19,7 +19,11 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Brief:** `docs/agents/tasks/games-list-tabs.md`
 - **Status:** in review — implemented and verified on the branch
   (`pnpm -r typecheck`, `pnpm -r test`, `pnpm -r build` all pass; 415 engine,
-  162 server, 57 web tests), awaiting review.
+  162 server, 59 web tests), including the review follow-up (sign-out clears
+  "Show my games", a numeric column opens descending on an empty table, the
+  Action header right-aligns, the Players cell loses its trailing break, the
+  column arrays are memoised, and a **Beta** badge sits after the *Play
+  Civilization* heading), awaiting review.
 - **Claimed paths:**
   - `packages/engine/src/state.ts` (`GameState.createdAt` only)
   - `packages/engine/src/create-game.ts`, `packages/engine/src/migrate.ts`

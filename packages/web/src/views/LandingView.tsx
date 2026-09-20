@@ -39,24 +39,41 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
     void reload()
   }, [reload])
 
-  async function run(action: () => Promise<unknown>): Promise<void> {
-    setBusy(true)
-    setError(null)
-    try {
-      await action()
-      await reload()
-    } catch (caught) {
-      if (isUnauthorized(caught)) return onSignIn()
-      setError(errorMessage(caught))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const run = useCallback(
+    async (action: () => Promise<unknown>): Promise<void> => {
+      setBusy(true)
+      setError(null)
+      try {
+        await action()
+        await reload()
+      } catch (caught) {
+        if (isUnauthorized(caught)) return onSignIn()
+        setError(errorMessage(caught))
+      } finally {
+        setBusy(false)
+      }
+    },
+    [reload, onSignIn],
+  )
+
+  // Stable identity so `GameList`'s memoised column arrays (and through them
+  // `SortableTable`'s sort memo) survive a re-render.
+  const joinGame = useCallback(
+    (gameId: string): void => {
+      void run(async () => {
+        await api.join(gameId)
+        onOpenGame(gameId)
+      })
+    },
+    [run, onOpenGame],
+  )
 
   return (
     <>
       <section className="landing-intro">
-        <h1>Play Civilization</h1>
+        <h1>
+          Play Civilization <span className="beta-badge">Beta</span>
+        </h1>
         <p className="muted">
           Browse active and finished games, compare the highscore and follow the lobby chat.
         </p>
@@ -77,10 +94,7 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
             player={player}
             busy={busy}
             onOpenGame={onOpenGame}
-            onJoin={(gameId) => void run(async () => {
-              await api.join(gameId)
-              onOpenGame(gameId)
-            })}
+            onJoin={joinGame}
           />
         </section>
 
