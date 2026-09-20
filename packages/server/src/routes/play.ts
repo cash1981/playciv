@@ -29,6 +29,7 @@ import {
   revealItem,
   revealSocialPolicy,
   revealTech,
+  revealTurnOrder,
   revealedTechsForAllPlayers,
   saveNote,
   setPlayerStat,
@@ -427,6 +428,18 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
         after: ({ after }) =>
           context.notifications.phaseUpdated(after, actor.id, actor.username, phase, order),
       },
+    )
+  })
+
+  app.post('/api/games/:gameId/turns/reveal', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const phase = parsePhase(c, optionalString(body, 'phase'))
+    if (phase instanceof Response) return phase
+    const turnNumber = optionalNumber(body, 'turnNumber') ?? 1
+
+    return applyToGame(context, c, gameId, (state) =>
+      revealTurnOrder(state, { playerId: currentPlayer(c).id, turnNumber, phase }),
     )
   })
 

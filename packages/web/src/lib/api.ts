@@ -364,6 +364,8 @@ export const api = {
   myTurns: (gameId: string) => get<PlayerTurn[]>(`/api/games/${gameId}/turns/mine`),
   updateTurn: (gameId: string, turnNumber: number, phase: string, order: string) =>
     post<PlayerView>(`/api/games/${gameId}/turns/update`, { turnNumber, phase, order }),
+  revealTurnOrder: (gameId: string, turnNumber: number, phase: string) =>
+    post<PlayerView>(`/api/games/${gameId}/turns/reveal`, { turnNumber, phase }),
   lockTurn: (gameId: string, turnNumber: number, locked: boolean) =>
     post<PlayerView>(`/api/games/${gameId}/turns/lock`, { turnNumber, locked }),
   saveNote: (gameId: string, note: string) => post<PlayerView>(`/api/games/${gameId}/note`, { note }),

@@ -3,8 +3,8 @@
  *
  * Java had five tests — updateSOT, updateTrade, updateCM, updateMovement and
  * updateResearch — all checking that the order landed in the right field and
- * that `publicTurns` was filled. They run here as a table against one
- * `updateTurn`.
+ * that a turn was created. Reveal behaviour is covered alongside the same
+ * update action because the hotfix adds publication as a separate step.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -14,9 +14,11 @@ import {
   allPublicTurns,
   lockOrUnlockTurn,
   playersTurns,
+  revealTurnOrder,
   updateTurn,
 } from '../src/actions/turn.js'
 import { unwrap, unwrapErr } from '../src/result.js'
+import { migrateGameState } from '../src/migrate.js'
 import { findPlayer } from '../src/state.js'
 import type { TurnPhase } from '../src/turn.js'
 import { TURN_PHASES } from '../src/turn.js'
@@ -40,7 +42,7 @@ describe('updateTurn', () => {
   }
 
   for (const { phase, order } of cases) {
-    it(`${phase} is stored on the turn and in publicTurns`, () => {
+    it(`${phase} is stored privately until it is revealed`, () => {
       const state = unwrap(
         updateTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase, order }),
       )
@@ -52,7 +54,7 @@ describe('updateTurn', () => {
 
       // Java: assertFalse(pbf.getPublicTurns().isEmpty())
       expect(Object.keys(state.publicTurns)).toEqual(['1cash1981'])
-      expect(state.publicTurns['1cash1981']?.orders[phase]).toBe(order)
+      expect(state.publicTurns['1cash1981']?.orders[phase]).toBe('')
       expect(state.log.at(-1)?.logType).toBe(phase)
       expect(state.log.at(-1)?.publicLog).toBe(`Turn 1 - cash1981 has updated ${phaseNames[phase]} phase`)
     })
@@ -123,6 +125,58 @@ describe('updateTurn', () => {
     )
     expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'outsider' })
   })
+
+  it('reveals only the requested phase to public turns', () => {
+    let state = firstCivGame()
+    state = unwrap(updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'secret' }))
+    state = unwrap(updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'TRADE', order: 'public' }))
+    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'TRADE' }))
+
+    expect(state.publicTurns['1cash1981']?.orders).toMatchObject({ SOT: '', TRADE: 'public' })
+    expect(playersTurns(state, CASH1981)[0]?.orders).toMatchObject({ SOT: 'secret', TRADE: 'public' })
+  })
+
+  it('does not let another player reveal the owner\'s phase', () => {
+    const state = unwrap(updateTurn(firstCivGame(), {
+      playerId: CASH1981,
+      turnNumber: 1,
+      phase: 'SOT',
+      order: 'secret',
+    }))
+
+    expect(unwrapErr(revealTurnOrder(state, { playerId: KARANDRAS1, turnNumber: 1, phase: 'SOT' }))).toEqual({
+      kind: 'TURN_NOT_FOUND',
+      turnNumber: 1,
+    })
+  })
+
+  it('migrates an old turn as already public', () => {
+    const state = unwrap(updateTurn(firstCivGame(), {
+      playerId: CASH1981,
+      turnNumber: 1,
+      phase: 'SOT',
+      order: 'old order',
+    }))
+    const oldTurn = { ...state.publicTurns['1cash1981'] } as Record<string, unknown>
+    delete oldTurn['revealed']
+    oldTurn['orders'] = { ...state.publicTurns['1cash1981']?.orders, SOT: 'old order' }
+    const migrated = migrateGameState({
+      ...state,
+      players: state.players.map((player) => ({
+        ...player,
+        playerTurns: player.playerTurns.map((turn) => {
+          const old = { ...turn } as Record<string, unknown>
+          delete old['revealed']
+          return old
+        }),
+      })),
+      publicTurns: { '1cash1981': oldTurn },
+    } as unknown as typeof state)
+
+    expect(migrated.publicTurns['1cash1981']?.revealed.SOT).toBe(true)
+    expect(migrated.players[0]?.playerTurns[0]?.revealed.SOT).toBe(true)
+    expect(allPublicTurns(migrated)[0]?.orders.SOT).toBe('old order')
+  })
 })
 
 describe('allPublicTurns', () => {
@@ -153,6 +207,7 @@ describe('allPublicTurns', () => {
     state = unwrap(
       updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'second' }),
     )
+    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT' }))
 
     expect(allPublicTurns(state)[0]?.history.SOT).toEqual(['first'])
     // Java mutated the stored objects here, so a read corrupted data
@@ -214,8 +269,7 @@ describe('hidden information', () => {
     const state = unwrap(
       updateTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'x' }),
     )
-    // Turn orders ARE public — that is the point of play by forum
-    expect(JSON.stringify(state.publicTurns)).toContain('x')
+    expect(JSON.stringify(state.publicTurns)).not.toContain('x')
     expect(JSON.stringify(state.publicTurns)).not.toContain('gamenote')
   })
 })

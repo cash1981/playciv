@@ -104,6 +104,14 @@ const history: Readonly<Record<TurnPhase, readonly string[]>> = {
   RESEARCH: [],
 }
 
+const revealed: Readonly<Record<TurnPhase, boolean>> = {
+  SOT: false,
+  TRADE: false,
+  CM: false,
+  MOVEMENT: false,
+  RESEARCH: false,
+}
+
 const turn = (
   username: string,
   disabled = false,
@@ -114,6 +122,7 @@ const turn = (
   username,
   disabled,
   orders: turnOrders,
+  revealed,
   history,
 })
 
@@ -312,6 +321,33 @@ describe('TurnOrderWorkspace', () => {
     expect(markup.match(/Saved (start of turn|trade|city management|movement|research)/g)).toHaveLength(5)
     expect(markup).not.toContain('Save start of turn')
     expect(markup).not.toContain('All orders')
+  })
+
+  it('offers one reveal button for each populated private phase', () => {
+    const onRevealPhase = vi.fn()
+    render(
+      <TurnOrderWorkspace
+        gameId="game-1"
+        busy={false}
+        run={run}
+        player={{ username: 'cash1981', color: 'Red', own: true }}
+        turnNumber={3}
+        turnNumbers={[3]}
+        current={turn('cash1981')}
+        values={orders}
+        onTurnNumberChange={noop}
+        onNewTurn={noop}
+        onPhaseChange={noop}
+        onRevealPhase={onRevealPhase}
+        tabPanelId="panel"
+        labelledBy="tab"
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    expect(screen.getAllByRole('button', { name: 'Reveal' })).toHaveLength(5)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Reveal' })[0] as HTMLElement)
+    expect(onRevealPhase).toHaveBeenCalledWith('SOT')
   })
 
   it('renders another player orders read-only without publishing controls', () => {
