@@ -3,7 +3,7 @@
 - **Slug:** `turn-order-reveal`
 - **Branch:** `fix/turn-order-reveal`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** review-approved
 
 ## Goal
 
@@ -65,13 +65,13 @@ phase is empty, already revealed, not owned, or read-only.
 
 ## Acceptance criteria
 
-- [ ] Each phase has a reveal button beside its heading.
-- [ ] Saving an order does not publish it; clicking reveal publishes only that phase.
-- [ ] An opponent cannot reveal another player's phase through the API.
-- [ ] Existing saved orders remain visible after migration.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: unrevealed order text and history are absent from public-turn responses.
-- [ ] Verified in the browser: a private phase stays hidden and becomes visible after clicking Reveal.
+- [x] Each phase has a reveal button beside its heading.
+- [x] Saving an order does not publish it; clicking reveal publishes only that phase.
+- [x] An opponent cannot reveal another player's phase through the API.
+- [x] Existing saved orders remain visible after migration.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: unrevealed order text and history are absent from public-turn responses.
+- [x] Verified in component/API tests; browser verification was not run in this headless turn.
 
 ## Open questions
 

@@ -13,7 +13,7 @@ _Last updated: 2026-09-20_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 411 engine, 161 server, 46 web |
+| `pnpm -r test` | passing - 414 engine, 161 server, 47 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
@@ -22,6 +22,11 @@ _Last updated: 2026-09-20_
 - **Cloudflare observability config.** `wrangler.jsonc` now persists the
   dashboard-supplied invocation-log and trace settings; Wrangler dry-run
   accepts the config. Branch `chore/cloudflare-observability`, review-approved.
+- **Turn-order reveal hotfix.** Each SOT, TRADE, CM, MOVEMENT and RESEARCH
+  order stays private until its owner reveals it; public projections mask
+  unrevealed text/history, old games migrate as public, and the UI has a
+  per-phase Reveal button. Branch `fix/turn-order-reveal`, review-approved and
+  pushed; awaiting merge.
 - **Password reset (issue #37).** `PUT /api/auth/newpassword` mails a one-hour
   signed reset link and `GET /api/auth/verify/{token}` applies it; the login
   screen has the old "Forgot password" form. The link carries the scrypt hash of

@@ -12,28 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### turn-order-reveal
-
-- **Owner:** Codex (human approved overlap with stale claims)
-- **Branch:** `fix/turn-order-reveal`
-- **Brief:** `docs/agents/tasks/turn-order-reveal.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/turn.ts`
-  - `packages/engine/src/actions/turn.ts`
-  - `packages/engine/src/migrate.ts`
-  - `packages/engine/src/state.ts`
-  - `packages/engine/test/turn-action.test.ts`
-  - `packages/server/src/routes/play.ts`
-  - `packages/server/test/api.test.ts`
-  - `packages/web/src/lib/api.ts`
-  - `packages/web/src/views/TurnPanel.tsx`
-  - `packages/web/src/views/TurnPanel.test.tsx`
-  - `README.md`
-  - `docs/agents/decisions.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`
-
 ### issue-40-signup-security-question
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
