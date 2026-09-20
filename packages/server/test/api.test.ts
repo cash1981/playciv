@@ -30,7 +30,12 @@ async function register(username: string): Promise<string> {
   const response = await inject(app, {
     method: 'POST',
     url: '/api/auth/register',
-    payload: { username, password: 'hemmelig', email: `${username}@example.com` },
+    payload: {
+      username,
+      password: 'hemmelig',
+      email: `${username}@example.com`,
+      securityAnswer: 'writing',
+    },
   })
   expect(response.status).toBe(201)
   return (await response.json() as { token: string }).token
@@ -195,7 +200,7 @@ describe('auth', () => {
     const again = await inject(app, {
       method: 'POST',
       url: '/api/auth/register',
-      payload: { username: 'CASH1981', password: 'hemmelig' },
+      payload: { username: 'CASH1981', password: 'hemmelig', securityAnswer: 'writing' },
     })
     expect(again.status).toBe(409)
   })

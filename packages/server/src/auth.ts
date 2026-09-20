@@ -62,6 +62,18 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return timingSafeEqual(derived, expectedBuffer)
 }
 
+/**
+ * The old signup form's fixed security question — "What is China's starting
+ * tech?", answered `writing` — turned into a server-side gate (issue #40).
+ *
+ * AngularJS: `RegisterController.js:37` compared the raw control value with
+ * `toUpperCase()` against `"WRITING"`. There is deliberately no trimming here
+ * either, so ` writing` is rejected exactly as the old client rejected it.
+ */
+export function isSecurityAnswer(answer: unknown): boolean {
+  return typeof answer === 'string' && answer.toUpperCase() === 'WRITING'
+}
+
 export interface TokenPayload {
   readonly playerId: string
   readonly expiresAt: number

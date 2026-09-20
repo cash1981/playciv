@@ -38,7 +38,7 @@ async function register(
   const response = await inject(app, {
     method: 'POST',
     url: '/api/auth/register',
-    payload: { username, password: 'hemmelig', email },
+    payload: { username, password: 'hemmelig', email, securityAnswer: 'writing' },
   })
   expect(response.status).toBe(201)
   const body = await response.json<{ readonly token: string; readonly player: { readonly id: string } }>()
