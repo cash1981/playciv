@@ -6,6 +6,7 @@ import { errorMessage, isUnauthorized } from '../App.js'
 import { api } from '../lib/api.js'
 import type { PlayerDto, PublicGameSummary } from '../lib/api.js'
 import { ChatTimestamp } from './ChatTimestamp.js'
+import { GameList } from './GameList.js'
 import { HighscoreView } from './HighscoreView.js'
 
 interface Props {
@@ -71,58 +72,16 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
       <div className="grid">
         <section className="panel">
           <h2>Active and finished games</h2>
-          {games.length === 0 && <p className="muted">No games yet.</p>}
-          <ul className="list">
-            {games.map((game) => {
-              const full = game.players.length >= game.numOfPlayers
-              const alreadyJoined = player !== null && game.youAreIn
-              return (
-                <li key={game.id}>
-                  <a
-                    href={`/game/${encodeURIComponent(game.id)}`}
-                    onClick={(event) => {
-                      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-                        return
-                      }
-                      event.preventDefault()
-                      onOpenGame(game.id)
-                    }}
-                  >
-                    <strong>{game.name}</strong>
-                  </a>
-                  <span className="muted">
-                    {game.players.length}/{game.numOfPlayers}
-                  </span>
-                  {!game.active && <span className="tag">ended</span>}
-                  {game.winner !== null && <span className="tag revealed">{game.winner} won</span>}
-                  {game.active && game.nameOfUsersTurn !== '' && (
-                    <span className="tag">{game.nameOfUsersTurn}’s turn</span>
-                  )}
-                  <span className="spacer" style={{ flex: 1 }} />
-                  {player !== null && alreadyJoined && (
-                    <button className="small" onClick={() => onOpenGame(game.id)}>
-                      Open
-                    </button>
-                  )}
-                  {player !== null && !alreadyJoined && game.active && (
-                    <button
-                      className="small"
-                      disabled={busy || full}
-                      onClick={() => void run(async () => {
-                        await api.join(game.id)
-                        onOpenGame(game.id)
-                      })}
-                    >
-                      {full ? 'Full' : 'Join'}
-                    </button>
-                  )}
-                  {player === null && game.active && !full && (
-                    <span className="muted">Sign in to join</span>
-                  )}
-                </li>
-              )
+          <GameList
+            games={games}
+            player={player}
+            busy={busy}
+            onOpenGame={onOpenGame}
+            onJoin={(gameId) => void run(async () => {
+              await api.join(gameId)
+              onOpenGame(gameId)
             })}
-          </ul>
+          />
         </section>
 
         <section className="panel">

@@ -1,0 +1,190 @@
+# Active and finished games: tabs, sortable tables and pagination
+
+- **Slug:** `games-list-tabs`
+- **Branch:** `feat/games-list-tabs`
+- **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
+- **Status:** in progress
+
+## Goal
+
+The front page splits its single "Active and finished games" list into two tabs,
+**Active games** and **Finished games**, each a sortable, paged table. The
+pagination and sortable table are the ones already on the front page
+(`SortableTable`, used by the highscore); the tab control is the one from
+`HighscoreView`. The old search box and "Show my games" filter come along.
+
+## Why
+
+Old-civ-web's `app/views/list.html` had a `uib-tabset` with an **Active Games**
+tab (`dir-paginate`, 30 per page, a search box and a "Show my games"
+checkbox) and a **Finished Games** tab (an `ng-table`, 10 per page, sortable by
+Created / Name / Number of players). The rewrite collapsed both into one list
+with no tabs and no paging. The human asked for the old behaviour back, with a
+sortable table on **both** tabs, the old search + "Show my games", and 10 rows
+per page.
+
+## Reference
+
+- `old-civ-web/app/views/list.html` — the tabset, the active table (`#`,
+  Created, Name, Type, Number of players, Players, Action) and the finished
+  table (the same columns, no Action), the search box and "Show my games".
+- `old-civ-web/app/scripts/controllers/GameListController.js` — splits the
+  loaded games into `games` (active) and `finishedGames` (inactive),
+  `totalNumberOfGames`, and the "show my games" behaviour (it set the search
+  text to the username).
+- The finished table sorted by `created`, `name` and `numOfPlayers`.
+
+Deliberate differences from the old client, to record in `decisions.md`:
+
+- The old "Show my games" reused the free-text filter (it typed the username
+  into it). Here it is a real filter on membership (`youAreIn`), which is what
+  the old behaviour meant and does not accidentally match a username inside
+  another game's text.
+- The old finished table's default sort was `totalWins desc` (a
+  copy-paste from the highscore controller that never matched a game field, so
+  it was a no-op). Both tables here default to **Name ascending**, which is the
+  order the server already returns and the active list already showed.
+- The `#` column is the row's position in the whole filtered/sorted list, not
+  the page-local index (the old active table used the page-local `$index`).
+- `GameState.createdAt` is new (see below); the old `PBF.created` was not
+  carried across by the rewrite. Migrated games show an empty Created cell.
+
+## Scope
+
+**In:**
+
+- `GameState.createdAt` (`string | null`), stamped by the server when a game is
+  created and defaulted to `null` by `migrateGameState` for games saved before
+  it existed, so the old "Created" column has a source.
+- The two game summaries (`GameSummary`, `PublicGameSummary`) expose `createdAt`.
+- A generalised `SortableTable<T>` with a `Pager` and a shared `Tabs`
+  component, and a new `GameList` panel that renders the two tabs.
+- `LandingView` renders `GameList` in place of its current single list.
+- Web tests for the new behaviour.
+
+**Out:**
+
+- Server-side pagination — the lobby already loads every game, exactly like the
+  old client (`dir-paginate`/`ng-table` are client-side).
+- `LobbyView.tsx`, which is unused dead code (nothing imports it); leave it.
+- Any change to `delete-game`, the highscore, or the game page.
+
+## Approach
+
+### Engine
+
+- `packages/engine/src/state.ts`: add `readonly createdAt: string | null` to
+  `GameState`, next to `name`/`gameType` (public data, like `winner`).
+- `packages/engine/src/create-game.ts`: add `readonly createdAt?: string | null`
+  to `CreateGameOptions` and set `createdAt: options.createdAt ?? null` in the
+  returned state. The engine stays pure — the server passes the timestamp.
+- `packages/engine/src/migrate.ts`: add `'createdAt'` to the `MaybeOlder` `Omit`
+  and `Partial` lists and default it with `createdAt: older.createdAt ?? null`.
+- Any test that builds a `GameState` literal needs the new field; the compiler
+  finds them.
+
+### Server
+
+- `packages/server/src/routes/games.ts`: add `createdAt: string | null` to
+  `GameSummary` and `PublicGameSummary` and set it in `toSummary` /
+  `toPublicSummary` from `game.createdAt`. In the create handler, pass
+  `createdAt: new Date().toISOString()` into `createGame`.
+
+### Web
+
+- `packages/web/src/lib/api.ts`: add `readonly createdAt: string | null` to
+  `GameSummary` and `PublicGameSummary`.
+- `packages/web/src/views/Pager.tsx` (new): the Prev / "Page X of Y" / Next
+  markup, lifted verbatim out of `SortableTable` so both it and the games
+  tables share one implementation.
+- `packages/web/src/views/Tabs.tsx` (new): the `Tabs` component currently local
+  to `HighscoreView` (`div.tabs` + `aria-pressed` buttons), moved out unchanged.
+- `packages/web/src/views/SortableTable.tsx`: generalise to
+  `SortableTable<T>` with a column list and a page size:
+
+  ```ts
+  interface SortableColumn<T> {
+    readonly key: string
+    readonly header: string
+    /** Omit to make the column unsortable. */
+    readonly sortValue?: (row: T) => string | number
+    readonly render: (row: T, index: number) => React.ReactNode
+    /** Direction when this column is first selected; numbers default desc. */
+    readonly initialDirection?: 'asc' | 'desc'
+  }
+  interface Props<T> {
+    readonly rows: readonly T[]
+    readonly columns: readonly SortableColumn<T>[]
+    readonly rowKey: (row: T, index: number) => string
+    readonly initialSortKey: string
+    readonly emptyMessage: string
+    readonly pageSize?: number
+  }
+  ```
+
+  `index` in `render` is the row's position in the whole sorted list.
+  `HighscoreView` passes its four columns (`username` asc, `totalWins`/
+  `attempts`/`percentWin` numeric, default sort `totalWins` desc) and keeps the
+  "a fresh table per tab" `key`. Numeric columns open descending; text columns
+  ascending — same rule as today.
+- `packages/web/src/views/HighscoreView.tsx`: use the shared `Tabs` and the new
+  `SortableTable` props.
+- `packages/web/src/views/GameList.tsx` (new): the panel. Props:
+  `{ games, player, busy, onOpenGame, onJoin }`. State: `tab`
+  (`'active' | 'finished'`), `query`, `onlyMine`. It splits `games` on
+  `game.active`, filters by `query` (case-insensitive substring over name,
+  `gameType` and player usernames) and by `onlyMine` (`youAreIn`; render the
+  checkbox only when `player !== null`), and renders one `SortableTable` per
+  tab with 10 rows per page. Columns, in the old order:
+  `#` (unsortable, global index + 1), **Created** (`game.createdAt`, formatted
+  with the existing `formatTimestamp`, sortable), **Name** (an anchor to
+  `/game/<id>` with the current left-click handling, sortable), **Type**
+  (`gameType`, sortable), **Number of players** (sortable), **Players**
+  (usernames joined with `<br />`, unsortable), **Action**:
+  - `youAreIn` → **Open** button (`onOpenGame`),
+  - else active and not full → **Join** button (disabled while `busy`, then
+    `onJoin`),
+  - else active and full → **Full** (disabled),
+  - else nothing.
+  The Finished tab shows a caption with the total number of finished games
+  (the old `caption`).
+- `packages/web/src/views/LandingView.tsx`: replace the `<ul className="list">`
+  games block with `<GameList … />`. Keep the "New game" form, the lobby chat
+  and the highscore as they are.
+- `packages/web/src/styles.css`: rename the `.highscore-table` rules to
+  `.data-table` (the generic table's class), and add only what the games table
+  needs (a right-aligned action cell, the filter row, the caption).
+
+### Tests
+
+- `packages/engine/test/create-game.test.ts` (new): `createGame` stores the
+  `createdAt` it is given and `null` when it is not; `migrateGameState` defaults
+  a missing one to `null` and keeps an existing one.
+- `packages/server/test/api.test.ts`: a created game's summary (and the public
+  summary) carries a non-null `createdAt`.
+- `packages/web/src/views/GameList.test.tsx` (new): the tabs split on `active`;
+  the search filters; "Show my games" keeps only `youAreIn` and is hidden when
+  signed out; the page shows 10 rows with working Prev/Next; a column header
+  sorts.
+- `packages/web/src/views/SortableTable.test.tsx` (new): sorting and paging on
+  a small generic fixture (guards the highscore behaviour too).
+
+## Acceptance criteria
+
+- [ ] The front page shows **Active games** and **Finished games** tabs; the
+      active tab is selected first and each tab contains only its games.
+- [ ] Both tabs are sortable tables with 10 rows per page and a pager.
+- [ ] Search filters the visible games; "Show my games" keeps only games the
+      signed-in player is in, and is not shown when signed out.
+- [ ] A new game's summary (signed in and public) carries its `createdAt`.
+- [ ] Old migrated games read back with `createdAt: null` and render.
+- [ ] Hidden information is unaffected (`createdAt` is public).
+- [ ] `pnpm -r typecheck`, `pnpm -r test` and `pnpm -r build` all pass.
+- [ ] `docs/agents/decisions.md` records the createdAt addition and the
+      deliberate differences from the old client above; `state.md` and the task
+      board are updated.
+
+## Open questions
+
+None. The human chose a sortable table on both tabs, the old search + "Show my
+games", 10 rows per page, and adding `GameState.createdAt`.

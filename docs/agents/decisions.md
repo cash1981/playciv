@@ -1080,3 +1080,36 @@ save, so this is a documented product change rather than a ported rule.
 
 **Consequences.** Public projections mask both the current text and history of
 unrevealed phases. The reveal action is restricted to the owner of the turn.
+## 2026-09-20 — The game list is two tabs with sortable, paged tables
+
+**Decision.** The front page splits its single list into **Active games** and
+**Finished games** tabs, each a sortable table paged at ten rows, with the old
+search box and "Show my games" filter above them. `GameState` gains
+`createdAt: string | null`; the server stamps it at creation and
+`migrateGameState` defaults a missing one to `null`.
+
+**Why.** `old-civ-web/app/views/list.html` had exactly this split: an Active
+Games tab (`dir-paginate`, 30 per page, a search box and "Show my games") and a
+Finished Games tab (an `ng-table`, 10 per page, sortable by Created / Name /
+Number of players). The rewrite collapsed both into one un-paged list. The
+human asked for the old behaviour back, with a sortable table on **both** tabs,
+the old search + "Show my games", and 10 rows per page. `GameState.createdAt` is
+needed because the rewrite never carried `PBF.created` across, so the old
+Created column had nothing to read.
+
+**Consequences.** Deliberate differences from the old client:
+- "Show my games" is a real filter on membership (`youAreIn`). The old
+  controller implemented it by typing the username into the free-text search
+  (`GameListController.showMyGames`), which also matched a username appearing
+  elsewhere in another game's text.
+- Both tables default to **Name ascending** — the order the server already
+  returns and the active list already showed. The old finished table's default
+  sort was `totalWins desc` (`finishedGamesList`, a copy-paste from the highscore
+  controller), a field that does not exist on a game, so it was a no-op.
+- `#` is the row's position in the whole filtered/sorted list, not the old
+  active table's page-local `$index`.
+- Migrated games read back with `createdAt: null` and render an empty Created
+  cell. `createdAt` is public data (like `winner`), so no projection changes and
+  no hidden information is affected.
+- The old client only offered Join to a signed-in user; a signed-out visitor
+  keeps the existing "Sign in to join" hint instead of a button that cannot work.

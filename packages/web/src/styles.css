@@ -1055,9 +1055,10 @@ ul.history > li {
   }
 }
 
-/* --- Highscore -------------------------------------------------------------
-   Port of old-civ-web's highscore.html: nested pill tabs over sortable,
-   paginated tables. The pills replace uib-tabset; the table replaces ng-table.
+/* --- Pill tabs and sortable tables -----------------------------------------
+   Port of old-civ-web's highscore.html and list.html: pill tabs over sortable,
+   paginated tables. The pills replace uib-tabset; `.data-table` replaces
+   ng-table and is shared by the highscore and the game list.
    --------------------------------------------------------------------------- */
 
 .tabs {
@@ -1096,34 +1097,34 @@ ul.history > li {
   font-weight: 600;
 }
 
-.highscore-table {
+.data-table {
   width: 100%;
   border-collapse: collapse;
   text-align: center;
 }
 
-.highscore-table th,
-.highscore-table td {
+.data-table th,
+.data-table td {
   padding: 0.4rem 0.5rem;
   border-bottom: 1px solid var(--line);
 }
 
-.highscore-table tbody tr:nth-child(odd) {
+.data-table tbody tr:nth-child(odd) {
   background: var(--panel-2);
 }
 
-.highscore-table tbody tr:hover {
+.data-table tbody tr:hover {
   background: var(--line);
 }
 
-.highscore-table th {
+.data-table th {
   color: var(--muted);
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
-.highscore-table th .sort {
+.data-table th .sort {
   width: 100%;
   display: inline-flex;
   align-items: center;
@@ -1139,8 +1140,34 @@ ul.history > li {
   cursor: pointer;
 }
 
-.highscore-table th .sort:hover {
+.data-table th .sort:hover {
   color: var(--accent);
+}
+
+/* The game list's Action cell sits to the right of the table. */
+.data-table td.action-cell {
+  text-align: right;
+}
+
+/* The game list's search box and "Show my games" checkbox, above the tabs. */
+.games-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.7rem;
+}
+
+.games-filter input[type='search'] {
+  flex: 1 1 12rem;
+  min-width: 8rem;
+}
+
+/* The Finished tab's count, the old ng-table caption. */
+.games-caption {
+  margin: 0 0 0.7rem;
+  text-align: center;
+  font-weight: 600;
 }
 
 /* --- Player status --------------------------------------------------------- */

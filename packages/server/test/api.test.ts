@@ -250,6 +250,28 @@ describe('games', () => {
     expect(view.you?.color).toBe('Green')
   })
 
+  it('a new game summary carries its createdAt, signed in and public', async () => {
+    const token = await register('created-at')
+    const gameId = await createGame(token, 'Stamped game')
+
+    const mine = await inject(app, {
+      method: 'GET',
+      url: '/api/games',
+      headers: bearer(token),
+    })
+    const summary = (await mine.json() as { id: string; createdAt: string | null }[]).find(
+      (game) => game.id === gameId,
+    )
+    expect(typeof summary?.createdAt).toBe('string')
+    expect(Number.isNaN(Date.parse(String(summary?.createdAt)))).toBe(false)
+
+    const publicGames = await inject(app, { method: 'GET', url: '/api/public/games' })
+    const publicSummary = (
+      await publicGames.json() as { id: string; createdAt: string | null }[]
+    ).find((game) => game.id === gameId)
+    expect(typeof publicSummary?.createdAt).toBe('string')
+  })
+
   it('two games cannot share a name', async () => {
     const token = await register('cash1981')
     await createGame(token, 'Duplikat')

@@ -12,6 +12,34 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### games-list-tabs
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
+- **Branch:** `feat/games-list-tabs`
+- **Brief:** `docs/agents/tasks/games-list-tabs.md`
+- **Status:** in review — implemented and verified on the branch
+  (`pnpm -r typecheck`, `pnpm -r test`, `pnpm -r build` all pass; 415 engine,
+  162 server, 57 web tests), awaiting review.
+- **Claimed paths:**
+  - `packages/engine/src/state.ts` (`GameState.createdAt` only)
+  - `packages/engine/src/create-game.ts`, `packages/engine/src/migrate.ts`
+  - `packages/engine/test/create-game.test.ts` (new)
+  - `packages/server/src/routes/games.ts` (the two summary builders and the create handler only)
+  - `packages/server/test/api.test.ts` (a summary assertion only)
+  - `packages/web/src/lib/api.ts` (game summary types only)
+  - `packages/web/src/views/SortableTable.tsx`, `packages/web/src/views/Pager.tsx` (new), `packages/web/src/views/Tabs.tsx` (new)
+  - `packages/web/src/views/HighscoreView.tsx`
+  - `packages/web/src/views/GameList.tsx` (new), `packages/web/src/views/LandingView.tsx`
+  - `packages/web/src/views/GameList.test.tsx` (new), `packages/web/src/views/SortableTable.test.tsx` (new)
+  - `packages/web/src/styles.css`
+  - `docs/agents/tasks/games-list-tabs.md`, `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** Ports old-civ-web's `list.html` split into "Active Games" and
+  "Finished Games" tabs, with a sortable, paged table on both (reusing the
+  front page's `SortableTable`/pager), plus the old search box and "Show my
+  games". Ten rows per page. No GitHub issue — the human chose to implement
+  directly. Adds `GameState.createdAt` so the old "Created" column has a
+  source; migrated games get `null`.
+
 ### issue-40-signup-security-question
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role

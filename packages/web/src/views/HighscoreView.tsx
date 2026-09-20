@@ -8,12 +8,14 @@
  * `playerHighscore`, even on the civilization tabs.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { HighscoreResult, WinnerEntry } from '../lib/api.js'
 import { SortableTable } from './SortableTable.js'
+import type { SortableColumn } from './SortableTable.js'
+import { Tabs } from './Tabs.js'
 
 type TopTab = 'players' | 'civs'
 type CountTab = 'total' | 'two' | 'three' | 'four' | 'five'
@@ -47,26 +49,9 @@ const CONFIG = Object.fromEntries(COUNTS.map((entry) => [entry.key, entry])) as 
   CountConfig
 >
 
-function Tabs<T extends string>(props: {
-  readonly tabs: readonly { readonly key: T; readonly label: string }[]
-  readonly active: T
-  readonly onSelect: (key: T) => void
-}): React.JSX.Element {
-  return (
-    <div className="tabs">
-      {props.tabs.map((tab) => (
-        <button
-          key={tab.key}
-          type="button"
-          aria-pressed={tab.key === props.active}
-          className={tab.key === props.active ? 'tab active' : 'tab'}
-          onClick={() => props.onSelect(tab.key)}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  )
+/** The leading number of a `percentWin` string like "50.0 %"; 0 when absent. */
+function percentValue(entry: WinnerEntry): number {
+  return Number.parseFloat(entry.percentWin) || 0
 }
 
 export function HighscoreView(): React.JSX.Element {
@@ -90,13 +75,50 @@ export function HighscoreView(): React.JSX.Element {
     }
   }, [])
 
+  const nameHeader = top === 'players' ? 'Username' : 'Civilization'
+  // Stable so `SortableTable`'s sort memo is not invalidated every render; only
+  // the name header depends on `top`. The three numeric columns override the
+  // string/text default and open descending, as before.
+  const columns = useMemo<readonly SortableColumn<WinnerEntry>[]>(
+    () => [
+      {
+        key: 'username',
+        header: nameHeader,
+        sortValue: (entry) => entry.username,
+        render: (entry) => entry.username,
+        initialDirection: 'asc',
+      },
+      {
+        key: 'totalWins',
+        header: 'Total wins',
+        sortValue: (entry) => entry.totalWins,
+        render: (entry) => entry.totalWins,
+        initialDirection: 'desc',
+      },
+      {
+        key: 'attempts',
+        header: 'Number of attempts',
+        sortValue: (entry) => entry.attempts,
+        render: (entry) => entry.attempts,
+        initialDirection: 'desc',
+      },
+      {
+        key: 'percentWin',
+        header: 'Efficiency',
+        sortValue: (entry) => percentValue(entry),
+        render: (entry) => entry.percentWin,
+        initialDirection: 'desc',
+      },
+    ],
+    [nameHeader],
+  )
+
   if (error !== null) return <div className="error">{error}</div>
   if (data === null) return <p className="muted">Loading …</p>
 
   const config = CONFIG[count]
   const table = top === 'players' ? data.players : data.civs
   const rows: readonly WinnerEntry[] = table[config.list]
-  const nameHeader = top === 'players' ? 'Username' : 'Civilization'
 
   const caption =
     config.players === null ? (
@@ -133,7 +155,14 @@ export function HighscoreView(): React.JSX.Element {
 
         {/* A fresh table per tab, so each opens at page 1 sorted totalWins desc,
             the way the original gave every tab its own NgTableParams. */}
-        <SortableTable key={`${top}-${count}`} rows={rows} nameHeader={nameHeader} />
+        <SortableTable
+          key={`${top}-${count}`}
+          rows={rows}
+          columns={columns}
+          rowKey={(entry) => entry.username}
+          initialSortKey="totalWins"
+          emptyMessage="No games yet."
+        />
       </div>
     </>
   )
