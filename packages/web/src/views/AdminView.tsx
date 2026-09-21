@@ -3,22 +3,41 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { errorMessage, isUnauthorized } from '../App.js'
 import { api } from '../lib/api.js'
 import type { AdminUserDto, PlayerDto } from '../lib/api.js'
+import { MarkdownEditor } from './MarkdownEditor.js'
+import type { MarkdownEditorComponent } from './MarkdownEditor.js'
 
 interface Props {
   readonly player: PlayerDto
   readonly onUnauthorized: () => void
   readonly onBack: () => void
+  /** Injectable so tests can swap the WYSIWYG editor for a plain textarea. */
+  readonly editorComponent?: MarkdownEditorComponent | undefined
 }
 
 /** Users shown per page. The list is paged in the browser, not on the server. */
 const PAGE_SIZE = 10
 
-export function AdminView({ player, onUnauthorized, onBack }: Props): React.JSX.Element {
+/** Java's subject was "Message from cash at playciv.com"; the domain moved. */
+const DEFAULT_SUBJECT = 'Message from cash at playciv.app'
+
+export function AdminView({
+  player,
+  onUnauthorized,
+  onBack,
+  editorComponent: EditorComponent = MarkdownEditor,
+}: Props): React.JSX.Element {
   const [users, setUsers] = useState<readonly AdminUserDto[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
+
+  /** The broadcast composer (issue #92): subject, Markdown body and the override. */
+  const [emailSubject, setEmailSubject] = useState(DEFAULT_SUBJECT)
+  const [emailBody, setEmailBody] = useState('')
+  const [includeUnsubscribed, setIncludeUnsubscribed] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sentNotice, setSentNotice] = useState<string | null>(null)
 
   /** The user being edited, and the draft values for the free-text fields. */
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -121,6 +140,36 @@ export function AdminView({ player, onUnauthorized, onBack }: Props): React.JSX.
       setError(errorMessage(caught))
     } finally {
       setBusyId(null)
+    }
+  }
+
+  async function sendBroadcast(): Promise<void> {
+    if (sending || emailSubject.trim() === '' || emailBody.trim() === '') return
+    if (
+      !window.confirm(
+        includeUnsubscribed
+          ? 'Send this email to every player, including those who unsubscribed?'
+          : 'Send this email to every player with an email address?',
+      )
+    ) {
+      return
+    }
+    setSending(true)
+    setError(null)
+    setSentNotice(null)
+    try {
+      const { sent, skipped } = await api.broadcastEmail(
+        emailSubject.trim(),
+        emailBody,
+        includeUnsubscribed,
+      )
+      setSentNotice(`Sent to ${sent} players; ${skipped} skipped.`)
+      setEmailBody('')
+    } catch (caught) {
+      if (isUnauthorized(caught)) return onUnauthorized()
+      setError(errorMessage(caught))
+    } finally {
+      setSending(false)
     }
   }
 
@@ -260,6 +309,54 @@ export function AdminView({ player, onUnauthorized, onBack }: Props): React.JSX.
             </button>
           </div>
         )}
+      </section>
+
+      <section className="panel">
+        <h2>Send email to all players</h2>
+        <p className="muted">
+          The body is written in Markdown and sent as a formatted email, with the Markdown
+          source as the plain-text fallback. Every account with an email address gets its own
+          copy, greeted with its username and carrying the unsubscribe link.
+        </p>
+        {sentNotice !== null && <div className="notice">{sentNotice}</div>}
+
+        <label className="inline-label">
+          Subject
+          <input
+            value={emailSubject}
+            disabled={sending}
+            onChange={(event) => setEmailSubject(event.target.value)}
+            style={{ flex: 1, minWidth: '12rem' }}
+          />
+        </label>
+
+        <EditorComponent
+          value={emailBody}
+          onChange={setEmailBody}
+          readOnly={sending}
+          ariaLabel="Email body"
+          placeholder="Write the message in Markdown …"
+        />
+
+        <label className="inline-label">
+          <input
+            type="checkbox"
+            checked={includeUnsubscribed}
+            disabled={sending}
+            onChange={(event) => setIncludeUnsubscribed(event.target.checked)}
+          />
+          Also send to players who have unsubscribed
+        </label>
+
+        <div className="row">
+          <button
+            className="primary"
+            disabled={sending || emailSubject.trim() === '' || emailBody.trim() === ''}
+            onClick={() => void sendBroadcast()}
+          >
+            {sending ? 'Sending …' : 'Send email'}
+          </button>
+        </div>
       </section>
     </>
   )

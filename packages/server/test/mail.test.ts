@@ -33,6 +33,30 @@ describe('Resend mailer', () => {
     })
   })
 
+  it('forwards the optional html body to Resend when one is set', async () => {
+    let captured: RequestInit | undefined
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      captured = init ?? {}
+      return new Response('{"id":"test"}', { status: 200 })
+    }
+
+    const mailer = createResendMailer({ apiKey: 're_test', from: 'a@b.c', fetchImpl })
+    await mailer.send({
+      to: 'to@example.com',
+      subject: 'Hi',
+      text: '**Bold**',
+      html: '<p><strong>Bold</strong></p>',
+    })
+
+    expect(JSON.parse(String(captured?.body))).toEqual({
+      from: 'a@b.c',
+      to: 'to@example.com',
+      subject: 'Hi',
+      text: '**Bold**',
+      html: '<p><strong>Bold</strong></p>',
+    })
+  })
+
   it('throws when Resend rejects the mail', async () => {
     const fetchImpl: typeof fetch = async () => new Response('bad key', { status: 401 })
     const mailer = createResendMailer({ apiKey: 're_test', from: 'a@b.c', fetchImpl })

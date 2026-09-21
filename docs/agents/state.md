@@ -6,14 +6,14 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-20_
+_Last updated: 2026-09-21_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 418 engine, 162 server, 65 web |
+| `pnpm -r test` | passing - 418 engine, 170 server, 69 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
 
@@ -23,6 +23,18 @@ _Last updated: 2026-09-20_
   logs `Turn <n> - <username> revealed <phase> phase`, and requires a new
   reveal after editing a published phase. Branch
   `fix/turn-order-reveal-followup`, review-approved and pushed; awaiting merge.
+- **Admin email broadcast (issue #92).** The old `GameAction.sendMailToAll` —
+  unreachable in Java, its `PUT /admin/mail` caller commented out — is back as
+  `POST /api/admin/email/broadcast` (admin only). The admin page gains a "Send
+  email to all players" panel: an editable subject (default "Message from cash
+  at playciv.app"), the WYSIWYG Markdown editor whose body `marked` renders to
+  HTML (the Markdown source stays as the plain-text fallback), and a checkbox to
+  also mail unsubscribed players. Each mail keeps the `Hello <username>`
+  greeting and the unsubscribe link; one send failure is logged and skipped. The
+  untrusted-HTML and in-request-volume caveats are in `decisions.md` and
+  `README.md`. 8 new server tests (the broadcast plus the mailer's HTML field)
+  and 4 web tests. Review-approved on branch `feat/issue-92-admin-email-broadcast`;
+  PR to open.
 
 - **Cloudflare observability config.** `wrangler.jsonc` now persists the
   dashboard-supplied invocation-log and trace settings; Wrangler dry-run

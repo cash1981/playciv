@@ -11,6 +11,8 @@ export interface OutgoingEmail {
   readonly to: string
   readonly subject: string
   readonly text: string
+  /** Optional HTML alternative; set by the admin broadcast (issue #92). */
+  readonly html?: string
 }
 
 export interface Mailer {
@@ -69,6 +71,9 @@ export function createResendMailer(options: ResendMailerOptions): Mailer {
           to: email.to,
           subject: email.subject,
           text: email.text,
+          // Resend treats an absent `html` as a plain-text mail; only add it
+          // when a caller supplied one, so the existing mails are unchanged.
+          ...(email.html !== undefined ? { html: email.html } : {}),
         }),
         signal: AbortSignal.timeout(timeoutMs),
       })
