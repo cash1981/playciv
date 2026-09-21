@@ -1335,3 +1335,28 @@ beside the PayPal one issue #77 restored.
 - The PayPal form is untouched — same endpoint, same `cmd` and encrypted
   `encrypted` values as issue #77.
 
+
+## 2026-09-21 - A Great Person and the civ card can be given away
+
+**Decision.** `tradeToPlayer` moves Great Person and Civ cards, not only the old
+`Tradable` set (Culture I/II/III, Hut, Village). A new `isGiftable` predicate in
+`item.ts` decides what the hand's "Give" control may move; loot still uses
+`isTradable`.
+
+**Why.** The human reported it directly: "you cannot gift a greatperson or your
+civ starting tile. You can only gift hut, village and culture cards." The old
+Java `Tradable` marker interface, implemented by Culture I/II/III, Hut and
+Village, was the only gate; `PlayerAction.tradeToPlayer` filtered on it, so a
+Great Person or Civ card reached the reducer and came back `ITEM_NOT_FOUND` even
+though the client draws the Give control on every card. No old-system rule
+covers this, so it is a deliberate extension requested by the human, recorded
+here and in `README.md`.
+
+**Consequences.**
+- `isTradable` is unchanged. `loot` still refuses a Great Person or a Civ card,
+  so a Great Person can be given but not looted. A test pins that line.
+- The other kinds (units, wonders, tiles, city-states, techs, social policies)
+  stay non-giftable. Only the two kinds the human named were added; widening
+  further is a separate decision.
+- The trade log, `ownerId` update and the two log entries are unchanged: the
+  change is only which items are eligible.

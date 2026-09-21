@@ -465,7 +465,7 @@ describe('trade', () => {
     expect(state.log.at(-1)?.publicLog).toBe('')
   })
 
-  it('items that are not Tradable cannot be traded', () => {
+  it('items outside the giftable set cannot be traded', () => {
     const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'ANCIENT_WONDERS' }))
     const wonder = handOf(state, CASH1981)[0]
     if (wonder === undefined) throw new Error('no wonder')
@@ -479,6 +479,46 @@ describe('trade', () => {
       }),
     )
     expect(error.kind).toBe('ITEM_NOT_FOUND')
+  })
+
+  it('gives a great person to another player', () => {
+    // Deliberate extension past the old `Tradable` marker; see the task brief.
+    let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'GREAT_PERSON' }))
+    const card = handOf(state, CASH1981).find((item) => item.kind === 'greatperson')
+    if (card === undefined) throw new Error('no great person')
+
+    state = unwrap(
+      tradeToPlayer(state, {
+        playerId: CASH1981,
+        targetPlayerId: ITCHI,
+        sheetName: 'GREAT_PERSON',
+        itemNumber: card.itemNumber,
+        name: itemName(card),
+      }),
+    )
+
+    expect(handOf(state, CASH1981).some((item) => item.id === card.id)).toBe(false)
+    expect(handOf(state, ITCHI).some((item) => item.id === card.id)).toBe(true)
+    expect(handOf(state, ITCHI).find((item) => item.id === card.id)?.ownerId).toBe(ITCHI)
+  })
+
+  it('gives the civ card to another player', () => {
+    let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CIV' }))
+    const card = handOf(state, CASH1981).find((item) => item.kind === 'civ')
+    if (card === undefined) throw new Error('no civ card')
+
+    state = unwrap(
+      tradeToPlayer(state, {
+        playerId: CASH1981,
+        targetPlayerId: ITCHI,
+        sheetName: 'CIV',
+        itemNumber: card.itemNumber,
+        name: itemName(card),
+      }),
+    )
+
+    expect(handOf(state, CASH1981).some((item) => item.id === card.id)).toBe(false)
+    expect(handOf(state, ITCHI).some((item) => item.id === card.id)).toBe(true)
   })
 })
 

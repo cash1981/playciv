@@ -21,6 +21,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Claimed paths:**
   - `packages/engine/src/item.ts` (`isGiftable` only)
   - `packages/engine/src/actions/player.ts` (`tradeToPlayer` filter and comment only)
+  - `packages/engine/package.json` (`@types/node` devDependency only)
+  - `pnpm-lock.yaml`
   - `packages/engine/test/player-action.test.ts` (trade tests only)
   - `packages/engine/test/draw-action.test.ts` (a loot regression test only)
   - `docs/agents/tasks/gift-greatperson-civ.md`

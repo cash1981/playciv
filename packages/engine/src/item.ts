@@ -207,6 +207,19 @@ export function isTradable(item: Item): boolean {
   return TRADABLE_KINDS.has(item.kind)
 }
 
+/**
+ * What `tradeToPlayer` — the hand's "Give" control — may move. The old Java
+ * `Tradable` marker is the base, plus Great Person and Civ, which the human
+ * asked to be giftable. That is a deliberate extension past the old system
+ * (see `decisions.md`); `loot` deliberately keeps using `isTradable`, because
+ * looting a Great Person or a Civ was never asked for.
+ */
+const GIFTABLE_KINDS = new Set<ItemKind>([...TRADABLE_KINDS, 'greatperson', 'civ'])
+
+export function isGiftable(item: Item): boolean {
+  return GIFTABLE_KINDS.has(item.kind)
+}
+
 // ---------------------------------------------------------------------------
 // Names and types
 // ---------------------------------------------------------------------------

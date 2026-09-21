@@ -561,6 +561,15 @@ one provider call per recipient, so a very large account list could hit the
 Worker's subrequest/CPU limits — a known limitation, not fixed here. See
 `docs/agents/decisions.md`.
 
+**A Great Person and the civ card can be given away.** The hand's "Give"
+control ran through Java's `Tradable` marker interface, which only Culture
+I/II/III, Hut and Village implement, so giving away a Great Person or a Civ card
+failed with `ITEM_NOT_FOUND` even though the control was drawn on those cards.
+`tradeToPlayer` now allows those two extra kinds (`isGiftable`). Every other
+kind stays non-giftable, and looting is untouched: it still uses `isTradable`,
+so a Great Person can be given but not looted. This is an extension past the old
+system, requested by the human; see `docs/agents/decisions.md`.
+
 ## Deferred
 
 - **Card artwork.** The hand is shown as text. `itemImage()` in the engine

@@ -13,12 +13,21 @@ _Last updated: 2026-09-21_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 429 engine, 173 server, 72 web |
+| `pnpm -r test` | passing - 432 engine, 173 server, 73 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
 
 ## Done
 
+- **Gift a Great Person or the civ card.** The hand's "Give" control was gated
+  by Java's `Tradable` marker (Culture I/II/III, Hut, Village), so giving away a
+  Great Person or a Civ card failed with `ITEM_NOT_FOUND` even though the control
+  is drawn on every card. `tradeToPlayer` now uses a new `isGiftable` predicate
+  adding those two kinds — a deliberate extension past the old system, requested
+  by the human. Loot is untouched and still refuses both, pinned by a test. Also
+  declared `@types/node` on `packages/engine`, whose tests import
+  `node:fs`/`node:url`; without it `pnpm -r typecheck` fails on `main` itself.
+  Branch `feat/gift-greatperson-civ`; 3 new engine tests.
 - **Buy Me a Coffee in the footer.** The site-wide footer now shows a Buy Me a
   Coffee button beside the PayPal donate button, from the exact markup the owner
   supplied (`buymeacoffee.com/cash1981`). A plain image link, not the provider's

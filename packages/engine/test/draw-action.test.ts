@@ -390,6 +390,18 @@ describe('loot', () => {
     expect(unwrapErr(result).kind).toBe('ITEM_NOT_LOOTABLE')
   })
 
+  it('still refuses to loot a Great Person, which is giftable but not lootable', () => {
+    // `isGiftable` lets the Give control move a Great Person, but loot keeps
+    // using `isTradable`; this pins that line.
+    const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'GREAT_PERSON' }))
+    const result = loot(state, {
+      playerId: CASH1981,
+      targetPlayerId: KARANDRAS1,
+      sheetNames: new Set(['GREAT_PERSON']),
+    })
+    expect(unwrapErr(result).kind).toBe('ITEM_NOT_LOOTABLE')
+  })
+
   it('treats Culture I, II and III as one random Culture Card pool', () => {
     // Java: `SheetName.CULTURE_CARD` is the EnumSet CULTURE_1/2/3 passed by
     // `DrawResource.loot` for the old client's single Culture Card button.
