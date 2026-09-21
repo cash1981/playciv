@@ -12,6 +12,25 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### gift-greatperson-civ
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `feat/gift-greatperson-civ`
+- **Brief:** `docs/agents/tasks/gift-greatperson-civ.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/item.ts` (`isGiftable` only)
+  - `packages/engine/src/actions/player.ts` (`tradeToPlayer` filter and comment only)
+  - `packages/engine/test/player-action.test.ts` (trade tests only)
+  - `packages/engine/test/draw-action.test.ts` (a loot regression test only)
+  - `docs/agents/tasks/gift-greatperson-civ.md`
+  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
+- **Notes:** The human reported that the hand's Give control fails for Great
+  Person and Civ cards. `tradeToPlayer` filters on the old Java `Tradable`
+  marker (Culture I/II/III, Hut, Village), so this adds those two kinds as a
+  deliberate extension. Loot stays restricted. Great Person and Civ only; other
+  kinds are out on purpose.
+
 ### buymeacoffee-footer
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
