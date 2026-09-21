@@ -20,8 +20,8 @@ import {
 import { unwrap, unwrapErr } from '../src/result.js'
 import { migrateGameState } from '../src/migrate.js'
 import { findPlayer } from '../src/state.js'
-import type { TurnPhase } from '../src/turn.js'
-import { TURN_PHASES } from '../src/turn.js'
+import type { PlayerTurn, TurnPhase } from '../src/turn.js'
+import { TURN_PHASES, migratePlayerTurn } from '../src/turn.js'
 
 import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -79,7 +79,7 @@ describe('updateTurn', () => {
     })
   })
 
-  it('a changed order goes into the history', () => {
+  it('a changed order does not create a history version', () => {
     let state = firstCivGame()
     state = unwrap(
       updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'first' }),
@@ -90,18 +90,65 @@ describe('updateTurn', () => {
 
     const turn = playersTurns(state, CASH1981)[0]
     expect(turn?.orders.SOT).toBe('second')
-    expect(turn?.history.SOT).toEqual(['first', 'second'])
+    // Only a reveal records a version; saving never does.
+    expect(turn?.history.SOT).toEqual([])
   })
 
-  it('the same order twice makes only one history entry', () => {
-    // Java used a Set<String> for the history
+  it('revealing a phase appends exactly one version with its timestamp', () => {
     let state = firstCivGame()
-    for (let i = 0; i < 3; i++) {
-      state = unwrap(
-        updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'same' }),
-      )
-    }
-    expect(playersTurns(state, CASH1981)[0]?.history.SOT).toEqual(['same'])
+    state = unwrap(
+      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'first' }),
+    )
+    state = unwrap(
+      revealTurnOrder(state, {
+        playerId: CASH1981,
+        turnNumber: 1,
+        phase: 'SOT',
+        at: '2026-09-21T10:00:00.000Z',
+      }),
+    )
+
+    expect(playersTurns(state, CASH1981)[0]?.history.SOT).toEqual([
+      { markdown: 'first', at: '2026-09-21T10:00:00.000Z' },
+    ])
+  })
+
+  it('keeps every revealed version in order across edits and reveals', () => {
+    let state = firstCivGame()
+    state = unwrap(
+      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'first' }),
+    )
+    state = unwrap(
+      revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', at: 't1' }),
+    )
+    state = unwrap(
+      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'second' }),
+    )
+    state = unwrap(
+      revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', at: 't2' }),
+    )
+
+    expect(playersTurns(state, CASH1981)[0]?.history.SOT).toEqual([
+      { markdown: 'first', at: 't1' },
+      { markdown: 'second', at: 't2' },
+    ])
+  })
+
+  it('revealing an already revealed phase adds no duplicate version', () => {
+    let state = firstCivGame()
+    state = unwrap(
+      updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'first' }),
+    )
+    state = unwrap(
+      revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', at: 't1' }),
+    )
+    state = unwrap(
+      revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', at: 't2' }),
+    )
+
+    expect(playersTurns(state, CASH1981)[0]?.history.SOT).toEqual([
+      { markdown: 'first', at: 't1' },
+    ])
   })
 
   it('several turn numbers give several PlayerTurns, sorted', () => {
@@ -130,7 +177,7 @@ describe('updateTurn', () => {
     let state = firstCivGame()
     state = unwrap(updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'secret' }))
     state = unwrap(updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'TRADE', order: 'public' }))
-    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'TRADE' }))
+    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'TRADE', at: 't1' }))
 
     expect(state.publicTurns['1cash1981']?.orders).toMatchObject({ SOT: '', TRADE: 'public' })
     expect(playersTurns(state, CASH1981)[0]?.orders).toMatchObject({ SOT: 'secret', TRADE: 'public' })
@@ -140,7 +187,7 @@ describe('updateTurn', () => {
       updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'TRADE', order: 'new public' }),
     )
     expect(state.publicTurns['1cash1981']?.orders.TRADE).toBe('')
-    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'TRADE' }))
+    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'TRADE', at: 't2' }))
     expect(state.publicTurns['1cash1981']?.orders.TRADE).toBe('new public')
   })
 
@@ -152,7 +199,7 @@ describe('updateTurn', () => {
       order: 'secret',
     }))
 
-    expect(unwrapErr(revealTurnOrder(state, { playerId: KARANDRAS1, turnNumber: 1, phase: 'SOT' }))).toEqual({
+    expect(unwrapErr(revealTurnOrder(state, { playerId: KARANDRAS1, turnNumber: 1, phase: 'SOT', at: 't1' }))).toEqual({
       kind: 'TURN_NOT_FOUND',
       turnNumber: 1,
     })
@@ -185,6 +232,39 @@ describe('updateTurn', () => {
     expect(migrated.players[0]?.playerTurns[0]?.revealed.SOT).toBe(true)
     expect(allPublicTurns(migrated)[0]?.orders.SOT).toBe('old order')
   })
+
+  it('migration drops legacy string histories and is idempotent', () => {
+    const state = unwrap(
+      updateTurn(firstCivGame(), {
+        playerId: CASH1981,
+        turnNumber: 1,
+        phase: 'SOT',
+        order: 'current',
+      }),
+    )
+    const stored = state.publicTurns['1cash1981'] as PlayerTurn
+    // Java's save-based history: bare strings, including the current order.
+    const legacy = {
+      ...stored,
+      history: { ...stored.history, SOT: ['saved first', 'current'] },
+    } as unknown as PlayerTurn
+
+    const migratedTurn = migratePlayerTurn(legacy)
+    expect(migratedTurn.history.SOT).toEqual([])
+    // Running it again changes nothing.
+    expect(migratePlayerTurn(migratedTurn).history.SOT).toEqual([])
+
+    // A real revealed version survives untouched.
+    const withVersion = {
+      ...migratedTurn,
+      history: { ...migratedTurn.history, SOT: [{ markdown: 'kept', at: 't1' }] },
+    }
+    expect(migratePlayerTurn(withVersion).history.SOT).toEqual([{ markdown: 'kept', at: 't1' }])
+
+    // A save written before `history` existed is tolerated.
+    const withoutHistory = { ...stored, history: undefined } as unknown as PlayerTurn
+    expect(migratePlayerTurn(withoutHistory).history.SOT).toEqual([])
+  })
 })
 
 describe('allPublicTurns', () => {
@@ -207,19 +287,23 @@ describe('allPublicTurns', () => {
     ])
   })
 
-  it('strips the current order from the history without changing the state', () => {
+  it('shows every revealed version without changing the stored state', () => {
     let state = firstCivGame()
     state = unwrap(
       updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'first' }),
     )
+    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', at: 't1' }))
     state = unwrap(
       updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'second' }),
     )
-    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT' }))
+    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', at: 't2' }))
 
-    expect(allPublicTurns(state)[0]?.history.SOT).toEqual(['first'])
-    // Java mutated the stored objects here, so a read corrupted data
-    expect(playersTurns(state, CASH1981)[0]?.history.SOT).toEqual(['first', 'second'])
+    expect(allPublicTurns(state)[0]?.history.SOT).toEqual([
+      { markdown: 'first', at: 't1' },
+      { markdown: 'second', at: 't2' },
+    ])
+    // The projection is pure: it must not touch the stored turn.
+    expect(playersTurns(state, CASH1981)[0]?.history.SOT).toHaveLength(2)
   })
 })
 
@@ -279,5 +363,50 @@ describe('hidden information', () => {
     )
     expect(JSON.stringify(state.publicTurns)).not.toContain('x')
     expect(JSON.stringify(state.publicTurns)).not.toContain('gamenote')
+  })
+
+  it('an unrevealed phase never reaches publicTurns, even as a version', () => {
+    const state = unwrap(
+      updateTurn(firstCivGame(), {
+        playerId: CASH1981,
+        turnNumber: 1,
+        phase: 'SOT',
+        order: 'secret draft',
+      }),
+    )
+
+    expect(JSON.stringify(state.publicTurns)).not.toContain('secret draft')
+    expect(allPublicTurns(state)[0]?.history.SOT).toEqual([])
+  })
+
+  it('a revealed version stays public after the phase is edited and made private', () => {
+    let state = firstCivGame()
+    state = unwrap(
+      updateTurn(state, {
+        playerId: CASH1981,
+        turnNumber: 1,
+        phase: 'SOT',
+        order: 'published plan',
+      }),
+    )
+    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', at: 't1' }))
+    expect(JSON.stringify(state.publicTurns)).toContain('published plan')
+
+    // Editing makes the phase private again, but the revealed version is public
+    // information and must survive.
+    state = unwrap(
+      updateTurn(state, {
+        playerId: CASH1981,
+        turnNumber: 1,
+        phase: 'SOT',
+        order: 'new private draft',
+      }),
+    )
+
+    expect(state.publicTurns['1cash1981']?.orders.SOT).toBe('')
+    expect(state.publicTurns['1cash1981']?.history.SOT).toEqual([
+      { markdown: 'published plan', at: 't1' },
+    ])
+    expect(JSON.stringify(state.publicTurns)).not.toContain('new private draft')
   })
 })

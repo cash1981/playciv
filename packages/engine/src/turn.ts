@@ -1,8 +1,9 @@
 /**
  * Port of `no.asgari.civilization.server.model.PlayerTurn`.
  *
- * A turn has five phases. Each phase holds a current order and a history of
- * earlier orders, so the players can see what changed.
+ * A turn has five phases. Each phase holds the current order and the history
+ * of the versions its owner has *revealed*, so the players can see what was
+ * published before. Saving never creates a version.
  *
  * `TurnKey.java` is not ported. It was an attempt at a composite key for
  * `publicTurns`, but Java could not get Jackson to serialise the map and ended
@@ -21,6 +22,13 @@ export const TURN_PHASE_LABEL: Readonly<Record<TurnPhase, string>> = {
   RESEARCH: 'research',
 }
 
+/** One version of a phase its owner has published, and when they did it. */
+export interface TurnOrderVersion {
+  readonly markdown: string
+  /** ISO timestamp supplied by the caller; the engine stays pure. */
+  readonly at: string
+}
+
 export interface PlayerTurn {
   readonly turnNumber: number
   readonly username: string
@@ -30,10 +38,11 @@ export interface PlayerTurn {
   /** Each phase is published independently by the player who owns the turn. */
   readonly revealed: Readonly<Record<TurnPhase, boolean>>
   /**
-   * Java used a `Set<String>` per phase, so without order. Insertion order is
-   * kept here, since a history without order is worth little.
+   * Every version the owner has revealed for the phase, oldest first. Java kept
+   * a `Set<String>` of *saved* orders here; that save-based history is replaced
+   * by the reveal history, because only a reveal is public information.
    */
-  readonly history: Readonly<Record<TurnPhase, readonly string[]>>
+  readonly history: Readonly<Record<TurnPhase, readonly TurnOrderVersion[]>>
 }
 
 const emptyOrders = (): Record<TurnPhase, string> => ({
@@ -44,7 +53,7 @@ const emptyOrders = (): Record<TurnPhase, string> => ({
   RESEARCH: '',
 })
 
-const emptyHistory = (): Record<TurnPhase, readonly string[]> => ({
+const emptyHistory = (): Record<TurnPhase, readonly TurnOrderVersion[]> => ({
   SOT: [],
   TRADE: [],
   CM: [],
@@ -92,44 +101,72 @@ export function compareTurns(a: PlayerTurn, b: PlayerTurn): number {
   return a.turnNumber - b.turnNumber || compareJavaStrings(a.username, b.username)
 }
 
-/** Sets the order for one phase and adds it to the history. */
+/**
+ * Sets the order for one phase.
+ *
+ * Saving never creates a history version — only `revealTurnOrder` does — so
+ * this no longer touches `history`.
+ */
 export function withOrder(turn: PlayerTurn, phase: TurnPhase, order: string): PlayerTurn {
-  const existing = turn.history[phase]
   return {
     ...turn,
     orders: { ...turn.orders, [phase]: order },
     // A changed order must be explicitly published again.
     revealed: { ...turn.revealed, [phase]: false },
-    history: {
-      ...turn.history,
-      // Java used a Set, so the same order twice made only one entry
-      [phase]: existing.includes(order) ? existing : [...existing, order],
-    },
   }
 }
 
-/** Backfills the phase flags on games saved before turn-order reveal existed. */
+const isVersion = (entry: unknown): entry is TurnOrderVersion =>
+  typeof entry === 'object' &&
+  entry !== null &&
+  typeof (entry as { readonly markdown?: unknown }).markdown === 'string' &&
+  typeof (entry as { readonly at?: unknown }).at === 'string'
+
+/**
+ * Backfills the phase flags on games saved before turn-order reveal existed and
+ * normalises `history`.
+ *
+ * Java's history stored every saved order (including the current one) as a bare
+ * string. Those cannot be read back as reveal versions — they were never
+ * published as a version and each contained the current order — so legacy
+ * string entries are dropped. Entries already shaped `{ markdown, at }` are
+ * kept, which makes the migration idempotent. A missing or `undefined` history
+ * becomes empty lists.
+ */
 export function migratePlayerTurn(turn: PlayerTurn): PlayerTurn {
+  // Older saves carry bare strings here, which the declared type does not
+  // allow; read it as unknown and filter.
+  const legacyHistory = (turn as { readonly history?: Partial<Record<TurnPhase, readonly unknown[]>> })
+    .history
+  const versionsFor = (phase: TurnPhase): readonly TurnOrderVersion[] =>
+    (legacyHistory?.[phase] ?? []).filter(isVersion)
   return {
     ...turn,
     revealed: Object.fromEntries(
       TURN_PHASES.map((phase) => [phase, turn.revealed?.[phase] ?? true]),
     ) as Record<TurnPhase, boolean>,
+    history: {
+      SOT: versionsFor('SOT'),
+      TRADE: versionsFor('TRADE'),
+      CM: versionsFor('CM'),
+      MOVEMENT: versionsFor('MOVEMENT'),
+      RESEARCH: versionsFor('RESEARCH'),
+    },
   }
 }
 
-/** Masks unpublished phases before a turn is sent to another player. */
+/** Masks the current text of unpublished phases before a turn is sent out. */
 export function publicTurn(turn: PlayerTurn): PlayerTurn {
   const orders = { ...turn.orders }
-  const history = { ...turn.history }
   for (const phase of TURN_PHASES) {
     // Missing flags are treated as public for callers holding an old state
     // object that has not passed through migration yet.
     if (turn.revealed?.[phase] !== false) continue
     orders[phase] = ''
-    history[phase] = []
   }
-  return { ...turn, orders, history }
+  // A previously revealed version is public information and stays in
+  // `history`, even after the phase is edited and made private again.
+  return { ...turn, orders }
 }
 
 /**
@@ -139,19 +176,6 @@ export function publicTurn(turn: PlayerTurn): PlayerTurn {
  */
 export function publicTurnKey(turn: PlayerTurn): string {
   return `${turn.turnNumber}${turn.username}`
-}
-
-/**
- * Java: `TurnAction.getAllPublicTurns` stripped the current order from the
- * history before returning — but did it by mutating the stored objects, so a
- * read corrupted data. Here it is a pure projection.
- */
-export function withoutCurrentOrderInHistory(turn: PlayerTurn): PlayerTurn {
-  const history = { ...turn.history }
-  for (const phase of TURN_PHASES) {
-    history[phase] = turn.history[phase].filter((order) => order !== turn.orders[phase])
-  }
-  return { ...turn, history }
 }
 
 /** Java: `PlayerTurn.endTurn()` bumped the turn number. */
