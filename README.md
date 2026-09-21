@@ -407,7 +407,9 @@ owner clicks Reveal, then publishes only that phase; existing saved turns are
 migrated as already public. Each phase also keeps the history of the versions
 its owner has revealed — oldest first, greyed and struck through above the
 current editor — so editing after a reveal does not erase what was published
-before.
+before. The revealed versions and the editor each keep a bounded,
+independently scrollable height, so a long order cannot make the section
+enormous.
 
 **The password reset link is a signed, expiring token.** Java emailed
 `/api/auth/verify/{playerId}` and stored the pending password in plaintext on

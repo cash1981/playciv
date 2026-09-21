@@ -17,8 +17,13 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
 - **Branch:** `feat/issue-125-turn-order-reveal-history`
 - **Brief:** `docs/agents/tasks/issue-125-turn-order-reveal-history.md`
-- **Status:** in progress — follow-up on the open PR #126 after the human's
-  review: fixed-height scroll areas for the revealed history and the editor.
+- **Status:** review-approved — PR #126 open, awaiting the human's merge. Claim
+  kept until merged. The first pass was approved in two read-only rounds. The
+  fixed-height scroll follow-up (from the human's review) was approved on
+  2026-09-22 with two nits left deliberately: the jsdom test guards the
+  `data-turn-phase` hook, not the CSS effect, and the history wraps long lines
+  so its horizontal scrollbar is effectively unused. Both are the human's to
+  accept in the browser.
 - **Claimed paths:**
   - `packages/web/src/views/TurnPanel.tsx`
   - `packages/web/src/views/TurnPanel.css`

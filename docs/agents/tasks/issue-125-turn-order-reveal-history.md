@@ -147,3 +147,14 @@ second field — was put to the human, who chose replace.
 - The `rules-checker` found no undocumented divergence from `old-civ-rest`/
   `old-civ-web`; the only change to old behaviour is the human-approved
   replacement of the save-based history.
+- Follow-up, from the human's review of PR #126: the section height is now
+  bounded. The revealed history and the editor each scroll on their own; SOT,
+  CM and MOVEMENT stop at about six lines (history `8rem`, editor `9rem`), while
+  TRADE and RESEARCH keep their default size. The per-phase hook is
+  `data-turn-phase`. The history wraps long lines instead of scrolling
+  horizontally — a deliberate choice (prose reads better wrapped and nothing is
+  clipped); the editor still scrolls horizontally for a wide code line or URL.
+  The follow-up's review left two nits on purpose: the jsdom test can only guard
+  the `data-turn-phase` hook, not the CSS effect, and the history's wrapping
+  means its horizontal scrollbar is effectively unused. Both are the human's to
+  accept in the browser.
