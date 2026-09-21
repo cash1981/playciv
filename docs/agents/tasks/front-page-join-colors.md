@@ -3,7 +3,7 @@
 - **Slug:** `front-page-join-colors`
 - **Branch:** `feat/front-page-join-colors`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Status:** review-approved (reviewer `deepseek/deepseek-v4-pro`), PR to open
+- **Status:** review-approved (reviewer `deepseek/deepseek-v4-pro`), PR #123 open
 
 ## Goal
 

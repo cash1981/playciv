@@ -29,7 +29,7 @@ _Last updated: 2026-09-21_
   against `--panel-2`. `Full` stays grey; no layout or behaviour change. New
   `GameList` test asserts the variant and that `Full` lacks it. Branch
   `feat/front-page-join-colors`; review-approved (reviewer
-  `deepseek/deepseek-v4-pro`), PR to open. 1 new web test (87 total). No browser
+  `deepseek/deepseek-v4-pro`), PR #123 open. 1 new web test (87 total). No browser
   was connected, so the light/dark visual pass is left to the human; see
   `decisions.md`.
 - **Only Tradable cards can be given away.** The hand's "Give" control was drawn
