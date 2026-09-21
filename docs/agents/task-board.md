@@ -17,7 +17,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `feat/culture-track-artwork`
 - **Brief:** `docs/agents/tasks/culture-track-artwork.md`
-- **Status:** in progress
+- **Status:** review-approved — implemented and checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/engine/src/board.ts`
   - `packages/engine/data/board-assets.json`

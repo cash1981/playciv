@@ -19,6 +19,13 @@ _Last updated: 2026-09-21_
 
 ## Done
 
+- **Culture track artwork.** The board shows the correct track,
+  `Moderator/map/culturetrack.png` (2572 × 216), instead of the wrong
+  `DoC/PBF Modding Material/culture track.png`. It has 20 spaces in three groups
+  of 7, 7 and 6 rather than 27, so the cell geometry, START and Culture Victory
+  fractions, tests and docs were re-measured, and `CULTURE_TRACK_SCALE` drops
+  from 1.7 to 1.3 to keep the band's 164 px height. The track stays a marker
+  only. Branch `feat/culture-track-artwork`; review-approved, PR to open.
 - **Movement as an expression (issue #102).** The Player status board's
   Movement column now accepts the table shorthand `3+1` for natural religion's
   +1: `PlayerStats.mvmt` is literal text (a base plus zero or more `+bonus`
