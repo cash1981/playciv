@@ -295,6 +295,7 @@ describe('setPlayerStat', () => {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
         stat: 'coins',
+        // @ts-expect-error — a Movement expression is not a valid coins value
         value: '3+1',
       }),
     )

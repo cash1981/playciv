@@ -36,7 +36,8 @@ type MaybeOlderPlayerhand = Omit<Playerhand, 'stats' | 'government'> &
  */
 const normalizeStats = (stats: Partial<PlayerStats> | undefined): PlayerStats => {
   const merged = { ...DEFAULT_PLAYER_STATS, ...stats }
-  return { ...merged, mvmt: String(merged.mvmt) }
+  // `?? default` guards a hand-edited or older save that stored neither.
+  return { ...merged, mvmt: String(merged.mvmt ?? DEFAULT_PLAYER_STATS.mvmt) }
 }
 
 const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({

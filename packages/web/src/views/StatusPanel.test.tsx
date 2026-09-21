@@ -114,6 +114,8 @@ describe('StatusPanel Movement (issue #102)', () => {
     await waitFor(() =>
       expect(setStat).toHaveBeenCalledWith('game-1', 'player-me', 'mvmt', '3+1'),
     )
+    // The cell keeps showing the expression it was given, not a reverted value.
+    expect((movement as HTMLInputElement).value).toBe('3+1')
   })
 
   it('reverts an invalid Movement value without saving', () => {

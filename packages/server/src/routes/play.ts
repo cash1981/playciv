@@ -493,7 +493,12 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
           : undefined
         : optionalNumber(body, 'value')
     if (value === undefined) {
-      return sendError(c, 400, 'BAD_REQUEST', 'value must be a number or a movement expression')
+      return sendError(
+        c,
+        400,
+        'BAD_REQUEST',
+        stat === 'mvmt' ? 'value must be a movement expression' : 'value must be a number',
+      )
     }
     return applyToGame(context, c, gameId, (state) =>
       setPlayerStat(state, {
