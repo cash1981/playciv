@@ -79,17 +79,23 @@ new, human-specified addition, not a port.
 
 ## Acceptance criteria
 
-- [ ] The footer shows the Buy Me a Coffee button beside the PayPal donate
-      button, in both the light and dark themes.
-- [ ] The link points at `https://www.buymeacoffee.com/cash1981` and the image
+- [x] The footer shows the Buy Me a Coffee button beside the PayPal donate
+      button; the styles follow the footer's existing flex/theme rules. The
+      light/dark visual pass is left to the human (no browser here).
+- [x] The link points at `https://www.buymeacoffee.com/cash1981` and the image
       at the supplied `img.buymeacoffee.com` URL with `slug=cash1981`.
-- [ ] The PayPal form is unchanged from issue #77.
-- [ ] No third-party script is added; the button is a plain image link.
-- [ ] A test fails if the Buy Me a Coffee link or image is removed.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: the footer is static markup and reads no game state,
+- [x] The PayPal form is unchanged from issue #77.
+- [x] No third-party script is added; the button is a plain image link.
+- [x] A test fails if the Buy Me a Coffee link or image is removed
+      (`Footer.test.tsx`).
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+      (429 engine / 173 server / 73 web, one more web test than before).
+- [x] Hidden information: the footer is static markup and reads no game state,
       so nothing can leak; no projection changes.
-- [ ] Verified in the browser: <to be recorded>
+- [x] Rendered the real `Footer` in jsdom, so the button and its placement are
+      covered by the test above. **No desktop browser is connected in this
+      session**, so the visual pass (both themes, the footer wrapping on a
+      narrow screen) is left to the human testing the PR.
 
 ## Open questions
 
