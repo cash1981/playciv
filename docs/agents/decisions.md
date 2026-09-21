@@ -1272,3 +1272,38 @@ old-system behaviour to contradict; the human is the authority for it.
   not step numbers, and history entries already written are unchanged.
 - The cell spans in `board.ts` are in the artwork's own pixels, found by the
   same dark-divider measurement as before.
+
+## Starting tile orientation
+
+**Decision.** When a civilization is revealed, its starting tile is laid in the
+player's corner turned so the printed arrow points at the middle of the board.
+On the full board player 1 is north-west, 2 north-east, 3 south-east and 4
+south-west. On the two-player 16 × 8 board the two players sit in opposite
+corners — player 1 north-west (A1–D4), player 2 south-east (M5–P8) — and because
+the board is long and short their arrows run along the long axis at each other:
+the north-west tile points east (90°) and the south-east tile points west (270°).
+
+**Why.** The human reported a four-player game where every starting tile faced
+outwards, and then a two-player game where both tiles sat along the top. The
+placement is new behaviour — neither `old-civ-rest` nor `old-civ-web` has a
+board — so there is no old-system rule to check it against and the human is the
+authority, exactly as the culture track is. The commit that introduced it
+(`3092d92`) already stated the intent, "pilen inn mot midten"; the code's
+assumption about the artwork was what was wrong. The human picked the final
+orientation from two rendered candidates and verified the result in the browser,
+and waived the review gate.
+
+**Consequences.**
+- The artwork is not touched. All sixteen starting tiles have the arrow on the
+  bottom edge pointing up, so a single per-corner table fixes every
+  civilization. Only `startingCorner` and its test change.
+- The per-corner rotations are `[180, 180, 0, 0]` for
+  `[north-west, north-east, south-east, south-west]` on a full board, and
+  `[90, 270]` for `[north-west, south-east]` on the two-player board.
+- `startingCorner` reads the player count off the board, not from a parameter:
+  two block rows means the two-player board, and the corner list becomes
+  north-west then south-east.
+- Tiles already placed in saved games keep the rotation stored on the piece.
+  Nothing is migrated: a stored rotation is player-owned state, and the affected
+  games are pre-release and can be turned with the existing rotate control.
+

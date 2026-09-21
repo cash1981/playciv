@@ -75,12 +75,13 @@ describe('startingCorner', () => {
   const top = mapTop(board)
 
   it('gives the four corners with the arrow pointing inwards', () => {
-    // The raw image has the arrow pointing down and the capital icon in the
-    // top left, so turning clockwise moves both around the edge together
-    expect(startingCorner(board, 1)).toEqual({ x: 0, y: top, rotation: 0 })
-    expect(startingCorner(board, 2)).toEqual({ x: 1128, y: top, rotation: 90 })
-    expect(startingCorner(board, 3)).toEqual({ x: 1128, y: top + 1128, rotation: 180 })
-    expect(startingCorner(board, 4)).toEqual({ x: 0, y: top + 1128, rotation: 270 })
+    // Every raw image has the arrow on the bottom edge pointing up, so the top
+    // two corners turn a half step to point it down at the middle and the
+    // bottom two stay put to point it up
+    expect(startingCorner(board, 1)).toEqual({ x: 0, y: top, rotation: 180 })
+    expect(startingCorner(board, 2)).toEqual({ x: 1128, y: top, rotation: 180 })
+    expect(startingCorner(board, 3)).toEqual({ x: 1128, y: top + 1128, rotation: 0 })
+    expect(startingCorner(board, 4)).toEqual({ x: 0, y: top + 1128, rotation: 0 })
   })
 
   it('player 1 covers A1 to D4', () => {
@@ -93,6 +94,20 @@ describe('startingCorner', () => {
   it('player 5 shares a corner with player 1', () => {
     // The template has four corners, so more players have to share
     expect(startingCorner(board, 5)).toEqual(startingCorner(board, 1))
+  })
+
+  it('puts the two-player board in opposite corners, arrows along the long axis', () => {
+    // The two-player board is 16 x 8 — two block rows — so player 2 sits in the
+    // south-east corner (M5-P8). The arrows run along the long axis and point at
+    // each other: east out of the north-west, west out of the south-east.
+    const twoPlayer = createBoard(16, 8)
+    const twoPlayerTop = mapTop(twoPlayer)
+    expect(startingCorner(twoPlayer, 1)).toEqual({ x: 0, y: twoPlayerTop, rotation: 90 })
+    expect(startingCorner(twoPlayer, 2)).toEqual({
+      x: 1128,
+      y: twoPlayerTop + 376,
+      rotation: 270,
+    })
   })
 })
 
@@ -256,7 +271,8 @@ describe('automatic placement', () => {
     expect(civTiles).toHaveLength(1)
     // cash1981 is player 1 in the fixture, so the top left slot
     expect([civTiles[0]?.x, civTiles[0]?.y]).toEqual([0, mapTop(state.board)])
-    expect(civTiles[0]?.rotation).toBe(0)
+    // The top left slot points its arrow down at the middle
+    expect(civTiles[0]?.rotation).toBe(180)
     expect(civTiles[0]?.assetId).toBe(civTileAssetId(civ.name))
   })
 

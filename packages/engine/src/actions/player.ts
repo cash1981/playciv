@@ -289,10 +289,11 @@ function revealCivilization(
 /**
  * Puts the civilization's starting tile in the player's corner.
  *
- * Player 1 takes the top-left slot (A1-D4), 2 the top-right, 3 the
- * bottom-right and 4 the bottom-left, and the tile is turned so the arrow
- * points in towards the middle. See `startingCorner` in board.ts for how the
- * rotation follows from that.
+ * Player 1 takes the top-left slot (A1-D4), and the others walk clockwise
+ * around the board; on the two-player board player 2 instead takes the opposite
+ * south-east corner. The tile is turned so the arrow points in towards the
+ * middle. See `startingCorner` in board.ts for how the slot and the rotation
+ * follow from the player count.
  *
  * The tile can be moved and turned afterwards like any other piece.
  */

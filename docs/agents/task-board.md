@@ -12,6 +12,26 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### starting-tile-orientation
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `fix/starting-tile-orientation`
+- **Brief:** `docs/agents/tasks/starting-tile-orientation.md`
+- **Status:** done on the branch — implemented, all checks pass, and verified in
+  a live 4-player and 2-player game in a browser. The human waived the review
+  gate and tests it themselves. Claim kept until merged.
+- **Claimed paths:**
+  - `packages/engine/src/board.ts` (`startingCorner` and its comment only)
+  - `packages/engine/test/board-tiles.test.ts`
+  - `docs/agents/tasks/starting-tile-orientation.md`
+  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** Fixes a 4-player (and every player count) bug where every starting
+  tile faced outward. The raw artwork is uniform — all 16 starting tiles carry
+  the arrow on the bottom edge pointing up — but `startingCorner` assumed the
+  arrow points down, and its per-corner table was wrong on top of that. No image
+  is touched. `board.ts` is also named in the (now merged) `culture-track-artwork`
+  claim; PR #106 merged, so that claim is stale and the path is free.
+
 ### culture-track-artwork
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)

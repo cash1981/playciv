@@ -13,11 +13,21 @@ _Last updated: 2026-09-21_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 428 engine, 173 server, 72 web |
+| `pnpm -r test` | passing - 429 engine, 173 server, 72 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
 
 ## Done
+
+- **Starting tile orientation.** Every civilization's starting tile was laid
+  facing outwards: the artwork is uniform (all sixteen tiles carry the arrow on
+  the bottom edge pointing up), but `startingCorner` assumed it pointed down and
+  its per-corner table was wrong. The top two corners now turn 180° and the
+  bottom two stay at 0°, so every arrow points at the middle. In the same
+  branch, the two-player 16 × 8 board puts player 2 in the opposite south-east
+  corner (M5–P8) and runs both arrows along the long axis at each other (90° and
+  270°). Branch `fix/starting-tile-orientation`; the human waived the review gate
+  and verified in the browser instead. 1 new engine test (429 total).
 
 - **Culture track artwork.** The board shows the correct track,
   `Moderator/map/culturetrack.png` (2572 × 216), instead of the wrong
