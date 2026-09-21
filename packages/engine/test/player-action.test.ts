@@ -549,7 +549,9 @@ describe('discardRandomGreatPerson', () => {
     // the pre-shuffle seed and become predictable.
     expect(after.rng).not.toBe(state.rng)
     expect(after.log.at(-1)?.logType).toBe('DISCARD')
-    // DISCARD reveals the card, so the public line names the type.
+    // The random discard says so, like the loot lines; DISCARD still reveals
+    // the card, so the public line names the type too.
+    expect(after.log.at(-1)?.publicLog).toContain('has randomly discarded')
     expect(after.log.at(-1)?.publicLog).toContain('General')
   })
 

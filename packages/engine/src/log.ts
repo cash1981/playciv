@@ -213,6 +213,29 @@ export function appendItemLog(
   return appendLog(state, { username, logType, item, playerId, ...texts })
 }
 
+/**
+ * The random Great Person discard (`discardRandomGreatPerson`), which has no
+ * Java counterpart. It keeps the `DISCARD` log type so undo still returns the
+ * card to hand, but says "randomly" the way the loot lines do — the human asked
+ * for that wording.
+ */
+export function appendRandomDiscardLog(
+  state: GameState,
+  username: string,
+  playerId: string,
+  item: Item,
+): GameState {
+  const text = `${username} has randomly discarded ${DELIM}${revealAll(item)}. Item number #${item.itemNumber}`
+  return appendLog(state, {
+    username,
+    logType: 'DISCARD',
+    item,
+    playerId,
+    privateLog: text,
+    publicLog: text,
+  })
+}
+
 /** Java: `GameLogAction.createCommonPublicLog` — prefixes the username. */
 export function appendPublicLog(
   state: GameState,

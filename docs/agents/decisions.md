@@ -1360,8 +1360,11 @@ human-specified rule, not a port.
   non-empty match, because discarding the only card of a type is exactly what
   the manual discard already does. It shuffles the candidates with `state.rng`
   (advancing it, as `loot` does) and reuses `discardItem`'s destination
-  (`discardedItems`, `hidden`) and its public `DISCARD` log line, so the log
-  text and reveal behaviour are the old system's, unchanged.
+  (`discardedItems`, `hidden`).
+- Its log line says the discard was random — "`<username>` has randomly
+  discarded - `<card>`" — the way the loot lines do; the human asked for that
+  wording. It keeps the `DISCARD` log type so undo still returns the card to
+  hand, and still reveals the card publicly, as `discardItem` does.
 - The new engine error `NOTHING_TO_DISCARD` maps to 404, mirroring
   `NOTHING_TO_LOOT`.
 - The mechanic is not wired to the battle arena's kill toggle. Issue #75 put

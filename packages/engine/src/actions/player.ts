@@ -25,6 +25,7 @@ import {
   appendItemLog,
   appendLog,
   appendPublicLog,
+  appendRandomDiscardLog,
   createLogTexts,
 } from '../log.js'
 import type { Result } from '../result.js'
@@ -721,7 +722,7 @@ export function discardRandomGreatPerson(
     rng,
   }
 
-  return ok(appendItemLog(next, 'DISCARD', player.username, player.playerId, discarded))
+  return ok(appendRandomDiscardLog(next, player.username, player.playerId, discarded))
 }
 
 // ---------------------------------------------------------------------------

@@ -817,6 +817,7 @@ describe('great person discard', () => {
     expect(fromAfter?.items.some((item) => item.id === card?.id)).toBe(false)
     expect(after?.discardedItems.some((item) => item.id === card?.id)).toBe(true)
     expect(after?.log.at(-1)?.logType).toBe('DISCARD')
+    expect(after?.log.at(-1)?.publicLog).toContain('has randomly discarded')
     expect(after?.log.at(-1)?.publicLog).toContain(card?.type ?? '')
   })
 })
