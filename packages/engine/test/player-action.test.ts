@@ -295,6 +295,20 @@ describe('reveal civilization', () => {
     expect(state.board.pieces.some((piece) => piece.category === 'wonder')).toBe(true)
   })
 
+  it('credits the automatic wonder deal to System, not the last revealer', () => {
+    const state = revealEveryCiv(firstCivGame())
+    const wonderLines = state.log.filter((entry) =>
+      /drew .+ and placed it in the Wonders area/.test(entry.publicLog),
+    )
+    expect(wonderLines).toHaveLength(4)
+    for (const entry of wonderLines) {
+      expect(entry.username).toBe('System')
+      expect(entry.publicLog.startsWith('System: ')).toBe(true)
+    }
+    // The deal belongs to the game, so none of it is credited to a player.
+    expect(wonderLines.some((entry) => entry.username !== 'System')).toBe(false)
+  })
+
   it('a wonder placed from the palette does not cancel the start-of-game deal', () => {
     // A moderator decorates the board with wonder art before setup finishes.
     let state = unwrap(

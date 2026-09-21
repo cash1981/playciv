@@ -408,12 +408,13 @@ function drawStartingItems(
 /**
  * Java: `drawStartingWonders` — four ancient wonders. They no longer go into
  * the player's hand: each is placed in the shared Wonders area and named in a
- * public log line. See {@link drawWonderToBoard}.
+ * public log line credited to "System", because the deal is the game's, not the
+ * last player who revealed a civ. See {@link drawWonderToBoard}.
  */
 function drawStartingWonders(state: GameState, playerId: string): ActionResult {
   let next = appendInfoLog(state, 'Drawing 4 ancient wonders')
   for (let i = 0; i < 4; i++) {
-    const drawn = drawWonderToBoard(next, playerId, 'ANCIENT_WONDERS')
+    const drawn = drawWonderToBoard(next, playerId, 'ANCIENT_WONDERS', 'system')
     if (!drawn.ok) return drawn
     next = drawn.value
   }

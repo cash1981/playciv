@@ -1371,3 +1371,23 @@ human-specified rule, not a port.
   killed-unit cleanup in the player's hands on purpose, and coupling the two
   would reopen that decision.
 
+
+## 2026-09-21 - The start-of-game wonder deal is logged as System
+
+**Decision.** The four ancient wonders dealt once every civilization is
+revealed are logged as `System: drew <wonder> and placed it in the Wonders
+area`, not as the last player who revealed a civ. A manual wonder draw still
+logs the drawing player.
+
+**Why.** The human reported it: "i loggen står det at det er den siste spilleren
+som revealed civ som har trukket de. Kan du endre til System". The deal is the
+game's setup, not a player action, so crediting the last revealer was
+misleading.
+
+**Consequences.**
+- `drawWonderToBoard` takes an optional `actor: 'player' | 'system'` (default
+  `'player'`). `drawStartingWonders` passes `'system'`, which routes the log
+  through `appendInfoLog` (username `System`, public text `System: ...`). The
+  board piece is still placed with the revealing player's `playerId`; only the
+  log attribution changes.
+- Manual wonder draws are unchanged and still credit the drawing player.

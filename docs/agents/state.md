@@ -41,6 +41,12 @@ _Last updated: 2026-09-21_
   offered only "General", and one random General was discarded with the public
   "has randomly discarded" line. No browser pass was possible — no browser was
   connected to the session.
+- **The start-of-game wonder deal is logged as System.** The four ancient
+  wonders dealt once every civilization is revealed were credited to the last
+  player who revealed a civ; they are now logged as `System: drew <wonder> and
+  placed it in the Wonders area`. `drawWonderToBoard` gained an optional `actor`
+  (default the player), and only `drawStartingWonders` passes `system`; manual
+  draws still credit the player. Branch `feat/great-person-discard`.
 - **Starting tile orientation.** Every civilization's starting tile was laid
   facing outwards: the artwork is uniform (all sixteen tiles carry the arrow on
   the bottom edge pointing up), but `startingCorner` assumed it pointed down and
