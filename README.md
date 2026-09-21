@@ -492,9 +492,9 @@ the engine returns a clear error instead. See `docs/agents/decisions.md`.
 **Transactional email is Resend, and unsubscribing works.** The old app sent
 through SendGrid (`SENDGRID_USERNAME`/`SENDGRID_PASSWORD`); the rewrite uses
 Resend (`RESEND_API_KEY`, from `noreply@playciv.app`). Every trigger the old
-system had is back — it-is-your-turn, new game, someone joined, chat, game
-ended, game deleted and the five turn-phase updates — with Java's 30-minute
-per-player-in-game and 3-hour per-account throttles. Several old behaviours were
+system had is back except the new-game broadcast — it-is-your-turn, someone
+joined, chat, game ended, game deleted and the five turn-phase updates — with
+Java's 30-minute per-player-in-game throttle. Several old behaviours were
 corrected on purpose:
 
 - The unsubscribe link rides on **every** mail (Java's it-is-your-turn mail
@@ -512,10 +512,12 @@ corrected on purpose:
 - The cooldown is claimed in one atomic step, so two simultaneous actions
   cannot both slip a mail past the 30-minute window.
 
-The new-game broadcast to every account is kept but behind
-`MAIL_BROADCAST_NEW_GAMES`, off by default. Sends are bounded by a five-second
-timeout so a slow provider cannot hold up an already-committed game action. See
-`docs/agents/decisions.md`.
+The new-game broadcast to every account is gone: creating a game sends no email
+at all. Java mailed every account ("A new game by the name X was just
+created!"); issue #30 ported it behind `MAIL_BROADCAST_NEW_GAMES`, and the owner
+retired it outright, so no switch can bring it back. The remaining sends are
+still bounded by a five-second timeout so a slow provider cannot hold up an
+already-committed game action. See `docs/agents/decisions.md`.
 
 **The footer carries PayPal and Buy Me a Coffee.** Issue #77 restored the old
 site-wide footer — the copyright line, the Apache 2.0 link and the exact

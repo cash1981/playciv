@@ -1,12 +1,10 @@
 /**
  * Email notifications (issue #30). Ports of Java's `SendEmail` call sites:
- * `PlayerAction.endTurn`, `GameAction.{createNewGame,joinGame,endGame,
- * deleteGame,addChat}` and `TurnAction.update*`.
+ * `PlayerAction.endTurn`, `GameAction.{joinGame,endGame,deleteGame,addChat}` and
+ * `TurnAction.update*`.
  *
  * Every test drives the app through `app.request` with a fake mailer, so no
- * provider is ever contacted. The one exception is the new-game broadcast: the
- * route fires it in the background, so that test calls the notification service
- * directly to avoid racing it.
+ * provider is ever contacted.
  */
 
 import type { GameState } from '@civ/engine'
@@ -14,10 +12,8 @@ import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createTestApp } from '../src/app.js'
-import { runInBackground } from '../src/context.js'
 import type { Mailer, OutgoingEmail } from '../src/mail.js'
 import {
-  GLOBAL_COOLDOWN_MS,
   IN_GAME_COOLDOWN_MS,
   createNotifications,
 } from '../src/notifications.js'
@@ -370,44 +366,14 @@ describe('unsubscribe', () => {
   })
 })
 
-describe('new-game broadcast', () => {
-  it('is off unless it is switched on', async () => {
-    const creator = await register('broadcast-off')
-    await createGame(creator.token, 'broadcast off', 3)
-    // The route fires this in the background; being off, it resolves with
-    // nothing, so a short tick is enough to prove no mail appears.
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(mailer.subjects('New Civilization game created')).toHaveLength(0)
-  })
-
-  it('emails every account, throttled to once per three hours', async () => {
-    const creator = await register('broadcast-on-a')
-    await register('broadcast-on-b')
-    const gameId = await createGame(creator.token, 'broadcast on', 3)
-    const state = await loadGame(gameId)
-
-    const broadcastMailer = new FakeMailer()
-    const notifications = createNotifications({
-      repo,
-      mailer: broadcastMailer,
-      appOrigin: 'https://playciv.app',
-      broadcastNewGames: true,
-      now: () => now,
-    })
-
-    await notifications.gameCreated(state)
-    expect(broadcastMailer.subjects('New Civilization game created')).toHaveLength(2)
-    expect(broadcastMailer.sent[0]?.text).toContain(
-      'A new game by the name broadcast on was just created!',
-    )
-
-    // Inside the three-hour global window, Java suppressed it per account.
-    await notifications.gameCreated(state)
-    expect(broadcastMailer.subjects('New Civilization game created')).toHaveLength(2)
-
-    now = new Date(now.getTime() + GLOBAL_COOLDOWN_MS + 60_000)
-    await notifications.gameCreated(state)
-    expect(broadcastMailer.subjects('New Civilization game created')).toHaveLength(4)
+describe('game creation', () => {
+  it('sends no email to any account', async () => {
+    const creator = await register('no-mail-a')
+    // A second opted-in account proves the silence is not just "nobody had an
+    // address": Java's new-game blast would have reached both.
+    await register('no-mail-b')
+    await createGame(creator.token, 'silent', 3)
+    expect(mailer.sent).toHaveLength(0)
   })
 })
 
@@ -441,34 +407,5 @@ describe('email cooldown', () => {
     ])
 
     expect(mailer.subjects('New Chat')).toHaveLength(1)
-  })
-})
-
-describe('background tasks', () => {
-  it('hands the task to waitUntil when the runtime has one', async () => {
-    const waiting: Promise<unknown>[] = []
-    const context = {
-      executionCtx: {
-        waitUntil(task: Promise<unknown>): void {
-          waiting.push(task)
-        },
-      },
-    }
-
-    runInBackground(context, Promise.resolve())
-    expect(waiting).toHaveLength(1)
-    await Promise.all(waiting)
-  })
-
-  it('falls back to a floating promise when there is no execution context', () => {
-    // Node's adapter has no execution context; reading the getter throws, as
-    // Hono's `Context` does. That must not reach the caller.
-    const context = {
-      get executionCtx(): { waitUntil(task: Promise<unknown>): void } {
-        throw new Error('This context has no ExecutionContext')
-      },
-    }
-
-    expect(() => runInBackground(context, Promise.resolve())).not.toThrow()
   })
 })

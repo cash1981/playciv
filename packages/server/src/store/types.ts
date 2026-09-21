@@ -107,8 +107,10 @@ export interface Repository {
    * has been recorded for `scope` within `waitMs` (and records `now`), false
    * while the cooldown is still active. Java kept these timestamps on
    * `Player.emailSent` (global, 3 h) and `Playerhand.emailSent` (per game,
-   * 30 min); here it is a small keyed table so it survives a restart without
-   * touching the engine state. Keys are built by `notifications.ts`.
+   * 30 min); the rewrite keeps only the per-game scope — the global one belonged
+   * to the removed new-game broadcast — in a small keyed table so it survives a
+   * restart without touching the engine state. Keys are built by
+   * `notifications.ts`.
    *
    * Must be atomic: two concurrent callers for the same scope must never both
    * receive true, or a chat burst sends more than the one mail the cooldown

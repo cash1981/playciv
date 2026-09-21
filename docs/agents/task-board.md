@@ -38,7 +38,32 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   Great Person and Civ; that is reverted (`isGiftable` removed, `tradeToPlayer`
   back to `isTradable`). Also declares `@types/node` on `packages/engine`,
   needed for `node:fs`/`node:url` in its tests.
+### remove-new-game-email
 
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `feat/remove-new-game-email`
+- **Brief:** `docs/agents/tasks/remove-new-game-email.md`
+- **Status:** review-approved — implemented and checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged. Review ran on
+  `deepseek/deepseek-v4-pro` (Sol unavailable; the human approved the
+  substitute). Two doc-comment nits found and fixed.
+- **Claimed paths:**
+  - `packages/server/src/notifications.ts`
+  - `packages/server/src/app.ts`
+  - `packages/server/src/index.ts`
+  - `packages/server/src/context.ts`
+  - `packages/server/src/routes/games.ts`
+  - `packages/server/test/notifications.test.ts`
+  - `packages/server/src/store/types.ts` (comment only)
+  - `packages/worker/src/index.ts`
+  - `packages/server/.env.example`
+  - `wrangler.jsonc`
+  - `README.md`
+  - `docs/agents/tasks/remove-new-game-email.md`
+  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** Owner asked that creating a game never sends email. Deletes the
+  new-game blast and its `MAIL_BROADCAST_NEW_GAMES` switch outright; the other
+  notification triggers and the admin mass mail are untouched.
 ### issue-116-hut-village-unlimited
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)

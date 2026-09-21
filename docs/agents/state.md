@@ -13,7 +13,7 @@ _Last updated: 2026-09-21_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 443 engine, 176 server, 86 web |
+| `pnpm -r test` | passing - 443 engine, 173 server, 86 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
 
@@ -31,6 +31,13 @@ _Last updated: 2026-09-21_
   tests import `node:fs`/`node:url`; a lockfile refresh had dropped the hoisting
   accident it relied on, breaking `pnpm -r typecheck` on `main`. Branch
   `feat/gift-greatperson-civ`.
+- **Creating a game sends no email.** The new-game broadcast to every account is
+  removed outright: `POST /api/games` now sends nothing, and the `gameCreated`
+  notification, the `broadcastNewGames` option and the `MAIL_BROADCAST_NEW_GAMES`
+  variable are gone. `GLOBAL_COOLDOWN_MS`, `globalScope` and `runInBackground`
+  (whose only production caller it was) go with it; the other five triggers, the
+  30-minute per-player-in-game cooldown, the unsubscribe links, `disableEmail`
+  and the admin mass mail are unchanged. Branch `feat/remove-new-game-email`.
 - **Issue #116.** Huts and Villages are no longer capped at the player count in
   the board palette: a two-player game showed "Hut (2)" / "Village (2)" and
   refused a third piece. `boardAssetLimit` returns `undefined` for
@@ -137,12 +144,13 @@ _Last updated: 2026-09-21_
   `decisions.md` and `README.md`. Branch `feat/issue-37-password-reset`,
   awaiting review.
 - **Email notifications (issue #30).** Resend mailer in the Node API with every
-  old trigger (your turn, new game, join, chat, game ended, game deleted, the
-  five turn-phase updates), the 30 min / 3 h throttles, `disableEmail` and the
-  unauthenticated stop/start links. The new-game broadcast is behind
-  `MAIL_BROADCAST_NEW_GAMES`, off by default; the two deliberate differences
-  from Java (link on every mail, unsubscribe honoured everywhere) are in
-  `decisions.md` and `README.md`. 21 new server tests.
+  old trigger except the new-game broadcast (your turn, join, chat, game ended,
+  game deleted, the five turn-phase updates), the 30-minute per-player-in-game
+  throttle, `disableEmail` and the unauthenticated stop/start links. The
+  new-game broadcast was gated by `MAIL_BROADCAST_NEW_GAMES` and later removed
+  outright; the two deliberate differences from Java (link on every mail,
+  unsubscribe honoured everywhere) are in `decisions.md` and `README.md`. 21 new
+  server tests.
 - **OpenCode agents.** OpenCode gets the `coder`, `reviewer` and `rules-checker`
   roles under `.opencode/agents/`, mirroring `.claude/agents/`. The `reviewer`
   and `rules-checker` are read-only and the coder cannot spawn subagents. Every

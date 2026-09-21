@@ -17,8 +17,6 @@
  *   MAIL_FROM      from address, defaults to noreply@playciv.app
  *   APP_ORIGIN     base URL of the web app, defaults to https://playciv.app.
  *                  Used in the links inside notification email.
- *   MAIL_BROADCAST_NEW_GAMES  "true" to email every account when a game is
- *                  created (Java's behaviour). Off by default.
  *
  * For local development these can live in a gitignored `packages/server/.env`;
  * `./load-env.js` loads it.
@@ -58,7 +56,6 @@ console.log(`Storage: JSON file, mirrored to ${dataFile}`)
 
 const appOrigin = process.env['APP_ORIGIN'] ?? DEFAULT_APP_ORIGIN
 const mailFrom = process.env['MAIL_FROM'] ?? 'noreply@playciv.app'
-const broadcastNewGames = process.env['MAIL_BROADCAST_NEW_GAMES'] === 'true'
 
 let mailer: Mailer = noopMailer
 const resendKey = process.env['RESEND_API_KEY']
@@ -76,7 +73,6 @@ const app = createApp({
   corsOrigin,
   mailer,
   appOrigin,
-  broadcastNewGames,
 })
 
 const server = serve({ fetch: app.fetch, port, hostname: host })
