@@ -3,7 +3,8 @@
 - **Slug:** `gift-greatperson-civ`
 - **Branch:** `feat/gift-greatperson-civ`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Status:** in progress
+- **Status:** review-approved — PR #114 open, awaiting the human's merge; the
+  read-only reviewer found nothing above a nit.
 
 ## Goal
 
@@ -84,15 +85,19 @@ behaviour.
 
 ## Acceptance criteria
 
-- [ ] A Great Person, Civ, City-state or Wonder cannot be traded: the reducer
+- [x] A Great Person, Civ, City-state or Wonder cannot be traded: the reducer
       returns `ITEM_NOT_FOUND`.
-- [ ] Culture I/II/III, Hut and Village can still be given away.
-- [ ] The hand shows no Give control for a Great Person, Civ or City-state.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: the control is built from the viewer's own hand only;
+- [x] Culture I/II/III, Hut and Village can still be given away.
+- [x] The hand shows no Give control for a Great Person, Civ or City-state.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+      (engine 443, server 176, web 86).
+- [x] Hidden information: the control is built from the viewer's own hand only;
       no opponent hand is read or exposed.
-- [ ] Verified in the browser / against a running server: a Great Person, Civ
-      and City-state card show no Give control, a Hut/Village/Culture card does.
+- [ ] Verified in the browser: a Great Person, Civ and City-state card show no
+      Give control, a Hut/Village/Culture card does. **Not done — no browser was
+      connected to the session.** Covered by `GiveControl.test.tsx` (renders
+      nothing for Great Person, Civ and City-state; renders for all five
+      Tradable kinds) and by the engine trade tests.
 
 ## Open questions
 
