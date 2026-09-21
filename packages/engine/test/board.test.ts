@@ -76,7 +76,7 @@ describe('geometry', () => {
   it('the culture track sits above the map, a gap apart', () => {
     const board = createBoard()
     // The track is drawn the full width of the map, so its height follows from
-    // its own aspect (215 / 3349 of 1504), stretched taller by CULTURE_TRACK_SCALE
+    // its own aspect (216 / 2572 of 1504), stretched taller by CULTURE_TRACK_SCALE
     // so the band reads well (issue #22).
     const expected = Math.round(
       (boardWidth(board) * CULTURE_TRACK.height * CULTURE_TRACK_SCALE) / CULTURE_TRACK.width,
