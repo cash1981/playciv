@@ -14,6 +14,7 @@ import {
   chooseSocialPolicy,
   chooseTech,
   discardItem,
+  discardRandomGreatPerson,
   endTurn,
   isYourTurn,
   remainingTechsForPlayer,
@@ -32,7 +33,7 @@ import { itemName } from '../src/item.js'
 import { uniqueItemNumber } from '../src/log.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
-import { findPlayer } from '../src/state.js'
+import { findPlayer, withPlayer } from '../src/state.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -503,6 +504,80 @@ describe('discarding', () => {
     expect(state.discardedItems[0]?.hidden).toBe(true)
     // Java: DISCARD reveals everything publicly too, the card is out of play
     expect(state.log.at(-1)?.publicLog).toContain(itemName(card))
+  })
+})
+
+/**
+ * New mechanic, with no Java counterpart — see
+ * `docs/agents/tasks/great-person-discard.md`.
+ */
+describe('discardRandomGreatPerson', () => {
+  /** Puts `count` Great Persons of one type into the player's hand. */
+  const giveGreatPersons = (
+    state: GameState,
+    playerId: string,
+    type: string,
+    count: number,
+  ): { readonly state: GameState; readonly ids: readonly string[] } => {
+    const player = findPlayer(state, playerId)
+    if (player === undefined) throw new Error('no player')
+    const cards = state.items
+      .filter((item) => item.kind === 'greatperson' && item.type === type)
+      .slice(0, count)
+    return {
+      state: withPlayer(state, { ...player, items: [...player.items, ...cards] }),
+      ids: cards.map((card) => card.id),
+    }
+  }
+
+  it('removes one card of the type, discards it and logs DISCARD', () => {
+    const { state, ids } = giveGreatPersons(firstCivGame(), CASH1981, 'General', 3)
+    const after = unwrap(discardRandomGreatPerson(state, { playerId: CASH1981, type: 'General' }))
+
+    expect(after.discardedItems).toHaveLength(1)
+    expect(ids).toContain(after.discardedItems[0]?.id)
+    expect(after.discardedItems[0]?.kind).toBe('greatperson')
+    expect(after.discardedItems[0]?.hidden).toBe(true)
+    expect(handOf(after, CASH1981)).toHaveLength(2)
+    expect(after.log.at(-1)?.logType).toBe('DISCARD')
+    // DISCARD reveals the card, so the public line names the type.
+    expect(after.log.at(-1)?.publicLog).toContain('General')
+  })
+
+  it('picks across all candidates rather than always the first', () => {
+    // The seeds are fixed, so this cannot pass by luck: the same seeds always
+    // produce the same picks. See `conventions.md` on avoiding lucky tests.
+    const { state, ids } = giveGreatPersons(firstCivGame(), CASH1981, 'General', 3)
+    const picked = new Set<string>()
+    for (let rng = 0; rng < 40; rng++) {
+      const after = unwrap(
+        discardRandomGreatPerson({ ...state, rng }, { playerId: CASH1981, type: 'General' }),
+      )
+      picked.add(after.discardedItems[0]?.id ?? '')
+    }
+    expect(picked).toEqual(new Set(ids))
+  })
+
+  it('leaves Great Persons of another type in the hand', () => {
+    const withGenerals = giveGreatPersons(firstCivGame(), CASH1981, 'General', 2).state
+    const { state, ids: scientistIds } = giveGreatPersons(
+      withGenerals,
+      CASH1981,
+      'Scientist',
+      1,
+    )
+    const after = unwrap(discardRandomGreatPerson(state, { playerId: CASH1981, type: 'General' }))
+
+    const remaining = handOf(after, CASH1981)
+    expect(remaining).toHaveLength(2)
+    expect(remaining.some((item) => item.id === scientistIds[0])).toBe(true)
+  })
+
+  it('gives NOTHING_TO_DISCARD when the player holds none of the type', () => {
+    const error = unwrapErr(
+      discardRandomGreatPerson(firstCivGame(), { playerId: CASH1981, type: 'General' }),
+    )
+    expect(error).toEqual({ kind: 'NOTHING_TO_DISCARD', playerId: CASH1981, type: 'General' })
   })
 })
 

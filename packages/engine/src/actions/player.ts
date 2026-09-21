@@ -18,7 +18,7 @@ import {
 import type { EngineError } from '../errors.js'
 import type { Government } from '../government.js'
 import { isGovernment, startingGovernmentFor } from '../government.js'
-import type { CivItem, Item, SocialPolicyItem, TechItem } from '../item.js'
+import type { CivItem, GreatPersonItem, Item, SocialPolicyItem, TechItem } from '../item.js'
 import { isTradable, isUnit, itemName, revealAll } from '../item.js'
 import {
   appendInfoLog,
@@ -29,6 +29,7 @@ import {
 } from '../log.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
+import { shuffle } from '../random.js'
 import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
 import type { GameState, Playerhand, PlayerStats } from '../state.js'
@@ -669,6 +670,55 @@ export function discardItem(state: GameState, input: DiscardInput): ActionResult
       items: player.items.filter((item) => item.id !== found.id),
     }),
     discardedItems: [...state.discardedItems, discarded],
+  }
+
+  return ok(appendItemLog(next, 'DISCARD', player.username, player.playerId, discarded))
+}
+
+export interface DiscardRandomGreatPersonInput {
+  readonly playerId: string
+  /** The Great Person `type`, e.g. "General" or "Artist or Thinker". */
+  readonly type: string
+}
+
+/**
+ * New mechanic, with no old-system counterpart — see
+ * `docs/agents/tasks/great-person-discard.md`. It covers the case the human
+ * described: a player holds two Generals and one is killed, so which card is
+ * lost must be random rather than picked.
+ *
+ * Deliberately mirror two neighbours: `loot` for the shuffle-and-take over the
+ * seeded RNG, and `discardItem` for the destination (`discardedItems`, hidden)
+ * and the public `DISCARD` log line. The "two or more" rule is a UI affordance,
+ * not an engine guard: discarding the only card of a type is just the manual
+ * discard, so there is nothing to protect here.
+ */
+export function discardRandomGreatPerson(
+  state: GameState,
+  input: DiscardRandomGreatPersonInput,
+): ActionResult {
+  const access = requireAccess(state, input.playerId)
+  if (!access.ok) return access
+  const player = access.value
+
+  const candidates = player.items.filter(
+    (item): item is GreatPersonItem => item.kind === 'greatperson' && item.type === input.type,
+  )
+  if (candidates.length === 0) {
+    return err({ kind: 'NOTHING_TO_DISCARD', playerId: input.playerId, type: input.type })
+  }
+
+  const [shuffled, rng] = shuffle(candidates, state.rng)
+  const discardedItem = shuffled[0] as Item
+
+  const discarded: Item = { ...discardedItem, hidden: true }
+  const next: GameState = {
+    ...withPlayer(state, {
+      ...player,
+      items: player.items.filter((item) => item.id !== discardedItem.id),
+    }),
+    discardedItems: [...state.discardedItems, discarded],
+    rng,
   }
 
   return ok(appendItemLog(next, 'DISCARD', player.username, player.playerId, discarded))

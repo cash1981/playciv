@@ -26,6 +26,7 @@ export function statusFor(error: EngineError): number {
     case 'LOG_ENTRY_NOT_FOUND':
     case 'TURN_NOT_FOUND':
     case 'NOTHING_TO_LOOT':
+    case 'NOTHING_TO_DISCARD':
     case 'BOARD_PIECE_NOT_FOUND':
       return 404
     // Nothing on the board to take back

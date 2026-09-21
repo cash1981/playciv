@@ -507,6 +507,11 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
           void run(() => api.loot(gameId, category, targetPlayerId))
         }
       />
+      <GreatPersonDiscardControls
+        items={items}
+        busy={busy}
+        onDiscard={(type) => void run(() => api.discardGreatPerson(gameId, type))}
+      />
       {items.length === 0 && <p className="muted">Empty.</p>}
       <ul className="card-grid scroll">
         {items.map((item) => (
@@ -571,6 +576,55 @@ export function LootControls({
             onClick={() => onLoot(category, targetPlayerId)}
           >
             Loot {label}
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/**
+ * Offers a random discard only for a Great Person type the viewer holds two or
+ * more of; with exactly one there is no choice to make, so the ordinary
+ * per-card discard covers it (the human's rule — see the task brief). Built
+ * from the viewer's own hand only.
+ */
+export function GreatPersonDiscardControls({
+  items,
+  busy,
+  onDiscard,
+}: {
+  readonly items: readonly Item[]
+  readonly busy: boolean
+  readonly onDiscard: (type: string) => void
+}): React.JSX.Element | null {
+  const counts = new Map<string, number>()
+  for (const item of items) {
+    if (item.kind === 'greatperson' && item.type !== null) {
+      counts.set(item.type, (counts.get(item.type) ?? 0) + 1)
+    }
+  }
+  const duplicates = [...counts]
+    .filter(([, count]) => count >= 2)
+    .map(([type]) => type)
+
+  if (duplicates.length === 0) return null
+
+  return (
+    <section aria-label="Discard a great person" style={{ marginBottom: '1rem' }}>
+      <h3 style={{ marginTop: 0 }}>Discard a great person</h3>
+      <p className="muted">
+        You hold more than one of a type, so which card is lost is random. Discard one:
+      </p>
+      <div className="row">
+        {duplicates.map((type) => (
+          <button
+            key={type}
+            className="small danger"
+            disabled={busy}
+            onClick={() => onDiscard(type)}
+          >
+            Discard random {type}
           </button>
         ))}
       </div>
