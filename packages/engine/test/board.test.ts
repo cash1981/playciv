@@ -246,6 +246,24 @@ describe('placePiece', () => {
     }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'resources/wheat', limit: 4 })
   })
 
+  it('leaves huts and villages unlimited (issue #116)', () => {
+    for (const assetId of ['resources/hut', 'resources/village']) {
+      const asset = findBoardAsset(assetId)
+      if (asset === undefined) throw new Error(`${assetId} missing from manifest`)
+
+      // The two-player board is where the bug showed as "Hut (2)".
+      expect(boardAssetLimit(asset, 2), assetId).toBeUndefined()
+
+      let state = firstCivGame()
+      for (let index = 0; index < 6; index++) state = place(state, assetId, 0, 0)
+      expect(state.board.pieces, assetId).toHaveLength(6)
+      expect(
+        remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers),
+        assetId,
+      ).toBeUndefined()
+    }
+  })
+
   it('limits each Great Person type to three and removal restores one', () => {
     let state = firstCivGame()
     for (let index = 0; index < 3; index++) state = place(state, 'great people/artist', 0, 0)

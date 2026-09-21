@@ -1332,6 +1332,34 @@ beside the PayPal one issue #77 restored.
   page still runs no donation-provider JavaScript.
 - The CSS pins the button to the PayPal button's height (47 px) so the two sit
   level; the footer's support area wraps on narrow screens.
-- The PayPal form is untouched — same endpoint, same `cmd` and encrypted
+- The PayPal form is untouched - same endpoint, same `cmd` and encrypted
   `encrypted` values as issue #77.
+
+---
+
+## 2026-09-21 - Huts and Villages have no board-supply cap
+
+**Decision.** `resources/hut` and `resources/village` are unlimited in the board
+palette. Every other resource stays capped at the number of players, exactly as
+issue #49 set it.
+
+**Why.** Issue #116 reported the palette showing "Hut (2)" in a two-player game
+and refusing a third piece. Huts and Villages are collected during play - a
+scout discovers one, loot moves one between players - they are not a setup
+supply dealt to the table, so there is no physical maximum to enforce. The
+finite supplies are a requested improvement with no counterpart in
+`old-civ-rest` or `old-civ-web` (recorded in
+`tasks/issue-49-availability.md`), so the owner is the authority for what they
+cover, as with the culture track and the starting-tile orientation.
+
+**Consequences.**
+- `boardAssetLimit` returns `undefined` for the two ids through a named
+  `UNLIMITED_RESOURCE_IDS` set; `remainingBoardAssetCount`, the palette's
+  `(n)` suffix and `placePiece`'s refusal all follow from that and needed no
+  code change.
+- Wheat, iron, silk and incense keep the `Math.max(0, Math.min(5, numOfPlayers))`
+  cap; buildings and Great Persons are untouched.
+- The manifest still classes both as `resource` pieces; only the limit changes.
+- Huts and villages already placed in saved games are unaffected.
+
 

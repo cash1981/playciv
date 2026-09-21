@@ -147,4 +147,24 @@ describe('BoardPalette finite supplies', () => {
     expect(restored).toContain('Academy (1)')
     expect(restored).toContain('draggable="true"')
   })
+
+  it('shows no count and keeps a hut draggable (issue #116)', () => {
+    const hut = findBoardAsset('resources/hut')
+    if (hut === undefined) throw new Error('hut missing from manifest')
+
+    const markup = renderToStaticMarkup(
+      <BoardPalette
+        assets={[hut]}
+        category="resource"
+        onCategoryChange={() => undefined}
+        replaying={false}
+        pieces={[]}
+        numOfPlayers={2}
+      />,
+    )
+    expect(markup).toContain('Hut')
+    expect(markup).not.toContain('Hut (')
+    expect(markup).toContain('draggable="true"')
+    expect(markup).not.toContain('unavailable')
+  })
 })

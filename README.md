@@ -144,9 +144,11 @@ Every player sees and can move every piece, as at a physical table.
 
 The palette has ten categories, generated from the images on disk. Buildings
 and resources use finite physical supplies: the physical building counts are
-read from the reference sheet, each resource type is limited by the player
-count, and each Great Person type has three board pieces. The separate Great
-Person card deck remains a hand/draw mechanic.
+read from the reference sheet, wheat, iron, silk and incense are each limited by
+the player count, and each Great Person type has three board pieces. Huts and
+Villages are **unlimited** — they are picked up during play rather than dealt
+from a setup supply, so the player-count cap does not apply to them (issue
+#116). The separate Great Person card deck remains a hand/draw mechanic.
 
 | Category | Count | From |
 | --- | --- | --- |
@@ -560,6 +562,16 @@ already controls every account, so the content is trusted. Sends run in-request,
 one provider call per recipient, so a very large account list could hit the
 Worker's subrequest/CPU limits — a known limitation, not fixed here. See
 `docs/agents/decisions.md`.
+
+**The board palette enforces finite physical supplies.** The old system tracked
+board pieces in a Google Sheet and enforced no limits; issue #49 asked for the
+physical supplies to be visible and enforced, so the palette now shows a
+remaining count and refuses an exhausted piece. Building counts come from the
+reference sheet (upgrade families share one pool), wheat, iron, silk and incense
+are capped at the player count, and each Great Person type has three board
+pieces. Huts and Villages are deliberately **not** capped: they are collected
+during play, not dealt at setup, so the player-count limit never applied to them
+(issue #116). See `docs/agents/decisions.md`.
 
 ## Deferred
 
