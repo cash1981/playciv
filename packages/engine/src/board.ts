@@ -728,8 +728,11 @@ export function nearestBlockOrigin(
 /**
  * Where a civilization's starting tile goes, and which way it faces.
  *
- * Player 1 takes the top-left slot (A1-D4), 2 the top-right, 3 the
- * bottom-right and 4 the bottom-left, matching the example board.
+ * Player 1 always takes the top-left slot (A1-D4). On the full board the rest
+ * walk clockwise: 2 the top-right, 3 the bottom-right and 4 the bottom-left,
+ * matching the example board. The two-player board is only two block rows tall
+ * and its players sit in opposite corners, so player 2 takes the south-east
+ * corner (M5-P8) rather than the top-right.
  *
  * Starting tiles carry an arrow showing which way the tile goes, and it should
  * point in towards the middle. Every image file has the arrow on the bottom
@@ -756,10 +759,12 @@ export function startingCorner(
     { blockColumn: 0, blockRow: lastRow, rotation: 0 },
   ]
 
-  // playernumber is 1-based; more than four players share the corners again
-  const corner = corners[
-    (Math.max(playernumber, 1) - 1) % corners.length
-  ] as (typeof corners)[number]
+  // playernumber is 1-based; more than four players share the corners again.
+  // A two-player board has two block rows, so its players are opposite corners
+  // (top-left, then bottom-right) instead of the two top corners.
+  const order: readonly number[] = blockRows(board) === 2 ? [0, 2] : [0, 1, 2, 3]
+  const position = order[(Math.max(playernumber, 1) - 1) % order.length] as number
+  const corner = corners[position] as (typeof corners)[number]
   const [x, y] = blockOrigin(board, corner.blockColumn, corner.blockRow)
   return { x, y, rotation: corner.rotation }
 }

@@ -95,6 +95,19 @@ describe('startingCorner', () => {
     // The template has four corners, so more players have to share
     expect(startingCorner(board, 5)).toEqual(startingCorner(board, 1))
   })
+
+  it('puts the two-player board in opposite corners', () => {
+    // The two-player board is 16 x 8 — two block rows — so player 2 sits in the
+    // south-east corner (M5-P8) instead of the top-right one
+    const twoPlayer = createBoard(16, 8)
+    const twoPlayerTop = mapTop(twoPlayer)
+    expect(startingCorner(twoPlayer, 1)).toEqual({ x: 0, y: twoPlayerTop, rotation: 180 })
+    expect(startingCorner(twoPlayer, 2)).toEqual({
+      x: 1128,
+      y: twoPlayerTop + 376,
+      rotation: 0,
+    })
+  })
 })
 
 describe('firstFreeBlock', () => {
