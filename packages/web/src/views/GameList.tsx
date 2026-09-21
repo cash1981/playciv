@@ -21,6 +21,8 @@
  * - `#` is the row's position in the whole filtered/sorted list, not the old
  *   active table's page-local `$index`.
  * - The `Open` / `Full` actions come from the rewrite, not the old client.
+ *   `Open` and `Join` take the old `btn-info` teal (`info` in `styles.css`);
+ *   `Full` stays the plain, disabled default.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -69,7 +71,7 @@ function actionCell(
   if (player !== null) {
     if (game.youAreIn) {
       return (
-        <button type="button" className="small" onClick={() => onOpenGame(game.id)}>
+        <button type="button" className="small info" onClick={() => onOpenGame(game.id)}>
           Open
         </button>
       )
@@ -78,7 +80,7 @@ function actionCell(
       return (
         <button
           type="button"
-          className="small"
+          className="small info"
           disabled={busy}
           onClick={() => onJoin(game.id)}
         >

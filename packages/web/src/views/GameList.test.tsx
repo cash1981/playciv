@@ -181,4 +181,34 @@ describe('GameList', () => {
     const cells = Array.from(document.querySelectorAll('tbody tr td'))
     expect(cells[1]?.textContent).toBe('')
   })
+
+  it('colours the Open and Join actions, and leaves Full plain', () => {
+    const games = [
+      game({ id: 'mine', name: 'Mine', youAreIn: true }),
+      game({
+        id: 'joinable',
+        name: 'Joinable',
+        players: [{ username: 'Andrius', color: 'Blue' }],
+      }),
+      game({
+        id: 'full',
+        name: 'Full',
+        numOfPlayers: 2,
+        players: [
+          { username: 'Andrius', color: 'Blue' },
+          { username: 'Someone', color: 'Red' },
+        ],
+      }),
+    ]
+
+    render(
+      <GameList games={games} player={player} busy={false} onOpenGame={noop} onJoin={noop} />,
+    )
+
+    // The old front page's coloured `btn-info`; Open and Join never share a row.
+    expect(screen.getByRole('button', { name: 'Open' }).className).toContain('info')
+    expect(screen.getByRole('button', { name: 'Join' }).className).toContain('info')
+    // A non-action: no colour, and it cannot be clicked anyway.
+    expect(screen.getByRole('button', { name: 'Full' }).className).not.toContain('info')
+  })
 })
