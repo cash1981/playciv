@@ -98,9 +98,10 @@ the human, and is recorded in `decisions.md` and `README.md`.
 - [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 - [x] Hidden information: trading only ever moves an item the giver already
       holds; no opponent hand is read or exposed.
-- [ ] Verified in the browser: a Give on a Great Person and on the Civ card
-      succeeds. Not done if no browser is connected; then verified against a
-      running server and said so.
+- [x] Verified against a running server (no browser was connected): a Great
+      Person given to the opponent left the giver's hand and joined theirs; the
+      civ card did the same, and the giver's chosen civilization stayed set.
+      Two public `TRADE_BETWEEN_PLAYERS` lines were written.
 
 ## Open questions
 
