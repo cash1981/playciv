@@ -1,4 +1,4 @@
-# Civilization: The Board Game — V2
+# Civilization: The Board Game — version 2
 
 A rewrite of Sid Meier's Civilization: The Board Game (Fantasy Flight Games), with the *Fame and Fortune* and *Wisdom and
 Warfare* expansions.
