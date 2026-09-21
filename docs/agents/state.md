@@ -15,7 +15,7 @@ _Last updated: 2026-09-21_
 | `pnpm -r typecheck` | passing |
 | `pnpm -r test` | passing - 418 engine, 170 server, 69 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; issue #79 merged, issue #70 review-approved on its feature branch |
+| `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
 
 ## Done
 
@@ -250,6 +250,7 @@ _Last updated: 2026-09-21_
   chat to the bottom as its own `LobbyChat` panel with the shared pager (ten per
   page), and changed `GET /api/chat` to return ~3 months newest first with no
   50-message cap; 1 server test replaced, 5 new web tests.
+- **Issue #40.** The register form asks the old fixed question ("What is China's starting tech?") and `POST /api/auth/register` now requires a `securityAnswer` field, accepting only `writing` case-insensitive, so a direct API call can no longer skip the gate the old client enforced alone. The client refuses a wrong answer before calling the API, as `RegisterController.js` did. The question is a speed bump, not a security boundary, and server enforcement is a deliberate improvement over Java — recorded in `decisions.md` and `README.md`. Review-approved and merged as PR #94; the route is covered by the Hono tests and the form by `LoginView.test.tsx` (no browser connection was available for a manual pass).
 
 ## In progress
 
@@ -273,8 +274,6 @@ _Nothing queued._
   already in place (Luna) and confirmed working. 297 engine + 51 server tests
   pass. Branch pushed; PR still to open.
 
-- **`gh` is not installed**, so pull requests are opened through the compare
-  link rather than the CLI. SSH push works.
 - **Space Flight has no artwork.** Nothing to fix; there is no such card.
 - **Card images are large** — up to 1 MB each, straight from the old client.
   Fine locally, wasteful over a network. Nobody has decided to optimise them.

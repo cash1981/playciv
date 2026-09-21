@@ -131,12 +131,15 @@ paste its report back.
 git push -u origin feat/<slug>
 ```
 
-`gh` is not installed on this machine, so the push output prints a link that
-opens the pull request form. Use it, or:
+`gh` is on the PATH, so open the pull request with the CLI:
 
+```bash
+gh pr create --base main --head feat/<slug> --title "<title>" --body-file <file>
 ```
-https://github.com/cash1981/playciv/compare/main...feat/<slug>?expand=1
-```
+
+If `gh` is ever unavailable, the push output prints a link that opens the pull
+request form, or use
+`https://github.com/cash1981/playciv/compare/main...feat/<slug>?expand=1`.
 
 The PR body should say what changed, why, what was verified, and what was
 deliberately left out. Link the task brief.
