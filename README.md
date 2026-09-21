@@ -142,7 +142,7 @@ centre.
 
 Every player sees and can move every piece, as at a physical table.
 
-The palette has ten categories, generated from the images on disk. Buildings
+The palette has eleven categories, generated from the images on disk. Buildings
 and resources use finite physical supplies: the physical building counts are
 read from the reference sheet, wheat, iron, silk and incense are each limited by
 the player count, and each Great Person type has three board pieces. Huts and

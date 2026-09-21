@@ -235,15 +235,17 @@ describe('placePiece', () => {
     }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'buildings/harbor', limit: 10 })
   })
 
-  it('limits each resource to the number of players', () => {
-    let state = firstCivGame()
-    for (let index = 0; index < 4; index++) state = place(state, 'resources/wheat', 0, 0)
-    expect(unwrapErr(placePiece(state, {
-      playerId: CASH1981,
-      assetId: 'resources/wheat',
-      x: 0,
-      y: 0,
-    }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'resources/wheat', limit: 4 })
+  it('limits each resource except hut and village to the number of players', () => {
+    for (const assetId of ['resources/wheat', 'resources/iron', 'resources/silk', 'resources/incense']) {
+      let state = firstCivGame()
+      for (let index = 0; index < 4; index++) state = place(state, assetId, 0, 0)
+      expect(unwrapErr(placePiece(state, {
+        playerId: CASH1981,
+        assetId,
+        x: 0,
+        y: 0,
+      })), assetId).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId, limit: 4 })
+    }
   })
 
   it('leaves huts and villages unlimited (issue #116)', () => {
@@ -254,7 +256,7 @@ describe('placePiece', () => {
       // The two-player board is where the bug showed as "Hut (2)".
       expect(boardAssetLimit(asset, 2), assetId).toBeUndefined()
 
-      let state = firstCivGame()
+      let state: GameState = { ...firstCivGame(), numOfPlayers: 2 }
       for (let index = 0; index < 6; index++) state = place(state, assetId, 0, 0)
       expect(state.board.pieces, assetId).toHaveLength(6)
       expect(
