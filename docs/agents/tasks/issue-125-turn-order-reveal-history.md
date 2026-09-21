@@ -3,7 +3,7 @@
 - **Slug:** `issue-125-turn-order-reveal-history`
 - **Branch:** `feat/issue-125-turn-order-reveal-history`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
-- **Status:** in progress
+- **Status:** review-approved — PR to open, awaiting the human's merge
 
 ## Goal
 
@@ -131,8 +131,9 @@ second field — was put to the human, who chose replace.
 
 ## Notes after implementation
 
-- Verification: `pnpm -r typecheck` exit 0; `pnpm -r test` engine 448, server
-  173, web 87; `pnpm -r build` exit 0.
+- Verification (after rebasing onto `main` with the front-page join-button
+  colours): `pnpm -r typecheck` exit 0; `pnpm -r test` engine 448, server 173,
+  web 88; `pnpm -r build` exit 0.
 - No browser was connected to the session, so the visual pass is the one
   unchecked box and is left to the human.
 - The review gate (read-only `reviewer`) returned approve with nits. One minor

@@ -33,31 +33,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   change; the disabled `Full` button stays grey. No browser was connected, so
   the visual pass is left to the human.
 
-### issue-125-turn-order-reveal-history
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
-- **Branch:** `feat/issue-125-turn-order-reveal-history`
-- **Brief:** `docs/agents/tasks/issue-125-turn-order-reveal-history.md`
-- **Status:** claimed
-- **Claimed paths:**
-  - `packages/engine/src/turn.ts`
-  - `packages/engine/src/actions/turn.ts`
-  - `packages/engine/test/turn-action.test.ts`
-  - `packages/server/src/routes/play.ts`
-  - `packages/server/test/api.test.ts` (the reveal assertions only)
-  - `packages/web/src/views/TurnPanel.tsx`
-  - `packages/web/src/views/TurnPanel.css`
-  - `packages/web/src/views/TurnPanel.test.tsx`
-  - `docs/agents/tasks/issue-125-turn-order-reveal-history.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
-- **Notes:** Issue #125. Per-phase reveal history on turn orders. The reveal
-  history *replaces* the existing save-based `PlayerTurn.history` (the human
-  chose replace over adding a second field); versions are `{ markdown, at }`,
-  appended only on Reveal, and rendered greyed/struck-through above the current
-  editor. Amends the 2026-09-20 "Turn orders are revealed per phase" decision's
-  claim that unrevealed phases mask their history.
-
 ### gift-greatperson-civ
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
