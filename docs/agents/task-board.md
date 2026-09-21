@@ -17,7 +17,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `fix/issue-116-hut-village-unlimited`
 - **Brief:** `docs/agents/tasks/issue-116-hut-village-unlimited.md`
-- **Status:** in progress — implemented, in review.
+- **Status:** review-approved — implemented and self-checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/engine/src/board.ts`
   - `packages/engine/test/board.test.ts`

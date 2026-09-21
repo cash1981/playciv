@@ -13,12 +13,21 @@ _Last updated: 2026-09-21_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 429 engine, 173 server, 72 web |
+| `pnpm -r test` | passing - 430 engine, 173 server, 74 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
 
 ## Done
 
+- **Issue #116.** Huts and Villages are no longer capped at the player count in
+  the board palette: a two-player game showed "Hut (2)" / "Village (2)" and
+  refused a third piece. `boardAssetLimit` returns `undefined` for
+  `resources/hut` and `resources/village`; wheat, iron, silk and incense keep
+  the issue #49 player-count cap, and buildings and Great Persons are untouched.
+  No client change — the palette already hides the count and the exhausted state
+  for an unlimited asset. Branch `fix/issue-116-hut-village-unlimited`;
+  review-approved after two read-only rounds (round one's findings all fixed).
+  1 new engine test (430 total) and 1 new web test (74 total).
 - **Buy Me a Coffee in the footer.** The site-wide footer now shows a Buy Me a
   Coffee button beside the PayPal donate button, from the exact markup the owner
   supplied (`buymeacoffee.com/cash1981`). A plain image link, not the provider's

@@ -570,8 +570,8 @@ remaining count and refuses an exhausted piece. Building counts come from the
 reference sheet (upgrade families share one pool), wheat, iron, silk and incense
 are capped at the player count, and each Great Person type has three board
 pieces. Huts and Villages are deliberately **not** capped: they are collected
-during play, not dealt at setup, so the player-count limit never applied to them
-(issue #116). See `docs/agents/decisions.md`.
+during play, not dealt at setup, so the player-count limit does not apply to
+them (issue #116). See `docs/agents/decisions.md`.
 
 ## Deferred
 

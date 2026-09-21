@@ -1341,7 +1341,8 @@ beside the PayPal one issue #77 restored.
 
 **Decision.** `resources/hut` and `resources/village` are unlimited in the board
 palette. Every other resource stays capped at the number of players, exactly as
-issue #49 set it.
+issue #49 set it. This amends the 2026-09-17 entry *Issue #49 uses finite
+supplies for public board assets*.
 
 **Why.** Issue #116 reported the palette showing "Hut (2)" in a two-player game
 and refusing a third piece. Huts and Villages are collected during play — a
