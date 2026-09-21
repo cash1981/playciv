@@ -1488,26 +1488,29 @@ cover, as with the culture track and the starting-tile orientation.
 
 ---
 
-## 2026-09-21 - The front page's Open and Join buttons keep the old `btn-info` teal
+## 2026-09-21 - The front page's Open and Join buttons get colour: Open teal, Join green
 
-**Decision.** The front page game list's `Open` and `Join` actions carry a new
-`info` button variant. The light theme uses Bootstrap 3's `.btn-info` values
-exactly (`#5bc0de` / `#46b8da` / white, hover `#31b0d5` / `#269abc`); the dark
-theme uses a dimmer teal (`#1f7f94`, hover `#2a93aa`). Both actions share the
-one colour because a row shows `Open` or `Join`, never both. The disabled
-`Full` button stays the plain grey default.
+**Decision.** The front page game list's `Open` and `Join` actions carry new
+button variants. `Open` uses `info`, `Join` uses `success`. The light theme
+copies Bootstrap 3 exactly: `.btn-info` (`#5bc0de` / `#46b8da` / white, hover
+`#31b0d5` / `#269abc`) for Open, `.btn-success` (`#5cb85c` / `#4cae4c` /
+white, hover `#449d44` / `#398439`) for Join. The dark theme uses a dimmer
+shade of each (Open `#1f7f94`, Join `#2f7d43`) so it reads against `--panel-2`.
+The disabled `Full` button stays the plain grey default.
 
 **Why.** The human asked for it: *"forsiden hadde farger på join knappene. Det
 er vanskelig å 'Open' og 'join' idag. Kan du gi samme farge som den forrige
 versjonen, og en farge i dark theme som passer."* `old-civ-web`'s
 `list.html` rendered its Join action as `<a class="btn btn-info">`, so the
-light teal is a port of the old look; the dark teal is new, because the old
-client had no dark theme.
+teal is a port of the old look. The human then asked for green on **Join**
+(*"I want green color for join"*), so the two actions are deliberately
+different colours: Open is the old teal, Join is `.btn-success` green.
 
 **Consequences.**
 - `Open` is a rewrite-only action (recorded 2026-09-17), so colouring it is an
   addition, not a disagreement with the old system.
-- The dark teal is a visual choice, not a copied value; the human is the
-  authority for it, as with the culture track and the starting-tile
-  orientation. No browser was connected, so the visual pass is left to the
-  human.
+- Assigning green to Join is the human's call, not a value copied from the old
+  system; the old client had one coloured action, not two. The dark shades are
+  a visual choice the human is the authority for, as with the culture track and
+  the starting-tile orientation. No browser was connected, so the visual pass
+  is left to the human.

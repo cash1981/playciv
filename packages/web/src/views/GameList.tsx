@@ -21,8 +21,8 @@
  * - `#` is the row's position in the whole filtered/sorted list, not the old
  *   active table's page-local `$index`.
  * - The `Open` / `Full` actions come from the rewrite, not the old client.
- *   `Open` and `Join` take the old `btn-info` teal (`info` in `styles.css`);
- *   `Full` stays the plain, disabled default.
+ *   `Join` is the green `success` variant; `Open` is the old `btn-info` teal
+ *   (`info` in `styles.css`); `Full` stays the plain, disabled default.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -80,7 +80,7 @@ function actionCell(
       return (
         <button
           type="button"
-          className="small info"
+          className="small success"
           disabled={busy}
           onClick={() => onJoin(game.id)}
         >

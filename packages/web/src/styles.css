@@ -19,14 +19,20 @@
   --error-text: #ffc9ca;
   --board-bg: #0f1115;
   --wonder-accent: #c9a227;
-  /* The old front page's `btn-info` join action. Dark keeps a dimmer teal
-     that reads against `--panel-2` while staying legible under white text;
+  /* The front page's game actions. `--info` is the old front page's
+     `btn-info` teal (Open); `--success` is a green for Join. Dark uses a
+     dimmer shade of each so it reads against `--panel-2` under white text;
      light (below) is Bootstrap's own. */
   --info: #1f7f94;
   --info-border: #2f9bb3;
   --info-text: #ffffff;
   --info-hover: #2a93aa;
   --info-hover-border: #43b3cf;
+  --success: #2f7d43;
+  --success-border: #3f9d57;
+  --success-text: #ffffff;
+  --success-hover: #3a9150;
+  --success-hover-border: #4cb066;
   --radius: 8px;
 }
 
@@ -46,12 +52,17 @@
   --error-text: #8c2028;
   --board-bg: #ffffff;
   --wonder-accent: #9a7d12;
-  /* Bootstrap 3 `.btn-info`, the exact teal the old Join button used. */
+  /* Bootstrap 3's own values: `.btn-info` for Open, `.btn-success` for Join. */
   --info: #5bc0de;
   --info-border: #46b8da;
   --info-text: #ffffff;
   --info-hover: #31b0d5;
   --info-hover-border: #269abc;
+  --success: #5cb85c;
+  --success-border: #4cae4c;
+  --success-text: #ffffff;
+  --success-hover: #449d44;
+  --success-hover-border: #398439;
 }
 
 * {
@@ -120,9 +131,9 @@ button.danger {
   color: var(--bad);
 }
 
-/* The old front page's coloured join action (`btn-info`). Used by the front
-   page's Open/Join buttons, which share the colour because a row shows one at
-   most. */
+/* The front page's game actions. `info` is the old front page's `btn-info`
+   teal (Open); `success` is the green for Join. Both share `.small`, and the
+   hover rules keep their own fill instead of the generic accent border. */
 button.info {
   background: var(--info);
   border-color: var(--info-border);
@@ -132,6 +143,17 @@ button.info {
 button.info:hover:not(:disabled) {
   background: var(--info-hover);
   border-color: var(--info-hover-border);
+}
+
+button.success {
+  background: var(--success);
+  border-color: var(--success-border);
+  color: var(--success-text);
+}
+
+button.success:hover:not(:disabled) {
+  background: var(--success-hover);
+  border-color: var(--success-hover-border);
 }
 
 button.small {

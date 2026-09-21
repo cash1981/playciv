@@ -182,7 +182,7 @@ describe('GameList', () => {
     expect(cells[1]?.textContent).toBe('')
   })
 
-  it('colours the Open and Join actions, and leaves Full plain', () => {
+  it('colours Open teal and Join green, and leaves Full plain', () => {
     const games = [
       game({ id: 'mine', name: 'Mine', youAreIn: true }),
       game({
@@ -205,10 +205,12 @@ describe('GameList', () => {
       <GameList games={games} player={player} busy={false} onOpenGame={noop} onJoin={noop} />,
     )
 
-    // The old front page's coloured `btn-info`; Open and Join never share a row.
+    // Open is the old `btn-info` teal; Join is the green the human asked for.
     expect(screen.getByRole('button', { name: 'Open' }).className).toContain('info')
-    expect(screen.getByRole('button', { name: 'Join' }).className).toContain('info')
+    expect(screen.getByRole('button', { name: 'Join' }).className).toContain('success')
     // A non-action: no colour, and it cannot be clicked anyway.
-    expect(screen.getByRole('button', { name: 'Full' }).className).not.toContain('info')
+    const full = screen.getByRole('button', { name: 'Full' })
+    expect(full.className).not.toContain('info')
+    expect(full.className).not.toContain('success')
   })
 })
