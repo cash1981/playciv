@@ -12,6 +12,23 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-116-hut-village-unlimited
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `fix/issue-116-hut-village-unlimited`
+- **Brief:** `docs/agents/tasks/issue-116-hut-village-unlimited.md`
+- **Status:** in progress — implemented, in review.
+- **Claimed paths:**
+  - `packages/engine/src/board.ts`
+  - `packages/engine/test/board.test.ts`
+  - `packages/web/src/views/BoardView.test.tsx`
+  - `docs/agents/tasks/issue-116-hut-village-unlimited.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
+- **Notes:** Issue #116. Huts and Villages get no board-supply cap; the other
+  four resources keep the issue #49 player-count limit. No client code changes;
+  only the engine limit and tests.
+
 ### buymeacoffee-footer
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
