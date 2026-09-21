@@ -75,12 +75,13 @@ describe('startingCorner', () => {
   const top = mapTop(board)
 
   it('gives the four corners with the arrow pointing inwards', () => {
-    // The raw image has the arrow pointing down and the capital icon in the
-    // top left, so turning clockwise moves both around the edge together
-    expect(startingCorner(board, 1)).toEqual({ x: 0, y: top, rotation: 0 })
-    expect(startingCorner(board, 2)).toEqual({ x: 1128, y: top, rotation: 90 })
-    expect(startingCorner(board, 3)).toEqual({ x: 1128, y: top + 1128, rotation: 180 })
-    expect(startingCorner(board, 4)).toEqual({ x: 0, y: top + 1128, rotation: 270 })
+    // Every raw image has the arrow on the bottom edge pointing up, so the top
+    // two corners turn a half step to point it down at the middle and the
+    // bottom two stay put to point it up
+    expect(startingCorner(board, 1)).toEqual({ x: 0, y: top, rotation: 180 })
+    expect(startingCorner(board, 2)).toEqual({ x: 1128, y: top, rotation: 180 })
+    expect(startingCorner(board, 3)).toEqual({ x: 1128, y: top + 1128, rotation: 0 })
+    expect(startingCorner(board, 4)).toEqual({ x: 0, y: top + 1128, rotation: 0 })
   })
 
   it('player 1 covers A1 to D4', () => {
@@ -256,7 +257,8 @@ describe('automatic placement', () => {
     expect(civTiles).toHaveLength(1)
     // cash1981 is player 1 in the fixture, so the top left slot
     expect([civTiles[0]?.x, civTiles[0]?.y]).toEqual([0, mapTop(state.board)])
-    expect(civTiles[0]?.rotation).toBe(0)
+    // The top left slot points its arrow down at the middle
+    expect(civTiles[0]?.rotation).toBe(180)
     expect(civTiles[0]?.assetId).toBe(civTileAssetId(civ.name))
   })
 

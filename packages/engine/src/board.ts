@@ -732,10 +732,12 @@ export function nearestBlockOrigin(
  * bottom-right and 4 the bottom-left, matching the example board.
  *
  * Starting tiles carry an arrow showing which way the tile goes, and it should
- * point in towards the middle. In the image files the arrow points down —
- * checked against japan.jpg and germany.png. Turning clockwise carries it
- * round: 0 degrees points down, which suits the top-left slot; 90 points left,
- * which suits the top-right; and so on.
+ * point in towards the middle. Every image file has the arrow on the bottom
+ * edge pointing up — checked against all sixteen civ tiles and the physical
+ * America tile in Civilization/Civs/america.jpg — so it is the rotation that
+ * turns it: the top two corners need 180 degrees to point the arrow down at the
+ * middle, the bottom two stay at 0 degrees to point it up. Turning clockwise
+ * carries it round from there.
  *
  * The tile can be turned freely afterwards, so this is a starting point rather
  * than a constraint.
@@ -748,10 +750,10 @@ export function startingCorner(
   const lastRow = blockRows(board) - 1
 
   const corners: readonly { blockColumn: number; blockRow: number; rotation: Rotation }[] = [
-    { blockColumn: 0, blockRow: 0, rotation: 0 },
-    { blockColumn: lastColumn, blockRow: 0, rotation: 90 },
-    { blockColumn: lastColumn, blockRow: lastRow, rotation: 180 },
-    { blockColumn: 0, blockRow: lastRow, rotation: 270 },
+    { blockColumn: 0, blockRow: 0, rotation: 180 },
+    { blockColumn: lastColumn, blockRow: 0, rotation: 180 },
+    { blockColumn: lastColumn, blockRow: lastRow, rotation: 0 },
+    { blockColumn: 0, blockRow: lastRow, rotation: 0 },
   ]
 
   // playernumber is 1-based; more than four players share the corners again
