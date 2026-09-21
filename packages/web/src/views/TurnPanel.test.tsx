@@ -582,6 +582,12 @@ describe('TurnOrderWorkspace', () => {
     if (list === null) throw new Error('expected a revealed-version list')
     const editor = screen.getByRole('textbox', { name: /start of turn orders for cash1981/i })
     expect(list.compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    // The CSS keys the phase-specific reading height and scrollbar off this hook.
+    const phaseHooks = Array.from(container.querySelectorAll('.turn-phase')).map(
+      (section) => (section as HTMLElement).dataset['turnPhase'],
+    )
+    expect(phaseHooks).toEqual(['SOT', 'TRADE', 'CM', 'MOVEMENT', 'RESEARCH'])
   })
 })
 

@@ -148,12 +148,30 @@
   margin-top: 0.35rem;
 }
 
+/* Long phases get a fixed reading height: the revealed versions and the
+   editor each scroll on their own, so a wall of text cannot make the section
+   enormous. Trade and research keep the default size — they hold a number
+   and a tech name. About six lines before a scrollbar appears. */
+.turn-phase {
+  --turn-history-max-height: none;
+  --turn-editor-height: none;
+}
+
+.turn-phase[data-turn-phase='SOT'],
+.turn-phase[data-turn-phase='CM'],
+.turn-phase[data-turn-phase='MOVEMENT'] {
+  --turn-history-max-height: 8rem;
+  --turn-editor-height: 9rem;
+}
+
 /* Revealed versions sit above the editor on a simple vertical timeline. */
 .turn-history {
+  max-height: var(--turn-history-max-height);
   margin: 0 0 0.55rem;
   padding-left: 0.9rem;
   border-left: 2px solid var(--line);
   list-style: none;
+  overflow: auto;
   color: var(--muted);
 }
 
@@ -233,6 +251,12 @@
   border: 0;
   border-radius: 0;
   resize: vertical;
+}
+
+.turn-phase .turn-markdown .milkdown .ProseMirror,
+.turn-phase .turn-markdown-fallback {
+  max-height: var(--turn-editor-height);
+  overflow: auto;
 }
 
 .editor-status {

@@ -252,6 +252,7 @@ export function TurnOrderWorkspace({
       {TURN_PHASES.map((phase) => (
         <section
           className="turn-phase"
+          data-turn-phase={phase}
           data-save-status={
             player.own
               ? phaseStatuses?.[phase] ??
