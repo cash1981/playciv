@@ -19,6 +19,19 @@ _Last updated: 2026-09-21_
 
 ## Done
 
+- **The front page's Open and Join buttons are coloured.** The game list's
+  `Open` and `Join` actions were plain grey default buttons, so the two things a
+  signed-in player can do on the front page were hard to see beside the
+  disabled `Full`. `Open` now uses an `info` variant (the old `list.html` Join
+  button's Bootstrap `.btn-info` teal: light `#5bc0de` / `#46b8da` / white,
+  dark `#1f7f94`) and `Join` a green `success` variant (Bootstrap `.btn-success`
+  in light `#5cb85c` / `#4cae4c` / white, dark `#2f7d43`), per the human's
+  follow-up *"I want green color for join"*. `Full` stays grey; no layout or
+  behaviour change. New `GameList` test asserts both variants and that `Full`
+  has neither. Branch `feat/front-page-join-colors`; review-approved in two
+  rounds (reviewer `deepseek/deepseek-v4-pro`), PR #123 open. 1 new web test
+  (87 total). No browser was connected, so the light/dark visual pass is left to
+  the human; see `decisions.md`.
 - **Only Tradable cards can be given away.** The hand's "Give" control was drawn
   on every card, but `tradeToPlayer` only accepts Java's `Tradable` set (Culture
   I/II/III, Hut, Village); every other kind returned `ITEM_NOT_FOUND`, so the

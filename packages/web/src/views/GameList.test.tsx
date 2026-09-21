@@ -181,4 +181,36 @@ describe('GameList', () => {
     const cells = Array.from(document.querySelectorAll('tbody tr td'))
     expect(cells[1]?.textContent).toBe('')
   })
+
+  it('colours Open teal and Join green, and leaves Full plain', () => {
+    const games = [
+      game({ id: 'mine', name: 'Mine', youAreIn: true }),
+      game({
+        id: 'joinable',
+        name: 'Joinable',
+        players: [{ username: 'Andrius', color: 'Blue' }],
+      }),
+      game({
+        id: 'full',
+        name: 'Full',
+        numOfPlayers: 2,
+        players: [
+          { username: 'Andrius', color: 'Blue' },
+          { username: 'Someone', color: 'Red' },
+        ],
+      }),
+    ]
+
+    render(
+      <GameList games={games} player={player} busy={false} onOpenGame={noop} onJoin={noop} />,
+    )
+
+    // Open is the old `btn-info` teal; Join is the green the human asked for.
+    expect(screen.getByRole('button', { name: 'Open' }).className).toContain('info')
+    expect(screen.getByRole('button', { name: 'Join' }).className).toContain('success')
+    // A non-action: no colour, and it cannot be clicked anyway.
+    const full = screen.getByRole('button', { name: 'Full' })
+    expect(full.className).not.toContain('info')
+    expect(full.className).not.toContain('success')
+  })
 })
