@@ -371,7 +371,7 @@ const CULTURE_SECTIONS: readonly { readonly from: number; readonly to: number; r
   { from: 1752, to: 2450, cells: 6 },
 ]
 
-/** Spaces on the track, numbered 1 to 27. */
+/** Spaces on the track, numbered 1 to 20. */
 export const CULTURE_TRACK_CELLS = CULTURE_SECTIONS.reduce(
   (total, section) => total + section.cells,
   0,
