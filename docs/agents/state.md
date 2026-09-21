@@ -13,7 +13,7 @@ _Last updated: 2026-09-21_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 429 engine, 173 server, 72 web |
+| `pnpm -r test` | passing - 434 engine, 176 server, 77 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
 
@@ -26,6 +26,20 @@ _Last updated: 2026-09-21_
   `target`/`rel`/`alt`, so the client's external-link convention and an `alt`
   were added. Branch `feat/buymeacoffee-footer`; review self-checked in
   OpenCode (no game rules involved). 1 new web test (73 total).
+- **Discard a random great person of a type.** The "Your hand" panel offers a
+  random discard for each Great Person type the player holds two or more of —
+  the case the human described, where two Generals are held and one is killed.
+  The pure engine `discardRandomGreatPerson` shuffles the matching cards with
+  the seeded RNG and reuses `discardItem`'s discard pile and public `DISCARD`
+  log; a new `NOTHING_TO_DISCARD` error maps to 404. New mechanic with no
+  old-system counterpart, specified by the human (see `decisions.md`). Branch
+  `feat/great-person-discard`; review-approved (reviewer `deepseek/deepseek-v4-pro`;
+  Sol unavailable) and the read-only `rules-checker` confirmed there is no
+  old-system equivalent. 5 new engine tests, 3 server, 4 web. Verified end to
+  end against a running server: a hand of Artist-or-Thinker + two Generals
+  offered only "General", and one random General was discarded with the public
+  `DISCARD` line. No browser pass was possible — no browser was connected to the
+  session.
 - **Starting tile orientation.** Every civilization's starting tile was laid
   facing outwards: the artwork is uniform (all sixteen tiles carry the arrow on
   the bottom edge pointing up), but `startingCorner` assumed it pointed down and

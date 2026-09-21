@@ -3,7 +3,7 @@
 - **Slug:** `great-person-discard`
 - **Branch:** `feat/great-person-discard`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -124,19 +124,25 @@ listing types with count ≥ 2.
 
 ## Acceptance criteria
 
-- [ ] The engine discards a uniformly random Great Person of the given type
+- [x] The engine discards a uniformly random Great Person of the given type
       from the acting player's hand; fixed seeds select each candidate.
-- [ ] The discarded card lands in `discardedItems` and gets the public
+- [x] The discarded card lands in `discardedItems` and gets the public
       `DISCARD` log line; the remaining cards stay in hand.
-- [ ] An unknown/absent type returns `NOTHING_TO_DISCARD`, mapped to 404.
-- [ ] The route acts only on the signed-in player's own hand.
-- [ ] The hand control appears only for Great Person types held two or more
+- [x] An unknown/absent type returns `NOTHING_TO_DISCARD`, mapped to 404.
+- [x] The route acts only on the signed-in player's own hand.
+- [x] The hand control appears only for Great Person types held two or more
       times, and pressing a button discards one of that type.
-- [ ] Hidden information: the hand control is built only from the viewer's own
+- [x] Hidden information: the hand control is built only from the viewer's own
       hand; no opponent hand or private description is rendered or sent.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+      (engine 434, server 176, web 77).
 - [ ] Verified in the browser: with two Generals in hand, a "Discard random
-      General" button appears and discards exactly one.
+      General" button appears and discards exactly one. **Not done — no browser
+      was connected to the session.** Verified against a running server instead:
+      a hand of Artist-or-Thinker + two Generals offered only "General", and the
+      route discarded one at random (Khalid ibn al-Walid), leaving the other
+      General and the Artist-or-Thinker, with one public `DISCARD` line. The
+      button's visibility and click are covered by the jsdom component tests.
 
 ## Open questions
 

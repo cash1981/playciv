@@ -1335,3 +1335,36 @@ beside the PayPal one issue #77 restored.
 - The PayPal form is untouched — same endpoint, same `cmd` and encrypted
   `encrypted` values as issue #77.
 
+## Discard a random great person of a type (great-person-discard)
+
+The human asked for a way to discard a random Great Person of a given type, for
+the case where a player holds two of a type (two Generals) and one of them is
+killed. Neither `old-civ-rest` nor `old-civ-web` has such a rule:
+`PlayerAction.discardItem` discards a *named* card, matched by sheet, item number
+and name, and the old client offers only that per-card discard. This is a new,
+human-specified rule, not a port.
+
+**Decisions, settled with the human before the work started.**
+
+- The action always takes from the acting player's own hand. The route uses
+  `currentPlayer(c).id`, so a member cannot discard another player's card.
+- The control is offered only for a type held **two or more** times. With only
+  one, there is nothing random to choose and the existing per-card discard
+  applies. That gate lives in the UI, not the engine.
+- No turn gating; it may be used any time, like Loot.
+- It sits in the "Your hand" panel, next to the Loot controls.
+
+**Consequences.**
+
+- `discardRandomGreatPerson` is deliberately permissive: it accepts any
+  non-empty match, because discarding the only card of a type is exactly what
+  the manual discard already does. It shuffles the candidates with `state.rng`
+  (advancing it, as `loot` does) and reuses `discardItem`'s destination
+  (`discardedItems`, `hidden`) and its public `DISCARD` log line, so the log
+  text and reveal behaviour are the old system's, unchanged.
+- The new engine error `NOTHING_TO_DISCARD` maps to 404, mirroring
+  `NOTHING_TO_LOOT`.
+- The mechanic is not wired to the battle arena's kill toggle. Issue #75 put
+  killed-unit cleanup in the player's hands on purpose, and coupling the two
+  would reopen that decision.
+
