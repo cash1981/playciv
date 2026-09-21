@@ -458,7 +458,12 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     const turnNumber = optionalNumber(body, 'turnNumber') ?? 1
 
     return applyToGame(context, c, gameId, (state) =>
-      revealTurnOrder(state, { playerId: currentPlayer(c).id, turnNumber, phase }),
+      revealTurnOrder(state, {
+        playerId: currentPlayer(c).id,
+        turnNumber,
+        phase,
+        at: new Date().toISOString(),
+      }),
     )
   })
 
