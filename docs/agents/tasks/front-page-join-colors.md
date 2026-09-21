@@ -3,7 +3,7 @@
 - **Slug:** `front-page-join-colors`
 - **Branch:** `feat/front-page-join-colors`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Status:** in progress (round 2 — Join green)
+- **Status:** review-approved (round 2, reviewer `deepseek/deepseek-v4-pro`), PR #123 open
 
 ## Goal
 
@@ -93,20 +93,23 @@ dimmer shade for the dark theme, which is the client default.
 
 ## Acceptance criteria
 
-- [ ] A signed-in player's `Open` button renders with the `info` variant and
+- [x] A signed-in player's `Open` button renders with the `info` variant and
       `Join` with the `success` variant; `Full` stays the grey default.
-- [ ] Light theme uses Bootstrap's `.btn-info` teal for Open and `.btn-success`
+- [x] Light theme uses Bootstrap's `.btn-info` teal for Open and `.btn-success`
       green for Join; dark theme uses a dimmer shade of each that reads against
       `--panel-2`.
-- [ ] Each variant's hover state keeps its own background/border instead of the
+- [x] Each variant's hover state keeps its own background/border instead of the
       generic accent border.
-- [ ] A test fails if `Open` or `Join` loses its variant.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: the buttons render only `game.id`, already public in
+- [x] A test fails if `Open` or `Join` loses its variant.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+      (443 engine / 176 server / 87 web).
+- [x] Hidden information: the buttons render only `game.id`, already public in
       the list, and read no hand or private state; no projection changes, so
       nothing can leak.
-- [ ] Verified in the browser: both themes inspected on a live front page, or —
-      if no browser is available — stated plainly and left to the human.
+- [x] Verified in the browser: **not possible — no desktop browser is connected
+      to this session**. The built CSS was inspected instead (both `--info` and
+      both `--success` values and the `button.info` / `button.success` rules
+      present), and the light/dark visual pass is left to the human.
 
 ## Open questions
 

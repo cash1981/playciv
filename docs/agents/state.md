@@ -28,10 +28,10 @@ _Last updated: 2026-09-21_
   in light `#5cb85c` / `#4cae4c` / white, dark `#2f7d43`), per the human's
   follow-up *"I want green color for join"*. `Full` stays grey; no layout or
   behaviour change. New `GameList` test asserts both variants and that `Full`
-  has neither. Branch `feat/front-page-join-colors`; review-approved (reviewer
-  `deepseek/deepseek-v4-pro`), PR #123 open. 1 new web test (87 total). No browser
-  was connected, so the light/dark visual pass is left to the human; see
-  `decisions.md`.
+  has neither. Branch `feat/front-page-join-colors`; review-approved in two
+  rounds (reviewer `deepseek/deepseek-v4-pro`), PR #123 open. 1 new web test
+  (87 total). No browser was connected, so the light/dark visual pass is left to
+  the human; see `decisions.md`.
 - **Only Tradable cards can be given away.** The hand's "Give" control was drawn
   on every card, but `tradeToPlayer` only accepts Java's `Tradable` set (Culture
   I/II/III, Hut, Village); every other kind returned `ITEM_NOT_FOUND`, so the

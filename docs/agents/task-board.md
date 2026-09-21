@@ -17,7 +17,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `feat/front-page-join-colors`
 - **Brief:** `docs/agents/tasks/front-page-join-colors.md`
-- **Status:** in progress — round 2: `Join` green, per the human's follow-up.
+- **Status:** review-approved (round 2) — implemented and checked on the branch;
+  PR #123 open, awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/web/src/styles.css`
   - `packages/web/src/views/GameList.tsx`
