@@ -17,7 +17,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `feat/buymeacoffee-footer`
 - **Brief:** `docs/agents/tasks/buymeacoffee-footer.md`
-- **Status:** in progress
+- **Status:** review-approved — implemented and self-checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/web/src/views/Footer.tsx`
   - `packages/web/src/views/Footer.test.tsx`

@@ -1307,3 +1307,31 @@ and waived the review gate.
   Nothing is migrated: a stored rotation is player-owned state, and the affected
   games are pre-release and can be turned with the existing rotate control.
 
+---
+
+## 2026-09-21 — A Buy Me a Coffee button beside the footer's PayPal button
+
+**Decision.** The site-wide footer carries a Buy Me a Coffee button next to the
+PayPal donate button, using the exact markup the owner supplied. It is a plain
+image link, not Buy Me a Coffee's JavaScript widget.
+
+**Why.** The owner asked for it directly, in Norwegian, and supplied both the
+link (`https://www.buymeacoffee.com/cash1981`) and the
+`img.buymeacoffee.com/button-api/?…slug=cash1981…` image. There is no
+counterpart in the old system — the old footer had PayPal and Patreon only — so
+this is a deliberate new addition, not a port. It is the second donation option
+beside the PayPal one issue #77 restored.
+
+**Consequences.**
+- The supplied anchor and image `src` are copied verbatim. The client's
+  convention for external links is added on top: `target="_blank"` with
+  `rel="noopener noreferrer"`, and the image carries `alt="Buy me a coffee"`
+  because an image-only link needs accessible text. The supplied markup had
+  none of these.
+- Like Patreon, only the image link is used, never a third-party script, so the
+  page still runs no donation-provider JavaScript.
+- The CSS pins the button to the PayPal button's height (47 px) so the two sit
+  level; the footer's support area wraps on narrow screens.
+- The PayPal form is untouched — same endpoint, same `cmd` and encrypted
+  `encrypted` values as issue #77.
+

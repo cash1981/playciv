@@ -120,7 +120,8 @@ The client imports its types from `@civ/engine`, so it cannot drift out of step
 with what the server actually sends.
 
 Every page also carries the old site-wide footer: the copyright line, the
-Apache 2.0 license link and the PayPal donate button (issue #77).
+Apache 2.0 license link, the PayPal donate button (issue #77) and a Buy Me a
+Coffee button beside it.
 
 ## The board
 
@@ -514,12 +515,15 @@ The new-game broadcast to every account is kept but behind
 timeout so a slow provider cannot hold up an already-committed game action. See
 `docs/agents/decisions.md`.
 
-**The footer is PayPal only.** Issue #77 restored the old site-wide footer — the
-copyright line, the Apache 2.0 link and the exact encrypted PayPal hosted button
-from `old-civ-web`, on every page. The old footer also carried a Patreon button
-and its `becomePatronButton.bundle.js` script; those are dropped on purpose (the
-owner's decision), so no Patreon code runs on the page. See
-`docs/agents/decisions.md`.
+**The footer carries PayPal and Buy Me a Coffee.** Issue #77 restored the old
+site-wide footer — the copyright line, the Apache 2.0 link and the exact
+encrypted PayPal hosted button from `old-civ-web`, on every page. A later,
+owner-supplied addition puts a Buy Me a Coffee button beside the PayPal one; it
+is a plain image link to the owner's page, not Buy Me a Coffee's JavaScript
+widget, and it has no counterpart in the old footer. The old footer also carried
+a Patreon button and its `becomePatronButton.bundle.js` script; those are
+dropped on purpose (the owner's decision), so no Patreon code runs on the page.
+See `docs/agents/decisions.md`.
 
 **The signup security question is enforced on the server too.** The old
 registration form's fixed question — "What is China's starting tech?", answered
