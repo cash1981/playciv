@@ -1346,11 +1346,12 @@ beside the PayPal one issue #77 restored.
 **Why.** The human reported it directly: "you cannot gift a greatperson or your
 civ starting tile. You can only gift hut, village and culture cards." The old
 Java `Tradable` marker interface, implemented by Culture I/II/III, Hut and
-Village, was the only gate; `PlayerAction.tradeToPlayer` filtered on it, so a
-Great Person or Civ card reached the reducer and came back `ITEM_NOT_FOUND` even
-though the client draws the Give control on every card. No old-system rule
-covers this, so it is a deliberate extension requested by the human, recorded
-here and in `README.md`.
+Village, was the only gate: `PlayerAction.tradeToPlayer` filtered on it, and the
+old AngularJS client only drew its "Send to Player" button on those same cards.
+In the rewrite the Give control is drawn on every hand card, so a Great Person
+or Civ card reached the reducer and came back `ITEM_NOT_FOUND`. No old-system
+rule covers gifting these, so it is a deliberate extension requested by the
+human, recorded here and in `README.md`.
 
 **Consequences.**
 - `isTradable` is unchanged. `loot` still refuses a Great Person or a Civ card,
@@ -1360,3 +1361,17 @@ here and in `README.md`.
   further is a separate decision.
 - The trade log, `ownerId` update and the two log entries are unchanged: the
   change is only which items are eligible.
+- **Giving the civ card moves only the card.** The player's chosen civilization
+  (`Playerhand.civilization`), government, starting tech, starting tile and
+  leader marker all stay with the giver; the receiver just holds the card. The
+  civ card in hand is the one chosen at reveal time (the others are discarded on
+  reveal), so this is the case that matters. A test pins it. If the card is
+  meant to carry the whole civilization across instead, that is a larger change
+  and needs its own decision.
+- **Unrelated tooling fix bundled in.** `packages/engine` imports `node:fs` and
+  `node:url` in `gamedata.test.ts` but never declared `@types/node`; its
+  typecheck only passed because an older install happened to link it. Refreshing
+  the lockfile dropped that link and broke `pnpm -r typecheck` on `main`, so the
+  branch declares `@types/node`. The same refresh also syncs the engine's
+  `vitest` importer to `^4.1.11`, which `main`'s `packages/engine/package.json`
+  already required while the lockfile still pinned 3.2.7.

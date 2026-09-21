@@ -390,16 +390,18 @@ describe('loot', () => {
     expect(unwrapErr(result).kind).toBe('ITEM_NOT_LOOTABLE')
   })
 
-  it('still refuses to loot a Great Person, which is giftable but not lootable', () => {
-    // `isGiftable` lets the Give control move a Great Person, but loot keeps
-    // using `isTradable`; this pins that line.
-    const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'GREAT_PERSON' }))
-    const result = loot(state, {
-      playerId: CASH1981,
-      targetPlayerId: KARANDRAS1,
-      sheetNames: new Set(['GREAT_PERSON']),
-    })
-    expect(unwrapErr(result).kind).toBe('ITEM_NOT_LOOTABLE')
+  it('still refuses to loot a Great Person or a Civ card, which are giftable but not lootable', () => {
+    // `isGiftable` lets the Give control move these, but loot keeps using
+    // `isTradable`; this pins that line.
+    for (const sheetName of ['GREAT_PERSON', 'CIV'] as const) {
+      const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName }))
+      const result = loot(state, {
+        playerId: CASH1981,
+        targetPlayerId: KARANDRAS1,
+        sheetNames: new Set([sheetName]),
+      })
+      expect(unwrapErr(result).kind).toBe('ITEM_NOT_LOOTABLE')
+    }
   })
 
   it('treats Culture I, II and III as one random Culture Card pool', () => {

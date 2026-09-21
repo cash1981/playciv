@@ -500,12 +500,31 @@ describe('trade', () => {
     expect(handOf(state, CASH1981).some((item) => item.id === card.id)).toBe(false)
     expect(handOf(state, ITCHI).some((item) => item.id === card.id)).toBe(true)
     expect(handOf(state, ITCHI).find((item) => item.id === card.id)?.ownerId).toBe(ITCHI)
+    // The existing trade log is reused unchanged.
+    expect(state.log.at(-2)?.logType).toBe('TRADE_BETWEEN_PLAYERS')
+    expect(state.log.at(-1)?.publicLog).toBe('')
   })
 
-  it('gives the civ card to another player', () => {
+  it('gives the civ card away without touching the chosen civilization', () => {
+    // Choose a civ first, so `civilization` is set: the card moved by the trade
+    // is then exactly the chosen civ card (the other civs are discarded on
+    // reveal). Gifting it moves only the card; the giver keeps their chosen
+    // civilization, government and starting tech. That is the recorded decision
+    // (see `decisions.md`), and this test pins it.
     let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CIV' }))
+    const drawn = handOf(state, CASH1981).find((item) => item.kind === 'civ')
+    if (drawn === undefined) throw new Error('no civ card')
+    state = unwrap(
+      revealItem(state, {
+        playerId: CASH1981,
+        sheetName: 'CIV',
+        itemNumber: drawn.itemNumber,
+      }),
+    )
+
     const card = handOf(state, CASH1981).find((item) => item.kind === 'civ')
-    if (card === undefined) throw new Error('no civ card')
+    if (card === undefined) throw new Error('no chosen civ card left in hand')
+    expect(findPlayer(state, CASH1981)?.civilization?.id).toBe(card.id)
 
     state = unwrap(
       tradeToPlayer(state, {
@@ -518,7 +537,8 @@ describe('trade', () => {
     )
 
     expect(handOf(state, CASH1981).some((item) => item.id === card.id)).toBe(false)
-    expect(handOf(state, ITCHI).some((item) => item.id === card.id)).toBe(true)
+    expect(handOf(state, ITCHI).find((item) => item.id === card.id)?.ownerId).toBe(ITCHI)
+    expect(findPlayer(state, CASH1981)?.civilization?.id).toBe(card.id)
   })
 })
 

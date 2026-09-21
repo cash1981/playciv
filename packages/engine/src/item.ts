@@ -199,7 +199,8 @@ export function isUnit(item: Item): item is UnitItem {
 
 /**
  * Java: `Tradable` — an empty marker interface implemented by CultureI/II/III,
- * Hut and Village. Only these can be looted or given away.
+ * Hut and Village. Only these can be looted; what may be *given away* is a
+ * superset, `isGiftable` below.
  */
 const TRADABLE_KINDS = new Set<ItemKind>(['cultureI', 'cultureII', 'cultureIII', 'hut', 'village'])
 

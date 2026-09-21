@@ -30,8 +30,11 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Notes:** The human reported that the hand's Give control fails for Great
   Person and Civ cards. `tradeToPlayer` filters on the old Java `Tradable`
   marker (Culture I/II/III, Hut, Village), so this adds those two kinds as a
-  deliberate extension. Loot stays restricted. Great Person and Civ only; other
-  kinds are out on purpose.
+  deliberate extension. Loot stays restricted. Giving the civ card moves only
+  the card; the giver's civilization/government/start tech/board pieces stay.
+  Other kinds are out on purpose. Also declares `@types/node` on
+  `packages/engine`, needed for `node:fs`/`node:url` in its tests; without it
+  `pnpm -r typecheck` fails on `main` after a lockfile refresh.
 
 ### buymeacoffee-footer
 
