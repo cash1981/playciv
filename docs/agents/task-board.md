@@ -17,8 +17,9 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `fix/starting-tile-orientation`
 - **Brief:** `docs/agents/tasks/starting-tile-orientation.md`
-- **Status:** in progress — the human confirmed the target orientation and asked
-  for a browser check in place of the review gate.
+- **Status:** done on the branch — implemented, all checks pass, and verified in
+  a live 4-player and 2-player game in a browser. The human waived the review
+  gate and tests it themselves. Claim kept until merged.
 - **Claimed paths:**
   - `packages/engine/src/board.ts` (`startingCorner` and its comment only)
   - `packages/engine/test/board-tiles.test.ts`

@@ -12,6 +12,11 @@ corner with the printed arrow pointing in towards the board, at every player
 count. Today every starting tile points outward instead, so a four-player game
 has all four corners facing the wrong way.
 
+Second fix, asked for in the same breath: on the two-player board the two
+starting tiles must sit in opposite corners — player 1 north-west (A1–D4) and
+player 2 south-east (M5–P8) — not both along the top. Today player 2 takes the
+top-right corner, which is right for three or more players but wrong for two.
+
 The human's wording (4-player game, corners A1–D4 America, top-right Arabia,
 bottom-right Spain, bottom-left Mongolia):
 
@@ -32,6 +37,16 @@ the browser in place of the review gate):
 
 Both top tiles end pointing south, both bottom tiles pointing north — i.e. the
 arrow points towards the horizontal middle of the board.
+
+The human also sent a two-player screenshot and asked for the corners to be
+opposite: player 1 north-west, player 2 south-east. The two-player board is
+16 × 8 (two block rows), so `startingCorner` reads that from the board and gives
+player 2 the south-east corner (M5–P8) instead of the top-right.
+
+| Player | Corner | Rotation |
+| --- | --- | --- |
+| 1 | top-left (A1–D4) | 180° |
+| 2 | bottom-right (M5–P8) | 0° |
 
 ## Why
 
@@ -61,7 +76,10 @@ points down, and its per-corner table compounded the error.
 
 - Correct the per-corner rotation table in `startingCorner`.
 - Correct the comment above it, which documents the wrong arrow direction.
+- Give the two-player board opposite corners (player 2 south-east) instead of
+  the top two.
 - Update `packages/engine/test/board-tiles.test.ts` to assert the new values.
+- Touch up the matching comment in `placeStartingTile`.
 
 **Out:**
 
@@ -82,8 +100,16 @@ turn 180° to point the arrow down and the bottom corners stay at 0° to point i
 up.
 
 `revealItem` in `packages/engine/src/actions/player.ts` already consumes
-`corner.rotation` unchanged, so nothing else moves. The test file asserts the
-four values and the player-1 reveal, both of which flip.
+`corner.rotation` unchanged, so nothing else moves.
+
+For the two-player diagonal, `startingCorner` needs the player count. It does
+not take one, and the board already encodes it: the two-player board is 16 × 8
+(two block rows) while three or more players use the full 16 × 16. So the
+function walks the four corners clockwise from the top-left as before, but when
+`blockRows(board) === 2` it indexes `[top-left, bottom-right]` instead of
+`[top-left, top-right, bottom-right, bottom-left]`. The test file asserts the
+four values, the player-1 reveal, and the two-player corners, all of which
+change.
 
 ## Claimed paths
 
@@ -95,12 +121,13 @@ four values and the player-1 reveal, both of which flip.
 ## Acceptance criteria
 
 - [ ] All four corners return the arrow-inwards rotation (180/180/0/0).
+- [ ] A two-player board puts player 1 top-left and player 2 bottom-right.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 - [ ] Hidden information: not touched — no projection changes, no new
       projection test needed.
-- [ ] Verified in the browser: a live 4-player game, all four civilizations
-      revealed, all four starting tiles pointing inward; screenshot shown to the
-      human.
+- [ ] Verified in the browser: a live 4-player game with all four civilizations
+      revealed, and a live 2-player game with both revealed; screenshots shown to
+      the human.
 - [ ] `decisions.md` records that saved games are not re-oriented.
 
 ## Open questions
