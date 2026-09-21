@@ -17,7 +17,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `feat/front-page-join-colors`
 - **Brief:** `docs/agents/tasks/front-page-join-colors.md`
-- **Status:** in progress
+- **Status:** review-approved — implemented and checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/web/src/styles.css`
   - `packages/web/src/views/GameList.tsx`
@@ -28,7 +29,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Notes:** Colours the front page's `Open` and `Join` action buttons with the
   old `btn-info` teal (Bootstrap 3 `#5bc0de`) in the light theme and a dimmer
   teal for the dark theme. No layout or behaviour change; the disabled `Full`
-  button stays grey.
+  button stays grey. No browser was connected, so the visual pass is left to the
+  human.
 
 ### gift-greatperson-civ
 

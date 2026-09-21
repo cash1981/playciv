@@ -3,7 +3,7 @@
 - **Slug:** `front-page-join-colors`
 - **Branch:** `feat/front-page-join-colors`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Status:** in progress
+- **Status:** review-approved (reviewer `deepseek/deepseek-v4-pro`), PR to open
 
 ## Goal
 
@@ -87,19 +87,22 @@ theme and adds a dimmer teal for the dark theme, which is the client default.
 
 ## Acceptance criteria
 
-- [ ] A signed-in player's `Open` and `Join` action buttons render with the
+- [x] A signed-in player's `Open` and `Join` action buttons render with the
       `info` variant; `Full` stays the grey default.
-- [ ] Light theme uses Bootstrap's `.btn-info` teal; dark theme uses a teal
+- [x] Light theme uses Bootstrap's `.btn-info` teal; dark theme uses a teal
       that reads against `--panel-2`.
-- [ ] The `info` variant's hover state keeps its own background/border instead
+- [x] The `info` variant's hover state keeps its own background/border instead
       of the generic accent border.
-- [ ] A test fails if `Open` or `Join` loses the variant.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: the buttons render only `game.id`, already public in
+- [x] A test fails if `Open` or `Join` loses the variant.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+      (443 engine / 176 server / 87 web, one more web test than before).
+- [x] Hidden information: the buttons render only `game.id`, already public in
       the list, and read no hand or private state; no projection changes, so
       nothing can leak.
-- [ ] Verified in the browser: both themes inspected on a live front page, or —
-      if no browser is available — stated plainly and left to the human.
+- [x] Verified in the browser: **not possible — no desktop browser is connected
+      to this session** (`browser.tabs.list` returns disconnected). The built
+      CSS was inspected instead (both `--info` values and both `button.info`
+      rules present), and the light/dark visual pass is left to the human.
 
 ## Open questions
 

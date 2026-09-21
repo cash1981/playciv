@@ -1486,3 +1486,28 @@ cover, as with the culture track and the starting-tile orientation.
 - The manifest still classes both as `resource` pieces; only the limit changes.
 - Huts and villages already placed in saved games are unaffected.
 
+---
+
+## 2026-09-21 - The front page's Open and Join buttons keep the old `btn-info` teal
+
+**Decision.** The front page game list's `Open` and `Join` actions carry a new
+`info` button variant. The light theme uses Bootstrap 3's `.btn-info` values
+exactly (`#5bc0de` / `#46b8da` / white, hover `#31b0d5` / `#269abc`); the dark
+theme uses a dimmer teal (`#1f7f94`, hover `#2a93aa`). Both actions share the
+one colour because a row shows `Open` or `Join`, never both. The disabled
+`Full` button stays the plain grey default.
+
+**Why.** The human asked for it: *"forsiden hadde farger på join knappene. Det
+er vanskelig å 'Open' og 'join' idag. Kan du gi samme farge som den forrige
+versjonen, og en farge i dark theme som passer."* `old-civ-web`'s
+`list.html` rendered its Join action as `<a class="btn btn-info">`, so the
+light teal is a port of the old look; the dark teal is new, because the old
+client had no dark theme.
+
+**Consequences.**
+- `Open` is a rewrite-only action (recorded 2026-09-17), so colouring it is an
+  addition, not a disagreement with the old system.
+- The dark teal is a visual choice, not a copied value; the human is the
+  authority for it, as with the culture track and the starting-tile
+  orientation. No browser was connected, so the visual pass is left to the
+  human.

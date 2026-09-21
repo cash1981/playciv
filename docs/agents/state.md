@@ -13,12 +13,25 @@ _Last updated: 2026-09-21_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 443 engine, 176 server, 86 web |
+| `pnpm -r test` | passing - 443 engine, 176 server, 87 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
 
 ## Done
 
+- **The front page's Open and Join buttons are coloured.** The game list's
+  `Open` and `Join` actions were plain grey default buttons, so the two things a
+  signed-in player can do on the front page were hard to see beside the
+  disabled `Full`. They now carry a new `info` button variant: the light theme
+  is Bootstrap 3's exact `.btn-info` teal (`#5bc0de` / `#46b8da` / white, hover
+  `#31b0d5` / `#269abc`), the same colour the old `list.html` Join button had,
+  and the dark theme a dimmer teal (`#1f7f94`, hover `#2a93aa`) that reads
+  against `--panel-2`. `Full` stays grey; no layout or behaviour change. New
+  `GameList` test asserts the variant and that `Full` lacks it. Branch
+  `feat/front-page-join-colors`; review-approved (reviewer
+  `deepseek/deepseek-v4-pro`), PR to open. 1 new web test (87 total). No browser
+  was connected, so the light/dark visual pass is left to the human; see
+  `decisions.md`.
 - **Only Tradable cards can be given away.** The hand's "Give" control was drawn
   on every card, but `tradeToPlayer` only accepts Java's `Tradable` set (Culture
   I/II/III, Hut, Village); every other kind returned `ITEM_NOT_FOUND`, so the
