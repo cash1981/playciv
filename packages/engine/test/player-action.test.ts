@@ -524,8 +524,14 @@ describe('discardRandomGreatPerson', () => {
     const cards = state.items
       .filter((item) => item.kind === 'greatperson' && item.type === type)
       .slice(0, count)
+    const taken = new Set(cards.map((card) => card.id))
     return {
-      state: withPlayer(state, { ...player, items: [...player.items, ...cards] }),
+      // Take the cards out of the deck too, so the fixture cannot mask a
+      // reducer that removed from the deck instead of the hand.
+      state: withPlayer(
+        { ...state, items: state.items.filter((item) => !taken.has(item.id)) },
+        { ...player, items: [...player.items, ...cards] },
+      ),
       ids: cards.map((card) => card.id),
     }
   }
@@ -539,6 +545,9 @@ describe('discardRandomGreatPerson', () => {
     expect(after.discardedItems[0]?.kind).toBe('greatperson')
     expect(after.discardedItems[0]?.hidden).toBe(true)
     expect(handOf(after, CASH1981)).toHaveLength(2)
+    // The shuffle must advance the seeded RNG, or the next draw would reuse
+    // the pre-shuffle seed and become predictable.
+    expect(after.rng).not.toBe(state.rng)
     expect(after.log.at(-1)?.logType).toBe('DISCARD')
     // DISCARD reveals the card, so the public line names the type.
     expect(after.log.at(-1)?.publicLog).toContain('General')
@@ -578,6 +587,13 @@ describe('discardRandomGreatPerson', () => {
       discardRandomGreatPerson(firstCivGame(), { playerId: CASH1981, type: 'General' }),
     )
     expect(error).toEqual({ kind: 'NOTHING_TO_DISCARD', playerId: CASH1981, type: 'General' })
+  })
+
+  it('refuses a player who is not in the game', () => {
+    const error = unwrapErr(
+      discardRandomGreatPerson(firstCivGame(), { playerId: 'player-nobody', type: 'General' }),
+    )
+    expect(error.kind).toBe('NO_ACCESS')
   })
 })
 
