@@ -390,9 +390,9 @@ describe('loot', () => {
     expect(unwrapErr(result).kind).toBe('ITEM_NOT_LOOTABLE')
   })
 
-  it('still refuses to loot a Great Person or a Civ card, which are giftable but not lootable', () => {
-    // `isGiftable` lets the Give control move these, but loot keeps using
-    // `isTradable`; this pins that line.
+  it('still refuses to loot a Great Person or a Civ card', () => {
+    // Neither implements the old `Tradable` marker, so neither can be looted
+    // (nor given away); this pins that line.
     for (const sheetName of ['GREAT_PERSON', 'CIV'] as const) {
       const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName }))
       const result = loot(state, {

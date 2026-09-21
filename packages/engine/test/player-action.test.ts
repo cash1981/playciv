@@ -465,80 +465,25 @@ describe('trade', () => {
     expect(state.log.at(-1)?.publicLog).toBe('')
   })
 
-  it('items outside the giftable set cannot be traded', () => {
-    const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'ANCIENT_WONDERS' }))
-    const wonder = handOf(state, CASH1981)[0]
-    if (wonder === undefined) throw new Error('no wonder')
+  it('items outside the Tradable set cannot be traded', () => {
+    // Java: only CultureI/II/III, Hut and Village implement Tradable. Great
+    // Person, Civ, City-state and Wonders do not, so the Give control is not
+    // drawn for them and the reducer refuses them.
+    for (const sheetName of ['ANCIENT_WONDERS', 'GREAT_PERSON', 'CIV', 'CITY_STATES'] as const) {
+      const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName }))
+      const card = handOf(state, CASH1981)[0]
+      if (card === undefined) throw new Error(`no ${sheetName} card`)
 
-    const error = unwrapErr(
-      tradeToPlayer(state, {
-        playerId: CASH1981,
-        targetPlayerId: ITCHI,
-        sheetName: 'ANCIENT_WONDERS',
-        name: itemName(wonder),
-      }),
-    )
-    expect(error.kind).toBe('ITEM_NOT_FOUND')
-  })
-
-  it('gives a great person to another player', () => {
-    // Deliberate extension past the old `Tradable` marker; see the task brief.
-    let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'GREAT_PERSON' }))
-    const card = handOf(state, CASH1981).find((item) => item.kind === 'greatperson')
-    if (card === undefined) throw new Error('no great person')
-
-    state = unwrap(
-      tradeToPlayer(state, {
-        playerId: CASH1981,
-        targetPlayerId: ITCHI,
-        sheetName: 'GREAT_PERSON',
-        itemNumber: card.itemNumber,
-        name: itemName(card),
-      }),
-    )
-
-    expect(handOf(state, CASH1981).some((item) => item.id === card.id)).toBe(false)
-    expect(handOf(state, ITCHI).some((item) => item.id === card.id)).toBe(true)
-    expect(handOf(state, ITCHI).find((item) => item.id === card.id)?.ownerId).toBe(ITCHI)
-    // The existing trade log is reused unchanged.
-    expect(state.log.at(-2)?.logType).toBe('TRADE_BETWEEN_PLAYERS')
-    expect(state.log.at(-1)?.publicLog).toBe('')
-  })
-
-  it('gives the civ card away without touching the chosen civilization', () => {
-    // Choose a civ first, so `civilization` is set: the card moved by the trade
-    // is then exactly the chosen civ card (the other civs are discarded on
-    // reveal). Gifting it moves only the card; the giver keeps their chosen
-    // civilization, government and starting tech. That is the recorded decision
-    // (see `decisions.md`), and this test pins it.
-    let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CIV' }))
-    const drawn = handOf(state, CASH1981).find((item) => item.kind === 'civ')
-    if (drawn === undefined) throw new Error('no civ card')
-    state = unwrap(
-      revealItem(state, {
-        playerId: CASH1981,
-        sheetName: 'CIV',
-        itemNumber: drawn.itemNumber,
-      }),
-    )
-
-    const card = handOf(state, CASH1981).find((item) => item.kind === 'civ')
-    if (card === undefined) throw new Error('no chosen civ card left in hand')
-    expect(findPlayer(state, CASH1981)?.civilization?.id).toBe(card.id)
-
-    state = unwrap(
-      tradeToPlayer(state, {
-        playerId: CASH1981,
-        targetPlayerId: ITCHI,
-        sheetName: 'CIV',
-        itemNumber: card.itemNumber,
-        name: itemName(card),
-      }),
-    )
-
-    expect(handOf(state, CASH1981).some((item) => item.id === card.id)).toBe(false)
-    expect(handOf(state, ITCHI).find((item) => item.id === card.id)?.ownerId).toBe(ITCHI)
-    expect(findPlayer(state, CASH1981)?.civilization?.id).toBe(card.id)
+      const error = unwrapErr(
+        tradeToPlayer(state, {
+          playerId: CASH1981,
+          targetPlayerId: ITCHI,
+          sheetName,
+          name: itemName(card),
+        }),
+      )
+      expect(error.kind).toBe('ITEM_NOT_FOUND')
+    }
   })
 })
 

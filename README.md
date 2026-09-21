@@ -561,18 +561,13 @@ one provider call per recipient, so a very large account list could hit the
 Worker's subrequest/CPU limits — a known limitation, not fixed here. See
 `docs/agents/decisions.md`.
 
-**A Great Person and the civ card can be given away.** `tradeToPlayer` ran
-through Java's `Tradable` marker interface, which only Culture I/II/III, Hut and
-Village implement, so giving away a Great Person or a Civ card failed with
-`ITEM_NOT_FOUND`. (The old AngularJS client also drew its "Send to Player"
-button on those cards only; showing the Give control on every hand card is the
-rewrite's own behaviour.) `tradeToPlayer` now allows those two extra kinds
-(`isGiftable`). Every other kind stays non-giftable, and looting is untouched:
-it still uses `isTradable`, so a Great Person can be given but not looted.
-Giving the civ card moves only the card — the giver keeps their chosen
-civilization, government, starting tech, starting tile and leader marker. This
-is an extension past the old system, requested by the human; see
-`docs/agents/decisions.md`.
+**Only Tradable cards can be given away.** The hand's "Give" control was drawn
+on every card, but `tradeToPlayer` only ever accepted Java's `Tradable` set
+(Culture I/II/III, Hut, Village); every other kind came back `ITEM_NOT_FOUND`.
+The control is now shown only for the Tradable cards, so Great Person, Civ,
+City-state, units, wonders, tiles, techs and social policies no longer offer a
+button that cannot work. The old AngularJS client likewise drew "Send to Player"
+only on the Tradable cards. See `docs/agents/decisions.md`.
 
 ## Deferred
 

@@ -1375,3 +1375,29 @@ human, recorded here and in `README.md`.
   branch declares `@types/node`. The same refresh also syncs the engine's
   `vitest` importer to `^4.1.11`, which `main`'s `packages/engine/package.json`
   already required while the lockfile still pinned 3.2.7.
+
+## 2026-09-21 - Correction: only Tradable cards can be given away
+
+**Supersedes** the "A Great Person and the civ card can be given away" entry
+above. That entry misread the human's report. They meant the Give control should
+not be offered on those cards at all: "You can still give away greatperson,
+citystate and your civ. None of which should be possible."
+
+**Decision.** Gifting stays exactly the old `Tradable` set (Culture I/II/III,
+Hut, Village). `tradeToPlayer` filters on `isTradable` again (the `isGiftable`
+superset is removed), and the client draws the Give control only when
+`isTradable(item)` holds, so Great Person, Civ, City-state, units, wonders,
+tiles, techs and social policies no longer show a Give button that would fail
+with `ITEM_NOT_FOUND`.
+
+**Why.** The engine already refused the non-Tradable kinds; the bug was that the
+rewrite drew the control on every hand card, inviting a click that could never
+succeed. The old AngularJS client drew its "Send to Player" button only on the
+Tradable cards, so hiding it is the faithful behaviour.
+
+**Consequences.**
+- `isGiftable` is gone; `isTradable` is the single gate for both loot and give.
+- `GiveControl` in `GameView.tsx` renders null for a non-Tradable item; a
+  component test covers Great Person, Civ and City-state.
+- The `@types/node` fix from the previous entry stays: it is unrelated but still
+  needed for `pnpm -r typecheck` on `main`.

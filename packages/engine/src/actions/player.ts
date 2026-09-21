@@ -19,7 +19,7 @@ import type { EngineError } from '../errors.js'
 import type { Government } from '../government.js'
 import { isGovernment, startingGovernmentFor } from '../government.js'
 import type { CivItem, Item, SocialPolicyItem, TechItem } from '../item.js'
-import { isGiftable, isUnit, itemName, revealAll } from '../item.js'
+import { isTradable, isUnit, itemName, revealAll } from '../item.js'
 import {
   appendInfoLog,
   appendItemLog,
@@ -582,9 +582,9 @@ export interface TradeInput {
  * Java: `PlayerAction.tradeToPlayer` — gives a Tradable item to another
  * player. Unlike `loot` this is voluntary, and the player picks the item.
  *
- * This port also allows a Great Person and a Civ card, which the old `Tradable`
- * marker excluded; that is a deliberate extension the human asked for, so it is
- * `isGiftable`, not `isTradable`, that decides here (see `decisions.md`).
+ * Only the old `Tradable` set may be given away: Great Person, Civ, City-state
+ * and every other kind are rejected with `ITEM_NOT_FOUND`, and the client does
+ * not even draw the Give control for them.
  */
 export function tradeToPlayer(state: GameState, input: TradeInput): ActionResult {
   const from = requireAccess(state, input.playerId)
@@ -598,10 +598,10 @@ export function tradeToPlayer(state: GameState, input: TradeInput): ActionResult
   const matchesName = (item: Item): boolean =>
     input.name !== undefined && itemName(item).toLowerCase() === input.name.toLowerCase()
 
-  const giftable = fromPlayer.items.filter(isGiftable)
+  const tradable = fromPlayer.items.filter(isTradable)
   const found =
-    giftable.find((item) => item.itemNumber === input.itemNumber && matchesName(item)) ??
-    giftable.find((item) => item.sheetName === input.sheetName && matchesName(item))
+    tradable.find((item) => item.itemNumber === input.itemNumber && matchesName(item)) ??
+    tradable.find((item) => item.sheetName === input.sheetName && matchesName(item))
 
   if (found === undefined) return err({ kind: 'ITEM_NOT_FOUND', sheetName: input.sheetName })
 

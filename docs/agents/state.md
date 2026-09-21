@@ -19,18 +19,18 @@ _Last updated: 2026-09-21_
 
 ## Done
 
-- **Gift a Great Person or the civ card.** The hand's "Give" control was gated
-  by Java's `Tradable` marker (Culture I/II/III, Hut, Village), so giving away a
-  Great Person or a Civ card failed with `ITEM_NOT_FOUND` although the rewrite
-  draws the control on every hand card. `tradeToPlayer` now uses a new
-  `isGiftable` predicate adding those two kinds — a deliberate extension past the
-  old system, requested by the human. Giving the civ card moves only the card;
-  the giver keeps their civilization, government, starting tech and board
-  pieces. Loot is untouched and still refuses both, pinned by a test. Also
-  declared `@types/node` on `packages/engine`, whose tests import
-  `node:fs`/`node:url`; a lockfile refresh had dropped the hoisting accident it
-  relied on, breaking `pnpm -r typecheck` on `main`. Branch
-  `feat/gift-greatperson-civ`; 3 new engine tests.
+- **Only Tradable cards can be given away.** The hand's "Give" control was drawn
+  on every card, but `tradeToPlayer` only accepts Java's `Tradable` set (Culture
+  I/II/III, Hut, Village); every other kind returned `ITEM_NOT_FOUND`, so the
+  control invited a click that could not succeed. The Give control
+  (`GiveControl` in `GameView.tsx`) is now rendered only for a Tradable item, so
+  Great Person, Civ, City-state, units, wonders, tiles, techs and social
+  policies no longer offer it; the engine gate is unchanged. (An earlier pass on
+  this branch wrongly *enabled* gifting Great Person and Civ; that is reverted —
+  see `decisions.md`.) Also declared `@types/node` on `packages/engine`, whose
+  tests import `node:fs`/`node:url`; a lockfile refresh had dropped the hoisting
+  accident it relied on, breaking `pnpm -r typecheck` on `main`. Branch
+  `feat/gift-greatperson-civ`.
 - **Buy Me a Coffee in the footer.** The site-wide footer now shows a Buy Me a
   Coffee button beside the PayPal donate button, from the exact markup the owner
   supplied (`buymeacoffee.com/cash1981`). A plain image link, not the provider's

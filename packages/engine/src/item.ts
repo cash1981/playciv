@@ -199,26 +199,13 @@ export function isUnit(item: Item): item is UnitItem {
 
 /**
  * Java: `Tradable` — an empty marker interface implemented by CultureI/II/III,
- * Hut and Village. Only these can be looted; what may be *given away* is a
- * superset, `isGiftable` below.
+ * Hut and Village. Only these can be looted or given away. The Give control in
+ * the hand is shown only for these; see `GameView.tsx`.
  */
 const TRADABLE_KINDS = new Set<ItemKind>(['cultureI', 'cultureII', 'cultureIII', 'hut', 'village'])
 
 export function isTradable(item: Item): boolean {
   return TRADABLE_KINDS.has(item.kind)
-}
-
-/**
- * What `tradeToPlayer` — the hand's "Give" control — may move. The old Java
- * `Tradable` marker is the base, plus Great Person and Civ, which the human
- * asked to be giftable. That is a deliberate extension past the old system
- * (see `decisions.md`); `loot` deliberately keeps using `isTradable`, because
- * looting a Great Person or a Civ was never asked for.
- */
-const GIFTABLE_KINDS = new Set<ItemKind>([...TRADABLE_KINDS, 'greatperson', 'civ'])
-
-export function isGiftable(item: Item): boolean {
-  return GIFTABLE_KINDS.has(item.kind)
 }
 
 // ---------------------------------------------------------------------------
