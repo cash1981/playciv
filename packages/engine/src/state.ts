@@ -35,7 +35,13 @@ export interface PlayerStats {
   readonly artillery: number
   readonly mounted: number
   readonly stacking: number
-  readonly mvmt: number
+  /**
+   * Movement is the one status value the players write as an expression:
+   * natural religion adds one movement to an army figure, written `3+1`. It is
+   * stored exactly as typed and, like the rest of the board, is never used in a
+   * calculation. See {@link isMovementValue} for what is allowed.
+   */
+  readonly mvmt: string
   readonly combat: number
   readonly handSize: number
   readonly efta: number
@@ -52,13 +58,31 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   artillery: 1,
   mounted: 1,
   stacking: 2,
-  mvmt: 2,
+  mvmt: '2',
   combat: 0,
   handSize: 0,
   efta: 0,
   infra: 0,
   mic: 0,
   pe: 0,
+}
+
+/**
+ * What a Movement value may look like: a base number followed by zero or more
+ * `+<bonus>` parts, as in `2`, `3+1` or `2+1+1`. Deliberately strict, so a typo
+ * like `3+` or `+1` is refused rather than stored.
+ */
+export const MOVEMENT_VALUE_PATTERN = /^\d+(?:\+\d+)*$/
+
+/**
+ * True for a Movement value. A non-negative integer is accepted for callers
+ * that still send a bare number (and for games saved before Movement was text);
+ * it is stored in its string form. Shared by the engine and the client so the
+ * two cannot drift apart.
+ */
+export function isMovementValue(value: unknown): value is number | string {
+  if (typeof value === 'number') return Number.isInteger(value) && value >= 0
+  return typeof value === 'string' && MOVEMENT_VALUE_PATTERN.test(value)
 }
 
 export interface Playerhand {

@@ -419,6 +419,9 @@ status" panel: shared bookkeeping includes coins, trade, culture, unit counts,
 movement/combat/stacking values, hand size and EftA/Infra/MIC/PE modifiers.
 Every value is editable by any member of the game, with every edit written to
 the public log; new games start with the standard unit and modifier defaults.
+Movement is the one value written as an expression rather than a plain integer:
+natural religion adds one movement to an army figure, so it is recorded as
+`3+1`. It is still pure bookkeeping, never added up or used in a rule.
 
 **Government is structured public bookkeeping.** The old app had no government
 field, endpoint or dedicated UI; players recorded it only through the embedded

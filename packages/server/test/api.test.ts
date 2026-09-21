@@ -2113,6 +2113,52 @@ describe('player stats (#43)', () => {
     expect(rejected.status).toBe(400)
     expect((await rejected.json() as { error: string }).error).toBe('INVALID_STAT_VALUE')
   })
+
+  it('stores a Movement expression as text (issue #102)', async () => {
+    const { gameId, starter } = await startedGame('StatsMovement')
+    const { other } = await ids(gameId, starter)
+
+    const saved = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/stat`,
+      headers: bearer(starter),
+      payload: { stat: 'mvmt', value: '3+1' },
+    })
+    expect(saved.status).toBe(200)
+    const view = await saved.json() as {
+      opponents: { playerId: string; stats: { mvmt: string } }[]
+    }
+    expect(view.opponents.find((o) => o.playerId === other)?.stats.mvmt).toBe('3+1')
+  })
+
+  it('still accepts a numeric string for a plain stat', async () => {
+    const { gameId, starter } = await startedGame('StatsNumericString')
+    const { other } = await ids(gameId, starter)
+
+    const saved = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/stat`,
+      headers: bearer(starter),
+      payload: { stat: 'coins', value: '5' },
+    })
+    expect(saved.status).toBe(200)
+    const view = await saved.json() as StatView
+    expect(view.opponents.find((o) => o.playerId === other)?.stats.coins).toBe(5)
+  })
+
+  it('rejects an invalid Movement value', async () => {
+    const { gameId, starter } = await startedGame('StatsMovementBad')
+    const { other } = await ids(gameId, starter)
+
+    const rejected = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/stat`,
+      headers: bearer(starter),
+      payload: { stat: 'mvmt', value: '3+' },
+    })
+    expect(rejected.status).toBe(400)
+    expect((await rejected.json() as { error: string }).error).toBe('INVALID_STAT_VALUE')
+  })
 })
 
 describe('player governments (#43)', () => {

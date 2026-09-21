@@ -32,7 +32,7 @@ import { err, ok } from '../result.js'
 import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
 import type { GameState, Playerhand, PlayerStats } from '../state.js'
-import { findPlayer, hasUserAccess, withPlayer } from '../state.js'
+import { findPlayer, hasUserAccess, isMovementValue, withPlayer } from '../state.js'
 
 import { placeUnchecked } from './board.js'
 import { draw, drawWonderToBoard } from './draw.js'
@@ -806,11 +806,22 @@ function isPlayerStatKey(stat: string): stat is keyof PlayerStats {
   return (STAT_KEYS as readonly string[]).includes(stat)
 }
 
-export interface SetPlayerStatInput {
+/**
+ * The value `setPlayerStat` accepts for a given stat. Everything is a number
+ * except Movement (issue #102), whose expression (`3+1`) is a string — though a
+ * bare number is still accepted and normalised, so older callers keep working.
+ * `K` is inferred from `stat`, so passing a Movement expression to `coins` is a
+ * compile error as well as a runtime one.
+ */
+export type PlayerStatValue<K extends keyof PlayerStats> = K extends 'mvmt'
+  ? number | string
+  : PlayerStats[K]
+
+export type SetPlayerStatInput<K extends keyof PlayerStats = keyof PlayerStats> = {
   readonly editorPlayerId: string
   readonly targetPlayerId: string
-  readonly stat: keyof PlayerStats
-  readonly value: number
+  readonly stat: K
+  readonly value: PlayerStatValue<K>
   /** ISO timestamp for the log entry. The engine itself stays pure. */
   readonly at?: string
 }
@@ -820,7 +831,10 @@ export interface SetPlayerStatInput {
  * other current player's numbers — the board is shared bookkeeping, not a
  * private hand, so there is no owner-only restriction here.
  */
-export function setPlayerStat(state: GameState, input: SetPlayerStatInput): ActionResult {
+export function setPlayerStat<K extends keyof PlayerStats>(
+  state: GameState,
+  input: SetPlayerStatInput<K>,
+): ActionResult {
   const editorAccess = requireAccess(state, input.editorPlayerId)
   if (!editorAccess.ok) return editorAccess
   const editor = editorAccess.value
@@ -833,20 +847,38 @@ export function setPlayerStat(state: GameState, input: SetPlayerStatInput): Acti
     return err({ kind: 'UNKNOWN_STAT', stat: String(input.stat) })
   }
 
-  const allowsNegative = input.stat === 'combat'
-  if (!Number.isInteger(input.value) || (!allowsNegative && input.value < 0)) {
-    return err({ kind: 'INVALID_STAT_VALUE', value: input.value })
+  // `input.value` is `PlayerStatValue<K>`, a type the compiler cannot narrow
+  // through a generic key; the runtime checks below are what make the cast safe.
+  const value = input.value as number | string
+
+  // Movement (issue #102) is the one value written as an expression, `3+1`, to
+  // record a natural-religion bonus. Every other stat stays a plain integer;
+  // Combat alone may be negative.
+  let storedValue: number | string
+  if (input.stat === 'mvmt') {
+    if (!isMovementValue(value)) {
+      return err({ kind: 'INVALID_STAT_VALUE', value })
+    }
+    // A bare number is accepted and normalised, so older callers and games
+    // saved before Movement was text keep working.
+    storedValue = String(value)
+  } else {
+    const allowsNegative = input.stat === 'combat'
+    if (typeof value !== 'number' || !Number.isInteger(value) || (!allowsNegative && value < 0)) {
+      return err({ kind: 'INVALID_STAT_VALUE', value })
+    }
+    storedValue = value
   }
 
   const next = withPlayer(state, {
     ...target,
-    stats: { ...target.stats, [input.stat]: input.value },
+    stats: { ...target.stats, [input.stat]: storedValue } as PlayerStats,
   })
 
   const message =
     editor.playerId === target.playerId
-      ? `set their ${STAT_LABEL[input.stat]} to ${input.value}`
-      : `set ${target.username}'s ${STAT_LABEL[input.stat]} to ${input.value}`
+      ? `set their ${STAT_LABEL[input.stat]} to ${storedValue}`
+      : `set ${target.username}'s ${STAT_LABEL[input.stat]} to ${storedValue}`
 
   return ok(
     appendLog(next, {

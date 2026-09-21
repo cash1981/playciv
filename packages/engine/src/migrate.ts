@@ -9,7 +9,7 @@
 import type { ArenaUnit, Battle } from './battle.js'
 import type { Board, BoardHistoryEntry, BoardPiece } from './board.js'
 import { createBoard } from './board.js'
-import type { GameState, Playerhand } from './state.js'
+import type { GameState, Playerhand, PlayerStats } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
 import { migratePlayerTurn } from './turn.js'
@@ -30,10 +30,20 @@ type MaybeOlder = Omit<
 type MaybeOlderPlayerhand = Omit<Playerhand, 'stats' | 'government'> &
   Partial<Pick<Playerhand, 'stats' | 'government'>>
 
+/**
+ * Fills in the status board and, since issue #102, normalises Movement to its
+ * string form: a game saved before then stored it as a number.
+ */
+const normalizeStats = (stats: Partial<PlayerStats> | undefined): PlayerStats => {
+  const merged = { ...DEFAULT_PLAYER_STATS, ...stats }
+  // `?? default` guards a hand-edited or older save that stored neither.
+  return { ...merged, mvmt: String(merged.mvmt ?? DEFAULT_PLAYER_STATS.mvmt) }
+}
+
 const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   ...player,
   playerTurns: player.playerTurns.map(migratePlayerTurn),
-  stats: { ...DEFAULT_PLAYER_STATS, ...player.stats },
+  stats: normalizeStats(player.stats),
   government: player.government ?? DEFAULT_GOVERNMENT,
 })
 

@@ -8,7 +8,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-import { GOVERNMENT_CARDS, GOVERNMENTS } from '@civ/engine'
+import { GOVERNMENT_CARDS, GOVERNMENTS, isMovementValue } from '@civ/engine'
 import type { Government } from '@civ/engine'
 
 import { api } from '../lib/api.js'
@@ -38,6 +38,11 @@ type StatColumn = {
   readonly key: keyof PlayerStats
   readonly label: string
   readonly signed?: boolean
+  /**
+   * Movement (issue #102) is written as an expression (`3+1`) rather than a
+   * plain integer; the cell accepts text and validates it accordingly.
+   */
+  readonly text?: boolean
 }
 
 const ACCOUNTING_COLUMNS: readonly StatColumn[] = [
@@ -54,7 +59,7 @@ const UNIT_COLUMNS: readonly StatColumn[] = [
 
 const MODIFIER_COLUMNS: readonly StatColumn[] = [
   { key: 'stacking', label: 'Stacking' },
-  { key: 'mvmt', label: 'Movement' },
+  { key: 'mvmt', label: 'Movement', text: true },
   { key: 'combat', label: 'Combat', signed: true },
   { key: 'handSize', label: 'Hand Size' },
 ]
@@ -232,8 +237,10 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
                     className={GROUP_START_KEYS.has(column.key) ? 'status-group-start' : undefined}
                   >
                     <StatCell
+                      label={`${row.username} ${column.label}`}
                       value={row.stats[column.key]}
                       signed={column.signed === true}
+                      text={column.text === true}
                       disabled={busy || readOnly}
                       onCommit={(value) =>
                         void run(() => api.setPlayerStat(gameId, row.playerId, column.key, value))
@@ -293,22 +300,28 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
 }
 
 /**
- * An inline editable integer. Combat may be negative; other values are
- * non-negative. Commits on blur or Enter, and only when the value actually
- * changed, so concurrent edits are not clobbered.
+ * An inline editable stat. Most are integers (Combat may be negative);
+ * Movement (issue #102) is text, an expression like `3+1`. Commits on blur or
+ * Enter, and only when the value actually changed, so concurrent edits are not
+ * clobbered. Invalid input reverts rather than saving.
  */
 function StatCell({
+  label,
   value,
   signed = false,
+  text = false,
   disabled,
   onCommit,
 }: {
-  readonly value: number
+  readonly label: string
+  readonly value: number | string
   readonly signed?: boolean
+  readonly text?: boolean
   readonly disabled: boolean
-  readonly onCommit: (value: number) => void
+  readonly onCommit: (value: number | string) => void
 }): React.JSX.Element {
-  const displayValue = signed && value >= 0 ? `+${value}` : String(value)
+  const displayValue =
+    typeof value === 'string' ? value : signed && value >= 0 ? `+${value}` : String(value)
   const [draft, setDraft] = useState(displayValue)
 
   useEffect(() => {
@@ -317,6 +330,15 @@ function StatCell({
 
   function commit(): void {
     const trimmed = draft.trim()
+    if (text) {
+      // Movement: `3`, `3+1` and `2+1+1` are allowed; a typo reverts.
+      if (!isMovementValue(trimmed)) {
+        setDraft(displayValue)
+        return
+      }
+      if (trimmed !== value) onCommit(trimmed)
+      return
+    }
     const parsed = Number(trimmed)
     // Empty or partial input (e.g. "" or "-") must revert, not save 0.
     if (trimmed === '' || !Number.isInteger(parsed) || (!signed && parsed < 0)) {
@@ -330,7 +352,8 @@ function StatCell({
     <input
       className="stat-input"
       type="text"
-      inputMode="decimal"
+      aria-label={label}
+      inputMode={text ? 'text' : 'decimal'}
       value={draft}
       disabled={disabled}
       onChange={(event) => setDraft(event.target.value)}

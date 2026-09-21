@@ -1212,3 +1212,33 @@ is pure JS with no Node built-ins, so it runs on Cloudflare Workers.
 - Deliberate differences from Java: the default subject uses the current domain
   (`playciv.app`, not `playciv.com`); and the unsubscribe link is on every mail,
   as with the other notifications.
+
+---
+
+## 2026-09-21 - Movement as an expression (issue #102)
+
+**Decision.** The Movement value on the Player status board (issue #43) is
+stored as literal text, not as a base/bonus pair. It accepts a base number with
+zero or more `+<bonus>` parts - `2`, `3+1`, `2+1+1` - and shows exactly what
+was typed. `PlayerStats.mvmt` is therefore `string` (default `'2'`), every
+other stat stays `number`. The shared `isMovementValue` / `MOVEMENT_VALUE_PATTERN`
+in `state.ts` is used by both the engine and the client, so the two cannot
+drift. A bare number is still accepted and normalised to its string form, so
+older callers and saves keep working, and `migrateGameState` converts an older
+game's numeric `mvmt` to text.
+
+**Why.** Natural religion adds one movement to an army figure, and players write
+that at the table as `3+1`; the numeric cell from issue #43 refused it
+(issue #102). Movement is pure bookkeeping - it is never added up or used in a
+rule - so there is nothing to gain from parsing it into two numbers. The status
+board and its Movement stat have no counterpart in `old-civ-rest` or
+`old-civ-web`, so this deviates from nothing in the old system; it is a new,
+human-specified field.
+
+**Consequences.**
+- `setPlayerStat` is generic over the stat key (`PlayerStatValue<K>`), so that
+  passing a Movement expression to a numeric stat is a compile error as well as
+  the existing runtime `INVALID_STAT_VALUE`.
+- The `POST /api/games/:id/players/:id/stat` route accepts a string `value` for
+  `mvmt` and still accepts a number or numeric string for the others. It is
+  bookkeeping, not a game rule: no enforcement, no arithmetic.

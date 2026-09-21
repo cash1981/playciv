@@ -64,7 +64,7 @@ describe('setPlayerStat', () => {
       artillery: 1,
       mounted: 1,
       stacking: 2,
-      mvmt: 2,
+      mvmt: '2',
       combat: 0,
       handSize: 0,
       efta: 0,
@@ -91,6 +91,19 @@ describe('setPlayerStat', () => {
       trade: 2,
       culture: 4,
     })
+  })
+
+  it('normalises a numeric Movement from a game saved before issue #102', () => {
+    const original = firstCivGame()
+    const older = {
+      ...original,
+      players: original.players.map((player) => ({
+        ...player,
+        stats: { ...player.stats, mvmt: 3 },
+      })),
+    } as unknown as GameState
+
+    expect(findPlayer(migrateGameState(older), CASH1981)?.stats.mvmt).toBe('3')
   })
 
   it('sets a stat on the target and writes a public log entry', () => {
@@ -223,6 +236,70 @@ describe('setPlayerStat', () => {
       }),
     )
     expect(findPlayer(state, CASH1981)?.stats.combat).toBe(-1)
+  })
+
+  it('accepts a Movement expression with a printed natural-religion bonus', () => {
+    const state = unwrap(
+      setPlayerStat(firstCivGame(), {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        stat: 'mvmt',
+        value: '3+1',
+      }),
+    )
+    expect(findPlayer(state, CASH1981)?.stats.mvmt).toBe('3+1')
+    expect(state.log.at(-1)?.publicLog).toBe('cash1981 set their movement to 3+1')
+  })
+
+  it('accepts more than one Movement bonus, and a plain number normalised to text', () => {
+    let state = unwrap(
+      setPlayerStat(firstCivGame(), {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        stat: 'mvmt',
+        value: '2+1+1',
+      }),
+    )
+    expect(findPlayer(state, CASH1981)?.stats.mvmt).toBe('2+1+1')
+
+    state = unwrap(
+      setPlayerStat(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        stat: 'mvmt',
+        value: 4,
+      }),
+    )
+    // A bare number is stored in its canonical string form.
+    expect(findPlayer(state, CASH1981)?.stats.mvmt).toBe('4')
+  })
+
+  it.each(['3+', '+1', 'three', '', '3 + 1', '-1'])(
+    'rejects an invalid Movement value: %s',
+    (value) => {
+      const error = unwrapErr(
+        setPlayerStat(firstCivGame(), {
+          editorPlayerId: CASH1981,
+          targetPlayerId: CASH1981,
+          stat: 'mvmt',
+          value,
+        }),
+      )
+      expect(error).toEqual({ kind: 'INVALID_STAT_VALUE', value })
+    },
+  )
+
+  it('rejects a Movement expression for a numeric stat', () => {
+    const error = unwrapErr(
+      setPlayerStat(firstCivGame(), {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        stat: 'coins',
+        // @ts-expect-error — a Movement expression is not a valid coins value
+        value: '3+1',
+      }),
+    )
+    expect(error).toEqual({ kind: 'INVALID_STAT_VALUE', value: '3+1' })
   })
 })
 

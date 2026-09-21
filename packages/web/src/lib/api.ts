@@ -382,7 +382,9 @@ export const api = {
     gameId: string,
     targetPlayerId: string,
     stat: keyof PlayerStats,
-    value: number,
+    // Movement (issue #102) takes its expression as a string ("3+1"); every
+    // other stat is a number.
+    value: number | string,
   ) =>
     post<PlayerView>(`/api/games/${gameId}/players/${targetPlayerId}/stat`, { stat, value }),
   setPlayerGovernment: (
