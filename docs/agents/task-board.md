@@ -12,6 +12,27 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-125-turn-order-reveal-history
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
+- **Branch:** `feat/issue-125-turn-order-reveal-history`
+- **Brief:** `docs/agents/tasks/issue-125-turn-order-reveal-history.md`
+- **Status:** in progress — follow-up on the open PR #126 after the human's
+  review: fixed-height scroll areas for the revealed history and the editor.
+- **Claimed paths:**
+  - `packages/web/src/views/TurnPanel.tsx`
+  - `packages/web/src/views/TurnPanel.css`
+  - `packages/web/src/views/TurnPanel.test.tsx`
+  - `docs/agents/tasks/issue-125-turn-order-reveal-history.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+- **Notes:** The original issue #125 implementation is review-approved and on PR
+  #126. This follow-up bounds the section height: the revealed history and the
+  editor each get their own scrollbar, and the long phases (SOT, CM, MOVEMENT)
+  stop growing at about six lines. Trade and research keep their default size.
+  Same branch and PR; the earlier claim was released when the first pass
+  finished.
+
 ### front-page-join-colors
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
