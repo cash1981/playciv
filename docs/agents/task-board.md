@@ -20,11 +20,13 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Status:** in progress — implemented, in review.
 - **Claimed paths:**
   - `.opencode/agents/reviewer.md` (new)
+  - `.claude/agents/reviewer.md`
   - `AGENTS.md`
   - `docs/agents/workflow.md`
   - `docs/agents/roles.md`
   - `docs/agents/repo-map.md`
   - `.claude/skills/review-gate/SKILL.md`
+  - `.agents/skills/review-gate/SKILL.md`
   - `docs/agents/tasks/opencode-readonly-review-loop.md`
   - `docs/agents/task-board.md`
   - `docs/agents/state.md`

@@ -85,7 +85,7 @@ anything worth keeping to `docs/agents/decisions.md`.
 
 If the coder has come back three times on the same task, stop. Three rejected
 rounds on a cheap model cost more than one pass on a strong one. Say so and
-switch.
+switch the coder to the strong model; the review loop continues on the new diff.
 
 ## What must never pass
 

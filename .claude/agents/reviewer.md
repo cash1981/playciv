@@ -16,6 +16,8 @@ it**. Do not suggest that you fix it; you cannot.
 - A path to a diff, written outside the repository.
 - A path to the task brief the change was meant to satisfy.
 - The verification output the orchestrator ran: typecheck, tests, build.
+- On a second or later round, the findings from the previous round, so you can
+  say whether each was actually fixed.
 
 Read the diff first. Read files from the repository when the diff alone does
 not tell you whether something is right — the diff hides the surrounding code,
@@ -44,6 +46,9 @@ reverse.
    a time and say whether the diff actually shows each one met.
 7. **Conventions.** `import type`, `.js` specifiers, no `!`, `readonly`, no
    hand-edited generated files, English throughout.
+
+On a re-review, also confirm the previous round's findings are fixed, quoting
+the code that fixes them.
 
 ## How to report
 

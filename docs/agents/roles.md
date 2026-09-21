@@ -55,6 +55,12 @@ its own commands can also write files through them.
 explicit approval, and the orchestrator is expected to disagree with the
 reviewer when it has reason to — the report is evidence, not a verdict.
 
+**The review runs after the first implementation, and it runs to zero
+findings.** It is not a single pass saved for the pull request: fix what the
+reviewer reports, review the new diff, and repeat until a round has nothing
+above a nit. A nit left in place is written down in the verdict, so the choice
+is visible. See `workflow.md`.
+
 ```
 coder ──▶ orchestrator verifies ──▶ reviewer reads diff ──▶ report
                   ▲                                           │
@@ -116,4 +122,5 @@ Two things keep it from going wrong:
   what a test run already proved.
 
 If the cheap model needs three rounds on the same task, stop and do it on the
-strong model. Three rejected rounds cost more than one good pass.
+strong model — the review loop still runs, it just runs on the new coder. Three
+rejected rounds cost more than one good pass.

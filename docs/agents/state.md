@@ -13,7 +13,7 @@ _Last updated: 2026-09-21_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 429 engine, 173 server, 72 web |
+| `pnpm -r test` | passing - 429 engine, 173 server, 73 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
 
@@ -93,13 +93,13 @@ _Last updated: 2026-09-21_
   `MAIL_BROADCAST_NEW_GAMES`, off by default; the two deliberate differences
   from Java (link on every mail, unsubscribe honoured everywhere) are in
   `decisions.md` and `README.md`. 21 new server tests.
-- **OpenCode agents.** OpenCode gets the `coder` and `rules-checker` roles under
-  `.opencode/agents/`, mirroring `.claude/agents/`; the reviewer role is
-  intentionally omitted because the owner runs the same model throughout, so the
-  orchestrator does the correctness check itself. `rules-checker` is read-only
-  and the coder cannot spawn subagents. Skills still load from `.claude/skills/`.
-  Self-checked against the OpenCode agent spec; `chore/opencode-agents` PR to
-  open.
+- **OpenCode agents.** OpenCode gets the `coder`, `reviewer` and `rules-checker`
+  roles under `.opencode/agents/`, mirroring `.claude/agents/`. The `reviewer`
+  and `rules-checker` are read-only and the coder cannot spawn subagents. Every
+  change goes through the read-only reviewer after the first implementation,
+  iterating until a round reports nothing above a nit (see `workflow.md`); the
+  earlier claim that OpenCode had no reviewer is superseded. Skills still load
+  from `.claude/skills/`.
 - **The port itself.** Deck, items, draws, reshuffle, hands, techs, social
   policy, trade, turns, undo voting, chat, game lifecycle. Every Java action
   class has a counterpart and a test file naming it.

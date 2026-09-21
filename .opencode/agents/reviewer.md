@@ -1,5 +1,5 @@
 ---
-description: "Reads a diff against the task brief it was meant to satisfy and returns a verdict with findings. Read-only by design — it cannot write, edit or run anything. Use after the first implementation and the orchestrator's verification, and again after every fix until a round reports no findings. Not for writing code and not for fixing what it finds."
+description: "Reads a diff against the task brief it was meant to satisfy and returns a verdict with findings. Read-only by design — it cannot write, edit or run anything. Use after the first implementation and the orchestrator's verification, and again after every fix until a round reports nothing above a nit. Not for writing code and not for fixing what it finds."
 mode: subagent
 model: deepseek/deepseek-v4-pro
 permissions:

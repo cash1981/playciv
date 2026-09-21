@@ -25,9 +25,13 @@ to zero findings, matching what Claude Code already does through
 - New `.opencode/agents/reviewer.md`: read-only, permissions deny everything
   except read/glob/grep/external_directory, mirroring `.claude/agents/reviewer.md`.
 - The rule itself, stated in the four places a worker reads it:
-  `AGENTS.md` (rule 4), `docs/agents/workflow.md` (step 5),
-  `docs/agents/roles.md`, and `.claude/skills/review-gate/SKILL.md`.
+  `AGENTS.md`, `docs/agents/workflow.md` (step 5),
+  `docs/agents/roles.md`, and the review-gate skill (both the `.claude/` and
+  `.agents/` copies).
 - `docs/agents/repo-map.md`: the `.opencode/` row no longer says "no reviewer".
+- `docs/agents/state.md`: the old "OpenCode has no reviewer" entry is corrected.
+- `.claude/agents/reviewer.md`: given the same re-review instruction as the new
+  OpenCode reviewer, so the two stay in step.
 
 **Out:**
 
@@ -46,11 +50,13 @@ the orchestrator chooses to leave are recorded in the review verdict.
 ## Claimed paths
 
 - `.opencode/agents/reviewer.md` (new)
+- `.claude/agents/reviewer.md`
 - `AGENTS.md`
 - `docs/agents/workflow.md`
 - `docs/agents/roles.md`
 - `docs/agents/repo-map.md`
 - `.claude/skills/review-gate/SKILL.md`
+- `.agents/skills/review-gate/SKILL.md`
 - `docs/agents/tasks/opencode-readonly-review-loop.md`
 - `docs/agents/task-board.md`
 - `docs/agents/state.md`
