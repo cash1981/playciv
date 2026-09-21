@@ -89,10 +89,13 @@ else has been here.
 3. **Work in a dedicated git worktree on a feature branch**, never on `main` or
    the shared checkout. See `workflow.md`. This is required because multiple
    agents and the human may work on the repository at the same time.
-4. **Nothing merges without a review pass.** Code is written by the coder role
-   and checked by a reviewer role that has no write access. The orchestrator —
-   the main agent, or the human — is the only one who can approve. See
-   `roles.md`.
+4. **Every change passes a read-only review, run to zero findings.** After the
+   first implementation — not only before the pull request — put the diff
+   through the read-only `reviewer` role; fix what it reports and run it again
+   until a round has nothing above a nit. Code is written by the coder role and
+   checked by a reviewer role that has no write access. The orchestrator — the
+   main agent, or the human — is the only one who can approve. See `roles.md`
+   and `workflow.md`.
 
 ## Before you finish
 
