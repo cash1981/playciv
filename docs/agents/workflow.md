@@ -74,6 +74,10 @@ no statement of intent can only check style.
 
 Then implement. Small commits. Stay inside the paths you claimed.
 
+For any frontend change, the task brief and implementation must explicitly
+account for the mobile-first rule: mobile and tablet are the baseline, and the
+changed flow must remain usable at narrow widths with touch interaction.
+
 ## 4. Verify
 
 Run all three and keep the output. This is not optional and the result is
@@ -84,7 +88,10 @@ pnpm -r typecheck && pnpm -r test && pnpm -r build
 ```
 
 If the change is visible in the browser, check it there too and say what you
-saw. "It should work" is not verification.
+saw. For frontend changes, check the relevant flow at a narrow mobile-sized
+viewport and a tablet-sized viewport, including layout, touch-sized controls,
+readability, focus/accessibility states and the absence of accidental
+horizontal overflow. "It should work" is not verification.
 
 ## 5. The review gate
 
