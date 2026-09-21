@@ -3,7 +3,7 @@
 - **Slug:** `culture-track-artwork`
 - **Branch:** `feat/culture-track-artwork`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Status:** in progress
+- **Status:** in review
 
 ## Goal
 

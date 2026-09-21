@@ -1242,3 +1242,33 @@ human-specified field.
 - The `POST /api/games/:id/players/:id/stat` route accepts a string `value` for
   `mvmt` and still accepts a number or numeric string for the others. It is
   bookkeeping, not a game rule: no enforcement, no arithmetic.
+
+---
+
+## 2026-09-21 — Culture track artwork replaced, and re-measured to 20 spaces
+
+**Decision.** The culture track backdrop is
+`Civilization/Moderator/map/culturetrack.png`, not the older
+`DoC/PBF Modding Material/culture track.png`, and the engine's measurement
+follows it: 20 spaces between Start and Culture Victory instead of 27. The band
+keeps the height it had (164 px at board width 1504), which drops
+`CULTURE_TRACK_SCALE` from 1.7 to 1.3 because the new artwork is less wide.
+
+**Why.** The human: the track that was implemented is the wrong one. The new
+file is narrower (2572 × 216 against 3349 × 215) and carries a genuinely
+shorter track of 20 spaces in three groups of 7, 7 and 6, with the same carved
+pillars between them. The human chose, when asked, to follow the artwork (20
+spaces) and to keep the band the same height rather than grow the board.
+Neither `old-civ-rest` nor `old-civ-web` has a culture track, so there is no
+old-system behaviour to contradict; the human is the authority for it.
+
+**Consequences.**
+- `CULTURE_TRACK_CELLS` is 20; `CULTURE_VICTORY_STEP` is 21.
+- Only `CULTURE_TRACK_SCALE` changed to hold the printed height; the band
+  height is still the artwork's aspect times that factor.
+- Markers on an existing game are read back against the new, shorter track. A
+  marker that sat on a space number that no longer exists reads as the nearest
+  remaining space. No migration is needed: the board stores pixel positions,
+  not step numbers, and history entries already written are unchanged.
+- The cell spans in `board.ts` are in the artwork's own pixels, found by the
+  same dark-divider measurement as before.
