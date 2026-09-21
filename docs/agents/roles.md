@@ -15,17 +15,15 @@ The orchestrator is the session you are talking to. The roles are defined once
 per agent host and spawned with that host's subagent tool:
 
 - Claude Code reads `.claude/agents/`: `coder`, `reviewer` and `rules-checker`.
-- OpenCode reads `.opencode/agents/`: `coder` and `rules-checker`. There is no
-  separate reviewer there — the owner runs the same model throughout, so a
-  second pass on a "stronger" model buys nothing, and the orchestrator does the
-  correctness check itself against the brief and the old system. Everything
-  below about *why* the reviewer is read-only still applies whenever a reviewer
-  role does exist.
+- OpenCode reads `.opencode/agents/`: `coder`, `reviewer` and `rules-checker`.
+  The reviewer is read-only, exactly as the Claude one is: it reports and the
+  orchestrator decides. Everything below about *why* the reviewer is read-only
+  applies to it.
 
 The model names in the table above are the Claude ones. The rule is the split,
 not the vendor: the coder runs on a cheaper model, the reviewer and rules
-checker on a stronger one that cannot write. OpenCode keeps the coder and
-rules-checker halves of that split.
+checker on a stronger one that cannot write. OpenCode keeps all three halves of
+that split.
 
 ## Why reviewers cannot write
 
@@ -56,6 +54,12 @@ its own commands can also write files through them.
 **Only the orchestrator approves.** Work continues past a review only on an
 explicit approval, and the orchestrator is expected to disagree with the
 reviewer when it has reason to — the report is evidence, not a verdict.
+
+**The review runs after the first implementation, and it runs to zero
+findings.** It is not a single pass saved for the pull request: fix what the
+reviewer reports, review the new diff, and repeat until a round has nothing
+above a nit. A nit left in place is written down in the verdict, so the choice
+is visible. See `workflow.md`.
 
 ```
 coder ──▶ orchestrator verifies ──▶ reviewer reads diff ──▶ report
@@ -118,4 +122,5 @@ Two things keep it from going wrong:
   what a test run already proved.
 
 If the cheap model needs three rounds on the same task, stop and do it on the
-strong model. Three rejected rounds cost more than one good pass.
+strong model — the review loop still runs, it just runs on the new coder. Three
+rejected rounds cost more than one good pass.

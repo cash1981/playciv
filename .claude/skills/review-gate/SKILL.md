@@ -12,6 +12,11 @@ stronger one that cannot write.
 You are the orchestrator here. **You approve, not the reviewer.** Its report is
 evidence; disagree with it when you have reason.
 
+Run the gate **after the first implementation**, not once at the end, and run it
+**to zero findings**: fix what it reports and review the new diff again, until a
+round has nothing above a nit. A nit you choose to leave is recorded in the
+verdict so the choice is visible.
+
 ## 1. Verify first
 
 Run it yourself, and read the output:
@@ -66,11 +71,12 @@ finding with no concrete failure case is a suspicion, not a defect.
 
 Then:
 
-- **Approved** — say so explicitly, and the work may proceed to `/feature
-  finish`.
+- **Approved** — only when no finding above a nit remains. Say so explicitly,
+  and the work may proceed to `/feature finish`.
 - **Changes needed** — hand the findings back to the coder as a list, and run
-  this gate again afterwards. Do not quietly fix them yourself; the loop is
-  what stops the same mistake recurring.
+  this gate again on the new diff afterwards. Do not quietly fix them yourself;
+  the loop is what stops the same mistake recurring. Keep going until a round
+  reports nothing above a nit.
 
 Record the verdict in the task board block as `in review` → `done`, and append
 anything worth keeping to `docs/agents/decisions.md`.
@@ -79,7 +85,7 @@ anything worth keeping to `docs/agents/decisions.md`.
 
 If the coder has come back three times on the same task, stop. Three rejected
 rounds on a cheap model cost more than one pass on a strong one. Say so and
-switch.
+switch the coder to the strong model; the review loop continues on the new diff.
 
 ## What must never pass
 

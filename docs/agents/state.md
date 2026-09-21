@@ -19,6 +19,23 @@ _Last updated: 2026-09-21_
 
 ## Done
 
+- **Issue #116.** Huts and Villages are no longer capped at the player count in
+  the board palette: a two-player game showed "Hut (2)" / "Village (2)" and
+  refused a third piece. `boardAssetLimit` returns `undefined` for
+  `resources/hut` and `resources/village`; wheat, iron, silk and incense keep
+  the issue #49 player-count cap, and buildings and Great Persons are untouched.
+  No client change — the palette already hides the count and the exhausted state
+  for an unlimited asset. Branch `fix/issue-116-hut-village-unlimited`;
+  review-approved after two read-only rounds (round one's findings all fixed).
+  1 new engine test (430 total) and 1 new web test (74 total).
+- **Read-only review loop in OpenCode.** OpenCode gets the missing read-only
+  `reviewer` agent under `.opencode/agents/`, and every change now runs through
+  the read-only reviewer after the first implementation, iterating until a round
+  reports nothing above a nit. The rule is stated in `AGENTS.md`,
+  `workflow.md`, `roles.md` and both review-gate skill copies (Claude and
+  Codex); the old claim that OpenCode had no reviewer is corrected. Branch
+  `chore/opencode-readonly-review-loop`; review-approved in two read-only
+  rounds. Documentation-only; no test counts change.
 - **Buy Me a Coffee in the footer.** The site-wide footer now shows a Buy Me a
   Coffee button beside the PayPal donate button, from the exact markup the owner
   supplied (`buymeacoffee.com/cash1981`). A plain image link, not the provider's
@@ -114,13 +131,13 @@ _Last updated: 2026-09-21_
   `MAIL_BROADCAST_NEW_GAMES`, off by default; the two deliberate differences
   from Java (link on every mail, unsubscribe honoured everywhere) are in
   `decisions.md` and `README.md`. 21 new server tests.
-- **OpenCode agents.** OpenCode gets the `coder` and `rules-checker` roles under
-  `.opencode/agents/`, mirroring `.claude/agents/`; the reviewer role is
-  intentionally omitted because the owner runs the same model throughout, so the
-  orchestrator does the correctness check itself. `rules-checker` is read-only
-  and the coder cannot spawn subagents. Skills still load from `.claude/skills/`.
-  Self-checked against the OpenCode agent spec; `chore/opencode-agents` PR to
-  open.
+- **OpenCode agents.** OpenCode gets the `coder`, `reviewer` and `rules-checker`
+  roles under `.opencode/agents/`, mirroring `.claude/agents/`. The `reviewer`
+  and `rules-checker` are read-only and the coder cannot spawn subagents. Every
+  change goes through the read-only reviewer after the first implementation,
+  iterating until a round reports nothing above a nit (see `workflow.md`); the
+  earlier claim that OpenCode had no reviewer is superseded. Skills still load
+  from `.claude/skills/`.
 - **The port itself.** Deck, items, draws, reshuffle, hands, techs, social
   policy, trade, turns, undo voting, chat, game lifecycle. Every Java action
   class has a counterpart and a test file naming it.
