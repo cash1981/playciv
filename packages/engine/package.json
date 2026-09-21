@@ -16,6 +16,7 @@
     "gamedata": "pwsh -File ../../tools/xlsx-to-json.ps1 -Xlsx ../../old-civ-rest/src/main/resources/assets/gamedata-faf-waw.xlsx -Out ./data/gamedata-faf-waw.json"
   },
   "devDependencies": {
+    "@types/node": "^24.13.3",
     "typescript": "^5.9.3",
     "vitest": "^5.0.1"
   }
