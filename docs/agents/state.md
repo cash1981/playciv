@@ -13,12 +13,22 @@ _Last updated: 2026-09-21_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 418 engine, 170 server, 69 web |
+| `pnpm -r test` | passing - 428 engine, 173 server, 72 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
 
 ## Done
 
+- **Movement as an expression (issue #102).** The Player status board's
+  Movement column now accepts the table shorthand `3+1` for natural religion's
+  +1: `PlayerStats.mvmt` is literal text (a base plus zero or more `+bonus`
+  parts), shared validation in `isMovementValue`/`MOVEMENT_VALUE_PATTERN`, a
+  generic `setPlayerStat` so a Movement expression on a numeric stat is a
+  compile error too, and `migrateGameState` converting an older numeric value.
+  It stays pure bookkeeping, never used in a calculation. New engine, server and
+  web tests cover the expression, the invalids, and the migration. Branch
+  `fix/issue-102-movement-text`; review-approved (reviewer
+  `deepseek/deepseek-v4-pro`, as Sol was unavailable).
 - **Turn-order reveal follow-up.** Reveal now waits for saved phase content,
   logs `Turn <n> - <username> revealed <phase> phase`, and requires a new
   reveal after editing a published phase. Branch

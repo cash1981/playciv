@@ -3,7 +3,8 @@
 - **Slug:** `issue-102-movement-text`
 - **Branch:** `fix/issue-102-movement-text`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Status:** in progress
+- **Status:** done — review-approved (reviewer `deepseek/deepseek-v4-pro`; Sol
+  unavailable, chosen by the human)
 - **Issue:** <https://github.com/cash1981/playciv/issues/102>
 
 ## Goal
@@ -89,19 +90,25 @@ code.
 
 ## Acceptance criteria
 
-- [ ] Typing `3+1` in a Movement cell and committing calls the API with the
-      string `3+1` and the board shows `3+1`.
-- [ ] `setPlayerStat` accepts `2`, `3+1` and `2+1+1` for `mvmt`, and rejects
-      `3+`, `+1`, `three`, `''` and `-1` with `INVALID_STAT_VALUE`.
-- [ ] The other stats still accept only non-negative integers (Combat may be
-      negative), and a non-number for them is rejected.
-- [ ] An older saved game with numeric `mvmt` migrates to `'2'` (string), while
-      the other stats are untouched.
-- [ ] Hidden information: unchanged — stats were already public; the test in
+- [x] Typing `3+1` in a Movement cell and committing calls the API with the
+      string `3+1` and the cell shows `3+1`
+      (`StatusPanel.test.tsx`, mocked API; server round-trip below).
+- [x] `setPlayerStat` accepts `2`/`4`, `3+1` and `2+1+1` for `mvmt`, and
+      rejects `3+`, `+1`, `three`, `''`, `3 + 1` and `-1` with
+      `INVALID_STAT_VALUE`.
+- [x] The other stats still accept only non-negative integers (Combat may be
+      negative), and a non-number for them is rejected — now a compile error as
+      well, via the generic `SetPlayerStatInput`.
+- [x] An older saved game with numeric `mvmt` migrates to its string form,
+      while the other stats are untouched.
+- [x] Hidden information: unchanged — stats were already public; the test in
       `player-stats.test.ts` still proves a hand does not leak alongside them.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
-- [ ] Verified in the browser: enter `3+1` on a live game and confirm it saves
-      and renders as `3+1`.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+      (428 engine, 173 server, 72 web).
+- [~] Verified end to end over HTTP against a local server (no desktop browser
+      was connected, so the UI was exercised through the jsdom component test
+      only): `mvmt` set to `3+1` returned `3+1`, survived a reload, logged
+      `set their movement to 3+1`, and an invalid `3+` was rejected 400.
 
 ## Open questions
 

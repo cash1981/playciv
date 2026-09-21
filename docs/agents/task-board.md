@@ -12,31 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-102-movement-text
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `fix/issue-102-movement-text`
-- **Brief:** `docs/agents/tasks/issue-102-movement-text.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/state.ts` (`PlayerStats.mvmt`, default, validator only)
-  - `packages/engine/src/actions/player.ts` (`setPlayerStat` only)
-  - `packages/engine/src/errors.ts` (`INVALID_STAT_VALUE` only)
-  - `packages/engine/src/migrate.ts` (status-board normalisation only)
-  - `packages/engine/test/player-stats.test.ts`
-  - `packages/server/src/routes/play.ts` (the `/stat` route only)
-  - `packages/server/test/api.test.ts` (the player-stats block only)
-  - `packages/web/src/views/StatusPanel.tsx`
-  - `packages/web/src/views/StatusPanel.test.tsx`
-  - `packages/web/src/lib/api.ts` (`setPlayerStat` signature only)
-  - `docs/agents/tasks/issue-102-movement-text.md`
-  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
-  - `README.md`
-- **Notes:** Issue #102. Movement on the Player status board becomes text so the
-  table shorthand `3+1` (natural religion) can be recorded; it stays pure
-  bookkeeping, never used in a calculation. The value is stored literally, not
-  as a base/bonus pair — recorded in `decisions.md`.
-
 ### issue-92-admin-email-broadcast
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
