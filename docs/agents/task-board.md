@@ -29,6 +29,29 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   donate button in the site-wide footer (issue #77). New button only; the PayPal
   form and everything else in the footer is untouched.
 
+### great-person-discard
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `feat/great-person-discard`
+- **Brief:** `docs/agents/tasks/great-person-discard.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/actions/player.ts` (`discardRandomGreatPerson` only)
+  - `packages/engine/src/errors.ts` (`NOTHING_TO_DISCARD` only)
+  - `packages/engine/test/player-action.test.ts` (new tests only)
+  - `packages/server/src/errors.ts` (`NOTHING_TO_DISCARD` mapping only)
+  - `packages/server/src/routes/play.ts` (the discard route only)
+  - `packages/server/test/api.test.ts` (new tests only)
+  - `packages/web/src/lib/api.ts` (`discardGreatPerson` only)
+  - `packages/web/src/views/GameView.tsx` (`GreatPersonDiscardControls` only)
+  - `packages/web/src/views/GreatPersonDiscardControls.test.tsx` (new)
+  - `docs/agents/tasks/great-person-discard.md`
+  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** New mechanic, no old-system counterpart; the human specified it and
+  settled the open choices (own hand, two-or-more gate, no turn gating, in the
+  hand panel). Discards a uniformly random Great Person of a chosen `type` to
+  the discard pile with the existing public `DISCARD` log.
+
 ### starting-tile-orientation
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
