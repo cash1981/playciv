@@ -12,6 +12,33 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-92-admin-email-broadcast
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
+- **Branch:** `feat/issue-92-admin-email-broadcast`
+- **Brief:** `docs/agents/tasks/issue-92-admin-email-broadcast.md`
+- **Status:** review-approved — implemented and checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged.
+- **Claimed paths:**
+  - `packages/server/src/mail.ts`
+  - `packages/server/src/markdown.ts` (new)
+  - `packages/server/src/notifications.ts`
+  - `packages/server/src/routes/admin.ts`
+  - `packages/server/package.json`, `pnpm-lock.yaml` (`marked` only)
+  - `packages/server/test/mail.test.ts`
+  - `packages/server/test/admin-email-broadcast.test.ts` (new)
+  - `packages/web/src/lib/api.ts` (`broadcastEmail` only)
+  - `packages/web/src/views/AdminView.tsx`
+  - `packages/web/src/views/AdminView.test.tsx` (new)
+  - `docs/agents/tasks/issue-92-admin-email-broadcast.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
+- **Notes:** Issue #92. Ports the old (unreachable) `GameAction.sendMailToAll`
+  as an admin broadcast with a WYSIWYG Markdown editor, an editable subject and
+  a checkbox to also mail players who unsubscribed. New server dependency
+  `marked` renders the Markdown to an HTML email body. Sends run in-request, one
+  per recipient, like the old method; see the brief for the volume caveat.
+
 ### games-list-tabs
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role

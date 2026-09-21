@@ -3,7 +3,7 @@
 
 import type { App } from '../app.js'
 import type { AppContext } from '../context.js'
-import { asRecord, currentPlayer, requireAdminWith } from '../context.js'
+import { asRecord, currentPlayer, requireAdminWith, requireString } from '../context.js'
 import { sendError } from '../errors.js'
 import { toPlayerDto } from './auth.js'
 import type { PlayerUpdate, StoredPlayer, UserRole } from '../store/types.js'
@@ -144,5 +144,32 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       return sendError(c, 404, 'USER_NOT_FOUND', `No user with id ${userId}`)
     }
     return c.body(null, 204)
+  })
+
+  /**
+   * The admin email broadcast (issue #92). Java's `PUT /admin/mail` had the
+   * body commented out and always answered 204; this is the reachable version,
+   * with a Markdown body the server renders to HTML.
+   */
+  app.post('/api/admin/email/broadcast', admin, async (c) => {
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const subject = requireString(body, 'subject')
+    const markdown = requireString(body, 'markdown')
+    if (subject === undefined || markdown === undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'subject and markdown are required')
+    }
+
+    // Same shape as the user PATCH route's `disabled`: a boolean when present.
+    const includeValue = body['includeUnsubscribed']
+    if (includeValue !== undefined && typeof includeValue !== 'boolean') {
+      return sendError(c, 400, 'BAD_REQUEST', 'includeUnsubscribed must be a boolean')
+    }
+
+    const result = await context.notifications.broadcast({
+      subject,
+      markdown,
+      includeUnsubscribed: includeValue === true,
+    })
+    return c.json(result)
   })
 }

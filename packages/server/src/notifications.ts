@@ -11,6 +11,7 @@
 import type { GameState, TurnPhase } from '@civ/engine'
 
 import type { Mailer } from './mail.js'
+import { escapeHtml, renderMarkdown } from './markdown.js'
 import type { Repository } from './store/types.js'
 
 export const DEFAULT_APP_ORIGIN = 'https://playciv.app'
@@ -65,6 +66,17 @@ export interface Notifications {
    * their own account.
    */
   passwordReset(email: string, link: string): Promise<void>
+  /**
+   * Java `GameAction.sendMailToAll(msg)` — the admin's message to every
+   * account. Its old endpoint was commented out, so this is the first time it
+   * is reachable. One personalised mail per eligible account; `skipped` counts
+   * both the policy skips (no address, or unsubscribed) and the send failures.
+   */
+  broadcast(options: {
+    readonly subject: string
+    readonly markdown: string
+    readonly includeUnsubscribed: boolean
+  }): Promise<{ readonly sent: number; readonly skipped: number }>
 }
 
 /**
@@ -98,6 +110,15 @@ export function createNotifications(config: NotificationsConfig): Notifications 
   const unsubscribe = (playerId: string): string =>
     '\n\nIf you wish to unsubscribe from ALL emails, then push this link: ' +
     `${appOrigin}/api/admin/email/notification/${playerId}/stop`
+
+  /**
+   * The HTML twin of `unsubscribe`, so the link is clickable in the HTML body.
+   * Same wording and destination as the plain-text footer; only the markup
+   * differs.
+   */
+  const unsubscribeHtml = (playerId: string): string =>
+    '<p>If you wish to unsubscribe from ALL emails, then push ' +
+    `<a href="${appOrigin}/api/admin/email/notification/${playerId}/stop">this link</a></p>`
 
   /**
    * One recipient. Skips a missing account, a blank address and an account that
@@ -262,6 +283,58 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       } catch (error) {
         console.error(`Password-reset email to ${email} failed`, error)
       }
+    },
+
+    /**
+     * Java's `sendMailToAll` ran one `parallelStream` send per opted-in player
+     * and told the caller nothing. Here the loop is sequential (so the counts
+     * are deterministic) and returns how many were sent and how many were not.
+     * Like `notify`, a single send failure is logged and swallowed so the rest
+     * of the list still goes out.
+     */
+    async broadcast(options: {
+      readonly subject: string
+      readonly markdown: string
+      readonly includeUnsubscribed: boolean
+    }): Promise<{ readonly sent: number; readonly skipped: number }> {
+      let sent = 0
+      let skipped = 0
+      const players = await repo.allPlayers()
+      for (const player of players) {
+        // No address: nothing to send to. Same guard as `notify`.
+        if (player.email === null || player.email === '') {
+          skipped += 1
+          continue
+        }
+        // Java's `!isDisableEmail()` filter, except the admin may deliberately
+        // override it for this one mail.
+        if (player.disableEmail === true && !options.includeUnsubscribed) {
+          skipped += 1
+          continue
+        }
+
+        // Java: "Hello " + username + "\n" + msg, then sendMessage appended the
+        // unsubscribe footer. A single newline after the greeting, as Java had.
+        const text = `Hello ${player.username}\n${options.markdown}${unsubscribe(player.id)}`
+        const html =
+          `<p>Hello ${escapeHtml(player.username)}</p>` +
+          renderMarkdown(options.markdown) +
+          unsubscribeHtml(player.id)
+
+        try {
+          await mailer.send({
+            to: player.email,
+            subject: options.subject,
+            text,
+            html,
+          })
+          sent += 1
+        } catch (error) {
+          console.error(`Broadcast email to ${player.id} failed`, error)
+          skipped += 1
+        }
+      }
+      return { sent, skipped }
     },
   }
 }
