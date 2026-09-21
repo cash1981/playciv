@@ -27,7 +27,6 @@ import {
   sameTurn,
   TURN_PHASE_LABEL,
   withOrder,
-  withoutCurrentOrderInHistory,
 } from '../turn.js'
 
 type ActionResult = Result<GameState, EngineError>
@@ -94,9 +93,11 @@ export interface RevealTurnOrderInput {
   readonly playerId: string
   readonly turnNumber: number
   readonly phase: TurnPhase
+  /** ISO timestamp for this reveal, supplied by the caller. */
+  readonly at: string
 }
 
-/** Publishes one phase of the caller's turn order. */
+/** Publishes one phase of the caller's turn order and records a new version. */
 export function revealTurnOrder(state: GameState, input: RevealTurnOrderInput): ActionResult {
   const access = requireAccess(state, input.playerId)
   if (!access.ok) return access
@@ -104,9 +105,19 @@ export function revealTurnOrder(state: GameState, input: RevealTurnOrderInput): 
   const turn = player.playerTurns.find((candidate) => candidate.turnNumber === input.turnNumber)
   if (turn === undefined) return err({ kind: 'TURN_NOT_FOUND', turnNumber: input.turnNumber })
 
+  // Already revealed: a repeat request must not append a duplicate version.
+  if (turn.revealed[input.phase] === true) return ok(state)
+
   const updated: PlayerTurn = {
     ...turn,
     revealed: { ...turn.revealed, [input.phase]: true },
+    history: {
+      ...turn.history,
+      [input.phase]: [
+        ...turn.history[input.phase],
+        { markdown: turn.orders[input.phase], at: input.at },
+      ],
+    },
   }
   const next: GameState = {
     ...withPlayer(state, {
@@ -201,14 +212,15 @@ export function lockOrUnlockTurn(state: GameState, input: LockTurnInput): Action
 }
 
 /**
- * Java: `getAllPublicTurns`. Java stripped the current order from the history
- * by mutating the stored objects — a read that corrupted data. Here it is a
- * pure projection.
+ * Java: `getAllPublicTurns`. Java stripped the current order from its
+ * save-based history by mutating the stored objects — a read that corrupted
+ * data. The reveal history never contains the current order, so nothing is
+ * stripped here; `publicTurn` masks the text of unpublished phases.
  */
 export function allPublicTurns(state: GameState): readonly PlayerTurn[] {
   return Object.values(state.publicTurns)
     .sort(compareTurns)
-    .map((turn) => withoutCurrentOrderInHistory(publicTurn(turn)))
+    .map((turn) => publicTurn(turn))
 }
 
 /**

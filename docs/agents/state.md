@@ -13,9 +13,9 @@ _Last updated: 2026-09-21_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 443 engine, 173 server, 86 web |
+| `pnpm -r test` | passing - 448 engine, 173 server, 88 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
+| `main` pushed to `origin` | yes; open pull requests: #123 (front-page join-button colours) and this change's issue #125 |
 
 ## Done
 
@@ -32,6 +32,28 @@ _Last updated: 2026-09-21_
   rounds (reviewer `deepseek/deepseek-v4-pro`), PR #123 open. 1 new web test
   (87 total). No browser was connected, so the light/dark visual pass is left to
   the human; see `decisions.md`.
+- **Issue #125.** Each turn-order section (SOT, TRADE, CM, MOVEMENT, RESEARCH)
+  keeps a history of every version its owner has revealed, shown oldest-first
+  above the current editor as greyed, slightly transparent, struck-through text
+  with the reveal's timestamp. A version is written only by `revealTurnOrder`
+  (never by a save) and carries the caller-supplied ISO timestamp; revealing an
+  already-revealed phase is a no-op. `PlayerTurn.history` therefore changes from
+  Java's deduplicated list of *saved* order strings to
+  `TurnOrderVersion { markdown, at }`; `withOrder` no longer touches it,
+  `publicTurn` masks only the current text of an unpublished phase, and
+  `withoutCurrentOrderInHistory` is deleted. Legacy string histories are dropped
+  on migration — they were never displayed, mixed published and unpublished
+  orders, and carried no timestamps. The human chose to replace the save-based
+  field rather than add a second one; see `decisions.md`. Branch
+  `feat/issue-125-turn-order-reveal-history`; review-approved in two read-only
+  rounds, and the `rules-checker` found only the documented replacement. 5 new
+  engine tests (448 total), 1 new web test (88 total). No browser was connected,
+  so the visual pass is left to the human. The history shows the raw Markdown
+  source; noted in the brief. A follow-up after the human's review gives every
+  phase editor a fixed height and its own scrollbar (SOT/CM/MOVEMENT `10rem`,
+  TRADE/RESEARCH `6rem`) and caps the revealed history in its own scroll area;
+  the private log keeps its default size. The history wraps long lines rather
+  than scrolling horizontally.
 - **Only Tradable cards can be given away.** The hand's "Give" control was drawn
   on every card, but `tradeToPlayer` only accepts Java's `Tradable` set (Culture
   I/II/III, Hut, Village); every other kind returned `ITEM_NOT_FOUND`, so the

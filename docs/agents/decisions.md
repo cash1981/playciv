@@ -1549,3 +1549,43 @@ different colours: Open is the old teal, Join is `.btn-success` green.
   a visual choice the human is the authority for, as with the culture track and
   the starting-tile orientation. No browser was connected, so the visual pass
   is left to the human.
+
+## 2026-09-21 - Turn-order reveal history (amends the 2026-09-20 entry)
+
+**Decision.** `PlayerTurn.history` changes from Java's deduplicated list of
+*saved* order strings to an ordered list of revealed versions,
+`TurnOrderVersion { markdown, at }`, one list per phase. A version is written
+only by `revealTurnOrder`, which appends the phase's current text and a
+caller-supplied ISO timestamp and marks the phase revealed; saving through
+`withOrder` no longer touches `history` at all. Revealing an already-revealed
+phase is a no-op, so a double request cannot append a duplicate version.
+`migratePlayerTurn` normalises `history`: entries already shaped
+`{ markdown, at }` are kept, legacy bare-string entries are dropped. The client
+renders each phase's versions oldest-first above the current editor, greyed,
+slightly transparent and struck through, each with the timestamp of its reveal.
+
+**Why.** Issue #125: after a player reveals a section, edits it and reveals
+again, there was no way to see what was published before. Java's `history`
+could not serve as that record: it stored every save (published or not) as a
+bare string with no timestamp, and `getAllPublicTurns` removed the current
+order from it by mutating the stored objects. The human chose to replace that
+field with the reveal history rather than add a second one.
+
+**Consequences.**
+- A save never creates a version, and a version is never edited or deleted;
+  each version is the complete content of its phase at reveal time — there is
+  no diff view. Hidden information is unaffected: an unrevealed phase's current
+  text never reaches a public projection.
+- This amends the consequences of the 2026-09-20 "Turn orders are revealed per
+  phase" entry, which said public projections mask both the current text *and
+  history* of unrevealed phases. They no longer mask history: once a version
+  has been revealed it is public information and stays visible after the phase
+  is edited and made private again. Only the current text (`orders[phase]`) is
+  masked.
+- `withoutCurrentOrderInHistory` is deleted. Java needed it because its history
+  contained the current order; the reveal history never does, so keeping the
+  helper would have hidden the version just revealed.
+- Legacy save-based string histories are discarded on migration rather than
+  reinterpreted, because they mixed published and unpublished orders and
+  carried no timestamps. `allPublicTurns` is now a plain
+  `sort(compareTurns).map(publicTurn)`.

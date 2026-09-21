@@ -1866,6 +1866,13 @@ describe('a whole round', () => {
       headers: bearer(tokens['Chul'] as string),
     })
     expect(publicTurns.body).toContain('Build city at L4')
+    const revealedTurns = await publicTurns.json() as {
+      readonly history: Readonly<Record<string, readonly { readonly markdown: string; readonly at: string }[]>>
+    }[]
+    const version = revealedTurns[0]?.history['SOT']?.[0]
+    expect(version?.markdown).toBe('Build city at L4')
+    // The reveal carries the moment it happened, an ISO timestamp.
+    expect(Number.isNaN(Date.parse(version?.at ?? ''))).toBe(false)
 
     // Chat
     await inject(app, {

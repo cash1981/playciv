@@ -12,6 +12,31 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-125-turn-order-reveal-history
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
+- **Branch:** `feat/issue-125-turn-order-reveal-history`
+- **Brief:** `docs/agents/tasks/issue-125-turn-order-reveal-history.md`
+- **Status:** review-approved — PR #126 open, awaiting the human's merge. Claim
+  kept until merged. The first pass was approved in two read-only rounds, and
+  the fixed-height scroll follow-up in round 2. Two nits are left deliberately:
+  the jsdom test guards the `data-turn-phase` hook, not the CSS effect, and the
+  history wraps long lines so its horizontal scrollbar is effectively unused.
+  Both are the human's to accept in the browser.
+- **Claimed paths:**
+  - `packages/web/src/views/TurnPanel.tsx`
+  - `packages/web/src/views/TurnPanel.css`
+  - `packages/web/src/views/TurnPanel.test.tsx`
+  - `docs/agents/tasks/issue-125-turn-order-reveal-history.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+- **Notes:** The original issue #125 implementation is review-approved and on PR
+  #126. The follow-up gives every phase editor a fixed height with its own
+  scrollbar (SOT/CM/MOVEMENT `10rem`, TRADE/RESEARCH `6rem`) and caps the
+  revealed history in its own scroll area; the private log keeps its default
+  size. Same branch and PR; the earlier claim was released when the first pass
+  finished.
+
 ### front-page-join-colors
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)

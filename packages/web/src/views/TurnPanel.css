@@ -148,6 +148,67 @@
   margin-top: 0.35rem;
 }
 
+/* Every phase editor has a fixed reading height and its own scrollbar, so a
+   wall of text cannot make the section enormous. The long phases start taller
+   than trade and research, which hold a number and a tech name. The revealed
+   history scrolls in its own area too, capped rather than fixed so an empty
+   history reserves no space. */
+.turn-phase[data-turn-phase] {
+  --turn-history-max-height: 6rem;
+  --turn-editor-height: 6rem;
+}
+
+.turn-phase[data-turn-phase='SOT'],
+.turn-phase[data-turn-phase='CM'],
+.turn-phase[data-turn-phase='MOVEMENT'] {
+  --turn-history-max-height: 10rem;
+  --turn-editor-height: 10rem;
+}
+
+/* Revealed versions sit above the editor on a simple vertical timeline. */
+.turn-history {
+  max-height: var(--turn-history-max-height, none);
+  margin: 0 0 0.55rem;
+  padding-left: 0.9rem;
+  border-left: 2px solid var(--line);
+  list-style: none;
+  overflow: auto;
+  color: var(--muted);
+}
+
+.turn-history-version {
+  position: relative;
+  margin-bottom: 0.5rem;
+  padding-left: 0.5rem;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.turn-history-version::before {
+  content: '';
+  position: absolute;
+  top: 0.3rem;
+  left: -0.95rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.turn-history-time {
+  display: block;
+  margin-bottom: 0.1rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.turn-history-content {
+  color: var(--muted);
+  text-decoration: line-through;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .turn-markdown {
   overflow: hidden;
   border: 1px solid var(--line);
@@ -191,6 +252,26 @@
   border: 0;
   border-radius: 0;
   resize: vertical;
+}
+
+/* Size the Crepe content surface, not its frame, so the toolbar stays put, and
+   drop the default min-heights so the fixed height is actually honoured. The
+   plain-text fallback gets the same box. The private log is not a turn phase,
+   so these `[data-turn-phase]` rules leave it at its default size. */
+.turn-phase[data-turn-phase] .turn-markdown .milkdown {
+  min-height: 0;
+}
+
+.turn-phase[data-turn-phase] .turn-markdown .milkdown .ProseMirror {
+  height: var(--turn-editor-height);
+  min-height: 0;
+  overflow: auto;
+}
+
+.turn-phase[data-turn-phase] .turn-markdown-fallback {
+  height: var(--turn-editor-height);
+  min-height: 0;
+  overflow: auto;
 }
 
 .editor-status {
