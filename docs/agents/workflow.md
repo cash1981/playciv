@@ -92,6 +92,13 @@ saw. "It should work" is not verification.
 a cheaper model; it is checked by a `reviewer` role on a stronger model that
 **cannot write**. See `roles.md` for why.
 
+**Run the gate after the first implementation, and run it to zero findings.**
+It is not a single pass saved up for the pull request. As soon as the first
+implementation is verified, review it; fix every finding the orchestrator judges
+real; review the new diff again. Repeat until a round reports nothing above a
+nit. A nit the orchestrator chooses to leave is not a finding, but it is written
+down in the verdict so the choice is visible.
+
 The orchestrator drives it:
 
 1. Write the diff somewhere outside the repo, so the reviewer can read it
@@ -102,15 +109,16 @@ The orchestrator drives it:
    ```
 
 2. Spawn the reviewer with: the diff path, the task brief path, and the
-   verification output. The reviewer returns a report; it has no way to write
-   one, which is the point.
+   verification output. On a later round, hand it the previous round's findings
+   too. The reviewer returns a report; it has no way to write one, which is the
+   point.
 
 3. Read the report. Then decide:
 
-   - **Approved** — go to step 6.
+   - **Approved** — nothing above a nit remains; go to step 6.
    - **Changes needed** — hand the findings back to the coder and repeat from
-     step 3. Do not fix them yourself in passing; the loop is what keeps the
-     cheap model honest.
+     step 1 with the new diff. Do not fix them yourself in passing; the loop is
+     what keeps the cheap model honest.
 
    The orchestrator is the only role that can approve. A reviewer saying
    "looks good" is an input to that decision, not the decision.
@@ -118,12 +126,11 @@ The orchestrator drives it:
 4. Record anything worth keeping in `decisions.md`.
 
 In Claude this is the `/review-gate` skill; the `reviewer` and `rules-checker`
-subagents are in `.claude/agents/`. In OpenCode the `coder` and `rules-checker`
-agents are in `.opencode/agents/` and the `/review-gate` skill runs as before,
-except that there is no reviewer subagent — the orchestrator does the
-correctness check itself. In Codex, do the same by hand: generate the diff, open
-a separate conversation on a stronger model with the diff and the brief, and
-paste its report back.
+subagents are in `.claude/agents/`. In OpenCode the `coder`, `reviewer` and
+`rules-checker` agents are in `.opencode/agents/`, and the `/review-gate` skill
+runs as before. In Codex, do the same by hand: generate the diff, open a
+separate conversation on a stronger model with the diff and the brief, and paste
+its report back.
 
 ## 6. Pull request
 
