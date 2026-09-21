@@ -5,9 +5,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { PlayerTurn, TurnPhase } from '@civ/engine'
+import type { PlayerTurn, TurnOrderVersion, TurnPhase } from '@civ/engine'
 
 import { api } from '../lib/api.js'
+import { formatTimestamp } from '../lib/formatTimestamp.js'
 import type { PlayerView } from '../lib/api.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
 import type {
@@ -96,7 +97,7 @@ const orders: Readonly<Record<TurnPhase, string>> = {
   RESEARCH: 'Research writing',
 }
 
-const history: Readonly<Record<TurnPhase, readonly string[]>> = {
+const history: Readonly<Record<TurnPhase, readonly TurnOrderVersion[]>> = {
   SOT: [],
   TRADE: [],
   CM: [],
@@ -117,13 +118,14 @@ const turn = (
   disabled = false,
   turnNumber = 3,
   turnOrders: Readonly<Record<TurnPhase, string>> = orders,
+  turnHistory: Readonly<Record<TurnPhase, readonly TurnOrderVersion[]>> = history,
 ): PlayerTurn => ({
   turnNumber,
   username,
   disabled,
   orders: turnOrders,
   revealed,
-  history,
+  history: turnHistory,
 })
 
 const noop = (): void => undefined
@@ -533,6 +535,49 @@ describe('TurnOrderWorkspace', () => {
     expect(
       (screen.getByLabelText(/movement orders for cash1981, turn 1/i) as HTMLTextAreaElement).value,
     ).toBe('Turn one movement')
+  })
+
+  it('renders revealed versions oldest-first above the editor', () => {
+    const versions: Readonly<Record<TurnPhase, readonly TurnOrderVersion[]>> = {
+      ...history,
+      SOT: [
+        { markdown: 'First published plan', at: '2026-09-21T08:30:00.000Z' },
+        { markdown: 'Second published plan', at: '2026-09-21T09:45:00.000Z' },
+      ],
+    }
+    const { container } = render(
+      <TurnOrderWorkspace
+        gameId="game-1"
+        busy={false}
+        run={run}
+        player={{ username: 'cash1981', color: 'Red', own: true }}
+        turnNumber={3}
+        turnNumbers={[3]}
+        current={turn('cash1981', false, 3, orders, versions)}
+        values={orders}
+        onTurnNumberChange={noop}
+        onNewTurn={noop}
+        onPhaseChange={noop}
+        tabPanelId="panel"
+        labelledBy="tab"
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    // Only the phase with versions gets a list.
+    expect(container.querySelectorAll('.turn-history')).toHaveLength(1)
+    const items = container.querySelectorAll('.turn-history-version')
+    expect(items).toHaveLength(2)
+    expect(items[0]?.textContent).toContain('First published plan')
+    expect(items[1]?.textContent).toContain('Second published plan')
+    // Each version carries the formatted timestamp of its reveal.
+    expect(items[0]?.textContent).toContain(formatTimestamp('2026-09-21T08:30:00.000Z'))
+
+    // The history sits above the start-of-turn editor, which keeps normal contrast.
+    const list = container.querySelector('.turn-history')
+    if (list === null) throw new Error('expected a revealed-version list')
+    const editor = screen.getByRole('textbox', { name: /start of turn orders for cash1981/i })
+    expect(list.compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })
 

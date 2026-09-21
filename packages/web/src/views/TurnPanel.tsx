@@ -13,6 +13,7 @@ import type { PlayerTurn, TurnPhase } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
+import { formatTimestamp } from '../lib/formatTimestamp.js'
 import type { NavigationAttempt } from '../lib/navigationGuard.js'
 import type { GameRevisionView, PlayerView } from '../lib/api.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
@@ -301,6 +302,18 @@ export function TurnOrderWorkspace({
               <span className="tag">{current.revealed[phase] ? 'revealed' : 'private'}</span>
             )}
           </div>
+          {current !== undefined && current.history[phase].length > 0 && (
+            <ol className="turn-history" aria-label={`Revealed ${TURN_PHASE_LABEL[phase]} versions`}>
+              {current.history[phase].map((version, index) => (
+                <li className="turn-history-version" key={`${version.at}:${index}`}>
+                  <time className="turn-history-time" dateTime={version.at}>
+                    {formatTimestamp(version.at)}
+                  </time>
+                  <div className="turn-history-content">{version.markdown}</div>
+                </li>
+              ))}
+            </ol>
+          )}
           <EditorComponent
             key={`${player.username}:${turnNumber}:${phase}`}
             ref={(handle) => {
