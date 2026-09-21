@@ -19,7 +19,7 @@ reference material: `old-civ-rest` (Java 8 / Dropwizard / MongoDB) and
 `README.md` is the human-facing description of the product. This file and
 `docs/agents/` are about how we work on it.
 
-## The five rules that never bend
+## The six rules that never bend
 
 1. **The old system is the reference.** The business logic to reproduce is what
    the old backend (`old-civ-rest`, Java) and the old client (`old-civ-web`,
@@ -42,6 +42,10 @@ reference material: `old-civ-rest` (Java 8 / Dropwizard / MongoDB) and
 5. **TypeScript strict, and English throughout.** Code, comments, tests, UI
    strings, commit messages and these docs are in English. Conversation with
    the human is in Norwegian.
+6. **Frontend is mobile first.** Every frontend implementation must be
+   designed for mobile and tablet use before larger screens are considered.
+   Check layout, touch interaction, readability, accessibility and responsive
+   behaviour on narrow viewports as part of the implementation and review.
 
 ## Where to look
 

@@ -19,6 +19,11 @@ _Last updated: 2026-09-21_
 
 ## Done
 
+- **Mobile-first frontend rule.** Frontend work must be designed and verified
+  for mobile and tablet first, including responsive layout, touch interaction,
+  readability and accessibility checks. The rule is documented in `AGENTS.md`,
+  `docs/agents/conventions.md` and `docs/agents/workflow.md`.
+
 - **Buy Me a Coffee in the footer.** The site-wide footer now shows a Buy Me a
   Coffee button beside the PayPal donate button, from the exact markup the owner
   supplied (`buymeacoffee.com/cash1981`). A plain image link, not the provider's

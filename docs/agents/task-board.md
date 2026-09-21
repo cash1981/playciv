@@ -12,6 +12,22 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### mobile-first-rule
+
+- **Owner:** Codex
+- **Branch:** `chore/mobile-first-rule`
+- **Brief:** `docs/agents/tasks/mobile-first-rule.md`
+- **Status:** in review
+- **Claimed paths:**
+  - `AGENTS.md`
+  - `docs/agents/conventions.md`
+  - `docs/agents/workflow.md`
+  - `docs/agents/tasks/mobile-first-rule.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+- **Notes:** Adds a mandatory mobile-first design and verification rule for
+  every frontend implementation.
+
 ### buymeacoffee-footer
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)

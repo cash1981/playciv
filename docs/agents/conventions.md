@@ -53,6 +53,30 @@ Anything you add to a projection needs a test proving it does not leak. The
 pattern is in `packages/engine/test/hidden-info.test.ts`: serialise the view and
 assert the secret string is not in it.
 
+## Mobile-first frontend
+
+Mobile and tablet use is the baseline for every frontend change. Design and
+implement the narrow layout and touch interaction first; desktop layouts may
+enhance it but must not be required for the feature to work.
+
+For every frontend implementation:
+
+- Keep the primary content and actions usable without horizontal scrolling at
+  narrow mobile widths.
+- Make controls comfortable to use by touch, with clear focus states and
+  labels or accessible names where needed.
+- Preserve readable text, useful contrast, and sensible spacing when the
+  viewport is narrow or the device is rotated.
+- Make dense desktop layouts reflow, stack, scroll within an intentional
+  region, or otherwise degrade gracefully on mobile and tablet.
+- Verify the changed flow at a narrow mobile-sized viewport and a tablet-sized
+  viewport, in addition to the normal desktop check when the change is
+  visible. Record any deliberate limitation in the task brief or decisions.
+
+This is a design and verification rule, not a requirement to duplicate every
+desktop test at every possible device size. The relevant mobile and tablet
+states must be covered by the implementation's tests or manual verification.
+
 ## TypeScript
 
 Strict, with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
