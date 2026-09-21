@@ -170,13 +170,27 @@ const buildingSupplyGroup = (asset: BoardAsset): string | undefined =>
     ? (BUILDING_SUPPLY_GROUP[asset.id] ?? asset.id)
     : undefined
 
+/**
+ * Resource pieces a player collects during play, not a setup supply dealt to
+ * the table. Issue #49 capped every resource at the player count, which is
+ * right for wheat, iron, silk and incense but wrong for these two, so they have
+ * no maximum (issue #116).
+ */
+const UNLIMITED_RESOURCE_IDS: ReadonlySet<string> = new Set([
+  'resources/hut',
+  'resources/village',
+])
+
 /** The finite supply for a board asset, or undefined for unlimited assets. */
 export function boardAssetLimit(asset: BoardAsset, numOfPlayers: number): number | undefined {
   if (asset.category === 'building') {
     const group = buildingSupplyGroup(asset)
     return BUILDING_SUPPLY_LIMIT[group ?? asset.id] ?? 6
   }
-  if (asset.category === 'resource') return Math.max(0, Math.min(5, numOfPlayers))
+  if (asset.category === 'resource') {
+    if (UNLIMITED_RESOURCE_IDS.has(asset.id)) return undefined
+    return Math.max(0, Math.min(5, numOfPlayers))
+  }
   if (asset.category === 'greatperson') return 3
   return undefined
 }
