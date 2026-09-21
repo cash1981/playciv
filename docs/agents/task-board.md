@@ -12,6 +12,27 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### culture-track-artwork
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `feat/culture-track-artwork`
+- **Brief:** `docs/agents/tasks/culture-track-artwork.md`
+- **Status:** review-approved — implemented and checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged.
+- **Claimed paths:**
+  - `packages/engine/src/board.ts`
+  - `packages/engine/data/board-assets.json`
+  - `packages/engine/test/culture-track.test.ts`
+  - `packages/engine/test/board.test.ts` (comment only)
+  - `packages/web/public/board/culture-track.png`
+  - `tools/board-assets.ps1`
+  - `docs/agents/tasks/culture-track-artwork.md`
+  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** Replaces the wrong culture track with
+  `Civilization/Moderator/map/culturetrack.png`. The new artwork is 2572 x 216
+  and has 20 spaces, not 27. The human chose to follow the artwork (20 spaces)
+  and keep today's band height, so `CULTURE_TRACK_SCALE` drops to 1.3.
+
 ### issue-92-admin-email-broadcast
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
@@ -213,7 +234,7 @@ at a time. Claim them by name.
 
 | Resource | Owned by |
 | --- | --- |
-| `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
+| `packages/engine/data/board-assets.json` and `packages/web/public/board/` | `culture-track-artwork` (DeepSeek V4.1 Flash) |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |

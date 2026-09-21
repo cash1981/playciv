@@ -316,8 +316,12 @@ export const mapHeight = (board: Board): number => board.rows * board.squareSize
  * 100% zoom (issue #22). The client paints the image with
  * `background-size: 100% 100%`, so stretching the band simply grows the image
  * with it; cell centres stay at `trackHeight / 2` and zoom is unaffected.
+ *
+ * The current artwork (2572 x 216) is less wide than the one it replaced
+ * (3349 x 215), so its natural aspect height is larger and a smaller factor
+ * gives the same band. 1.3 keeps the printed band at the 164 px it had before.
  */
-export const CULTURE_TRACK_SCALE = 1.7
+export const CULTURE_TRACK_SCALE = 1.3
 
 /**
  * Height of the culture track band. The track image is drawn across the full
@@ -347,25 +351,27 @@ export const boardHeight = (board: Board): number =>
 
 /**
  * The spaces of the culture track, measured off the artwork by finding the dark
- * divider columns in `DoC/PBF Modding Material/culture track.png`.
+ * divider columns in `Moderator/map/culturetrack.png`.
  *
- * There are 27 spaces between Start and Culture Victory, in four sections of
- * 7, 7, 7 and 6 — one per culture event — separated by a wide pillar. Within a
- * section the spaces are even, so each is given as the pixel span of its
- * section in the source image and divided up.
+ * There are 20 spaces between Start and Culture Victory, in three groups of 7,
+ * 7 and 6 separated by the carved pillars. The first space is listed on its own
+ * because the Start pillar sits between it and the Start panel and would
+ * otherwise pull its centre left; the rest of the first group follows it.
+ * Within a section the spaces are even, so each is given as the pixel span of
+ * its section in the source image and divided up.
  *
  * Neither Java nor the AngularJS app had a culture track. It is a marker only:
  * nothing here enforces what it costs to advance or what happens at a
  * threshold, because those rules are not in the ported source.
  */
 const CULTURE_SECTIONS: readonly { readonly from: number; readonly to: number; readonly cells: number }[] = [
-  { from: 116, to: 907, cells: 7 },
-  { from: 936, to: 1725, cells: 7 },
-  { from: 1753, to: 2540, cells: 7 },
-  { from: 2569, to: 3252, cells: 6 },
+  { from: 150, to: 237, cells: 1 },
+  { from: 237, to: 937, cells: 6 },
+  { from: 937, to: 1752, cells: 7 },
+  { from: 1752, to: 2450, cells: 6 },
 ]
 
-/** Spaces on the track, numbered 1 to 27. */
+/** Spaces on the track, numbered 1 to 20. */
 export const CULTURE_TRACK_CELLS = CULTURE_SECTIONS.reduce(
   (total, section) => total + section.cells,
   0,
@@ -382,22 +388,22 @@ const CULTURE_CELL_FRACTIONS: readonly number[] = CULTURE_SECTIONS.flatMap((sect
 
 /**
  * Centre of the START panel, as a fraction of the track image's width.
- * Measured off `culture track.png` directly (the panel has no even
- * subdivisions to derive it from, unlike the grey spaces): the parchment
- * panel spans x 0..88 of 3349, centre fraction ~0.0131.
+ * Measured off `culturetrack.png` directly (the panel has no even
+ * subdivisions to derive it from, unlike the spaces): the parchment
+ * panel spans x 0..88 of 2572, centre fraction ~0.0171.
  */
-const CULTURE_START_FRACTION = 0.0131
+const CULTURE_START_FRACTION = 0.0171
 
 /**
  * The Culture Victory panel at the far right, measured the same way as START:
- * the parchment end panel spans x 3263..3348 of 3349, centre fraction ~0.9870.
+ * the parchment end panel spans x 2445..2550 of 2572, centre fraction ~0.9710.
  */
-const CULTURE_VICTORY_FRACTION = 0.987
+const CULTURE_VICTORY_FRACTION = 0.971
 
 /**
  * Every position on the track, both end panels included, as fractions of the
- * image width. Index 0 is START; indices 1..27 are the grey spaces, matching
- * the 1-based numbering players use; index 28 is the Culture Victory panel.
+ * image width. Index 0 is START; indices 1..20 are the spaces, matching the
+ * 1-based numbering players use; index 21 is the Culture Victory panel.
  */
 const CULTURE_POSITION_FRACTIONS: readonly number[] = [
   CULTURE_START_FRACTION,
@@ -437,7 +443,7 @@ export function cultureCellCenter(
 
 /**
  * The position a piece sits on, by its centre, or null when off the track.
- * 0 is START, 1..27 are the grey spaces.
+ * 0 is START, 1..20 are the spaces.
  */
 export function cultureStepOf(board: Board, piece: BoardPiece): number | null {
   const centreY = piece.y + piece.height / 2

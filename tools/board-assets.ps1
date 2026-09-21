@@ -220,7 +220,9 @@ foreach ($folder in $categories.Keys) {
 
 # The culture track is a backdrop, not a piece, so it is copied on its own and
 # only its natural size is recorded. The engine scales it to the map width.
-$trackSource = Join-Path $Source 'DoC\PBF Modding Material\culture track.png'
+# The correct track is Moderator/map/culturetrack.png, not the older
+# "PBF Modding Material" copy under DoC.
+$trackSource = Join-Path $Source 'map\culturetrack.png'
 if (-not (Test-Path $trackSource)) { throw "Could not find $trackSource" }
 Copy-Item $trackSource (Join-Path $WebPublic 'culture-track.png') -Force
 

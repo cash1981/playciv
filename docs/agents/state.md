@@ -19,6 +19,13 @@ _Last updated: 2026-09-21_
 
 ## Done
 
+- **Culture track artwork.** The board shows the correct track,
+  `Moderator/map/culturetrack.png` (2572 × 216), instead of the wrong
+  `DoC/PBF Modding Material/culture track.png`. It has 20 spaces in three groups
+  of 7, 7 and 6 rather than 27, so the cell geometry, START and Culture Victory
+  fractions, tests and docs were re-measured, and `CULTURE_TRACK_SCALE` drops
+  from 1.7 to 1.3 to keep the band's 164 px height. The track stays a marker
+  only. Branch `feat/culture-track-artwork`; review-approved, PR to open.
 - **Movement as an expression (issue #102).** The Player status board's
   Movement column now accepts the table shorthand `3+1` for natural religion's
   +1: `PlayerStats.mvmt` is literal text (a base plus zero or more `+bonus`
@@ -123,12 +130,13 @@ _Last updated: 2026-09-21_
 - **Board history.** Every change recorded as a semantic operation, giving exact
   undo and step-by-step replay with the log trimmed to each step.
 - **Everything in English.**
-- **Culture track.** A band above the map, 27 spaces in four sections, measured
-  off the artwork. Leader markers are placed freely, not snapped to a space, so
-  they can be nudged anywhere and can share a space; the log still names the
-  nearest space. Choosing a civilization places that leader on Start. The
-  band is drawn `CULTURE_TRACK_SCALE` (1.7×) taller than its bare aspect so it
-  reads well at any zoom (issue #22).
+- **Culture track.** A band above the map, 20 spaces in three groups of 7, 7 and
+  6, measured off `Moderator/map/culturetrack.png`. Leader markers are placed
+  freely, not snapped to a space, so they can be nudged anywhere and can share a
+  space; the log still names the nearest space. Choosing a civilization places
+  that leader on Start. The band is drawn `CULTURE_TRACK_SCALE` (1.3×) taller
+  than its bare aspect so it reads well at any zoom (issue #22); 1.3 keeps the
+  printed band the same height as before the artwork was replaced.
 - **Card artwork.** 346 of 347 items have a picture; only Space Flight does
   not, because it is added in code rather than read from the spreadsheet. The
   hand renders as cards.

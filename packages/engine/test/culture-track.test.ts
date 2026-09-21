@@ -42,8 +42,8 @@ const place = (state: GameState, assetId: string, x: number, y: number): GameSta
 describe('the track', () => {
   const board = createBoard()
 
-  it('has 27 spaces, matching the artwork', () => {
-    expect(CULTURE_TRACK_CELLS).toBe(27)
+  it('has 20 spaces, matching the artwork', () => {
+    expect(CULTURE_TRACK_CELLS).toBe(20)
   })
 
   it('is drawn taller than its bare aspect ratio, so it reads well (issue #22)', () => {
@@ -105,7 +105,7 @@ describe('cultureStepOf', () => {
   const board = createBoard()
 
   it('reads the space back from a marker placed on its centre', () => {
-    for (const step of [1, 7, 14, 21, 27]) {
+    for (const step of [1, 7, 14, 18, 20]) {
       const centre = cultureCellCenter(board, step)
       const piece = { x: centre.x - 23, y: 10, width: 46, height: 35 } as BoardPiece
       expect(cultureStepOf(board, piece)).toBe(step)
