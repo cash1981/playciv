@@ -13,7 +13,7 @@ _Last updated: 2026-09-21_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 430 engine, 173 server, 79 web |
+| `pnpm -r test` | passing - 435 engine, 173 server, 81 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
 

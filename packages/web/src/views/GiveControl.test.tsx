@@ -19,10 +19,16 @@ const base = {
   type: null,
 } as const
 
-const tradable = (sheetName: 'CULTURE_1' | 'HUTS' | 'VILLAGES'): Item => {
+const tradable = (
+  sheetName: 'CULTURE_1' | 'CULTURE_2' | 'CULTURE_3' | 'HUTS' | 'VILLAGES',
+): Item => {
   switch (sheetName) {
     case 'CULTURE_1':
-      return { ...base, id: 'culture', sheetName, kind: 'cultureI' }
+      return { ...base, id: 'culture-1', sheetName, kind: 'cultureI' }
+    case 'CULTURE_2':
+      return { ...base, id: 'culture-2', sheetName, kind: 'cultureII' }
+    case 'CULTURE_3':
+      return { ...base, id: 'culture-3', sheetName, kind: 'cultureIII' }
     case 'HUTS':
       return { ...base, id: 'hut', sheetName, kind: 'hut' }
     case 'VILLAGES':
@@ -70,7 +76,7 @@ const cityState: Item = {
 const run = async (): Promise<void> => undefined
 
 describe('GiveControl', () => {
-  it.each(['CULTURE_1', 'HUTS', 'VILLAGES'] as const)(
+  it.each(['CULTURE_1', 'CULTURE_2', 'CULTURE_3', 'HUTS', 'VILLAGES'] as const)(
     'shows the selector and Give button for %s',
     (sheetName) => {
       render(
