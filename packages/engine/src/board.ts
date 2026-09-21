@@ -738,8 +738,11 @@ export function nearestBlockOrigin(
  * point in towards the middle. Every image file has the arrow on the bottom
  * edge pointing up — checked against all sixteen civ tiles and the physical
  * America tile in Civilization/Civs/america.jpg — so it is the rotation that
- * turns it: the top two corners need 180 degrees to point the arrow down at the
- * middle, the bottom two stay at 0 degrees to point it up. Turning clockwise
+ * turns it. On the full board the top two corners need 180 degrees to point the
+ * arrow down at the middle and the bottom two stay at 0 degrees to point it up.
+ * On the long, short two-player board the arrows instead run along the long
+ * axis, at each other: 90 degrees out of the north-west corner (pointing east)
+ * and 270 out of the south-east corner (pointing west). Turning clockwise
  * carries it round from there.
  *
  * The tile can be turned freely afterwards, so this is a starting point rather
@@ -752,19 +755,25 @@ export function startingCorner(
   const lastColumn = blockColumns(board) - 1
   const lastRow = blockRows(board) - 1
 
-  const corners: readonly { blockColumn: number; blockRow: number; rotation: Rotation }[] = [
-    { blockColumn: 0, blockRow: 0, rotation: 180 },
-    { blockColumn: lastColumn, blockRow: 0, rotation: 180 },
-    { blockColumn: lastColumn, blockRow: lastRow, rotation: 0 },
-    { blockColumn: 0, blockRow: lastRow, rotation: 0 },
-  ]
+  // The two-player board is two block rows, so its two corners are the two the
+  // players use; every bigger board walks all four clockwise from the top left.
+  const corners: readonly { blockColumn: number; blockRow: number; rotation: Rotation }[] =
+    blockRows(board) === 2
+      ? [
+          { blockColumn: 0, blockRow: 0, rotation: 90 },
+          { blockColumn: lastColumn, blockRow: lastRow, rotation: 270 },
+        ]
+      : [
+          { blockColumn: 0, blockRow: 0, rotation: 180 },
+          { blockColumn: lastColumn, blockRow: 0, rotation: 180 },
+          { blockColumn: lastColumn, blockRow: lastRow, rotation: 0 },
+          { blockColumn: 0, blockRow: lastRow, rotation: 0 },
+        ]
 
-  // playernumber is 1-based; more than four players share the corners again.
-  // A two-player board has two block rows, so its players are opposite corners
-  // (top-left, then bottom-right) instead of the two top corners.
-  const order: readonly number[] = blockRows(board) === 2 ? [0, 2] : [0, 1, 2, 3]
-  const position = order[(Math.max(playernumber, 1) - 1) % order.length] as number
-  const corner = corners[position] as (typeof corners)[number]
+  // playernumber is 1-based; more than four players share the corners again
+  const corner = corners[
+    (Math.max(playernumber, 1) - 1) % corners.length
+  ] as (typeof corners)[number]
   const [x, y] = blockOrigin(board, corner.blockColumn, corner.blockRow)
   return { x, y, rotation: corner.rotation }
 }

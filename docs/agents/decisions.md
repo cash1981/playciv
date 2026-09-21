@@ -1279,7 +1279,9 @@ old-system behaviour to contradict; the human is the authority for it.
 player's corner turned so the printed arrow points at the middle of the board.
 On the full board player 1 is north-west, 2 north-east, 3 south-east and 4
 south-west. On the two-player 16 × 8 board the two players sit in opposite
-corners: player 1 north-west (A1–D4), player 2 south-east (M5–P8).
+corners — player 1 north-west (A1–D4), player 2 south-east (M5–P8) — and because
+the board is long and short their arrows run along the long axis at each other:
+the north-west tile points east (90°) and the south-east tile points west (270°).
 
 **Why.** The human reported a four-player game where every starting tile faced
 outwards, and then a two-player game where both tiles sat along the top. The
@@ -1296,9 +1298,10 @@ and waived the review gate.
   bottom edge pointing up, so a single per-corner table fixes every
   civilization. Only `startingCorner` and its test change.
 - The per-corner rotations are `[180, 180, 0, 0]` for
-  `[north-west, north-east, south-east, south-west]`.
+  `[north-west, north-east, south-east, south-west]` on a full board, and
+  `[90, 270]` for `[north-west, south-east]` on the two-player board.
 - `startingCorner` reads the player count off the board, not from a parameter:
-  two block rows means the two-player board, and the corner order becomes
+  two block rows means the two-player board, and the corner list becomes
   north-west then south-east.
 - Tiles already placed in saved games keep the rotation stored on the piece.
   Nothing is migrated: a stored rotation is player-owned state, and the affected

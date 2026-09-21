@@ -39,14 +39,16 @@ Both top tiles end pointing south, both bottom tiles pointing north — i.e. the
 arrow points towards the horizontal middle of the board.
 
 The human also sent a two-player screenshot and asked for the corners to be
-opposite: player 1 north-west, player 2 south-east. The two-player board is
-16 × 8 (two block rows), so `startingCorner` reads that from the board and gives
-player 2 the south-east corner (M5–P8) instead of the top-right.
+opposite: player 1 north-west, player 2 south-east, with the arrows along the
+long axis pointing at each other. The two-player board is 16 × 8 (two block
+rows), so `startingCorner` reads that from the board, gives player 2 the
+south-east corner (M5–P8) instead of the top-right, and turns the north-west
+tile 90° (arrow east) and the south-east tile 270° (arrow west).
 
 | Player | Corner | Rotation |
 | --- | --- | --- |
-| 1 | top-left (A1–D4) | 180° |
-| 2 | bottom-right (M5–P8) | 0° |
+| 1 | top-left (A1–D4) | 90° |
+| 2 | bottom-right (M5–P8) | 270° |
 
 ## Why
 
@@ -104,12 +106,12 @@ up.
 
 For the two-player diagonal, `startingCorner` needs the player count. It does
 not take one, and the board already encodes it: the two-player board is 16 × 8
-(two block rows) while three or more players use the full 16 × 16. So the
-function walks the four corners clockwise from the top-left as before, but when
-`blockRows(board) === 2` it indexes `[top-left, bottom-right]` instead of
-`[top-left, top-right, bottom-right, bottom-left]`. The test file asserts the
-four values, the player-1 reveal, and the two-player corners, all of which
-change.
+(two block rows) while three or more players use the full 16 × 16. When
+`blockRows(board) === 2` the function returns only the two corners the players
+use — north-west then south-east — with rotations 90° and 270° so the arrows run
+along the long axis at each other. Every bigger board keeps the four corners in
+clockwise order with rotations 180/180/0/0. The test file asserts the four
+values, the player-1 reveal, and the two-player corners, all of which change.
 
 ## Claimed paths
 
@@ -121,7 +123,8 @@ change.
 ## Acceptance criteria
 
 - [ ] All four corners return the arrow-inwards rotation (180/180/0/0).
-- [ ] A two-player board puts player 1 top-left and player 2 bottom-right.
+- [ ] A two-player board puts player 1 top-left (90°) and player 2 bottom-right
+      (270°), arrows along the long axis.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 - [ ] Hidden information: not touched — no projection changes, no new
       projection test needed.
