@@ -1335,6 +1335,62 @@ beside the PayPal one issue #77 restored.
 - The PayPal form is untouched — same endpoint, same `cmd` and encrypted
   `encrypted` values as issue #77.
 
+## Discard a random great person of a type (great-person-discard)
+
+The human asked for a way to discard a random Great Person of a given type, for
+the case where a player holds two of a type (two Generals) and one of them is
+killed. Neither `old-civ-rest` nor `old-civ-web` has such a rule:
+`PlayerAction.discardItem` discards a *named* card, matched by sheet, item number
+and name, and the old client offers only that per-card discard. This is a new,
+human-specified rule, not a port.
+
+**Decisions, settled with the human before the work started.**
+
+- The action always takes from the acting player's own hand. The route uses
+  `currentPlayer(c).id`, so a member cannot discard another player's card.
+- The control is offered only for a type held **two or more** times. With only
+  one, there is nothing random to choose and the existing per-card discard
+  applies. That gate lives in the UI, not the engine.
+- No turn gating; it may be used any time, like Loot.
+- It sits in the "Your hand" panel, next to the Loot controls.
+
+**Consequences.**
+
+- `discardRandomGreatPerson` is deliberately permissive: it accepts any
+  non-empty match, because discarding the only card of a type is exactly what
+  the manual discard already does. It shuffles the candidates with `state.rng`
+  (advancing it, as `loot` does) and reuses `discardItem`'s destination
+  (`discardedItems`, `hidden`).
+- Its log line says the discard was random — "`<username>` has randomly
+  discarded - `<card>`" — the way the loot lines do; the human asked for that
+  wording. It keeps the `DISCARD` log type so undo still returns the card to
+  hand, and still reveals the card publicly, as `discardItem` does.
+- The new engine error `NOTHING_TO_DISCARD` maps to 404, mirroring
+  `NOTHING_TO_LOOT`.
+- The mechanic is not wired to the battle arena's kill toggle. Issue #75 put
+  killed-unit cleanup in the player's hands on purpose, and coupling the two
+  would reopen that decision.
+
+
+## 2026-09-21 - The start-of-game wonder deal is logged as System
+
+**Decision.** The four ancient wonders dealt once every civilization is
+revealed are logged as `System: drew <wonder> and placed it in the Wonders
+area`, not as the last player who revealed a civ. A manual wonder draw still
+logs the drawing player.
+
+**Why.** The human reported it: "i loggen står det at det er den siste spilleren
+som revealed civ som har trukket de. Kan du endre til System". The deal is the
+game's setup, not a player action, so crediting the last revealer was
+misleading.
+
+**Consequences.**
+- `drawWonderToBoard` takes an optional `actor: 'player' | 'system'` (default
+  `'player'`). `drawStartingWonders` passes `'system'`, which routes the log
+  through `appendInfoLog` (username `System`, public text `System: ...`). The
+  board piece is still placed with the revealing player's `playerId`; only the
+  log attribution changes.
+- Manual wonder draws are unchanged and still credit the drawing player.
 ---
 
 ## 2026-09-21 - Huts and Villages have no board-supply cap

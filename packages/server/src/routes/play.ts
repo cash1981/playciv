@@ -11,6 +11,7 @@ import {
   chooseTech,
   discardBarbarians,
   discardItem,
+  discardRandomGreatPerson,
   draw,
   drawUnitsForBattle,
   drawWonder,
@@ -333,6 +334,24 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
         sheetName,
         name,
       }),
+    )
+  })
+
+  /**
+   * Discards one random Great Person of the given `type` from the acting
+   * player's own hand. New mechanic, no old-system counterpart; the type is a
+   * body field because the values contain spaces ("Artist or Thinker").
+   */
+  app.post('/api/games/:gameId/greatperson/discard', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const type = requireString(body, 'type')
+    if (type === undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'type is required')
+    }
+
+    return applyToGame(context, c, gameId, (state) =>
+      discardRandomGreatPerson(state, { playerId: currentPlayer(c).id, type }),
     )
   })
 
