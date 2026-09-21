@@ -148,25 +148,26 @@
   margin-top: 0.35rem;
 }
 
-/* Long phases get a fixed reading height: the revealed versions and the
-   editor each scroll on their own, so a wall of text cannot make the section
-   enormous. Trade and research keep the default size — they hold a number
-   and a tech name. About six lines before a scrollbar appears. */
-.turn-phase {
-  --turn-history-max-height: none;
-  --turn-editor-height: none;
+/* Every phase editor has a fixed reading height and its own scrollbar, so a
+   wall of text cannot make the section enormous. The long phases start taller
+   than trade and research, which hold a number and a tech name. The revealed
+   history scrolls in its own area too, capped rather than fixed so an empty
+   history reserves no space. */
+.turn-phase[data-turn-phase] {
+  --turn-history-max-height: 6rem;
+  --turn-editor-height: 6rem;
 }
 
 .turn-phase[data-turn-phase='SOT'],
 .turn-phase[data-turn-phase='CM'],
 .turn-phase[data-turn-phase='MOVEMENT'] {
-  --turn-history-max-height: 8rem;
-  --turn-editor-height: 9rem;
+  --turn-history-max-height: 10rem;
+  --turn-editor-height: 10rem;
 }
 
 /* Revealed versions sit above the editor on a simple vertical timeline. */
 .turn-history {
-  max-height: var(--turn-history-max-height);
+  max-height: var(--turn-history-max-height, none);
   margin: 0 0 0.55rem;
   padding-left: 0.9rem;
   border-left: 2px solid var(--line);
@@ -253,9 +254,23 @@
   resize: vertical;
 }
 
-.turn-phase .turn-markdown .milkdown .ProseMirror,
-.turn-phase .turn-markdown-fallback {
-  max-height: var(--turn-editor-height);
+/* Size the Crepe content surface, not its frame, so the toolbar stays put, and
+   drop the default min-heights so the fixed height is actually honoured. The
+   plain-text fallback gets the same box. The private log is not a turn phase,
+   so these `[data-turn-phase]` rules leave it at its default size. */
+.turn-phase[data-turn-phase] .turn-markdown .milkdown {
+  min-height: 0;
+}
+
+.turn-phase[data-turn-phase] .turn-markdown .milkdown .ProseMirror {
+  height: var(--turn-editor-height);
+  min-height: 0;
+  overflow: auto;
+}
+
+.turn-phase[data-turn-phase] .turn-markdown-fallback {
+  height: var(--turn-editor-height);
+  min-height: 0;
   overflow: auto;
 }
 
