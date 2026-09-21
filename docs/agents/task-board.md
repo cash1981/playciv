@@ -12,6 +12,23 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### buymeacoffee-footer
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `feat/buymeacoffee-footer`
+- **Brief:** `docs/agents/tasks/buymeacoffee-footer.md`
+- **Status:** review-approved — implemented and self-checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged.
+- **Claimed paths:**
+  - `packages/web/src/views/Footer.tsx`
+  - `packages/web/src/views/Footer.test.tsx`
+  - `packages/web/src/styles.css`
+  - `docs/agents/tasks/buymeacoffee-footer.md`
+  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
+- **Notes:** Adds the human-supplied Buy Me a Coffee button next to the PayPal
+  donate button in the site-wide footer (issue #77). New button only; the PayPal
+  form and everything else in the footer is untouched.
+
 ### starting-tile-orientation
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)

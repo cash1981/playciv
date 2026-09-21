@@ -19,6 +19,13 @@ _Last updated: 2026-09-21_
 
 ## Done
 
+- **Buy Me a Coffee in the footer.** The site-wide footer now shows a Buy Me a
+  Coffee button beside the PayPal donate button, from the exact markup the owner
+  supplied (`buymeacoffee.com/cash1981`). A plain image link, not the provider's
+  JavaScript widget; the PayPal form is untouched. The supplied code had no
+  `target`/`rel`/`alt`, so the client's external-link convention and an `alt`
+  were added. Branch `feat/buymeacoffee-footer`; review self-checked in
+  OpenCode (no game rules involved). 1 new web test (73 total).
 - **Starting tile orientation.** Every civilization's starting tile was laid
   facing outwards: the artwork is uniform (all sixteen tiles carry the arrow on
   the bottom edge pointing up), but `startingCorner` assumed it pointed down and

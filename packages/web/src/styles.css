@@ -176,7 +176,9 @@ label > textarea {
 /* --- Site footer (issue #77) ----------------------------------------------
    Copyright, license and the old PayPal donate button, on every page. The old
    AngularJS footer floated the form with Bootstrap's `pull-right`; here the
-   footer itself is the flex row. */
+   footer itself is the flex row, and the donate buttons share a right-hand
+   support area that wraps on narrow screens. The Buy Me a Coffee button is
+   new (not in the old footer). */
 
 .site-footer {
   display: flex;
@@ -195,10 +197,28 @@ label > textarea {
   margin: 0;
 }
 
+.site-footer-support {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .site-footer-donate {
   display: flex;
   align-items: center;
   margin: 0;
+}
+
+.site-footer-coffee {
+  display: inline-flex;
+}
+
+/* Match the PayPal button's height so the two sit level in the row. */
+.site-footer-coffee img {
+  display: block;
+  height: 47px;
+  width: auto;
 }
 
 .topbar {
