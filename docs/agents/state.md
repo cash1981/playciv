@@ -290,6 +290,10 @@ _Nothing queued._
 
 ## Known problems and loose ends
 
+- **3- and 5-player map setup is not implemented.** Three players get a plain
+  16 × 16 rectangle instead of the rulebook's stepped board, and five players get
+  the same rectangle with two starting tiles stacked in the north-west corner.
+  Only 1, 2 and 4 players match the setup diagrams. Tracked in issue #109.
 - **Game fixes done on `feat/game-fixes`** (off `feat/mongodb-storage`), each
   through the review gate: membership on endturn/taketurn (403 for non-members),
   `GAME_NOT_STARTED` (409) instead of a misleading "Couldn't find player",

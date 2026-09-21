@@ -91,6 +91,9 @@ points down, and its per-corner table compounded the error.
   player-owned state; affected games are pre-release and can be re-snapped with
   the existing rotate controls. Called out in `decisions.md`.
 - A general "rotate a piece on placement" feature. Out of scope.
+- The 3- and 5-player map shapes (the stepped board and the centre hole). Not
+  supported today; tracked in issue #109. This branch only covers 1, 2 and 4
+  players, where the board is a rectangle.
 
 ## Approach
 
