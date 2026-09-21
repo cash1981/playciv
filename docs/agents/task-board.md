@@ -17,7 +17,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `chore/opencode-readonly-review-loop`
 - **Brief:** `docs/agents/tasks/opencode-readonly-review-loop.md`
-- **Status:** in progress — implemented, in review.
+- **Status:** review-approved — implemented and self-checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `.opencode/agents/reviewer.md` (new)
   - `.claude/agents/reviewer.md`

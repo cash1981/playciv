@@ -19,6 +19,14 @@ _Last updated: 2026-09-21_
 
 ## Done
 
+- **Read-only review loop in OpenCode.** OpenCode gets the missing read-only
+  `reviewer` agent under `.opencode/agents/`, and every change now runs through
+  the read-only reviewer after the first implementation, iterating until a round
+  reports nothing above a nit. The rule is stated in `AGENTS.md`,
+  `workflow.md`, `roles.md` and both review-gate skill copies (Claude and
+  Codex); the old claim that OpenCode had no reviewer is corrected. Branch
+  `chore/opencode-readonly-review-loop`; review-approved in two read-only
+  rounds. Documentation-only; no test counts change.
 - **Buy Me a Coffee in the footer.** The site-wide footer now shows a Buy Me a
   Coffee button beside the PayPal donate button, from the exact markup the owner
   supplied (`buymeacoffee.com/cash1981`). A plain image link, not the provider's

@@ -63,7 +63,7 @@ the orchestrator chooses to leave are recorded in the review verdict.
 
 ## Acceptance criteria
 
-- [ ] `.opencode/agents/reviewer.md` exists and is read-only by permissions.
-- [ ] `AGENTS.md`, `workflow.md`, `roles.md` and the review-gate skill all say the read-only review runs after the first implementation and iterates until a round is clean.
-- [ ] `roles.md` and `repo-map.md` no longer claim OpenCode has no reviewer.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (documentation-only change).
+- [x] `.opencode/agents/reviewer.md` exists and is read-only by permissions.
+- [x] `AGENTS.md`, `workflow.md`, `roles.md` and the review-gate skill all say the read-only review runs after the first implementation and iterates until a round is clean.
+- [x] `roles.md` and `repo-map.md` no longer claim OpenCode has no reviewer.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (documentation-only change).

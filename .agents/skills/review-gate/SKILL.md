@@ -98,8 +98,8 @@ Regardless of the reviewer's verdict, do not approve when:
 
 - a projection carries another player's hand, private log, or unrevealed cards,
   and no test proves otherwise;
-- the change encodes an FFG rule that is not in the Java source;
-- it "fixes" Java behaviour without recording the deviation in
+- the change encodes an FFG rule that is not in the old system;
+- it "fixes" old-system behaviour without recording the deviation in
   `docs/agents/decisions.md` and `README.md`;
 - a test was deleted or loosened to make the suite pass;
 - the engine gained a clock, a random number, I/O, or a `throw`.
