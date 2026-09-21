@@ -109,24 +109,40 @@ replace it, so the new shape is a documented product change, not a ported rule.
 
 ## Acceptance criteria
 
-- [ ] Revealing a section creates exactly one new historical version.
-- [ ] Saving without revealing does not create a historical version.
-- [ ] Multiple reveals preserve every previously revealed version.
-- [ ] Versions are ordered oldest first and newest last.
-- [ ] Each version includes the timestamp of its reveal.
-- [ ] The complete revealed content is shown for every version; no diff view.
-- [ ] Historical entries are visibly de-emphasised (grey, slightly opaque,
+- [x] Revealing a section creates exactly one new historical version.
+- [x] Saving without revealing does not create a historical version.
+- [x] Multiple reveals preserve every previously revealed version.
+- [x] Versions are ordered oldest first and newest last.
+- [x] Each version includes the timestamp of its reveal.
+- [x] The complete revealed content is shown for every version; no diff view.
+- [x] Historical entries are visibly de-emphasised (grey, slightly opaque,
       struck through) and the current editor is clearly below them.
-- [ ] History is maintained independently for each turn-order section.
-- [ ] Hidden information: an unrevealed phase's current text never reaches a
+- [x] History is maintained independently for each turn-order section.
+- [x] Hidden information: an unrevealed phase's current text never reaches a
       public projection; a previously revealed version stays public after the
       phase is edited and made private again. Proven in `turn-action.test.ts`.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Verified in the browser with a real reveal, edit and second reveal; say
-      what was seen. If no browser is connected, say so and leave it to the
-      human.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [ ] Verified in the browser with a real reveal, edit and second reveal.
 
 ## Open questions
 
 None. The one material question — replace the save-based `history` versus add a
 second field — was put to the human, who chose replace.
+
+## Notes after implementation
+
+- Verification: `pnpm -r typecheck` exit 0; `pnpm -r test` engine 448, server
+  173, web 87; `pnpm -r build` exit 0.
+- No browser was connected to the session, so the visual pass is the one
+  unchecked box and is left to the human.
+- The review gate (read-only `reviewer`) returned approve with nits. One minor
+  finding: the history renders the raw Markdown source while the live editor is
+  WYSIWYG, so styled text shows its syntax (`**bold**`). The orchestrator kept
+  that on purpose — the brief specifies the complete Markdown text, the
+  requested treatment is struck-through *text*, and `packages/web` has no
+  Markdown renderer, so rendering it would mean a new client dependency and
+  sanitizer. Worth a look during the human's browser pass. The second, a nit
+  about a tautological timestamp assertion, was fixed.
+- The `rules-checker` found no undocumented divergence from `old-civ-rest`/
+  `old-civ-web`; the only change to old behaviour is the human-approved
+  replacement of the save-based history.

@@ -570,8 +570,12 @@ describe('TurnOrderWorkspace', () => {
     expect(items).toHaveLength(2)
     expect(items[0]?.textContent).toContain('First published plan')
     expect(items[1]?.textContent).toContain('Second published plan')
-    // Each version carries the formatted timestamp of its reveal.
-    expect(items[0]?.textContent).toContain(formatTimestamp('2026-09-21T08:30:00.000Z'))
+    // Each version carries the timestamp of its reveal: the raw ISO in the
+    // machine-readable attribute, plus the formatted value in the text.
+    const times = container.querySelectorAll('.turn-history-version time')
+    expect(times[0]?.getAttribute('dateTime')).toBe('2026-09-21T08:30:00.000Z')
+    expect(times[1]?.getAttribute('dateTime')).toBe('2026-09-21T09:45:00.000Z')
+    expect(times[0]?.textContent).toBe(formatTimestamp('2026-09-21T08:30:00.000Z'))
 
     // The history sits above the start-of-turn editor, which keeps normal contrast.
     const list = container.querySelector('.turn-history')
