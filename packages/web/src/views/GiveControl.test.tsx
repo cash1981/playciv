@@ -70,13 +70,16 @@ const cityState: Item = {
 const run = async (): Promise<void> => undefined
 
 describe('GiveControl', () => {
-  it('shows the selector and Give button for a Tradable card', () => {
-    render(
-      <GiveControl item={tradable('HUTS')} gameId="g" busy={false} run={run} opponents={[]} />,
-    )
-    expect(screen.getByRole('combobox')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Give' })).toBeTruthy()
-  })
+  it.each(['CULTURE_1', 'HUTS', 'VILLAGES'] as const)(
+    'shows the selector and Give button for %s',
+    (sheetName) => {
+      render(
+        <GiveControl item={tradable(sheetName)} gameId="g" busy={false} run={run} opponents={[]} />,
+      )
+      expect(screen.getByRole('combobox')).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Give' })).toBeTruthy()
+    },
+  )
 
   it.each([
     ['great person', greatPerson],
