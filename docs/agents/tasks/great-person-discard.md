@@ -135,7 +135,7 @@ listing types with count ≥ 2.
 - [x] Hidden information: the hand control is built only from the viewer's own
       hand; no opponent hand or private description is rendered or sent.
 - [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
-      (engine 434, server 176, web 77).
+      (engine 436, server 176, web 77).
 - [ ] Verified in the browser: with two Generals in hand, a "Discard random
       General" button appears and discards exactly one. **Not done — no browser
       was connected to the session.** Verified against a running server instead:

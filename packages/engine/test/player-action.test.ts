@@ -31,6 +31,7 @@ import {
 import type { CivItem } from '../src/item.js'
 import { itemName } from '../src/item.js'
 import { uniqueItemNumber } from '../src/log.js'
+import { nextId, shuffle } from '../src/random.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer, withPlayer } from '../src/state.js'
@@ -559,9 +560,18 @@ describe('discardRandomGreatPerson', () => {
     expect(after.discardedItems[0]?.kind).toBe('greatperson')
     expect(after.discardedItems[0]?.hidden).toBe(true)
     expect(handOf(after, CASH1981)).toHaveLength(2)
-    // The shuffle must advance the seeded RNG, or the next draw would reuse
-    // the pre-shuffle seed and become predictable.
-    expect(after.rng).not.toBe(state.rng)
+    // The stored RNG must be the shuffle's next state, then advanced once more
+    // by the log entry's id. `after.rng !== state.rng` alone would be vacuous:
+    // the log's `nextId` advances the RNG anyway, so the assertion would pass
+    // even if the shuffle's advance were dropped. Compare against both.
+    const candidates = handOf(state, CASH1981).filter(
+      (item) => item.kind === 'greatperson' && item.type === 'General',
+    )
+    const [, shuffledRng] = shuffle(candidates, state.rng)
+    const [, afterStoredShuffle] = nextId(shuffledRng)
+    const [, afterDroppedShuffle] = nextId(state.rng)
+    expect(after.rng).toBe(afterStoredShuffle)
+    expect(after.rng).not.toBe(afterDroppedShuffle)
     expect(after.log.at(-1)?.logType).toBe('DISCARD')
     // The random discard says so, like the loot lines; DISCARD still reveals
     // the card, so the public line names the type too.
