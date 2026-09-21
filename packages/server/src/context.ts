@@ -128,34 +128,6 @@ export function stampLog(state: GameState, now: string): GameState {
   }
 }
 
-/** The slice of a Hono context the background runner needs. */
-export interface BackgroundRunner {
-  readonly executionCtx: { waitUntil(task: Promise<unknown>): void }
-}
-
-/**
- * Runs a best-effort task after the response without delaying it.
- *
- * Cloudflare Workers cancel a floating promise once the request ends, so such
- * a task has to be handed to `executionCtx.waitUntil`. Node's
- * `@hono/node-server` passes no execution context — its second argument is the
- * server's `{ incoming, outgoing }`, and `Context.executionCtx` throws when
- * read — and there the process outlives the request, so a floating promise is
- * enough. Keeping both paths here is what lets the same mailer code move from
- * Render to a Worker unchanged.
- */
-export function runInBackground(context: BackgroundRunner, task: Promise<unknown>): void {
-  const caught = task.catch((error) => {
-    console.error('Background task failed', error)
-  })
-  try {
-    context.executionCtx.waitUntil(caught)
-  } catch {
-    // No ExecutionContext (Node): the process outlives the request.
-    void caught
-  }
-}
-
 export function createGameRevision(
   before: GameState | undefined,
   state: GameState,

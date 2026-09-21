@@ -5,9 +5,8 @@
   // docs/agents/decisions.md.
   //
   // Runtime secrets (TOKEN_SECRET required; RESEND_API_KEY, MAIL_FROM,
-  // APP_ORIGIN, MAIL_BROADCAST_NEW_GAMES optional) are set in the Cloudflare
-  // dashboard under the Worker's Settings > Variables, not here. This file is
-  // committed and holds no secrets.
+  // APP_ORIGIN optional) are set in the Cloudflare dashboard under the Worker's
+  // Settings > Variables, not here. This file is committed and holds no secrets.
   "name": "playciv",
   "main": "packages/worker/src/index.ts",
   "compatibility_date": "2026-09-18",

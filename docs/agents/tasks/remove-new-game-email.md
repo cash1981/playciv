@@ -39,16 +39,17 @@ manual action and is **not** affected.
   `broadcastNewGames` config/option and the `MAIL_BROADCAST_NEW_GAMES`
   environment variable.
 - Drop the now-unused `GLOBAL_COOLDOWN_MS` and `globalScope` helper (only the
-  new-game blast used them).
+  new-game blast used them), and `runInBackground` with its `BackgroundRunner`
+  type (`packages/server/src/context.ts`), whose only production caller it was.
 - Remove the new-game-broadcast tests and the environment-variable
   documentation (`.env.example`, `wrangler.jsonc` comment, `README.md`, the Node
-  entry docblock).
+  entry docblock), and add a route-level test proving create-game sends nothing.
 - Record the retirement in `decisions.md` and `state.md`.
 
 **Out:**
 
-- The other five notification triggers, the two cooldowns they use, the
-  unsubscribe links and `disableEmail` handling — untouched.
+- The other five notification triggers, the 30-minute per-player-in-game
+  cooldown, the unsubscribe links and `disableEmail` handling — untouched.
 - The admin mass mail (`POST /api/admin/email/broadcast`) — untouched.
 - The historical task brief `docs/agents/tasks/issue-30-email-notifications.md`
   — a record, not edited.
@@ -61,16 +62,17 @@ removal out through `app.ts` (`CreateAppOptions.broadcastNewGames`),
 `packages/server/src/index.ts` and `packages/worker/src/index.ts` (Env field and
 `buildApp`), and delete the `runInBackground(c, context.notifications.gameCreated(
 stamped))` call (and the now-unused `runInBackground` import) in
-`packages/server/src/routes/games.ts`. Delete the `new-game broadcast` describe
-block in `packages/server/test/notifications.test.ts` and its now-unused imports.
-For the "never" guarantee, the test that proves the create route sends no mail
-stays as a route-level regression test.
+`packages/server/src/routes/games.ts`. Delete `runInBackground` itself, since
+nothing else calls it. Delete the `new-game broadcast` and `background tasks`
+blocks in `packages/server/test/notifications.test.ts` and their now-unused
+imports, and add a route-level test proving `POST /api/games` sends no mail.
 
 ## Claimed paths
 
 - `packages/server/src/notifications.ts`
 - `packages/server/src/app.ts`
 - `packages/server/src/index.ts`
+- `packages/server/src/context.ts`
 - `packages/server/src/routes/games.ts`
 - `packages/server/test/notifications.test.ts`
 - `packages/worker/src/index.ts`
@@ -83,9 +85,10 @@ stays as a route-level regression test.
 ## Acceptance criteria
 
 - [ ] No code path sends email from `POST /api/games`; creating a game with a
-      mailer that records sends produces none.
-- [ ] `broadcastNewGames` / `MAIL_BROADCAST_NEW_GAMES` no longer exist anywhere
-      in the repository.
+      mailer that records sends produces none (route-level test).
+- [ ] `broadcastNewGames` / `MAIL_BROADCAST_NEW_GAMES` no longer exist in code
+      or live configuration (historical docs and the issue #30 brief still name
+      them, as records).
 - [ ] The remaining notification triggers and their tests are unchanged.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 - [ ] Hidden information: not applicable — this removes a send, adds no field and

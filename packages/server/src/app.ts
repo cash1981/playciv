@@ -37,8 +37,6 @@ export interface CreateAppOptions {
   readonly mailer?: Mailer
   /** Absolute base URL of the web app, used in email links. */
   readonly appOrigin?: string
-  /** Java emailed every account when a game was created; off by default. */
-  readonly broadcastNewGames?: boolean
   /** Injectable clock for the notification cooldowns; for tests. */
   readonly now?: () => Date
 }
@@ -88,7 +86,6 @@ export function createApp(options: CreateAppOptions): App {
       repo: options.repo,
       mailer: options.mailer ?? noopMailer,
       appOrigin,
-      broadcastNewGames: options.broadcastNewGames === true,
       ...(options.now !== undefined ? { now: options.now } : {}),
     }),
     appOrigin,

@@ -18,8 +18,6 @@ export const DEFAULT_APP_ORIGIN = 'https://playciv.app'
 
 /** Java `CivUtil.shouldSendEmailInGame`: 30 minutes, per player per game. */
 export const IN_GAME_COOLDOWN_MS = 30 * 60 * 1000
-/** Java `CivUtil.shouldSendEmail`: 3 hours, per account. */
-export const GLOBAL_COOLDOWN_MS = 3 * 60 * 60 * 1000
 
 type Player = GameState['players'][number]
 
@@ -27,15 +25,11 @@ export interface NotificationsConfig {
   readonly repo: Repository
   readonly mailer: Mailer
   readonly appOrigin?: string
-  /** Java's new-game mail to every account; off unless the owner turns it on. */
-  readonly broadcastNewGames?: boolean
-  /** Injectable clock, so the two cooldowns are testable. */
+  /** Injectable clock, so the cooldown is testable. */
   readonly now?: () => Date
 }
 
 export interface Notifications {
-  /** Java `GameAction.createNewGame` — every registered, opted-in account. */
-  gameCreated(game: GameState): Promise<void>
   /** Java `GameAction.joinGame` — the other players. */
   playerJoined(game: GameState, joinerPlayerId: string): Promise<void>
   /** Java `PlayerAction.endTurn` → `sendYourTurn` — the next player. */
@@ -93,14 +87,12 @@ const PHASE_MAIL: Readonly<Record<TurnPhase, { readonly subject: string; readonl
   RESEARCH: { subject: 'Research updated', noun: 'research' },
 }
 
-const globalScope = (playerId: string): string => `mail:player:${playerId}`
 const inGameScope = (gameId: string, playerId: string): string =>
   `mail:game:${gameId}:${playerId}`
 
 export function createNotifications(config: NotificationsConfig): Notifications {
   const { repo, mailer } = config
   const appOrigin = (config.appOrigin ?? DEFAULT_APP_ORIGIN).replace(/\/+$/, '')
-  const broadcastNewGames = config.broadcastNewGames === true
   const clock = config.now ?? ((): Date => new Date())
 
   const gameLink = (gameId: string): string => `${appOrigin}/game/${gameId}`
@@ -164,24 +156,6 @@ export function createNotifications(config: NotificationsConfig): Notifications 
   }
 
   return {
-    async gameCreated(game: GameState): Promise<void> {
-      if (!broadcastNewGames) return
-      const body =
-        `A new game by the name ${game.name} was just created! ` +
-        `Visit ${appOrigin}/ to join the game.`
-      try {
-        const players = await repo.allPlayers()
-        for (const player of players) {
-          await notify(player.id, 'New Civilization game created', body, {
-            scope: globalScope(player.id),
-            waitMs: GLOBAL_COOLDOWN_MS,
-          })
-        }
-      } catch (error) {
-        console.error('New-game broadcast failed', error)
-      }
-    },
-
     async playerJoined(game: GameState, joinerPlayerId: string): Promise<void> {
       const joiner = game.players.find((player) => player.playerId === joinerPlayerId)
       const body =

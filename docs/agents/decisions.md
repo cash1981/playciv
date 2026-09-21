@@ -1486,3 +1486,38 @@ cover, as with the culture track and the starting-tile orientation.
 - The manifest still classes both as `resource` pieces; only the limit changes.
 - Huts and villages already placed in saved games are unaffected.
 
+---
+
+## 2026-09-21 - Creating a game sends no email (supersedes part of the issue #30 entry)
+
+**Decision.** The new-game broadcast to every account is removed. `POST
+/api/games` sends no notification at all; the `gameCreated` method, the
+`broadcastNewGames` option and the `MAIL_BROADCAST_NEW_GAMES` environment
+variable are gone, together with `GLOBAL_COOLDOWN_MS`, the `globalScope` helper
+and `runInBackground` (its only production caller). The other five triggers, the
+30-minute per-player-in-game cooldown, the unsubscribe links and `disableEmail`
+handling are unchanged, and so is the admin mass mail (issue #92).
+
+**Why.** The owner asked for it directly: "Kan du fikse implementasjonen slik at
+det aldri blir sendt ut epost når det lages nye kamper. Det er helt greit at man
+får epost når det er sin tur eller noe oppdatering skjer, men ikke når det blir
+nye kamper som blir laget." The issue #30 decision had already put the blast
+behind `MAIL_BROADCAST_NEW_GAMES`, off by default, but a dormant switch is not
+"never": an operator could still turn it on. Deleting the code path is the only
+guarantee, so the ported-but-gated Java behaviour is retired rather than kept
+dormant.
+
+**Consequences.**
+- `GLOBAL_COOLDOWN_MS` (Java `CivUtil.shouldSendEmail`, three hours per account)
+  was only ever used by this broadcast, so the rewrite now has a single
+  notification throttle, the 30-minute per-player-in-game one.
+- `runInBackground` and its `BackgroundRunner` type are deleted: the new-game
+  blast was their only caller, and the remaining notifications are awaited in
+  the `applyToGame` post-commit hook.
+- `MAIL_BROADCAST_NEW_GAMES` is no longer read by the Worker or the Node entry,
+  and the `.env.example` and `wrangler.jsonc` comments no longer mention it. A
+  deployment still setting it has no effect.
+- A route-level test (`packages/server/test/notifications.test.ts`) creates a
+  game with two registered accounts and asserts the mailer received nothing, so
+  a future change cannot quietly reintroduce the send.
+
