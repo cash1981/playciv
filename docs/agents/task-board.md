@@ -43,7 +43,10 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `feat/remove-new-game-email`
 - **Brief:** `docs/agents/tasks/remove-new-game-email.md`
-- **Status:** in progress
+- **Status:** review-approved — implemented and checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged. Review ran on
+  `deepseek/deepseek-v4-pro` (Sol unavailable; the human approved the
+  substitute). Two doc-comment nits found and fixed.
 - **Claimed paths:**
   - `packages/server/src/notifications.ts`
   - `packages/server/src/app.ts`
