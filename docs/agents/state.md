@@ -49,10 +49,11 @@ _Last updated: 2026-09-21_
   rounds, and the `rules-checker` found only the documented replacement. 5 new
   engine tests (448 total), 1 new web test (88 total). No browser was connected,
   so the visual pass is left to the human. The history shows the raw Markdown
-  source; noted in the brief. A follow-up after the human's review bounds the
-  section height: the revealed history and the editor each scroll on their own,
-  and SOT/CM/MOVEMENT stop at about six lines while TRADE/RESEARCH keep their
-  default size; the history wraps long lines rather than scrolling horizontally.
+  source; noted in the brief. A follow-up after the human's review gives every
+  phase editor a fixed height and its own scrollbar (SOT/CM/MOVEMENT `10rem`,
+  TRADE/RESEARCH `6rem`) and caps the revealed history in its own scroll area;
+  the private log keeps its default size. The history wraps long lines rather
+  than scrolling horizontally.
 - **Only Tradable cards can be given away.** The hand's "Give" control was drawn
   on every card, but `tradeToPlayer` only accepts Java's `Tradable` set (Culture
   I/II/III, Hut, Village); every other kind returned `ITEM_NOT_FOUND`, so the
