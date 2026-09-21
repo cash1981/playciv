@@ -75,6 +75,7 @@ imports, and add a route-level test proving `POST /api/games` sends no mail.
 - `packages/server/src/context.ts`
 - `packages/server/src/routes/games.ts`
 - `packages/server/test/notifications.test.ts`
+- `packages/server/src/store/types.ts` (`claimEmailSlot` doc comment only)
 - `packages/worker/src/index.ts`
 - `packages/server/.env.example`
 - `wrangler.jsonc`

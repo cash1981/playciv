@@ -51,6 +51,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/server/src/context.ts`
   - `packages/server/src/routes/games.ts`
   - `packages/server/test/notifications.test.ts`
+  - `packages/server/src/store/types.ts` (comment only)
   - `packages/worker/src/index.ts`
   - `packages/server/.env.example`
   - `wrangler.jsonc`

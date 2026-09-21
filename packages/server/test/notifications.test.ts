@@ -1,7 +1,7 @@
 /**
  * Email notifications (issue #30). Ports of Java's `SendEmail` call sites:
- * `PlayerAction.endTurn`, `GameAction.{createNewGame,joinGame,endGame,
- * deleteGame,addChat}` and `TurnAction.update*`.
+ * `PlayerAction.endTurn`, `GameAction.{joinGame,endGame,deleteGame,addChat}` and
+ * `TurnAction.update*`.
  *
  * Every test drives the app through `app.request` with a fake mailer, so no
  * provider is ever contacted.
