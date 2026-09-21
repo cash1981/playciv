@@ -14,6 +14,7 @@ import {
   chooseSocialPolicy,
   chooseTech,
   discardItem,
+  discardRandomGreatPerson,
   endTurn,
   isYourTurn,
   remainingTechsForPlayer,
@@ -30,9 +31,10 @@ import {
 import type { CivItem } from '../src/item.js'
 import { itemName } from '../src/item.js'
 import { uniqueItemNumber } from '../src/log.js'
+import { nextId, shuffle } from '../src/random.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
-import { findPlayer } from '../src/state.js'
+import { findPlayer, withPlayer } from '../src/state.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -294,6 +296,20 @@ describe('reveal civilization', () => {
     expect(state.board.pieces.some((piece) => piece.category === 'wonder')).toBe(true)
   })
 
+  it('credits the automatic wonder deal to System, not the last revealer', () => {
+    const state = revealEveryCiv(firstCivGame())
+    const wonderLines = state.log.filter((entry) =>
+      /drew .+ and placed it in the Wonders area/.test(entry.publicLog),
+    )
+    expect(wonderLines).toHaveLength(4)
+    for (const entry of wonderLines) {
+      expect(entry.username).toBe('System')
+      expect(entry.publicLog.startsWith('System: ')).toBe(true)
+    }
+    // The deal belongs to the game, so none of it is credited to a player.
+    expect(wonderLines.some((entry) => entry.username !== 'System')).toBe(false)
+  })
+
   it('a wonder placed from the palette does not cancel the start-of-game deal', () => {
     // A moderator decorates the board with wonder art before setup finishes.
     let state = unwrap(
@@ -531,6 +547,107 @@ describe('discarding', () => {
     expect(state.discardedItems[0]?.hidden).toBe(true)
     // Java: DISCARD reveals everything publicly too, the card is out of play
     expect(state.log.at(-1)?.publicLog).toContain(itemName(card))
+  })
+})
+
+/**
+ * New mechanic, with no Java counterpart — see
+ * `docs/agents/tasks/great-person-discard.md`.
+ */
+describe('discardRandomGreatPerson', () => {
+  /** Puts `count` Great Persons of one type into the player's hand. */
+  const giveGreatPersons = (
+    state: GameState,
+    playerId: string,
+    type: string,
+    count: number,
+  ): { readonly state: GameState; readonly ids: readonly string[] } => {
+    const player = findPlayer(state, playerId)
+    if (player === undefined) throw new Error('no player')
+    const cards = state.items
+      .filter((item) => item.kind === 'greatperson' && item.type === type)
+      .slice(0, count)
+    const taken = new Set(cards.map((card) => card.id))
+    return {
+      // Take the cards out of the deck too, so the fixture cannot mask a
+      // reducer that removed from the deck instead of the hand.
+      state: withPlayer(
+        { ...state, items: state.items.filter((item) => !taken.has(item.id)) },
+        { ...player, items: [...player.items, ...cards] },
+      ),
+      ids: cards.map((card) => card.id),
+    }
+  }
+
+  it('removes one card of the type, discards it and logs DISCARD', () => {
+    const { state, ids } = giveGreatPersons(firstCivGame(), CASH1981, 'General', 3)
+    const after = unwrap(discardRandomGreatPerson(state, { playerId: CASH1981, type: 'General' }))
+
+    expect(after.discardedItems).toHaveLength(1)
+    expect(ids).toContain(after.discardedItems[0]?.id)
+    expect(after.discardedItems[0]?.kind).toBe('greatperson')
+    expect(after.discardedItems[0]?.hidden).toBe(true)
+    expect(handOf(after, CASH1981)).toHaveLength(2)
+    // The stored RNG must be the shuffle's next state, then advanced once more
+    // by the log entry's id. `after.rng !== state.rng` alone would be vacuous:
+    // the log's `nextId` advances the RNG anyway, so the assertion would pass
+    // even if the shuffle's advance were dropped. Compare against both.
+    const candidates = handOf(state, CASH1981).filter(
+      (item) => item.kind === 'greatperson' && item.type === 'General',
+    )
+    const [, shuffledRng] = shuffle(candidates, state.rng)
+    const [, afterStoredShuffle] = nextId(shuffledRng)
+    const [, afterDroppedShuffle] = nextId(state.rng)
+    expect(after.rng).toBe(afterStoredShuffle)
+    expect(after.rng).not.toBe(afterDroppedShuffle)
+    expect(after.log.at(-1)?.logType).toBe('DISCARD')
+    // The random discard says so, like the loot lines; DISCARD still reveals
+    // the card, so the public line names the type too.
+    expect(after.log.at(-1)?.publicLog).toContain('has randomly discarded')
+    expect(after.log.at(-1)?.publicLog).toContain('General')
+  })
+
+  it('picks across all candidates rather than always the first', () => {
+    // The seeds are fixed, so this cannot pass by luck: the same seeds always
+    // produce the same picks. See `conventions.md` on avoiding lucky tests.
+    const { state, ids } = giveGreatPersons(firstCivGame(), CASH1981, 'General', 3)
+    const picked = new Set<string>()
+    for (let rng = 0; rng < 40; rng++) {
+      const after = unwrap(
+        discardRandomGreatPerson({ ...state, rng }, { playerId: CASH1981, type: 'General' }),
+      )
+      picked.add(after.discardedItems[0]?.id ?? '')
+    }
+    expect(picked).toEqual(new Set(ids))
+  })
+
+  it('leaves Great Persons of another type in the hand', () => {
+    const withGenerals = giveGreatPersons(firstCivGame(), CASH1981, 'General', 2).state
+    const { state, ids: scientistIds } = giveGreatPersons(
+      withGenerals,
+      CASH1981,
+      'Scientist',
+      1,
+    )
+    const after = unwrap(discardRandomGreatPerson(state, { playerId: CASH1981, type: 'General' }))
+
+    const remaining = handOf(after, CASH1981)
+    expect(remaining).toHaveLength(2)
+    expect(remaining.some((item) => item.id === scientistIds[0])).toBe(true)
+  })
+
+  it('gives NOTHING_TO_DISCARD when the player holds none of the type', () => {
+    const error = unwrapErr(
+      discardRandomGreatPerson(firstCivGame(), { playerId: CASH1981, type: 'General' }),
+    )
+    expect(error).toEqual({ kind: 'NOTHING_TO_DISCARD', playerId: CASH1981, type: 'General' })
+  })
+
+  it('refuses a player who is not in the game', () => {
+    const error = unwrapErr(
+      discardRandomGreatPerson(firstCivGame(), { playerId: 'player-nobody', type: 'General' }),
+    )
+    expect(error.kind).toBe('NO_ACCESS')
   })
 })
 

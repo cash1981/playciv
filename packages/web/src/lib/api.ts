@@ -279,6 +279,8 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/draw/${sheetName}`),
   loot: (gameId: string, category: LootCategory, targetPlayerId: string) =>
     post<PlayerView>(`/api/games/${gameId}/loot/${category}/${targetPlayerId}`),
+  discardGreatPerson: (gameId: string, type: string) =>
+    post<PlayerView>(`/api/games/${gameId}/greatperson/discard`, { type }),
 
   drawBattlehand: (gameId: string, numberOfUnits: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/draw`, { numberOfUnits }),

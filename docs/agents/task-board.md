@@ -38,6 +38,46 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   Great Person and Civ; that is reverted (`isGiftable` removed, `tradeToPlayer`
   back to `isTradable`). Also declares `@types/node` on `packages/engine`,
   needed for `node:fs`/`node:url` in its tests.
+### issue-116-hut-village-unlimited
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `fix/issue-116-hut-village-unlimited`
+- **Brief:** `docs/agents/tasks/issue-116-hut-village-unlimited.md`
+- **Status:** review-approved — implemented and self-checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged.
+- **Claimed paths:**
+  - `packages/engine/src/board.ts`
+  - `packages/engine/test/board.test.ts`
+  - `packages/web/src/views/BoardView.test.tsx`
+  - `docs/agents/tasks/issue-116-hut-village-unlimited.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
+- **Notes:** Issue #116. Huts and Villages get no board-supply cap; the other
+  four resources keep the issue #49 player-count limit. No client code changes;
+  only the engine limit and tests.
+### opencode-readonly-review-loop
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `chore/opencode-readonly-review-loop`
+- **Brief:** `docs/agents/tasks/opencode-readonly-review-loop.md`
+- **Status:** review-approved — implemented and self-checked on the branch; PR to
+  open, awaiting the human's merge. Claim kept until merged.
+- **Claimed paths:**
+  - `.opencode/agents/reviewer.md` (new)
+  - `.claude/agents/reviewer.md`
+  - `AGENTS.md`
+  - `docs/agents/workflow.md`
+  - `docs/agents/roles.md`
+  - `docs/agents/repo-map.md`
+  - `.claude/skills/review-gate/SKILL.md`
+  - `.agents/skills/review-gate/SKILL.md`
+  - `docs/agents/tasks/opencode-readonly-review-loop.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+- **Notes:** Process change requested by the owner: OpenCode must always run a
+  read-only review after the first implementation and iterate until a round is
+  clean. Adds the missing read-only `reviewer` agent to `.opencode/agents/` and
+  states the loop in AGENTS.md, workflow.md, roles.md and the review-gate skill.
 
 ### buymeacoffee-footer
 

@@ -14,6 +14,7 @@ _Last updated: 2026-09-21_
 | --- | --- |
 | `pnpm -r typecheck` | passing |
 | `pnpm -r test` | passing - 435 engine, 173 server, 81 web |
+| `pnpm -r test` | passing - 436 engine, 176 server, 77 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
 
@@ -31,6 +32,23 @@ _Last updated: 2026-09-21_
   tests import `node:fs`/`node:url`; a lockfile refresh had dropped the hoisting
   accident it relied on, breaking `pnpm -r typecheck` on `main`. Branch
   `feat/gift-greatperson-civ`.
+- **Issue #116.** Huts and Villages are no longer capped at the player count in
+  the board palette: a two-player game showed "Hut (2)" / "Village (2)" and
+  refused a third piece. `boardAssetLimit` returns `undefined` for
+  `resources/hut` and `resources/village`; wheat, iron, silk and incense keep
+  the issue #49 player-count cap, and buildings and Great Persons are untouched.
+  No client change — the palette already hides the count and the exhausted state
+  for an unlimited asset. Branch `fix/issue-116-hut-village-unlimited`;
+  review-approved after two read-only rounds (round one's findings all fixed).
+  1 new engine test (430 total) and 1 new web test (74 total).
+- **Read-only review loop in OpenCode.** OpenCode gets the missing read-only
+  `reviewer` agent under `.opencode/agents/`, and every change now runs through
+  the read-only reviewer after the first implementation, iterating until a round
+  reports nothing above a nit. The rule is stated in `AGENTS.md`,
+  `workflow.md`, `roles.md` and both review-gate skill copies (Claude and
+  Codex); the old claim that OpenCode had no reviewer is corrected. Branch
+  `chore/opencode-readonly-review-loop`; review-approved in two read-only
+  rounds. Documentation-only; no test counts change.
 - **Buy Me a Coffee in the footer.** The site-wide footer now shows a Buy Me a
   Coffee button beside the PayPal donate button, from the exact markup the owner
   supplied (`buymeacoffee.com/cash1981`). A plain image link, not the provider's
@@ -38,6 +56,27 @@ _Last updated: 2026-09-21_
   `target`/`rel`/`alt`, so the client's external-link convention and an `alt`
   were added. Branch `feat/buymeacoffee-footer`; review self-checked in
   OpenCode (no game rules involved). 1 new web test (73 total).
+- **Discard a random great person of a type.** The "Your hand" panel offers a
+  random discard for each Great Person type the player holds two or more of —
+  the case the human described, where two Generals are held and one is killed.
+  The pure engine `discardRandomGreatPerson` shuffles the matching cards with
+  the seeded RNG and reuses `discardItem`'s discard pile, with a public log line
+  that says "has randomly discarded" (the human asked for the loot-style
+  wording); a new `NOTHING_TO_DISCARD` error maps to 404. New mechanic with no
+  old-system counterpart, specified by the human (see `decisions.md`). Branch
+  `feat/great-person-discard`; review-approved (reviewer `deepseek/deepseek-v4-pro`;
+  Sol unavailable) and the read-only `rules-checker` confirmed there is no
+  old-system equivalent. 5 new engine tests, 3 server, 4 web. Verified end to
+  end against a running server: a hand of Artist-or-Thinker + two Generals
+  offered only "General", and one random General was discarded with the public
+  "has randomly discarded" line. No browser pass was possible — no browser was
+  connected to the session.
+- **The start-of-game wonder deal is logged as System.** The four ancient
+  wonders dealt once every civilization is revealed were credited to the last
+  player who revealed a civ; they are now logged as `System: drew <wonder> and
+  placed it in the Wonders area`. `drawWonderToBoard` gained an optional `actor`
+  (default the player), and only `drawStartingWonders` passes `system`; manual
+  draws still credit the player. Branch `feat/great-person-discard`.
 - **Starting tile orientation.** Every civilization's starting tile was laid
   facing outwards: the artwork is uniform (all sixteen tiles carry the arrow on
   the bottom edge pointing up), but `startingCorner` assumed it pointed down and
@@ -105,13 +144,13 @@ _Last updated: 2026-09-21_
   `MAIL_BROADCAST_NEW_GAMES`, off by default; the two deliberate differences
   from Java (link on every mail, unsubscribe honoured everywhere) are in
   `decisions.md` and `README.md`. 21 new server tests.
-- **OpenCode agents.** OpenCode gets the `coder` and `rules-checker` roles under
-  `.opencode/agents/`, mirroring `.claude/agents/`; the reviewer role is
-  intentionally omitted because the owner runs the same model throughout, so the
-  orchestrator does the correctness check itself. `rules-checker` is read-only
-  and the coder cannot spawn subagents. Skills still load from `.claude/skills/`.
-  Self-checked against the OpenCode agent spec; `chore/opencode-agents` PR to
-  open.
+- **OpenCode agents.** OpenCode gets the `coder`, `reviewer` and `rules-checker`
+  roles under `.opencode/agents/`, mirroring `.claude/agents/`. The `reviewer`
+  and `rules-checker` are read-only and the coder cannot spawn subagents. Every
+  change goes through the read-only reviewer after the first implementation,
+  iterating until a round reports nothing above a nit (see `workflow.md`); the
+  earlier claim that OpenCode had no reviewer is superseded. Skills still load
+  from `.claude/skills/`.
 - **The port itself.** Deck, items, draws, reshuffle, hands, techs, social
   policy, trade, turns, undo voting, chat, game lifecycle. Every Java action
   class has a counterpart and a test file naming it.

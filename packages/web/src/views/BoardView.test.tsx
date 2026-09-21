@@ -147,4 +147,31 @@ describe('BoardPalette finite supplies', () => {
     expect(restored).toContain('Academy (1)')
     expect(restored).toContain('draggable="true"')
   })
+
+  it('shows no count and keeps a hut draggable at the cap (issue #116)', () => {
+    const hut = findBoardAsset('resources/hut')
+    if (hut === undefined) throw new Error('hut missing from manifest')
+
+    // Two huts in a two-player game is exactly where a capped resource would be
+    // exhausted; a hut must stay unlimited, so it must not show "(0)".
+    const huts: readonly BoardPiece[] = [0, 1].map((index) => ({
+      ...piece('resources/hut', String(index)),
+      category: 'resource',
+    }))
+
+    const markup = renderToStaticMarkup(
+      <BoardPalette
+        assets={[hut]}
+        category="resource"
+        onCategoryChange={() => undefined}
+        replaying={false}
+        pieces={huts}
+        numOfPlayers={2}
+      />,
+    )
+    expect(markup).toContain('Hut')
+    expect(markup).not.toContain('Hut (')
+    expect(markup).toContain('draggable="true"')
+    expect(markup).not.toContain('unavailable')
+  })
 })

@@ -761,6 +761,67 @@ describe('loot', () => {
   })
 })
 
+describe('great person discard', () => {
+  it('requires a type', async () => {
+    const { gameId, starter } = await startedGame('Great person no type')
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/greatperson/discard`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({ error: 'BAD_REQUEST' })
+  })
+
+  it('returns 404 NOTHING_TO_DISCARD when the hand holds none of that type', async () => {
+    const { gameId, starter } = await startedGame('Great person none')
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/greatperson/discard`,
+      headers: bearer(starter),
+      payload: { type: 'General' },
+    })
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({ error: 'NOTHING_TO_DISCARD' })
+  })
+
+  it('discards a drawn great person of its type and logs it publicly', async () => {
+    const { gameId, starter } = await startedGame('Great person discard')
+
+    const drawn = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/GREAT_PERSON`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(drawn.status).toBe(200)
+
+    const before = await repo.findGame(gameId)
+    const from = before?.players.find((player) => player.yourTurn)
+    const card = from?.items.find((item) => item.kind === 'greatperson')
+    expect(card?.type).toBeTruthy()
+
+    const discarded = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/greatperson/discard`,
+      headers: bearer(starter),
+      payload: { type: card?.type ?? '' },
+    })
+    expect(discarded.status).toBe(200)
+
+    const after = await repo.findGame(gameId)
+    const fromAfter = after?.players.find((player) => player.playerId === from?.playerId)
+    expect(fromAfter?.items.some((item) => item.id === card?.id)).toBe(false)
+    expect(after?.discardedItems.some((item) => item.id === card?.id)).toBe(true)
+    expect(after?.log.at(-1)?.logType).toBe('DISCARD')
+    expect(after?.log.at(-1)?.publicLog).toContain('has randomly discarded')
+    expect(after?.log.at(-1)?.publicLog).toContain(card?.type ?? '')
+  })
+})
+
 describe('hidden information over HTTP', () => {
   it('an opponent sees the number of cards, not their contents', async () => {
     const creator = await register('cash1981')

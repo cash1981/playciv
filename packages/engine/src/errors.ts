@@ -27,6 +27,11 @@ export type EngineError =
   | { readonly kind: 'NOTHING_TO_LOOT'; readonly playerId: string }
   /** Java: 406 "Item is not lootable" */
   | { readonly kind: 'ITEM_NOT_LOOTABLE'; readonly itemId: string }
+  /**
+   * No old-system counterpart: `discardRandomGreatPerson` found no Great Person
+   * of the requested type in the acting player's hand.
+   */
+  | { readonly kind: 'NOTHING_TO_DISCARD'; readonly playerId: string; readonly type: string }
   /** Java: `SecurityCheck.hasUserAccess` was false — 403 */
   | { readonly kind: 'NO_ACCESS'; readonly playerId: string }
   /** Java logged a warning and returned null */
@@ -117,6 +122,8 @@ export function describeError(error: EngineError): string {
       return 'You have nothing to draw'
     case 'ITEM_NOT_LOOTABLE':
       return 'Item is not lootable'
+    case 'NOTHING_TO_DISCARD':
+      return `You have no ${error.type} great person to discard`
     case 'NO_ACCESS':
       return 'User is not player of this game'
     case 'TECH_ALREADY_CHOSEN':

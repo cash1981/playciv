@@ -17,6 +17,7 @@ import type { EngineError } from '../errors.js'
 import type { Item } from '../item.js'
 import { isTradable, isUnit, revealAll, revealPublic } from '../item.js'
 import {
+  appendInfoLog,
   appendItemLog,
   appendPrivateLog,
   appendPrivatePublicLog,
@@ -151,6 +152,11 @@ export function drawWonderToBoard(
   state: GameState,
   playerId: string,
   sheetName: SheetName,
+  /**
+   * Who the public log credits. The start-of-game deal is the system's, not the
+   * last player who revealed a civ; a manual draw is the drawing player's.
+   */
+  actor: 'player' | 'system' = 'player',
 ): DrawResult {
   const found = requirePlayer(state, playerId)
   if (!found.ok) return found
@@ -177,13 +183,11 @@ export function drawWonderToBoard(
     return err({ kind: 'BOARD_ASSET_NOT_FOUND', assetId })
   }
 
+  const message = `drew ${item.name} and placed it in the Wonders area`
   return ok(
-    appendPublicLog(
-      next,
-      player.username,
-      playerId,
-      `drew ${item.name} and placed it in the Wonders area`,
-    ),
+    actor === 'system'
+      ? appendInfoLog(next, message)
+      : appendPublicLog(next, player.username, playerId, message),
   )
 }
 

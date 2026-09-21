@@ -119,6 +119,16 @@ describe('drawWonderToBoard places the wonder on the board, not in a hand', () =
     expect(entry?.playerId).toBe(CASH1981)
   })
 
+  it('can credit the placement to System, for the start-of-game deal', () => {
+    const after = unwrap(
+      drawWonderToBoard(firstCivGame(), CASH1981, 'ANCIENT_WONDERS', 'system'),
+    )
+    const entry = after.log.at(-1)
+    expect(entry?.username).toBe('System')
+    expect(entry?.publicLog).toMatch(/^System: drew .+ and placed it in the Wonders area$/)
+    expect(entry?.playerId).toBeNull()
+  })
+
   it('the low-level helper places without a turn check (the start flow uses it off-turn)', () => {
     // KARANDRAS1 does not hold the turn in firstCivGame; the helper still places
     // the wonder, because the reveal flow calls it when it is nobody's turn.
