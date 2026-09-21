@@ -1335,6 +1335,73 @@ beside the PayPal one issue #77 restored.
 - The PayPal form is untouched — same endpoint, same `cmd` and encrypted
   `encrypted` values as issue #77.
 
+
+## 2026-09-21 - A Great Person and the civ card can be given away
+
+**Decision.** `tradeToPlayer` moves Great Person and Civ cards, not only the old
+`Tradable` set (Culture I/II/III, Hut, Village). A new `isGiftable` predicate in
+`item.ts` decides what the hand's "Give" control may move; loot still uses
+`isTradable`.
+
+**Why.** The human reported it directly: "you cannot gift a greatperson or your
+civ starting tile. You can only gift hut, village and culture cards." The old
+Java `Tradable` marker interface, implemented by Culture I/II/III, Hut and
+Village, was the only gate: `PlayerAction.tradeToPlayer` filtered on it, and the
+old AngularJS client only drew its "Send to Player" button on those same cards.
+In the rewrite the Give control is drawn on every hand card, so a Great Person
+or Civ card reached the reducer and came back `ITEM_NOT_FOUND`. No old-system
+rule covers gifting these, so it is a deliberate extension requested by the
+human, recorded here and in `README.md`.
+
+**Consequences.**
+- `isTradable` is unchanged. `loot` still refuses a Great Person or a Civ card,
+  so a Great Person can be given but not looted. A test pins that line.
+- The other kinds (units, wonders, tiles, city-states, techs, social policies)
+  stay non-giftable. Only the two kinds the human named were added; widening
+  further is a separate decision.
+- The trade log, `ownerId` update and the two log entries are unchanged: the
+  change is only which items are eligible.
+- **Giving the civ card moves only the card.** The player's chosen civilization
+  (`Playerhand.civilization`), government, starting tech, starting tile and
+  leader marker all stay with the giver; the receiver just holds the card. The
+  civ card in hand is the one chosen at reveal time (the others are discarded on
+  reveal), so this is the case that matters. A test pins it. If the card is
+  meant to carry the whole civilization across instead, that is a larger change
+  and needs its own decision.
+- **Unrelated tooling fix bundled in.** `packages/engine` imports `node:fs` and
+  `node:url` in `gamedata.test.ts` but never declared `@types/node`; its
+  typecheck only passed because an older install happened to link it. Refreshing
+  the lockfile dropped that link and broke `pnpm -r typecheck` on `main`, so the
+  branch declares `@types/node`. The same refresh also syncs the engine's
+  `vitest` importer to `^4.1.11`, which `main`'s `packages/engine/package.json`
+  already required while the lockfile still pinned 3.2.7.
+
+## 2026-09-21 - Correction: only Tradable cards can be given away
+
+**Supersedes** the "A Great Person and the civ card can be given away" entry
+above. That entry misread the human's report. They meant the Give control should
+not be offered on those cards at all: "You can still give away greatperson,
+citystate and your civ. None of which should be possible."
+
+**Decision.** Gifting stays exactly the old `Tradable` set (Culture I/II/III,
+Hut, Village). `tradeToPlayer` filters on `isTradable` again (the `isGiftable`
+superset is removed), and the client draws the Give control only when
+`isTradable(item)` holds, so Great Person, Civ, City-state, units, wonders,
+tiles, techs and social policies no longer show a Give button that would fail
+with `ITEM_NOT_FOUND`.
+
+**Why.** The engine already refused the non-Tradable kinds; the bug was that the
+rewrite drew the control on every hand card, inviting a click that could never
+succeed. The old AngularJS client drew its "Send to Player" button only on the
+Tradable cards, so hiding it is the faithful behaviour.
+
+**Consequences.**
+- `isGiftable` is gone; `isTradable` is the single gate for both loot and give.
+- `GiveControl` in `GameView.tsx` renders null for a non-Tradable item; a
+  component test covers Great Person, Civ and City-state.
+- The `@types/node` fix from the previous entry stays: it is unrelated but still
+  needed for `pnpm -r typecheck` on `main`.
+
 ## Discard a random great person of a type (great-person-discard)
 
 The human asked for a way to discard a random Great Person of a given type, for

@@ -481,20 +481,48 @@ describe('trade', () => {
     expect(state.log.at(-1)?.publicLog).toBe('')
   })
 
-  it('items that are not Tradable cannot be traded', () => {
-    const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'ANCIENT_WONDERS' }))
-    const wonder = handOf(state, CASH1981)[0]
-    if (wonder === undefined) throw new Error('no wonder')
+  it.each(['CULTURE_1', 'CULTURE_2', 'CULTURE_3', 'HUTS', 'VILLAGES'] as const)(
+    'gives a %s card to another player',
+    (sheetName) => {
+      let state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName }))
+      const card = handOf(state, CASH1981)[0]
+      if (card === undefined) throw new Error(`no ${sheetName} card`)
 
-    const error = unwrapErr(
-      tradeToPlayer(state, {
-        playerId: CASH1981,
-        targetPlayerId: ITCHI,
-        sheetName: 'ANCIENT_WONDERS',
-        name: itemName(wonder),
-      }),
-    )
-    expect(error.kind).toBe('ITEM_NOT_FOUND')
+      state = unwrap(
+        tradeToPlayer(state, {
+          playerId: CASH1981,
+          targetPlayerId: ITCHI,
+          sheetName,
+          itemNumber: card.itemNumber,
+          name: itemName(card),
+        }),
+      )
+
+      expect(handOf(state, CASH1981).some((item) => item.id === card.id)).toBe(false)
+      expect(handOf(state, ITCHI).some((item) => item.id === card.id)).toBe(true)
+      expect(handOf(state, ITCHI).find((item) => item.id === card.id)?.ownerId).toBe(ITCHI)
+    },
+  )
+
+  it('items outside the Tradable set cannot be traded', () => {
+    // Java: only CultureI/II/III, Hut and Village implement Tradable. Great
+    // Person, Civ, City-state and Wonders do not, so the Give control is not
+    // drawn for them and the reducer refuses them.
+    for (const sheetName of ['ANCIENT_WONDERS', 'GREAT_PERSON', 'CIV', 'CITY_STATES'] as const) {
+      const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName }))
+      const card = handOf(state, CASH1981)[0]
+      if (card === undefined) throw new Error(`no ${sheetName} card`)
+
+      const error = unwrapErr(
+        tradeToPlayer(state, {
+          playerId: CASH1981,
+          targetPlayerId: ITCHI,
+          sheetName,
+          name: itemName(card),
+        }),
+      )
+      expect(error.kind).toBe('ITEM_NOT_FOUND')
+    }
   })
 })
 

@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { isUnit, itemName, itemType } from '@civ/engine'
+import { isTradable, isUnit, itemName, itemType } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -645,8 +645,6 @@ function HandItem({
   readonly run: Run
   readonly opponents: PlayerView['opponents']
 }): React.JSX.Element {
-  const [target, setTarget] = useState('')
-
   return (
     <ItemCard item={item}>
       <span className={item.hidden ? 'tag hidden' : 'tag revealed'}>
@@ -677,6 +675,42 @@ function HandItem({
       >
         Back to deck
       </button>
+      <GiveControl
+        item={item}
+        gameId={gameId}
+        busy={busy}
+        run={run}
+        opponents={opponents}
+      />
+    </ItemCard>
+  )
+}
+
+/**
+ * The "give to …" selector and Give button, shown only for the old `Tradable`
+ * cards (Culture I/II/III, Hut, Village). The engine rejects every other kind
+ * with `ITEM_NOT_FOUND`, so drawing the control for them only invited a failed
+ * click — Great Person, Civ, City-state and the rest get no Give control.
+ */
+export function GiveControl({
+  item,
+  gameId,
+  busy,
+  run,
+  opponents,
+}: {
+  readonly item: Item
+  readonly gameId: string
+  readonly busy: boolean
+  readonly run: Run
+  readonly opponents: PlayerView['opponents']
+}): React.JSX.Element | null {
+  const [target, setTarget] = useState('')
+
+  if (!isTradable(item)) return null
+
+  return (
+    <>
       <select
         value={target}
         onChange={(event) => setTarget(event.target.value)}
@@ -700,7 +734,7 @@ function HandItem({
       >
         Give
       </button>
-    </ItemCard>
+    </>
   )
 }
 

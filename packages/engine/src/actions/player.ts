@@ -584,6 +584,10 @@ export interface TradeInput {
 /**
  * Java: `PlayerAction.tradeToPlayer` — gives a Tradable item to another
  * player. Unlike `loot` this is voluntary, and the player picks the item.
+ *
+ * Only the old `Tradable` set may be given away: Great Person, Civ, City-state
+ * and every other kind are rejected with `ITEM_NOT_FOUND`, and the client does
+ * not even draw the Give control for them.
  */
 export function tradeToPlayer(state: GameState, input: TradeInput): ActionResult {
   const from = requireAccess(state, input.playerId)

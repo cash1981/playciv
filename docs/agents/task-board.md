@@ -12,6 +12,33 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### gift-greatperson-civ
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `feat/gift-greatperson-civ`
+- **Brief:** `docs/agents/tasks/gift-greatperson-civ.md`
+- **Status:** review-approved — PR #114 open, awaiting the human's merge. Claim
+  kept until merged.
+- **Claimed paths:**
+  - `packages/engine/src/item.ts` (`isTradable` comment only)
+  - `packages/engine/src/actions/player.ts` (`tradeToPlayer` filter and comment only)
+  - `packages/engine/package.json` (`@types/node` devDependency only)
+  - `pnpm-lock.yaml`
+  - `packages/engine/test/player-action.test.ts` (trade tests only)
+  - `packages/engine/test/draw-action.test.ts` (a loot regression test only)
+  - `packages/web/src/views/GameView.tsx` (`GiveControl` only)
+  - `packages/web/src/views/GiveControl.test.tsx` (new)
+  - `docs/agents/tasks/gift-greatperson-civ.md`
+  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
+- **Notes:** Corrected task. The human's report meant the Give control should
+  NOT be offered on Great Person, Civ or City-state cards — only the old Java
+  `Tradable` set (Culture I/II/III, Hut, Village) is giftable, and the engine
+  already enforced that. The fix is client-side: `GiveControl` renders null for
+  a non-Tradable item. An earlier pass on this branch wrongly enabled gifting
+  Great Person and Civ; that is reverted (`isGiftable` removed, `tradeToPlayer`
+  back to `isTradable`). Also declares `@types/node` on `packages/engine`,
+  needed for `node:fs`/`node:url` in its tests.
+
 ### issue-116-hut-village-unlimited
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)

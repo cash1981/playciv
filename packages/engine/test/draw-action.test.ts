@@ -400,6 +400,20 @@ describe('loot', () => {
     expect(unwrapErr(result).kind).toBe('ITEM_NOT_LOOTABLE')
   })
 
+  it('still refuses to loot a Great Person or a Civ card', () => {
+    // Neither implements the old `Tradable` marker, so neither can be looted
+    // (nor given away); this pins that line.
+    for (const sheetName of ['GREAT_PERSON', 'CIV'] as const) {
+      const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName }))
+      const result = loot(state, {
+        playerId: CASH1981,
+        targetPlayerId: KARANDRAS1,
+        sheetNames: new Set([sheetName]),
+      })
+      expect(unwrapErr(result).kind).toBe('ITEM_NOT_LOOTABLE')
+    }
+  })
+
   it('treats Culture I, II and III as one random Culture Card pool', () => {
     // Java: `SheetName.CULTURE_CARD` is the EnumSet CULTURE_1/2/3 passed by
     // `DrawResource.loot` for the old client's single Culture Card button.

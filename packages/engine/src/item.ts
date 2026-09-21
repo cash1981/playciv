@@ -199,7 +199,8 @@ export function isUnit(item: Item): item is UnitItem {
 
 /**
  * Java: `Tradable` — an empty marker interface implemented by CultureI/II/III,
- * Hut and Village. Only these can be looted or given away.
+ * Hut and Village. Only these can be looted or given away. The Give control in
+ * the hand is shown only for these; see `GameView.tsx`.
  */
 const TRADABLE_KINDS = new Set<ItemKind>(['cultureI', 'cultureII', 'cultureIII', 'hut', 'village'])
 

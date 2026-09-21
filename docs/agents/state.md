@@ -13,12 +13,24 @@ _Last updated: 2026-09-21_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 436 engine, 176 server, 77 web |
+| `pnpm -r test` | passing - 443 engine, 176 server, 86 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; issue #40 merged as PR #94; PR #91 (issue #72 D1) is the only open pull request |
 
 ## Done
 
+- **Only Tradable cards can be given away.** The hand's "Give" control was drawn
+  on every card, but `tradeToPlayer` only accepts Java's `Tradable` set (Culture
+  I/II/III, Hut, Village); every other kind returned `ITEM_NOT_FOUND`, so the
+  control invited a click that could not succeed. The Give control
+  (`GiveControl` in `GameView.tsx`) is now rendered only for a Tradable item, so
+  Great Person, Civ, City-state, units, wonders, tiles, techs and social
+  policies no longer offer it; the engine gate is unchanged. (An earlier pass on
+  this branch wrongly *enabled* gifting Great Person and Civ; that is reverted —
+  see `decisions.md`.) Also declared `@types/node` on `packages/engine`, whose
+  tests import `node:fs`/`node:url`; a lockfile refresh had dropped the hoisting
+  accident it relied on, breaking `pnpm -r typecheck` on `main`. Branch
+  `feat/gift-greatperson-civ`.
 - **Issue #116.** Huts and Villages are no longer capped at the player count in
   the board palette: a two-player game showed "Hut (2)" / "Village (2)" and
   refused a third piece. `boardAssetLimit` returns `undefined` for

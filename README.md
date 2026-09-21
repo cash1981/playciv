@@ -563,6 +563,14 @@ one provider call per recipient, so a very large account list could hit the
 Worker's subrequest/CPU limits — a known limitation, not fixed here. See
 `docs/agents/decisions.md`.
 
+**Only Tradable cards can be given away.** The hand's "Give" control was drawn
+on every card, but `tradeToPlayer` only ever accepted Java's `Tradable` set
+(Culture I/II/III, Hut, Village); every other kind came back `ITEM_NOT_FOUND`.
+The control is now shown only for the Tradable cards, so Great Person, Civ,
+City-state, units, wonders, tiles, techs and social policies no longer offer a
+button that cannot work. The old AngularJS client likewise drew "Send to Player"
+only on the Tradable cards. See `docs/agents/decisions.md`.
+
 **The board palette enforces finite physical supplies.** The old system tracked
 board pieces in a Google Sheet and enforced no limits; issue #49 asked for the
 physical supplies to be visible and enforced, so the palette now shows a
