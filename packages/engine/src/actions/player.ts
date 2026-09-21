@@ -32,7 +32,7 @@ import { err, ok } from '../result.js'
 import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
 import type { GameState, Playerhand, PlayerStats } from '../state.js'
-import { findPlayer, hasUserAccess, withPlayer } from '../state.js'
+import { findPlayer, hasUserAccess, isMovementValue, withPlayer } from '../state.js'
 
 import { placeUnchecked } from './board.js'
 import { draw, drawWonderToBoard } from './draw.js'
@@ -810,7 +810,11 @@ export interface SetPlayerStatInput {
   readonly editorPlayerId: string
   readonly targetPlayerId: string
   readonly stat: keyof PlayerStats
-  readonly value: number
+  /**
+   * A number for every stat except Movement, which takes its expression as a
+   * string (`3+1`). See {@link isMovementValue}.
+   */
+  readonly value: number | string
   /** ISO timestamp for the log entry. The engine itself stays pure. */
   readonly at?: string
 }
@@ -833,20 +837,38 @@ export function setPlayerStat(state: GameState, input: SetPlayerStatInput): Acti
     return err({ kind: 'UNKNOWN_STAT', stat: String(input.stat) })
   }
 
-  const allowsNegative = input.stat === 'combat'
-  if (!Number.isInteger(input.value) || (!allowsNegative && input.value < 0)) {
-    return err({ kind: 'INVALID_STAT_VALUE', value: input.value })
+  // Movement (issue #102) is the one value written as an expression, `3+1`, to
+  // record a natural-religion bonus. Every other stat stays a plain integer;
+  // Combat alone may be negative.
+  let storedValue: number | string
+  if (input.stat === 'mvmt') {
+    if (!isMovementValue(input.value)) {
+      return err({ kind: 'INVALID_STAT_VALUE', value: input.value })
+    }
+    // A bare number is accepted and normalised, so older callers and games
+    // saved before Movement was text keep working.
+    storedValue = String(input.value)
+  } else {
+    const allowsNegative = input.stat === 'combat'
+    if (
+      typeof input.value !== 'number' ||
+      !Number.isInteger(input.value) ||
+      (!allowsNegative && input.value < 0)
+    ) {
+      return err({ kind: 'INVALID_STAT_VALUE', value: input.value })
+    }
+    storedValue = input.value
   }
 
   const next = withPlayer(state, {
     ...target,
-    stats: { ...target.stats, [input.stat]: input.value },
+    stats: { ...target.stats, [input.stat]: storedValue } as PlayerStats,
   })
 
   const message =
     editor.playerId === target.playerId
-      ? `set their ${STAT_LABEL[input.stat]} to ${input.value}`
-      : `set ${target.username}'s ${STAT_LABEL[input.stat]} to ${input.value}`
+      ? `set their ${STAT_LABEL[input.stat]} to ${storedValue}`
+      : `set ${target.username}'s ${STAT_LABEL[input.stat]} to ${storedValue}`
 
   return ok(
     appendLog(next, {

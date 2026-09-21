@@ -72,8 +72,12 @@ export type EngineError =
   | { readonly kind: 'GAME_NOT_STARTED' }
   /** Java has no equivalent — `setPlayerStat` (issue #43) got a key outside `PlayerStats` */
   | { readonly kind: 'UNKNOWN_STAT'; readonly stat: string }
-  /** `setPlayerStat` (issue #43) got a value that is not an allowed integer */
-  | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number }
+  /**
+   * `setPlayerStat` (issue #43) got a value the stat does not allow: a
+   * non-integer or negative number, or — for Movement (issue #102) — a string
+   * that is not a `base(+bonus)*` expression.
+   */
+  | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number | string }
   /** `setPlayerGovernment` got a value outside the Wisdom and Warfare cards. */
   | { readonly kind: 'UNKNOWN_GOVERNMENT'; readonly government: string }
   /** A battle is already active — only one at a time is allowed */

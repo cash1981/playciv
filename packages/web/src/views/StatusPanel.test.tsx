@@ -99,3 +99,34 @@ describe('StatusPanel governments', () => {
     ).toBe(true)
   })
 })
+
+describe('StatusPanel Movement (issue #102)', () => {
+  it('saves a Movement expression as text', async () => {
+    const setStat = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(memberView)
+    render(
+      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+    )
+
+    const movement = screen.getByRole('textbox', { name: 'Alice Movement' })
+    fireEvent.change(movement, { target: { value: '3+1' } })
+    fireEvent.blur(movement)
+
+    await waitFor(() =>
+      expect(setStat).toHaveBeenCalledWith('game-1', 'player-me', 'mvmt', '3+1'),
+    )
+  })
+
+  it('reverts an invalid Movement value without saving', () => {
+    const setStat = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(memberView)
+    render(
+      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+    )
+
+    const movement = screen.getByRole('textbox', { name: 'Alice Movement' }) as HTMLInputElement
+    fireEvent.change(movement, { target: { value: '3+' } })
+    fireEvent.blur(movement)
+
+    expect(setStat).not.toHaveBeenCalled()
+    expect(movement.value).toBe('2')
+  })
+})

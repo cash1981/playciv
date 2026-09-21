@@ -482,9 +482,18 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     if (stat === undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'stat is required')
     }
-    const value = optionalNumber(body, 'value')
+    // Movement (issue #102) is sent as a string ("3+1") so a printed bonus can
+    // be recorded, though a bare number is still accepted. Every other stat
+    // keeps `optionalNumber`, including the numeric strings older clients sent.
+    const rawValue = body['value']
+    const value =
+      stat === 'mvmt'
+        ? typeof rawValue === 'number' || typeof rawValue === 'string'
+          ? rawValue
+          : undefined
+        : optionalNumber(body, 'value')
     if (value === undefined) {
-      return sendError(c, 400, 'BAD_REQUEST', 'value must be a number')
+      return sendError(c, 400, 'BAD_REQUEST', 'value must be a number or a movement expression')
     }
     return applyToGame(context, c, gameId, (state) =>
       setPlayerStat(state, {
