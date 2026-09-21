@@ -12,6 +12,27 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### opencode-readonly-review-loop
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `chore/opencode-readonly-review-loop`
+- **Brief:** `docs/agents/tasks/opencode-readonly-review-loop.md`
+- **Status:** in progress — implemented, in review.
+- **Claimed paths:**
+  - `.opencode/agents/reviewer.md` (new)
+  - `AGENTS.md`
+  - `docs/agents/workflow.md`
+  - `docs/agents/roles.md`
+  - `docs/agents/repo-map.md`
+  - `.claude/skills/review-gate/SKILL.md`
+  - `docs/agents/tasks/opencode-readonly-review-loop.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+- **Notes:** Process change requested by the owner: OpenCode must always run a
+  read-only review after the first implementation and iterate until a round is
+  clean. Adds the missing read-only `reviewer` agent to `.opencode/agents/` and
+  states the loop in AGENTS.md, workflow.md, roles.md and the review-gate skill.
+
 ### buymeacoffee-footer
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
