@@ -71,7 +71,8 @@ nothing to reproduce here beyond recording the deviation.
   doc comment that list the old column order.
 - `packages/web/src/styles.css`: change `.data-table .action-cell` to
   `text-align: left` and reword its comment from "to the right of the table".
-  The `SortableTable.tsx` class-name hook on `key === 'action'` is unchanged.
+  The `SortableTable.tsx` class-name hook on `key === 'action'` is unchanged;
+  only its now-stale "right-aligns" comment is corrected.
 - `packages/web/src/views/GameList.test.tsx`: make the `names()` helper find the
   Name link instead of the third cell, so it works whichever tab is open (the
   two tabs now have different column positions). Update the "empty Created cell"
@@ -85,6 +86,7 @@ nothing to reproduce here beyond recording the deviation.
 
 - `packages/web/src/views/GameList.tsx`
 - `packages/web/src/views/GameList.test.tsx`
+- `packages/web/src/views/SortableTable.tsx` (`action-cell` comment only)
 - `packages/web/src/styles.css`
 - `docs/agents/tasks/front-page-actions-first.md`
 - `docs/agents/task-board.md`

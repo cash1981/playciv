@@ -47,7 +47,7 @@ function names(): (string | null)[] {
   return Array.from(document.querySelectorAll('tbody tr td a')).map((link) => link.textContent)
 }
 
-/** The open table's header text, in order, with any sort arrow stripped. */
+/** The currently rendered table's header text, in order, with any sort arrow stripped. */
 function headers(): (string | null)[] {
   return Array.from(document.querySelectorAll('thead th')).map(
     (th) => th.textContent?.replace(/[▲▼]/g, '') ?? null,

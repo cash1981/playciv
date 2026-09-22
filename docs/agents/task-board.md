@@ -39,6 +39,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Claimed paths:**
   - `packages/web/src/views/GameList.tsx`
   - `packages/web/src/views/GameList.test.tsx`
+  - `packages/web/src/views/SortableTable.tsx` (`action-cell` comment only)
   - `packages/web/src/styles.css`
   - `docs/agents/tasks/front-page-actions-first.md`
   - `docs/agents/task-board.md`
