@@ -15,7 +15,7 @@ _Last updated: 2026-09-22_
 | `pnpm -r typecheck` | passing |
 | `pnpm -r test` | passing - 449 engine, 173 server, 111 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; open pull request: turn-order reveal dedupe (`feat/turn-history-hide-current`) |
+| `main` pushed to `origin` | yes; open pull request: #132 (turn-order reveal dedupe) |
 
 ## Done
 
