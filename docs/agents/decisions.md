@@ -1644,8 +1644,11 @@ The action column stays unsortable (it is an action, not a value), and the
 parchment-and-brass light theme, a midnight-blue-and-gold dark theme, `Marcellus`
 for headings with `Cinzel` for the brand and small caps labels, both self-hosted
 under `packages/web/public/fonts/` (SIL OFL, licence files kept beside them), and
-a painted board backdrop behind everything. No selector was removed, no markup
-changed, and PR #131's two mobile blocks in `styles.css` are untouched.
+a painted board backdrop behind everything. No selector was removed and PR
+#131's two mobile blocks in `styles.css` are untouched. The game page's panel
+order also changes: the Log and Chat panels move from the bottom of the stack to
+directly under the board, in a `.panel-pair` wrapper that is two columns when
+the viewport has room and one when it does not.
 
 **Why.** The human asked for it directly: *"Går det an å lage siten litt mer
 moderne og sexy? Jeg ønsker et forslag der all funksjonalitet forblir og
@@ -1654,7 +1657,10 @@ fungerer sånn som den er, bare at det kommer et nytt design som er mer
 godt til hvert design. ... Perhaps there should be a background image that is
 civilization boardgame inspired."* They picked the Atlas direction and the
 "Boks · motiv" backdrop from mockups. The stylesheet's own header said
-"Deliberately plain. The artwork comes later." — this is that pass.
+"Deliberately plain. The artwork comes later." — this is that pass. After
+testing the first pass they asked for one layout change: *"du glemte å flytte
+log og chat rett under mapen"* — a turn-by-forum game is read from the log, so
+it belongs beside the board rather than under seven other panels.
 
 **Consequences.** The backdrop is derived from an image the human supplied — the
 box art of *Sid Meier's Civilization: The Board Game* — cropped to the lower

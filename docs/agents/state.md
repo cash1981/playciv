@@ -24,7 +24,10 @@ _Last updated: 2026-09-22_
   type and surfaces become parchment-and-brass in the light theme and
   midnight-blue-and-gold in the dark one, with self-hosted `Marcellus`/`Cinzel`
   for headings and the brand, and a painted board backdrop behind every page.
-  Behaviour, markup and data are untouched: `styles.css` is restyled in place,
+  The game page's panel order also changes: Log and Chat move from the bottom of
+  the stack to directly under the board, side by side when the viewport has room.
+  Data, props and behaviour are untouched — the game view's change is a reorder
+  of its existing panel children. `styles.css` is restyled in place,
   and no selector, media query or custom property was removed
   (`removedClasses: []`, `removedMedia: []`, `removedVars: []` against `main`).
   PR #131's two mobile blocks are byte-identical, so `SiteMobileStyles.test.ts`

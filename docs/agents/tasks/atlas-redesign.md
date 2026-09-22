@@ -50,6 +50,11 @@ It unblocks nothing technical; it is a presentation change the owner asked for.
   (painted map + scrim + a cartography line/compass overlay). `aria-hidden`,
   purely presentational, no state, no props.
 - `packages/web/src/main.tsx`: renders `SiteBackdrop` once, beside `App`.
+- `packages/web/src/views/GameView.tsx`: **panel order only** — the Log and Chat
+  panels move to directly under the board, in a `.panel-pair` wrapper (two
+  columns when the viewport has room, one when it does not). The human asked for
+  this after testing the first pass: *"du glemte å flytte log og chat rett under
+  mapen"*.
 - `packages/web/public/theme/backdrop.jpg` (new asset): the illustrated
   backdrop, derived from the image the human supplied.
 - `packages/web/public/fonts/` (new assets): self-hosted Marcellus (400) and
@@ -58,10 +63,11 @@ It unblocks nothing technical; it is a presentation change the owner asked for.
 
 **Out:**
 
-- **Any behaviour, markup, props or data.** No `.tsx` file other than
-  `main.tsx`'s one added element changes. Explicitly out: a burger menu or any
-  other change to `Navigation.tsx` — the mobile navigation already landed in PR
-  #131 and its touch-sized grid is kept as it is.
+- **Any behaviour, props or data.** The only `.tsx` edits are `main.tsx`'s one
+  added element and a reorder of `GameView.tsx`'s existing panel children; no
+  component's props, state, effects or data flow change. Explicitly out: a
+  burger menu or any other change to `Navigation.tsx` — the mobile navigation
+  already landed in PR #131 and its touch-sized grid is kept as it is.
 - **Rewriting the responsive strategy.** The stylesheet stays desktop-first with
   `max-width` media queries, because PR #131's mobile contract (and
   `SiteMobileStyles.test.ts`) asserts that structure and those exact values.

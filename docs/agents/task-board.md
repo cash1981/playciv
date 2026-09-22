@@ -24,6 +24,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   geometry and computed style from the live app.
 - **Claimed paths:**
   - `packages/web/src/styles.css`
+  - `packages/web/src/views/GameView.tsx` (panel order only)
   - `packages/web/src/views/SiteBackdrop.tsx` (new)
   - `packages/web/src/views/SiteBackdrop.test.tsx` (new)
   - `packages/web/src/main.tsx`

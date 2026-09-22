@@ -558,6 +558,22 @@ label > textarea {
   gap: 1rem;
 }
 
+/* Log and chat, directly under the board. `auto-fit` gives them two columns
+   when the viewport has room and one when it does not, without a media query.
+   The panels already carry a bottom margin; inside the pair it would double up
+   with the gap. */
+.panel-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.panel-pair > .panel {
+  margin-bottom: 0;
+}
+
 .row {
   display: flex;
   gap: 0.4rem;
