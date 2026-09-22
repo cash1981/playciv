@@ -19,6 +19,16 @@ _Last updated: 2026-09-21_
 
 ## Done
 
+- **Issue #115, PR 1 (board mobile interactions).** The board now supports
+  tap/select/place for palette assets and tap/select/move for existing pieces,
+  while retaining desktop drag-and-drop. Pending placement/move states expose
+  an accessible Cancel action; board panning, multi-pointer gestures,
+  pointer-cancel/lost-capture cleanup and mouse movement tolerance prevent
+  accidental writes. The board palette is responsive on narrow screens and
+  exhausted/replay controls are disabled. Review-approved on branch
+  `feat/issue-115-board`; real-device verification remains in the final issue
+  #115 testing PR. Full checks pass (448 engine, 173 server, 90 web tests).
+
 - **The front page's Open and Join buttons are coloured.** The game list's
   `Open` and `Join` actions were plain grey default buttons, so the two things a
   signed-in player can do on the front page were hard to see beside the

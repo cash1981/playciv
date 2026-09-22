@@ -17,7 +17,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** Codex
 - **Branch:** `feat/issue-115-board`
 - **Brief:** `docs/agents/tasks/issue-115-board-mobile.md`
-- **Status:** in progress
+- **Status:** review-approved — ready for PR; claim kept until the human merges it.
 - **Claimed paths:**
   - `packages/web/src/views/BoardView.tsx`
   - `packages/web/src/views/BoardView.test.tsx`
