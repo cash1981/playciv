@@ -12,24 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### hide-revealed-techs
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
-- **Branch:** `feat/hide-revealed-techs`
-- **Brief:** `docs/agents/tasks/hide-revealed-techs.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/TechPanel.tsx`
-  - `packages/web/src/views/TechPanel.test.tsx` (new)
-  - `docs/agents/tasks/hide-revealed-techs.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`, `docs/agents/decisions.md`
-- **Notes:** The human asked that a researched tech that has been revealed lose
-  its row in the Techs panel's "Yours" list, since the pyramid already shows it.
-  Client-only: the "Yours" `<ul>` is filtered to hidden techs; the engine and
-  `techsChosen` are untouched. Social policies are out of scope (they have no
-  pyramid).
-
 ### issue-125-turn-order-reveal-history
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role

@@ -3,7 +3,7 @@
 - **Slug:** `hide-revealed-techs`
 - **Branch:** `feat/hide-revealed-techs`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
-- **Status:** in progress
+- **Status:** review-approved
 
 ## Goal
 
@@ -81,14 +81,14 @@ In `packages/web/src/views/TechPanel.tsx`:
 
 ## Acceptance criteria
 
-- [ ] A revealed tech (`hidden: false`) has no row in the "Yours" list.
-- [ ] A hidden tech still has its row with the `hidden` tag, `Reveal` and
+- [x] A revealed tech (`hidden: false`) has no row in the "Yours" list.
+- [x] A hidden tech still has its row with the `hidden` tag, `Reveal` and
       `Remove` buttons.
-- [ ] The player's pyramid still renders the revealed tech.
-- [ ] The empty-state line is `None chosen.` only when no tech is researched,
+- [x] The player's pyramid still renders the revealed tech.
+- [x] The empty-state line is `None chosen.` only when no tech is researched,
       and `All researched techs are revealed.` when all of them are revealed.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: no engine projection is touched, so nothing new can
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: no engine projection is touched, so nothing new can
       leak; the test only reads the viewer's own `techsChosen`.
 - [ ] Verified in the browser: no browser is connected to this session, so the
       visual pass is left to the human.

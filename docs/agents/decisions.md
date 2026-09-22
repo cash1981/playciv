@@ -1589,3 +1589,23 @@ field with the reveal history rather than add a second one.
   reinterpreted, because they mixed published and unpublished orders and
   carried no timestamps. `allPublicTurns` is now a plain
   `sort(compareTurns).map(publicTurn)`.
+
+## 2026-09-22 - The Techs list hides revealed techs
+
+**Decision.** The Techs panel's "Yours" list now renders only still-hidden
+technologies. A revealed tech keeps its slot on the player's own pyramid (and
+appears in the "Revealed by everyone" pyramids), but no longer has a list row,
+so it also loses that row's `Reveal` and `Remove` buttons. The list is
+client-only: `Player.techsChosen` still holds the revealed tech, and the engine
+is untouched.
+
+**Why.** The human asked for it directly: a revealed tech is already visible on
+the pyramid, so its row is redundant - "just remove the boxes".
+
+**Consequences.** A revealed tech can no longer be removed from the Techs panel;
+`removeTech` remains in the engine and API, but the UI no longer offers a way to
+call it for a revealed tech. The old client never had a "Yours" list at all
+(`UserItemController.putTechsInScope` built only the pyramid, and a tech was
+revealed from the log), so this moves the port closer to it rather than away.
+Social policies keep their list rows; they have no pyramid, so the reason does
+not apply.

@@ -6,18 +6,32 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-21_
+_Last updated: 2026-09-22_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 448 engine, 173 server, 88 web |
+| `pnpm -r test` | passing - 448 engine, 173 server, 91 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; open pull requests: #123 (front-page join-button colours) and this change's issue #125 |
 
 ## Done
+
+- **The Techs list hides revealed techs.** In the Techs panel's "Yours" list a
+  researched technology that has already been revealed kept a row tagged
+  `revealed` with a `Remove` button, even though the pyramid above it already
+  shows the tech. The human asked for the row to go ("just remove the boxes"),
+  so the list is now filtered to still-hidden techs; a revealed tech stays on
+  the viewer's pyramid and in "Revealed by everyone". Client-only:
+  `Player.techsChosen` and the engine are untouched, so nothing was removed from
+  the game. The empty-state line is `None chosen.` with no tech and `All
+  researched techs are revealed.` when only revealed ones are left. Social
+  policies keep their rows (no pyramid). Branch `feat/hide-revealed-techs`;
+  review-approved in one read-only round with no findings above a nit. 3 new web
+  tests (91 total). No browser was connected, so the visual pass is left to the
+  human; see `decisions.md`.
 
 - **The front page's Open and Join buttons are coloured.** The game list's
   `Open` and `Join` actions were plain grey default buttons, so the two things a
