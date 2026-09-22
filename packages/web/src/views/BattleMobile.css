@@ -2,9 +2,12 @@
    on desktop, while phones use the same select-then-place interaction as the
    mobile board. */
 .battle-piece-selectable,
-.battle-piece-selected,
 .arena-slot {
   touch-action: manipulation;
+}
+
+.battle-piece-selected {
+  touch-action: none;
 }
 
 .battle-piece-selectable {

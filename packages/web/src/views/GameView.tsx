@@ -766,6 +766,13 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
     readonly id: string
   } | null>(null)
   const battleActionInFlightRef = useRef(false)
+  const touchDragRef = useRef<{
+    readonly unitId: string
+    readonly pointerId: number
+    readonly startX: number
+    readonly startY: number
+    moved: boolean
+  } | null>(null)
 
   useEffect(() => {
     if (selectedBattlePiece === null) return
@@ -835,6 +842,42 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
     return run(async () => {
       try { return await action() } finally { battleActionInFlightRef.current = false }
     })
+  }
+
+  function handleArenaPointerDown(unitId: string, event: React.PointerEvent<HTMLLIElement>): void {
+    if (event.pointerType === 'mouse' || busy || battleActionInFlightRef.current) return
+    if (selectedBattlePiece?.kind !== 'arena' || selectedBattlePiece.id !== unitId) return
+    if ((event.target as HTMLElement).closest('button, input, select, textarea') !== null) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    touchDragRef.current = {
+      unitId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    }
+  }
+
+  function handleArenaPointerMove(event: React.PointerEvent<HTMLLIElement>): void {
+    const drag = touchDragRef.current
+    if (drag === null || drag.pointerId !== event.pointerId) return
+    if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) <= 6) return
+    drag.moved = true
+    event.preventDefault()
+  }
+
+  function finishArenaPointerDrag(event: React.PointerEvent<HTMLLIElement>, cancelled: boolean): void {
+    const drag = touchDragRef.current
+    touchDragRef.current = null
+    if (drag === null || drag.pointerId !== event.pointerId) return
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+    if (cancelled || !drag.moved) return
+    event.preventDefault()
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-arena-slot]')
+    const side = target?.dataset['arenaSide']
+    const position = target?.dataset['arenaPosition']
+    if ((side !== 'attacker' && side !== 'defender') || position === undefined) return
+    handleSlotClick(side, Number(position))
   }
 
   function handleDropOnArena(side: BattleSideId, position: number): void {
@@ -1093,6 +1136,9 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               onArenaDragEnd={handleDragEnd}
               onDropUnit={handleDropOnArena}
               onSlotClick={handleSlotClick}
+              onArenaPointerDown={handleArenaPointerDown}
+              onArenaPointerMove={handleArenaPointerMove}
+              onArenaPointerUp={finishArenaPointerDrag}
               selectedBattlePiece={selectedBattlePiece}
               onSelectPiece={selectBattlePiece}
               canManage={mySideInBattle !== null}
@@ -1113,6 +1159,9 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               onArenaDragEnd={handleDragEnd}
               onDropUnit={handleDropOnArena}
               onSlotClick={handleSlotClick}
+              onArenaPointerDown={handleArenaPointerDown}
+              onArenaPointerMove={handleArenaPointerMove}
+              onArenaPointerUp={finishArenaPointerDrag}
               selectedBattlePiece={selectedBattlePiece}
               onSelectPiece={selectBattlePiece}
               canManage={mySideInBattle !== null}
@@ -1140,6 +1189,9 @@ interface ArenaRowProps {
   readonly onArenaDragEnd: () => void
   readonly onDropUnit: (side: BattleSideId, position: number) => void
   readonly onSlotClick: (side: BattleSideId, position: number) => void
+  readonly onArenaPointerDown: (unitId: string, event: React.PointerEvent<HTMLLIElement>) => void
+  readonly onArenaPointerMove: (event: React.PointerEvent<HTMLLIElement>) => void
+  readonly onArenaPointerUp: (event: React.PointerEvent<HTMLLIElement>, cancelled: boolean) => void
   readonly selectedBattlePiece: { readonly kind: 'hand' | 'arena'; readonly id: string } | null
   readonly onSelectPiece: (kind: 'hand' | 'arena', id: string) => void
   readonly canManage: boolean
@@ -1150,7 +1202,7 @@ interface ArenaRowProps {
 function ArenaRow({
   label, side, units, maxPositions, gameId, busy, rev, run,
   draggingUnitId, draggingArenaUnitId, onArenaDragStart, onArenaDragEnd, onDropUnit, onSlotClick,
-  selectedBattlePiece, onSelectPiece, canManage, isOwnSide,
+  onArenaPointerDown, onArenaPointerMove, onArenaPointerUp, selectedBattlePiece, onSelectPiece, canManage, isOwnSide,
 }: ArenaRowProps): React.JSX.Element {
   const [dragOver, setDragOver] = useState<number | null>(null)
 
@@ -1170,6 +1222,9 @@ function ArenaRow({
             <div
               key={pos}
               className={`arena-slot${isDragOver ? ' drag-over' : ''}${validDestination ? ' valid-destination' : ''}`}
+              data-arena-slot="true"
+              data-arena-side={side}
+              data-arena-position={pos}
               aria-disabled={selectedBattlePiece !== null && !validDestination}
               onClick={() => { if (validDestination) onSlotClick(side, pos) }}
               role="button"
@@ -1197,6 +1252,10 @@ function ArenaRow({
                       ? () => onSlotClick(side, pos)
                       : () => onSelectPiece('arena', unit.id),
                   } : {})}
+                  onPointerDown={(event) => onArenaPointerDown(unit.id, event)}
+                  onPointerMove={onArenaPointerMove}
+                  onPointerUp={(event) => onArenaPointerUp(event, false)}
+                  onPointerCancel={(event) => onArenaPointerUp(event, true)}
                   onDragStart={(e) => onArenaDragStart(e, unit.id)}
                   onDragEnd={onArenaDragEnd}
                 />
@@ -1224,12 +1283,17 @@ interface ArenaUnitCardProps {
   readonly canMove: boolean
   readonly selected?: boolean
   readonly onSelect?: () => void
+  readonly onPointerDown?: React.PointerEventHandler<HTMLLIElement>
+  readonly onPointerMove?: React.PointerEventHandler<HTMLLIElement>
+  readonly onPointerUp?: React.PointerEventHandler<HTMLLIElement>
+  readonly onPointerCancel?: React.PointerEventHandler<HTMLLIElement>
   readonly onDragStart: (e: React.DragEvent<HTMLLIElement>) => void
   readonly onDragEnd: () => void
 }
 
 export function ArenaUnitCard({
-  unit, gameId, busy, rev, run, canManage, canMove, selected = false, onSelect, onDragStart, onDragEnd,
+  unit, gameId, busy, rev, run, canManage, canMove, selected = false, onSelect,
+  onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onDragStart, onDragEnd,
 }: ArenaUnitCardProps): React.JSX.Element {
   const [attack, setAttack] = useState(unit.attack)
   const [health, setHealth] = useState(unit.health)
@@ -1288,6 +1352,10 @@ export function ArenaUnitCard({
             if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect() }
           },
         })}
+        {...(onPointerDown === undefined ? {} : { onPointerDown })}
+        {...(onPointerMove === undefined ? {} : { onPointerMove })}
+        {...(onPointerUp === undefined ? {} : { onPointerUp })}
+        {...(onPointerCancel === undefined ? {} : { onPointerCancel })}
         labelOverride={displayLabel}
         rotation={displayRotation}
         draggable={canMove}

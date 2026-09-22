@@ -27,6 +27,10 @@ export function ItemCard({
   draggable,
   onClick,
   onKeyDown,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
   role,
   tabIndex,
   className,
@@ -60,6 +64,10 @@ export function ItemCard({
   readonly draggable?: boolean
   readonly onClick?: React.MouseEventHandler<HTMLLIElement>
   readonly onKeyDown?: React.KeyboardEventHandler<HTMLLIElement>
+  readonly onPointerDown?: React.PointerEventHandler<HTMLLIElement>
+  readonly onPointerMove?: React.PointerEventHandler<HTMLLIElement>
+  readonly onPointerUp?: React.PointerEventHandler<HTMLLIElement>
+  readonly onPointerCancel?: React.PointerEventHandler<HTMLLIElement>
   readonly role?: React.AriaRole
   readonly tabIndex?: number
   readonly className?: string
@@ -83,6 +91,10 @@ export function ItemCard({
       draggable={draggable}
       onClick={onClick}
       onKeyDown={onKeyDown}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
       role={role}
       tabIndex={tabIndex}
       onDragStart={onDragStart}
