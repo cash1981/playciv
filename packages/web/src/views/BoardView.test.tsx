@@ -226,4 +226,57 @@ describe('BoardView mobile placement', () => {
     assets.mockRestore()
     cleanup()
   })
+
+  it('places an armed asset when tapping an existing starting tile', async () => {
+    const hut = findBoardAsset('resources/hut')
+    if (hut === undefined) throw new Error('hut missing from manifest')
+    const assets = vi.spyOn(api, 'boardAssets').mockResolvedValue([hut])
+    const placePiece = vi.spyOn(api, 'placePiece').mockResolvedValue({} as PlayerView)
+    const startingTile: BoardPiece = {
+      ...piece('tiles/starting', 'starting-tile'),
+      path: 'tiles/starting.png',
+      label: 'Starting tile',
+      category: 'civtile',
+      x: 100,
+      y: 100,
+      width: 4,
+      height: 4,
+    }
+
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [startingTile] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Resources' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /hut/i })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /hut/i }))
+
+    const tile = container.querySelector('.board-piece')
+    if (!(tile instanceof HTMLElement)) throw new Error('starting tile missing from board')
+    const dispatchPointer = (type: 'pointerdown' | 'pointerup') => {
+      const event = new Event(type, { bubbles: true })
+      for (const [name, value] of Object.entries({
+        pointerId: 1,
+        pointerType: 'touch',
+        isPrimary: true,
+        button: 0,
+        clientX: 120,
+        clientY: 120,
+      })) Object.defineProperty(event, name, { value })
+      tile.dispatchEvent(event)
+    }
+    dispatchPointer('pointerdown')
+    dispatchPointer('pointerup')
+
+    await waitFor(() => expect(placePiece).toHaveBeenCalledWith('game', hut.id, expect.any(Number), expect.any(Number)))
+    placePiece.mockRestore()
+    assets.mockRestore()
+    cleanup()
+  })
 })

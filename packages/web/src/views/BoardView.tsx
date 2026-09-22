@@ -340,6 +340,9 @@ export function BoardView({
   // --- moving a piece on the board -----------------------------------------
 
   function onPiecePointerDown(event: React.PointerEvent, piece: BoardPiece): void {
+    // While a palette asset is armed, the board surface owns the tap—even if
+    // the user taps an existing piece such as a starting tile.
+    if (pendingAsset !== null) return
     if (busy || readOnly) return
     if (!event.isPrimary) {
       // A second finger may land on a piece, whose pointerdown does not bubble
@@ -574,7 +577,7 @@ export function BoardView({
                       ...(readOnly ? { cursor: 'default' } : {}),
                     }}
                     onPointerDown={(event) => {
-                      event.stopPropagation()
+                      if (pendingAsset === null) event.stopPropagation()
                       onPiecePointerDown(event, piece)
                     }}
                     onPointerMove={onPiecePointerMove}
