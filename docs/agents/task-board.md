@@ -18,7 +18,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Branch:** `feat/issue-101-social-policy-reference`
 - **Brief:** `docs/agents/tasks/issue-101-social-policy-reference.md`
 - **Status:** review-approved (read-only reviewer, nothing above a nit; both
-  nits fixed) — PR to open, awaiting the human's merge. Claim kept until merged.
+  nits fixed) — PR #134 open, awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/web/src/views/ReferenceDialog.tsx` (new)
   - `packages/web/src/views/ReferenceCard.tsx` (new)

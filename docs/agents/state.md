@@ -15,7 +15,7 @@ _Last updated: 2026-09-22_
 | `pnpm -r typecheck` | passing |
 | `pnpm -r test` | passing - 449 engine, 173 server, 120 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; open pull request: the social policy reference (#101) |
+| `main` pushed to `origin` | yes; open pull request: #134 (the social policy reference, issue #101) |
 
 ## Done
 
