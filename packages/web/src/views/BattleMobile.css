@@ -27,21 +27,26 @@
   color: var(--accent);
 }
 
+/* One shared viewport keeps attacker and defender front numbers aligned. */
+.mobile-arena-frame {
+  overflow-x: auto;
+}
+
+.mobile-arena-frame .arena-row {
+  min-width: max-content;
+}
+
+.mobile-arena-frame .arena-row-slots {
+  overflow-x: visible;
+}
+
 @media (max-width: 42rem) {
   .battle-selection {
     justify-content: space-between;
     flex-wrap: wrap;
   }
 
-  .arena-frame {
-    overflow-x: auto;
-  }
-
-  .arena-row {
-    min-width: 29rem;
-  }
-
-  .arena-row-slots {
+  .mobile-arena-frame .arena-row-slots {
     overscroll-behavior-x: contain;
   }
 }

@@ -26,6 +26,9 @@ export function ItemCard({
   reveal = 'all',
   draggable,
   onClick,
+  onKeyDown,
+  role,
+  tabIndex,
   className,
   onDragStart,
   onDragEnd,
@@ -56,6 +59,9 @@ export function ItemCard({
   readonly reveal?: 'all' | 'public'
   readonly draggable?: boolean
   readonly onClick?: React.MouseEventHandler<HTMLLIElement>
+  readonly onKeyDown?: React.KeyboardEventHandler<HTMLLIElement>
+  readonly role?: React.AriaRole
+  readonly tabIndex?: number
   readonly className?: string
   readonly onDragStart?: (e: React.DragEvent<HTMLLIElement>) => void
   readonly onDragEnd?: (e: React.DragEvent<HTMLLIElement>) => void
@@ -76,6 +82,9 @@ export function ItemCard({
       className={`card${className === undefined ? '' : ` ${className}`}`}
       draggable={draggable}
       onClick={onClick}
+      onKeyDown={onKeyDown}
+      role={role}
+      tabIndex={tabIndex}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
     >

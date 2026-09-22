@@ -765,6 +765,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
     readonly kind: 'hand' | 'arena'
     readonly id: string
   } | null>(null)
+  const battleActionInFlightRef = useRef(false)
 
   useEffect(() => {
     if (selectedBattlePiece === null) return
@@ -798,17 +799,18 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
     const unit = battlehand.find((u) => u.id === unitId) ?? barbarians.find((u) => u.id === unitId)
     if (unit === undefined) return
     setSelectedBattlePiece(null)
-    void run(() => api.placeUnitInArena(gameId, unitId, side, position, unit.attack, unit.health, rev))
+    runBattleAction(() => api.placeUnitInArena(gameId, unitId, side, position, unit.attack, unit.health, rev))
   }
 
   function selectBattlePiece(kind: 'hand' | 'arena', id: string): void {
+    if (busy || battleActionInFlightRef.current) return
     setDraggingUnitId(null)
     setDraggingArenaUnitId(null)
     setSelectedBattlePiece({ kind, id })
   }
 
   function handleSlotClick(side: BattleSideId, position: number): void {
-    if (selectedBattlePiece === null) return
+    if (busy || battleActionInFlightRef.current || selectedBattlePiece === null) return
     if (selectedBattlePiece.kind === 'hand') {
       if (side !== mySideInBattle && !(side === 'defender' && battle?.defender.kind === 'barbarians' && battle.defender.playerId === myId)) return
       placeInArena(selectedBattlePiece.id, side, position)
@@ -817,7 +819,15 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
     const arenaUnit = battle?.arena.find((unit) => unit.id === selectedBattlePiece.id)
     if (arenaUnit === undefined || !mySideInBattle || arenaUnit.side !== side || arenaUnit.side !== mySideInBattle) return
     setSelectedBattlePiece(null)
-    void run(() => api.moveArenaUnit(gameId, arenaUnit.id, position, rev))
+    runBattleAction(() => api.moveArenaUnit(gameId, arenaUnit.id, position, rev))
+  }
+
+  function runBattleAction(action: () => Promise<PlayerView | unknown>): Promise<void> {
+    if (busy || battleActionInFlightRef.current) return Promise.resolve()
+    battleActionInFlightRef.current = true
+    return run(async () => {
+      try { return await action() } finally { battleActionInFlightRef.current = false }
+    })
   }
 
   function handleDropOnArena(side: BattleSideId, position: number): void {
@@ -828,7 +838,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
       // only be repositioned within its own side.
       const draggedUnit = battle?.arena.find((u) => u.id === arenaUnitId)
       if (draggedUnit === undefined || draggedUnit.side !== side) return
-      void run(() => api.moveArenaUnit(gameId, arenaUnitId, position, rev))
+      runBattleAction(() => api.moveArenaUnit(gameId, arenaUnitId, position, rev))
       return
     }
     if (draggingUnitId === null) return
@@ -914,10 +924,18 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
           <ItemCard
             key={unit.id}
             item={unit}
-            className={selectedBattlePiece?.id === unit.id ? 'battle-piece-selected' : 'battle-piece-selectable'}
+            {...(selectedBattlePiece?.id === unit.id
+              ? { className: 'battle-piece-selected' }
+              : battle !== null && mySideInBattle !== null && !(battle.defender.kind === 'barbarians' && battle.defender.playerId === myId)
+                ? { className: 'battle-piece-selectable' } : {})}
             draggable={battle !== null}
             {...(battle !== null && mySideInBattle !== null && !(battle.defender.kind === 'barbarians' && battle.defender.playerId === myId)
-              ? { onClick: () => selectBattlePiece('hand', unit.id) }
+              ? {
+                  onClick: () => selectBattlePiece('hand', unit.id), role: 'button' as const, tabIndex: 0,
+                  onKeyDown: (event: React.KeyboardEvent<HTMLLIElement>) => {
+                    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectBattlePiece('hand', unit.id) }
+                  },
+                }
               : {})}
             onDragStart={(e) => { e.dataTransfer.setData('text/plain', unit.id); handleDragStart(unit.id) }}
             onDragEnd={handleDragEnd}
@@ -951,10 +969,18 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
           <ItemCard
             key={unit.id}
             item={unit}
-            className={selectedBattlePiece?.id === unit.id ? 'battle-piece-selected' : 'battle-piece-selectable'}
+            {...(selectedBattlePiece?.id === unit.id
+              ? { className: 'battle-piece-selected' }
+              : battle !== null && battle.defender.kind === 'barbarians' && battle.defender.playerId === myId
+                ? { className: 'battle-piece-selectable' } : {})}
             draggable={battle !== null}
             {...(battle !== null && battle.defender.kind === 'barbarians' && battle.defender.playerId === myId
-              ? { onClick: () => selectBattlePiece('hand', unit.id) }
+              ? {
+                  onClick: () => selectBattlePiece('hand', unit.id), role: 'button' as const, tabIndex: 0,
+                  onKeyDown: (event: React.KeyboardEvent<HTMLLIElement>) => {
+                    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectBattlePiece('hand', unit.id) }
+                  },
+                }
               : {})}
             onDragStart={(e) => { e.dataTransfer.setData('text/plain', unit.id); handleDragStart(unit.id) }}
             onDragEnd={handleDragEnd}
@@ -1013,7 +1039,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               <button
                 className="small"
                 disabled={busy}
-                onClick={() => void run(() => api.endBattleTurn(gameId, rev))}
+                onClick={() => runBattleAction(() => api.endBattleTurn(gameId, rev))}
               >
                 End turn
               </button>
@@ -1022,7 +1048,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               <button
                 className="small danger"
                 disabled={busy}
-                onClick={() => void run(() => api.endBattleArena(gameId, rev))}
+                onClick={() => runBattleAction(() => api.endBattleArena(gameId, rev))}
               >
                 End battle
               </button>
@@ -1044,7 +1070,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
           )}
 
           {/* Arena: one shared frame, two rows */}
-          <div className="arena-frame">
+          <div className="arena-frame mobile-arena-frame">
             <ArenaRow
               label={attackerSummary?.label ?? 'Attacker'}
               side="attacker"
@@ -1053,7 +1079,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               gameId={gameId}
               busy={busy}
               rev={rev}
-              run={run}
+              run={runBattleAction}
               draggingUnitId={draggingUnitId}
               draggingArenaUnitId={draggingArenaUnitId}
               onArenaDragStart={handleArenaDragStart}
@@ -1073,7 +1099,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               gameId={gameId}
               busy={busy}
               rev={rev}
-              run={run}
+              run={runBattleAction}
               draggingUnitId={draggingUnitId}
               draggingArenaUnitId={draggingArenaUnitId}
               onArenaDragStart={handleArenaDragStart}
@@ -1135,6 +1161,11 @@ function ArenaRow({
               key={pos}
               className={`arena-slot${isDragOver ? ' drag-over' : ''}`}
               onClick={() => onSlotClick(side, pos)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSlotClick(side, pos) }
+              }}
               onDragOver={(e) => { e.preventDefault(); setDragOver(pos) }}
               onDragLeave={() => setDragOver(null)}
               onDrop={() => { setDragOver(null); onDropUnit(side, pos) }}
@@ -1149,7 +1180,11 @@ function ArenaRow({
                   canManage={canManage}
                   canMove={isOwnSide}
                   selected={selectedBattlePiece?.id === unit.id}
-                  {...(isOwnSide ? { onSelect: () => onSelectPiece('arena', unit.id) } : {})}
+                  {...(isOwnSide ? {
+                    onSelect: selectedBattlePiece !== null && unit.killed
+                      ? () => onSlotClick(side, pos)
+                      : () => onSelectPiece('arena', unit.id),
+                  } : {})}
                   onDragStart={(e) => onArenaDragStart(e, unit.id)}
                   onDragEnd={onArenaDragEnd}
                 />
@@ -1227,13 +1262,20 @@ export function ArenaUnitCard({
   const displayRotation = (unit.rotation + baseOrientation) % 360
 
   return (
-    <div className={`arena-unit-card${unit.killed ? ' killed' : ''}`}>
+    <div className={`arena-unit-card${unit.killed ? ' killed' : ''}`} onClick={(event) => event.stopPropagation()}>
       <ItemCard
         item={unit.unit}
         {...(selected
           ? { className: 'battle-piece-selected' }
           : onSelect === undefined ? {} : { className: 'battle-piece-selectable' })}
-        {...(onSelect === undefined ? {} : { onClick: (event: React.MouseEvent<HTMLLIElement>) => { event.stopPropagation(); onSelect() } })}
+        {...(onSelect === undefined ? {} : {
+          onClick: (event: React.MouseEvent<HTMLLIElement>) => { event.stopPropagation(); onSelect() },
+          role: 'button' as const,
+          tabIndex: 0,
+          onKeyDown: (event: React.KeyboardEvent<HTMLLIElement>) => {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect() }
+          },
+        })}
         labelOverride={displayLabel}
         rotation={displayRotation}
         draggable={canMove}
