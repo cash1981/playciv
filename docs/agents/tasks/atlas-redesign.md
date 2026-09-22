@@ -57,6 +57,19 @@ It unblocks nothing technical; it is a presentation change the owner asked for.
   mapen"*.
 - `packages/web/public/theme/backdrop.jpg` (new asset): the illustrated
   backdrop, derived from the image the human supplied.
+- `packages/web/src/styles.css` (continued) and
+  `packages/web/src/views/StatusPanel.tsx`, three further adjustments the human
+  asked for after testing the first pass:
+  - `.app` grows with the viewport (`max(1200px, min(94vw, 2200px))`) instead of
+    sitting at a fixed 1200 px, so a large screen can show more of the board
+    while a sliver of the backdrop stays visible.
+  - each player-status row carries the player's colour as `--player-color`, which
+    the row's bottom border takes, so a row stays identifiable when the status
+    board is scrolled sideways.
+  - a `.tech-pyramid-block` fieldset no longer forces the page sideways on a
+    phone: a `fieldset` does not shrink below its content's minimum width by
+    default, so a wide tech pyramid pushed the whole document wider instead of
+    scrolling inside `.tech-pyramid`.
 - `packages/web/public/fonts/` (new assets): self-hosted Marcellus (400) and
   Cinzel (variable 400–900), latin subset, with their OFL licence files.
 - `@font-face` declarations, and the font stacks used by the stylesheet.
@@ -119,6 +132,7 @@ Provenance and the trademark decision are recorded in `decisions.md`.
 
 - `packages/web/src/styles.css`
 - `packages/web/src/views/GameView.tsx` (panel order only)
+- `packages/web/src/views/StatusPanel.tsx`, `packages/web/src/views/StatusPanel.test.tsx` (row colour)
 - `packages/web/src/views/SiteBackdrop.tsx` (new)
 - `packages/web/src/views/SiteBackdrop.test.tsx` (new)
 - `packages/web/src/main.tsx`

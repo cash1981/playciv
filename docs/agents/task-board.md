@@ -25,6 +25,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Claimed paths:**
   - `packages/web/src/styles.css`
   - `packages/web/src/views/GameView.tsx` (panel order only)
+  - `packages/web/src/views/StatusPanel.tsx` (row colour only)
+  - `packages/web/src/views/StatusPanel.test.tsx`
   - `packages/web/src/views/SiteBackdrop.tsx` (new)
   - `packages/web/src/views/SiteBackdrop.test.tsx` (new)
   - `packages/web/src/main.tsx`

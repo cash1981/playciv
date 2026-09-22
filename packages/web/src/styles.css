@@ -285,7 +285,12 @@ label > textarea {
   /* Lift the whole app onto its own layer so the fixed backdrop stays behind
      it instead of painting over it. */
   z-index: 1;
-  max-width: 1200px;
+  /* Fill more of a large screen so the board and the tables have room, but keep
+     a sliver of the backdrop visible at the edges: 94vw leaves ~3% each side,
+     and 2200px caps it so a very wide monitor does not stretch panels forever.
+     `max(1200px, ...)` is what keeps phones unchanged: there the element is
+     `width: auto`, so a cap above the viewport never applies. */
+  max-width: max(1200px, min(94vw, 2200px));
   margin: 0 auto;
   padding: 1rem;
 }
@@ -1206,6 +1211,11 @@ ul.list > li:last-child {
   padding: 0.5rem 0.6rem 0.2rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  /* A `fieldset` does not shrink below its content's minimum width by default,
+     so a wide pyramid would push the whole page sideways on a phone instead of
+     scrolling inside `.tech-pyramid`. */
+  min-width: 0;
+  min-inline-size: 0;
 }
 
 .tech-pyramid-block legend {
@@ -1721,6 +1731,13 @@ ul.history > li {
 
 .status-table td {
   white-space: nowrap;
+}
+
+/* The row separator takes the player's own colour (set on the `<tr>` by
+   `StatusPanel`), so a row stays identifiable when the status board is
+   scrolled sideways. Rows with no colour keep the neutral line. */
+.status-table tbody tr td {
+  border-bottom-color: var(--player-color, var(--line));
 }
 
 /* The status board has many columns; let it scroll sideways on narrow screens. */

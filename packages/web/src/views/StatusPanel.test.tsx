@@ -100,6 +100,21 @@ describe('StatusPanel governments', () => {
   })
 })
 
+describe('StatusPanel player colours', () => {
+  it('puts each player colour on their row, so the separator identifies the row when scrolled sideways', () => {
+    render(
+      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+    )
+
+    // The rows are Alice (Red) and Bob (Blue) in the shared fixture.
+    const rows = [...document.querySelectorAll<HTMLTableRowElement>('.status-table tbody tr')]
+    expect(rows.map((row) => row.style.getPropertyValue('--player-color'))).toEqual([
+      'red',
+      'blue',
+    ])
+  })
+})
+
 describe('StatusPanel Movement (issue #102)', () => {
   it('saves a Movement expression as text', async () => {
     const setStat = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(memberView)
