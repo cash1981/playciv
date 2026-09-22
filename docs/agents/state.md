@@ -6,14 +6,14 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-21_
+_Last updated: 2026-09-22_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 448 engine, 173 server, 88 web |
+| `pnpm -r test` | passing - 448 engine, 173 server, 91 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; open pull requests: #123 (front-page join-button colours) and this change's issue #125 |
 
@@ -24,10 +24,12 @@ _Last updated: 2026-09-21_
   while retaining desktop drag-and-drop. Pending placement/move states expose
   an accessible Cancel action; board panning, multi-pointer gestures,
   pointer-cancel/lost-capture cleanup and mouse movement tolerance prevent
-  accidental writes. The board palette is responsive on narrow screens and
+  accidental writes. Tapping an existing or starting tile while a palette
+  asset is armed now places the asset there instead of selecting the tile.
+  The board palette is responsive on narrow screens and
   exhausted/replay controls are disabled. Review-approved on branch
   `feat/issue-115-board`; real-device verification remains in the final issue
-  #115 testing PR. Full checks pass (448 engine, 173 server, 90 web tests).
+  #115 testing PR. Full checks pass (448 engine, 173 server, 91 web tests).
 
 - **The front page's Open and Join buttons are coloured.** The game list's
   `Open` and `Join` actions were plain grey default buttons, so the two things a

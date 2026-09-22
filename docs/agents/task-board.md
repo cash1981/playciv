@@ -26,8 +26,9 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `docs/agents/task-board.md`
   - `docs/agents/state.md`
 - **Notes:** First delivery slice of issue #115. Adds tap/select/place for the
-  board while preserving desktop drag behaviour. Battle/arena and the rest of
-  the site are intentionally separate PRs.
+  board while preserving desktop drag behaviour. A follow-up fix also lets an
+  armed asset be placed by tapping an existing or starting tile. Battle/arena
+  and the rest of the site are intentionally separate PRs.
 
 ### issue-125-turn-order-reveal-history
 
