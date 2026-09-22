@@ -1635,7 +1635,7 @@ visible immediately.
 (`old-civ-web/app/views/list.html` had Action last). It is a UI layout choice
 requested by the human, not a game rule; the old system is otherwise unchanged.
 The action column stays unsortable (it is an action, not a value), and the
-`SortableTable` component is untouched - the order is just the order the
+`SortableTable` component is untouched — the order is just the order the
 `GameList` column array is built in.
 
 ## 2026-09-22 - The site gets the Atlas look
