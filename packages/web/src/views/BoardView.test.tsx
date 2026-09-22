@@ -365,8 +365,8 @@ describe('BoardView mobile placement', () => {
 
   it('can select and remove another player-area resource after removing one', async () => {
     const removePiece = vi.spyOn(api, 'removePiece').mockResolvedValue({} as PlayerView)
-    const first = piece('resources/hut', 'hut-one')
-    const second = { ...piece('resources/incense', 'incense-one'), x: 100 }
+    const first = { ...piece('resources/hut', 'hut-one'), category: 'resource' as const, label: 'Hut', path: 'resources/hut.png' }
+    const second = { ...piece('resources/incense', 'incense-one'), category: 'resource' as const, label: 'Incense', path: 'resources/incense.png', x: 100 }
     const { container } = render(
       <BoardView
         gameId="game"
@@ -394,6 +394,8 @@ describe('BoardView mobile placement', () => {
 
     pointerTap(pieces()[1] as HTMLElement, 4)
     await waitFor(() => expect(pieces()[1]?.classList.contains('selected')).toBe(true))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(removePiece).toHaveBeenCalledWith('game', second.id))
     removePiece.mockRestore()
     cleanup()
   })
