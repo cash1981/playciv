@@ -13,12 +13,33 @@ _Last updated: 2026-09-22_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 173 server, 111 web |
+| `pnpm -r test` | passing - 449 engine, 173 server, 120 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; open pull request: #132 (turn-order reveal dedupe) |
+| `main` pushed to `origin` | yes; open pull request: the social policy reference (#101) |
 
 ## Done
 
+- **Issue #101: a social policy card reference, and unavailable policies greyed
+  out.** The Techs & Social policy panel's "choose a card" dropdown now has a
+  `?` button that opens a modal of all eight social policy cards — picture,
+  printed text and flipside — like the Government column has had since issue
+  #43. A policy the viewer already holds, or one whose own flipside the viewer
+  holds, is disabled in the dropdown with its reason and named in a message, so
+  the engine's `SOCIAL_POLICY_ALREADY_CHOSEN` / `SOCIAL_POLICY_FLIPSIDE_TAKEN`
+  rejection is visible before the click. The client mirrors the engine's
+  directional flipside check exactly (Java `PlayerAction.chooseSocialPolicy`),
+  including the one-way `Military Tradition → Patronage` asymmetry, so nothing
+  the server would accept is greyed out and nothing it would reject stays
+  selectable. The Government reference was factored into shared
+  `ReferenceDialog` / `ReferenceCard` with generic `reference-*` CSS; its only
+  behaviour change is that focus returns to the `?` on close. Client-only: no
+  engine, server or projection change — the reference renders the already-public
+  `state.socialPolicies` catalogue. Branch `feat/issue-101-social-policy-reference`;
+  review-approved in one read-only round with nothing above a nit (both nits
+  fixed). 6 new web tests (120 total). Browser-verified against a local server:
+  choosing `Rationalism` greyed out `Rationalism` and `Patronage` with the
+  message, the `?` opened the eight-card modal with all art loaded, and Escape
+  closed it and returned focus, with no console errors. See `decisions.md`.
 - **A revealed turn-order version identical to the editor is hidden.** After a
   reveal the newest history version is the text still in the phase editor, so
   the panel printed the same order twice - once struck through and greyed above,

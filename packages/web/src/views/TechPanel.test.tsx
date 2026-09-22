@@ -173,14 +173,19 @@ const policy = (name: string, flipside: string | null): SocialPolicyItem => ({
 })
 
 /**
- * The real-data shape, including the one-way `Military Tradition` → `Patronage`
- * flipside that makes the engine's check directional rather than symmetric.
+ * The real `SOCIAL_POLICY` sheet, all eight, including the one-way
+ * `Military Tradition` → `Patronage` flipside that makes the engine's check
+ * directional rather than symmetric (`Patronage` points back at `Rationalism`).
  */
 const CATALOGUE: readonly SocialPolicyItem[] = [
   policy('Rationalism', 'Patronage'),
-  policy('Patronage', 'Rationalism'),
-  policy('Military Tradition', 'Patronage'),
+  policy('Natural Religion', 'Organized Religion'),
+  policy('Expansionsim', 'Urban Development'),
   policy('Pacifism', 'Military Tradition'),
+  policy('Patronage', 'Rationalism'),
+  policy('Organized Religion', 'Natural Religion'),
+  policy('Urban Development', 'Expansionsim'),
+  policy('Military Tradition', 'Patronage'),
 ]
 
 describe('TechPanel social policy reference', () => {
@@ -234,9 +239,13 @@ describe('TechPanel social policy availability', () => {
     expect([...select.options].map((option) => [option.textContent, option.disabled])).toEqual([
       ['choose a card …', false],
       ['Rationalism — already chosen', true],
-      ['Patronage — flipside of Rationalism', true],
-      ['Military Tradition', false],
+      ['Natural Religion', false],
+      ['Expansionsim', false],
       ['Pacifism', false],
+      ['Patronage — flipside of Rationalism', true],
+      ['Organized Religion', false],
+      ['Urban Development', false],
+      ['Military Tradition', false],
     ])
     const message = screen.getByRole('status').textContent ?? ''
     expect(message).toContain('Rationalism (already chosen)')

@@ -1746,3 +1746,34 @@ equality rather than "drop only the newest" also hides a version that becomes
 current again after the player reverts, which is intended: the text is on screen
 anyway. This is a presentation choice with no old-system counterpart - the
 reveal history is new in issue #125 and `old-civ-web` never rendered it.
+
+## 2026-09-22 - The social policy picker greys out exactly what the engine rejects
+
+**Decision.** In the Techs & Social policy panel the social policy dropdown now
+shows a `?` button that opens a reference of all eight cards (picture, printed
+text and flipside), the same pattern the Government column has had since issue
+#43. The dropdown also disables - and the Choose button refuses - a policy the
+viewer already holds and one whose own `flipside` the viewer already holds, each
+carrying its reason, with a short message naming the unavailable cards. The
+catalogue the reference lists is the already-public `state.socialPolicies` deck
+that the dropdown itself was already fetching; nothing new reaches a client.
+
+**Why.** Issue #101 asked for the Government-style `?` reference so a player can
+read what a social policy does before choosing it. The human then added, in the
+same session, that choosing a flipside that is already taken should be
+impossible and greyed out in the combo box, with a message.
+
+**Consequences.** The client mirrors the engine's check **exactly**, not a
+symmetric "same pair" one: `chooseSocialPolicy` compares only the candidate's
+own `flipside` against the names the player holds (Java:
+`PlayerAction.chooseSocialPolicy`; its test `chooseSocialPolicyThenFlipside`
+chooses `Rationalism` and expects `Patronage` to be refused). The sheet is
+one-way for `Military Tradition -> Patronage` while `Patronage -> Rationalism`,
+so after holding `Military Tradition` the engine - and therefore the picker -
+still allows `Patronage`. A future reader must not "fix" this into symmetry:
+that would grey out a card the server would accept. The reference and its tests
+use the real eight-card sheet, not a trimmed fixture. Finally, the Government
+reference was factored into shared `ReferenceDialog` / `ReferenceCard` and its
+`government-*` CSS renamed to generic `reference-*`; the one behaviour change
+there is that focus now returns to the `?` when the dialog closes, instead of an
+effect that also grabbed focus on mount.

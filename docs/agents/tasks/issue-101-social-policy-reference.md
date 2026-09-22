@@ -131,30 +131,36 @@ The pattern to mirror is the government reference in
 
 ## Acceptance criteria
 
-- [ ] The social policy section has a `?` button beside the dropdown; it opens
+- [x] The social policy section has a `?` button beside the dropdown; it opens
       a modal listing all eight policies with picture, name, description and
       flipside.
-- [ ] The dropdown still lists names only, and a chosen policy's picture still
+- [x] The dropdown still lists names only, and a chosen policy's picture still
       appears only in the chosen list.
-- [ ] Escape, the Close button and the backdrop all close the modal; focus
+- [x] Escape, the Close button and the backdrop all close the modal; focus
       returns to the `?`.
-- [ ] A spectator sees the same read-only reference.
-- [ ] A policy already held, and one whose own flipside is already held, is
+- [x] A spectator sees the same read-only reference.
+- [x] A policy already held, and one whose own flipside is already held, is
       disabled in the dropdown with its reason, and a message names the
       unavailable cards; every other option stays selectable and choosing one
       still calls `chooseSocialPolicy`. The block matches the engine's
       directional check, including the `Military Tradition` → `Patronage`
       asymmetry.
-- [ ] The government reference is unchanged for the user and its existing test
+- [x] The government reference is unchanged for the user and its existing test
       still passes, now through the shared pieces.
-- [ ] Hidden information: the reference renders the already-public catalogue
+- [x] Hidden information: the reference renders the already-public catalogue
       only. A web test asserts the eight names/descriptions/flipsides come from
       the fetched `socialPolicies`, and the panel never gains an opponent's
       chosen or hidden policy.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Verified in the browser: the modal opens, shows all eight cards with art
-      and flipside, and closes cleanly; or stated plainly if no browser was
-      available.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+      (449 engine, 173 server, 120 web).
+- [x] Verified in the browser against a local server on a private port: the
+      dropdown listed all eight policies; choosing `Rationalism` put its card in
+      the chosen list and then greyed out `Rationalism` (already chosen) and
+      `Patronage` (flipside of `Rationalism`) with the message "Patronage
+      (flipside of Rationalism), Rationalism (already chosen) cannot be
+      chosen."; the `?` opened a modal of all eight cards with their art loaded
+      (`naturalWidth > 0`), printed text and flipside; Escape closed it and
+      returned focus to the `?`; no console errors.
 
 ## Open questions
 
