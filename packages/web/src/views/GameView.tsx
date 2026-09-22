@@ -904,7 +904,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
       <h3 style={{ marginTop: '0.8rem' }}>Battlehand ({availableBattlehand.length})</h3>
       {selectedBattlePiece !== null && (
         <div className="battle-selection" role="status">
-          Selected unit. Tap an empty front to place it.
+          Selected unit. Tap a destination front to place or move it.
           <button className="small" type="button" onClick={() => setSelectedBattlePiece(null)}>Cancel</button>
         </div>
       )}

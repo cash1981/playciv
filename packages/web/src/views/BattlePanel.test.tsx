@@ -47,7 +47,7 @@ describe('BattlePanel mobile placement', () => {
     const card = container.querySelector('li.card')
     expect(card).not.toBeNull()
     fireEvent.click(card as HTMLElement)
-    expect(getByText('Selected unit. Tap an empty front to place it.')).toBeTruthy()
+    expect(getByText('Selected unit. Tap a destination front to place or move it.')).toBeTruthy()
 
     const slot = container.querySelector('.arena-slot-empty')
     expect(slot).not.toBeNull()
