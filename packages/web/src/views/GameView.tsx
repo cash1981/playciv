@@ -1156,15 +1156,20 @@ function ArenaRow({
         {positions.map((pos) => {
           const unit = units.find((u) => u.position === pos) ?? null
           const isDragOver = dragOver === pos && (draggingUnitId !== null || draggingArenaUnitId !== null)
+          const validDestination = selectedBattlePiece !== null && isOwnSide && (unit === null || unit.killed) && (
+            selectedBattlePiece.kind === 'hand' || units.some((candidate) => candidate.id === selectedBattlePiece.id && candidate.side === side)
+          )
           return (
             <div
               key={pos}
-              className={`arena-slot${isDragOver ? ' drag-over' : ''}`}
-              onClick={() => onSlotClick(side, pos)}
+              className={`arena-slot${isDragOver ? ' drag-over' : ''}${validDestination ? ' valid-destination' : ''}`}
+              aria-disabled={selectedBattlePiece !== null && !validDestination}
+              onClick={() => { if (validDestination) onSlotClick(side, pos) }}
               role="button"
               tabIndex={0}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSlotClick(side, pos) }
+                if (event.target !== event.currentTarget) return
+                if ((event.key === 'Enter' || event.key === ' ') && validDestination) { event.preventDefault(); onSlotClick(side, pos) }
               }}
               onDragOver={(e) => { e.preventDefault(); setDragOver(pos) }}
               onDragLeave={() => setDragOver(null)}

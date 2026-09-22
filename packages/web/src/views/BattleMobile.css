@@ -40,6 +40,11 @@
   overflow-x: visible;
 }
 
+.arena-slot.valid-destination {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
 @media (max-width: 42rem) {
   .battle-selection {
     justify-content: space-between;

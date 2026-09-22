@@ -51,6 +51,7 @@ describe('BattlePanel mobile placement', () => {
 
     const slot = container.querySelector('.arena-slot-empty')
     expect(slot).not.toBeNull()
+    expect((slot as HTMLElement).closest('.arena-slot')?.classList.contains('valid-destination')).toBe(true)
     fireEvent.click(slot as HTMLElement)
     expect(vi.mocked(api.placeUnitInArena)).toHaveBeenCalledWith(
       'game', 'unit-1', 'attacker', 0, 1, 3, 4,
