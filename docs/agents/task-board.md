@@ -12,6 +12,28 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### atlas-redesign
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `feat/atlas-redesign`
+- **Brief:** `docs/agents/tasks/atlas-redesign.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/styles.css`
+  - `packages/web/src/views/SiteBackdrop.tsx` (new)
+  - `packages/web/src/views/SiteBackdrop.test.tsx` (new)
+  - `packages/web/src/main.tsx`
+  - `packages/web/public/theme/` (new assets)
+  - `packages/web/public/fonts/` (new assets)
+  - `docs/agents/tasks/atlas-redesign.md`
+  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** New site-wide visual identity ("Atlas"), approved by the human from
+  mockups. No behaviour, markup or data changes: the stylesheet, two self-hosted
+  fonts, one illustrated backdrop asset and a decorative `SiteBackdrop` layer.
+  Branched from `main` after PR #131 merged, and it keeps PR #131's mobile blocks
+  verbatim, so the `issue-115-site-mobile` claim below is stale (that PR is
+  merged) and its `styles.css` claim is superseded by this one.
+
 ### issue-115-site-mobile
 
 - **Owner:** Codex
