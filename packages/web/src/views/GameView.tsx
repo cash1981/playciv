@@ -770,8 +770,13 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
   useEffect(() => {
     if (selectedBattlePiece === null) return
     const stillAvailable = selectedBattlePiece.kind === 'hand'
-      ? battlehand.some((unit) => unit.id === selectedBattlePiece.id) || barbarians.some((unit) => unit.id === selectedBattlePiece.id)
-      : battle?.arena.some((unit) => unit.id === selectedBattlePiece.id) === true
+      ? battle !== null && (
+          battlehand.some((unit) => unit.id === selectedBattlePiece.id && !unit.inBattle && !(battle.defender.kind === 'barbarians' && battle.defender.playerId === myId)) ||
+          barbarians.some((unit) => unit.id === selectedBattlePiece.id && !unit.inBattle && battle.defender.kind === 'barbarians' && battle.defender.playerId === myId)
+        )
+      : battle !== null && battle.arena.some((unit) => unit.id === selectedBattlePiece.id && (
+          unit.side === 'attacker' ? battle.attacker.playerId === myId : battle.defender.playerId === myId
+        ))
     if (!stillAvailable) setSelectedBattlePiece(null)
   }, [battle, battlehand, barbarians, selectedBattlePiece])
 
