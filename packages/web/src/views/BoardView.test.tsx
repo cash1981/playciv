@@ -1,12 +1,16 @@
-import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+// @vitest-environment jsdom
 
-import { findBoardAsset } from '@civ/engine'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+
+import { createBoard, findBoardAsset } from '@civ/engine'
 import type { BoardPiece, PlayerView } from '@civ/engine'
 
 import type { GameRevisionView } from '../lib/api.js'
+import { api } from '../lib/api.js'
 
-import { BoardPalette } from './BoardView.js'
+import { BoardPalette, BoardView } from './BoardView.js'
 import {
   GlobalReplayBar,
   loadConsistentLive,
@@ -117,6 +121,27 @@ describe('global replay controls', () => {
 })
 
 describe('BoardPalette finite supplies', () => {
+  it('calls the tap selection callback for an available asset', () => {
+    const hut = findBoardAsset('resources/hut')
+    if (hut === undefined) throw new Error('hut missing from manifest')
+    let selected: string | null = null
+
+    render(
+      <BoardPalette
+        assets={[hut]}
+        category="resource"
+        onCategoryChange={() => undefined}
+        replaying={false}
+        pieces={[]}
+        numOfPlayers={2}
+        onSelectAsset={(asset) => { selected = asset.id }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /hut/i }))
+    expect(selected).toBe('resources/hut')
+    cleanup()
+  })
+
   it('shows the remaining count and disables an exhausted building family', () => {
     const academy = findBoardAsset('buildings/academy')
     if (academy === undefined) throw new Error('academy missing from manifest')
@@ -174,5 +199,31 @@ describe('BoardPalette finite supplies', () => {
     expect(markup).not.toContain('Hut (')
     expect(markup).toContain('draggable="true"')
     expect(markup).not.toContain('unavailable')
+  })
+})
+
+describe('BoardView mobile placement', () => {
+  it('shows a pending placement status after tapping a palette asset', async () => {
+    const hut = findBoardAsset('resources/hut')
+    if (hut === undefined) throw new Error('hut missing from manifest')
+    const assets = vi.spyOn(api, 'boardAssets').mockResolvedValue([hut])
+
+    render(
+      <BoardView
+        gameId="game"
+        board={createBoard()}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Resources' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /hut/i })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /hut/i }))
+    expect(screen.getByRole('status').textContent).toContain('Placing Hut')
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
+    assets.mockRestore()
+    cleanup()
   })
 })

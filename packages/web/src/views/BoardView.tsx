@@ -132,7 +132,7 @@ export function BoardPalette({
       <p className="muted" style={{ margin: '0 0 0.5rem' }}>
         {replaying
           ? 'Replaying — return to now to make changes.'
-          : 'Drag a piece onto the board. Drop it in a player area to tidy it into a row.'}
+          : 'Tap a piece, then tap the board, or drag it there. Drop it in a player area to tidy it into a row.'}
       </p>
 
       <div className="palette-grid">
@@ -144,6 +144,7 @@ export function BoardPalette({
               type="button"
               key={asset.id}
               className={`palette-item${exhausted ? ' unavailable' : ''}`}
+              disabled={replaying || exhausted}
               title={exhausted ? `${asset.label} (none available)` : asset.label}
               draggable={!replaying && !exhausted}
               onDragStart={(event) => {
@@ -209,6 +210,9 @@ export function BoardView({
     offsetY: number
     x: number
     y: number
+    startClientX: number
+    startClientY: number
+    moved: boolean
   } | null>(null)
   /** Mirrors dragRef, purely to trigger a render while the piece follows the mouse. */
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null)
@@ -285,6 +289,9 @@ export function BoardView({
   }
 
   function onSurfacePointerDown(event: React.PointerEvent<HTMLDivElement>): void {
+    if (surfaceGestureRef.current !== null && surfaceGestureRef.current.pointerId !== event.pointerId) {
+      surfaceGestureRef.current = null
+    }
     if (event.isPrimary && event.button === 0) {
       surfaceGestureRef.current = {
         pointerId: event.pointerId,
@@ -336,7 +343,10 @@ export function BoardView({
     if (busy || readOnly) return
     if (!event.isPrimary || event.button !== 0) return
     setSelectedId(piece.id)
-    if (event.pointerType !== 'mouse') return
+    if (event.pointerType !== 'mouse') {
+      surfaceGestureRef.current = null
+      return
+    }
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
 
@@ -347,6 +357,9 @@ export function BoardView({
       offsetY: y - piece.y,
       x: piece.x,
       y: piece.y,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      moved: false,
     }
     setDragPosition({ x: piece.x, y: piece.y })
   }
@@ -355,6 +368,10 @@ export function BoardView({
     const drag = dragRef.current
     if (drag === null) return
 
+    if (!drag.moved && Math.hypot(event.clientX - drag.startClientX, event.clientY - drag.startClientY) <= 6) {
+      return
+    }
+    drag.moved = true
     const [x, y] = toBoard(event.clientX, event.clientY)
     drag.x = x - drag.offsetX
     drag.y = y - drag.offsetY
@@ -373,10 +390,19 @@ export function BoardView({
 
     const piece = pieces.find((candidate) => candidate.id === drag.id)
     // A plain click without movement should only select, not send a request
-    if (piece !== undefined && piece.x === Math.round(drag.x) && piece.y === Math.round(drag.y)) {
+    if (!drag.moved || (piece !== undefined && piece.x === Math.round(drag.x) && piece.y === Math.round(drag.y))) {
       return
     }
     void run(() => api.movePiece(gameId, drag.id, drag.x, drag.y))
+  }
+
+  function onPiecePointerCancel(event: React.PointerEvent): void {
+    if (dragRef.current === null) return
+    dragRef.current = null
+    setDragPosition(null)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
   }
 
   return (
@@ -546,6 +572,8 @@ export function BoardView({
                     }}
                     onPointerMove={onPiecePointerMove}
                     onPointerUp={onPiecePointerUp}
+                    onPointerCancel={onPiecePointerCancel}
+                    onLostPointerCapture={onPiecePointerCancel}
                   />
                 )
               })}
