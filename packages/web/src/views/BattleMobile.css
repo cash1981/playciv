@@ -7,6 +7,10 @@
 }
 
 .battle-piece-selected {
+  touch-action: manipulation;
+}
+
+.arena-unit-card .battle-piece-selected {
   touch-action: none;
 }
 

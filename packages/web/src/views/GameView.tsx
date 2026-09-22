@@ -845,7 +845,8 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
   }
 
   function handleArenaPointerDown(unitId: string, event: React.PointerEvent<HTMLLIElement>): void {
-    if (event.pointerType === 'mouse' || busy || battleActionInFlightRef.current) return
+    if (event.isPrimary === false || (event.button !== undefined && event.button !== 0) || event.pointerType === 'mouse' || busy || battleActionInFlightRef.current) return
+    if (touchDragRef.current !== null) return
     if (selectedBattlePiece?.kind !== 'arena' || selectedBattlePiece.id !== unitId) return
     if ((event.target as HTMLElement).closest('button, input, select, textarea') !== null) return
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -868,8 +869,8 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
 
   function finishArenaPointerDrag(event: React.PointerEvent<HTMLLIElement>, cancelled: boolean): void {
     const drag = touchDragRef.current
-    touchDragRef.current = null
     if (drag === null || drag.pointerId !== event.pointerId) return
+    touchDragRef.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
     if (cancelled || !drag.moved) return
     event.preventDefault()
