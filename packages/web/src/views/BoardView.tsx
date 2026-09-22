@@ -111,6 +111,7 @@ export function BoardPalette({
   onSelectAsset,
 }: BoardPaletteProps): React.JSX.Element {
   const inCategory = assets.filter((asset) => asset.category === category)
+  const draggedAssetRef = useRef(false)
 
   return (
     <>
@@ -147,10 +148,18 @@ export function BoardPalette({
               draggable={!replaying && !exhausted}
               onDragStart={(event) => {
                 if (exhausted) return
+                draggedAssetRef.current = true
                 event.dataTransfer.setData('text/civ-asset', asset.id)
                 event.dataTransfer.effectAllowed = 'copy'
               }}
+              onDragEnd={() => {
+                window.setTimeout(() => { draggedAssetRef.current = false }, 0)
+              }}
               onClick={() => {
+                if (draggedAssetRef.current) {
+                  draggedAssetRef.current = false
+                  return
+                }
                 if (!exhausted && !replaying) onSelectAsset?.(asset)
               }}
             >
