@@ -57,26 +57,28 @@ export function Navigation({
         </details>
       </nav>
       <span className="spacer" />
-      {player !== null && screen === 'game' && (
-        <button onClick={() => onNavigate('/')}>Back to games</button>
-      )}
-      {player !== null && screen === 'admin' && (
-        <button onClick={() => onNavigate('/')}>Back to games</button>
-      )}
-      {player !== null && player.role === 'admin' && screen !== 'admin' && (
-        <button onClick={() => onNavigate('/admin')}>Admin</button>
-      )}
-      <button onClick={onToggleTheme} aria-label={`Switch to ${nextTheme} theme`}>
-        {theme === 'dark' ? 'Light theme' : 'Dark theme'}
-      </button>
-      {player === null ? (
-        <span className="muted">Not signed in</span>
-      ) : (
-        <>
-          <span className="muted">{player.username}</span>
-          <button onClick={onSignOut}>Sign out</button>
-        </>
-      )}
+      <div className="topbar-actions">
+        {player !== null && screen === 'game' && (
+          <button onClick={() => onNavigate('/')}>Back to games</button>
+        )}
+        {player !== null && screen === 'admin' && (
+          <button onClick={() => onNavigate('/')}>Back to games</button>
+        )}
+        {player !== null && player.role === 'admin' && screen !== 'admin' && (
+          <button onClick={() => onNavigate('/admin')}>Admin</button>
+        )}
+        <button onClick={onToggleTheme} aria-label={`Switch to ${nextTheme} theme`}>
+          {theme === 'dark' ? 'Light theme' : 'Dark theme'}
+        </button>
+        {player === null ? (
+          <span className="muted">Not signed in</span>
+        ) : (
+          <>
+            <span className="muted">{player.username}</span>
+            <button onClick={onSignOut}>Sign out</button>
+          </>
+        )}
+      </div>
     </header>
   )
 }

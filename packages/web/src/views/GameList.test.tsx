@@ -259,4 +259,19 @@ describe('GameList', () => {
     expect(full.className).not.toContain('info')
     expect(full.className).not.toContain('success')
   })
+
+  it('keeps the game list and action controls in the mobile layout hooks', () => {
+    render(
+      <GameList
+        games={[game({ id: 'joinable', name: 'Joinable' })]}
+        player={player}
+        busy={false}
+        onOpenGame={noop}
+        onJoin={noop}
+      />,
+    )
+
+    expect(document.querySelector('.game-list')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Join' }).className).toContain('small')
+  })
 })

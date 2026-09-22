@@ -113,7 +113,7 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
         <section className="panel">
           <h2>New game</h2>
           <form
-            className="row"
+            className="row new-game-form"
             onSubmit={(event) => {
               event.preventDefault()
               void run(async () => {

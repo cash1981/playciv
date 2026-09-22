@@ -61,7 +61,7 @@ export function LobbyChat({ messages, player, busy, onSend }: Props): React.JSX.
         <p className="muted">Sign in to join the conversation.</p>
       ) : (
         <form
-          className="row"
+          className="row lobby-chat-form"
           style={{ marginTop: '0.5rem' }}
           onSubmit={(event) => {
             event.preventDefault()

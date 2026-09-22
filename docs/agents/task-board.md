@@ -12,23 +12,30 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-115-board-mobile
+### issue-115-site-mobile
 
 - **Owner:** Codex
-- **Branch:** `feat/issue-115-board`
-- **Brief:** `docs/agents/tasks/issue-115-board-mobile.md`
-- **Status:** review-approved — ready for PR; claim kept until the human merges it.
+- **Branch:** `feat/issue-115-site-mobile`
+- **Brief:** `docs/agents/tasks/issue-115-site-mobile.md`
+- **Status:** in progress
 - **Claimed paths:**
-  - `packages/web/src/views/BoardView.tsx`
-  - `packages/web/src/views/BoardView.test.tsx`
+  - `packages/web/src/views/Navigation.tsx`
+  - `packages/web/src/views/LoginView.tsx`
+  - `packages/web/src/views/LandingView.tsx`
+  - `packages/web/src/views/GameList.tsx`
+  - `packages/web/src/views/LobbyChat.tsx`
+  - `packages/web/src/views/HighscoreView.tsx`
   - `packages/web/src/styles.css`
-  - `docs/agents/tasks/issue-115-board-mobile.md`
+  - `packages/web/src/views/Navigation.test.tsx`
+  - `packages/web/src/views/LoginView.test.tsx`
+  - `packages/web/src/views/GameList.test.tsx`
+  - `packages/web/src/views/LobbyChat.test.tsx`
+  - `packages/web/src/views/HighscoreView.test.tsx`
+  - `docs/agents/tasks/issue-115-site-mobile.md`
   - `docs/agents/task-board.md`
   - `docs/agents/state.md`
-- **Notes:** First delivery slice of issue #115. Adds tap/select/place for the
-  board while preserving desktop drag behaviour. A follow-up fix also lets an
-  armed asset be placed by tapping an existing or starting tile. Battle/arena
-  and the rest of the site are intentionally separate PRs.
+- **Notes:** Third delivery slice of issue #115. Board and battle/arena are
+  merged; this slice handles the site shell, authentication and lobby routes.
 
 ### issue-125-turn-order-reveal-history
 

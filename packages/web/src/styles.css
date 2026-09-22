@@ -281,6 +281,14 @@ label > textarea {
   border-bottom: 1px solid var(--line);
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .topbar .spacer {
   flex: 1;
 }
@@ -541,6 +549,19 @@ ul.list > li:last-child {
 .center {
   max-width: 26rem;
   margin: 4rem auto;
+}
+
+.new-game-form input {
+  flex: 1 1 12rem;
+}
+
+.new-game-form select {
+  flex: 0 1 10rem;
+  width: auto;
+}
+
+.lobby-chat-form input {
+  min-width: 12rem;
 }
 
 /* --- FAQ ------------------------------------------------------------------ */
@@ -1084,6 +1105,33 @@ ul.history > li {
     display: none;
   }
 
+  .topbar-actions {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+
+  /* Keep the primary site controls usable on tablets as well as phones. */
+  .site-navigation > a,
+  .navigation-menu > summary,
+  .topbar-actions button,
+  .row > input,
+  .row > select,
+  .row > button,
+  .center form label > input,
+  .center form label > select,
+  .center form label > textarea,
+  .tabs .tab,
+  .pager button,
+  .game-list button.small {
+    min-height: 2.75rem;
+  }
+
+  .center form label > input,
+  .center form label > select,
+  .center form label > textarea {
+    margin-top: 0.2rem;
+  }
+
   .board-layout {
     flex-direction: column;
   }
@@ -1103,6 +1151,149 @@ ul.history > li {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+@media (max-width: 600px) {
+  .app {
+    width: 100%;
+    padding: 0.75rem;
+  }
+
+  .topbar {
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+
+  .brand {
+    flex: 1 1 100%;
+  }
+
+  .site-navigation {
+    flex: 1 1 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+  }
+
+  .site-navigation > a,
+  .navigation-menu > summary {
+    min-height: 2.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.45rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    text-align: center;
+  }
+
+  .navigation-menu {
+    min-width: 0;
+  }
+
+  .navigation-menu > summary {
+    list-style: none;
+    position: relative;
+    z-index: 11;
+    background: var(--panel);
+  }
+
+  .navigation-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .navigation-dropdown {
+    position: fixed;
+    left: 0.75rem;
+    right: 0.75rem;
+    top: 0.75rem;
+    bottom: 0.75rem;
+    width: auto;
+    max-height: calc(100dvh - 1.5rem);
+    overflow-y: auto;
+  }
+
+  .topbar-actions {
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .topbar-actions button,
+  .topbar-actions .muted {
+    min-height: 2.75rem;
+  }
+
+  .topbar-actions button {
+    flex: 1 1 auto;
+  }
+
+  .topbar-actions .muted {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 0.35rem;
+  }
+
+  .center {
+    width: 100%;
+    margin: 2rem auto;
+  }
+
+  .center .panel {
+    padding: 0.75rem;
+  }
+
+  .row > input,
+  .row > select,
+  .row > button {
+    min-height: 2.75rem;
+  }
+
+  .new-game-form input,
+  .new-game-form select,
+  .lobby-chat-form input {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .new-game-form button,
+  .lobby-chat-form button {
+    flex: 1 1 100%;
+  }
+
+  .games-filter {
+    align-items: stretch;
+  }
+
+  .games-filter input[type='search'] {
+    min-height: 2.75rem;
+    flex-basis: 100%;
+  }
+
+  .games-filter label {
+    min-height: 2.75rem;
+    display: flex;
+    align-items: center;
+  }
+
+  .tabs {
+    gap: 0.35rem;
+  }
+
+  .tabs .tab {
+    flex: 1 1 8rem;
+    min-height: 2.75rem;
+  }
+
+  .table-scroll {
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pager button {
+    min-height: 2.75rem;
+    min-width: 4.5rem;
+  }
 }
 
 .card-grid.small {
