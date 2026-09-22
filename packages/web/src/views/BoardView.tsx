@@ -341,8 +341,15 @@ export function BoardView({
 
   function onPiecePointerDown(event: React.PointerEvent, piece: BoardPiece): void {
     if (busy || readOnly) return
-    if (!event.isPrimary || event.button !== 0) return
+    if (!event.isPrimary) {
+      // A second finger may land on a piece, whose pointerdown does not bubble
+      // to the surface. Cancel any pending surface tap before returning.
+      surfaceGestureRef.current = null
+      return
+    }
+    if (event.button !== 0) return
     setSelectedId(piece.id)
+    setMoveModeId(null)
     if (event.pointerType !== 'mouse') {
       surfaceGestureRef.current = null
       return
