@@ -68,6 +68,9 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
 
   const yourTechs = view.you?.techsChosen ?? []
   const yourPolicies = view.you?.socialPolicies ?? []
+  // A revealed tech is already on the pyramid (and in "Revealed by everyone"),
+  // so only the hidden ones keep a row with the Reveal and Remove controls.
+  const hiddenTechs = yourTechs.filter((tech) => tech.hidden)
 
   return (
     <CollapsiblePanel id="techs-social-policy" title="Techs & Social policy" defaultOpen>
@@ -105,23 +108,19 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
         techs={yourTechs.map((tech) => ({ name: tech.name, level: tech.level, hidden: tech.hidden }))}
       />
       <ul className="list scroll">
-        {yourTechs.map((tech) => (
+        {hiddenTechs.map((tech) => (
           <li key={tech.id}>
             <span>{tech.name}</span>
             <span className="muted">level {tech.level}</span>
-            <span className={tech.hidden ? 'tag hidden' : 'tag revealed'}>
-              {tech.hidden ? 'hidden' : 'revealed'}
-            </span>
+            <span className="tag hidden">hidden</span>
             <span style={{ flex: 1 }} />
-            {tech.hidden && (
-              <button
-                className="small"
-                disabled={busy}
-                onClick={() => void run(() => api.revealTech(gameId, tech.name))}
-              >
-                Reveal
-              </button>
-            )}
+            <button
+              className="small"
+              disabled={busy}
+              onClick={() => void run(() => api.revealTech(gameId, tech.name))}
+            >
+              Reveal
+            </button>
             <button
               className="small"
               disabled={busy}
@@ -131,7 +130,11 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
             </button>
           </li>
         ))}
-        {yourTechs.length === 0 && <li className="muted">None chosen.</li>}
+        {hiddenTechs.length === 0 && (
+          <li className="muted">
+            {yourTechs.length === 0 ? 'None chosen.' : 'All researched techs are revealed.'}
+          </li>
+        )}
       </ul>
 
       <h3 style={{ marginTop: '0.8rem' }}>Revealed by everyone</h3>
