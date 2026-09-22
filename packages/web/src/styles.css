@@ -1758,13 +1758,14 @@ ul.history > li {
   padding: 0.2rem 0.35rem;
 }
 
-.government-control {
+/* A dropdown with its round "?" reference button beside it. */
+.card-control {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
 }
 
-.government-help {
+.help-button {
   width: 1.6rem;
   height: 1.6rem;
   padding: 0;
@@ -1777,7 +1778,8 @@ ul.history > li {
   cursor: pointer;
 }
 
-.government-reference-backdrop {
+/* A card reference modal, shared by governments and social policies. */
+.reference-backdrop {
   position: fixed;
   inset: 0;
   z-index: 20;
@@ -1787,7 +1789,7 @@ ul.history > li {
   background: rgb(0 0 0 / 65%);
 }
 
-.government-reference {
+.reference {
   width: min(90vw, 72rem);
   max-height: 90vh;
   overflow-y: auto;
@@ -1798,14 +1800,14 @@ ul.history > li {
   box-shadow: 0 1rem 3rem rgb(0 0 0 / 45%);
 }
 
-.government-reference-heading {
+.reference-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.government-card-grid {
+.reference-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
   align-items: start;
@@ -1813,11 +1815,11 @@ ul.history > li {
   margin-top: 0.7rem;
 }
 
-.government-card {
+.reference-card {
   min-width: 0;
 }
 
-.government-card-image {
+.reference-card-image {
   display: block;
   width: 100%;
   max-width: 20rem;
@@ -1827,17 +1829,17 @@ ul.history > li {
   box-shadow: 0 0.45rem 1.1rem rgb(0 0 0 / 30%);
 }
 
-.government-card-copy {
+.reference-card-copy {
   max-width: 20rem;
   margin: 0.7rem auto 0;
 }
 
-.government-card h3 {
+.reference-card h3 {
   margin: 0 0 0.55rem;
   text-align: center;
 }
 
-.government-card p {
+.reference-card p {
   margin: 0.45rem 0 0;
   line-height: 1.35;
 }

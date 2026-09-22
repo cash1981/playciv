@@ -16,6 +16,8 @@ import { api } from '../lib/api.js'
 import type { PlayerStats, PlayerView } from '../lib/api.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import type { Run } from './GameView.js'
+import { ReferenceCard } from './ReferenceCard.js'
+import { ReferenceDialog } from './ReferenceDialog.js'
 
 interface Props {
   readonly gameId: string
@@ -87,39 +89,6 @@ const GROUP_START_KEYS = new Set(STATUS_GROUPS.map((g) => g.columns[0]!.key))
 export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element {
   const [showGovernmentReference, setShowGovernmentReference] = useState(false)
   const governmentHelpRef = useRef<HTMLButtonElement | null>(null)
-  const governmentCloseRef = useRef<HTMLButtonElement | null>(null)
-
-  useEffect(() => {
-    if (!showGovernmentReference) return
-    governmentCloseRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        setShowGovernmentReference(false)
-        return
-      }
-      if (event.key !== 'Tab') return
-      const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-labelledby="government-reference-title"]')
-      if (dialog === null) return
-      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
-      if (focusable.length === 0) return
-      const first = focusable[0]!
-      const last = focusable[focusable.length - 1]!
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [showGovernmentReference])
-
-  useEffect(() => {
-    if (!showGovernmentReference) governmentHelpRef.current?.focus()
-  }, [showGovernmentReference])
   const rows: Row[] = []
 
   if (view.you !== null) {
@@ -210,7 +179,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
                   )}
                 </td>
                 <td>
-                  <span className="government-control">
+                  <span className="card-control">
                     <select
                       className="government-select"
                       aria-label={`${row.username} government`}
@@ -231,7 +200,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
                       ))}
                     </select>
                     <button
-                      className="government-help"
+                      className="help-button"
                       type="button"
                       ref={governmentHelpRef}
                       aria-label="Show government card reference"
@@ -272,39 +241,28 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
         </table>
       </div>
       {showGovernmentReference && (
-        <div className="government-reference-backdrop" role="presentation" onClick={() => setShowGovernmentReference(false)}>
-          <section
-            className="government-reference"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="government-reference-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="government-reference-heading">
-              <h2 id="government-reference-title">Government card reference</h2>
-              <button ref={governmentCloseRef} type="button" onClick={() => setShowGovernmentReference(false)}>Close</button>
-            </div>
-        <p className="muted">
-          Card effects are shown for reference only; the status dropdown does not enforce them.
-        </p>
-        <div className="government-card-grid">
-          {GOVERNMENT_CARDS.map((card) => (
-            <article className="government-card" key={card.government}>
-              <img
-                className="government-card-image"
-                src={`/governments/${card.government.toLowerCase()}.jpg`}
-                alt={`${card.government} government card`}
-                loading="lazy"
-              />
-              <div className="government-card-copy">
-                <h3>{card.government}</h3>
+        <ReferenceDialog
+          titleId="government-reference-title"
+          title="Government card reference"
+          returnFocusTo={governmentHelpRef}
+          onClose={() => setShowGovernmentReference(false)}
+        >
+          <p className="muted">
+            Card effects are shown for reference only; the status dropdown does not enforce them.
+          </p>
+          <div className="reference-card-grid">
+            {GOVERNMENT_CARDS.map((card) => (
+              <ReferenceCard
+                key={card.government}
+                name={card.government}
+                image={`/governments/${card.government.toLowerCase()}.jpg`}
+                imageAlt={`${card.government} government card`}
+              >
                 {card.effects.map((effect) => <p key={effect}>{effect}</p>)}
-              </div>
-            </article>
-          ))}
-        </div>
-          </section>
-        </div>
+              </ReferenceCard>
+            ))}
+          </div>
+        </ReferenceDialog>
       )}
     </CollapsiblePanel>
   )

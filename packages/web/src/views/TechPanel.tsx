@@ -14,7 +14,9 @@ import { api } from '../lib/api.js'
 import type { GameRevisionView, PlayerView, RevealedTechsDto } from '../lib/api.js'
 import { TechTree } from './TechTree.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
-import { ItemCard } from './ItemCard.js'
+import { ItemCard, itemImageUrl } from './ItemCard.js'
+import { ReferenceCard } from './ReferenceCard.js'
+import { ReferenceDialog } from './ReferenceDialog.js'
 
 interface Props {
   readonly gameId: string
@@ -33,6 +35,8 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
   const [loadError, setLoadError] = useState<string | null>(null)
   const [chosenTech, setChosenTech] = useState('')
   const [chosenPolicy, setChosenPolicy] = useState('')
+  const [showPolicyReference, setShowPolicyReference] = useState(false)
+  const policyHelpRef = useRef<HTMLButtonElement | null>(null)
   const requestEpoch = useRef(0)
 
   const load = useCallback(async () => {
@@ -76,6 +80,29 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
   const otherRevealed = revealed.filter(
     (entry) => entry.civilization !== view.you?.civilization?.name,
   )
+
+  /**
+   * Why a social policy cannot be chosen, or null when it can. Mirrors
+   * `chooseSocialPolicy` in the engine exactly — a policy already held, or one
+   * whose own flipside is held, is rejected there (Java:
+   * `PlayerAction.chooseSocialPolicy`). The comparison is deliberately
+   * directional, like the engine's: the candidate's `flipside` is checked, not
+   * "same pair both ways", so a card the engine would accept stays selectable.
+   */
+  const chosenPolicyNames = new Set(yourPolicies.map((policy) => policy.name))
+  function policyUnavailableReason(policy: SocialPolicyItem): string | null {
+    if (chosenPolicyNames.has(policy.name)) return 'already chosen'
+    if (policy.flipside !== null && chosenPolicyNames.has(policy.flipside)) {
+      return `flipside of ${policy.flipside}`
+    }
+    return null
+  }
+  const unavailablePolicies = policies.filter((policy) => policyUnavailableReason(policy) !== null)
+  const chosenPolicyBlocked =
+    chosenPolicy !== '' &&
+    policies.some(
+      (policy) => policy.name === chosenPolicy && policyUnavailableReason(policy) !== null,
+    )
 
   return (
     <CollapsiblePanel id="techs-social-policy" title="Techs & Social policy" defaultOpen>
@@ -165,20 +192,36 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
 
       <h2 style={{ marginTop: '1rem' }}>Social policy</h2>
       <div className="row">
-        <select
-          value={chosenPolicy}
-          onChange={(event) => setChosenPolicy(event.target.value)}
-          style={{ flex: 1 }}
-        >
-          <option value="">choose a card …</option>
-          {policies.map((policy) => (
-            <option key={policy.id} value={policy.name}>
-              {policy.name}
-            </option>
-          ))}
-        </select>
+        <span className="card-control" style={{ flex: 1 }}>
+          <select
+            aria-label="Choose a social policy"
+            value={chosenPolicy}
+            onChange={(event) => setChosenPolicy(event.target.value)}
+            style={{ flex: 1 }}
+          >
+            <option value="">choose a card …</option>
+            {policies.map((policy) => {
+              const reason = policyUnavailableReason(policy)
+              return (
+                <option key={policy.id} value={policy.name} disabled={reason !== null}>
+                  {reason === null ? policy.name : `${policy.name} — ${reason}`}
+                </option>
+              )
+            })}
+          </select>
+          <button
+            className="help-button"
+            type="button"
+            ref={policyHelpRef}
+            aria-label="Show social policy card reference"
+            title="Show social policy card reference"
+            onClick={() => setShowPolicyReference(true)}
+          >
+            ?
+          </button>
+        </span>
         <button
-          disabled={busy || chosenPolicy === ''}
+          disabled={busy || chosenPolicy === '' || chosenPolicyBlocked}
           onClick={() =>
             void run(async () => {
               const result = await api.chooseSocialPolicy(gameId, chosenPolicy)
@@ -190,6 +233,14 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
           Choose
         </button>
       </div>
+      {unavailablePolicies.length > 0 && (
+        <p className="muted" role="status">
+          {unavailablePolicies
+            .map((policy) => `${policy.name} (${policyUnavailableReason(policy)})`)
+            .join(', ')}{' '}
+          cannot be chosen.
+        </p>
+      )}
       <ul className="card-grid small">
         {yourPolicies.map((policy) => (
           <ItemCard key={policy.id} item={policy}>
@@ -219,6 +270,35 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
         ))}
         {yourPolicies.length === 0 && <li className="muted">None chosen.</li>}
       </ul>
+
+      {showPolicyReference && (
+        <ReferenceDialog
+          titleId="social-policy-reference-title"
+          title="Social policy card reference"
+          returnFocusTo={policyHelpRef}
+          onClose={() => setShowPolicyReference(false)}
+        >
+          <p className="muted">
+            Card text is shown for reference only; the engine records the chosen policy but does
+            not enforce its effects.
+          </p>
+          <div className="reference-card-grid">
+            {policies.map((policy) => (
+              <ReferenceCard
+                key={policy.id}
+                name={policy.name}
+                image={itemImageUrl(policy)}
+                imageAlt={`${policy.name} social policy card`}
+              >
+                {policy.description !== null && policy.description !== '' && (
+                  <p>{policy.description}</p>
+                )}
+                {policy.flipside !== null && <p className="muted">Flipside: {policy.flipside}</p>}
+              </ReferenceCard>
+            ))}
+          </div>
+        </ReferenceDialog>
+      )}
     </CollapsiblePanel>
   )
 }
