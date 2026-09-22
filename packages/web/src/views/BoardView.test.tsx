@@ -132,6 +132,7 @@ describe('BoardPalette finite supplies', () => {
       />,
     )
     expect(exhausted).toContain('Academy (0)')
+    expect(exhausted).toContain('type="button"')
     expect(exhausted).toContain('draggable="false"')
 
     const restored = renderToStaticMarkup(
