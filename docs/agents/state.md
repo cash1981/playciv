@@ -13,11 +13,23 @@ _Last updated: 2026-09-22_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 173 server, 112 web |
+| `pnpm -r test` | passing - 449 engine, 173 server, 111 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; open pull request: #133 (the Atlas redesign) |
+| `main` pushed to `origin` | yes; open pull request: #132 (turn-order reveal dedupe) |
 
 ## Done
+
+- **A revealed turn-order version identical to the editor is hidden.** After a
+  reveal the newest history version is the text still in the phase editor, so
+  the panel printed the same order twice - once struck through and greyed above,
+  once normally below. The `TurnHistory` component in `TurnPanel.tsx` now drops
+  any version whose Markdown exactly equals the editor text, and renders nothing
+  when none remain; versions that differ stay, oldest first, with their reveal
+  timestamps. The stored `TurnOrderVersion[]` is untouched, so the public record
+  and the reveal state are unchanged. Branch `feat/turn-history-hide-current`;
+  review-approved in one read-only round with no findings above a nit. 2 new web
+  tests (111 web total). No browser was connected, so the visual pass is left to
+  the human; see `decisions.md`.
 
 - **The site gets the Atlas look.** The stylesheet's own header said "Deliberately
   plain. The artwork comes later."; this is that pass. The site-wide palette,
