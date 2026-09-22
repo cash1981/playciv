@@ -53,8 +53,8 @@ describe('StatusPanel governments', () => {
     expect(alice.querySelectorAll('option')).toHaveLength(GOVERNMENTS.length)
     fireEvent.click(screen.getAllByRole('button', { name: 'Show government card reference' })[0]!)
     const expectedEffects = GOVERNMENT_CARDS.flatMap((card) => card.effects)
-    expect(document.querySelectorAll('.government-card p')).toHaveLength(expectedEffects.length)
-    expect(document.querySelectorAll('.government-card img')).toHaveLength(GOVERNMENT_CARDS.length)
+    expect(document.querySelectorAll('.reference-card p')).toHaveLength(expectedEffects.length)
+    expect(document.querySelectorAll('.reference-card img')).toHaveLength(GOVERNMENT_CARDS.length)
 
     for (const card of GOVERNMENT_CARDS) {
       expect(card.effects.length).toBeGreaterThan(0)
@@ -64,7 +64,7 @@ describe('StatusPanel governments', () => {
           .getAttribute('src'),
       ).toBe(`/governments/${card.government.toLowerCase()}.jpg`)
       for (const effect of card.effects) {
-        expect(screen.getByText(effect, { selector: '.government-card p' })).toBeTruthy()
+        expect(screen.getByText(effect, { selector: '.reference-card p' })).toBeTruthy()
       }
     }
   })
