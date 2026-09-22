@@ -25,6 +25,8 @@ export function ItemCard({
   /** What the viewer is allowed to read: the whole card, or only its public face. */
   reveal = 'all',
   draggable,
+  onClick,
+  className,
   onDragStart,
   onDragEnd,
   /**
@@ -53,6 +55,8 @@ export function ItemCard({
   readonly item: Item
   readonly reveal?: 'all' | 'public'
   readonly draggable?: boolean
+  readonly onClick?: React.MouseEventHandler<HTMLLIElement>
+  readonly className?: string
   readonly onDragStart?: (e: React.DragEvent<HTMLLIElement>) => void
   readonly onDragEnd?: (e: React.DragEvent<HTMLLIElement>) => void
   readonly rotation?: number
@@ -68,7 +72,13 @@ export function ItemCard({
   const imageStyle = rotation ? { transform: `rotate(${rotation}deg)` } : undefined
 
   return (
-    <li className="card" draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+    <li
+      className={`card${className === undefined ? '' : ` ${className}`}`}
+      draggable={draggable}
+      onClick={onClick}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+    >
       <div className="card-art">
         {url === null ? (
           <span className="card-art-fallback" style={imageStyle}>{label}</span>

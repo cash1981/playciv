@@ -1,0 +1,47 @@
+/* Touch fallback for battle and arena. HTML5 drag-and-drop remains available
+   on desktop, while phones use the same select-then-place interaction as the
+   mobile board. */
+.battle-piece-selectable,
+.battle-piece-selected,
+.arena-slot {
+  touch-action: manipulation;
+}
+
+.battle-piece-selectable {
+  cursor: pointer;
+}
+
+.battle-piece-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.battle-selection {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.4rem 0 0.7rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.35rem;
+  color: var(--accent);
+}
+
+@media (max-width: 42rem) {
+  .battle-selection {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .arena-frame {
+    overflow-x: auto;
+  }
+
+  .arena-row {
+    min-width: 29rem;
+  }
+
+  .arena-row-slots {
+    overscroll-behavior-x: contain;
+  }
+}
