@@ -1213,7 +1213,9 @@ ul.list > li:last-child {
   border-radius: var(--radius);
   /* A `fieldset` does not shrink below its content's minimum width by default,
      so a wide pyramid would push the whole page sideways on a phone instead of
-     scrolling inside `.tech-pyramid`. */
+     scrolling inside `.tech-pyramid`. Both spellings are here on purpose: the
+     user-agent rule is written as the logical property, and browsers have
+     differed on which of the two wins. */
   min-width: 0;
   min-inline-size: 0;
 }

@@ -17,7 +17,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `feat/atlas-redesign`
 - **Brief:** `docs/agents/tasks/atlas-redesign.md`
-- **Status:** review-approved (two read-only rounds; round 2 had nothing above
+- **Status:** review-approved (five read-only rounds; round 5 had nothing above
   a nit) — PR #133 open, awaiting the human's merge. Claim kept until merged.
   The visual pass is left to the human: the browser window was not visible, so
   no screenshots could be taken; the mobile/desktop evidence is measured
@@ -35,11 +35,14 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `docs/agents/tasks/atlas-redesign.md`
   - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
 - **Notes:** New site-wide visual identity ("Atlas"), approved by the human from
-  mockups, plus one layout change they asked for after testing it: the game
-  page's Log and Chat panels move directly under the board. No behaviour, props
-  or data changes — the stylesheet, two self-hosted fonts, one illustrated
-  backdrop asset, a decorative `SiteBackdrop` layer, and a reorder of
-  `GameView.tsx`'s existing panel children.
+  mockups, plus four things they asked for after testing it: the game page's Log
+  and Chat panels move directly under the board; `.app` grows with the viewport
+  instead of sitting at a fixed 1200 px; each player-status row takes the
+  player's colour; and a pre-existing `.tech-pyramid-block` fieldset overflow on
+  phones is fixed. No behaviour, props or data changes — the stylesheet, two
+  self-hosted fonts, one illustrated backdrop asset, a decorative
+  `SiteBackdrop` layer, a reorder of `GameView.tsx`'s existing panel children
+  and one custom property on `StatusPanel.tsx`'s rows.
   Branched from `main` after PR #131 merged, and it keeps PR #131's mobile blocks
   verbatim, so the `issue-115-site-mobile` claim below is stale (that PR is
   merged) and its `styles.css` claim is superseded by this one.

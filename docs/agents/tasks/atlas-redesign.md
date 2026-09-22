@@ -144,7 +144,8 @@ Provenance and the trademark decision are recorded in `decisions.md`.
 ## Acceptance criteria
 
 - [ ] No behaviour changes: `pnpm -r typecheck && pnpm -r test && pnpm -r build`
-      pass, with the existing test counts unchanged plus the new backdrop test.
+      pass, with the existing test counts unchanged plus the new backdrop and
+      status-colour tests.
 - [ ] `SiteMobileStyles.test.ts` passes **without being edited** — every string
       it asserts is still present verbatim.
 - [ ] Every CSS selector that exists on `main` still exists; a reviewer can diff

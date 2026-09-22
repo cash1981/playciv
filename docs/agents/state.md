@@ -13,7 +13,7 @@ _Last updated: 2026-09-22_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 173 server, 111 web |
+| `pnpm -r test` | passing - 449 engine, 173 server, 112 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; open pull request: #133 (the Atlas redesign) |
 
@@ -34,10 +34,20 @@ _Last updated: 2026-09-22_
   passes unedited and the `2.75rem` touch minimums, the grid navigation and the
   `calc(100dvh - 1.5rem)` help menu still apply. New `SiteBackdrop.tsx`
   (decorative, `aria-hidden`, painted under `.app`), its test, two OFL fonts with
-  their licences and one backdrop JPEG under `public/`. 2 new web tests (111
-  total). Verified against the live app inside real 320 px, 390 px, 768 px and
-  1200 px viewports: the panel stack is one column at every width, the new
-  Log/Chat pair is one column on the phone and two above it, there is no
+  their licences and one backdrop JPEG under `public/`. 3 new web tests (112
+  total). Three further adjustments came out of the human testing it: `.app`
+  grows with the viewport past the old fixed 1200 px (`max(1200px, min(94vw,
+  2200px))`), so the board has room on a large screen while a sliver of the
+  backdrop stays visible; each player-status row carries the player's colour as
+  `--player-color`, which its bottom border takes, so a row stays identifiable
+  when the status board is scrolled sideways; and a `.tech-pyramid-block`
+  fieldset no longer forces the whole document wider than a phone screen — that
+  last one was a pre-existing bug (a `fieldset` will not shrink below its
+  content's minimum width), fixed here because it broke the mobile-first
+  guarantee this change makes. Verified against the live app inside real 320 px,
+  390 px, 768 px, 1280 px, 1600 px, 1920 px and 2560 px viewports: the panel
+  stack is one column at every width, the new Log/Chat pair is one column on the
+  phone and two above it, there is no
   accidental horizontal page overflow, and 44 px touch targets and WCAG AA
   contrast (measured 4.8-13.9) hold in both themes.
   No screenshots were captured — the browser window was not visible — so the
