@@ -12,6 +12,23 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-115-board-mobile
+
+- **Owner:** Codex
+- **Branch:** `feat/issue-115-board`
+- **Brief:** `docs/agents/tasks/issue-115-board-mobile.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/BoardView.tsx`
+  - `packages/web/src/views/BoardView.test.tsx`
+  - `packages/web/src/styles.css`
+  - `docs/agents/tasks/issue-115-board-mobile.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+- **Notes:** First delivery slice of issue #115. Adds tap/select/place for the
+  board while preserving desktop drag behaviour. Battle/arena and the rest of
+  the site are intentionally separate PRs.
+
 ### issue-125-turn-order-reveal-history
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
