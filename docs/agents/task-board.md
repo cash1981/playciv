@@ -12,6 +12,33 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-101-social-policy-reference
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `feat/issue-101-social-policy-reference`
+- **Brief:** `docs/agents/tasks/issue-101-social-policy-reference.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/ReferenceDialog.tsx` (new)
+  - `packages/web/src/views/ReferenceCard.tsx` (new)
+  - `packages/web/src/views/TechPanel.tsx`
+  - `packages/web/src/views/TechPanel.test.tsx`
+  - `packages/web/src/views/StatusPanel.tsx`
+  - `packages/web/src/views/StatusPanel.test.tsx`
+  - `packages/web/src/styles.css`
+  - `docs/agents/tasks/issue-101-social-policy-reference.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** Issue #101 plus a follow-up the human added in the same session: a
+  `?` reference of all eight social policy cards (picture, text, flipside) in
+  the Techs & Social policy panel, and the "choose a card" dropdown now greys
+  out a policy already held or whose own flipside is held, with the reason and
+  a short message, mirroring the engine's directional flipside check. The
+  government reference is factored into the shared `ReferenceDialog` /
+  `ReferenceCard` and its `government-*` CSS renamed to generic
+  `reference-*`; no behaviour, prop or data change elsewhere. Client-only; no
+  engine or server change.
+
 ### atlas-redesign
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
