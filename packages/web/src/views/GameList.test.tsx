@@ -38,10 +38,19 @@ function game(
   }
 }
 
-/** The Name cell of every body row, in render order (#, Created, Name, …). */
+/**
+ * The Name cell of every body row, in render order. The Name renders as the
+ * row's only link, so this works whichever tab is open — the two tabs now
+ * order their columns differently (the active table leads with Action).
+ */
 function names(): (string | null)[] {
-  return Array.from(document.querySelectorAll('tbody tr td:nth-child(3)')).map(
-    (cell) => cell.textContent,
+  return Array.from(document.querySelectorAll('tbody tr td a')).map((link) => link.textContent)
+}
+
+/** The open table's header text, in order, with any sort arrow stripped. */
+function headers(): (string | null)[] {
+  return Array.from(document.querySelectorAll('thead th')).map(
+    (th) => th.textContent?.replace(/[▲▼]/g, '') ?? null,
   )
 }
 
@@ -177,9 +186,46 @@ describe('GameList', () => {
       <GameList games={games} player={player} busy={false} onOpenGame={noop} onJoin={noop} />,
     )
 
-    // #, Created, Name, Type, Number of players, Players, Action.
+    // Action, #, Created, Name, Type, Number of players, Players.
     const cells = Array.from(document.querySelectorAll('tbody tr td'))
-    expect(cells[1]?.textContent).toBe('')
+    expect(cells[2]?.textContent).toBe('')
+  })
+
+  it('puts the Action column first on the active tab and omits it on finished', () => {
+    const games = [
+      game({ id: 'mine', name: 'Mine', youAreIn: true }),
+      game({ id: 'done', name: 'Done', active: false, winner: 'cash1981' }),
+    ]
+
+    render(
+      <GameList games={games} player={player} busy={false} onOpenGame={noop} onJoin={noop} />,
+    )
+
+    // The active table leads with the action, so its buttons are reachable on a
+    // narrow screen without scrolling sideways.
+    expect(headers()).toEqual([
+      'Action',
+      '#',
+      'Created',
+      'Name',
+      'Type',
+      'Number of players',
+      'Players',
+    ])
+    expect(document.querySelector('tbody tr td')?.textContent).toBe('Open')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Finished games' }))
+
+    // A finished game has nothing to open or join, so the column is gone and
+    // the old order stands.
+    expect(headers()).toEqual([
+      '#',
+      'Created',
+      'Name',
+      'Type',
+      'Number of players',
+      'Players',
+    ])
   })
 
   it('colours Open teal and Join green, and leaves Full plain', () => {

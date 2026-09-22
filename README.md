@@ -553,7 +553,10 @@ name, its type and any player's username (`filter` in AngularJS matched every
 property on the game). Both tabs are sortable, so **Type** is a new sortable
 column, and a numeric column opens **descending** on the first click where
 `ng-table` opened every column ascending. The **Open** and **Full** actions come
-from the rewrite, not the old client. See `docs/agents/decisions.md`.
+from the rewrite, not the old client, and the Active games table now puts its
+**Action** column first so the buttons are reachable on a narrow screen without
+scrolling sideways (the old client had Action last; the Finished table has no
+Action column). See `docs/agents/decisions.md`.
 
 **The admin broadcast is reachable, with a Markdown body.** The old
 `GameAction.sendMailToAll` existed but was dead: its only endpoint,

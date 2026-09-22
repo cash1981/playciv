@@ -1589,3 +1589,26 @@ field with the reveal history rather than add a second one.
   reinterpreted, because they mixed published and unpublished orders and
   carried no timestamps. `allPublicTurns` is now a plain
   `sort(compareTurns).map(publicTurn)`.
+
+## 2026-09-22 - The Active games table leads with its Action column
+
+**Decision.** The front page's Active games table orders its columns
+**Action, #, Created, Name, Type, Number of players, Players** — the Action
+column moves from last to first. The Finished games table, which has no Action
+column, keeps `#`, Created, Name, Type, Number of players, Players unchanged.
+No label, colour, size or behaviour of the buttons changes; the `.action-cell`
+class now left-aligns them, matching their new edge.
+
+**Why.** The human asked for it directly: *"Kan du bytte plassering på forsiden
+på action knappene join og open slik at de kommer først? Det er mer mobil vennlig
+så slipper man å måtte scrolle bort."* On a narrow screen the seven-column table
+scrolls sideways, so the Open / Join buttons sat off the right edge behind a
+horizontal scroll; putting them first makes the thing a player can act on
+visible immediately.
+
+**Consequences.** This deliberately deviates from the old client's column order
+(`old-civ-web/app/views/list.html` had Action last). It is a UI layout choice
+requested by the human, not a game rule; the old system is otherwise unchanged.
+The action column stays unsortable (it is an action, not a value), and the
+`SortableTable` component is untouched — the order is just the order the
+`GameList` column array is built in.
