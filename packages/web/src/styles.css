@@ -503,7 +503,8 @@ label > textarea {
 }
 
 /* A hairline inside the border, the way the board's printed panels are framed.
-   Decorative only, and painted under the content. */
+   Decorative and inert (`pointer-events: none`), and `inset: 4px` keeps it
+   inside the panel's padding, so it never overlaps the content. */
 .panel::before {
   content: '';
   position: absolute;

@@ -88,12 +88,12 @@ Provenance and the trademark decision are recorded in `decisions.md`.
 ## Approach
 
 1. **Palette and type first.** Replace the two `:root` blocks with the Atlas
-   variables (`--bg`, `--panel`, `--panel-2`, `--line`, `--line-soft`, `--text`,
-   `--muted`, `--accent`, `--accent-ink`, `--shadow`, `--radius`, `--map-ink`,
-   `--photo-opacity`, plus the font stacks) and keep every variable the current
-   stylesheet already uses, including `--info`/`--success` — those two encode
-   the deliberate Bootstrap `btn-info`/`btn-success` colours from the front-page
-   work and must not drift.
+   variables (`--bg`, `--bg-2`, `--panel`, `--panel-2`, `--line`, `--line-soft`,
+   `--text`, `--muted`, `--accent`, `--accent-text`, `--shadow`, `--radius`,
+   `--pill`, `--map-ink`, `--photo-opacity`, `--card-art-bg`, plus the font
+   stacks) and keep every variable the current stylesheet already uses,
+   including `--info`/`--success` — those two encode the deliberate Bootstrap
+   `btn-info`/`btn-success` colours from the front-page work and must not drift.
 2. **Every selector keeps its rule.** Restyle in place: the visual properties
    change, the selector list does not. The two mobile `@media` blocks from PR
    #131 are kept byte-for-byte, including `min-height: 2.75rem`, the

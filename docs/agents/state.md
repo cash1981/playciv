@@ -13,11 +13,32 @@ _Last updated: 2026-09-22_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 173 server, 95 web |
+| `pnpm -r test` | passing - 449 engine, 173 server, 111 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; open pull requests: #128 (hide revealed techs) and #129 (front-page Action column first) |
 
 ## Done
+
+- **The site gets the Atlas look.** The stylesheet's own header said "Deliberately
+  plain. The artwork comes later."; this is that pass. The site-wide palette,
+  type and surfaces become parchment-and-brass in the light theme and
+  midnight-blue-and-gold in the dark one, with self-hosted `Marcellus`/`Cinzel`
+  for headings and the brand, and a painted board backdrop behind every page.
+  Behaviour, markup and data are untouched: `styles.css` is restyled in place,
+  and no selector, media query or custom property was removed
+  (`removedClasses: []`, `removedMedia: []`, `removedVars: []` against `main`).
+  PR #131's two mobile blocks are byte-identical, so `SiteMobileStyles.test.ts`
+  passes unedited and the `2.75rem` touch minimums, the grid navigation and the
+  `calc(100dvh - 1.5rem)` help menu still apply. New `SiteBackdrop.tsx`
+  (decorative, `aria-hidden`, painted under `.app`), its test, two OFL fonts with
+  their licences and one backdrop JPEG under `public/`. 2 new web tests (111
+  total). Verified against the live app inside real 390 px, 768 px and 1200 px
+  viewports: one column at every width, no accidental horizontal page overflow,
+  44 px touch targets, and WCAG AA contrast in both themes (measured 4.8-13.9).
+  No screenshots were captured — the browser window was not visible — so the
+  visual pass is left to the human. Branch `feat/atlas-redesign`; the deliberate
+  desktop-first responsive decision and the backdrop's provenance are in
+  `decisions.md`.
 
 - **The Techs list hides revealed techs.** In the Techs panel's "Yours" list a
   researched technology that has already been revealed kept a row tagged

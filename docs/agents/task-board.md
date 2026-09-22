@@ -17,7 +17,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `feat/atlas-redesign`
 - **Brief:** `docs/agents/tasks/atlas-redesign.md`
-- **Status:** in progress
+- **Status:** review-approved (round 2 pending) — implemented and checked on the
+  branch; PR to open, awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/web/src/styles.css`
   - `packages/web/src/views/SiteBackdrop.tsx` (new)
