@@ -95,7 +95,8 @@ export function SortableTable<T>({
   }
 
   const header = (column: SortableColumn<T>) => {
-    // The game list's Action column right-aligns its header to match the cells.
+    // The game list's Action column carries `action-cell` so its header and
+    // cells can share one alignment rule.
     const className = column.key === 'action' ? 'action-cell' : undefined
     if (column.sortValue === undefined) {
       return (

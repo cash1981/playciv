@@ -1286,9 +1286,9 @@ ul.history > li {
   color: var(--accent);
 }
 
-/* The game list's Action header and cells sit to the right of the table. */
+/* The game list's Action header and cells lead the table, at its left edge. */
 .data-table .action-cell {
-  text-align: right;
+  text-align: left;
 }
 
 /* The game list's search box and "Show my games" checkbox, above the tabs. */

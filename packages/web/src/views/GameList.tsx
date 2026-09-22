@@ -20,6 +20,9 @@
  *   click (old ng-table: ascending).
  * - `#` is the row's position in the whole filtered/sorted list, not the old
  *   active table's page-local `$index`.
+ * - The Active games table puts its **Action** column first, so the Open / Join
+ *   buttons are reachable on a narrow screen without scrolling sideways; the
+ *   old client had Action last. The Finished table has no Action column.
  * - The `Open` / `Full` actions come from the rewrite, not the old client.
  *   `Join` is the green `success` variant; `Open` is the old `btn-info` teal
  *   (`info` in `styles.css`); `Full` stays the plain, disabled default.
@@ -111,9 +114,25 @@ interface ColumnOptions {
   readonly onJoin: (gameId: string) => void
 }
 
-/** The old column order: #, Created, Name, Type, Number of players, Players, Action. */
+/**
+ * The Active table's column order puts **Action** first — the human moved it
+ * there so the buttons are reachable on a narrow screen without scrolling
+ * sideways — then the old client's #, Created, Name, Type, Number of players,
+ * Players. The Finished table has no Action column, so it keeps that order.
+ */
 function columnsFor(options: ColumnOptions): readonly SortableColumn<PublicGameSummary>[] {
-  const columns: SortableColumn<PublicGameSummary>[] = [
+  const columns: SortableColumn<PublicGameSummary>[] = []
+
+  if (options.withAction) {
+    columns.push({
+      key: 'action',
+      header: 'Action',
+      render: (game) =>
+        actionCell(game, options.player, options.busy, options.onOpenGame, options.onJoin),
+    })
+  }
+
+  columns.push(
     {
       key: 'index',
       header: '#',
@@ -179,16 +198,7 @@ function columnsFor(options: ColumnOptions): readonly SortableColumn<PublicGameS
           </span>
         )),
     },
-  ]
-
-  if (options.withAction) {
-    columns.push({
-      key: 'action',
-      header: 'Action',
-      render: (game) =>
-        actionCell(game, options.player, options.busy, options.onOpenGame, options.onJoin),
-    })
-  }
+  )
 
   return columns
 }
