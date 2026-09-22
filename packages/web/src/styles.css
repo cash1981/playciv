@@ -145,12 +145,12 @@ h2 {
   font-size: 1.2rem;
 }
 h3 {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-family: var(--display);
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
 }
 
 button {
@@ -1636,8 +1636,8 @@ ul.history > li {
 .data-table th {
   font-family: var(--display);
   color: var(--muted);
-  font-size: 0.72rem;
-  letter-spacing: 0.13em;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -1708,8 +1708,8 @@ ul.history > li {
 .status-table th {
   font-family: var(--display);
   color: var(--muted);
-  font-size: 0.72rem;
-  letter-spacing: 0.13em;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
