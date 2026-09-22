@@ -1662,3 +1662,62 @@ equality rather than "drop only the newest" also hides a version that becomes
 current again after the player reverts, which is intended: the text is on screen
 anyway. This is a presentation choice with no old-system counterpart - the
 reveal history is new in issue #125 and `old-civ-web` never rendered it.
+## 2026-09-22 - The site gets the Atlas look
+
+**Decision.** The site-wide palette, type and surfaces change to "Atlas": a
+parchment-and-brass light theme, a midnight-blue-and-gold dark theme, `Marcellus`
+for headings with `Cinzel` for the brand and small caps labels, both self-hosted
+under `packages/web/public/fonts/` (SIL OFL, licence files kept beside them), and
+a painted board backdrop behind everything. No selector was removed and PR
+#131's two mobile blocks in `styles.css` are untouched. The game page's panel
+order also changes: the Log and Chat panels move from the bottom of the stack to
+directly under the board, in a `.panel-pair` wrapper that is two columns when
+the viewport has room and one when it does not.
+
+**Why.** The human asked for it directly: *"Går det an å lage siten litt mer
+moderne og sexy? Jeg ønsker et forslag der all funksjonalitet forblir og
+fungerer sånn som den er, bare at det kommer et nytt design som er mer
+'appealing' og flott å se på. Den skal fortsatt være mørk og lys tema som passer
+godt til hvert design. ... Perhaps there should be a background image that is
+civilization boardgame inspired."* They picked the Atlas direction and the
+"Boks · motiv" backdrop from mockups. The stylesheet's own header said
+"Deliberately plain. The artwork comes later." — this is that pass. After
+testing the first pass they asked for one layout change: *"du glemte å flytte
+log og chat rett under mapen"* — a turn-by-forum game is read from the log, so
+it belongs beside the board rather than under seven other panels.
+
+**Consequences.** The backdrop is derived from an image the human supplied — the
+box art of *Sid Meier's Civilization: The Board Game* — cropped to the lower
+painted landscape so the title block and the FFG/2K/Firaxis logos are not on
+screen. It joins the FFG artwork already committed deliberately (see the
+2026-09-15 entry); the human confirmed the whole cover would have been
+acceptable to them. It is a 1920x1080 JPEG (~258 KB), the same order of
+magnitude as a single card image. Because it is decorative, it is `aria-hidden`
+in `SiteBackdrop.tsx` and painted under `.app` (`z-index: 1`), so it can never
+capture a pointer or reach the accessibility tree. `--info` and `--success`
+keep their exact Bootstrap values — those two buttons were chosen by the human
+in an earlier task and deliberately do not follow the theme.
+
+## 2026-09-22 - The stylesheet stays desktop-first with `max-width` media queries
+
+**Decision.** The Atlas redesign restyles `styles.css` **in place**. The
+responsive strategy is not converted to mobile-first `min-width` queries, even
+though `docs/agents/conventions.md` (on the unmerged `chore/mobile-first-rule`
+branch) sets mobile and tablet as the baseline.
+
+**Why.** PR #131 had just landed the mobile site shell in `styles.css`, and its
+`SiteMobileStyles.test.ts` asserts exact strings from the `@media (max-width:
+900px)` and `@media (max-width: 600px)` blocks. Converting the cascade would
+invalidate that merged, reviewed mobile contract in the same breath as
+restyling the site, and would make it impossible to tell a regression in the
+redesign from one in the responsive rewrite.
+
+**Consequences.** The mobile-first rule is honoured in substance — the change was
+checked at 390 px and 768 px as well as desktop, there is no accidental
+horizontal page overflow, the touch minimums and the grid navigation from PR
+#131 still apply, and a dense region (the player-status board) scrolls inside
+its own container as the rule allows. What is deferred is the *cascade style*
+change: rewriting the sheet to `min-width` and re-expressing those two blocks is
+a follow-up task of its own, and it should move `SiteMobileStyles.test.ts` with
+it. No CSS selector, media query or custom property was removed by this work:
+`removedClasses: []`, `removedMedia: []`, `removedVars: []` against `main`.
