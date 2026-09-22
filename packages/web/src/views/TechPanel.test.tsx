@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { TechItem } from '@civ/engine'
 
 import { api } from '../lib/api.js'
-import type { PlayerView } from '../lib/api.js'
+import type { PlayerView, RevealedTechsDto } from '../lib/api.js'
 import { TechPanel } from './TechPanel.js'
 
 afterEach(() => {
@@ -28,9 +28,11 @@ const tech = (name: string, hidden: boolean): TechItem => ({
   type: null,
 })
 
-/** The viewer's own techs, with empty lists for everything the panel fetches. */
-const view = (techsChosen: readonly TechItem[]): PlayerView =>
-  ({ you: { techsChosen } }) as unknown as PlayerView
+/** The viewer's own techs and civilization. Everything else is fetched. */
+const view = (techsChosen: readonly TechItem[], civilization: string | null): PlayerView =>
+  ({
+    you: { techsChosen, civilization: civilization === null ? null : { name: civilization } },
+  }) as unknown as PlayerView
 
 const run = async (): Promise<void> => undefined
 
@@ -41,19 +43,37 @@ function yoursList(container: HTMLElement): HTMLElement {
   return list
 }
 
-function renderPanel(techsChosen: readonly TechItem[]): HTMLElement {
+interface PanelOptions {
+  readonly techsChosen?: readonly TechItem[]
+  readonly civilization?: string | null
+  readonly revealed?: readonly RevealedTechsDto[]
+}
+
+function renderPanel({
+  techsChosen = [],
+  civilization = null,
+  revealed = [],
+}: PanelOptions = {}): HTMLElement {
   vi.spyOn(api, 'availableTechs').mockResolvedValue([])
-  vi.spyOn(api, 'revealedTechs').mockResolvedValue([])
+  vi.spyOn(api, 'revealedTechs').mockResolvedValue([...revealed])
   vi.spyOn(api, 'socialPolicies').mockResolvedValue([])
   const { container } = render(
-    <TechPanel gameId="game-1" busy={false} run={run} view={view(techsChosen)} reloadCount={0} />,
+    <TechPanel
+      gameId="game-1"
+      busy={false}
+      run={run}
+      view={view(techsChosen, civilization)}
+      reloadCount={0}
+    />,
   )
   return container
 }
 
 describe('TechPanel Yours list', () => {
   it('drops the row of a revealed tech but keeps it on the pyramid', () => {
-    const container = renderPanel([tech('Horseback Riding', true), tech('Agriculture', false)])
+    const container = renderPanel({
+      techsChosen: [tech('Horseback Riding', true), tech('Agriculture', false)],
+    })
 
     const list = yoursList(container)
     expect(list.textContent).toContain('Horseback Riding')
@@ -63,14 +83,41 @@ describe('TechPanel Yours list', () => {
   })
 
   it('says all researched techs are revealed when no hidden one is left', () => {
-    const container = renderPanel([tech('Writing', false)])
+    const container = renderPanel({ techsChosen: [tech('Writing', false)] })
 
     expect(yoursList(container).textContent).toContain('All researched techs are revealed.')
   })
 
   it('says none chosen when nothing has been researched', () => {
-    const container = renderPanel([])
+    const container = renderPanel()
 
     expect(yoursList(container).textContent).toContain('None chosen.')
+  })
+})
+
+describe('TechPanel Revealed by other players', () => {
+  it('shows an opponent pyramid but not the viewer own', async () => {
+    renderPanel({
+      civilization: 'Rome',
+      revealed: [
+        { civilization: 'Rome', color: 'Red', techs: [{ name: 'Writing', level: 1 }] },
+        { civilization: 'Egypt', color: 'Blue', techs: [{ name: 'Masonry', level: 1 }] },
+      ],
+    })
+
+    expect(await screen.findByText('Egypt')).toBeTruthy()
+    // The viewer's own pyramid stays under "Yours" only.
+    expect(screen.queryByText('Rome')).toBeNull()
+  })
+
+  it('says no other player has chosen a civilization when only the viewer has', async () => {
+    renderPanel({
+      civilization: 'Rome',
+      revealed: [{ civilization: 'Rome', color: 'Red', techs: [] }],
+    })
+
+    expect(
+      await screen.findByText('No other player has chosen a civilization yet.'),
+    ).toBeTruthy()
   })
 })

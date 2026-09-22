@@ -3,7 +3,24 @@
 - **Slug:** `hide-revealed-techs`
 - **Branch:** `feat/hide-revealed-techs`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
-- **Status:** review-approved
+- **Status:** in progress (follow-up)
+
+## Follow-up (2026-09-22) - the viewer's own pyramid is not repeated
+
+*"Vi viser først den som er under 'Yours', men så vises alle spillerne under
+revealed by everyone også din egen. Kan du ikke vise spillerens egen under
+revealed by everyone?"*
+
+The "Revealed by everyone" section listed every player with a civilization,
+including the viewer, whose pyramid is already drawn under "Yours". The viewer's
+own entry is now filtered out of that section, so it shows opponents only. For
+accuracy the heading reads **Revealed by other players**, and the empty message
+distinguishes "Nobody has chosen a civilization yet." (nobody at all) from
+"No other player has chosen a civilization yet." (only the viewer has).
+
+Still a client-only concern: `revealedTechsForAllPlayers` and the public
+`/techs/revealed` response are unchanged, so a spectator with no civilization
+keeps seeing every player's pyramid.
 
 ## Goal
 
@@ -90,6 +107,12 @@ In `packages/web/src/views/TechPanel.tsx`:
 - [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 - [x] Hidden information: no engine projection is touched, so nothing new can
       leak; the test only reads the viewer's own `techsChosen`.
+- [x] Follow-up: the viewer's own civilization is not in "Revealed by other
+      players"; an opponent's still is; a spectator (no civilization) still sees
+      every player's pyramid.
+- [x] Follow-up: the empty message distinguishes nobody-chose
+      ("Nobody has chosen a civilization yet.") from only-the-viewer-chose
+      ("No other player has chosen a civilization yet.").
 - [ ] Verified in the browser: no browser is connected to this session, so the
       visual pass is left to the human.
 

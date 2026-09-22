@@ -68,9 +68,14 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
 
   const yourTechs = view.you?.techsChosen ?? []
   const yourPolicies = view.you?.socialPolicies ?? []
-  // A revealed tech is already on the pyramid (and in "Revealed by everyone"),
-  // so only the hidden ones keep a row with the Reveal and Remove controls.
+  // A revealed tech is already on the pyramid, so only the hidden ones keep a
+  // row with the Reveal and Remove controls.
   const hiddenTechs = yourTechs.filter((tech) => tech.hidden)
+  // The viewer's own pyramid is already under "Yours"; drop it from the
+  // opponents' section so it is not drawn twice.
+  const otherRevealed = revealed.filter(
+    (entry) => entry.civilization !== view.you?.civilization?.name,
+  )
 
   return (
     <CollapsiblePanel id="techs-social-policy" title="Techs & Social policy" defaultOpen>
@@ -137,8 +142,8 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
         )}
       </ul>
 
-      <h3 style={{ marginTop: '0.8rem' }}>Revealed by everyone</h3>
-      {revealed.map((entry) => (
+      <h3 style={{ marginTop: '0.8rem' }}>Revealed by other players</h3>
+      {otherRevealed.map((entry) => (
         <fieldset
           key={entry.civilization}
           className="tech-pyramid-block"
@@ -150,7 +155,13 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
           <TechTree techs={entry.techs.map((tech) => ({ name: tech.name, level: tech.level as 1 | 2 | 3 | 4 | 5 }))} />
         </fieldset>
       ))}
-      {revealed.length === 0 && <p className="muted">Nobody has chosen a civilization yet.</p>}
+      {otherRevealed.length === 0 && (
+        <p className="muted">
+          {revealed.length === 0
+            ? 'Nobody has chosen a civilization yet.'
+            : 'No other player has chosen a civilization yet.'}
+        </p>
+      )}
 
       <h2 style={{ marginTop: '1rem' }}>Social policy</h2>
       <div className="row">
