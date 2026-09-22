@@ -366,6 +366,19 @@ describe('movePiece', () => {
     expect(moved?.y).toBe(800)
   })
 
+  it('keeps map tiles behind other pieces when a tile is moved', () => {
+    let state = firstCivGame()
+    state = place(state, 'tiles/tile01', 100, 100)
+    state = place(state, 'cities/bluecity2', 120, 120)
+    const tile = state.board.pieces.find((piece) => piece.category === 'tile')
+    if (tile === undefined) throw new Error('no tile')
+
+    state = unwrap(movePiece(state, { playerId: CASH1981, pieceId: tile.id, x: 800, y: 800 }))
+
+    expect(state.board.pieces[0]?.id).toBe(tile.id)
+    expect(state.board.pieces.at(-1)?.category).toBe('city')
+  })
+
   it('another player can move a piece you put down', () => {
     // A deliberate choice: everyone may move everything, as at a real table
     let state = place(firstCivGame(), 'figures/redarmy', 100, 100)

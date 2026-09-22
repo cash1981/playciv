@@ -218,8 +218,8 @@ export interface MovePieceInput {
 }
 
 /**
- * Moves a piece. It also comes to the top, the way picking something up off a
- * table and putting it back down leaves it on top of the pile.
+ * Moves a piece. Ordinary pieces come to the top, while map tiles remain in
+ * the bottom tile stratum so they cannot cover pieces placed on them.
  */
 export function movePiece(state: GameState, input: MovePieceInput): ActionResult {
   const denied = requireAccess(state, input.playerId)
@@ -261,7 +261,11 @@ export function movePiece(state: GameState, input: MovePieceInput): ActionResult
 
   const [x, y] = clampToBoard(state.board, wanted.x, wanted.y, piece.width, piece.height)
   const moved: BoardPiece = { ...piece, x, y }
-  const pieces = [...state.board.pieces.filter((other) => other.id !== piece.id), moved]
+  // Map tiles must remain beneath cities, buildings and other pieces even
+  // after they are moved. Ordinary pieces come to the top when picked up.
+  const pieces = piece.category === 'tile' || piece.category === 'civtile'
+    ? [moved, ...others]
+    : [...others, moved]
 
   const from = locationOf(state.board, areas, piece)
   const to = locationOf(state.board, areas, moved)
@@ -306,7 +310,12 @@ function reorder(state: GameState, input: PieceInput, toTop: boolean): ActionRes
   }
 
   const rest = state.board.pieces.filter((other) => other.id !== piece.id)
-  const pieces = toTop ? [...rest, piece] : [piece, ...rest]
+  const tiles = rest.filter((other) => other.category === 'tile' || other.category === 'civtile')
+  const ordinary = rest.filter((other) => other.category !== 'tile' && other.category !== 'civtile')
+  const isTile = piece.category === 'tile' || piece.category === 'civtile'
+  const pieces = isTile
+    ? (toTop ? [...tiles, piece, ...ordinary] : [piece, ...tiles, ...ordinary])
+    : (toTop ? [...tiles, ...ordinary, piece] : [...tiles, piece, ...ordinary])
 
   return ok(
     record(input, {
@@ -318,11 +327,11 @@ function reorder(state: GameState, input: PieceInput, toTop: boolean): ActionRes
   )
 }
 
-/** Moves the piece to the end of the list, that is to the top of the stack. */
+/** Moves an ordinary piece to the top of its stratum. */
 export const bringToFront = (state: GameState, input: PieceInput): ActionResult =>
   reorder(state, input, true)
 
-/** Moves the piece to the start of the list, that is to the bottom. */
+/** Moves an ordinary piece to the bottom of its stratum, below other pieces. */
 export const sendToBack = (state: GameState, input: PieceInput): ActionResult =>
   reorder(state, input, false)
 

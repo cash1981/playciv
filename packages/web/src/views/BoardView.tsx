@@ -10,8 +10,8 @@
  * "bring to front" is a move to the end of the list.
  *
  * Interaction:
- *   palette to board   HTML5 drag and drop, which gives a drag image for free
- *   piece on board     pointer events, for smooth dragging and pointer capture
+ *   palette to board   tap/select/place on touch, plus HTML5 drag and drop
+ *   piece on board     tap/select/move on touch, plus pointer dragging with a mouse
  *
  * Global replay is owned by GameView; this component only renders the supplied
  * live or historical board. Live board undo remains available.
@@ -97,6 +97,7 @@ export interface BoardPaletteProps {
   readonly replaying: boolean
   readonly pieces: readonly BoardPiece[]
   readonly numOfPlayers: number
+  readonly onSelectAsset?: (asset: BoardAsset) => void
 }
 
 /** The palette is separate so its finite-supply UI can be tested without a browser. */
@@ -107,8 +108,10 @@ export function BoardPalette({
   replaying,
   pieces,
   numOfPlayers,
+  onSelectAsset,
 }: BoardPaletteProps): React.JSX.Element {
   const inCategory = assets.filter((asset) => asset.category === category)
+  const draggedAssetRef = useRef(false)
 
   return (
     <>
@@ -129,7 +132,7 @@ export function BoardPalette({
       <p className="muted" style={{ margin: '0 0 0.5rem' }}>
         {replaying
           ? 'Replaying — return to now to make changes.'
-          : 'Drag a piece onto the board. Drop it in a player area to tidy it into a row.'}
+          : 'Tap a piece, then tap the board, or drag it there. Drop it in a player area to tidy it into a row.'}
       </p>
 
       <div className="palette-grid">
@@ -137,15 +140,28 @@ export function BoardPalette({
           const remaining = remainingBoardAssetCount(asset, pieces, numOfPlayers)
           const exhausted = remaining === 0
           return (
-            <div
+            <button
+              type="button"
               key={asset.id}
               className={`palette-item${exhausted ? ' unavailable' : ''}`}
+              disabled={replaying || exhausted}
               title={exhausted ? `${asset.label} (none available)` : asset.label}
               draggable={!replaying && !exhausted}
               onDragStart={(event) => {
                 if (exhausted) return
+                draggedAssetRef.current = true
                 event.dataTransfer.setData('text/civ-asset', asset.id)
                 event.dataTransfer.effectAllowed = 'copy'
+              }}
+              onDragEnd={() => {
+                window.setTimeout(() => { draggedAssetRef.current = false }, 0)
+              }}
+              onClick={() => {
+                if (draggedAssetRef.current) {
+                  draggedAssetRef.current = false
+                  return
+                }
+                if (!exhausted && !replaying) onSelectAsset?.(asset)
               }}
             >
               <img src={assetUrl(asset.path)} alt={asset.label} draggable={false} />
@@ -153,7 +169,7 @@ export function BoardPalette({
                 {asset.label}
                 {remaining !== undefined && ` (${remaining})`}
               </span>
-            </div>
+            </button>
           )
         })}
         {inCategory.length === 0 && <p className="muted">Loading …</p>}
@@ -174,6 +190,8 @@ export function BoardView({
   const [assets, setAssets] = useState<readonly BoardAsset[]>([])
   const [category, setCategory] = useState<BoardAsset['category']>('figure')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [pendingAssetId, setPendingAssetId] = useState<string | null>(null)
+  const [moveModeId, setMoveModeId] = useState<string | null>(null)
   const [zoom, setZoom] = useState(0.4)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -192,9 +210,18 @@ export function BoardView({
     offsetY: number
     x: number
     y: number
+    startClientX: number
+    startClientY: number
+    moved: boolean
   } | null>(null)
   /** Mirrors dragRef, purely to trigger a render while the piece follows the mouse. */
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null)
+  const surfaceGestureRef = useRef<{
+    pointerId: number
+    clientX: number
+    clientY: number
+    moved: boolean
+  } | null>(null)
 
   useEffect(() => {
     api
@@ -202,6 +229,19 @@ export function BoardView({
       .then(setAssets)
       .catch((caught: unknown) => setLoadError(errorMessage(caught)))
   }, [])
+
+  useEffect(() => {
+    if (selectedId === null && moveModeId === null) return
+    const clearSelectionOutsideBoard = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest('.board-surface') !== null || target.closest('.board-palette') !== null) return
+      setSelectedId(null)
+      setMoveModeId(null)
+    }
+    document.addEventListener('pointerdown', clearSelectionOutsideBoard)
+    return () => document.removeEventListener('pointerdown', clearSelectionOutsideBoard)
+  }, [moveModeId, selectedId])
 
   const pieces = board.pieces
 
@@ -213,6 +253,7 @@ export function BoardView({
   const bandTop = areaBandTop(board)
 
   const selected = pieces.find((piece) => piece.id === selectedId) ?? null
+  const pendingAsset = assets.find((asset) => asset.id === pendingAssetId) ?? null
 
   /** Empty map slots are unknown territory until a tile is placed there. */
   const fogSlots = useMemo(() => {
@@ -260,12 +301,79 @@ export function BoardView({
     void run(() => api.placePiece(gameId, assetId, x - asset.width / 2, y - asset.height / 2))
   }
 
+  function onSurfacePointerDown(event: React.PointerEvent<HTMLDivElement>): void {
+    if (surfaceGestureRef.current !== null && surfaceGestureRef.current.pointerId !== event.pointerId) {
+      surfaceGestureRef.current = null
+    }
+    if (event.isPrimary && event.button === 0) {
+      surfaceGestureRef.current = {
+        pointerId: event.pointerId,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        moved: false,
+      }
+    }
+    if (pendingAsset === null && moveModeId === null) setSelectedId(null)
+  }
+
+  function onSurfacePointerMove(event: React.PointerEvent<HTMLDivElement>): void {
+    const gesture = surfaceGestureRef.current
+    if (gesture === null || gesture.pointerId !== event.pointerId) return
+    if (Math.hypot(event.clientX - gesture.clientX, event.clientY - gesture.clientY) > 8) {
+      gesture.moved = true
+    }
+  }
+
+  function onSurfacePointerCancel(event: React.PointerEvent<HTMLDivElement>): void {
+    if (surfaceGestureRef.current?.pointerId === event.pointerId) surfaceGestureRef.current = null
+  }
+
+  function onSurfacePointerUp(event: React.PointerEvent<HTMLDivElement>): void {
+    const gesture = surfaceGestureRef.current
+    surfaceGestureRef.current = null
+    if (
+      gesture === null || gesture.pointerId !== event.pointerId || gesture.moved ||
+      !event.isPrimary || event.button !== 0 || busy || readOnly
+    ) return
+
+    const [x, y] = toBoard(event.clientX, event.clientY)
+    if (pendingAsset !== null) {
+      setPendingAssetId(null)
+      void run(() => api.placePiece(gameId, pendingAsset.id, x - pendingAsset.width / 2, y - pendingAsset.height / 2))
+      return
+    }
+
+    const moving = pieces.find((piece) => piece.id === moveModeId)
+    if (moving !== undefined) {
+      setMoveModeId(null)
+      void run(() => api.movePiece(gameId, moving.id, x - moving.width / 2, y - moving.height / 2))
+    }
+  }
+
   // --- moving a piece on the board -----------------------------------------
 
   function onPiecePointerDown(event: React.PointerEvent, piece: BoardPiece): void {
+    // While a palette asset is armed, the board surface owns the tap—even if
+    // the user taps an existing piece such as a starting tile.
+    if (pendingAsset !== null || (moveModeId !== null && moveModeId !== piece.id)) return
     if (busy || readOnly) return
+    if (!event.isPrimary) {
+      // A second finger may land on a piece, whose pointerdown does not bubble
+      // to the surface. Cancel any pending surface tap before returning.
+      surfaceGestureRef.current = null
+      return
+    }
+    if (event.button !== 0) return
+    setSelectedId(piece.id)
+    if (event.pointerType !== 'mouse' && selectedId !== piece.id) {
+      // The first touch selects the piece. A later touch on the marked piece
+      // can become a drag, while an untouched tile still permits board panning.
+      surfaceGestureRef.current = null
+      return
+    }
+    if (event.pointerType === 'mouse') setMoveModeId(null)
     event.preventDefault()
-    event.currentTarget.setPointerCapture(event.pointerId)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
 
     const [x, y] = toBoard(event.clientX, event.clientY)
     dragRef.current = {
@@ -274,15 +382,21 @@ export function BoardView({
       offsetY: y - piece.y,
       x: piece.x,
       y: piece.y,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      moved: false,
     }
     setDragPosition({ x: piece.x, y: piece.y })
-    setSelectedId(piece.id)
   }
 
   function onPiecePointerMove(event: React.PointerEvent): void {
     const drag = dragRef.current
     if (drag === null) return
 
+    if (!drag.moved && Math.hypot(event.clientX - drag.startClientX, event.clientY - drag.startClientY) <= 6) {
+      return
+    }
+    drag.moved = true
     const [x, y] = toBoard(event.clientX, event.clientY)
     drag.x = x - drag.offsetX
     drag.y = y - drag.offsetY
@@ -295,16 +409,26 @@ export function BoardView({
     setDragPosition(null)
     if (drag === null) return
 
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId)
     }
 
     const piece = pieces.find((candidate) => candidate.id === drag.id)
     // A plain click without movement should only select, not send a request
-    if (piece !== undefined && piece.x === Math.round(drag.x) && piece.y === Math.round(drag.y)) {
+    if (!drag.moved || (piece !== undefined && piece.x === Math.round(drag.x) && piece.y === Math.round(drag.y))) {
+      setMoveModeId(drag.id)
       return
     }
     void run(() => api.movePiece(gameId, drag.id, drag.x, drag.y))
+  }
+
+  function onPiecePointerCancel(event: React.PointerEvent): void {
+    if (dragRef.current === null) return
+    dragRef.current = null
+    setDragPosition(null)
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId)
+    }
   }
 
   return (
@@ -355,7 +479,10 @@ export function BoardView({
               style={{ width: width * zoom, height: height * zoom }}
               onDragOver={(event) => event.preventDefault()}
               onDrop={onDrop}
-              onPointerDown={() => setSelectedId(null)}
+              onPointerDown={onSurfacePointerDown}
+              onPointerMove={onSurfacePointerMove}
+              onPointerUp={onSurfacePointerUp}
+              onPointerCancel={onSurfacePointerCancel}
             >
               {/* The culture track runs across the top, above the map */}
               <div
@@ -466,11 +593,15 @@ export function BoardView({
                       ...(readOnly ? { cursor: 'default' } : {}),
                     }}
                     onPointerDown={(event) => {
-                      event.stopPropagation()
+                      if (pendingAsset === null && (moveModeId === null || moveModeId === piece.id)) {
+                        event.stopPropagation()
+                      }
                       onPiecePointerDown(event, piece)
                     }}
                     onPointerMove={onPiecePointerMove}
                     onPointerUp={onPiecePointerUp}
+                    onPointerCancel={onPiecePointerCancel}
+                    onLostPointerCapture={onPiecePointerCancel}
                   />
                 )
               })}
@@ -492,13 +623,37 @@ export function BoardView({
             replaying={readOnly}
             pieces={pieces}
             numOfPlayers={numOfPlayers}
+            onSelectAsset={(asset) => {
+              setPendingAssetId(asset.id)
+              setMoveModeId(null)
+              setSelectedId(null)
+            }}
           />
+
+          {pendingAsset !== null && (
+            <div className="board-placement-status" role="status" aria-live="polite">
+              <strong>Placing {pendingAsset.label}</strong>
+              <span>Tap the board where it should go.</span>
+              <button type="button" className="small" onClick={() => setPendingAssetId(null)}>
+                Cancel
+              </button>
+            </div>
+          )}
 
           <h3 style={{ marginTop: '1rem' }}>Selected piece</h3>
           {selected === null ? (
             <p className="muted">Click a piece on the board.</p>
           ) : (
             <>
+              {moveModeId === selected.id && (
+                <div className="board-placement-status" role="status" aria-live="polite">
+                  <strong>Moving {selected.label}</strong>
+                  <span>Tap a destination on the board.</span>
+                  <button type="button" className="small" onClick={() => setMoveModeId(null)}>
+                    Cancel
+                  </button>
+                </div>
+              )}
               <p style={{ margin: '0 0 0.5rem' }}>
                 <strong>{selected.label}</strong>{' '}
                 <span className="muted">
@@ -507,6 +662,16 @@ export function BoardView({
                 </span>
               </p>
               <div className="row" style={{ marginBottom: '0.4rem' }}>
+                <button
+                  className="small"
+                  disabled={busy || readOnly}
+                  onClick={() => {
+                    setMoveModeId(selected.id)
+                    setPendingAssetId(null)
+                  }}
+                >
+                  Move
+                </button>
                 <button
                   className="small"
                   disabled={busy || readOnly}
@@ -547,6 +712,7 @@ export function BoardView({
                   disabled={busy || readOnly}
                   onClick={() => {
                     setSelectedId(null)
+                    setMoveModeId(null)
                     void run(() => api.removePiece(gameId, selected.id))
                   }}
                 >

@@ -33,6 +33,25 @@ _Last updated: 2026-09-22_
   tests (91 total). No browser was connected, so the visual pass is left to the
   human; see `decisions.md`.
 
+- **Issue #115, PR 1 (board mobile interactions).** The board now supports
+  tap/select/place for palette assets and tap/select/move for existing pieces,
+  while retaining desktop drag-and-drop. Pending placement/move states expose
+  an accessible Cancel action; board panning, multi-pointer gestures,
+  pointer-cancel/lost-capture cleanup and mouse movement tolerance prevent
+  accidental writes. Tapping an existing or starting tile while a palette
+  asset is armed now places the asset there instead of selecting the tile.
+  On touch, selecting an existing piece immediately arms move mode so the
+  next board tap moves it; tapping outside the board clears the selection.
+  The board palette is responsive on narrow screens and
+  exhausted/replay controls are disabled. Review-approved on branch
+  `feat/issue-115-board`; real-device verification remains in the final issue
+  Touch dragging now works on an already-marked piece without taking away
+  board panning; tiles and starting tiles remain in a dedicated bottom
+  stratum through movement, reorder and replay. Full checks pass (449 engine,
+  173 server, 94 web tests). Removing a selected piece now also clears any
+  stale movement mode so another player-area resource can be selected and
+  removed immediately.
+
 - **The front page's Open and Join buttons are coloured.** The game list's
   `Open` and `Join` actions were plain grey default buttons, so the two things a
   signed-in player can do on the front page were hard to see beside the
