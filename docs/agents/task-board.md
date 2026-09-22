@@ -37,24 +37,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Notes:** Third delivery slice of issue #115. Board and battle/arena are
   merged; this slice handles the site shell, authentication and lobby routes.
 
-### turn-history-hide-current
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `feat/turn-history-hide-current`
-- **Brief:** `docs/agents/tasks/turn-history-hide-current.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/TurnPanel.tsx`
-  - `packages/web/src/views/TurnPanel.test.tsx`
-  - `docs/agents/tasks/turn-history-hide-current.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`
-  - `docs/agents/decisions.md`
-- **Notes:** Supersedes the merged `issue-125-turn-order-reveal-history` claim
-  (PR #126), which is released here. Hides a revealed version that is identical
-  to the phase editor's current text, so a reveal that has not been edited since
-  is not printed twice. Client-only; the stored history is unchanged.
-
 ### front-page-join-colors
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)

@@ -13,11 +13,23 @@ _Last updated: 2026-09-22_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 173 server, 95 web |
+| `pnpm -r test` | passing - 449 engine, 173 server, 111 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; open pull requests: #128 (hide revealed techs) and #129 (front-page Action column first) |
+| `main` pushed to `origin` | yes; open pull request: turn-order reveal dedupe (`feat/turn-history-hide-current`) |
 
 ## Done
+
+- **A revealed turn-order version identical to the editor is hidden.** After a
+  reveal the newest history version is the text still in the phase editor, so
+  the panel printed the same order twice - once struck through and greyed above,
+  once normally below. The `TurnHistory` component in `TurnPanel.tsx` now drops
+  any version whose Markdown exactly equals the editor text, and renders nothing
+  when none remain; versions that differ stay, oldest first, with their reveal
+  timestamps. The stored `TurnOrderVersion[]` is untouched, so the public record
+  and the reveal state are unchanged. Branch `feat/turn-history-hide-current`;
+  review-approved in one read-only round with no findings above a nit. 2 new web
+  tests (111 web total). No browser was connected, so the visual pass is left to
+  the human; see `decisions.md`.
 
 - **The Techs list hides revealed techs.** In the Techs panel's "Yours" list a
   researched technology that has already been revealed kept a row tagged

@@ -1635,5 +1635,30 @@ visible immediately.
 (`old-civ-web/app/views/list.html` had Action last). It is a UI layout choice
 requested by the human, not a game rule; the old system is otherwise unchanged.
 The action column stays unsortable (it is an action, not a value), and the
-`SortableTable` component is untouched — the order is just the order the
+`SortableTable` component is untouched - the order is just the order the
 `GameList` column array is built in.
+
+## 2026-09-22 - A turn-order reveal identical to the editor is not repeated
+
+**Decision.** A revealed version in a turn-order phase's history is hidden from
+the list above the editor when its Markdown exactly equals the text the editor
+currently holds. Every version that differs from the current text stays, oldest
+first, with its reveal timestamp; if no version differs, the phase shows no
+history list at all.
+
+**Why.** The human asked for it directly: *"If you have not made changes to your
+turn orders, there is no need to show history. ... there is no need to show the
+history when it is written in the textbox."* After a reveal the newest version
+is by definition the text still sitting in the editor, so the same order was
+printed twice - once struck through and greyed above, once normally below.
+
+**Consequences.** The stored history is unchanged: `TurnOrderVersion` still
+records every reveal, because it is the public record and `revealed[phase]`
+depends on it; only the rendering filters. The comparison is exact string
+equality on Markdown, the same equality the panel already uses to decide whether
+a phase has unsaved changes (`values[phase] !== savedValues[phase]`); a reveal
+stores exactly the editor text, so no normalisation case arises. Filtering by
+equality rather than "drop only the newest" also hides a version that becomes
+current again after the player reverts, which is intended: the text is on screen
+anyway. This is a presentation choice with no old-system counterpart - the
+reveal history is new in issue #125 and `old-civ-web` never rendered it.
