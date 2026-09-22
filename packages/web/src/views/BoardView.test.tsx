@@ -362,4 +362,39 @@ describe('BoardView mobile placement', () => {
     movePiece.mockRestore()
     cleanup()
   })
+
+  it('can select and remove another player-area resource after removing one', async () => {
+    const removePiece = vi.spyOn(api, 'removePiece').mockResolvedValue({} as PlayerView)
+    const first = piece('resources/hut', 'hut-one')
+    const second = { ...piece('resources/incense', 'incense-one'), x: 100 }
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [first, second] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+    const pointerTap = (target: HTMLElement, pointerId: number) => {
+      for (const type of ['pointerdown', 'pointerup'] as const) {
+        const event = new Event(type, { bubbles: true })
+        for (const [name, value] of Object.entries({ pointerId, pointerType: 'touch', isPrimary: true, button: 0, clientX: 20, clientY: 20 })) {
+          Object.defineProperty(event, name, { value })
+        }
+        target.dispatchEvent(event)
+      }
+    }
+    const pieces = () => Array.from(container.querySelectorAll<HTMLElement>('.board-piece'))
+    pointerTap(pieces()[0] as HTMLElement, 3)
+    await waitFor(() => expect(pieces()[0]?.classList.contains('selected')).toBe(true))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(removePiece).toHaveBeenCalledWith('game', first.id))
+
+    pointerTap(pieces()[1] as HTMLElement, 4)
+    await waitFor(() => expect(pieces()[1]?.classList.contains('selected')).toBe(true))
+    removePiece.mockRestore()
+    cleanup()
+  })
 })

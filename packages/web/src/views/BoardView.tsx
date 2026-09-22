@@ -712,6 +712,7 @@ export function BoardView({
                   disabled={busy || readOnly}
                   onClick={() => {
                     setSelectedId(null)
+                    setMoveModeId(null)
                     void run(() => api.removePiece(gameId, selected.id))
                   }}
                 >
