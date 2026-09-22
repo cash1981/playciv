@@ -33,8 +33,11 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `docs/agents/tasks/atlas-redesign.md`
   - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
 - **Notes:** New site-wide visual identity ("Atlas"), approved by the human from
-  mockups. No behaviour, markup or data changes: the stylesheet, two self-hosted
-  fonts, one illustrated backdrop asset and a decorative `SiteBackdrop` layer.
+  mockups, plus one layout change they asked for after testing it: the game
+  page's Log and Chat panels move directly under the board. No behaviour, props
+  or data changes — the stylesheet, two self-hosted fonts, one illustrated
+  backdrop asset, a decorative `SiteBackdrop` layer, and a reorder of
+  `GameView.tsx`'s existing panel children.
   Branched from `main` after PR #131 merged, and it keeps PR #131's mobile blocks
   verbatim, so the `issue-115-site-mobile` claim below is stale (that PR is
   merged) and its `styles.css` claim is superseded by this one.

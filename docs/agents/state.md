@@ -35,9 +35,11 @@ _Last updated: 2026-09-22_
   `calc(100dvh - 1.5rem)` help menu still apply. New `SiteBackdrop.tsx`
   (decorative, `aria-hidden`, painted under `.app`), its test, two OFL fonts with
   their licences and one backdrop JPEG under `public/`. 2 new web tests (111
-  total). Verified against the live app inside real 390 px, 768 px and 1200 px
-  viewports: one column at every width, no accidental horizontal page overflow,
-  44 px touch targets, and WCAG AA contrast in both themes (measured 4.8-13.9).
+  total). Verified against the live app inside real 320 px, 390 px, 768 px and
+  1200 px viewports: the panel stack is one column at every width, the new
+  Log/Chat pair is one column on the phone and two above it, there is no
+  accidental horizontal page overflow, and 44 px touch targets and WCAG AA
+  contrast (measured 4.8-13.9) hold in both themes.
   No screenshots were captured — the browser window was not visible — so the
   visual pass is left to the human. Branch `feat/atlas-redesign`; the deliberate
   desktop-first responsive decision and the backdrop's provenance are in

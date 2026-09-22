@@ -560,14 +560,15 @@ label > textarea {
 
 /* Log and chat, directly under the board. `auto-fit` gives them two columns
    when the viewport has room and one when it does not, without a media query.
-   The panels already carry a bottom margin; inside the pair it would double up
-   with the gap. */
+   The `min()` caps the 20rem floor at the container's own width, so the single
+   column cannot overflow a very narrow phone (a 320 px viewport leaves 296 px
+   after the app's padding). The panels already carry a bottom margin; inside the
+   pair it would double up with the gap. */
 .panel-pair {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
   gap: 1rem;
   align-items: start;
-  min-width: 0;
 }
 
 .panel-pair > .panel {

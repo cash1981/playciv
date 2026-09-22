@@ -7,13 +7,13 @@
 
 ## Goal
 
-The site gets a new visual identity — "Atlas" — without changing a single
-behaviour. Every screen (lobby, game list, game page, board, battle, techs,
-turn orders, admin, FAQ, about, highscore, login) keeps its markup, its
-components and its data flow; only the stylesheet, the fonts and one purely
-decorative backdrop layer change. Dark and light themes both get a deliberate
-palette rather than a mechanical inversion, and the illustrated backdrop reads
-well in both.
+The site gets a new visual identity — "Atlas" — without changing how it
+behaves. Every screen (lobby, game list, game page, board, battle, techs,
+turn orders, admin, FAQ, about, highscore, login) keeps its components, its
+data flow and its behaviour; the stylesheet, the fonts and one purely
+decorative backdrop layer change, and the game page's panel order changes so the
+Log and Chat panels sit directly under the board instead of at the bottom of the
+stack.
 
 The player-facing change is: the app stops looking like a plain default form and
 starts looking like the board game it is — warm parchment and brass in the light
@@ -118,6 +118,7 @@ Provenance and the trademark decision are recorded in `decisions.md`.
 ## Claimed paths
 
 - `packages/web/src/styles.css`
+- `packages/web/src/views/GameView.tsx` (panel order only)
 - `packages/web/src/views/SiteBackdrop.tsx` (new)
 - `packages/web/src/views/SiteBackdrop.test.tsx` (new)
 - `packages/web/src/main.tsx`
