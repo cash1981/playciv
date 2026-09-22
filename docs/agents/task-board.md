@@ -30,6 +30,25 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   armed asset be placed by tapping an existing or starting tile. Battle/arena
   and the rest of the site are intentionally separate PRs.
 
+### front-page-actions-first
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
+- **Branch:** `feat/front-page-actions-first`
+- **Brief:** `docs/agents/tasks/front-page-actions-first.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/GameList.tsx`
+  - `packages/web/src/views/GameList.test.tsx`
+  - `packages/web/src/styles.css`
+  - `docs/agents/tasks/front-page-actions-first.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
+- **Notes:** The human asked to move the Active games table's **Open** / **Join**
+  Action column to the front so it is reachable on a narrow screen without a
+  sideways scroll. The `front-page-join-colors` claim above still lists
+  `GameList.tsx`, `GameList.test.tsx` and `styles.css`, but PR #123 merged on
+  2026-09-21, so that claim is stale and the paths are free.
+
 ### issue-125-turn-order-reveal-history
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
