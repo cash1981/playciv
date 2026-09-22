@@ -954,7 +954,11 @@ export function applyChange(
     case 'move': {
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces
-      return [...withoutPiece(pieces, piece.id), { ...piece, x: change.to.x, y: change.to.y }]
+      const rest = withoutPiece(pieces, piece.id)
+      const moved = { ...piece, x: change.to.x, y: change.to.y }
+      return piece.category === 'tile' || piece.category === 'civtile'
+        ? [moved, ...rest]
+        : [...rest, moved]
     }
     case 'rotate':
       return pieces.map((piece) =>
@@ -964,7 +968,12 @@ export function applyChange(
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces
       const rest = withoutPiece(pieces, piece.id)
-      return change.toTop ? [...rest, piece] : [piece, ...rest]
+      const tiles = rest.filter((other) => other.category === 'tile' || other.category === 'civtile')
+      const ordinary = rest.filter((other) => other.category !== 'tile' && other.category !== 'civtile')
+      const isTile = piece.category === 'tile' || piece.category === 'civtile'
+      return isTile
+        ? (change.toTop ? [...tiles, piece, ...ordinary] : [piece, ...tiles, ...ordinary])
+        : (change.toTop ? [...tiles, ...ordinary, piece] : [...tiles, piece, ...ordinary])
     }
     // Kept for games cleared before the clear action was removed (issue #14).
     case 'clear':

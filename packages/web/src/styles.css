@@ -592,6 +592,24 @@ ul.list > li:last-child {
   margin-top: 0.6rem;
 }
 
+.board-placement-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  margin: 0.6rem 0;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
+.board-placement-status span {
+  flex: 1 1 100%;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .board-scroll {
   flex: 1;
   min-width: 0;
@@ -620,6 +638,7 @@ ul.list > li:last-child {
   position: absolute;
   top: 14px;
   left: 14px;
+  touch-action: pan-x pan-y;
 }
 
 /* The culture track backdrop, stretched across the width of the map */
@@ -701,7 +720,7 @@ ul.list > li:last-child {
   cursor: grab;
   user-select: none;
   -webkit-user-drag: none;
-  touch-action: none;
+  touch-action: manipulation;
 }
 
 .board-piece:active {
@@ -711,6 +730,7 @@ ul.list > li:last-child {
 .board-piece.selected {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+  touch-action: none;
 }
 
 .board-labels {
@@ -882,6 +902,13 @@ ul.list > li:last-child {
   border-radius: var(--radius);
   cursor: grab;
   text-align: center;
+  color: inherit;
+  font: inherit;
+}
+
+.palette-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .palette-item:hover {
@@ -904,6 +931,25 @@ ul.list > li:last-child {
   font-size: 0.65rem;
   color: var(--muted);
   line-height: 1.2;
+}
+
+@media (max-width: 700px) {
+  .board-layout {
+    flex-direction: column;
+  }
+
+  .board-scroll {
+    width: 100%;
+    max-height: 65vh;
+  }
+
+  .board-palette {
+    width: 100%;
+  }
+
+  .palette-grid {
+    max-height: 12rem;
+  }
 }
 
 /* --- Tech tree -------------------------------------------------------------

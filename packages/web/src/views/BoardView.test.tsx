@@ -1,12 +1,16 @@
-import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+// @vitest-environment jsdom
 
-import { findBoardAsset } from '@civ/engine'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+
+import { createBoard, findBoardAsset } from '@civ/engine'
 import type { BoardPiece, PlayerView } from '@civ/engine'
 
 import type { GameRevisionView } from '../lib/api.js'
+import { api } from '../lib/api.js'
 
-import { BoardPalette } from './BoardView.js'
+import { BoardPalette, BoardView } from './BoardView.js'
 import {
   GlobalReplayBar,
   loadConsistentLive,
@@ -117,6 +121,27 @@ describe('global replay controls', () => {
 })
 
 describe('BoardPalette finite supplies', () => {
+  it('calls the tap selection callback for an available asset', () => {
+    const hut = findBoardAsset('resources/hut')
+    if (hut === undefined) throw new Error('hut missing from manifest')
+    let selected: string | null = null
+
+    render(
+      <BoardPalette
+        assets={[hut]}
+        category="resource"
+        onCategoryChange={() => undefined}
+        replaying={false}
+        pieces={[]}
+        numOfPlayers={2}
+        onSelectAsset={(asset) => { selected = asset.id }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /hut/i }))
+    expect(selected).toBe('resources/hut')
+    cleanup()
+  })
+
   it('shows the remaining count and disables an exhausted building family', () => {
     const academy = findBoardAsset('buildings/academy')
     if (academy === undefined) throw new Error('academy missing from manifest')
@@ -132,6 +157,7 @@ describe('BoardPalette finite supplies', () => {
       />,
     )
     expect(exhausted).toContain('Academy (0)')
+    expect(exhausted).toContain('type="button"')
     expect(exhausted).toContain('draggable="false"')
 
     const restored = renderToStaticMarkup(
@@ -173,5 +199,204 @@ describe('BoardPalette finite supplies', () => {
     expect(markup).not.toContain('Hut (')
     expect(markup).toContain('draggable="true"')
     expect(markup).not.toContain('unavailable')
+  })
+})
+
+describe('BoardView mobile placement', () => {
+  it('shows a pending placement status after tapping a palette asset', async () => {
+    const hut = findBoardAsset('resources/hut')
+    if (hut === undefined) throw new Error('hut missing from manifest')
+    const assets = vi.spyOn(api, 'boardAssets').mockResolvedValue([hut])
+
+    render(
+      <BoardView
+        gameId="game"
+        board={createBoard()}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Resources' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /hut/i })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /hut/i }))
+    expect(screen.getByRole('status').textContent).toContain('Placing Hut')
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
+    assets.mockRestore()
+    cleanup()
+  })
+
+  it('places an armed asset when tapping an existing starting tile', async () => {
+    const hut = findBoardAsset('resources/hut')
+    if (hut === undefined) throw new Error('hut missing from manifest')
+    const assets = vi.spyOn(api, 'boardAssets').mockResolvedValue([hut])
+    const placePiece = vi.spyOn(api, 'placePiece').mockResolvedValue({} as PlayerView)
+    const startingTile: BoardPiece = {
+      ...piece('tiles/starting', 'starting-tile'),
+      path: 'tiles/starting.png',
+      label: 'Starting tile',
+      category: 'civtile',
+      x: 100,
+      y: 100,
+      width: 4,
+      height: 4,
+    }
+
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [startingTile] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Resources' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /hut/i })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /hut/i }))
+
+    const tile = container.querySelector('.board-piece')
+    if (!(tile instanceof HTMLElement)) throw new Error('starting tile missing from board')
+    const dispatchPointer = (type: 'pointerdown' | 'pointerup') => {
+      const event = new Event(type, { bubbles: true })
+      for (const [name, value] of Object.entries({
+        pointerId: 1,
+        pointerType: 'touch',
+        isPrimary: true,
+        button: 0,
+        clientX: 120,
+        clientY: 120,
+      })) Object.defineProperty(event, name, { value })
+      tile.dispatchEvent(event)
+    }
+    dispatchPointer('pointerdown')
+    dispatchPointer('pointerup')
+
+    await waitFor(() => expect(placePiece).toHaveBeenCalledWith('game', hut.id, expect.any(Number), expect.any(Number)))
+    placePiece.mockRestore()
+    assets.mockRestore()
+    cleanup()
+  })
+
+  it('clears a touch selection when tapping an empty board location', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const boardPiece = piece('buildings/academy', 'academy-1')
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [boardPiece] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+
+    const tile = container.querySelector('.board-piece')
+    const surface = container.querySelector('.board-surface')
+    if (!(tile instanceof HTMLElement) || !(surface instanceof HTMLElement)) throw new Error('board elements missing')
+    const dispatchPointer = (target: HTMLElement, type: 'pointerdown' | 'pointerup', clientX: number, clientY: number) => {
+      const event = new Event(type, { bubbles: true })
+      for (const [name, value] of Object.entries({
+        pointerId: 1,
+        pointerType: 'touch',
+        isPrimary: true,
+        button: 0,
+        clientX,
+        clientY,
+      })) Object.defineProperty(event, name, { value })
+      target.dispatchEvent(event)
+    }
+
+    dispatchPointer(tile, 'pointerdown', 20, 20)
+    dispatchPointer(tile, 'pointerup', 20, 20)
+    await waitFor(() => expect(container.querySelector('.board-piece')?.classList.contains('selected')).toBe(true))
+
+    dispatchPointer(surface, 'pointerdown', 120, 120)
+    dispatchPointer(surface, 'pointerup', 120, 120)
+    await waitFor(() => expect(container.querySelector('.board-piece')?.classList.contains('selected')).toBe(false))
+    expect(movePiece).not.toHaveBeenCalled()
+    const outside = document.createElement('div')
+    document.body.appendChild(outside)
+    outside.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await waitFor(() => expect(container.querySelector('.board-piece')?.classList.contains('selected')).toBe(false))
+    outside.remove()
+    movePiece.mockRestore()
+    cleanup()
+  })
+
+  it('drags a marked touch piece without scrolling the board', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const boardPiece = piece('buildings/academy', 'academy-drag')
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [boardPiece] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+    const pointer = (target: HTMLElement, type: 'pointerdown' | 'pointermove' | 'pointerup', x: number, y: number) => {
+      const event = new Event(type, { bubbles: true })
+      for (const [name, value] of Object.entries({ pointerId: 2, pointerType: 'touch', isPrimary: true, button: 0, clientX: x, clientY: y })) {
+        Object.defineProperty(event, name, { value })
+      }
+      target.dispatchEvent(event)
+    }
+    const firstTile = container.querySelector('.board-piece')
+    if (!(firstTile instanceof HTMLElement)) throw new Error('board piece missing')
+    pointer(firstTile, 'pointerdown', 20, 20)
+    pointer(firstTile, 'pointerup', 20, 20)
+    await waitFor(() => expect(container.querySelector('.board-piece')?.classList.contains('selected')).toBe(true))
+
+    const markedTile = container.querySelector('.board-piece')
+    if (!(markedTile instanceof HTMLElement)) throw new Error('marked board piece missing')
+    pointer(markedTile, 'pointerdown', 20, 20)
+    pointer(markedTile, 'pointermove', 100, 100)
+    pointer(markedTile, 'pointerup', 100, 100)
+    await waitFor(() => expect(movePiece).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number)))
+    movePiece.mockRestore()
+    cleanup()
+  })
+
+  it('can select and remove another player-area resource after removing one', async () => {
+    const removePiece = vi.spyOn(api, 'removePiece').mockResolvedValue({} as PlayerView)
+    const first = { ...piece('resources/hut', 'hut-one'), category: 'resource' as const, label: 'Hut', path: 'resources/hut.png' }
+    const second = { ...piece('resources/incense', 'incense-one'), category: 'resource' as const, label: 'Incense', path: 'resources/incense.png', x: 100 }
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [first, second] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+    const pointerTap = (target: HTMLElement, pointerId: number) => {
+      for (const type of ['pointerdown', 'pointerup'] as const) {
+        const event = new Event(type, { bubbles: true })
+        for (const [name, value] of Object.entries({ pointerId, pointerType: 'touch', isPrimary: true, button: 0, clientX: 20, clientY: 20 })) {
+          Object.defineProperty(event, name, { value })
+        }
+        target.dispatchEvent(event)
+      }
+    }
+    const pieces = () => Array.from(container.querySelectorAll<HTMLElement>('.board-piece'))
+    pointerTap(pieces()[0] as HTMLElement, 3)
+    await waitFor(() => expect(pieces()[0]?.classList.contains('selected')).toBe(true))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(removePiece).toHaveBeenCalledWith('game', first.id))
+
+    pointerTap(pieces()[1] as HTMLElement, 4)
+    await waitFor(() => expect(pieces()[1]?.classList.contains('selected')).toBe(true))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(removePiece).toHaveBeenCalledWith('game', second.id))
+    removePiece.mockRestore()
+    cleanup()
   })
 })

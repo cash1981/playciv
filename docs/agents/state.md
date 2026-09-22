@@ -6,18 +6,37 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-21_
+_Last updated: 2026-09-22_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 448 engine, 173 server, 88 web |
+| `pnpm -r test` | passing - 449 engine, 173 server, 94 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; open pull requests: #123 (front-page join-button colours) and this change's issue #125 |
 
 ## Done
+
+- **Issue #115, PR 1 (board mobile interactions).** The board now supports
+  tap/select/place for palette assets and tap/select/move for existing pieces,
+  while retaining desktop drag-and-drop. Pending placement/move states expose
+  an accessible Cancel action; board panning, multi-pointer gestures,
+  pointer-cancel/lost-capture cleanup and mouse movement tolerance prevent
+  accidental writes. Tapping an existing or starting tile while a palette
+  asset is armed now places the asset there instead of selecting the tile.
+  On touch, selecting an existing piece immediately arms move mode so the
+  next board tap moves it; tapping outside the board clears the selection.
+  The board palette is responsive on narrow screens and
+  exhausted/replay controls are disabled. Review-approved on branch
+  `feat/issue-115-board`; real-device verification remains in the final issue
+  Touch dragging now works on an already-marked piece without taking away
+  board panning; tiles and starting tiles remain in a dedicated bottom
+  stratum through movement, reorder and replay. Full checks pass (449 engine,
+  173 server, 94 web tests). Removing a selected piece now also clears any
+  stale movement mode so another player-area resource can be selected and
+  removed immediately.
 
 - **The front page's Open and Join buttons are coloured.** The game list's
   `Open` and `Join` actions were plain grey default buttons, so the two things a
