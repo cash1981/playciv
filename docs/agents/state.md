@@ -19,6 +19,23 @@ _Last updated: 2026-09-22_
 
 ## Done
 
+- **The Techs list hides revealed techs.** In the Techs panel's "Yours" list a
+  researched technology that has already been revealed kept a row tagged
+  `revealed` with a `Remove` button, even though the pyramid above it already
+  shows the tech. The human asked for the row to go ("just remove the boxes"),
+  so the list is now filtered to still-hidden techs; a revealed tech stays on
+  the viewer's pyramid. A follow-up also drops the viewer's own pyramid from the
+  all-players section (renamed "Revealed by everyone" to "Revealed by other
+  players"), so it is no longer drawn twice. Client-only: `Player.techsChosen`
+  and the engine are untouched, so nothing was removed from the game. Empty
+  states: `None chosen.` / `All researched techs are revealed.` for the list,
+  and `Nobody has chosen a civilization yet.` / `No other player has chosen a
+  civilization yet.` for the other-players section. Social policies keep their
+  rows (no pyramid). Branch `feat/hide-revealed-techs`; review-approved in two
+  read-only rounds with no findings above a nit. 6 web tests for the panel (100
+  web total). No browser was connected, so the visual pass is left to the human;
+  see `decisions.md`.
+
 - **Issue #115, PR 1 (board mobile interactions).** The board now supports
   tap/select/place for palette assets and tap/select/move for existing pieces,
   while retaining desktop drag-and-drop. Pending placement/move states expose
