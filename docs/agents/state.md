@@ -13,9 +13,9 @@ _Last updated: 2026-09-22_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 173 server, 94 web |
+| `pnpm -r test` | passing - 449 engine, 173 server, 95 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; open pull requests: #123 (front-page join-button colours) and this change's issue #125 |
+| `main` pushed to `origin` | yes; open pull requests: #128 (hide revealed techs) and this change's front-page Action column |
 
 ## Done
 
@@ -37,7 +37,17 @@ _Last updated: 2026-09-22_
   173 server, 94 web tests). Removing a selected piece now also clears any
   stale movement mode so another player-area resource can be selected and
   removed immediately.
-
+- **The front page's Action column comes first.** The Active games table's
+  `Open` / `Join` / `Full` column moved from last to first, so on a narrow
+  screen the buttons are reachable without scrolling the table sideways; the
+  other six columns keep their order, and the Finished games table (which has no
+  Action column) is unchanged. `.action-cell` is now left-aligned. This is a
+  deliberate deviation from the old client's column order (`old-civ-web`'s
+  `list.html` had Action last), recorded in `decisions.md` and `README.md`.
+  Branch `feat/front-page-actions-first`; review-approved in two read-only
+  rounds (reviewer `deepseek/deepseek-v4-pro`; Sol unavailable). 1 new web test
+  (95 total). No browser was connected, so the light/dark visual pass is left to
+  the human.
 - **The front page's Open and Join buttons are coloured.** The game list's
   `Open` and `Join` actions were plain grey default buttons, so the two things a
   signed-in player can do on the front page were hard to see beside the
