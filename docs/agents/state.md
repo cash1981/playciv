@@ -13,7 +13,7 @@ _Last updated: 2026-09-22_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 448 engine, 173 server, 91 web |
+| `pnpm -r test` | passing - 449 engine, 173 server, 100 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; open pull requests: #123 (front-page join-button colours) and this change's issue #125 |
 
@@ -24,14 +24,17 @@ _Last updated: 2026-09-22_
   `revealed` with a `Remove` button, even though the pyramid above it already
   shows the tech. The human asked for the row to go ("just remove the boxes"),
   so the list is now filtered to still-hidden techs; a revealed tech stays on
-  the viewer's pyramid and in "Revealed by everyone". Client-only:
-  `Player.techsChosen` and the engine are untouched, so nothing was removed from
-  the game. The empty-state line is `None chosen.` with no tech and `All
-  researched techs are revealed.` when only revealed ones are left. Social
-  policies keep their rows (no pyramid). Branch `feat/hide-revealed-techs`;
-  review-approved in one read-only round with no findings above a nit. 3 new web
-  tests (91 total). No browser was connected, so the visual pass is left to the
-  human; see `decisions.md`.
+  the viewer's pyramid. A follow-up also drops the viewer's own pyramid from the
+  all-players section (renamed "Revealed by everyone" to "Revealed by other
+  players"), so it is no longer drawn twice. Client-only: `Player.techsChosen`
+  and the engine are untouched, so nothing was removed from the game. Empty
+  states: `None chosen.` / `All researched techs are revealed.` for the list,
+  and `Nobody has chosen a civilization yet.` / `No other player has chosen a
+  civilization yet.` for the other-players section. Social policies keep their
+  rows (no pyramid). Branch `feat/hide-revealed-techs`; review-approved in two
+  read-only rounds with no findings above a nit. 6 web tests for the panel (100
+  web total). No browser was connected, so the visual pass is left to the human;
+  see `decisions.md`.
 
 - **Issue #115, PR 1 (board mobile interactions).** The board now supports
   tap/select/place for palette assets and tap/select/move for existing pieces,

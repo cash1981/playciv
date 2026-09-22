@@ -34,6 +34,9 @@ const view = (techsChosen: readonly TechItem[], civilization: string | null): Pl
     you: { techsChosen, civilization: civilization === null ? null : { name: civilization } },
   }) as unknown as PlayerView
 
+/** A signed-out spectator: no `you`, so no civilization of their own. */
+const spectatorView = (): PlayerView => ({ you: null }) as unknown as PlayerView
+
 const run = async (): Promise<void> => undefined
 
 /** The "Yours" list, as opposed to the pyramid above it. */
@@ -47,12 +50,14 @@ interface PanelOptions {
   readonly techsChosen?: readonly TechItem[]
   readonly civilization?: string | null
   readonly revealed?: readonly RevealedTechsDto[]
+  readonly spectator?: boolean
 }
 
 function renderPanel({
   techsChosen = [],
   civilization = null,
   revealed = [],
+  spectator = false,
 }: PanelOptions = {}): HTMLElement {
   vi.spyOn(api, 'availableTechs').mockResolvedValue([])
   vi.spyOn(api, 'revealedTechs').mockResolvedValue([...revealed])
@@ -62,7 +67,7 @@ function renderPanel({
       gameId="game-1"
       busy={false}
       run={run}
-      view={view(techsChosen, civilization)}
+      view={spectator ? spectatorView() : view(techsChosen, civilization)}
       reloadCount={0}
     />,
   )
@@ -119,5 +124,18 @@ describe('TechPanel Revealed by other players', () => {
     expect(
       await screen.findByText('No other player has chosen a civilization yet.'),
     ).toBeTruthy()
+  })
+
+  it('shows every pyramid to a spectator with no civilization of their own', async () => {
+    renderPanel({
+      spectator: true,
+      revealed: [
+        { civilization: 'Rome', color: 'Red', techs: [{ name: 'Writing', level: 1 }] },
+        { civilization: 'Egypt', color: 'Blue', techs: [{ name: 'Masonry', level: 1 }] },
+      ],
+    })
+
+    expect(await screen.findByText('Rome')).toBeTruthy()
+    expect(screen.getByText('Egypt')).toBeTruthy()
   })
 })

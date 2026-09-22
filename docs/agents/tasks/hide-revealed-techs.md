@@ -3,7 +3,7 @@
 - **Slug:** `hide-revealed-techs`
 - **Branch:** `feat/hide-revealed-techs`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash); implementation by the `coder` role
-- **Status:** in progress (follow-up)
+- **Status:** review-approved (follow-up)
 
 ## Follow-up (2026-09-22) - the viewer's own pyramid is not repeated
 

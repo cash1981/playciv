@@ -12,24 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### hide-revealed-techs-followup
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `feat/hide-revealed-techs` (same branch and PR #128)
-- **Brief:** `docs/agents/tasks/hide-revealed-techs.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/TechPanel.tsx`
-  - `packages/web/src/views/TechPanel.test.tsx`
-  - `docs/agents/tasks/hide-revealed-techs.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`, `docs/agents/decisions.md`
-- **Notes:** Follow-up on the human's review of PR #128: the viewer's own
-  pyramid is filtered out of the "Revealed by other players" section (formerly
-  "Revealed by everyone"), since it is already drawn under "Yours". Client-only;
-  `revealedTechsForAllPlayers` and the public `/techs/revealed` response are
-  unchanged.
-
 ### issue-115-board-mobile
 
 - **Owner:** Codex
