@@ -73,6 +73,14 @@ describe('LobbyChat', () => {
     await waitFor(() => expect(input.value).toBe(''))
   })
 
+  it('keeps the send form in the mobile layout hook', () => {
+    render(<LobbyChat messages={messages(0)} player={player} busy={false} onSend={async () => {}} />)
+
+    expect(screen.getByLabelText('Lobby chat message').closest('form')?.className).toContain(
+      'lobby-chat-form',
+    )
+  })
+
   it('returns to page 1 after a send', async () => {
     const onSend = vi.fn(async (_message: string): Promise<void> => {})
     render(<LobbyChat messages={messages(12)} player={player} busy={false} onSend={onSend} />)

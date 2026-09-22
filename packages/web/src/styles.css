@@ -1110,6 +1110,28 @@ ul.history > li {
     justify-content: flex-start;
   }
 
+  /* Keep the primary site controls usable on tablets as well as phones. */
+  .site-navigation > a,
+  .navigation-menu > summary,
+  .topbar-actions button,
+  .row > input,
+  .row > select,
+  .row > button,
+  .center form label > input,
+  .center form label > select,
+  .center form label > textarea,
+  .tabs .tab,
+  .pager button,
+  .game-list button.small {
+    min-height: 2.75rem;
+  }
+
+  .center form label > input,
+  .center form label > select,
+  .center form label > textarea {
+    margin-top: 0.2rem;
+  }
+
   .board-layout {
     flex-direction: column;
   }
@@ -1171,6 +1193,9 @@ ul.history > li {
 
   .navigation-menu > summary {
     list-style: none;
+    position: relative;
+    z-index: 11;
+    background: var(--panel);
   }
 
   .navigation-menu > summary::-webkit-details-marker {
@@ -1181,8 +1206,11 @@ ul.history > li {
     position: fixed;
     left: 0.75rem;
     right: 0.75rem;
-    top: auto;
+    top: 0.75rem;
+    bottom: 0.75rem;
     width: auto;
+    max-height: calc(100dvh - 1.5rem);
+    overflow-y: auto;
   }
 
   .topbar-actions {
