@@ -25,6 +25,15 @@ export function ItemCard({
   /** What the viewer is allowed to read: the whole card, or only its public face. */
   reveal = 'all',
   draggable,
+  onClick,
+  onKeyDown,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  role,
+  tabIndex,
+  className,
   onDragStart,
   onDragEnd,
   /**
@@ -53,6 +62,15 @@ export function ItemCard({
   readonly item: Item
   readonly reveal?: 'all' | 'public'
   readonly draggable?: boolean
+  readonly onClick?: React.MouseEventHandler<HTMLLIElement>
+  readonly onKeyDown?: React.KeyboardEventHandler<HTMLLIElement>
+  readonly onPointerDown?: React.PointerEventHandler<HTMLLIElement>
+  readonly onPointerMove?: React.PointerEventHandler<HTMLLIElement>
+  readonly onPointerUp?: React.PointerEventHandler<HTMLLIElement>
+  readonly onPointerCancel?: React.PointerEventHandler<HTMLLIElement>
+  readonly role?: React.AriaRole
+  readonly tabIndex?: number
+  readonly className?: string
   readonly onDragStart?: (e: React.DragEvent<HTMLLIElement>) => void
   readonly onDragEnd?: (e: React.DragEvent<HTMLLIElement>) => void
   readonly rotation?: number
@@ -68,7 +86,20 @@ export function ItemCard({
   const imageStyle = rotation ? { transform: `rotate(${rotation}deg)` } : undefined
 
   return (
-    <li className="card" draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+    <li
+      className={`card${className === undefined ? '' : ` ${className}`}`}
+      draggable={draggable}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      role={role}
+      tabIndex={tabIndex}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+    >
       <div className="card-art">
         {url === null ? (
           <span className="card-art-fallback" style={imageStyle}>{label}</span>
