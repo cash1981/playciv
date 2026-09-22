@@ -279,4 +279,50 @@ describe('BoardView mobile placement', () => {
     assets.mockRestore()
     cleanup()
   })
+
+  it('arms touch movement after selecting a piece and moves it on the next board tap', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const boardPiece = piece('buildings/academy', 'academy-1')
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [boardPiece] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+
+    const tile = container.querySelector('.board-piece')
+    const surface = container.querySelector('.board-surface')
+    if (!(tile instanceof HTMLElement) || !(surface instanceof HTMLElement)) throw new Error('board elements missing')
+    const dispatchPointer = (target: HTMLElement, type: 'pointerdown' | 'pointerup', clientX: number, clientY: number) => {
+      const event = new Event(type, { bubbles: true })
+      for (const [name, value] of Object.entries({
+        pointerId: 1,
+        pointerType: 'touch',
+        isPrimary: true,
+        button: 0,
+        clientX,
+        clientY,
+      })) Object.defineProperty(event, name, { value })
+      target.dispatchEvent(event)
+    }
+
+    dispatchPointer(tile, 'pointerdown', 20, 20)
+    dispatchPointer(tile, 'pointerup', 20, 20)
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Academy'))
+
+    dispatchPointer(surface, 'pointerdown', 120, 120)
+    dispatchPointer(surface, 'pointerup', 120, 120)
+    await waitFor(() => expect(movePiece).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number)))
+    const outside = document.createElement('div')
+    document.body.appendChild(outside)
+    outside.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await waitFor(() => expect(container.querySelector('.board-piece')?.classList.contains('selected')).toBe(false))
+    outside.remove()
+    movePiece.mockRestore()
+    cleanup()
+  })
 })

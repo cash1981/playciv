@@ -230,6 +230,19 @@ export function BoardView({
       .catch((caught: unknown) => setLoadError(errorMessage(caught)))
   }, [])
 
+  useEffect(() => {
+    if (selectedId === null && moveModeId === null) return
+    const clearSelectionOutsideBoard = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest('.board-surface') !== null || target.closest('.board-palette') !== null) return
+      setSelectedId(null)
+      setMoveModeId(null)
+    }
+    document.addEventListener('pointerdown', clearSelectionOutsideBoard)
+    return () => document.removeEventListener('pointerdown', clearSelectionOutsideBoard)
+  }, [moveModeId, selectedId])
+
   const pieces = board.pieces
 
   const width = boardWidth(board)
@@ -342,7 +355,7 @@ export function BoardView({
   function onPiecePointerDown(event: React.PointerEvent, piece: BoardPiece): void {
     // While a palette asset is armed, the board surface owns the tap—even if
     // the user taps an existing piece such as a starting tile.
-    if (pendingAsset !== null) return
+    if (pendingAsset !== null || moveModeId !== null) return
     if (busy || readOnly) return
     if (!event.isPrimary) {
       // A second finger may land on a piece, whose pointerdown does not bubble
@@ -354,6 +367,9 @@ export function BoardView({
     setSelectedId(piece.id)
     setMoveModeId(null)
     if (event.pointerType !== 'mouse') {
+      // On touch, selecting a piece immediately arms destination mode so the
+      // next tap on the board moves it without requiring a small Move button.
+      setMoveModeId(piece.id)
       surfaceGestureRef.current = null
       return
     }
@@ -577,7 +593,7 @@ export function BoardView({
                       ...(readOnly ? { cursor: 'default' } : {}),
                     }}
                     onPointerDown={(event) => {
-                      if (pendingAsset === null) event.stopPropagation()
+                      if (pendingAsset === null && moveModeId === null) event.stopPropagation()
                       onPiecePointerDown(event, piece)
                     }}
                     onPointerMove={onPiecePointerMove}
