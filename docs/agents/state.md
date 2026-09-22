@@ -13,7 +13,7 @@ _Last updated: 2026-09-22_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 448 engine, 173 server, 91 web |
+| `pnpm -r test` | passing - 448 engine, 173 server, 92 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; open pull requests: #123 (front-page join-button colours) and this change's issue #125 |
 
@@ -26,10 +26,12 @@ _Last updated: 2026-09-22_
   pointer-cancel/lost-capture cleanup and mouse movement tolerance prevent
   accidental writes. Tapping an existing or starting tile while a palette
   asset is armed now places the asset there instead of selecting the tile.
+  On touch, selecting an existing piece immediately arms move mode so the
+  next board tap moves it; tapping outside the board clears the selection.
   The board palette is responsive on narrow screens and
   exhausted/replay controls are disabled. Review-approved on branch
   `feat/issue-115-board`; real-device verification remains in the final issue
-  #115 testing PR. Full checks pass (448 engine, 173 server, 91 web tests).
+  #115 testing PR. Full checks pass (448 engine, 173 server, 92 web tests).
 
 - **The front page's Open and Join buttons are coloured.** The game list's
   `Open` and `Join` actions were plain grey default buttons, so the two things a
