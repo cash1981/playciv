@@ -59,6 +59,22 @@ describe('BattlePanel mobile placement', () => {
 
     rerender(<BattlePanel gameId="game" busy={false} run={run} view={view} />)
     fireEvent.click(container.querySelector('li.card') as HTMLElement)
+    rerender(
+      <BattlePanel
+        gameId="game" busy={false} run={run}
+        view={{
+          ...view,
+          battle: {
+            ...view.battle,
+            attacker: { playerId: 'other-a', kind: 'player' },
+            defender: { playerId: 'other-b', kind: 'player' },
+          },
+        } as unknown as PlayerView}
+      />,
+    )
+    expect(queryByText('Selected unit. Tap a destination front to place or move it.')).toBeNull()
+    rerender(<BattlePanel gameId="game" busy={false} run={run} view={view} />)
+    fireEvent.click(container.querySelector('li.card') as HTMLElement)
 
     const slot = container.querySelector('.arena-slot-empty')
     expect(slot).not.toBeNull()
