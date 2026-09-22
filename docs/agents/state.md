@@ -13,7 +13,7 @@ _Last updated: 2026-09-22_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 173 server, 93 web |
+| `pnpm -r test` | passing - 449 engine, 173 server, 94 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; open pull requests: #123 (front-page join-button colours) and this change's issue #125 |
 
@@ -34,7 +34,9 @@ _Last updated: 2026-09-22_
   Touch dragging now works on an already-marked piece without taking away
   board panning; tiles and starting tiles remain in a dedicated bottom
   stratum through movement, reorder and replay. Full checks pass (449 engine,
-  173 server, 93 web tests).
+  173 server, 94 web tests). Removing a selected piece now also clears any
+  stale movement mode so another player-area resource can be selected and
+  removed immediately.
 
 - **The front page's Open and Join buttons are coloured.** The game list's
   `Open` and `Join` actions were plain grey default buttons, so the two things a
