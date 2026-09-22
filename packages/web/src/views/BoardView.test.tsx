@@ -325,4 +325,40 @@ describe('BoardView mobile placement', () => {
     movePiece.mockRestore()
     cleanup()
   })
+
+  it('drags a marked touch piece without scrolling the board', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const boardPiece = piece('buildings/academy', 'academy-drag')
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [boardPiece] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+    const pointer = (target: HTMLElement, type: 'pointerdown' | 'pointermove' | 'pointerup', x: number, y: number) => {
+      const event = new Event(type, { bubbles: true })
+      for (const [name, value] of Object.entries({ pointerId: 2, pointerType: 'touch', isPrimary: true, button: 0, clientX: x, clientY: y })) {
+        Object.defineProperty(event, name, { value })
+      }
+      target.dispatchEvent(event)
+    }
+    const firstTile = container.querySelector('.board-piece')
+    if (!(firstTile instanceof HTMLElement)) throw new Error('board piece missing')
+    pointer(firstTile, 'pointerdown', 20, 20)
+    pointer(firstTile, 'pointerup', 20, 20)
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Academy'))
+
+    const markedTile = container.querySelector('.board-piece')
+    if (!(markedTile instanceof HTMLElement)) throw new Error('marked board piece missing')
+    pointer(markedTile, 'pointerdown', 20, 20)
+    pointer(markedTile, 'pointermove', 100, 100)
+    pointer(markedTile, 'pointerup', 100, 100)
+    await waitFor(() => expect(movePiece).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number)))
+    movePiece.mockRestore()
+    cleanup()
+  })
 })

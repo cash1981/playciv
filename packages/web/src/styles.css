@@ -730,6 +730,7 @@ ul.list > li:last-child {
 .board-piece.selected {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+  touch-action: none;
 }
 
 .board-labels {

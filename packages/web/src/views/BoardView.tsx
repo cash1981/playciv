@@ -355,7 +355,7 @@ export function BoardView({
   function onPiecePointerDown(event: React.PointerEvent, piece: BoardPiece): void {
     // While a palette asset is armed, the board surface owns the tap—even if
     // the user taps an existing piece such as a starting tile.
-    if (pendingAsset !== null || moveModeId !== null) return
+    if (pendingAsset !== null || (moveModeId !== null && moveModeId !== piece.id)) return
     if (busy || readOnly) return
     if (!event.isPrimary) {
       // A second finger may land on a piece, whose pointerdown does not bubble
@@ -365,16 +365,16 @@ export function BoardView({
     }
     if (event.button !== 0) return
     setSelectedId(piece.id)
-    setMoveModeId(null)
-    if (event.pointerType !== 'mouse') {
-      // On touch, selecting a piece immediately arms destination mode so the
-      // next tap on the board moves it without requiring a small Move button.
+    if (event.pointerType !== 'mouse' && selectedId !== piece.id) {
+      // The first touch selects the piece. A later touch on the marked piece
+      // can become a drag, while an untouched tile still permits board panning.
       setMoveModeId(piece.id)
       surfaceGestureRef.current = null
       return
     }
+    if (event.pointerType === 'mouse') setMoveModeId(null)
     event.preventDefault()
-    event.currentTarget.setPointerCapture(event.pointerId)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
 
     const [x, y] = toBoard(event.clientX, event.clientY)
     dragRef.current = {
@@ -410,13 +410,14 @@ export function BoardView({
     setDragPosition(null)
     if (drag === null) return
 
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId)
     }
 
     const piece = pieces.find((candidate) => candidate.id === drag.id)
     // A plain click without movement should only select, not send a request
     if (!drag.moved || (piece !== undefined && piece.x === Math.round(drag.x) && piece.y === Math.round(drag.y))) {
+      setMoveModeId(drag.id)
       return
     }
     void run(() => api.movePiece(gameId, drag.id, drag.x, drag.y))
@@ -426,8 +427,8 @@ export function BoardView({
     if (dragRef.current === null) return
     dragRef.current = null
     setDragPosition(null)
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId)
     }
   }
 
@@ -593,7 +594,9 @@ export function BoardView({
                       ...(readOnly ? { cursor: 'default' } : {}),
                     }}
                     onPointerDown={(event) => {
-                      if (pendingAsset === null && moveModeId === null) event.stopPropagation()
+                      if (pendingAsset === null && (moveModeId === null || moveModeId === piece.id)) {
+                        event.stopPropagation()
+                      }
                       onPiecePointerDown(event, piece)
                     }}
                     onPointerMove={onPiecePointerMove}
