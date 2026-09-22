@@ -368,7 +368,6 @@ export function BoardView({
     if (event.pointerType !== 'mouse' && selectedId !== piece.id) {
       // The first touch selects the piece. A later touch on the marked piece
       // can become a drag, while an untouched tile still permits board panning.
-      setMoveModeId(piece.id)
       surfaceGestureRef.current = null
       return
     }

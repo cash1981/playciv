@@ -280,7 +280,7 @@ describe('BoardView mobile placement', () => {
     cleanup()
   })
 
-  it('arms touch movement after selecting a piece and moves it on the next board tap', async () => {
+  it('clears a touch selection when tapping an empty board location', async () => {
     const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
     const boardPiece = piece('buildings/academy', 'academy-1')
     const { container } = render(
@@ -312,11 +312,12 @@ describe('BoardView mobile placement', () => {
 
     dispatchPointer(tile, 'pointerdown', 20, 20)
     dispatchPointer(tile, 'pointerup', 20, 20)
-    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Academy'))
+    await waitFor(() => expect(container.querySelector('.board-piece')?.classList.contains('selected')).toBe(true))
 
     dispatchPointer(surface, 'pointerdown', 120, 120)
     dispatchPointer(surface, 'pointerup', 120, 120)
-    await waitFor(() => expect(movePiece).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number)))
+    await waitFor(() => expect(container.querySelector('.board-piece')?.classList.contains('selected')).toBe(false))
+    expect(movePiece).not.toHaveBeenCalled()
     const outside = document.createElement('div')
     document.body.appendChild(outside)
     outside.dispatchEvent(new Event('pointerdown', { bubbles: true }))
@@ -350,7 +351,7 @@ describe('BoardView mobile placement', () => {
     if (!(firstTile instanceof HTMLElement)) throw new Error('board piece missing')
     pointer(firstTile, 'pointerdown', 20, 20)
     pointer(firstTile, 'pointerup', 20, 20)
-    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Academy'))
+    await waitFor(() => expect(container.querySelector('.board-piece')?.classList.contains('selected')).toBe(true))
 
     const markedTile = container.querySelector('.board-piece')
     if (!(markedTile instanceof HTMLElement)) throw new Error('marked board piece missing')
