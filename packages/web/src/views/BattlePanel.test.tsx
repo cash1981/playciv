@@ -111,13 +111,21 @@ describe('BattlePanel mobile placement', () => {
     fireEvent.click(card)
     const destination = container.querySelectorAll('.arena-slot')[1] as HTMLElement
     Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => destination })
-    fireEvent.pointerDown(card, { pointerId: 7, button: 0, isPrimary: true, pointerType: 'touch', clientX: 10, clientY: 10 })
-    fireEvent.pointerDown(card, { pointerId: 8, isPrimary: false, pointerType: 'touch', clientX: 10, clientY: 10 })
-    fireEvent.pointerMove(card, { pointerId: 8, isPrimary: false, pointerType: 'touch', clientX: 30, clientY: 10 })
-    fireEvent.pointerUp(card, { pointerId: 8, isPrimary: false, pointerType: 'touch', clientX: 30, clientY: 10 })
+    const dispatchPointer = (type: string, pointerId: number, isPrimary: boolean, x: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true })
+      Object.defineProperties(event, {
+        pointerId: { value: pointerId }, isPrimary: { value: isPrimary }, pointerType: { value: 'touch' },
+        button: { value: 0 }, clientX: { value: x }, clientY: { value: 10 },
+      })
+      card.dispatchEvent(event)
+    }
+    dispatchPointer('pointerdown', 7, true, 10)
+    dispatchPointer('pointerdown', 8, false, 10)
+    dispatchPointer('pointermove', 8, false, 30)
+    dispatchPointer('pointerup', 8, false, 30)
     expect(vi.mocked(api.moveArenaUnit)).not.toHaveBeenCalled()
-    fireEvent.pointerMove(card, { pointerId: 7, isPrimary: true, pointerType: 'touch', clientX: 30, clientY: 10 })
-    fireEvent.pointerUp(card, { pointerId: 7, isPrimary: true, pointerType: 'touch', clientX: 30, clientY: 10 })
+    dispatchPointer('pointermove', 7, true, 30)
+    dispatchPointer('pointerup', 7, true, 30)
     expect(vi.mocked(api.moveArenaUnit)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(api.moveArenaUnit)).toHaveBeenCalledWith('game', 'arena-1', 1, 4)
   })
