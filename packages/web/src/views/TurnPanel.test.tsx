@@ -589,6 +589,74 @@ describe('TurnOrderWorkspace', () => {
     )
     expect(phaseHooks).toEqual(['SOT', 'TRADE', 'CM', 'MOVEMENT', 'RESEARCH'])
   })
+
+  it('hides a revealed version that is already in the editor', () => {
+    const versions: Readonly<Record<TurnPhase, readonly TurnOrderVersion[]>> = {
+      ...history,
+      SOT: [{ markdown: orders.SOT, at: '2026-09-21T08:30:00.000Z' }],
+    }
+    const { container } = render(
+      <TurnOrderWorkspace
+        gameId="game-1"
+        busy={false}
+        run={run}
+        player={{ username: 'cash1981', color: 'Red', own: true }}
+        turnNumber={3}
+        turnNumbers={[3]}
+        current={turn('cash1981', false, 3, orders, versions)}
+        values={orders}
+        onTurnNumberChange={noop}
+        onNewTurn={noop}
+        onPhaseChange={noop}
+        tabPanelId="panel"
+        labelledBy="tab"
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    // The one reveal is the same text the editor already shows, so no history.
+    expect(container.querySelector('.turn-history')).toBeNull()
+    expect(
+      screen.getByRole('textbox', { name: /start of turn orders for cash1981/i }),
+    ).toBeTruthy()
+  })
+
+  it('keeps earlier revealed versions that differ from the editor text', () => {
+    const versions: Readonly<Record<TurnPhase, readonly TurnOrderVersion[]>> = {
+      ...history,
+      SOT: [
+        { markdown: 'First published plan', at: '2026-09-21T08:30:00.000Z' },
+        { markdown: 'Second published plan', at: '2026-09-21T09:45:00.000Z' },
+        { markdown: orders.SOT, at: '2026-09-21T10:15:00.000Z' },
+      ],
+    }
+    const { container } = render(
+      <TurnOrderWorkspace
+        gameId="game-1"
+        busy={false}
+        run={run}
+        player={{ username: 'cash1981', color: 'Red', own: true }}
+        turnNumber={3}
+        turnNumbers={[3]}
+        current={turn('cash1981', false, 3, orders, versions)}
+        values={orders}
+        onTurnNumberChange={noop}
+        onNewTurn={noop}
+        onPhaseChange={noop}
+        tabPanelId="panel"
+        labelledBy="tab"
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    // The newest reveal matches the editor and is dropped; the two older ones
+    // stay, because they are not on screen anywhere else.
+    const items = container.querySelectorAll('.turn-history-version')
+    expect(items).toHaveLength(2)
+    expect(items[0]?.textContent).toContain('First published plan')
+    expect(items[1]?.textContent).toContain('Second published plan')
+    expect(container.querySelector('.turn-history')?.textContent).not.toContain('Build')
+  })
 })
 
 describe('PrivateLogWorkspace', () => {

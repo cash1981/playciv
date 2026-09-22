@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, MutableRefObject } from 'react'
 
 import { TURN_PHASES, TURN_PHASE_LABEL } from '@civ/engine'
-import type { PlayerTurn, TurnPhase } from '@civ/engine'
+import type { PlayerTurn, TurnOrderVersion, TurnPhase } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
@@ -303,17 +303,12 @@ export function TurnOrderWorkspace({
               <span className="tag">{current.revealed[phase] ? 'revealed' : 'private'}</span>
             )}
           </div>
-          {current !== undefined && current.history[phase].length > 0 && (
-            <ol className="turn-history" aria-label={`Revealed ${TURN_PHASE_LABEL[phase]} versions`}>
-              {current.history[phase].map((version, index) => (
-                <li className="turn-history-version" key={`${version.at}:${index}`}>
-                  <time className="turn-history-time" dateTime={version.at}>
-                    {formatTimestamp(version.at)}
-                  </time>
-                  <div className="turn-history-content">{version.markdown}</div>
-                </li>
-              ))}
-            </ol>
+          {current !== undefined && (
+            <TurnHistory
+              phase={phase}
+              versions={current.history[phase]}
+              currentMarkdown={values[phase]}
+            />
           )}
           <EditorComponent
             key={`${player.username}:${turnNumber}:${phase}`}
@@ -330,6 +325,41 @@ export function TurnOrderWorkspace({
         </section>
       ))}
     </div>
+  )
+}
+
+/**
+ * The revealed versions of one phase, oldest first, above its editor.
+ *
+ * A version whose text equals what the editor already holds is left out: it is
+ * the same order the player can read below, and printing it twice — once struck
+ * through — reads as duplication rather than history. Only versions that differ
+ * from the current text carry information, so a reveal that has not been edited
+ * since shows no list at all.
+ */
+function TurnHistory({
+  phase,
+  versions,
+  currentMarkdown,
+}: {
+  readonly phase: TurnPhase
+  readonly versions: readonly TurnOrderVersion[]
+  readonly currentMarkdown: string
+}): React.JSX.Element | null {
+  const visible = versions.filter((version) => version.markdown !== currentMarkdown)
+  if (visible.length === 0) return null
+
+  return (
+    <ol className="turn-history" aria-label={`Revealed ${TURN_PHASE_LABEL[phase]} versions`}>
+      {visible.map((version, index) => (
+        <li className="turn-history-version" key={`${version.at}:${index}`}>
+          <time className="turn-history-time" dateTime={version.at}>
+            {formatTimestamp(version.at)}
+          </time>
+          <div className="turn-history-content">{version.markdown}</div>
+        </li>
+      ))}
+    </ol>
   )
 }
 
