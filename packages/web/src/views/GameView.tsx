@@ -360,6 +360,28 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
       />
 
       <div className="panel-stack">
+        {/* Log and chat sit directly under the board: it is what a player
+            reading a turn-by-forum game looks at first. Side by side when the
+            viewport has room, stacked when it does not (`.panel-pair`). */}
+        <div className="panel-pair">
+          <LogPanel
+            gameId={gameId}
+            busy={busy}
+            readOnly={replaying}
+            run={run}
+            reloadCount={reloadCount}
+            historical={historical}
+          />
+          {player !== null && (
+            <ChatPanel
+              gameId={gameId}
+              busy={busy}
+              run={run}
+              player={player}
+              reloadCount={reloadCount}
+            />
+          )}
+        </div>
         <DrawPanel gameId={gameId} busy={interactionBusy} yourTurn={yourTurn} run={run} view={displayedView} />
         <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
@@ -373,23 +395,6 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
           run={run}
         />
         <RevealedPanel gameId={gameId} reloadCount={reloadCount} historical={historical} />
-        <LogPanel
-          gameId={gameId}
-          busy={busy}
-          readOnly={replaying}
-          run={run}
-          reloadCount={reloadCount}
-          historical={historical}
-        />
-        {player !== null && (
-          <ChatPanel
-            gameId={gameId}
-            busy={busy}
-            run={run}
-            player={player}
-            reloadCount={reloadCount}
-          />
-        )}
       </div>
     </>
   )

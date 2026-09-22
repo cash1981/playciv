@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 
 import { GOVERNMENT_CARDS, GOVERNMENTS, isMovementValue } from '@civ/engine'
 import type { Government } from '@civ/engine'
@@ -181,7 +182,17 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.playerId}>
+              <tr
+                key={row.playerId}
+                /* Carried as a custom property so the cells' bottom border can
+                   take the player's colour; a border set on the row itself would
+                   not reach them. */
+                style={
+                  row.color === null
+                    ? undefined
+                    : ({ '--player-color': row.color.toLowerCase() } as CSSProperties)
+                }
+              >
                 <td>
                   <span className="row" style={{ justifyContent: 'flex-start' }}>
                     {row.color !== null && (

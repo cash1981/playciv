@@ -1,28 +1,58 @@
 /*
- * Deliberately plain. The artwork comes later; this only has to be readable
- * and make clear what is hidden and what is public.
+ * Atlas: the board game's own palette. Parchment and brass in the light theme,
+ * midnight blue and gold in the dark one, with the painted board map behind
+ * everything (`SiteBackdrop.tsx`).
+ *
+ * The two display faces are self-hosted under `public/fonts/` so nothing here
+ * depends on the network; the body keeps the system UI stack it always had.
+ *
+ * Everything below the palettes is the original stylesheet with its visual
+ * values replaced. No selector was removed, and the two mobile blocks near the
+ * bottom (`@media (max-width: 900px)` and `@media (max-width: 600px)`) are
+ * kept exactly as they were, because `SiteMobileStyles.test.ts` asserts them.
  */
 
+@font-face {
+  font-family: 'Marcellus';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/marcellus-latin-400.woff2') format('woff2');
+}
+
+/* Variable font: one file covers every weight the theme asks for. */
+@font-face {
+  font-family: 'Cinzel';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/cinzel-latin-variable.woff2') format('woff2');
+}
+
 :root {
-  --bg: #14161a;
-  --panel: #1c1f26;
-  --panel-2: #23272f;
-  --line: #333944;
-  --text: #e6e8ec;
-  --muted: #9aa3b2;
-  --accent: #6ea8fe;
-  --accent-text: #10131a;
-  --good: #63c98f;
-  --warn: #e6b455;
-  --bad: #e2686a;
-  --error-bg: #3a1f21;
-  --error-text: #ffc9ca;
+  --bg: #0c1018;
+  --bg-2: #101624;
+  --panel: #151c2b;
+  --panel-2: #1b2334;
+  --line: #2b3448;
+  --line-soft: rgba(217, 173, 87, 0.16);
+  --text: #ece7db;
+  --muted: #98a1b4;
+  --accent: #d9ad57;
+  --accent-text: #1a1408;
+  --good: #6cc08a;
+  --warn: #e0b45c;
+  --bad: #e07a7d;
+  --error-bg: #3a2020;
+  --error-text: #ffd8d8;
   --board-bg: #0f1115;
   --wonder-accent: #c9a227;
+  --card-art-bg: #0d1015;
   /* The front page's game actions. `--info` is the old front page's
      `btn-info` teal (Open); `--success` is a green for Join. Dark uses a
      dimmer shade of each so it reads against `--panel-2` under white text;
-     light (below) is Bootstrap's own. */
+     light (below) is Bootstrap's own. These two are the colours the human
+     chose for those buttons and do not follow the theme. */
   --info: #1f7f94;
   --info-border: #2f9bb3;
   --info-text: #ffffff;
@@ -33,25 +63,35 @@
   --success-text: #ffffff;
   --success-hover: #3a9150;
   --success-hover-border: #4cb066;
-  --radius: 8px;
+  --shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  --radius: 6px;
+  --pill: 999px;
+  --sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --serif: 'Marcellus', ui-serif, Georgia, 'Times New Roman', serif;
+  --display: 'Cinzel', 'Marcellus', ui-serif, Georgia, serif;
+  --map-ink: rgba(217, 173, 87, 0.5);
+  --photo-opacity: 0.45;
 }
 
 :root[data-theme='light'] {
-  --bg: #f4f6f8;
-  --panel: #ffffff;
-  --panel-2: #e9edf2;
-  --line: #c4ccd6;
-  --text: #202733;
-  --muted: #5c6877;
-  --accent: #2867ad;
-  --accent-text: #ffffff;
-  --good: #287b4e;
-  --warn: #8b6200;
-  --bad: #b33b42;
-  --error-bg: #fff0f0;
+  --bg: #efe6d1;
+  --bg-2: #e7dcc1;
+  --panel: #faf5e8;
+  --panel-2: #f3ebd8;
+  --line: #cdbb95;
+  --line-soft: rgba(143, 101, 22, 0.18);
+  --text: #2d2517;
+  --muted: #6f6349;
+  --accent: #8f6516;
+  --accent-text: #fdf8ec;
+  --good: #2b7a4b;
+  --warn: #8a6100;
+  --bad: #a8383f;
+  --error-bg: #fbe9e6;
   --error-text: #8c2028;
   --board-bg: #ffffff;
   --wonder-accent: #9a7d12;
+  --card-art-bg: #e6dcc4;
   /* Bootstrap 3's own values: `.btn-info` for Open, `.btn-success` for Join. */
   --info: #5bc0de;
   --info-border: #46b8da;
@@ -63,6 +103,8 @@
   --success-text: #ffffff;
   --success-hover: #449d44;
   --success-hover-border: #398439;
+  --shadow: 0 16px 34px rgba(90, 70, 30, 0.18);
+  --map-ink: rgba(120, 86, 30, 0.55);
 }
 
 * {
@@ -73,11 +115,18 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 15px/1.55 var(--sans);
 }
 
 a {
   color: var(--accent);
+}
+
+/* One visible ring for every keyboard-reachable control, on top of whatever
+   each control already does on focus. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 h1,
@@ -85,19 +134,23 @@ h2,
 h3 {
   margin: 0 0 0.5rem;
   line-height: 1.25;
+  font-family: var(--serif);
+  font-weight: 400;
 }
 
 h1 {
-  font-size: 1.4rem;
+  font-size: 1.6rem;
 }
 h2 {
-  font-size: 1.1rem;
+  font-size: 1.2rem;
 }
 h3 {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  font-family: var(--display);
+  font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.1em;
 }
 
 button {
@@ -105,9 +158,13 @@ button {
   color: var(--text);
   background: var(--panel-2);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.35rem 0.7rem;
+  border-radius: var(--pill);
+  padding: 0.35rem 0.8rem;
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 button:hover:not(:disabled) {
@@ -120,10 +177,16 @@ button:disabled {
 }
 
 button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 88%, #ffffff) 0%,
+    var(--accent) 55%,
+    color-mix(in srgb, var(--accent) 78%, #000000) 100%
+  );
+  border-color: color-mix(in srgb, var(--accent) 60%, #000000);
   color: var(--accent-text);
   font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 button.danger {
@@ -166,7 +229,7 @@ select,
 textarea {
   font: inherit;
   color: var(--text);
-  background: var(--bg);
+  background: var(--bg-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 0.35rem 0.5rem;
@@ -218,9 +281,73 @@ label > textarea {
 }
 
 .app {
-  max-width: 1200px;
+  position: relative;
+  /* Lift the whole app onto its own layer so the fixed backdrop stays behind
+     it instead of painting over it. */
+  z-index: 1;
+  /* Fill more of a large screen so the board and the tables have room, but keep
+     a sliver of the backdrop visible at the edges: 94vw leaves ~3% each side,
+     and 2200px caps it so a very wide monitor does not stretch panels forever.
+     `max(1200px, ...)` is what keeps phones unchanged: there the element is
+     `width: auto`, so a cap above the viewport never applies. */
+  max-width: max(1200px, min(94vw, 2200px));
   margin: 0 auto;
   padding: 1rem;
+}
+
+/* --- Site backdrop ---------------------------------------------------------
+   Three fixed, decorative layers behind the app: the painted board map, a
+   scrim that keeps panels and text readable over it, and the cartography
+   overlay from `SiteBackdrop.tsx`. Pointer events are off throughout — none of
+   this is interactive, and it is `aria-hidden` in the component. */
+
+.site-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.site-backdrop-photo {
+  position: absolute;
+  inset: 0;
+  background: #0c1018 url('/theme/backdrop.jpg') center / cover no-repeat;
+  opacity: var(--photo-opacity);
+  filter: saturate(0.85) contrast(0.95);
+}
+
+:root[data-theme='light'] .site-backdrop-photo {
+  filter: sepia(0.35) saturate(0.7) brightness(1.06);
+}
+
+.site-backdrop-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg) 70%, transparent),
+    color-mix(in srgb, var(--bg) 42%, transparent) 42%,
+    color-mix(in srgb, var(--bg) 88%, transparent)
+  );
+}
+
+:root[data-theme='light'] .site-backdrop-scrim {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg) 76%, transparent),
+    color-mix(in srgb, var(--bg) 52%, transparent) 42%,
+    color-mix(in srgb, var(--bg) 90%, transparent)
+  );
+}
+
+.site-backdrop-cartography {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--map-ink);
+  opacity: 0.3;
 }
 
 /* --- Site footer (issue #77) ----------------------------------------------
@@ -276,9 +403,27 @@ label > textarea {
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-  padding-bottom: 1rem;
+  padding: 0.6rem 0.85rem;
   margin-bottom: 1rem;
-  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* The brand is set in the display face, like a title on a game box. */
+.brand strong {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: 0.09em;
+}
+
+.brand .muted {
+  font-family: var(--display);
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .topbar-actions {
@@ -350,6 +495,7 @@ label > textarea {
 }
 
 .panel {
+  position: relative;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -358,6 +504,19 @@ label > textarea {
   /* Grid items default to `min-width: auto`, which lets a wide child (the
      game table) push past its track. Allow the panel to shrink instead. */
   min-width: 0;
+  box-shadow: var(--shadow);
+}
+
+/* A hairline inside the border, the way the board's printed panels are framed.
+   Decorative and inert (`pointer-events: none`), and `inset: 4px` keeps it
+   inside the panel's padding, so it never overlaps the content. */
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  pointer-events: none;
 }
 
 .grid {
@@ -402,6 +561,23 @@ label > textarea {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+/* Log and chat, directly under the board. `auto-fit` gives them two columns
+   when the viewport has room and one when it does not, without a media query.
+   The `min()` caps the 20rem floor at the container's own width, so the single
+   column cannot overflow a very narrow phone (a 320 px viewport leaves 296 px
+   after the app's padding). The panels already carry a bottom margin; inside the
+   pair it would double up with the gap. */
+.panel-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.panel-pair > .panel {
+  margin-bottom: 0;
 }
 
 .row {
@@ -843,7 +1019,7 @@ ul.list > li:last-child {
   justify-content: center;
   min-height: 6rem;
   padding: 0.2rem;
-  background: #0d1015;
+  background: var(--card-art-bg);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -1035,6 +1211,13 @@ ul.list > li:last-child {
   padding: 0.5rem 0.6rem 0.2rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  /* A `fieldset` does not shrink below its content's minimum width by default,
+     so a wide pyramid would push the whole page sideways on a phone instead of
+     scrolling inside `.tech-pyramid`. Both spellings are here on purpose: the
+     user-agent rule is written as the logical property, and browsers have
+     differed on which of the two wins. */
+  min-width: 0;
+  min-inline-size: 0;
 }
 
 .tech-pyramid-block legend {
@@ -1321,7 +1504,7 @@ ul.history > li {
   justify-content: center;
   min-height: 6rem;
   padding: 0.2rem;
-  background: #0d1015;
+  background: var(--card-art-bg);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -1411,9 +1594,9 @@ ul.history > li {
 }
 
 .tab.active {
-  background: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   border-color: var(--accent);
-  color: var(--accent-text);
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -1443,18 +1626,19 @@ ul.history > li {
 }
 
 .data-table tbody tr:nth-child(odd) {
-  background: var(--panel-2);
+  background: color-mix(in srgb, var(--panel-2) 60%, transparent);
 }
 
 .data-table tbody tr:hover {
-  background: var(--line);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .data-table th {
+  font-family: var(--display);
   color: var(--muted);
   font-size: 0.85rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 
 .data-table th .sort {
@@ -1518,14 +1702,15 @@ ul.history > li {
 }
 
 .status-table tbody tr:nth-child(odd) {
-  background: var(--panel-2);
+  background: color-mix(in srgb, var(--panel-2) 60%, transparent);
 }
 
 .status-table th {
+  font-family: var(--display);
   color: var(--muted);
   font-size: 0.85rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 
 .status-table th.status-group-heading {
@@ -1548,6 +1733,13 @@ ul.history > li {
 
 .status-table td {
   white-space: nowrap;
+}
+
+/* The row separator takes the player's own colour (set on the `<tr>` by
+   `StatusPanel`), so a row stays identifiable when the status board is
+   scrolled sideways. Rows with no colour keep the neutral line. */
+.status-table tbody tr td {
+  border-bottom-color: var(--player-color, var(--line));
 }
 
 /* The status board has many columns; let it scroll sideways on narrow screens. */
