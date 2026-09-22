@@ -15,7 +15,7 @@ _Last updated: 2026-09-22_
 | `pnpm -r typecheck` | passing |
 | `pnpm -r test` | passing - 449 engine, 173 server, 95 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; open pull requests: #128 (hide revealed techs) and this change's front-page Action column |
+| `main` pushed to `origin` | yes; open pull requests: #128 (hide revealed techs) and #129 (front-page Action column first) |
 
 ## Done
 
