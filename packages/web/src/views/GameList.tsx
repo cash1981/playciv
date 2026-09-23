@@ -48,7 +48,7 @@ interface Props {
   readonly player: PlayerDto | null
   readonly busy: boolean
   readonly onOpenGame: (gameId: string) => void
-  readonly onJoin: (gameId: string) => void
+  readonly onJoin: (gameId: string, color: string) => void
 }
 
 /** Case-insensitive substring over the name, the type and every player. */
@@ -67,7 +67,9 @@ function actionCell(
   player: PlayerDto | null,
   busy: boolean,
   onOpenGame: (gameId: string) => void,
-  onJoin: (gameId: string) => void,
+  selectedColors: Readonly<Record<string, string>>,
+  onColorChange: (gameId: string, color: string) => void,
+  onJoin: (gameId: string, color: string) => void,
 ): React.ReactNode {
   const full = game.players.length >= game.numOfPlayers
 
@@ -80,15 +82,29 @@ function actionCell(
       )
     }
     if (game.active && !full) {
+      const requestedColor = selectedColors[game.id]
+      const color = game.availableColors.includes(requestedColor ?? '')
+        ? requestedColor ?? ''
+        : game.availableColors[0] ?? ''
       return (
-        <button
-          type="button"
-          className="small success"
-          disabled={busy}
-          onClick={() => onJoin(game.id)}
-        >
-          Join
-        </button>
+        <>
+          <select
+            aria-label={`Color for ${game.name}`}
+            value={color}
+            disabled={game.availableColors.length === 0 || busy}
+            onChange={(event) => onColorChange(game.id, event.target.value)}
+          >
+            {game.availableColors.map((color) => <option key={color} value={color}>{color}</option>)}
+          </select>
+          <button
+            type="button"
+            className="small success"
+            disabled={busy || game.availableColors.length === 0}
+            onClick={() => onJoin(game.id, color)}
+          >
+            Join
+          </button>
+        </>
       )
     }
     if (game.active) {
@@ -110,8 +126,10 @@ interface ColumnOptions {
   readonly withAction: boolean
   readonly player: PlayerDto | null
   readonly busy: boolean
+  readonly selectedColors: Readonly<Record<string, string>>
+  readonly onColorChange: (gameId: string, color: string) => void
   readonly onOpenGame: (gameId: string) => void
-  readonly onJoin: (gameId: string) => void
+  readonly onJoin: (gameId: string, color: string) => void
 }
 
 /**
@@ -127,8 +145,15 @@ function columnsFor(options: ColumnOptions): readonly SortableColumn<PublicGameS
     columns.push({
       key: 'action',
       header: 'Action',
-      render: (game) =>
-        actionCell(game, options.player, options.busy, options.onOpenGame, options.onJoin),
+      render: (game) => actionCell(
+        game,
+        options.player,
+        options.busy,
+        options.onOpenGame,
+        options.selectedColors,
+        options.onColorChange,
+        options.onJoin,
+      ),
     })
   }
 
@@ -207,6 +232,10 @@ export function GameList({ games, player, busy, onOpenGame, onJoin }: Props): Re
   const [tab, setTab] = useState<Tab>('active')
   const [query, setQuery] = useState('')
   const [onlyMine, setOnlyMine] = useState(false)
+  const [selectedColors, setSelectedColors] = useState<Readonly<Record<string, string>>>({})
+  const onColorChange = (gameId: string, color: string): void => {
+    setSelectedColors((previous) => ({ ...previous, [gameId]: color }))
+  }
 
   // Signing out hides the checkbox, so the filter it set has to go with it —
   // otherwise a signed-out visitor is left with a filtered (often empty) list
@@ -227,12 +256,28 @@ export function GameList({ games, player, busy, onOpenGame, onJoin }: Props): Re
   // Stable between renders so `SortableTable`'s sort memo is not invalidated
   // every time this panel renders.
   const activeColumns = useMemo(
-    () => columnsFor({ withAction: true, player, busy, onOpenGame, onJoin }),
-    [player, busy, onOpenGame, onJoin],
+    () => columnsFor({
+      withAction: true,
+      player,
+      busy,
+      selectedColors,
+      onColorChange,
+      onOpenGame,
+      onJoin,
+    }),
+    [player, busy, selectedColors, onColorChange, onOpenGame, onJoin],
   )
   const finishedColumns = useMemo(
-    () => columnsFor({ withAction: false, player, busy, onOpenGame, onJoin }),
-    [player, busy, onOpenGame, onJoin],
+    () => columnsFor({
+      withAction: false,
+      player,
+      busy,
+      selectedColors,
+      onColorChange,
+      onOpenGame,
+      onJoin,
+    }),
+    [player, busy, selectedColors, onColorChange, onOpenGame, onJoin],
   )
 
   return (

@@ -106,6 +106,17 @@ describe('joinGame', () => {
     expect(findPlayer(state, KARANDRAS1)?.color).toBe('Blue')
   })
 
+  it('rejects unsupported and occupied requested colours without changing state', () => {
+    const before = newGameWithCreator()
+    expect(unwrapErr(joinGame(before, {
+      playerId: 'p-invalid', username: 'Invalid', color: 'Orange',
+    }))).toEqual({ kind: 'INVALID_PLAYER_COLOR', color: 'Orange' })
+    expect(unwrapErr(joinGame(before, {
+      playerId: 'p-taken', username: 'Taken', color: 'Green',
+    }))).toEqual({ kind: 'PLAYER_COLOR_TAKEN', color: 'Green' })
+    expect(before.players).toHaveLength(1)
+  })
+
   it('the same player cannot join twice', () => {
     const error = unwrapErr(
       joinGame(newGameWithCreator(), { playerId: CASH1981, username: 'cash1981' }),
@@ -149,6 +160,18 @@ describe('joinGame', () => {
     expect(state.log.some((entry) => entry.username === 'Karandras1')).toBe(false)
     // cash1981's hand is untouched
     expect(findPlayer(state, CASH1981)?.items).toHaveLength(handSize ?? 0)
+  })
+
+  it('keeps the withdrawn hand color and rejects a different requested color', () => {
+    const state = unwrap(withdrawFromGame(firstCivGame(), KARANDRAS1))
+    expect(unwrapErr(joinGame(state, {
+      playerId: 'replacement', username: 'Replacement', color: 'Blue',
+    }))).toEqual({ kind: 'WITHDRAWN_PLAYER_COLOR_MISMATCH', color: 'Red' })
+    expect(state.withdrawnPlayers).toHaveLength(1)
+    const replacement = unwrap(joinGame(state, {
+      playerId: 'replacement', username: 'Replacement', color: 'Red',
+    }))
+    expect(findPlayer(replacement, 'replacement')?.color).toBe('Red')
   })
 })
 

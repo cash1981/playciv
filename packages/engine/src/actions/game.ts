@@ -56,12 +56,19 @@ export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
     return err({ kind: 'ALREADY_JOINED', playerId: input.playerId })
   }
 
+  if (input.color !== undefined && !PLAYER_COLORS.some((color) => color === input.color)) {
+    return err({ kind: 'INVALID_PLAYER_COLOR', color: input.color })
+  }
+
   const withdrawn = state.withdrawnPlayers[0]
 
   let next: GameState
   let joined: Playerhand
 
   if (withdrawn !== undefined) {
+    if (input.color !== undefined && input.color !== withdrawn.color) {
+      return err({ kind: 'WITHDRAWN_PLAYER_COLOR_MISMATCH', color: withdrawn.color })
+    }
     // Java: takes over the hand and rewrites log entries to the new username
     joined = {
       ...withdrawn,
@@ -81,6 +88,9 @@ export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
   } else {
     const color = input.color ?? nextAvailableColor(state)
     if (color === undefined) return err({ kind: 'NO_COLOR_AVAILABLE' })
+    if (state.players.some((player) => player.color === color)) {
+      return err({ kind: 'PLAYER_COLOR_TAKEN', color })
+    }
 
     joined = {
       playerId: input.playerId,

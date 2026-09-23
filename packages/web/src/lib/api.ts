@@ -89,6 +89,7 @@ export interface GameSummary {
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
+  readonly availableColors: readonly string[]
 }
 
 export interface PublicGameSummary {
@@ -102,6 +103,7 @@ export interface PublicGameSummary {
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
+  readonly availableColors: readonly string[]
 }
 
 export interface LogEntryDto {
@@ -334,14 +336,15 @@ export const api = {
   sendLobbyChat: (message: string) => post<ChatMessageDto>('/api/chat', { message }),
 
   games: () => get<GameSummary[]>('/api/games'),
-  createGame: (name: string, numOfPlayers: number) =>
-    post<GameSummary>('/api/games', { name, numOfPlayers }),
+  createGame: (name: string, numOfPlayers: number, color?: string) =>
+    post<GameSummary>('/api/games', { name, numOfPlayers, ...(color === undefined ? {} : { color }) }),
   game: (gameId: string) => get<PlayerView>(`/api/games/${gameId}`),
   revisions: (gameId: string) => get<GameRevisionSummary[]>(`/api/games/${gameId}/revisions`),
   gameRev: (gameId: string) => get<{ readonly rev: number }>(`/api/games/${gameId}/rev`),
   revision: (gameId: string, revision: number) =>
     get<GameRevisionView>(`/api/games/${gameId}/revisions/${revision}`),
-  join: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/join`),
+  join: (gameId: string, color?: string) =>
+    post<PlayerView>(`/api/games/${gameId}/join`, color === undefined ? {} : { color }),
   withdraw: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/withdraw`),
   endGame: (gameId: string, winner?: string) =>
     post<PlayerView>(`/api/games/${gameId}/end`, winner === undefined ? {} : { winner }),

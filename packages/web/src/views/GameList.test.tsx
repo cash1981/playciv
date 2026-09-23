@@ -7,7 +7,7 @@
  */
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { PlayerDto, PublicGameSummary } from '../lib/api.js'
 import { GameList } from './GameList.js'
@@ -34,6 +34,7 @@ function game(
     players: [{ username: 'cash1981', color: 'Red' }],
     nameOfUsersTurn: '',
     youAreIn: false,
+    availableColors: ['Green', 'Yellow', 'Purple', 'Red', 'Blue'],
     ...overrides,
   }
 }
@@ -258,6 +259,25 @@ describe('GameList', () => {
     const full = screen.getByRole('button', { name: 'Full' })
     expect(full.className).not.toContain('info')
     expect(full.className).not.toContain('success')
+  })
+
+  it('shows only available colors and submits the selected join color', () => {
+    const onJoin = vi.fn()
+    render(
+      <GameList
+        games={[game({ id: 'joinable', name: 'Joinable', availableColors: ['Purple', 'Blue'] })]}
+        player={player}
+        busy={false}
+        onOpenGame={noop}
+        onJoin={onJoin}
+      />,
+    )
+    const select = screen.getByLabelText('Color for Joinable') as HTMLSelectElement
+    expect(Array.from(select.options).map((option) => option.value)).toEqual(['Purple', 'Blue'])
+    expect(select.value).toBe('Purple')
+    fireEvent.change(select, { target: { value: 'Blue' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }))
+    expect(onJoin).toHaveBeenCalledWith('joinable', 'Blue')
   })
 
   it('keeps the game list and action controls in the mobile layout hooks', () => {

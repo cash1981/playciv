@@ -46,11 +46,14 @@ export function statusFor(error: EngineError): number {
     case 'UNKNOWN_GOVERNMENT':
     case 'INVALID_ARENA_STAT_VALUE':
     case 'CANNOT_BATTLE_YOURSELF':
+    case 'INVALID_PLAYER_COLOR':
+    case 'WITHDRAWN_PLAYER_COLOR_MISMATCH':
       return 400
     case 'BOARD_ASSET_LIMIT_REACHED':
     case 'BATTLE_ALREADY_ACTIVE':
     case 'UNIT_ALREADY_IN_BATTLE':
     case 'ARENA_POSITION_OCCUPIED':
+    case 'PLAYER_COLOR_TAKEN':
       return 409
     case 'NO_BATTLE_ACTIVE':
     case 'ARENA_UNIT_NOT_FOUND':
