@@ -12,6 +12,23 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### board-tap-to-move
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `feat/board-tap-to-move`
+- **Brief:** `docs/agents/tasks/board-tap-to-move.md`
+- **Status:** claimed
+- **Claimed paths:**
+  - `packages/web/src/views/BoardView.tsx`
+  - `packages/web/src/views/BoardView.test.tsx`
+  - `docs/agents/tasks/board-tap-to-move.md`
+  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** Restores the documented (state.md) mobile flow: tapping an
+  existing board piece arms destination mode so the next board tap moves it,
+  instead of requiring a drag. Touch dragging of the marked piece and board
+  panning from an unmarked piece stay. Client-only; no engine, server or CSS
+  change (styles.css is claimed elsewhere and is not needed).
+
 ### issue-101-social-policy-reference
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
