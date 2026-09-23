@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '../lib/api.js'
 import type { PlayerDto } from '../lib/api.js'
@@ -13,8 +13,10 @@ const player = { id: 'one', username: 'One' } as PlayerDto
 const chat = vi.mocked(api.chat)
 
 describe('ChatPanel auto-refresh', () => {
+  beforeEach(() => localStorage.setItem('civ.panel.chat', 'true'))
   afterEach(() => {
     cleanup()
+    localStorage.removeItem('civ.panel.chat')
     vi.useRealTimers()
     vi.clearAllMocks()
   })

@@ -2,15 +2,15 @@
 
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
-import { createBoard, findBoardAsset } from '@civ/engine'
+import { boardWidth, createBoard, findBoardAsset } from '@civ/engine'
 import type { BoardPiece, PlayerView } from '@civ/engine'
 
 import type { GameRevisionView } from '../lib/api.js'
 import { api } from '../lib/api.js'
 
-import { BoardPalette, BoardView } from './BoardView.js'
+import { BoardPalette, BoardView, fittingBoardZoom } from './BoardView.js'
 import {
   GlobalReplayBar,
   loadConsistentLive,
@@ -30,6 +30,69 @@ const piece = (assetId: string, id: string): BoardPiece => ({
   height: 1,
   rotation: 0,
   placedBy: null,
+})
+
+describe('BoardView zoom', () => {
+  it('chooses the largest fitting step and caps automatic zoom at 100%', () => {
+    expect(fittingBoardZoom(1000, 1200)).toBe(1)
+    expect(fittingBoardZoom(1000, 900)).toBe(0.8)
+    expect(fittingBoardZoom(1000, 250)).toBe(0.3)
+  })
+
+  it('responds to width changes and leaves manual zoom alone', () => {
+    const board = createBoard()
+    const { container } = render(
+      <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} />,
+    )
+    const scroll = container.querySelector('.board-scroll')
+    const surface = container.querySelector('.board-surface')
+    if (!(scroll instanceof HTMLElement) || !(surface instanceof HTMLElement)) throw new Error('board missing')
+    let availableWidth = boardWidth(board) + 100
+    Object.defineProperty(scroll, 'clientWidth', { configurable: true, get: () => availableWidth })
+    fireEvent(window, new Event('resize'))
+    expect(surface.style.width).toBe(`${boardWidth(board)}px`)
+
+    availableWidth = boardWidth(board) * 0.55
+    fireEvent(window, new Event('resize'))
+    expect(surface.style.width).toBe(`${boardWidth(board) * 0.5}px`)
+
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    expect(surface.style.width).toBe(`${boardWidth(board)}px`)
+    availableWidth = boardWidth(board) * 0.38
+    fireEvent(window, new Event('resize'))
+    expect(surface.style.width).toBe(`${boardWidth(board)}px`)
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: 'auto' } })
+    expect(surface.style.width).toBe(`${boardWidth(board) * 0.3}px`)
+    cleanup()
+  })
+
+  it('uses ResizeObserver when its container changes without a window resize', () => {
+    let notifyResize: ResizeObserverCallback | undefined
+    const disconnect = vi.fn()
+    class TestResizeObserver {
+      constructor(callback: ResizeObserverCallback) { notifyResize = callback }
+      observe(): void {}
+      disconnect(): void { disconnect() }
+    }
+    vi.stubGlobal('ResizeObserver', TestResizeObserver)
+    try {
+      const board = createBoard()
+      const { container, unmount } = render(
+        <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} />,
+      )
+      const scroll = container.querySelector('.board-scroll')
+      const surface = container.querySelector('.board-surface')
+      if (!(scroll instanceof HTMLElement) || !(surface instanceof HTMLElement)) throw new Error('board missing')
+      Object.defineProperty(scroll, 'clientWidth', { configurable: true, value: boardWidth(board) + 100 })
+      if (notifyResize === undefined) throw new Error('resize observer missing')
+      act(() => notifyResize?.([], {} as ResizeObserver))
+      expect(surface.style.width).toBe(`${boardWidth(board)}px`)
+      unmount()
+      expect(disconnect).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })
 
 describe('global replay controls', () => {

@@ -37,6 +37,12 @@ Measure the available board scroll width and choose the largest supported zoom s
 - `packages/web/src/views/LogPanel.tsx`
 - `packages/web/src/views/TechPanel.tsx`
 - `packages/web/src/views/SocialPolicyPanel.tsx`
+- `packages/web/src/views/TurnPanel.tsx`
+- `packages/web/src/views/ChatPanel.test.tsx`
+- `packages/web/src/views/OpponentHandPanel.test.tsx`
+- `packages/web/src/views/StatusPanel.test.tsx`
+- `packages/web/src/views/TechPanel.test.tsx`
+- `packages/web/src/views/SocialPolicyPanel.test.tsx`
 - `docs/agents/tasks/responsive-map-panels.md`
 - `docs/agents/state.md`
 

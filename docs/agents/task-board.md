@@ -27,6 +27,12 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/web/src/views/LogPanel.tsx`
   - `packages/web/src/views/TechPanel.tsx`
   - `packages/web/src/views/SocialPolicyPanel.tsx`
+  - `packages/web/src/views/TurnPanel.tsx`
+  - `packages/web/src/views/ChatPanel.test.tsx`
+  - `packages/web/src/views/OpponentHandPanel.test.tsx`
+  - `packages/web/src/views/StatusPanel.test.tsx`
+  - `packages/web/src/views/TechPanel.test.tsx`
+  - `packages/web/src/views/SocialPolicyPanel.test.tsx`
   - `docs/agents/tasks/responsive-map-panels.md`
   - `docs/agents/state.md`
 - **Notes:** Board zoom and default panel state only; existing stored panel choices remain authoritative.

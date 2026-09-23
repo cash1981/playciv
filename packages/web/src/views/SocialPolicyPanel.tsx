@@ -140,7 +140,7 @@ export function SocialPolicyPanel({
   const active = tabs.find((tab) => tab.playerId === selectedPlayerId) ?? tabs[0]
 
   return (
-    <CollapsiblePanel id="social-policy" title="Social policy" defaultOpen>
+    <CollapsiblePanel id="social-policy" title="Social policy">
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="row">

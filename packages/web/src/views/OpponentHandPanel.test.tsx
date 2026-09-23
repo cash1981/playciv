@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { OpaquePlayerhand, PublicHandCounts } from '@civ/engine'
 
 import { OpponentHandPanel } from './OpponentHandPanel.js'
 
-afterEach(cleanup)
+beforeEach(() => localStorage.setItem('civ.panel.opponent-hands', 'true'))
+afterEach(() => {
+  cleanup()
+  localStorage.removeItem('civ.panel.opponent-hands')
+})
 
 function opponent(playerId: string, username: string, publicHand: PublicHandCounts): OpaquePlayerhand {
   return { playerId, username, publicHand } as OpaquePlayerhand

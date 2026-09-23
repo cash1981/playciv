@@ -830,7 +830,7 @@ export function TurnPanel({
   }
 
   return (
-    <CollapsiblePanel id="turn-orders" title="Turn orders">
+    <CollapsiblePanel id="turn-orders" title="Turn orders" defaultOpen>
       {loadError !== null && <div className="error">{loadError}</div>}
       {view === null && loadError === null && <p className="muted">Loading turn orders …</p>}
 

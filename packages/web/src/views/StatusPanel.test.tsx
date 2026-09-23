@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBoard, DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS, wondersArea } from '@civ/engine'
 import type { CoinSources } from '@civ/engine'
@@ -11,8 +11,10 @@ import type { PlayerView } from '../lib/api.js'
 import type { Run } from './GameView.js'
 import { StatusPanel } from './StatusPanel.js'
 
+beforeEach(() => localStorage.setItem('civ.panel.status', 'true'))
 afterEach(() => {
   cleanup()
+  localStorage.removeItem('civ.panel.status')
   vi.restoreAllMocks()
 })
 

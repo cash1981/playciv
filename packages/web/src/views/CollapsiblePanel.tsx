@@ -17,7 +17,7 @@ interface Props {
 export function CollapsiblePanel({
   id,
   title,
-  defaultOpen = true,
+  defaultOpen = false,
   className = '',
   children,
 }: Props): React.JSX.Element {
