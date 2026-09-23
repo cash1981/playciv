@@ -1777,3 +1777,32 @@ reference was factored into shared `ReferenceDialog` / `ReferenceCard` and its
 `government-*` CSS renamed to generic `reference-*`; the one behaviour change
 there is that focus now returns to the `?` when the dialog closes, instead of an
 effect that also grabbed focus on mount.
+
+## 2026-09-23 - Tapping a board piece on touch arms the move in the same tap
+
+**Decision.** On touch, the first tap on an existing board piece both selects it and
+arms destination mode, so the next tap anywhere on the board moves the piece
+there - the same two-tap flow as a palette asset. A touch drag on the marked
+piece still drags it, and a drag that actually moves the piece clears
+destination mode, so an unrelated later tap cannot move it a second time. While
+a piece is armed, any board tap is a destination, including a tap on another
+piece: the armed piece moves onto it and stacks, exactly as an armed palette
+asset already places onto an occupied square. This restores the behaviour
+commit `02c920b` added and commit `93bf305` ("Make map taps deselect touch
+pieces") removed; `state.md` had kept claiming the arming existed.
+
+**Why.** The human reported that on a phone you cannot tap a piece and then tap
+a destination to move it - you have to drag - while the palette flow does work.
+The two flows were inconsistent. Before this change the first tap only
+selected, a following board tap cleared the selection, and move mode was
+reachable only by tapping the marked piece a second time, which is not
+discoverable.
+
+**Consequences.** Touching an unmarked piece still pans the board (the tap does
+not capture the pointer), and the marked piece still drags. Deselecting without
+moving is still possible by tapping outside the board and palette or by the
+Cancel button. No engine, server, projection or CSS change; the old client had
+no interactive board, so this is a client-only interaction choice and an
+extension of issue #115's tap/select/place model. The trade-off is that a board
+tap while armed is a destination rather than a deselect, which is exactly what
+the human asked for.
