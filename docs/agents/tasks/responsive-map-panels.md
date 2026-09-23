@@ -3,7 +3,7 @@
 - **Slug:** `responsive-map-panels`
 - **Branch:** `codex/responsive-map-panels`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -48,13 +48,13 @@ Measure the available board scroll width and choose the largest supported zoom s
 
 ## Acceptance criteria
 
-- [ ] The board chooses the largest available zoom through 100% that fits its container width, and responds to width changes.
-- [ ] The user can still choose a manual zoom, including a zoom that scrolls.
-- [ ] Fresh panel state opens only Log, Draw, Your hand, and Turn orders on the game page.
-- [ ] User toggles persist after reload; existing stored choices override new defaults.
-- [ ] Relevant web tests cover zoom and persistence.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
-- [ ] No hidden information or game state changes.
+- [x] The board chooses the largest available zoom through 100% that fits its container width, and responds to width changes.
+- [x] The user can still choose a manual zoom, including a zoom that scrolls.
+- [x] Fresh panel state opens only Log, Draw, Your hand, and Turn orders on the game page.
+- [x] User toggles persist after reload; existing stored choices override new defaults.
+- [x] Relevant web tests cover zoom and persistence.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
+- [x] No hidden information or game state changes.
 
 ## Open questions
 

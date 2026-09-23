@@ -19,6 +19,8 @@ _Last updated: 2026-09-23_
 
 ## Done
 
+- **Responsive board and panel defaults.** The board starts at the largest zoom step that fits its available width, up to 100%, and follows container resizing; the manual selector remains available. New visitors see only Log, Draw, Your hand, and Turn orders open, while each browser's existing and later panel choices persist. Client-only, with no rules or projection change. Review-approved in round 2 after restoring the coordinate-label gutter. Full checks pass (473 engine, 182 server, 165 web).
+
 - **Issue #142: opponents' public hands.** Each opponent and spectator sees one
   generic face-down card per held culture card, hut, village, great person and
   unit, grouped by player and category. The projection sends only five numeric
