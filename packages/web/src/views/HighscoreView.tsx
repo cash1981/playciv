@@ -95,7 +95,7 @@ export function HighscoreView(): React.JSX.Element {
         sortValue: (entry: WinnerEntry) => ratings.get(entry.username)?.rating ?? Number.NEGATIVE_INFINITY,
         render: (entry: WinnerEntry) => {
           const value = ratings.get(entry.username)
-          return value === undefined || value.games === 0 ? '—' : value.rating.toFixed(2)
+          return value === undefined || value.games === 0 ? '—' : Math.round(value.rating * 100)
         },
         initialDirection: 'desc' as const,
       }] : []),
