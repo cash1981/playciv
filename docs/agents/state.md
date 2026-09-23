@@ -38,7 +38,7 @@ _Last updated: 2026-09-23_
   choosing and revealing it, and its removal cleared it; a Panama piece dragged
   out of the Wonders area kept its counter visible; the console was clean. No
   screenshot was possible (browser window not visible). Branch
-  `feat/issue-158-valid-coins`; PR to open.
+  `feat/issue-158-valid-coins`; PR #161 open.
 
 - **Issue #97 join color picker follow-up (PR #158).** Replaced the inline
   color selector with a compact visual dialog that shows only colors still
