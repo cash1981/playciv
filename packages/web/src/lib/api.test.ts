@@ -1,49 +1,79 @@
 // @vitest-environment jsdom
 
 /**
- * `request()` must never surface a raw `SyntaxError` for a response that is not
- * JSON. Cloudflare answers a Worker that exceeded its limits with `503` and a
- * plain-text `error code: 1102`, which is what the live game page showed as
- * "JSON.parse: unexpected character at line 1 column 1 of the JSON data".
+ * `request()` has two jobs worth testing here: a body that is not JSON must
+ * never surface as a raw `SyntaxError` (Cloudflare answers a Worker that
+ * exceeded its limits with `503` and a plain-text `error code: 1102`), and a
+ * transient gateway failure of a safe request gets a bounded retry while a
+ * write does not.
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api, storeToken } from './api.js'
 
 /** A response stub with only the surface `request()` touches. */
-function respondWith(status: number, body: string, statusText = ''): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => ({
-      status,
-      statusText,
-      ok: status >= 200 && status < 300,
-      text: async (): Promise<string> => body,
-    })),
-  )
+interface StubResponse {
+  readonly status: number
+  readonly statusText: string
+  readonly ok: boolean
+  readonly text: () => Promise<string>
+}
+
+function stubResponse(status: number, body: string, statusText = ''): StubResponse {
+  return { status, statusText, ok: status >= 200 && status < 300, text: async () => body }
+}
+
+/** Stubs `fetch` with one fixed response; returns the mock for call counts. */
+function respondWith(status: number, body: string, statusText = ''): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn(async () => stubResponse(status, body, statusText))
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+/** Stubs `fetch` with one response per call, repeating the last one. */
+function respondInSequence(responses: readonly StubResponse[]): ReturnType<typeof vi.fn> {
+  let call = 0
+  const fetchMock = vi.fn(async () => {
+    const response = responses[Math.min(call, responses.length - 1)]
+    call += 1
+    return response ?? stubResponse(500, '')
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
 }
 
 /** Resolves to the rejection value, avoiding `.catch` swallowing the type. */
 const rejectionOf = (promise: Promise<unknown>): Promise<unknown> =>
   promise.then(() => undefined, (caught: unknown) => caught)
 
+beforeEach(() => {
+  // Only the retry back-off uses timers, and driving it explicitly keeps the
+  // suite fast. The promise chain is untouched.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+})
+
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   storeToken(null)
 })
 
 describe('api request error handling', () => {
   it('reports a non-JSON error body instead of throwing a SyntaxError', async () => {
-    respondWith(503, 'error code: 1102')
+    const fetchMock = respondWith(503, 'error code: 1102')
 
-    const caught = await rejectionOf(api.game('b87c44725c869148'))
+    const caught = rejectionOf(api.game('b87c44725c869148'))
+    await vi.advanceTimersByTimeAsync(2_000)
+    const error = await caught
 
-    expect(caught).toBeInstanceOf(ApiError)
-    expect(caught).not.toBeInstanceOf(SyntaxError)
-    expect((caught as ApiError).status).toBe(503)
-    expect((caught as ApiError).message).toContain('503')
-    expect((caught as ApiError).message).toContain('error code: 1102')
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error).not.toBeInstanceOf(SyntaxError)
+    expect((error as ApiError).status).toBe(503)
+    expect((error as ApiError).message).toContain('503')
+    expect((error as ApiError).message).toContain('error code: 1102')
+    // The initial attempt plus the two retries, then give up.
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   it('keeps the server error code and message when the body is JSON', async () => {
@@ -73,5 +103,57 @@ describe('api request error handling', () => {
     respondWith(200, JSON.stringify({ id: 'some-game', rev: 3 }), 'OK')
 
     await expect(api.game('some-game')).resolves.toEqual({ id: 'some-game', rev: 3 })
+  })
+})
+
+describe('api retry on a transient gateway failure', () => {
+  it('retries a GET that answers 503 once and then succeeds', async () => {
+    const fetchMock = respondInSequence([
+      stubResponse(503, 'error code: 1102'),
+      stubResponse(200, JSON.stringify({ id: 'some-game', rev: 4 }), 'OK'),
+    ])
+
+    const pending = api.game('some-game')
+    await vi.advanceTimersByTimeAsync(250)
+
+    await expect(pending).resolves.toEqual({ id: 'some-game', rev: 4 })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries a GET twice, with a longer second wait', async () => {
+    const fetchMock = respondInSequence([
+      stubResponse(503, ''),
+      stubResponse(502, ''),
+      stubResponse(200, JSON.stringify({ status: 'ok' }), 'OK'),
+    ])
+
+    const pending = api.game('some-game')
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    await expect(pending).resolves.toEqual({ status: 'ok' })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not retry a write, because the game actions are not idempotent', async () => {
+    const fetchMock = respondWith(503, 'error code: 1102')
+
+    const caught = await rejectionOf(api.endTurn('some-game'))
+
+    expect(caught).toBeInstanceOf(ApiError)
+    expect((caught as ApiError).status).toBe(503)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retry a 500 from our own server', async () => {
+    const fetchMock = respondWith(
+      500,
+      JSON.stringify({ error: 'INTERNAL_ERROR', message: 'Something went wrong' }),
+    )
+
+    const caught = await rejectionOf(api.game('some-game'))
+
+    expect(caught).toBeInstanceOf(ApiError)
+    expect((caught as ApiError).code).toBe('INTERNAL_ERROR')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
