@@ -12,6 +12,24 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### turn-order-draft-bleed
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `fix/turn-order-draft-bleed`
+- **Brief:** `docs/agents/tasks/turn-order-draft-bleed.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/TurnPanel.tsx`
+  - `packages/web/src/views/MarkdownEditor.tsx`
+  - `packages/web/src/views/TurnPanel.test.tsx`
+  - `docs/agents/tasks/turn-order-draft-bleed.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** Live bug report: opening another player's turn-order tab and
+  returning to your own copied that player's text into your editors. Client-only
+  UI state fix: only the signed-in player's own workspace records drafts, and a
+  read-only editor no longer emits changes.
+
 ### board-tap-to-move
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
