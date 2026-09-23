@@ -138,7 +138,7 @@ coins på panama canal wonder."*
 - `packages/server/src/routes/play.ts` (the new route only)
 - `packages/server/src/errors.ts` (the two new kinds)
 - `packages/server/test/api.test.ts` (the status-board cases)
-- `packages/web/src/lib/api.ts` (`setPlayerCoin` and the `CoinSources` re-export)
+- `packages/web/src/lib/api.ts` (`setPlayerCoin` and the `CoinSourceKey` re-export)
 - `packages/web/src/views/StatusPanel.tsx`, `StatusPanel.test.tsx`
 - `packages/web/src/views/PlayerTabs.tsx` (doc comment only — it now also serves
   the status tabs)
