@@ -7,7 +7,7 @@
  * client-side slice of the array already in memory.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
@@ -16,6 +16,7 @@ import { ChatTimestamp } from './ChatTimestamp.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 
 const PAGE_SIZE = 10
+const CHAT_REFRESH_MS = 10_000
 
 interface Props {
   readonly gameId: string
@@ -23,19 +24,25 @@ interface Props {
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
   readonly player: PlayerDto
   readonly reloadCount: number
+  readonly autoRefresh: boolean
 }
 
-export function ChatPanel({ gameId, busy, run, player, reloadCount }: Props): React.JSX.Element {
+export function ChatPanel({ gameId, busy, run, player, reloadCount, autoRefresh }: Props): React.JSX.Element {
   const [chat, setChat] = useState<readonly ChatMessageDto[]>([])
   const [message, setMessage] = useState('')
   const [page, setPage] = useState(1)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const requestEpoch = useRef(0)
 
   const load = useCallback(async () => {
+    const epoch = ++requestEpoch.current
     try {
-      setChat(await api.chat(gameId))
+      const nextChat = await api.chat(gameId)
+      if (epoch !== requestEpoch.current) return
+      setChat(nextChat)
       setLoadError(null)
     } catch (caught) {
+      if (epoch !== requestEpoch.current) return
       setLoadError(errorMessage(caught))
     }
   }, [gameId])
@@ -43,6 +50,12 @@ export function ChatPanel({ gameId, busy, run, player, reloadCount }: Props): Re
   useEffect(() => {
     void load()
   }, [load, reloadCount])
+
+  useEffect(() => {
+    if (!autoRefresh) return
+    const id = setInterval(() => { void load() }, CHAT_REFRESH_MS)
+    return () => clearInterval(id)
+  }, [autoRefresh, load])
 
   // Newest first, paged 10 at a time.
   const newestFirst = [...chat].reverse()

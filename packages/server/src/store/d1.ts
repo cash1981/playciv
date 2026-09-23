@@ -351,6 +351,11 @@ export class D1Repository implements Repository {
     return row === null ? undefined : parseGame(row.state)
   }
 
+  async findGameRevisionCounter(id: string): Promise<number | undefined> {
+    const row = await this.db.prepare(`SELECT rev FROM game WHERE id = ?`).bind(id).first<{ rev: number }>()
+    return row?.rev
+  }
+
   async allGames(): Promise<readonly GameState[]> {
     const rows = await this.db.prepare(`SELECT state FROM game`).all<GameStateRow>()
     return rows.results.map((row) => parseGame(row.state))
