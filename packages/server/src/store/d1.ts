@@ -22,6 +22,7 @@ import { migrateGameState } from '@civ/engine'
 import type {
   ChatMessage,
   GameRevision,
+  GameRevisionMetadata,
   PlayerUpdate,
   Repository,
   StoredPlayer,
@@ -74,6 +75,9 @@ interface RevisionRow {
   readonly log_ids: string
   readonly state: string
 }
+
+/** `RevisionRow` without the `state` snapshot, for the summary query. */
+type RevisionMetadataRow = Omit<RevisionRow, 'state'>
 
 interface ChatRow {
   readonly id: string
@@ -320,6 +324,17 @@ export class D1Repository implements Repository {
     return rows.results.map(toGameRevision)
   }
 
+  async listGameRevisionSummaries(gameId: string): Promise<readonly GameRevisionMetadata[]> {
+    // Deliberately not `REVISION_SELECT`: the `state` column is the whole game
+    // state of the revision, and selecting it made this route read and parse
+    // every snapshot just to build the history list.
+    const rows = await this.db
+      .prepare(`${REVISION_METADATA_SELECT} WHERE game_id = ? ORDER BY revision ASC`)
+      .bind(gameId)
+      .all<RevisionMetadataRow>()
+    return rows.results.map(toGameRevisionMetadata)
+  }
+
   async findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined> {
     const row = await this.db
       .prepare(`${REVISION_SELECT} WHERE game_id = ? AND revision = ?`)
@@ -453,6 +468,14 @@ const REVISION_SELECT = `SELECT game_id, revision, created_at, actor_id, actor_u
                                 public_description, private_descriptions, log_ids, state
                          FROM game_revision`
 
+/**
+ * `REVISION_SELECT` minus `state`. Kept as its own statement so the summary
+ * query can never accidentally pull the snapshots back in.
+ */
+const REVISION_METADATA_SELECT = `SELECT game_id, revision, created_at, actor_id, actor_username,
+                                         public_description, private_descriptions, log_ids
+                                  FROM game_revision`
+
 function gameParams(game: GameState): readonly unknown[] {
   return [game.id, ...gameStateParams(game)]
 }
@@ -512,5 +535,17 @@ function toGameRevision(row: RevisionRow): GameRevision {
     privateDescriptions: JSON.parse(row.private_descriptions) as Record<string, string>,
     logIds: JSON.parse(row.log_ids) as string[],
     state: parseGame(row.state),
+  }
+}
+
+function toGameRevisionMetadata(row: RevisionMetadataRow): GameRevisionMetadata {
+  return {
+    gameId: row.game_id,
+    revision: row.revision,
+    createdAt: row.created_at,
+    actor: { playerId: row.actor_id, username: row.actor_username },
+    publicDescription: row.public_description,
+    privateDescriptions: JSON.parse(row.private_descriptions) as Record<string, string>,
+    logIds: JSON.parse(row.log_ids) as string[],
   }
 }

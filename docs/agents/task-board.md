@@ -46,10 +46,10 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/server/src/store/json-file.ts`
   - `packages/server/src/routes/games.ts` (`revisionSummary` and the `/revisions` route only)
   - `packages/server/test/d1-repository.test.ts`
-  - `packages/server/test/api.test.ts` (a revision-projection assertion only)
   - `packages/web/src/lib/api.ts`
   - `packages/web/src/lib/api.test.ts` (new)
   - `packages/web/src/views/GameView.tsx` (the auto-refresh constant, effect and title only)
+  - `packages/web/src/views/GameView.test.tsx` (new)
   - `docs/agents/tasks/revisions-503.md`
   - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
 - **Notes:** Fixes the live `JSON.parse` / 1102 report. `GET /api/games/:id/revisions`

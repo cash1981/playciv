@@ -106,11 +106,11 @@ deliberate product change, recorded in `decisions.md`.
 - `packages/server/src/routes/games.ts` (`revisionSummary` and the `/revisions`
   route only)
 - `packages/server/test/d1-repository.test.ts`
-- `packages/server/test/api.test.ts` (a revision-projection assertion only)
 - `packages/web/src/lib/api.ts`
 - `packages/web/src/lib/api.test.ts` (new)
 - `packages/web/src/views/GameView.tsx` (the auto-refresh constant, effect and
   title only)
+- `packages/web/src/views/GameView.test.tsx` (new)
 - `docs/agents/tasks/revisions-503.md`
 - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
 
@@ -119,9 +119,11 @@ deliberate product change, recorded in `decisions.md`.
 - [ ] `GET /api/games/:gameId/revisions` returns the same payload it does today,
       and the repository read no longer selects `state`.
 - [ ] A repository test proves the metadata accessor carries no `state` and
-      keeps the revision order and the per-viewer private descriptions.
-- [ ] A server test proves the route still projects only the viewer's own
-      `privateDescription` and never ships a revision `state`.
+      keeps the revision order, the log ids and the private descriptions, and
+      that its query does not select the `state` column.
+- [ ] The route's existing hidden-information test (`api.test.ts`, "projects
+      each historical viewer separately") still passes and still asserts the
+      list ships no `state` and no `privateDescriptions`.
 - [ ] An `api.ts` test proves a `503` `text/plain` body rejects with an
       `ApiError` whose message names the status, not a `SyntaxError`.
 - [ ] Auto-refresh is 10 s and the toggle's `title` says so.
