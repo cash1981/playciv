@@ -136,6 +136,13 @@ describe('the manifest', () => {
     expect(findBoardAsset('figures/whitearmy')).toBeUndefined()
   })
 
+  it('has a single Coin marker and no extra coin denominations', () => {
+    for (const id of ['markers/coin', 'markers/coin2', 'markers/coin3', 'markers/coin4']) {
+      expect(findBoardAsset(id), id).toBeUndefined()
+    }
+    expect(findBoardAsset('markers/coin1')?.label).toBe('Coin')
+  })
+
   it('has the six resources', () => {
     for (const name of ['hut', 'village', 'wheat', 'iron', 'silk', 'incense']) {
       expect(findBoardAsset(`resources/${name}`)).toBeDefined()
