@@ -401,6 +401,15 @@ tests match on them.
 
 ## Deliberate improvements
 
+**Social policies are revealed like technologies.** Java stored a chosen policy
+in the player's hand hidden and never revealed it; the port adds
+`revealSocialPolicy` (issue #6) and shows every player's revealed policies on
+their own tab of the Social policy panel (issue #140), the same way
+`revealedTechsForAllPlayers` has always shown technologies. A hidden policy
+stays private — only its count is public — and a revealed one is also named in
+the public log. The Techs and Social policy panels each have one tab per player,
+labelled with the username and the player's colour. See `docs/agents/decisions.md`.
+
 **Turn orders are revealed per phase.** The old client published every saved
 turn-order phase immediately. The port keeps each phase private until its
 owner clicks Reveal, then publishes only that phase; existing saved turns are

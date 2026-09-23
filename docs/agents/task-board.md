@@ -27,7 +27,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/web/src/views/GameView.tsx` (the panel list only)
   - `docs/agents/tasks/issue-140-tech-policy-tabs.md`
   - `docs/agents/task-board.md`
-  - `docs/agents/state.md`, `docs/agents/decisions.md`
+  - `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
 - **Notes:** Issue #140. Splits the combined Techs & Social policy panel into two
   panels, each with a tab per player. Other players' revealed social policies
   become visible through a new `OpaquePlayerhand.revealedSocialPolicies`
