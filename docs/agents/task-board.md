@@ -12,7 +12,24 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### responsive-map-panels
+
+- **Owner:** Codex (orchestrator and coder)
+- **Branch:** `codex/responsive-map-panels`
+- **Brief:** `docs/agents/tasks/responsive-map-panels.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/BoardView.tsx`
+  - `packages/web/src/views/BoardView.test.tsx`
+  - `packages/web/src/views/CollapsiblePanel.tsx`
+  - `packages/web/src/views/CollapsiblePanel.test.tsx`
+  - `packages/web/src/views/GameView.tsx`
+  - `packages/web/src/views/LogPanel.tsx`
+  - `packages/web/src/views/TechPanel.tsx`
+  - `packages/web/src/views/SocialPolicyPanel.tsx`
+  - `docs/agents/tasks/responsive-map-panels.md`
+  - `docs/agents/state.md`
+- **Notes:** Board zoom and default panel state only; existing stored panel choices remain authoritative.
 
 ---
 
