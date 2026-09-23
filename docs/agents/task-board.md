@@ -17,7 +17,10 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `feat/issue-139-poll-retry`
 - **Brief:** `docs/agents/tasks/issue-139-poll-retry.md`
-- **Status:** claimed
+- **Status:** review-approved (round 3; round 1's two minors - an unpinned 1 s
+  back-off and an imprecise "GET is read-only" reason - fixed, round 2's one
+  minor corrected in the state file) - PR to open, awaiting the human's merge.
+  Claim kept until merged.
 - **Claimed paths:**
   - `packages/web/src/lib/api.ts`
   - `packages/web/src/lib/api.test.ts`
