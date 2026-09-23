@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
-import { boardWidth, createBoard, findBoardAsset } from '@civ/engine'
+import { boardWidth, createBoard, createBoardForPlayers, findBoardAsset, slotOrigin } from '@civ/engine'
 import type { BoardPiece, PlayerView } from '@civ/engine'
 
 import type { GameRevisionView } from '../lib/api.js'
@@ -183,6 +183,93 @@ describe('global replay controls', () => {
       () => active,
     )
     await expect(pending).resolves.toBeNull()
+  })
+})
+
+describe('shaped boards', () => {
+  it('fogs each playable slot of the five-player map, and nothing in the hole', () => {
+    const board = createBoardForPlayers(5)
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={board}
+        numOfPlayers={5}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+      />,
+    )
+
+    // Twenty-two playable slots where the old rectangle had twenty-four blocks;
+    // the slot at the hole (squares 12..16 by 8..14) is not among them.
+    expect(container.querySelectorAll('.board-fog-tile')).toHaveLength(22)
+    expect(container.querySelectorAll('.board-map-slot')).toHaveLength(22)
+    expect(container.querySelector('.board-map')).toBeNull()
+    cleanup()
+  })
+
+  it('fogs each playable slot of the three-player pyramid', () => {
+    const board = createBoardForPlayers(3)
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={board}
+        numOfPlayers={3}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+      />,
+    )
+
+    expect(container.querySelectorAll('.board-fog-tile')).toHaveLength(10)
+    cleanup()
+  })
+
+  it('lifts the fog from a slot that holds a tile', () => {
+    const board = createBoardForPlayers(3)
+    const first = board.slots[0]
+    if (first === undefined) throw new Error('pyramid has no slots')
+    const [x, y] = slotOrigin(board, first)
+    const tile: BoardPiece = {
+      ...piece('tiles/tile01', 'tile-one'),
+      category: 'tile',
+      x,
+      y,
+      width: 376,
+      height: 376,
+    }
+
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...board, pieces: [tile] }}
+        numOfPlayers={3}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+      />,
+    )
+
+    expect(container.querySelectorAll('.board-fog-tile')).toHaveLength(9)
+    cleanup()
+  })
+
+  it('keeps the single outlined mat on a rectangular board', () => {
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={createBoard()}
+        numOfPlayers={4}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+      />,
+    )
+
+    expect(container.querySelectorAll('.board-map')).toHaveLength(1)
+    expect(container.querySelectorAll('.board-map-slot')).toHaveLength(0)
+    expect(container.querySelectorAll('.board-fog-tile')).toHaveLength(16)
+    cleanup()
   })
 })
 
