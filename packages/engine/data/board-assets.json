@@ -152,43 +152,11 @@
       "height": 34
     },
     {
-      "id": "markers/coin",
-      "category": "marker",
-      "path": "markers/coin.png",
-      "label": "Coin",
-      "width": 38,
-      "height": 38
-    },
-    {
       "id": "markers/coin1",
       "category": "marker",
       "path": "markers/coin1.png",
-      "label": "Coin 1",
+      "label": "Coin",
       "width": 19,
-      "height": 19
-    },
-    {
-      "id": "markers/coin2",
-      "category": "marker",
-      "path": "markers/coin2.png",
-      "label": "Coin 2",
-      "width": 29,
-      "height": 19
-    },
-    {
-      "id": "markers/coin3",
-      "category": "marker",
-      "path": "markers/coin3.png",
-      "label": "Coin 3",
-      "width": 39,
-      "height": 19
-    },
-    {
-      "id": "markers/coin4",
-      "category": "marker",
-      "path": "markers/coin4.png",
-      "label": "Coin 4",
-      "width": 49,
       "height": 19
     },
     {

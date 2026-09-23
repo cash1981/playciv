@@ -140,7 +140,7 @@ describe('history over HTTP', () => {
 
   it('both players see the same history', async () => {
     const { gameId, starter, waiting } = await startedGame('Shared')
-    await place(gameId, starter, 'markers/coin', 100, 100)
+    await place(gameId, starter, 'markers/coin1', 100, 100)
 
     const theirs = await inject(app, {
       method: 'GET',

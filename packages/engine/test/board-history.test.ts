@@ -105,7 +105,7 @@ describe('recording', () => {
     const state = unwrap(
       placePiece(firstCivGame(), {
         playerId: CASH1981,
-        assetId: 'markers/coin',
+        assetId: 'markers/coin1',
         x: 0,
         y: 0,
         at,
@@ -117,7 +117,7 @@ describe('recording', () => {
   it('each entry remembers how long the game log was', () => {
     // Lets replay trim the log to what was known at the time
     let state = firstCivGame()
-    state = place(state, 'markers/coin', 0, 0)
+    state = place(state, 'markers/coin1', 0, 0)
     const before = state.board.history[0]?.logLength
 
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'HUTS' }))
@@ -211,7 +211,7 @@ describe('undo', () => {
   it('repeated undo walks all the way back to an empty board', () => {
     let state = firstCivGame()
     state = place(state, 'figures/redarmy', 100, 100)
-    state = place(state, 'markers/coin', 300, 300)
+    state = place(state, 'markers/coin1', 300, 300)
     const piece = state.board.pieces[0] as BoardPiece
     state = unwrap(movePiece(state, { playerId: CASH1981, pieceId: piece.id, x: 700, y: 700 }))
     state = unwrap(rotatePiece(state, { playerId: CASH1981, pieceId: piece.id }))

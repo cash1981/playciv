@@ -95,11 +95,29 @@ $wonderLabels = @{
 
 # Pieces to leave out of the manifest even though the source art exists, keyed by
 # "<folder>/<basename>". The white army (barbarians) was dropped as unused; see
-# issue #26.
-$exclude = @('figures/whitearmy')
+# issue #26. The extra coin denominations were dropped 2026-09-23: the palette
+# only needs one single-coin marker (coin1, labelled "Coin"); see
+# docs/agents/tasks/coin-marker-cleanup.md.
+$exclude = @(
+    'figures/whitearmy'
+    'markers/coin'
+    'markers/coin2'
+    'markers/coin3'
+    'markers/coin4'
+)
+
+# Labels for pieces whose artwork name does not read well as-is, keyed by
+# "<category>/<basename>". The coin marker is the single surviving coin, so its
+# number is dropped.
+$labelOverrides = @{
+    'marker/coin1' = 'Coin'
+}
 
 function Get-Label([string] $category, [string] $baseName) {
     $name = $baseName
+
+    $override = "$category/$baseName"
+    if ($labelOverrides.ContainsKey($override)) { return $labelOverrides[$override] }
 
     if ($category -eq 'wonder') {
         $key = $baseName.ToLower()
@@ -134,7 +152,7 @@ function Get-Label([string] $category, [string] $baseName) {
         }
     }
 
-    # "Building Program" and "coin1" -> "Building Program", "Coin 1"
+    # "tile01" -> "Tile 01"; a name that already reads well keeps its words
     $spaced = ($name -creplace '([a-z])([A-Z0-9])', '$1 $2')
     return (Get-Culture).TextInfo.ToTitleCase($spaced.ToLower()) -replace '\s+', ' '
 }
