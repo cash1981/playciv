@@ -1806,3 +1806,34 @@ no interactive board, so this is a client-only interaction choice and an
 extension of issue #115's tap/select/place model. The trade-off is that a board
 tap while armed is a destination rather than a deselect, which is exactly what
 the human asked for.
+
+## 2026-09-23 - Turn-order drafts belong to the signed-in player's own workspace
+
+**Decision.** `TurnPanel` records turn-order drafts and live-dirty markers only
+when the selected tab is the signed-in player's own (`selectedPlayer.own ===
+true`). `MarkdownEditor` keeps emitting `onChange` whatever its `readOnly` prop
+is; the ownership check lives in `TurnPanel`, not in the editor.
+
+**Why.** A live report: opening another player's turn-order tab and returning to
+your own copied that player's text into your editors, and "Save all changes"
+would have published it as yours. Drafts were keyed by turn and phase with no
+player, and wired for whichever tab was showing. The real Milkdown editor
+flushes its document through `onChange` on unmount, and Crepe can serialize that
+document differently from the value it was given (a trailing newline is enough),
+so a read-only opponent editor reported a change the parent stored as the
+signed-in player's draft.
+
+The first attempt also made a read-only `MarkdownEditor` suppress its emissions.
+The read-only review rejected it: an own editor can be transiently read-only
+while `busy` (a save, draw or board action is in flight shared across panels),
+and suppressing its batched `markdownUpdated` or unmount flush there would drop
+the player's final keystrokes. The editor does not know whose orders it shows;
+`TurnPanel` does, so the guard belongs there.
+
+**Consequences.** An opponent editor may still emit a change, but its closure
+carries `selectedPlayer.own === false` and `TurnPanel` discards it, so no
+opponent text can reach a draft, the editors, or a save. The own player's flush
+path is untouched, including while their editor is transiently read-only.
+Client-only change: no engine, server or projection change; the old client had a
+single combined orders list and no per-player tabs, so there is no old-system
+behaviour to preserve here.

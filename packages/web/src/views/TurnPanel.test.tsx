@@ -169,9 +169,12 @@ const FlushingEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
     useEffect(
       () => () => {
         // The real MarkdownEditor flushes its current document through
-        // `onChange` when it unmounts. It used to do so even when read-only,
-        // which is how viewing another player's tab left their text in the
-        // signed-in player's draft.
+        // `onChange` when it unmounts, and Crepe can serialize that document
+        // differently from the value it was given. Viewing another player's
+        // tab therefore reported their text as a change, which the parent
+        // stored as the signed-in player's draft. This double reports its
+        // document unconditionally, so the test exercises the parent's
+        // ownership guard whatever the editor emits.
         onChangeRef.current(valueRef.current)
       },
       [],

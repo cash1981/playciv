@@ -17,7 +17,9 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `fix/turn-order-draft-bleed`
 - **Brief:** `docs/agents/tasks/turn-order-draft-bleed.md`
-- **Status:** in progress
+- **Status:** review-approved (read-only reviewer, round 2: nothing above a nit;
+  the round-1 read-only-guard finding was fixed, and the remaining comment nit
+  corrected) — PR to open, awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/web/src/views/TurnPanel.tsx`
   - `packages/web/src/views/TurnPanel.test.tsx`
