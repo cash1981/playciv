@@ -16,7 +16,7 @@ import {
   leaderAssetId,
   startingCorner,
 } from '../board.js'
-import { findCoinSource } from '../coins.js'
+import { findCoinSource, socialPolicyCoinSource, techCoinSource, withCoinSource } from '../coins.js'
 import type { EngineError } from '../errors.js'
 import type { Government } from '../government.js'
 import { isGovernment, startingGovernmentFor } from '../government.js'
@@ -102,9 +102,17 @@ export function removeTech(state: GameState, input: ChooseTechInput): ActionResu
   const tech = player.techsChosen.find((candidate) => candidate.name === input.techName)
   if (tech === undefined) return err({ kind: 'ITEM_NOT_FOUND' })
 
+  // Issue #158: the counter must not outlive the card that holds it. Removing
+  // a tech is a correction path — FFG rules never take one away — so a mistyped
+  // choice cannot strand a hidden value.
+  const source = techCoinSource(tech.name)
   const next = withPlayer(state, {
     ...player,
     techsChosen: player.techsChosen.filter((candidate) => candidate.name !== tech.name),
+    stats:
+      source === undefined
+        ? player.stats
+        : { ...player.stats, coinSources: withCoinSource(player.stats.coinSources, source, 0) },
   })
 
   return ok(appendItemLog(next, 'REMOVED_TECH', player.username, player.playerId, tech))
@@ -536,9 +544,16 @@ export function removeSocialPolicy(
   const policy = player.socialPolicies.find((candidate) => candidate.name === input.name)
   if (policy === undefined) return err({ kind: 'ITEM_NOT_FOUND' })
 
+  // Issue #158: Organised Religion holds a coin, and a social policy can be
+  // swapped away; the counter goes with it.
+  const source = socialPolicyCoinSource(policy.name)
   const next = withPlayer(state, {
     ...player,
     socialPolicies: player.socialPolicies.filter((candidate) => candidate.name !== policy.name),
+    stats:
+      source === undefined
+        ? player.stats
+        : { ...player.stats, coinSources: withCoinSource(player.stats.coinSources, source, 0) },
   })
 
   return ok(appendItemLog(next, 'REMOVED_SOCIAL_POLICY', player.username, player.playerId, policy))
@@ -983,7 +998,18 @@ export function setPlayerGovernment(
     return err({ kind: 'UNKNOWN_GOVERNMENT', government: String(input.government) })
   }
 
-  const next = withPlayer(state, { ...target, government: input.government })
+  // Issue #158: the government card holds its coin, so leaving Democracy clears
+  // the source instead of leaving a hidden value behind. Setting Democracy adds
+  // no coin of its own; the counter stays manual bookkeeping.
+  const stats =
+    input.government === 'Democracy'
+      ? target.stats
+      : {
+          ...target.stats,
+          coinSources: withCoinSource(target.stats.coinSources, 'democracyGovernment', 0),
+        }
+
+  const next = withPlayer(state, { ...target, government: input.government, stats })
   const message =
     editor.playerId === target.playerId
       ? `set their government to ${input.government}`

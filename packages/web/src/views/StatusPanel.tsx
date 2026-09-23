@@ -7,21 +7,25 @@
  *
  * The panel has two sections behind a tab bar: **Status** (the table above) and
  * **Coins** (one counter per coin source per player). The Status table's Coins
- * column is the read-only sum of that player's counters.
+ * column is the read-only sum of that player's counters. Since issue #158 the
+ * Coins table only offers a source to a player who actually has it.
  */
 
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
 import {
+  ALWAYS_AVAILABLE_COIN_SOURCES,
   COIN_SOURCES,
   GOVERNMENT_CARDS,
   GOVERNMENTS,
   isInWondersArea,
   isMovementValue,
+  socialPolicyCoinSource,
+  techCoinSource,
   totalCoins,
 } from '@civ/engine'
-import type { Government, PlayerStatKey } from '@civ/engine'
+import type { CoinSourceKey, Government, PlayerStatKey } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerStats, PlayerView } from '../lib/api.js'
@@ -48,6 +52,27 @@ interface Row {
   readonly civilizationName: string | null
   readonly government: Government
   readonly stats: PlayerStats
+  /**
+   * Revealed techs and social policies only, for the viewer too (issue #158).
+   * The Coins table is shared, so a hidden card must not add a row to it — the
+   * public projections are the only safe source for either column.
+   */
+  readonly revealedTechNames: readonly string[]
+  readonly revealedPolicyNames: readonly string[]
+}
+
+/**
+ * Who owns the copies of one wonder that sit in the shared Wonders area. The
+ * Internet's raised coin limits (issue #145) and the Panama Canal coin source
+ * (issue #158) both hang off the owner.
+ */
+function wonderOwners(view: PlayerView, assetId: string): ReadonlySet<string> {
+  return new Set(
+    view.board.pieces
+      .filter((piece) => piece.assetId === assetId && isInWondersArea(view.board, piece))
+      .map((piece) => piece.ownerId)
+      .filter((owner): owner is string => owner != null),
+  )
 }
 
 type Section = 'status' | 'coins'
@@ -125,6 +150,12 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
       civilizationName: view.you.civilization?.name ?? null,
       government: view.you.government,
       stats: view.you.stats,
+      revealedTechNames: view.you.techsChosen
+        .filter((tech) => !tech.hidden)
+        .map((tech) => tech.name),
+      revealedPolicyNames: view.you.socialPolicies
+        .filter((policy) => !policy.hidden)
+        .map((policy) => policy.name),
     })
   }
 
@@ -137,6 +168,8 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
       civilizationName: opponent.civilization?.name ?? null,
       government: opponent.government,
       stats: opponent.stats,
+      revealedTechNames: opponent.revealedTechs.map((tech) => tech.name),
+      revealedPolicyNames: opponent.revealedSocialPolicies.map((policy) => policy.name),
     })
   }
 
@@ -159,14 +192,8 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
           <CoinSection
             gameId={gameId}
             rows={rows}
-            internetOwners={
-              new Set(
-                view.board.pieces
-                  .filter((piece) => piece.assetId === 'wonders/internet' && isInWondersArea(view.board, piece))
-                  .map((piece) => piece.ownerId)
-                  .filter((owner): owner is string => owner != null),
-              )
-            }
+            internetOwners={wonderOwners(view, 'wonders/internet')}
+            panamaOwners={wonderOwners(view, 'wonders/panamacanal')}
             busy={busy}
             readOnly={readOnly}
             run={run}
@@ -331,15 +358,44 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
 }
 
 /**
- * The Coins section: one row per coin source from the reference sheet, one
- * column per player, each cell a `− / +` counter capped at the source's limit.
- * A final Total row repeats each player's sum, the same number the Status
- * table's Coins column shows.
+ * The coin sources a player currently has, from public data only (issue #158):
+ * the always-available sources, the eight coin-token techs the player has
+ * revealed, Organized Religion, the Democracy government and the Panama Canal
+ * wonder in the shared Wonders area. A source that is not here gets no counter
+ * in the Coins table.
+ */
+function availableCoinSources(
+  row: Row,
+  panamaOwners: ReadonlySet<string>,
+): ReadonlySet<CoinSourceKey> {
+  const available = new Set<CoinSourceKey>(ALWAYS_AVAILABLE_COIN_SOURCES)
+  for (const name of row.revealedTechNames) {
+    const key = techCoinSource(name)
+    if (key !== undefined) available.add(key)
+  }
+  for (const name of row.revealedPolicyNames) {
+    const key = socialPolicyCoinSource(name)
+    if (key !== undefined) available.add(key)
+  }
+  if (row.government === 'Democracy') available.add('democracyGovernment')
+  if (panamaOwners.has(row.playerId)) available.add('panamaCanal')
+  return available
+}
+
+/**
+ * The Coins section: one row per coin source, one column per player, each cell
+ * a `− / +` counter capped at the source's limit. Since issue #158 only the
+ * sources a player actually has get a cell — every other cell is empty, and a
+ * row with no cell at all is not drawn. A counter that still holds coins stays
+ * visible even when its source is no longer valid, so a value can never be
+ * hidden and impossible to lower. A final Total row repeats each player's sum,
+ * the same number the Status table's Coins column shows.
  */
 function CoinSection({
   gameId,
   rows,
   internetOwners,
+  panamaOwners,
   busy,
   readOnly,
   run,
@@ -347,11 +403,18 @@ function CoinSection({
   readonly gameId: string
   readonly rows: readonly Row[]
   readonly internetOwners: ReadonlySet<string>
+  readonly panamaOwners: ReadonlySet<string>
   readonly busy: boolean
   readonly readOnly: boolean
   readonly run: Run
 }): React.JSX.Element {
   const disabled = busy || readOnly
+  const available = new Map(
+    rows.map((row) => [row.playerId, availableCoinSources(row, panamaOwners)] as const),
+  )
+  const renders = (row: Row, key: CoinSourceKey): boolean =>
+    available.get(row.playerId)?.has(key) === true || row.stats.coinSources[key] > 0
+  const sources = COIN_SOURCES.filter((source) => rows.some((row) => renders(row, source.key)))
   return (
     <div className="scroll-x">
       <table className="status-table coin-table">
@@ -371,35 +434,44 @@ function CoinSection({
           </tr>
         </thead>
         <tbody>
-          {COIN_SOURCES.map((source) => (
+          {sources.map((source) => (
             <tr key={source.key}>
               <th scope="row">
                 <span className="coin-source">
                   <span>{source.label}</span>
-                  <span className="muted">{source.help}</span>
+                  {source.help !== '' && <span className="muted">{source.help}</span>}
                 </span>
               </th>
               {rows.map((row) => (
                 <td key={row.playerId}>
-                  <CoinCounter
-                    label={`${row.username} ${source.label}`}
-                    value={row.stats.coinSources[source.key]}
-                    max={
-                      source.max !== null &&
-                      ['codeOfLaws', 'pottery', 'democracy', 'printingPress'].includes(source.key) &&
-                      internetOwners.has(row.playerId)
-                        ? source.max + 2
-                        : source.max
-                    }
-                    disabled={disabled}
-                    onChange={(value) =>
-                      void run(() => api.setPlayerCoin(gameId, row.playerId, source.key, value))
-                    }
-                  />
+                  {renders(row, source.key) && (
+                    <CoinCounter
+                      label={`${row.username} ${source.label}`}
+                      value={row.stats.coinSources[source.key]}
+                      max={
+                        source.max !== null &&
+                        ['codeOfLaws', 'pottery', 'democracy', 'printingPress'].includes(source.key) &&
+                        internetOwners.has(row.playerId)
+                          ? source.max + 2
+                          : source.max
+                      }
+                      disabled={disabled}
+                      onChange={(value) =>
+                        void run(() => api.setPlayerCoin(gameId, row.playerId, source.key, value))
+                      }
+                    />
+                  )}
                 </td>
               ))}
             </tr>
           ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={1} className="muted">
+                Nobody has joined yet.
+              </td>
+            </tr>
+          )}
         </tbody>
         <tfoot>
           <tr>

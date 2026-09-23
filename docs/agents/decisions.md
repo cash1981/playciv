@@ -2213,3 +2213,40 @@ that estimates were intended only for migrated games.
 conservative OpenSkill value. The highscore UI displays that value times 100,
 rounded to an integer, and may show negative numbers. Numeric sorting and
 existing stored historical results stay unchanged.
+
+---
+
+## 2026-09-23 - Only valid coin sources are shown, and an invalid source clears its counter
+
+**Decision.** The Coins tab of Player status (issue #158) only gives a counter
+to a source a player actually has: a coin-token tech the player has revealed,
+the Organized Religion social policy revealed, the Democracy government, or
+the Panama Canal wonder in the shared Wonders area. Bank, Great People,
+Terrain and Sheet are always available; every other cell is empty and a row
+with no cell is not drawn. Visibility uses revealed techs and policies for the
+viewer's own column too, so a hidden card cannot leak through the shared
+table. The Great People helper text "50% chance of providing 1 coin" is
+removed. Three reducers reset the counter when its source goes away —
+`removeTech` (a correction path, the FFG rules never remove a tech),
+`removeSocialPolicy` (a policy can be swapped, like a government) and
+`setPlayerGovernment` when the new government is not Democracy. Anyone may
+still edit any counter: the human kept the shared-bookkeeping model, and the
+restriction is display only. A counter that still holds coins is always
+shown, even when its source is invalid, so no value can be hidden and
+impossible to lower; the one case left without an engine reset is a Panama
+Canal piece that is moved or loses its owner, which the human states cannot
+happen.
+
+**Why.** The human asked in issue #158 for only valid choices to appear, to
+make the page readable, and clarified the rules in conversation: "UI visningen
+kun vises for den som eier det", government and social policy changes remove
+their coin, and "Jeg ønsker den vekk fra visning dersom man ikke lengre har noe
+der."
+
+**Consequences.** `coins.ts` gains `techCoinSource`, `socialPolicyCoinSource`,
+`ALWAYS_AVAILABLE_COIN_SOURCES` and `withCoinSource`; the client composes them
+with the player's public state. The engine still accepts any known source
+within its printed limit through `setCoinSource` — a stale client's write to
+an invalid source shows up again because its value is above zero. No state
+shape changed, so no migration is needed. A row-added coverage test fails if a
+new coin source is not wired into one of the availability rules.

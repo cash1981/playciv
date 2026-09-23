@@ -12,6 +12,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+_Nothing claimed._
+
 ---
 
 ## Format
