@@ -8,10 +8,16 @@ import { readdirSync, readFileSync } from 'node:fs'
 
 const migrationsDir = new URL('../../worker/migrations/', import.meta.url)
 
-export function readMigrations(): string {
+/** Every committed migration, in filename order, with its name. */
+export function readMigrationFiles(): readonly { readonly name: string; readonly sql: string }[] {
   return readdirSync(migrationsDir)
     .filter((name) => name.endsWith('.sql'))
     .sort()
-    .map((name) => readFileSync(new URL(name, migrationsDir), 'utf8'))
+    .map((name) => ({ name, sql: readFileSync(new URL(name, migrationsDir), 'utf8') }))
+}
+
+export function readMigrations(): string {
+  return readMigrationFiles()
+    .map((migration) => migration.sql)
     .join('\n')
 }

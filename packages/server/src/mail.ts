@@ -16,6 +16,13 @@ export interface OutgoingEmail {
 }
 
 export interface Mailer {
+  /**
+   * True when a send really reaches a provider. The no-op mailer is false, and
+   * a route that needs to know whether mail can actually go out reads
+   * `Notifications.emailDeliveryEnabled`, which is this value. Registration
+   * auto-verifies exactly when it is false (issue #42).
+   */
+  readonly enabled: boolean
   send(email: OutgoingEmail): Promise<void>
 }
 
@@ -26,6 +33,7 @@ export interface Mailer {
  * returned false rather than failing the request).
  */
 export const noopMailer: Mailer = {
+  enabled: false,
   async send() {
     // Intentionally empty.
   },
@@ -59,6 +67,7 @@ export function createResendMailer(options: ResendMailerOptions): Mailer {
   const doFetch = options.fetchImpl ?? fetch
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   return {
+    enabled: true,
     async send(email: OutgoingEmail): Promise<void> {
       const response = await doFetch(RESEND_ENDPOINT, {
         method: 'POST',

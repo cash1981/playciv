@@ -196,4 +196,189 @@ export class ResetTokenSigner {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Derived-key link and token signers
+// ---------------------------------------------------------------------------
+
+/**
+ * The signature machinery the signers below share. Each kind of token derives
+ * its own key from the session secret, so a token minted for one purpose cannot
+ * be replayed as another even when their payloads overlap. A plain
+ * `TokenSigner` would accept any signed body with a `playerId` and a future
+ * `expiresAt`, which is exactly what these payloads carry.
+ */
+function derivedKey(secret: string, label: string): string {
+  return createHmac('sha256', secret).update(label).digest('hex')
+}
+
+function signExpiring(
+  key: string,
+  payload: Record<string, unknown>,
+  ttlMs: number,
+  now: number,
+): string {
+  const body = base64url(JSON.stringify({ ...payload, expiresAt: now + ttlMs }))
+  return `${body}.${createHmac('sha256', key).update(body).digest('base64url')}`
+}
+
+function verifyExpiring<T>(
+  key: string,
+  token: string,
+  parse: (raw: Record<string, unknown>) => T | undefined,
+): T | undefined {
+  const [body, signature] = token.split('.')
+  if (body === undefined || signature === undefined) return undefined
+
+  const expected = createHmac('sha256', key).update(body).digest('base64url')
+  if (
+    signature.length !== expected.length ||
+    !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+  ) {
+    return undefined
+  }
+
+  let raw: unknown
+  try {
+    raw = JSON.parse(fromBase64url(body))
+  } catch {
+    return undefined
+  }
+  if (typeof raw !== 'object' || raw === null) return undefined
+  return parse(raw as Record<string, unknown>)
+}
+
+/** What an email-verification link carries. The player id, nothing else. */
+export interface EmailVerifyTokenPayload {
+  readonly playerId: string
+  readonly expiresAt: number
+}
+
+const EMAIL_VERIFY_KEY_LABEL = 'email-verification'
+
+/**
+ * Signs the "verify your email" link (issue #42). Modelled on
+ * `ResetTokenSigner` and using its own key label, so a verification token
+ * cannot authenticate as a session token or complete a password reset even
+ * though all three carry a `playerId`. `ttlMs` defaults to 24 hours.
+ */
+export class EmailVerifyTokenSigner {
+  private readonly key: string
+  private readonly ttlMs: number
+
+  constructor(secret: string, ttlMs = 24 * 60 * 60 * 1000) {
+    this.key = derivedKey(secret, EMAIL_VERIFY_KEY_LABEL)
+    this.ttlMs = ttlMs
+  }
+
+  sign(payload: { readonly playerId: string }, now = Date.now()): string {
+    return signExpiring(this.key, payload, this.ttlMs, now)
+  }
+
+  verify(token: string, now = Date.now()): EmailVerifyTokenPayload | undefined {
+    return verifyExpiring(this.key, token, (raw) => {
+      const playerId = raw['playerId']
+      const expiresAt = raw['expiresAt']
+      if (typeof playerId !== 'string') return undefined
+      if (typeof expiresAt !== 'number' || expiresAt < now) return undefined
+      return { playerId, expiresAt }
+    })
+  }
+}
+
+/** The PKCE verifier and the provider carried from start to callback. */
+export interface OAuthStatePayload {
+  readonly provider: string
+  readonly codeVerifier: string
+  readonly expiresAt: number
+}
+
+const OAUTH_STATE_KEY_LABEL = 'oauth-state'
+
+/**
+ * Signs the OAuth `state` (issue #121). Self-contained — no cookie, the same
+ * idea as the reset link — and short lived. The callback refuses a state signed
+ * for a different provider than the one in the path. `ttlMs` defaults to 10
+ * minutes.
+ */
+export class OAuthStateSigner {
+  private readonly key: string
+  private readonly ttlMs: number
+
+  constructor(secret: string, ttlMs = 10 * 60 * 1000) {
+    this.key = derivedKey(secret, OAUTH_STATE_KEY_LABEL)
+    this.ttlMs = ttlMs
+  }
+
+  sign(
+    payload: { readonly provider: string; readonly codeVerifier: string },
+    now = Date.now(),
+  ): string {
+    return signExpiring(this.key, payload, this.ttlMs, now)
+  }
+
+  verify(token: string, now = Date.now()): OAuthStatePayload | undefined {
+    return verifyExpiring(this.key, token, (raw) => {
+      const provider = raw['provider']
+      const codeVerifier = raw['codeVerifier']
+      const expiresAt = raw['expiresAt']
+      if (typeof provider !== 'string' || typeof codeVerifier !== 'string') return undefined
+      if (typeof expiresAt !== 'number' || expiresAt < now) return undefined
+      return { provider, codeVerifier, expiresAt }
+    })
+  }
+}
+
+/** A provider identity held until the user picks a username (issue #121). */
+export interface PendingRegistrationPayload {
+  readonly provider: string
+  readonly providerUserId: string
+  readonly email: string | null
+  readonly emailVerified: boolean
+  readonly expiresAt: number
+}
+
+const PENDING_REGISTRATION_KEY_LABEL = 'oauth-pending'
+
+/**
+ * Signs the pending-registration token handed to the SPA after a first provider
+ * login. The account row is only created in the completion step, so an
+ * abandoned signup leaves nothing behind. `ttlMs` defaults to 15 minutes.
+ */
+export class PendingRegistrationSigner {
+  private readonly key: string
+  private readonly ttlMs: number
+
+  constructor(secret: string, ttlMs = 15 * 60 * 1000) {
+    this.key = derivedKey(secret, PENDING_REGISTRATION_KEY_LABEL)
+    this.ttlMs = ttlMs
+  }
+
+  sign(
+    payload: {
+      readonly provider: string
+      readonly providerUserId: string
+      readonly email: string | null
+      readonly emailVerified: boolean
+    },
+    now = Date.now(),
+  ): string {
+    return signExpiring(this.key, payload, this.ttlMs, now)
+  }
+
+  verify(token: string, now = Date.now()): PendingRegistrationPayload | undefined {
+    return verifyExpiring(this.key, token, (raw) => {
+      const provider = raw['provider']
+      const providerUserId = raw['providerUserId']
+      const email = raw['email']
+      const emailVerified = raw['emailVerified']
+      const expiresAt = raw['expiresAt']
+      if (typeof provider !== 'string' || typeof providerUserId !== 'string') return undefined
+      if (email !== null && typeof email !== 'string') return undefined
+      if (typeof emailVerified !== 'boolean') return undefined
+      if (typeof expiresAt !== 'number' || expiresAt < now) return undefined
+      return { provider, providerUserId, email, emailVerified, expiresAt }
+    })
+  }
+}
+
 export const newId = (): string => randomUUID()

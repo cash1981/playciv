@@ -8,17 +8,40 @@ import { hasUserAccess, toPlayerView } from '@civ/engine'
 import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
 
-import type { ResetTokenSigner, TokenSigner } from './auth.js'
+import type {
+  EmailVerifyTokenSigner,
+  OAuthStateSigner,
+  PendingRegistrationSigner,
+  ResetTokenSigner,
+  TokenSigner,
+} from './auth.js'
 import { sendEngineError, sendError } from './errors.js'
 import type { Notifications } from './notifications.js'
-import type { GameRevision, Repository, StoredPlayer } from './store/types.js'
+import type { GameRevision, ProviderId, Repository, StoredPlayer } from './store/types.js'
+
+/** One configured OAuth provider's credentials. */
+export interface ProviderCredentials {
+  readonly clientId: string
+  readonly clientSecret: string
+}
+
+/** Only the providers with both a client id and a secret are usable. */
+export type ProviderConfigMap = Partial<Record<ProviderId, ProviderCredentials>>
 
 export interface AppContext {
   readonly repo: Repository
   readonly tokens: TokenSigner
   /** Signs the password-reset links (issue #37); a key separate from `tokens`. */
   readonly resetTokens: ResetTokenSigner
+  /** Signs the "verify your email" links (issue #42); its own key. */
+  readonly verifyTokens: EmailVerifyTokenSigner
+  /** Signs the OAuth `state` (issue #121); its own key. */
+  readonly oauthStates: OAuthStateSigner
+  /** Signs the pending-registration token between provider login and completion. */
+  readonly pendingRegistrations: PendingRegistrationSigner
   readonly notifications: Notifications
+  /** The OAuth providers configured through the environment; others are hidden. */
+  readonly providers: ProviderConfigMap
   /** Absolute base URL of the web app, used in email links. */
   readonly appOrigin: string
 }
@@ -26,8 +49,19 @@ export interface AppContext {
 /** The Hono context variables set once `authenticate` has run. */
 export type Variables = { player: StoredPlayer }
 
-/** Requires a valid bearer token and puts the player on the context. */
-export function authenticateWith(context: AppContext) {
+/**
+ * Requires a valid bearer token and puts the player on the context.
+ *
+ * An account that has not verified its email (issue #42) may sign in and read —
+ * every `GET` is allowed — but its writes are refused with
+ * `403 EMAIL_NOT_VERIFIED`, so an unverified account cannot take part. The
+ * resend route is the single exemption: an unverified account has to be able to
+ * request a new link, so it passes `allowUnverified` (see `routes/auth.ts`).
+ */
+export function authenticateWith(
+  context: AppContext,
+  options: { readonly allowUnverified?: boolean } = {},
+) {
   return createMiddleware<{ Variables: Variables }>(async (c, next) => {
     const header = c.req.header('authorization')
     if (header === undefined || !header.startsWith('Bearer ')) {
@@ -48,6 +82,19 @@ export function authenticateWith(context: AppContext) {
       return sendError(c, 403, 'ACCOUNT_DISABLED', 'This account is disabled')
     }
 
+    if (
+      player.emailVerified === false &&
+      options.allowUnverified !== true &&
+      c.req.method !== 'GET'
+    ) {
+      return sendError(
+        c,
+        403,
+        'EMAIL_NOT_VERIFIED',
+        'Verify your email address before making changes',
+      )
+    }
+
     c.set('player', player)
     await next()
   })
@@ -64,6 +111,11 @@ export function authenticateWith(context: AppContext) {
  * 401/403 exactly like `authenticateWith` — silently downgrading it to
  * "spectator" would hide a real player's expired session behind what looks
  * like their own game turning read-only.
+ *
+ * The `emailVerified` write gate is deliberately absent here: every route that
+ * uses this is a `GET` (issue #42 allows an unverified account to read), so the
+ * gate in `authenticateWith` would never fire. If a write route ever uses this
+ * middleware, it must gate too.
  */
 export function authenticateOptionallyWith(context: AppContext) {
   return createMiddleware<{ Variables: Variables }>(async (c, next) => {

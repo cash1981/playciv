@@ -7,6 +7,7 @@ import { asRecord, currentPlayer, requireAdminWith, requireString } from '../con
 import { sendError } from '../errors.js'
 import { toPlayerDto } from './auth.js'
 import type { PlayerUpdate, StoredPlayer, UserRole } from '../store/types.js'
+import { sendVerificationEmail } from '../verification.js'
 
 export type AdminUserDto = ReturnType<typeof toPlayerDto> & {
   readonly createdAt: string
@@ -71,6 +72,12 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       else return sendError(c, 400, 'BAD_REQUEST', 'email must be a string or null')
     }
 
+    const verifiedValue = body['emailVerified']
+    if (verifiedValue !== undefined && typeof verifiedValue !== 'boolean') {
+      return sendError(c, 400, 'BAD_REQUEST', 'emailVerified must be a boolean')
+    }
+    const emailVerified = verifiedValue as boolean | undefined
+
     let username: string | undefined
     if (hasField(body, 'username')) {
       if (typeof body['username'] !== 'string') {
@@ -89,7 +96,13 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       username = trimmed
     }
 
-    if (role === undefined && disabled === undefined && email === undefined && username === undefined) {
+    if (
+      role === undefined &&
+      disabled === undefined &&
+      email === undefined &&
+      username === undefined &&
+      emailVerified === undefined
+    ) {
       return sendError(c, 400, 'BAD_REQUEST', 'At least one user field is required')
     }
 
@@ -111,8 +124,14 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
     const changes: PlayerUpdate = {
       ...(username !== undefined ? { username } : {}),
       ...(email !== undefined ? { email } : {}),
+      // A changed address is unproven, so it clears verification — unless the
+      // admin sets it explicitly in the same request (issue #42).
+      ...(email !== undefined && email !== target.email && emailVerified === undefined
+        ? { emailVerified: false }
+        : {}),
       ...(role !== undefined ? { role } : {}),
       ...(disabled !== undefined ? { disabled } : {}),
+      ...(emailVerified !== undefined ? { emailVerified } : {}),
     }
     const updated = await context.repo.updatePlayer(target.id, changes)
     if (updated === undefined) {
@@ -144,6 +163,22 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       return sendError(c, 404, 'USER_NOT_FOUND', `No user with id ${userId}`)
     }
     return c.body(null, 204)
+  })
+
+  /**
+   * Sends the verification link to an account (issue #42), so an admin can
+   * re-send it without changing anything. Best-effort like every mail path:
+   * answers `{ ok: true }` even when the send fails, or when the account has no
+   * address to send to.
+   */
+  app.post('/api/admin/users/:userId/send-verification', admin, async (c) => {
+    const userId = c.req.param('userId')
+    const target = await context.repo.findPlayerById(userId)
+    if (target === undefined) {
+      return sendError(c, 404, 'USER_NOT_FOUND', `No user with id ${userId}`)
+    }
+    await sendVerificationEmail(context, target)
+    return c.json({ ok: true })
   })
 
   /**

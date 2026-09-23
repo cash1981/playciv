@@ -128,6 +128,69 @@ Every page also carries the old site-wide footer: the copyright line, the
 Apache 2.0 license link, the PayPal donate button (issue #77) and a Buy Me a
 Coffee button beside it.
 
+## Social login and email verification
+
+An account created with a username and a password must prove control of its
+email address before it can take part (issue #42). It can sign in and read, but
+every write answers `403 EMAIL_NOT_VERIFIED` until the link in the mail is
+opened. The link is a signed, 24-hour token in the same style as the
+password-reset link, and opening it marks the address verified; the
+password-reset link verifies it too. The ~554 migrated accounts are grandfathered
+as verified, so only new accounts are affected. With no mail provider configured
+— local development, or a missing `RESEND_API_KEY` in production — registration
+marks the account verified and prints the link to the server console instead, so
+a local round can still be played.
+
+People can also create or sign into an account with Google, Facebook or Discord
+instead of a password (issue #121). Such an account is verified when the provider
+says the address is verified, and one identity with a matching verified email is
+auto-linked to an existing account. When two accounts share that address the
+login is refused with `oauth_duplicate_email` and an admin has to help. The old
+security question — "What is China's starting tech?", answered `writing` — still
+applies to everyone, and is asked together with the username in the completion
+step after the first provider login. **Apple is deliberately not shipped**: it
+needs a paid Apple Developer Program membership, which the owner refused, so
+only the free providers are in. Adding another provider is a new entry in the
+table in `packages/server/src/oauth.ts`.
+
+### Provider configuration
+
+| Variable | What it is |
+| --- | --- |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud OAuth 2.0 client |
+| `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` | Facebook app |
+| `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | Discord application |
+
+A provider is offered — its button appears and its start route answers — only
+when both its client id and its secret are set. Set them in a gitignored
+`packages/server/.env` locally, or as Worker secrets in the Cloudflare dashboard
+in production. The redirect (callback) URL to register with each provider is
+built from `APP_ORIGIN`:
+
+```
+{APP_ORIGIN}/api/auth/oauth/google/callback
+{APP_ORIGIN}/api/auth/oauth/facebook/callback
+{APP_ORIGIN}/api/auth/oauth/discord/callback
+```
+
+### Provider setup checklist
+
+- **Google Cloud** — create an OAuth 2.0 Client ID of type *Web application*,
+  add the Google callback URL above as an *Authorized redirect URI*, and copy
+  the client id and secret. The identity is read from Google's OIDC userinfo
+  endpoint.
+- **Facebook** — create an app at developers.facebook.com with the *Facebook
+  Login* product, add the Facebook callback URL above as a *Valid OAuth Redirect
+  URI*, and request the `email` permission. A returned address counts as
+  verified: Facebook only ever exposes a confirmed primary address.
+- **Discord** — create an application at discord.com/developers, add the Discord
+  callback URL above as a redirect, and copy the client id and secret.
+
+Every provider uses OAuth 2.0 authorization code with PKCE S256. The `state` is a
+signed, ten-minute token carrying the PKCE verifier and the provider, so the
+callback refuses a state that is forged, expired or signed for a different
+provider.
+
 ## The board
 
 At the top of the game page sits an interactive board that replaces the Google
