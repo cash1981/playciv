@@ -13,11 +13,19 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 476 engine, 197 server, 168 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 476 engine, 199 server, 169 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Current game rating evidence and display.** Fresh finished games rank
+  nonwinners using the actual culture marker step and the coin total from
+  player status; the old migration's estimates remain unchanged. The rating
+  column shows rounded OpenSkill points on a 100-times scale, including valid
+  negative values, while sorting and cached API values stay unscaled.
+  Read-only review approved with no findings; full checks pass (476 engine,
+  199 server, 169 web tests). Branch `fix/rating-current-state`.
 
 - **Issue #87: multiplayer rating and durable highscore cache.** OpenSkill rates
   two- to five-player results using the explicit winner and conservative

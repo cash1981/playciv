@@ -3,7 +3,7 @@
 - **Slug:** `rating-current-state`
 - **Branch:** `fix/rating-current-state`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 

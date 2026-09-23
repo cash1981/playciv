@@ -12,21 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### rating-current-state
-
-- **Owner:** Codex
-- **Branch:** `fix/rating-current-state`
-- **Brief:** `docs/agents/tasks/rating-current-state.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/server/src/store/rating.ts`
-  - `packages/server/test/rating.test.ts`
-  - `packages/web/src/views/HighscoreView.tsx`
-  - `packages/web/src/views/HighscoreView.test.tsx`
-  - `docs/agents/tasks/rating-current-state.md`
-  - `docs/agents/state.md`
-  - `docs/agents/task-board.md`
-- **Notes:** Fresh-game rating evidence only; legacy backfill stays unchanged.
+_Nothing claimed._
 
 ---
 
