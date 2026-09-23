@@ -60,6 +60,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       latestMarkdownRef.current = markdown
       if (markdown === lastEmittedRef.current) return
       lastEmittedRef.current = markdown
+      // A read-only editor has no edits to report. Crepe can still serialize
+      // the document it was given differently (a trailing newline is enough),
+      // and the unmount flush below would otherwise report that as a change —
+      // which, for another player's read-only orders, the parent would store
+      // as the signed-in player's draft for the same turn.
+      if (readOnlyRef.current) return
       onChangeRef.current(markdown)
     }
 

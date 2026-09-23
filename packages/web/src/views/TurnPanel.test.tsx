@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { createRef, forwardRef, useImperativeHandle, useRef, useState } from 'react'
+import { createRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -32,6 +32,8 @@ const milkdownLifecycle = vi.hoisted(() => ({
   create: (): Promise<void> => Promise.resolve(),
   getMarkdownCalls: 0,
   instances: [] as MockCrepeBuilderRecord[],
+  /** Simulates Crepe serializing the document differently from its value. */
+  serialize: (markdown: string): string => markdown,
 }))
 
 vi.mock('@milkdown/crepe/builder', () => ({
@@ -70,7 +72,7 @@ vi.mock('@milkdown/crepe/builder', () => ({
     getMarkdown(): string {
       milkdownLifecycle.getMarkdownCalls += 1
       if (!this.created) throw new Error('getMarkdown called before create completed')
-      return this.markdown
+      return milkdownLifecycle.serialize(this.markdown)
     }
 
     destroy(): Promise<void> {
@@ -159,11 +161,42 @@ const DelayedEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
   },
 )
 
+const FlushingEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
+  function FlushingEditor({ value, onChange, onDirty, readOnly, ariaLabel }, ref) {
+    const valueRef = useRef(value)
+    const onChangeRef = useRef(onChange)
+    onChangeRef.current = onChange
+    valueRef.current = value
+    useImperativeHandle(ref, () => ({ getMarkdown: () => valueRef.current }))
+    useEffect(
+      () => () => {
+        // The real MarkdownEditor flushes its current document through
+        // `onChange` when it unmounts. It used to do so even when read-only,
+        // which is how viewing another player's tab left their text in the
+        // signed-in player's draft.
+        onChangeRef.current(valueRef.current)
+      },
+      [],
+    )
+    return (
+      <textarea
+        aria-label={ariaLabel}
+        data-readonly={readOnly ? 'true' : 'false'}
+        readOnly={readOnly}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onInput={() => onDirty?.()}
+      />
+    )
+  },
+)
+
 afterEach(() => {
   cleanup()
   milkdownLifecycle.create = () => Promise.resolve()
   milkdownLifecycle.getMarkdownCalls = 0
   milkdownLifecycle.instances.length = 0
+  milkdownLifecycle.serialize = (markdown) => markdown
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
@@ -240,6 +273,39 @@ describe('MarkdownEditor lifecycle', () => {
 
     expect(saved).toEqual(['Fallback Markdown'])
     expect(milkdownLifecycle.getMarkdownCalls).toBe(0)
+  })
+
+  it('reports an editable document when it unmounts but never a read-only one', async () => {
+    // Crepe can serialize the mounted document differently from the value it
+    // was given — a trailing newline is enough. That difference must not look
+    // like a change when the editor is read-only (another player's orders).
+    milkdownLifecycle.serialize = (markdown) => `${markdown}\n`
+
+    const editableChange = vi.fn()
+    const editable = render(
+      <MarkdownEditor
+        value="My orders"
+        onChange={editableChange}
+        readOnly={false}
+        ariaLabel="Editable editor"
+      />,
+    )
+    await waitFor(() => expect(milkdownLifecycle.instances).toHaveLength(1))
+    editable.unmount()
+    expect(editableChange).toHaveBeenCalledWith('My orders\n')
+
+    const readOnlyChange = vi.fn()
+    const readOnly = render(
+      <MarkdownEditor
+        value="Their orders"
+        onChange={readOnlyChange}
+        readOnly={true}
+        ariaLabel="Read-only editor"
+      />,
+    )
+    await waitFor(() => expect(milkdownLifecycle.instances).toHaveLength(2))
+    readOnly.unmount()
+    expect(readOnlyChange).not.toHaveBeenCalled()
   })
 })
 
@@ -784,6 +850,48 @@ describe('TurnPanel save all changes', () => {
       'MOVEMENT',
       'Opponent private strategy',
     )
+  })
+
+  it('keeps the signed-in player text when returning from another player tab', async () => {
+    const ownTurn = turn('cash1981', false, 1, { ...orders, MOVEMENT: 'Own movement plan' })
+    const opponentTurn = turn('Andrius', false, 1, {
+      ...orders,
+      MOVEMENT: 'Opponent movement plan',
+    })
+    const playerView = viewFor([ownTurn], [
+      { username: 'Andrius', color: 'Blue', playernumber: 2 } as PlayerView['opponents'][number],
+    ])
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([opponentTurn])
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={FlushingEditor}
+      />,
+    )
+
+    const ownMovement = await screen.findByRole('textbox', {
+      name: /movement orders for cash1981.*turn 1/i,
+    })
+    expect((ownMovement as HTMLTextAreaElement).value).toBe('Own movement plan')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Andrius' }))
+    expect(
+      (screen.getByRole('textbox', {
+        name: /movement orders for Andrius.*turn 1/i,
+      }) as HTMLTextAreaElement).value,
+    ).toBe('Opponent movement plan')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'cash1981' }))
+    expect(
+      (screen.getByRole('textbox', {
+        name: /movement orders for cash1981.*turn 1/i,
+      }) as HTMLTextAreaElement).value,
+    ).toBe('Own movement plan')
   })
 
   it('removes successful drafts so a retry only sends the failed phase', async () => {
