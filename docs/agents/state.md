@@ -52,7 +52,7 @@ _Last updated: 2026-09-23_
   and one full `pnpm -r test` green (468 engine, 178 server, 148 web), while
   the old file failed 2 of 2 full web suites under the same load with the same
   `expected [] to have a length of 1`. Branch
-  `fix/issue-146-turnpanel-test-flake`; PR to open; see `decisions.md`.
+  `fix/issue-146-turnpanel-test-flake`; PR #151 open; see `decisions.md`.
 
 - **Coin sources per player, with a Coins section in Player status.** The panel
   has a second section behind a tab bar. It lists the reference sheet's fifteen

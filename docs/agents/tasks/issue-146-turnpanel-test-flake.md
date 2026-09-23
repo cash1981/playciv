@@ -3,7 +3,7 @@
 - **Slug:** `issue-146-turnpanel-test-flake`
 - **Branch:** `fix/issue-146-turnpanel-test-flake`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Status:** in progress
+- **Status:** review-approved (round 1; nothing above a nit) - PR #151 open
 
 ## Goal
 
