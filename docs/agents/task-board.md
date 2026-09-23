@@ -18,8 +18,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Branch:** `feat/board-tap-to-move`
 - **Brief:** `docs/agents/tasks/board-tap-to-move.md`
 - **Status:** review-approved (read-only reviewer on `deepseek/deepseek-v4-pro`,
-  as Sol is not available in this session; no findings above a nit) — PR to open,
-  awaiting the human's merge. Claim kept until merged.
+  as Sol is not available in this session; no findings above a nit) — PR #136
+  open, awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/web/src/views/BoardView.tsx`
   - `packages/web/src/views/BoardView.test.tsx`

@@ -15,7 +15,7 @@ _Last updated: 2026-09-23_
 | `pnpm -r typecheck` | passing |
 | `pnpm -r test` | passing - 449 engine, 173 server, 123 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; PR #134 merged; `feat/board-tap-to-move` PR to open |
+| `main` pushed to `origin` | yes; PR #134 merged; open pull request: #136 (board tap-to-move) |
 
 ## Done
 
@@ -29,7 +29,8 @@ _Last updated: 2026-09-23_
   deselect touch pieces") removed; `state.md` had kept claiming it existed.
   Client-only: no engine, server, projection or CSS change. Branch
   `feat/board-tap-to-move`; review-approved in one read-only round with nothing
-  above a nit (reviewer `deepseek/deepseek-v4-pro`, as Sol is unavailable).
+  above a nit (reviewer `deepseek/deepseek-v4-pro`, as Sol is unavailable);
+  PR #136 open.
   3 new web tests (123 total). Browser-verified in a real 390 x 844 CSS
   viewport: one tap armed the piece, the next tap sent `movePiece` (HTTP 200,
   the exact tapped board coordinate), a drag moved and disarmed, a swipe sent
