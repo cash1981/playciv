@@ -1891,6 +1891,138 @@ ul.history > li {
   box-shadow: 0 1rem 3rem rgb(0 0 0 / 45%);
 }
 
+.reference.join-color-dialog {
+  width: min(92vw, 30rem);
+  padding: 1.1rem;
+}
+
+.join-color-content > p {
+  margin: 0.45rem 0 1rem;
+}
+
+.join-color-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.join-color-fieldset legend {
+  margin-bottom: 0.55rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.join-color-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.join-color-option {
+  position: relative;
+  display: flex;
+  min-height: 5.2rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.65rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+}
+
+.join-color-option:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.join-color-option.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel-2));
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.join-color-option:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.join-color-option input[type='radio'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+
+.join-color-swatch {
+  display: block;
+  width: 1.65rem;
+  height: 1.65rem;
+  border: 2px solid rgb(255 255 255 / 78%);
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgb(0 0 0 / 38%), inset 0 0 0 1px rgb(0 0 0 / 12%);
+}
+
+.join-color-swatch-blue {
+  background: #00b9e5;
+}
+
+.join-color-swatch-green {
+  background: #42df05;
+}
+
+.join-color-swatch-red {
+  background: #f51d20;
+}
+
+.join-color-swatch-yellow {
+  background: #fff500;
+}
+
+.join-color-swatch-purple {
+  background: #ed00c4;
+}
+
+.join-color-selected {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.join-color-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
+.join-color-actions button {
+  min-width: 5.25rem;
+}
+
+@media (max-width: 600px) {
+  .join-color-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .join-color-actions {
+    flex-wrap: wrap;
+  }
+
+  .join-color-actions button {
+    flex: 1 1 auto;
+    min-height: 2.75rem;
+  }
+}
+
 .reference-heading {
   display: flex;
   align-items: center;

@@ -28,12 +28,13 @@
  *   (`info` in `styles.css`); `Full` stays the plain, disabled default.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PlayerDto, PublicGameSummary } from '../lib/api.js'
 import { formatTimestamp } from '../lib/formatTimestamp.js'
 import { SortableTable } from './SortableTable.js'
 import type { SortableColumn } from './SortableTable.js'
+import { ReferenceDialog } from './ReferenceDialog.js'
 import { Tabs } from './Tabs.js'
 
 type Tab = 'active' | 'finished'
@@ -67,9 +68,7 @@ function actionCell(
   player: PlayerDto | null,
   busy: boolean,
   onOpenGame: (gameId: string) => void,
-  selectedColors: Readonly<Record<string, string>>,
-  onColorChange: (gameId: string, color: string) => void,
-  onJoin: (gameId: string, color: string) => void,
+  onRequestJoin: (game: PublicGameSummary, button: HTMLButtonElement) => void,
 ): React.ReactNode {
   const full = game.players.length >= game.numOfPlayers
 
@@ -82,29 +81,15 @@ function actionCell(
       )
     }
     if (game.active && !full) {
-      const requestedColor = selectedColors[game.id]
-      const color = game.availableColors.includes(requestedColor ?? '')
-        ? requestedColor ?? ''
-        : game.availableColors[0] ?? ''
       return (
-        <>
-          <select
-            aria-label={`Color for ${game.name}`}
-            value={color}
-            disabled={game.availableColors.length === 0 || busy}
-            onChange={(event) => onColorChange(game.id, event.target.value)}
-          >
-            {game.availableColors.map((color) => <option key={color} value={color}>{color}</option>)}
-          </select>
-          <button
-            type="button"
-            className="small success"
-            disabled={busy || game.availableColors.length === 0}
-            onClick={() => onJoin(game.id, color)}
-          >
-            Join
-          </button>
-        </>
+        <button
+          type="button"
+          className="small success"
+          disabled={busy || game.availableColors.length === 0}
+          onClick={(event) => onRequestJoin(game, event.currentTarget)}
+        >
+          Join
+        </button>
       )
     }
     if (game.active) {
@@ -126,10 +111,8 @@ interface ColumnOptions {
   readonly withAction: boolean
   readonly player: PlayerDto | null
   readonly busy: boolean
-  readonly selectedColors: Readonly<Record<string, string>>
-  readonly onColorChange: (gameId: string, color: string) => void
+  readonly onRequestJoin: (game: PublicGameSummary, button: HTMLButtonElement) => void
   readonly onOpenGame: (gameId: string) => void
-  readonly onJoin: (gameId: string, color: string) => void
 }
 
 /**
@@ -150,9 +133,7 @@ function columnsFor(options: ColumnOptions): readonly SortableColumn<PublicGameS
         options.player,
         options.busy,
         options.onOpenGame,
-        options.selectedColors,
-        options.onColorChange,
-        options.onJoin,
+        options.onRequestJoin,
       ),
     })
   }
@@ -233,9 +214,47 @@ export function GameList({ games, player, busy, onOpenGame, onJoin }: Props): Re
   const [query, setQuery] = useState('')
   const [onlyMine, setOnlyMine] = useState(false)
   const [selectedColors, setSelectedColors] = useState<Readonly<Record<string, string>>>({})
-  const onColorChange = (gameId: string, color: string): void => {
-    setSelectedColors((previous) => ({ ...previous, [gameId]: color }))
-  }
+  const [joiningGameId, setJoiningGameId] = useState<string | null>(null)
+  const [joiningColor, setJoiningColor] = useState('')
+  const joinButtonRef = useRef<HTMLElement | null>(null)
+  const joiningGame = joiningGameId === null
+    ? null
+    : games.find((game) => game.id === joiningGameId) ?? null
+  const canJoinSelectedGame =
+    joiningGame !== null &&
+    joiningGame.active &&
+    joiningGame.players.length < joiningGame.numOfPlayers &&
+    joiningGame.availableColors.length > 0
+  const availableJoiningColors = canJoinSelectedGame ? joiningGame.availableColors : []
+  const selectedJoiningColor = availableJoiningColors.includes(joiningColor)
+    ? joiningColor
+    : availableJoiningColors[0] ?? ''
+
+  const requestJoin = useCallback(
+    (game: PublicGameSummary, button: HTMLButtonElement): void => {
+      const saved = selectedColors[game.id]
+      const color = game.availableColors.includes(saved ?? '')
+        ? saved ?? ''
+        : game.availableColors[0] ?? ''
+      if (color === '') return
+      joinButtonRef.current = button
+      setJoiningColor(color)
+      setJoiningGameId(game.id)
+    },
+    [selectedColors],
+  )
+
+  const chooseJoinColor = useCallback((color: string): void => {
+    if (!availableJoiningColors.includes(color) || joiningGameId === null) return
+    setJoiningColor(color)
+    setSelectedColors((previous) => ({ ...previous, [joiningGameId]: color }))
+  }, [availableJoiningColors, joiningGameId])
+
+  const confirmJoin = useCallback((): void => {
+    if (joiningGame === null || !availableJoiningColors.includes(selectedJoiningColor)) return
+    onJoin(joiningGame.id, selectedJoiningColor)
+    setJoiningGameId(null)
+  }, [joiningGame, availableJoiningColors, selectedJoiningColor, onJoin])
 
   // Signing out hides the checkbox, so the filter it set has to go with it —
   // otherwise a signed-out visitor is left with a filtered (often empty) list
@@ -260,24 +279,20 @@ export function GameList({ games, player, busy, onOpenGame, onJoin }: Props): Re
       withAction: true,
       player,
       busy,
-      selectedColors,
-      onColorChange,
+      onRequestJoin: requestJoin,
       onOpenGame,
-      onJoin,
     }),
-    [player, busy, selectedColors, onColorChange, onOpenGame, onJoin],
+    [player, busy, requestJoin, onOpenGame, onJoin],
   )
   const finishedColumns = useMemo(
     () => columnsFor({
       withAction: false,
       player,
       busy,
-      selectedColors,
-      onColorChange,
+      onRequestJoin: requestJoin,
       onOpenGame,
-      onJoin,
     }),
-    [player, busy, selectedColors, onColorChange, onOpenGame, onJoin],
+    [player, busy, requestJoin, onOpenGame, onJoin],
   )
 
   return (
@@ -323,6 +338,53 @@ export function GameList({ games, player, busy, onOpenGame, onJoin }: Props): Re
             emptyMessage="No finished games."
           />
         </>
+      )}
+
+      {joiningGame !== null && canJoinSelectedGame && (
+        <ReferenceDialog
+          titleId="join-color-title"
+          title={`Join ${joiningGame.name}`}
+          className="join-color-dialog"
+          onClose={() => setJoiningGameId(null)}
+          returnFocusTo={joinButtonRef}
+        >
+          <div className="join-color-content">
+            <p className="muted">Choose your color for this game.</p>
+            <fieldset className="join-color-fieldset">
+              <legend>Available colors</legend>
+              <div className="join-color-options">
+                {joiningGame.availableColors.map((color) => (
+                  <label key={color} className={`join-color-option${selectedJoiningColor === color ? ' selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="join-player-color"
+                      value={color}
+                      checked={selectedJoiningColor === color}
+                      onChange={() => chooseJoinColor(color)}
+                    />
+                    <span
+                      className={`join-color-swatch join-color-swatch-${color.toLowerCase()}`}
+                      aria-hidden="true"
+                    />
+                    <span>{color}</span>
+                    {selectedJoiningColor === color && <span className="join-color-selected">Selected</span>}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <div className="join-color-actions">
+              <button type="button" onClick={() => setJoiningGameId(null)}>Cancel</button>
+              <button
+                type="button"
+                className="success"
+                disabled={busy || !availableJoiningColors.includes(selectedJoiningColor)}
+                onClick={confirmJoin}
+              >
+                Join game
+              </button>
+            </div>
+          </div>
+        </ReferenceDialog>
       )}
     </div>
   )

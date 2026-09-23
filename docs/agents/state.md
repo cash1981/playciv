@@ -19,6 +19,12 @@ _Last updated: 2026-09-23_
 
 ## Done
 
+- **Issue #97 join color picker follow-up (PR #158).** Replaced the inline
+  color selector with a compact visual dialog that shows only colors still
+  available, updates if availability changes, and restores focus on close.
+  Read-only review approved with zero findings; typecheck and build pass, and
+  all tests pass (476 engine, 199 server, 169 web). Browser-verified.
+
 - **Current game rating evidence and display.** Fresh finished games rank
   nonwinners using the actual culture marker step and the coin total from
   player status; the old migration's estimates remain unchanged. The rating

@@ -261,9 +261,9 @@ describe('GameList', () => {
     expect(full.className).not.toContain('success')
   })
 
-  it('shows only available colors and submits the selected join color', () => {
+  it('shows only available colors in a dialog and submits the selected join color', () => {
     const onJoin = vi.fn()
-    render(
+    const { rerender } = render(
       <GameList
         games={[game({ id: 'joinable', name: 'Joinable', availableColors: ['Purple', 'Blue'] })]}
         player={player}
@@ -272,12 +272,47 @@ describe('GameList', () => {
         onJoin={onJoin}
       />,
     )
-    const select = screen.getByLabelText('Color for Joinable') as HTMLSelectElement
-    expect(Array.from(select.options).map((option) => option.value)).toEqual(['Purple', 'Blue'])
-    expect(select.value).toBe('Purple')
-    fireEvent.change(select, { target: { value: 'Blue' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Join' }))
-    expect(onJoin).toHaveBeenCalledWith('joinable', 'Blue')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    const joinButton = screen.getByRole('button', { name: 'Join' })
+    fireEvent.click(joinButton)
+
+    const dialog = screen.getByRole('dialog', { name: 'Join Joinable' })
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+    const colors = screen.getAllByRole('radio')
+    expect(colors.map((option) => option.getAttribute('value'))).toEqual(['Purple', 'Blue'])
+    expect((colors[0] as HTMLInputElement | undefined)?.checked).toBe(true)
+    fireEvent.click(screen.getByRole('radio', { name: /Blue/ }))
+    expect((screen.getByRole('radio', { name: /Blue/ }) as HTMLInputElement).checked).toBe(true)
+
+    rerender(
+      <GameList
+        games={[game({ id: 'joinable', name: 'Joinable', availableColors: ['Purple'] })]}
+        player={player}
+        busy={false}
+        onOpenGame={noop}
+        onJoin={onJoin}
+      />,
+    )
+    expect(screen.queryByRole('radio', { name: /Blue/ })).toBeNull()
+    expect((screen.getByRole('radio', { name: /Purple/ }) as HTMLInputElement).checked).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(joinButton)
+    expect(onJoin).not.toHaveBeenCalled()
+
+    fireEvent.click(joinButton)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(joinButton)
+    expect(onJoin).not.toHaveBeenCalled()
+
+    fireEvent.click(joinButton)
+    fireEvent.click(screen.getByRole('button', { name: 'Join game' }))
+
+    expect(onJoin).toHaveBeenCalledWith('joinable', 'Purple')
+    expect(dialog.isConnected).toBe(false)
   })
 
   it('keeps the game list and action controls in the mobile layout hooks', () => {
