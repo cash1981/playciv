@@ -1967,3 +1967,31 @@ nowhere: the human chose that the new model replaces it, so migration drops it
 and every counter starts at zero. The four techs' +2 from *The Internet* is
 deliberately not enforced yet — issue #145 tracks the wonder-ownership view it
 needs. The counters are bookkeeping only; no card effect is applied.
+
+## 2026-09-23 - The poll skips the history, and a gateway blip is retried
+
+**Decision.** Two client-only follow-ups to the revision-list fix (#138), from
+issue #139. `GameView` reloads through `loadAfterKnownRevision`: it reads the
+view first and, when `view.rev` equals the revision already applied, returns a
+`null` revision list, meaning "keep the list you have"; otherwise it reads the
+history-first pair as before (issue #70). `api.ts` retries a **GET** up to twice
+(250 ms, then 1 s) on `502`/`503`/`504`, and never retries a write.
+
+**Why.** Auto-refresh moved to 10 s in #138, so every watching client fetched the
+game and the whole ~101 KB revision list three times as often, even when nothing
+had changed. And the human's original report was "and a few retries it suddenly
+worked": one gateway blip still failed the whole load.
+
+**Consequences.** The skip compares against the applied view's `rev`, not the
+newest revision number, because `rev` is the optimistic-concurrency token and
+also advances on a private note, which writes no revision - so "unchanged `rev`"
+is the only safe direction, and a note still arrives through the view. When `rev`
+did move, the consistent pair is read history-first and the view is read a second
+time, so the common idle poll costs one request instead of two while the rare
+changed poll costs three instead of two. The retry boundary is the method
+(`GET`), which is safe because every GET the client makes is idempotent - the
+revisions route's `ensureGameRevision` side effect is guarded and idempotent -
+not because a GET is read-only. A gateway status is retried, not our own `500`:
+that one is a defect to surface. Left to #139: retrying writes, a network-level
+retry, paginating the revision list, and a behaviour test for the interval
+itself.

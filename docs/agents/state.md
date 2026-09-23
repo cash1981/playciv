@@ -13,7 +13,7 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 468 engine, 178 server, 141 web |
+| `pnpm -r test` | passing - 450 engine, 174 server, 143 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -36,6 +36,24 @@ _Last updated: 2026-09-23_
   total), 4 server (178), 5 web (141). Browser-verified against a local server:
   the tab, the 15 rows, `+` to 4 then disabled, four 200s on `/coin`, the
   read-only total, and a reload with the value kept. See `decisions.md`.
+
+- **The 10 s poll skips the history when nothing has moved, and a gateway blip
+  is retried.** Two client-only follow-ups from issue #139. `GameView` reloads
+  through `loadAfterKnownRevision`: it reads the view first and, when `view.rev`
+  equals the revision already applied, keeps the revision list it has; otherwise
+  it reads the history-first pair (issue #70). Since `rev` also advances on a
+  private note that writes no revision, the comparison is against the applied
+  view's revision, not the newest revision number. `api.ts` retries a **GET**
+  twice (250 ms, then 1 s) on `502`/`503`/`504` and never retries a write, which
+  is what the human's original "and a few retries it suddenly worked" wanted.
+  Client-only: no engine, server, route or projection change. Verified:
+  `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (450 engine,
+  174 server, 143 web). One `TurnPanel.test.tsx` test - a file not in this diff -
+  failed twice in roughly 14 full-suite runs, and only under heavy machine load:
+  the file took about 5.4 s in those runs against 0.3-0.6 s when passing. It did
+  not reproduce in 5 consecutive full-suite runs afterwards, and the new tests
+  here use virtual timers or plain promises and never flaked. Filed as issue
+  #146. Branch `feat/issue-139-poll-retry`; PR #148 open; see `decisions.md`.
 
 - **Down to a single coin marker.** The board palette had five coin variants;
   it now has one. `Coin`, `Coin 2`, `Coin 3` and `Coin 4` are removed from the

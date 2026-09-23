@@ -221,10 +221,27 @@ function failureMessage(
     : `${method} ${path} failed with ${status}: ${detail}`
 }
 
+/**
+ * Gateway statuses a later attempt can plausibly fix. `503` is also what
+ * Cloudflare answers when a Worker exceeds its resource limit (`error code:
+ * 1102`), which is transient by nature.
+ */
+const RETRYABLE_STATUSES = new Set([502, 503, 504])
+
+/** Back-off before each retry of a safe request, so two retries at most. */
+const RETRY_DELAYS_MS: readonly number[] = [250, 1000]
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
 async function request<T>(
   method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT',
   path: string,
   body?: unknown,
+  attempt = 0,
 ): Promise<T> {
   const token = storedToken()
   const response = await fetch(path, {
@@ -242,6 +259,16 @@ async function request<T>(
   const payload = parseBody(text)
 
   if (!response.ok) {
+    // Only a GET is retried. That is safe because every GET the client makes
+    // is idempotent — the one side effect, the revisions route's baseline
+    // `ensureGameRevision`, is itself guarded and idempotent — while the game's
+    // own actions are not: a retried `endTurn` or `draw` could apply twice.
+    const retryable =
+      method === 'GET' && RETRYABLE_STATUSES.has(response.status) && attempt < RETRY_DELAYS_MS.length
+    if (retryable) {
+      await delay(RETRY_DELAYS_MS[attempt] ?? 0)
+      return request<T>(method, path, body, attempt + 1)
+    }
     const error =
       payload === NOT_JSON || payload === undefined
         ? undefined

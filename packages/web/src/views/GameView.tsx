@@ -97,6 +97,35 @@ export async function loadConsistentLive(
   throw new Error('Could not load a consistent live game snapshot')
 }
 
+/**
+ * A reload that skips the history when the live game has not moved at all.
+ *
+ * `rev` is the server's optimistic-concurrency token: every write advances it,
+ * including a private note, which writes no revision. It therefore cannot be
+ * compared with the newest revision number. Comparing it with the revision of
+ * the view we already have is enough: an unchanged `rev` means nothing was
+ * written, so no revision can have appeared, while a private note still arrives
+ * through the view.
+ *
+ * Asking the view first costs one request instead of two in the common poll.
+ * When the revision did move, the consistent pair is read history-first as
+ * before (issue #70), which costs one extra view read on that path.
+ *
+ * A `null` list means "keep the list you already have".
+ */
+export async function loadAfterKnownRevision(
+  loadRevisions: () => Promise<readonly GameRevisionSummary[]>,
+  loadView: () => Promise<PlayerView>,
+  knownRevision: number,
+): Promise<{
+  readonly view: PlayerView
+  readonly revisions: readonly GameRevisionSummary[] | null
+}> {
+  const view = await loadView()
+  if (view.rev === knownRevision) return { view, revisions: null }
+  return loadConsistentLive(loadRevisions, loadView)
+}
+
 export async function loadHistoricalIfCurrent(
   load: () => Promise<GameRevisionView>,
   isCurrent: () => boolean,
@@ -137,13 +166,14 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
 
   const reload = useCallback(async () => {
     try {
-      const { view: nextView, revisions: nextRevisions } = await loadConsistentLive(
+      const { view: nextView, revisions: nextRevisions } = await loadAfterKnownRevision(
         () => api.revisions(gameId),
         () => api.game(gameId),
+        liveRevisionRef.current,
       )
       if (activeGameIdRef.current !== gameId) return false
       applyLiveView(nextView)
-      applyRevisionList(nextRevisions)
+      if (nextRevisions !== null) applyRevisionList(nextRevisions)
       setReloadCount((count) => count + 1)
       setError(null)
       return true
