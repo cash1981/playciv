@@ -330,6 +330,11 @@ export function registerOAuthRoutes(app: App, context: AppContext): void {
       provider: registration.provider as ProviderId,
       providerUserId: registration.providerUserId,
     }
+    // With no mailer the address cannot be verified by mail, so the account
+    // starts verified — the same rule register applies (issue #42). Otherwise
+    // the provider's verdict decides, and an unverified address is mailed a link.
+    const emailVerified =
+      registration.emailVerified || !context.notifications.emailDeliveryEnabled
     const player: StoredPlayer = {
       id: newId(),
       username,
@@ -340,7 +345,7 @@ export function registerOAuthRoutes(app: App, context: AppContext): void {
       createdAt: new Date().toISOString(),
       role: 'user',
       disabled: false,
-      emailVerified: registration.emailVerified,
+      emailVerified,
       oauthProviders: [identity],
     }
     await context.repo.createPlayer(player)

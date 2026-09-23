@@ -388,6 +388,27 @@ describe('completion (issue #121)', () => {
     expect((await repo.findPlayerByUsername('discord-user'))?.emailVerified).toBe(false)
     expect(mailer.sent.some((mail) => mail.subject === 'Please verify your email address')).toBe(true)
   })
+
+  it('verifies a social account when there is no mailer, instead of locking it out', async () => {
+    // The default no-op mailer means email delivery is disabled: an unverified
+    // provider identity must still land verified, because no link could reach it.
+    const { app, repo } = await createTestApp({ appOrigin: APP_ORIGIN, providers: CONFIGURED })
+
+    stubProvider('discord', { id: 'd-nomail', email: 'nomail@example.com', verified: false })
+    const pendingResponse = await inject(app, {
+      url: callbackUrl('discord', signState('discord')),
+    })
+    const pending = tokenFromFragment(pendingResponse.headers['location'] ?? '', 'pending')
+
+    const done = await inject(app, {
+      method: 'POST',
+      url: '/api/auth/complete-registration',
+      payload: { pending, username: 'no-mailer-user', securityAnswer: 'writing' },
+    })
+    expect(done.status).toBe(200)
+
+    expect((await repo.findPlayerByUsername('no-mailer-user'))?.emailVerified).toBe(true)
+  })
 })
 
 describe('provider userinfo parsing', () => {
