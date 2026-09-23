@@ -12,18 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### header-coin-icon
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `feat/header-coin-icon`
-- **Brief:** `docs/agents/tasks/header-coin-icon.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/Navigation.tsx`
-  - `packages/web/src/views/Navigation.test.tsx`
-  - `packages/web/src/styles.css`
-  - `docs/agents/tasks/header-coin-icon.md`
-- **Notes:** Reuses the existing favicon coin as the brand mark; no new art.
+_Nothing claimed._
 
 ---
 

@@ -13,11 +13,22 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 476 engine, 197 server, 168 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 476 engine, 197 server, 169 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **The coin mark sits in the top bar, linked home.** The favicon coin is shown
+  again inside the `.brand` anchor, to the left of the "Civilization playciv"
+  wordmark, so clicking it goes to `/`. Asset-only and presentational:
+  `Navigation.tsx` gets an `<img class="brand-icon" src="/favicon.ico" alt="">`,
+  `styles.css` sizes it `1.35rem` square with `align-self: center` while
+  `.brand` keeps its baseline alignment, and a `Navigation` test pins the link
+  and the icon `src`/`alt`. No new artwork; the existing icon is reused. Review
+  approved with two nits, both fixed. Full checks pass (476 engine, 197 server,
+  169 web). Branch `feat/header-coin-icon`; PR #160. Per the human's request the
+  review/test gate was not re-run after the final cosmetic commit.
 
 - **Issue #87: multiplayer rating and durable highscore cache.** OpenSkill rates
   two- to five-player results using the explicit winner and conservative
