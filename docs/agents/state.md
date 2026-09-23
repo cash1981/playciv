@@ -64,7 +64,7 @@ _Last updated: 2026-09-23_
   Client-only: no engine, server, projection or CSS change. Branch
   `feat/board-tap-to-move`; review-approved in one read-only round with nothing
   above a nit (reviewer `deepseek/deepseek-v4-pro`, as Sol is unavailable);
-  PR #136 open.
+  PR #136, merged.
   3 new web tests (123 total). Browser-verified in a real 390 x 844 CSS
   viewport: one tap armed the piece, the next tap sent `movePiece` (HTTP 200,
   the exact tapped board coordinate), a drag moved and disarmed, a swipe sent
