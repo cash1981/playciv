@@ -2095,3 +2095,26 @@ one-second grace period. Raising `testTimeout` or lowering `maxWorkers` was
 rejected: it hides the race. `BoardView`, `LoginView` and `StatusPanel` were
 seen hitting the 5 s kill in the same loads; that is outside #146 and is
 reported to the human rather than changed here.
+
+## 2026-09-23 - Poll the stored revision counter before reloading a game
+
+**Decision.** The existing monotonic game `rev` is the change marker; no hash of
+the full state is computed or stored. `GET /api/games/:gameId/rev` reads only the
+`rev` column in D1. When auto-refresh sees the same value, it leaves the game,
+history and dependent panels alone. A changed value uses the existing
+history-first consistent reload. Chat has its own 10 s refresh because chat
+writes do not advance game `rev`. Older overlapping chat responses are ignored.
+
+**Why.** The former 10 s poll fetched and projected the entire game on every
+tick and bumped `reloadCount` even when no write occurred, causing roughly ten
+additional panel requests. The human asked for a checksum-style check before
+fetching updates to stay within Cloudflare Workers Free CPU limits. The `rev`
+column already provides that check without serializing or hashing game state.
+
+**Consequences.** An unchanged game needs one small game-marker request and one
+chat request per tick for a signed-in player. Existing `/revisions` metadata is
+read before any baseline snapshot is constructed; only games with no history
+take the baseline path. The history response, anonymous access, missing-game
+404 and private-information projection remain the same. This polling mechanism
+has no old Java or AngularJS counterpart. See
+`docs/agents/tasks/lightweight-poll.md`.

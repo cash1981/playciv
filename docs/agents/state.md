@@ -19,6 +19,8 @@ _Last updated: 2026-09-23_
 
 ## Done
 
+- **Lightweight game polling.** Auto-refresh checks the stored `rev` counter before loading the full game; an unchanged game triggers no view, history or dependent-panel reads. Chat keeps its independent 10 s refresh and ignores stale overlapping responses. Existing `/revisions` history skips full game reads and baseline serialization. Review-approved in round 2; full checks pass (472 engine, 182 server, 157 web). Branch `fix/lightweight-poll`; PR to open.
+
 - **Issue #145: wonders in play have explicit owners, and The Internet raises
   coin limits.** The Wonders panel lists pieces in the shared Wonders area,
   lets any member assign or clear an owner, and shows an unassigned state.

@@ -3,7 +3,7 @@
 - **Slug:** `lightweight-poll`
 - **Branch:** `fix/lightweight-poll`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** review-approved (round 2; no findings or nits)
 
 ## Goal
 
