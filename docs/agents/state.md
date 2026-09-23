@@ -37,6 +37,23 @@ _Last updated: 2026-09-23_
   the review gate was waived by the human on request (Sol unavailable). Final
   `pnpm -r test`: 468 engine, 178 server, 148 web all pass.
 
+- **Issue #146: the `TurnPanel` test file no longer races the wall clock.** The
+  file's `findBy*`/`waitFor` calls polled Testing Library's one-second deadline
+  while the full suite's parallel workers starved them, and the `MarkdownEditor
+  lifecycle` test's wait for the mocked editor's dynamic imports — served
+  through the same Vite transform pipeline — was reproduced failing twice in
+  six full web-suite runs on an idle machine, and twice in two runs under
+  twelve CPU burners. The waits are now an `act` flush of the mocked api
+  promises (`settle()`) and `vi.dynamicImportSettled()` for the imports;
+  nothing in the file depends on wall-clock time any more. Test-only: no
+  engine, server, route or projection change, and no test added or removed (24
+  in the file, 148 web total; the file runs faster, about 2.3 s to 1 s alone).
+  Verified under twelve CPU burners on 16 logical cores: three full web suites
+  and one full `pnpm -r test` green (468 engine, 178 server, 148 web), while
+  the old file failed 2 of 2 full web suites under the same load with the same
+  `expected [] to have a length of 1`. Branch
+  `fix/issue-146-turnpanel-test-flake`; PR #151 open; see `decisions.md`.
+
 - **Coin sources per player, with a Coins section in Player status.** The panel
   has a second section behind a tab bar. It lists the reference sheet's fifteen
   coin sources — Code of Laws, Pottery, Civil Service, Democracy, Printing
@@ -71,7 +88,7 @@ _Last updated: 2026-09-23_
   the file took about 5.4 s in those runs against 0.3-0.6 s when passing. It did
   not reproduce in 5 consecutive full-suite runs afterwards, and the new tests
   here use virtual timers or plain promises and never flaked. Filed as issue
-  #146. Branch `feat/issue-139-poll-retry`; PR #148 open; see `decisions.md`.
+  #146. Branch `feat/issue-139-poll-retry`; merged as PR #148; see `decisions.md`.
 - **Coin sources per player, with a Coins section in Player status.** The panel
   has a second section behind a tab bar. It lists the reference sheet's fifteen
   coin sources — Code of Laws, Pottery, Civil Service, Democracy, Printing
@@ -119,7 +136,7 @@ _Last updated: 2026-09-23_
   The client no longer calls `GET /techs/revealed`; that route and
   `revealedTechsForAllPlayers` stay as the port of Java's `/tech/all`. 7 new web
   tests (136 total: `TechPanel` 9, new `SocialPolicyPanel` 10, replacing the old
-  panel's 12). Branch `feat/issue-140-tech-policy-tabs`; PR #143 open;
+  panel's 12). Branch `feat/issue-140-tech-policy-tabs`; merged as PR #143;
   review-approved in two
   read-only rounds (reviewer `deepseek/deepseek-v4-pro` with the human's
   approval, as Sol is unavailable; round 1 had two nits, both fixed), and the
@@ -690,13 +707,6 @@ _Nothing queued._
   heavier by the Coins section `coin-tab` added to the same panel. It passed in
   the final verification run here (468 engine, 178 server, 148 web). Raising that
   one test's timeout, or splitting the assertion, would remove it.
-
-- **A pre-existing `TurnPanel` test flake.** The mocked-editor test
-  `MarkdownEditor lifecycle > saves from the fallback and unmounts safely while
-  Crepe is still loading` waits 1 s for a dynamic-import-driven mock to
-  instantiate; under the full parallel run (22 workers spawned) that timeout can
-  expire. It passes when the file runs alone and is unrelated to the turn-order
-  draft fix. Raising that one `waitFor` timeout would remove the flake.
 
 - **A non-member's board is still interactive (found in the `board-tap-to-move`
   mobile pass).** On a public game page a signed-out visitor can tap a piece and

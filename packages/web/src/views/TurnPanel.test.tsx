@@ -2,7 +2,7 @@
 
 import { createRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { PlayerTurn, TurnOrderVersion, TurnPhase } from '@civ/engine'
@@ -131,6 +131,20 @@ const turn = (
 const noop = (): void => undefined
 const run = async (): Promise<void> => undefined
 
+/**
+ * Flushes the mocked api promises and the React updates they trigger.
+ *
+ * `findBy*`/`waitFor` poll against a one-second wall-clock deadline, and the
+ * full suite's parallel workers can starve those polls long enough to miss it
+ * (issue #146). The conditions this file waits for are promise-driven, so an
+ * `act` flush is enough and no deadline takes part.
+ */
+const settle = async (): Promise<void> => {
+  await act(async () => {
+    await Promise.resolve()
+  })
+}
+
 const DelayedEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
   function DelayedEditor({ value, onChange, onDirty, readOnly, ariaLabel }, ref) {
     const markdownRef = useRef(value)
@@ -232,7 +246,11 @@ describe('MarkdownEditor lifecycle', () => {
 
     expect(saved).toEqual(['Written while loading'])
     expect(milkdownLifecycle.getMarkdownCalls).toBe(0)
-    await waitFor(() => expect(milkdownLifecycle.instances).toHaveLength(1))
+    // The editor's dynamic imports are served by Vite's transform pipeline, so
+    // wait on the module runner's own bookkeeping instead of a wall-clock
+    // deadline (issue #146).
+    await vi.dynamicImportSettled()
+    expect(milkdownLifecycle.instances).toHaveLength(1)
     unmount()
     expect(milkdownLifecycle.getMarkdownCalls).toBe(0)
 
@@ -240,7 +258,7 @@ describe('MarkdownEditor lifecycle', () => {
       resolveCreate?.()
       await Promise.resolve()
     })
-    await waitFor(() => expect(milkdownLifecycle.instances[0]?.destroyed).toBe(true))
+    expect(milkdownLifecycle.instances[0]?.destroyed).toBe(true)
     expect(milkdownLifecycle.getMarkdownCalls).toBe(0)
   })
 
@@ -263,9 +281,9 @@ describe('MarkdownEditor lifecycle', () => {
       </>,
     )
 
-    expect(
-      await screen.findByText('Rich editing is unavailable; plain Markdown is active.'),
-    ).toBeTruthy()
+    await vi.dynamicImportSettled()
+    await settle()
+    expect(screen.getByText('Rich editing is unavailable; plain Markdown is active.')).toBeTruthy()
     fireEvent.change(screen.getByRole('textbox', { name: 'Rejected editor' }), {
       target: { value: 'Fallback Markdown' },
     })
@@ -756,7 +774,8 @@ describe('TurnPanel save all changes', () => {
       />,
     )
 
-    const saveAll = await screen.findByRole('button', { name: 'Save all changes' })
+    await settle()
+    const saveAll = screen.getByRole('button', { name: 'Save all changes' })
     vi.useFakeTimers()
     fireEvent.change(screen.getByRole('textbox', { name: /movement orders.*turn 1/i }), {
       target: { value: 'Move immediately' },
@@ -795,7 +814,8 @@ describe('TurnPanel save all changes', () => {
       />,
     )
 
-    await screen.findByRole('tab', { name: 'Andrius' })
+    await settle()
+    screen.getByRole('tab', { name: 'Andrius' })
     vi.useFakeTimers()
     fireEvent.change(screen.getByRole('textbox', { name: /movement orders for cash1981.*turn 1/i }), {
       target: { value: 'Own new movement' },
@@ -841,7 +861,8 @@ describe('TurnPanel save all changes', () => {
       />,
     )
 
-    const ownMovement = await screen.findByRole('textbox', {
+    await settle()
+    const ownMovement = screen.getByRole('textbox', {
       name: /movement orders for cash1981.*turn 1/i,
     })
     expect((ownMovement as HTMLTextAreaElement).value).toBe('Own movement plan')
@@ -884,7 +905,8 @@ describe('TurnPanel save all changes', () => {
       />,
     )
 
-    await screen.findByRole('button', { name: 'Save all changes' })
+    await settle()
+    screen.getByRole('button', { name: 'Save all changes' })
     vi.useFakeTimers()
     fireEvent.change(screen.getByRole('textbox', { name: /start of turn orders.*turn 1/i }), {
       target: { value: 'New setup' },
@@ -936,7 +958,8 @@ describe('TurnPanel save all changes', () => {
       />,
     )
 
-    const editor = await screen.findByRole('textbox', { name: /movement orders.*turn 1/i })
+    await settle()
+    const editor = screen.getByRole('textbox', { name: /movement orders.*turn 1/i })
     vi.useFakeTimers()
     fireEvent.change(editor, { target: { value: 'New movement' } })
     act(() => vi.advanceTimersByTime(200))
@@ -977,7 +1000,8 @@ describe('TurnPanel save all changes', () => {
       />,
     )
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Private log' }))
+    await settle()
+    fireEvent.click(screen.getByRole('tab', { name: 'Private log' }))
     vi.useFakeTimers()
     const editor = screen.getByRole('textbox', { name: 'Private log' })
     fireEvent.change(editor, { target: { value: 'Submitted note' } })
@@ -1010,7 +1034,8 @@ describe('TurnPanel save all changes', () => {
       />,
     )
 
-    const lock = await screen.findByRole('button', { name: 'Lock the turn' })
+    await settle()
+    const lock = screen.getByRole('button', { name: 'Lock the turn' })
     vi.useFakeTimers()
     fireEvent.change(screen.getByRole('textbox', { name: /movement orders.*turn 1/i }), {
       target: { value: 'Not emitted yet' },
@@ -1038,7 +1063,8 @@ describe('TurnPanel save all changes', () => {
       />,
     )
 
-    const editor = await screen.findByRole('textbox', { name: /movement orders.*turn 1/i })
+    await settle()
+    const editor = screen.getByRole('textbox', { name: /movement orders.*turn 1/i })
     vi.useFakeTimers()
     fireEvent.change(editor, {
       target: { value: 'Not saved' },

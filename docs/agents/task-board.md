@@ -12,59 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-139-poll-retry
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `feat/issue-139-poll-retry`
-- **Brief:** `docs/agents/tasks/issue-139-poll-retry.md`
-- **Status:** review-approved (round 3; round 1's two minors - an unpinned 1 s
-  back-off and an imprecise "GET is read-only" reason - fixed, round 2's one
-  minor corrected in the state file) - PR #148 open, awaiting the human's merge.
-  Claim kept until merged.
-- **Claimed paths:**
-  - `packages/web/src/lib/api.ts`
-  - `packages/web/src/lib/api.test.ts`
-  - `packages/web/src/views/GameView.tsx` (`loadConsistentLive`/`reload` region and the auto-refresh effect only)
-  - `packages/web/src/views/GameView.test.tsx`
-  - `docs/agents/tasks/issue-139-poll-retry.md`
-  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
-- **Notes:** Follow-ups from #139 after #138/#138. Two changes: a bounded retry
-  for `GET` on `502`/`503`/`504`, and a poll that skips the revision list while
-  `rev` has not moved. Client-only. `packages/web/src/lib/api.ts` is claimed in
-  the shared-resources table. `packages/web/src/views/GameView.tsx` is named in
-  `issue-140-tech-policy-tabs` ("the panel list only"), but that PR (#143) is
-  merged, the main checkout is clean and its branch is merged too, so the claim
-  is stale and this edit is a different region; recorded rather than treated as
-  a collision. No `rules-checker` pass: no game rule, deck, log text or
-  projection changes.
-
-### issue-140-tech-policy-tabs
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `feat/issue-140-tech-policy-tabs`
-- **Brief:** `docs/agents/tasks/issue-140-tech-policy-tabs.md`
-- **Status:** review-approved — PR #143 open, awaiting the human's merge. Claim
-  kept until merged.
-- **Claimed paths:**
-  - `packages/engine/src/state.ts` (`OpaquePlayerhand` and `opaque()` only)
-  - `packages/engine/test/hidden-info.test.ts`
-  - `packages/web/src/views/PlayerTabs.tsx` (new), `packages/web/src/views/PlayerTabs.css` (new)
-  - `packages/web/src/views/TechPanel.tsx`, `packages/web/src/views/TechPanel.test.tsx`
-  - `packages/web/src/views/SocialPolicyPanel.tsx` (new), `packages/web/src/views/SocialPolicyPanel.test.tsx` (new)
-  - `packages/web/src/views/GameView.tsx` (the panel list only)
-  - `docs/agents/tasks/issue-140-tech-policy-tabs.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
-- **Notes:** Issue #140. Splits the combined Techs & Social policy panel into two
-  panels, each with a tab per player. Other players' revealed social policies
-  become visible through a new `OpaquePlayerhand.revealedSocialPolicies`
-  projection (no new route). The human chose: own data as the first tab,
-  username + player colour labels, pickers above the tabs. `styles.css` and
-  `api.ts` are not touched. This claim replaced every claim that stood here
-  before; all of those PRs are merged (checked with `gh pr list --state merged`),
-  so their paths are free.
-_Nothing claimed. `coin-tab` is review-approved and awaits the human's merge as
-its pull request; the claim was released with this change._
+_Nothing claimed._
 
 ---
 
@@ -98,7 +46,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | `issue-139-poll-retry` (DeepSeek V4.1 Flash) |
+| `packages/web/src/lib/api.ts` | free (released with #148's merge) |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.
