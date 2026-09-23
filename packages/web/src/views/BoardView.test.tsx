@@ -45,16 +45,19 @@ describe('BoardView zoom', () => {
       <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} />,
     )
     const scroll = container.querySelector('.board-scroll')
+    const frame = container.querySelector('.board-frame')
     const surface = container.querySelector('.board-surface')
-    if (!(scroll instanceof HTMLElement) || !(surface instanceof HTMLElement)) throw new Error('board missing')
+    if (!(scroll instanceof HTMLElement) || !(frame instanceof HTMLElement) || !(surface instanceof HTMLElement)) throw new Error('board missing')
     let availableWidth = boardWidth(board) + 100
     Object.defineProperty(scroll, 'clientWidth', { configurable: true, get: () => availableWidth })
     fireEvent(window, new Event('resize'))
     expect(surface.style.width).toBe(`${boardWidth(board)}px`)
+    expect(parseFloat(frame.style.width)).toBe(parseFloat(surface.style.width) + 28)
 
     availableWidth = boardWidth(board) * 0.55
     fireEvent(window, new Event('resize'))
     expect(surface.style.width).toBe(`${boardWidth(board) * 0.5}px`)
+    expect(parseFloat(frame.style.width)).toBe(parseFloat(surface.style.width) + 28)
 
     fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
     expect(surface.style.width).toBe(`${boardWidth(board)}px`)

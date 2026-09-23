@@ -507,7 +507,7 @@ export function BoardView({
           <div
             ref={frameRef}
             className={`board-frame${readOnly ? ' replaying' : ''}`}
-            style={{ width: width * zoom, height: height * zoom + 28 }}
+            style={{ width: width * zoom + 28, height: height * zoom + 28 }}
           >
             <ColumnLabels board={board} zoom={zoom} edge="top" offset={mapStart * zoom} />
             <ColumnLabels board={board} zoom={zoom} edge="bottom" offset={mapBottom * zoom} />
