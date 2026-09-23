@@ -34,7 +34,8 @@ _Last updated: 2026-09-23_
   The client no longer calls `GET /techs/revealed`; that route and
   `revealedTechsForAllPlayers` stay as the port of Java's `/tech/all`. 7 new web
   tests (136 total: `TechPanel` 9, new `SocialPolicyPanel` 10, replacing the old
-  panel's 12). Branch `feat/issue-140-tech-policy-tabs`; review-approved in two
+  panel's 12). Branch `feat/issue-140-tech-policy-tabs`; PR #143 open;
+  review-approved in two
   read-only rounds (reviewer `deepseek/deepseek-v4-pro` with the human's
   approval, as Sol is unavailable; round 1 had two nits, both fixed), and the
   `rules-checker` confirmed Java never exposed social policies so nothing is

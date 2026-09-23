@@ -17,8 +17,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `feat/issue-140-tech-policy-tabs`
 - **Brief:** `docs/agents/tasks/issue-140-tech-policy-tabs.md`
-- **Status:** review-approved — PR open, awaiting the human's merge. Claim kept
-  until merged.
+- **Status:** review-approved — PR #143 open, awaiting the human's merge. Claim
+  kept until merged.
 - **Claimed paths:**
   - `packages/engine/src/state.ts` (`OpaquePlayerhand` and `opaque()` only)
   - `packages/engine/test/hidden-info.test.ts`
