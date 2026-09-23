@@ -8,6 +8,7 @@
  */
 
 import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem } from './item.js'
+import { isUnit } from './item.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece } from './board.js'
 import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
@@ -344,6 +345,14 @@ export function buildingCountOf(state: GameState, playerId: string): number {
 // ---------------------------------------------------------------------------
 
 /** What other players see of a hand: counts, not contents. */
+export interface PublicHandCounts {
+  readonly cultureCards: number
+  readonly huts: number
+  readonly villages: number
+  readonly greatPersons: number
+  readonly units: number
+}
+
 export interface OpaquePlayerhand {
   readonly playerId: string
   readonly username: string
@@ -354,6 +363,8 @@ export interface OpaquePlayerhand {
   /** The civilization is public as soon as it has been revealed. */
   readonly civilization: CivItem | null
   readonly numberOfItemsInHand: number
+  /** Counts of the five public hand categories; no item data or order. */
+  readonly publicHand: PublicHandCounts
   readonly numberOfTechsChosen: number
   readonly numberOfBarbarians: number
   readonly numberOfSocialPolicies: number
@@ -396,6 +407,13 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     yourTurn: player.yourTurn,
     civilization: player.civilization,
     numberOfItemsInHand: player.items.length,
+    publicHand: {
+      cultureCards: player.items.filter((item) => item.kind === 'cultureI' || item.kind === 'cultureII' || item.kind === 'cultureIII').length,
+      huts: player.items.filter((item) => item.kind === 'hut').length,
+      villages: player.items.filter((item) => item.kind === 'village').length,
+      greatPersons: player.items.filter((item) => item.kind === 'greatperson').length,
+      units: player.items.filter(isUnit).length,
+    },
     numberOfTechsChosen: player.techsChosen.length,
     numberOfBarbarians: player.barbarians.length,
     numberOfSocialPolicies: player.socialPolicies.length,

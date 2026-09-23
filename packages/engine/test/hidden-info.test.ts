@@ -74,6 +74,34 @@ describe('toPlayerView', () => {
     }
   })
 
+  it('projects only category counts for opponents and spectators', () => {
+    let state = firstCivGame()
+    for (const sheetName of [
+      'CULTURE_1', 'CULTURE_2', 'CULTURE_3', 'HUTS', 'VILLAGES',
+      'GREAT_PERSON', 'INFANTRY', 'ARTILLERY', 'MOUNTED', 'AIRCRAFT', 'CIV',
+    ] as const) {
+      state = unwrap(draw(state, { playerId: CASH1981, sheetName }))
+    }
+
+    const hand = findPlayer(state, CASH1981)?.items ?? []
+    const opponent = toPlayerView(state, ITCHI).opponents.find((entry) => entry.playerId === CASH1981)
+    const spectator = toPlayerView(state, 'onlooker').opponents.find((entry) => entry.playerId === CASH1981)
+    const expected = { cultureCards: 3, huts: 1, villages: 1, greatPersons: 1, units: 4 }
+    expect(opponent?.publicHand).toEqual(expected)
+    expect(spectator?.publicHand).toEqual(expected)
+    expect(opponent?.numberOfItemsInHand).toBe(11)
+
+    for (const projected of [opponent, spectator]) {
+      const serialised = JSON.stringify(projected)
+      expect(projected).not.toHaveProperty('items')
+      for (const item of hand) {
+        expect(serialised).not.toContain(item.id)
+        expect(serialised).not.toContain(`"itemNumber":${item.itemNumber}`)
+        expect(serialised).not.toContain(revealAll(item))
+      }
+    }
+  })
+
   it('log entries belonging to others arrive in public form only', () => {
     const state = unwrap(draw(firstCivGame(), { playerId: CASH1981, sheetName: 'CIV' }))
 
