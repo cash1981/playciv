@@ -27,8 +27,8 @@ _Last updated: 2026-09-23_
   Pottery, Democracy and Printing Press; moving the wonder out of the Wonders
   area or changing its owner removes that allowance, while existing excess
   counters can still be lowered. No coins are awarded automatically. Review
-  approved in round 2; 2 new engine, 1 server and 3 web tests. Full checks pass
-  (472 engine, 179 server, 152 web). Browser verification remains for the
+  approved in round 2; PR #150 open. 2 new engine, 1 server and 3 web tests.
+  Full checks pass (472 engine, 179 server, 152 web). Browser verification remains for the
   human: the local app started, but the Codex browser bridge timed out opening
   it. See `decisions.md`.
 

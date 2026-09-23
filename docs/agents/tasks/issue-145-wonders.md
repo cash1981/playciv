@@ -3,7 +3,7 @@
 - **Slug:** `issue-145-wonders`
 - **Branch:** `feat/issue-145-wonders`
 - **Owner:** orchestrator (Codex)
-- **Status:** review-approved; ready for PR
+- **Status:** PR #150 open; browser check pending
 
 ## Goal
 
