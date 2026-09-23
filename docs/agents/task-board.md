@@ -19,7 +19,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Brief:** `docs/agents/tasks/turn-order-draft-bleed.md`
 - **Status:** review-approved (read-only reviewer, round 2: nothing above a nit;
   the round-1 read-only-guard finding was fixed, and the remaining comment nit
-  corrected) — PR to open, awaiting the human's merge. Claim kept until merged.
+  corrected) — PR #137 open, awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/web/src/views/TurnPanel.tsx`
   - `packages/web/src/views/TurnPanel.test.tsx`

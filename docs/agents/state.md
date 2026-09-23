@@ -13,9 +13,9 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 173 server, 123 web |
+| `pnpm -r test` | passing - 449 engine, 173 server, 124 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; PR #134 merged; open pull request: #136 (board tap-to-move) |
+| `main` pushed to `origin` | yes; PR #134 merged; open pull requests: #136 (board tap-to-move), #137 (turn-order draft bleed) |
 
 ## Done
 
