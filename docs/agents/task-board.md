@@ -17,7 +17,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `feat/issue-140-tech-policy-tabs`
 - **Brief:** `docs/agents/tasks/issue-140-tech-policy-tabs.md`
-- **Status:** in progress
+- **Status:** review-approved — PR open, awaiting the human's merge. Claim kept
+  until merged.
 - **Claimed paths:**
   - `packages/engine/src/state.ts` (`OpaquePlayerhand` and `opaque()` only)
   - `packages/engine/test/hidden-info.test.ts`
@@ -33,9 +34,9 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   become visible through a new `OpaquePlayerhand.revealedSocialPolicies`
   projection (no new route). The human chose: own data as the first tab,
   username + player colour labels, pickers above the tabs. `styles.css` and
-  `api.ts` are not touched. The same commit releases every claim that stood
-  here before: all of their PRs are merged (checked with `gh pr list --state
-  merged`).
+  `api.ts` are not touched. This claim replaced every claim that stood here
+  before; all of those PRs are merged (checked with `gh pr list --state merged`),
+  so their paths are free.
 
 ---
 

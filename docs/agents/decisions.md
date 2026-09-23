@@ -1914,6 +1914,10 @@ appears only after `revealSocialPolicy`. A player who has revealed nothing still
 gets a tab, with a muted empty state that uses only the public counts. The
 client stops calling `GET /techs/revealed`; the route and
 `revealedTechsForAllPlayers` stay as the port of Java's `/tech/all`, with their
-server tests, because the projection only duplicates data the old endpoint made
-public. The panels' collapsible-state ids change to `techs` and `social-policy`,
+server tests, because the projection already duplicates what the old endpoint
+made public — with one deliberate difference: `revealedTechsForAllPlayers`
+filters to players with a civilization, while the tab projection does not, so a
+player who has revealed a tech before choosing a civilization gets a tab where
+the old client showed none (the brief records this as intentional). The panels'
+collapsible-state ids change to `techs` and `social-policy`,
 so a combined panel that a player had collapsed opens again on first load.
