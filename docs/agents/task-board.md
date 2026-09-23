@@ -28,6 +28,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `README.md`
   - `docs/agents/tasks/social-login-email-verification.md`
   - `docs/agents/decisions.md`
+  - `.opencode/agents/coder.md`
 - **Notes:** implements issues #42 and #121 together. Uses the shared resources
   `packages/web/src/lib/api.ts` (claimed below) and `packages/web/src/views/**`.
   Server first, then client; both inside this claim.

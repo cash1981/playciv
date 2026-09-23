@@ -1,7 +1,7 @@
 ---
 description: Implements a task brief on a feature branch. Use for the bulk of feature work, once a brief exists and paths are claimed. Runs on a cheaper model; its output always goes through the review gate before anything merges. Not for exploratory work or for decisions — those belong to the orchestrator.
 mode: subagent
-model: deepseek/deepseek-v4-flash-vision-exp
+model: deepseek/deepseek-flash
 permissions:
   - action: subagent
     resource: "*"
