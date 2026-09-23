@@ -12,7 +12,29 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### issue-97-color-choice
+
+- **Owner:** Codex (Astra orchestrator, Sol coder)
+- **Branch:** `feat/issue-97-color-choice`
+- **Brief:** `docs/agents/tasks/issue-97-color-choice.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `docs/agents/tasks/issue-97-color-choice.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+  - `docs/agents/decisions.md`
+  - `packages/engine/src/actions/game.ts`
+  - `packages/engine/src/errors.ts`
+  - `packages/engine/test/game-action.test.ts`
+  - `packages/server/src/routes/games.ts`
+  - `packages/server/src/errors.ts`
+  - `packages/server/test/api.test.ts`
+  - `packages/web/src/lib/api.ts`
+  - `packages/web/src/views/LandingView.tsx`
+  - `packages/web/src/views/GameList.tsx`
+  - `packages/web/src/views/GameList.test.tsx`
+  - `packages/web/src/views/LandingView.test.tsx`
+- **Notes:** Color selection on creation and joining, including safe takeover of withdrawn hands.
 
 ---
 
