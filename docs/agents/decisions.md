@@ -1888,6 +1888,40 @@ harness; `GameView.test.tsx` pins the constant instead, so a literal `30_000`
 reintroduced in the interval would not fail it, only a change to the constant
 would.
 
+## 2026-09-23 - One player tab per panel for techs and social policy
+
+**Decision.** The combined "Techs & Social policy" panel becomes two panels,
+"Techs" and "Social policy", each with one tab per player: the viewer first when
+they are in the game, then every opponent, labelled with the username and
+accented with the player's colour (the turn-order tab convention the human
+picked). Only the viewer's own tab carries the controls; another player's tab is
+read-only and shows that player's *revealed* items — their pyramid of
+`revealedTechs` and their cards of a new `OpaquePlayerhand.revealedSocialPolicies`.
+No new route, no DTO: both panels read `view.you` / `view.opponents`, so live
+reads and revision replay come from the same projection.
+
+**Why.** Issue #140: social policies should be visible "like the Tech
+implementation", social policy should leave the tech panel, and other players'
+pyramids should be behind tabs instead of stacked below the viewer's own. Java
+has no public social-policy projection at all — the port's `revealSocialPolicy`
+(2026-09-16) is the only way a policy becomes public — so the projection mirrors
+`revealedTechs` exactly rather than inventing a second visibility rule.
+
+**Consequences.** A hidden policy or tech still never leaves its owner's view;
+the engine leak test now serialises an opponent's view, asserts the hidden
+policy's name is absent and the revealed list empty, and asserts the name
+appears only after `revealSocialPolicy`. A player who has revealed nothing still
+gets a tab, with a muted empty state that uses only the public counts. The
+client stops calling `GET /techs/revealed`; the route and
+`revealedTechsForAllPlayers` stay as the port of Java's `/tech/all`, with their
+server tests, because the projection already duplicates what the old endpoint
+made public — with one deliberate difference: `revealedTechsForAllPlayers`
+filters to players with a civilization, while the tab projection does not, so a
+player who has revealed a tech before choosing a civilization gets a tab where
+the old client showed none (the brief records this as intentional). The panels'
+collapsible-state ids change to `techs` and `social-policy`,
+so a combined panel that a player had collapsed opens again on first load.
+
 ## 2026-09-23 - One coin marker, and old placements lose their image
 
 **Decision.** The board palette offers a single coin marker. The `Coin`, `Coin
