@@ -9,6 +9,7 @@ import {
   createGame,
   endGame,
   joinGame,
+  PLAYER_COLORS,
   remainingTechsForPlayer,
   revealedFeed,
   revealedTechsForAllPlayers,
@@ -47,6 +48,7 @@ export interface GameSummary {
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
+  readonly availableColors: readonly string[]
 }
 
 /** The public lobby summary. It deliberately has no viewer-specific fields. */
@@ -61,6 +63,14 @@ export interface PublicGameSummary {
   readonly players: readonly { readonly username: string; readonly color: string | null }[]
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
+  readonly availableColors: readonly string[]
+}
+
+function availableColors(game: GameState): readonly string[] {
+  const withdrawn = game.withdrawnPlayers[0]
+  if (withdrawn !== undefined) return withdrawn.color === null ? [] : [withdrawn.color]
+  const taken = new Set(game.players.map((player) => player.color))
+  return PLAYER_COLORS.filter((color) => !taken.has(color))
 }
 
 function toSummary(game: GameState, viewerId: string): GameSummary {
@@ -78,6 +88,7 @@ function toSummary(game: GameState, viewerId: string): GameSummary {
     })),
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
     youAreIn: game.players.some((player) => player.playerId === viewerId),
+    availableColors: availableColors(game),
   }
 }
 
@@ -96,6 +107,7 @@ export function toPublicSummary(game: GameState, viewerId?: string): PublicGameS
     })),
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
     youAreIn: viewerId !== undefined && game.players.some((player) => player.playerId === viewerId),
+    availableColors: availableColors(game),
   }
 }
 

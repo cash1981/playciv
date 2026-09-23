@@ -66,6 +66,9 @@ export type EngineError =
   | { readonly kind: 'TURN_NOT_FOUND'; readonly turnNumber: number }
   /** Every colour is taken */
   | { readonly kind: 'NO_COLOR_AVAILABLE' }
+  | { readonly kind: 'INVALID_PLAYER_COLOR'; readonly color: string }
+  | { readonly kind: 'PLAYER_COLOR_TAKEN'; readonly color: string }
+  | { readonly kind: 'WITHDRAWN_PLAYER_COLOR_MISMATCH'; readonly color: string | null }
   /** The piece does not exist in board-assets.json */
   | { readonly kind: 'BOARD_ASSET_NOT_FOUND'; readonly assetId: string }
   /** The physical supply for this board asset has been exhausted. */
@@ -164,6 +167,12 @@ export function describeError(error: EngineError): string {
       return `Could not find turn ${error.turnNumber}`
     case 'NO_COLOR_AVAILABLE':
       return 'No colors left to assign'
+    case 'INVALID_PLAYER_COLOR':
+      return `Unsupported player color: ${error.color}`
+    case 'PLAYER_COLOR_TAKEN':
+      return `Player color is already taken: ${error.color}`
+    case 'WITHDRAWN_PLAYER_COLOR_MISMATCH':
+      return `A replacement player must keep the withdrawn player's color: ${error.color}`
     case 'BOARD_ASSET_NOT_FOUND':
       return `Unknown board piece: ${error.assetId}`
     case 'BOARD_ASSET_LIMIT_REACHED':

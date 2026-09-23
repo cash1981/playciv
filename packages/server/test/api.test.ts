@@ -253,6 +253,54 @@ describe('games', () => {
     expect(view.you?.color).toBe('Green')
   })
 
+  it('creates a game with the requested color and rejects invalid colors without saving', async () => {
+    const token = await register('color-creator')
+    const created = await inject(app, {
+      method: 'POST', url: '/api/games', headers: bearer(token),
+      payload: { name: 'Chosen color', numOfPlayers: 3, color: 'Purple' },
+    })
+    expect(created.status).toBe(201)
+    const id = (await created.json() as { id: string }).id
+    expect((await repo.findGame(id))?.players[0]?.color).toBe('Purple')
+
+    const rejected = await inject(app, {
+      method: 'POST', url: '/api/games', headers: bearer(token),
+      payload: { name: 'Invalid color', numOfPlayers: 3, color: 'Orange' },
+    })
+    expect(rejected.status).toBe(400)
+    expect((await rejected.json() as { error: string }).error).toBe('INVALID_PLAYER_COLOR')
+    expect((await repo.allGames()).some((game) => game.name === 'Invalid color')).toBe(false)
+  })
+
+  it('publishes available colors without exposing hands and honors join color', async () => {
+    const creator = await register('color-lobby-owner')
+    const gameId = await createGame(creator, 'Color lobby', 3)
+    const publicList = await inject(app, { method: 'GET', url: '/api/public/games' })
+    const summary = (await publicList.json() as {
+      id: string; availableColors: string[]; players: unknown[]
+    }[]).find((game) => game.id === gameId)
+    expect(summary?.availableColors).toEqual(['Yellow', 'Purple', 'Red', 'Blue'])
+    expect(publicList.body).not.toContain('items')
+    expect(publicList.body).not.toContain('privateLog')
+
+    const joiner = await register('color-lobby-joiner')
+    const joined = await inject(app, {
+      method: 'POST', url: `/api/games/${gameId}/join`, headers: bearer(joiner),
+      payload: { color: 'Blue' },
+    })
+    expect(joined.status).toBe(200)
+    expect((await repo.findGame(gameId))?.players.find((player) => player.username === 'color-lobby-joiner')?.color)
+      .toBe('Blue')
+
+    const duplicate = await register('color-lobby-duplicate')
+    const rejected = await inject(app, {
+      method: 'POST', url: `/api/games/${gameId}/join`, headers: bearer(duplicate),
+      payload: { color: 'Blue' },
+    })
+    expect(rejected.status).toBe(409)
+    expect((await rejected.json() as { error: string }).error).toBe('PLAYER_COLOR_TAKEN')
+  })
+
   it('a new game summary carries its createdAt, signed in and public', async () => {
     const token = await register('created-at')
     const gameId = await createGame(token, 'Stamped game')

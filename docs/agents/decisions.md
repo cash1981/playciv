@@ -2139,3 +2139,29 @@ take the baseline path. The history response, anonymous access, missing-game
 404 and private-information projection remain the same. This polling mechanism
 has no old Java or AngularJS counterpart. See
 `docs/agents/tasks/lightweight-poll.md`.
+
+---
+
+## 2026-09-23 — Players choose colors when creating and joining games
+
+**Decision.** Issue #97 exposes the five existing board colors in the create
+form and the currently available colors in each join action. The selected color
+is sent through the existing API field and checked by the engine. Unsupported
+colors and colors held by another active player are rejected; a player taking
+over a withdrawn hand may only request that hand's retained color. Requests
+without a color still use the old automatic assignment.
+
+**Why.** The old AngularJS create form required a color and Java stored the
+creator's DTO color verbatim, but the old join form sent no color and Java chose
+one automatically. Issue #97 extends player choice to joining. Java did not
+restrict a caller-supplied creator color to the five artwork colors and ignored
+an internally supplied join color on withdrawn-hand takeover. The new checks
+protect the board assets and prevent a choice that cannot apply to a retained
+hand. They are deliberate deviations from Java's permissive input behavior.
+
+**Consequences.** Public game summaries now list selectable colors. For a
+vacant new seat these are the five colors minus active players' colors; for a
+withdrawn-hand replacement the only option is the retained color. This public
+field exposes no card or other private-hand data. The server checks the choice
+again when the request arrives, so a stale lobby list cannot assign a duplicate
+color. See `docs/agents/tasks/issue-97-color-choice.md`.

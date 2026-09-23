@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
+import { PLAYER_COLORS } from '@civ/engine'
 import { errorMessage, isUnauthorized } from '../App.js'
 import { api } from '../lib/api.js'
 import type { ChatMessageDto, PlayerDto, PublicGameSummary } from '../lib/api.js'
@@ -20,6 +21,7 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
   const [chat, setChat] = useState<readonly ChatMessageDto[]>([])
   const [name, setName] = useState('')
   const [numOfPlayers, setNumOfPlayers] = useState(4)
+  const [color, setColor] = useState('Green')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -61,9 +63,9 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
   // Stable identity so `GameList`'s memoised column arrays (and through them
   // `SortableTable`'s sort memo) survive a re-render.
   const joinGame = useCallback(
-    (gameId: string): void => {
+    (gameId: string, color: string): void => {
       void run(async () => {
-        await api.join(gameId)
+        await api.join(gameId, color)
         onOpenGame(gameId)
       }).catch(() => undefined)
     },
@@ -117,7 +119,7 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
             onSubmit={(event) => {
               event.preventDefault()
               void run(async () => {
-                const created = await api.createGame(name, numOfPlayers)
+                const created = await api.createGame(name, numOfPlayers, color)
                 setName('')
                 onOpenGame(created.id)
               }).catch(() => undefined)
@@ -130,6 +132,15 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
               placeholder="Game name"
               required
             />
+            <select
+              aria-label="Player color"
+              value={color}
+              onChange={(event) => setColor(event.target.value)}
+            >
+              {PLAYER_COLORS.map((choice) => (
+                <option key={choice} value={choice}>{choice}</option>
+              ))}
+            </select>
             <select
               aria-label="Number of players"
               value={numOfPlayers}

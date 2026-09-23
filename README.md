@@ -38,6 +38,11 @@ The client is on http://localhost:5173 and proxies `/api` to the server on port
 8787. Register a user, create a game, and let the other players join — the game
 starts by itself once the last seat is filled.
 
+Choose a board color when creating or joining a game. The join list offers only
+colors available for that seat. If you replace a player who withdrew, you take
+over their hand and its existing color. The server rejects invalid or occupied
+color choices; older requests that omit a color still get an automatic choice.
+
 Set `TOKEN_SECRET` before starting the server if logins should survive a
 restart. Without it a random secret is made on every start.
 
