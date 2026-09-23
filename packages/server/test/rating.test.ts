@@ -1,12 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import { createGame, joinGame } from '@civ/engine'
 
 import { legacyRatedGame } from '../src/migrate/legacy-rating.js'
 import { writeRatingBackfill } from '../src/migrate/rating-backfill.js'
-import { ratedHighscore } from '../src/store/rating.js'
+import { JsonFileRepository } from '../src/store/json-file.js'
+import { ratedHighscore, resultFromGame } from '../src/store/rating.js'
 import { readMigrations } from './migrations.js'
 
 const player = (username: string) => ({
@@ -102,4 +104,58 @@ describe('legacy rating backfill', () => {
     expect(score.ratings).toHaveLength(count)
     expect(score.ratings?.every((entry) => entry.games === 1 && Number.isFinite(entry.rating) && entry.uncertainty > 0)).toBe(true)
   })
+})
+
+it('credits a discarded owned culture III card in a newly finished game', () => {
+  const base = createGame({ name: 'Culture result', numOfPlayers: 3, seed: 'culture-result' })
+  const alice = joinGame(base, { playerId: 'a', username: 'Alice', gameCreator: true })
+  const bob = alice.ok ? joinGame(alice.value, { playerId: 'b', username: 'Bob' }) : undefined
+  const carol = bob?.ok ? joinGame(bob.value, { playerId: 'c', username: 'Carol' }) : undefined
+  if (carol === undefined || !carol.ok) throw new Error('fixture join failed')
+  const third = carol.value.items.find((item) => item.kind === 'cultureIII')
+  const first = carol.value.items.find((item) => item.kind === 'cultureI')
+  if (third === undefined || first === undefined) throw new Error('culture cards missing')
+  const game = {
+    ...carol.value, active: false, winner: 'Alice',
+    discardedItems: [{ ...third, ownerId: 'b' }],
+    players: carol.value.players.map((player) => player.username === 'Carol'
+      ? { ...player, items: [{ ...first, ownerId: 'c' }] }
+      : player),
+  }
+  expect(resultFromGame(game)?.participants).toEqual([
+    { username: 'Alice', rank: 1 },
+    { username: 'Bob', rank: 2 },
+    { username: 'Carol', rank: 3 },
+  ])
+})
+
+it('does not cache an old JSON highscore after a concurrent game finish', async () => {
+  const repo = new JsonFileRepository({ filePath: null })
+  await repo.createPlayer(player('Alice'))
+  await repo.createPlayer(player('Bob'))
+  const base = createGame({ name: 'Concurrent rating', numOfPlayers: 2, seed: 'concurrent-rating' })
+  const alice = joinGame(base, { playerId: 'a', username: 'Alice', gameCreator: true })
+  const bob = alice.ok ? joinGame(alice.value, { playerId: 'b', username: 'Bob' }) : undefined
+  if (bob === undefined || !bob.ok) throw new Error('fixture join failed')
+  await repo.saveGame(bob.value)
+
+  let release = (): void => undefined
+  let captured = (): void => undefined
+  const hold = new Promise<void>((resolve) => { release = resolve })
+  const snapshotTaken = new Promise<void>((resolve) => { captured = resolve })
+  const original = repo.finishedGamesForHighscore.bind(repo)
+  vi.spyOn(repo, 'finishedGamesForHighscore').mockImplementationOnce(async () => {
+    const old = await original()
+    captured()
+    await hold
+    return old
+  })
+
+  const pending = repo.cachedHighscore()
+  await snapshotTaken
+  await repo.saveGame({ ...bob.value, active: false, winner: 'Alice' })
+  release()
+  expect((await pending).players.totalNumberOfGames).toBe(1)
+  expect((await repo.cachedHighscore()).players.totalNumberOfGames).toBe(1)
+  vi.restoreAllMocks()
 })

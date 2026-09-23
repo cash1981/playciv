@@ -57,6 +57,7 @@ export class JsonFileRepository implements Repository {
   private readonly emailSent = new Map<string, string>()
   private chat: ChatMessage[] = []
   private highscoreCache: HighscoreResult | undefined
+  private highscoreGeneration = 0
 
   private readonly filePath: string | null
   private readonly debounceMs: number
@@ -107,7 +108,7 @@ export class JsonFileRepository implements Repository {
   }
 
   async createPlayer(player: StoredPlayer): Promise<void> {
-    this.highscoreCache = undefined
+    this.invalidateHighscore()
     this.players.set(player.id, {
       ...player,
       role: player.role === 'admin' ? 'admin' : 'user',
@@ -145,26 +146,26 @@ export class JsonFileRepository implements Repository {
     if (player === undefined) return undefined
     const updated = { ...player, ...changes }
     this.players.set(id, updated)
-    if (changes.username !== undefined) this.highscoreCache = undefined
+    if (changes.username !== undefined) this.invalidateHighscore()
     this.scheduleWrite()
     return updated
   }
 
   async deletePlayer(id: string): Promise<boolean> {
     const deleted = this.players.delete(id)
-    if (deleted) { this.highscoreCache = undefined; this.scheduleWrite() }
+    if (deleted) { this.invalidateHighscore(); this.scheduleWrite() }
     return deleted
   }
 
   async saveGame(game: GameState): Promise<void> {
-    if (!game.active || this.games.get(game.id)?.active === false) this.highscoreCache = undefined
+    if (!game.active || this.games.get(game.id)?.active === false) this.invalidateHighscore()
     this.games.set(game.id, game)
     this.scheduleWrite()
   }
 
   async saveGameIfRevision(game: GameState, expectedRevision: number): Promise<boolean> {
     if (this.games.get(game.id)?.rev !== expectedRevision) return false
-    if (!game.active || this.games.get(game.id)?.active === false) this.highscoreCache = undefined
+    if (!game.active || this.games.get(game.id)?.active === false) this.invalidateHighscore()
     this.games.set(game.id, game)
     this.scheduleWrite()
     return true
@@ -183,7 +184,7 @@ export class JsonFileRepository implements Repository {
     ) {
       return false
     }
-    if (!game.active || current?.active === false) this.highscoreCache = undefined
+    if (!game.active || current?.active === false) this.invalidateHighscore()
     this.games.set(game.id, game)
     this.revisions.set(revisionKey, revision)
     this.scheduleWrite()
@@ -241,7 +242,7 @@ export class JsonFileRepository implements Repository {
   async deleteGame(id: string): Promise<boolean> {
     const deleted = this.games.delete(id)
     if (deleted) {
-      this.highscoreCache = undefined
+      this.invalidateHighscore()
       for (const [key, revision] of this.revisions) {
         if (revision.gameId === id) this.revisions.delete(key)
       }
@@ -292,11 +293,23 @@ export class JsonFileRepository implements Repository {
   }
 
   async cachedHighscore(): Promise<HighscoreResult> {
-    if (this.highscoreCache !== undefined) return this.highscoreCache
-    const results = [...this.games.values()].map(resultFromGame).filter((result) => result !== null)
-    this.highscoreCache = ratedHighscore(await this.finishedGamesForHighscore(), await this.allPlayers(), results)
-    this.scheduleWrite()
-    return this.highscoreCache
+    for (;;) {
+      if (this.highscoreCache !== undefined) return this.highscoreCache
+      const generation = this.highscoreGeneration
+      const games = await this.finishedGamesForHighscore()
+      const players = await this.allPlayers()
+      const results = [...this.games.values()].map(resultFromGame).filter((result) => result !== null)
+      const response = ratedHighscore(games, players, results)
+      if (generation !== this.highscoreGeneration) continue
+      this.highscoreCache = response
+      this.scheduleWrite()
+      return response
+    }
+  }
+
+  private invalidateHighscore(): void {
+    this.highscoreGeneration++
+    this.highscoreCache = undefined
   }
 
   async flush(): Promise<void> {
