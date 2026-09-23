@@ -18,6 +18,8 @@ const player: PlayerDto = {
   email: null,
   role: 'user',
   disabled: false,
+  disableEmail: false,
+  emailVerified: true,
 }
 
 const noop = (): void => undefined

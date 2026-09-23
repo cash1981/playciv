@@ -20,6 +20,7 @@ vi.mock('./LobbyChat.js', () => ({ LobbyChat: () => null }))
 
 const player: PlayerDto = {
   id: 'creator', username: 'Creator', email: null, role: 'user', disabled: false,
+  disableEmail: false, emailVerified: true,
 }
 
 afterEach(() => {
