@@ -13,7 +13,7 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 173 server, 124 web |
+| `pnpm -r test` | passing - 449 engine, 174 server, 129 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; earlier PRs await the human's merge (see the task board) |
 
@@ -48,7 +48,7 @@ _Last updated: 2026-09-23_
   request, in the same branch because the poll was the heaviest request on the
   page. `GameRevisionMetadata` is new; `Repository` gains one method. Verified:
   `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (449 engine,
-  174 server, 128 web), and a repository test asserts the summary query does not
+  174 server, 129 web), and a repository test asserts the summary query does not
   select `state`. No browser pass: the banner needs a non-JSON 5xx, which no
   local route produces. Branch `fix/revisions-503`; see `decisions.md`.
 
