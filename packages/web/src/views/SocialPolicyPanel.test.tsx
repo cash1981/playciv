@@ -58,6 +58,7 @@ const opponent = (
     readonly color?: string
     readonly civilization?: string | null
     readonly revealedPolicies?: readonly SocialPolicyItem[]
+    readonly numberOfSocialPolicies?: number
   } = {},
 ) => ({
   playerId,
@@ -68,6 +69,8 @@ const opponent = (
       ? null
       : { name: options.civilization ?? `${username}land` },
   revealedSocialPolicies: options.revealedPolicies ?? [],
+  numberOfSocialPolicies:
+    options.numberOfSocialPolicies ?? options.revealedPolicies?.length ?? 0,
 })
 
 const view = (
@@ -186,14 +189,25 @@ describe('SocialPolicyPanel tabs', () => {
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull()
   })
 
-  it('says none chosen on the own tab and none revealed on another player\'s', () => {
-    const container = renderPanel({ opponents: [opponent('p2', 'Egil')] })
+  it('says none chosen on the own tab and uses the public count on another player\'s', () => {
+    const container = renderPanel({
+      opponents: [
+        opponent('p2', 'Egil'),
+        opponent('p3', 'Kari', { numberOfSocialPolicies: 2 }),
+      ],
+    })
 
     expect(activePanel(container).textContent).toContain('None chosen.')
 
     fireEvent.click(screen.getByRole('tab', { name: 'Egil' }))
 
-    expect(activePanel(container).textContent).toContain('Has not revealed any social policies.')
+    expect(activePanel(container).textContent).toContain('Has not chosen any social policies.')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Kari' }))
+
+    expect(activePanel(container).textContent).toContain(
+      'Has chosen social policies, but not revealed any.',
+    )
   })
 
   it('gives a spectator a tab per player, no own tab, and the reference', async () => {

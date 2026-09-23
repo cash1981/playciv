@@ -41,6 +41,8 @@ interface PolicyTab {
   readonly color: string | null
   readonly civilization: string | null
   readonly policies: readonly SocialPolicyItem[]
+  /** Java: the public `numberOfSocialPolicies`, shown in the opponent empty state. */
+  readonly chosenCount: number
   readonly own: boolean
 }
 
@@ -121,6 +123,7 @@ export function SocialPolicyPanel({
             color: view.you.color,
             civilization: view.you.civilization?.name ?? null,
             policies: view.you.socialPolicies,
+            chosenCount: view.you.socialPolicies.length,
             own: true,
           },
         ]),
@@ -130,6 +133,7 @@ export function SocialPolicyPanel({
       color: opponent.color,
       civilization: opponent.civilization?.name ?? null,
       policies: opponent.revealedSocialPolicies,
+      chosenCount: opponent.numberOfSocialPolicies,
       own: false,
     })),
   ]
@@ -245,7 +249,11 @@ export function SocialPolicyPanel({
             ))}
             {active.policies.length === 0 && (
               <li className="muted">
-                {active.own ? 'None chosen.' : 'Has not revealed any social policies.'}
+                {active.own
+                  ? 'None chosen.'
+                  : active.chosenCount === 0
+                    ? 'Has not chosen any social policies.'
+                    : 'Has chosen social policies, but not revealed any.'}
               </li>
             )}
           </ul>

@@ -200,7 +200,7 @@ describe('TechPanel tabs', () => {
     })
 
     expect(tabNames()).toEqual(['Egil', 'Kari'])
-    expect(screen.getByRole('combobox')).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Choose a tech' })).toBeTruthy()
   })
 
   it('moves between tabs with the arrow keys', () => {
@@ -227,7 +227,9 @@ describe('TechPanel tabs', () => {
     )
 
     await screen.findByRole('option', { name: 'Level 1 — Writing' })
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Writing' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Choose a tech' }), {
+      target: { value: 'Writing' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Research' }))
 
     await waitFor(() => expect(choose).toHaveBeenCalledWith('game-1', 'Writing'))

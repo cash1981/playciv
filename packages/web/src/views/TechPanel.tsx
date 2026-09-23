@@ -123,6 +123,7 @@ export function TechPanel({
 
       <div className="row">
         <select
+          aria-label="Choose a tech"
           value={chosenTech}
           onChange={(event) => setChosenTech(event.target.value)}
           style={{ flex: 1 }}
