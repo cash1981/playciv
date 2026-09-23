@@ -12,7 +12,29 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### lightweight-poll
+
+- **Owner:** Codex (orchestrator and coder)
+- **Branch:** `fix/lightweight-poll`
+- **Brief:** `docs/agents/tasks/lightweight-poll.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/server/src/store/types.ts`
+  - `packages/server/src/store/d1.ts`
+  - `packages/server/src/store/json-file.ts`
+  - `packages/server/src/routes/games.ts`
+  - `packages/server/test/api.test.ts`
+  - `packages/server/test/d1-repository.test.ts`
+  - `packages/web/src/lib/api.ts`
+  - `packages/web/src/views/GameView.tsx`
+  - `packages/web/src/views/GameView.test.tsx`
+  - `packages/web/src/views/ChatPanel.tsx`
+  - `packages/web/src/views/ChatPanel.test.tsx`
+  - `docs/agents/tasks/lightweight-poll.md`
+  - `docs/agents/state.md`
+  - `docs/agents/decisions.md`
+  - `docs/agents/task-board.md`
+- **Notes:** Poll a cheap game revision marker before loading full game data; keep chat current independently.
 
 ---
 
@@ -46,7 +68,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | free (released with #148's merge) |
+| `packages/web/src/lib/api.ts` | lightweight-poll |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.
