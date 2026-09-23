@@ -12,6 +12,29 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-139-poll-retry
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `feat/issue-139-poll-retry`
+- **Brief:** `docs/agents/tasks/issue-139-poll-retry.md`
+- **Status:** claimed
+- **Claimed paths:**
+  - `packages/web/src/lib/api.ts`
+  - `packages/web/src/lib/api.test.ts`
+  - `packages/web/src/views/GameView.tsx` (`loadConsistentLive`/`reload` region and the auto-refresh effect only)
+  - `packages/web/src/views/GameView.test.tsx`
+  - `docs/agents/tasks/issue-139-poll-retry.md`
+  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** Follow-ups from #139 after #138/#138. Two changes: a bounded retry
+  for `GET` on `502`/`503`/`504`, and a poll that skips the revision list while
+  `rev` has not moved. Client-only. `packages/web/src/lib/api.ts` is claimed in
+  the shared-resources table. `packages/web/src/views/GameView.tsx` is named in
+  `issue-140-tech-policy-tabs` ("the panel list only"), but that PR (#143) is
+  merged, the main checkout is clean and its branch is merged too, so the claim
+  is stale and this edit is a different region; recorded rather than treated as
+  a collision. No `rules-checker` pass: no game rule, deck, log text or
+  projection changes.
+
 ### issue-140-tech-policy-tabs
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
@@ -70,7 +93,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | free |
+| `packages/web/src/lib/api.ts` | `issue-139-poll-retry` (DeepSeek V4.1 Flash) |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.
