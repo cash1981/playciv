@@ -312,6 +312,19 @@ previous output untouched — it never writes an empty dump. The old `pbf` games
 stay read-only — Java's `PBF` shape is nothing like our `GameState`, so they are
 not migrated to playable form, exactly as before.
 
+Issue #87 has a separate, one-time rating backfill for databases already
+migrated to D1. After applying migration `0003_rating.sql`, run:
+
+```bash
+pnpm --filter @civ/server migrate:rating "<dump dir>/playciv.pbf.json" "<rating.sql>"
+wrangler d1 execute playciv --remote --file="<rating.sql>"
+```
+
+The script reads the original private export locally and writes only game IDs,
+an ordering key and player placements. Keep the generated SQL outside git. Its
+upserts make a rerun safe; changing any result invalidates the stored highscore
+response. It does not make the old games playable.
+
 There is no database integration test in CI; the shared repository logic is
 covered by the JSON implementation and by the `node:sqlite` adapter. The
 repository tests and the migration need Node 24 or newer (`node:sqlite` without
@@ -319,13 +332,16 @@ a flag), which the root `engines` field requires.
 
 ### Highscore
 
-`GET /api/highscore` needs no token and returns wins by player and by
-civilization, broken down by player count, computed by the pure
-`highscore()` function in the engine over every finished game — the old `pbf`
-games and any new ones together. It is a faithful port of Java's
-`getPlayerHighScore` / `getCivHighscore`, down to the `percentWin` formatting
-and the descending-username tiebreak. The tables themselves are drawn by the
-landing page (see the `public-landing` task).
+`GET /api/highscore` needs no token. Its wins, attempts and efficiency tables
+retain Java's `getPlayerHighScore` / `getCivHighscore` behavior, including the
+`percentWin` formatting and descending-username tiebreak. Player rating uses
+the open-source OpenSkill library on results from both old and new finished
+games. Old games use only evidence in the archive: known techs, owned culture
+cards (including owned discards), and provable printed coins. The winner is
+first; uncertain nonwinners share a placement. Nine old wins have just one
+recorded participant and count toward wins but cannot update a multiplayer
+rating. The complete public response is stored in `highscore_cache` and rebuilt
+only when source data changes. The Highscore page can sort players by rating.
 
 ## Game data
 
@@ -628,9 +644,7 @@ them (issue #116). See `docs/agents/decisions.md`.
 
 - **Card artwork.** The hand is shown as text. `itemImage()` in the engine
   already gives the filenames under `Civilization/Moderator/`.
-- **Highscores and tournaments** — `GameAction.getCivHighscore`,
-  `getPlayerHighScore`, `TournamentAction`. They query across games and need a
-  proper data layer.
+- **Tournaments** — `TournamentAction` still needs a proper data layer.
 - **`AdminAction`** — swap a user in a game, delete games.
 - **Real time.** The client refetches after every action; there is no websocket.
   `todo.txt` in old-civ-rest wanted one for chat.
