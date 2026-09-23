@@ -20,6 +20,7 @@ interface Props {
   readonly onClose: () => void
   /** The control that opened the dialog; it regains focus when this unmounts. */
   readonly returnFocusTo?: RefObject<HTMLElement | null>
+  readonly className?: string
   readonly children: ReactNode
 }
 
@@ -28,6 +29,7 @@ export function ReferenceDialog({
   title,
   onClose,
   returnFocusTo,
+  className,
   children,
 }: Props): React.JSX.Element {
   const dialogRef = useRef<HTMLElement | null>(null)
@@ -81,7 +83,7 @@ export function ReferenceDialog({
     <div className="reference-backdrop" role="presentation" onClick={onClose}>
       <section
         ref={dialogRef}
-        className="reference"
+        className={className === undefined ? 'reference' : `reference ${className}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
