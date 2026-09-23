@@ -33,6 +33,7 @@ export function Navigation({
   return (
     <header className="topbar">
       <a className="brand" href="/" onClick={(event) => navigate(event, '/', onNavigate)}>
+        <img className="brand-icon" src="/favicon.ico" alt="" />
         <strong>Civilization</strong>
         <span className="muted">playciv</span>
       </a>
