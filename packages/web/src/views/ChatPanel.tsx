@@ -7,7 +7,7 @@
  * client-side slice of the array already in memory.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
@@ -32,12 +32,17 @@ export function ChatPanel({ gameId, busy, run, player, reloadCount, autoRefresh 
   const [message, setMessage] = useState('')
   const [page, setPage] = useState(1)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const requestEpoch = useRef(0)
 
   const load = useCallback(async () => {
+    const epoch = ++requestEpoch.current
     try {
-      setChat(await api.chat(gameId))
+      const nextChat = await api.chat(gameId)
+      if (epoch !== requestEpoch.current) return
+      setChat(nextChat)
       setLoadError(null)
     } catch (caught) {
+      if (epoch !== requestEpoch.current) return
       setLoadError(errorMessage(caught))
     }
   }, [gameId])

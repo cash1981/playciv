@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '../lib/api.js'
@@ -41,5 +41,19 @@ describe('ChatPanel auto-refresh', () => {
     })
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
     expect(chat).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps newer chat when an older request completes last', async () => {
+    let finishOld: ((messages: Awaited<ReturnType<typeof api.chat>>) => void) | undefined
+    chat.mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve }))
+      .mockResolvedValueOnce([{
+        id: 'new', username: 'Two', message: 'New message', createdAt: '2020-01-02',
+      }])
+    render(<ChatPanel gameId="game" busy={false} run={async () => {}} player={player} reloadCount={0} autoRefresh={false} />)
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Refresh' })) })
+    expect(screen.getByText('New message')).toBeTruthy()
+    await act(async () => { finishOld?.([]) })
+    expect(screen.getByText('New message')).toBeTruthy()
+    expect(chat).toHaveBeenCalledTimes(2)
   })
 })
