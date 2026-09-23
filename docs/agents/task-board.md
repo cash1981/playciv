@@ -39,7 +39,9 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
 - **Branch:** `fix/revisions-503`
 - **Brief:** `docs/agents/tasks/revisions-503.md`
-- **Status:** claimed
+- **Status:** review-approved (round 2; round 1's one minor, a missing docs
+  update, fixed; round 2 found nothing above a cosmetic nit) - PR to open,
+  awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/server/src/store/types.ts`
   - `packages/server/src/store/d1.ts`

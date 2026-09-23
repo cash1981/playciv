@@ -1856,8 +1856,8 @@ time and otherwise `503` with `text/plain` body `error code: 1102` - Cloudflare'
 reading the `state` column (the whole game state) of every revision and running
 `JSON.parse` + `migrateGameState` on each row, then discarding all of it. On this
 game that is the work that tips the Worker over its limit, whichever of CPU or
-memory binds first. The banner text was the second half of the bug: the old
-client parsed before checking `response.ok`, so an edge error page became a
+memory binds first. The banner text was the second half of the bug: the previous
+`api.ts` parsed before checking `response.ok`, so an edge error page became a
 `SyntaxError` shown verbatim, and `GameView.loadConsistentLive` calls
 `api.revisions` before `api.game`, so the whole page failed.
 
