@@ -83,6 +83,13 @@ export type EngineError =
    * that is not a `base(+bonus)*` expression.
    */
   | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number | string }
+  /** `setCoinSource` got a source key outside the reference sheet's rows */
+  | { readonly kind: 'UNKNOWN_COIN_SOURCE'; readonly source: string }
+  /**
+   * `setCoinSource` got a value the source does not allow: not a whole number,
+   * negative, or above the printed limit (`max` is `null` when unlimited).
+   */
+  | { readonly kind: 'INVALID_COIN_VALUE'; readonly value: number; readonly max: number | null }
   /** `setPlayerGovernment` got a value outside the Wisdom and Warfare cards. */
   | { readonly kind: 'UNKNOWN_GOVERNMENT'; readonly government: string }
   /** A battle is already active — only one at a time is allowed */
@@ -170,6 +177,12 @@ export function describeError(error: EngineError): string {
       return `Unknown player stat: ${error.stat}`
     case 'INVALID_STAT_VALUE':
       return `Player stat must be a whole number; only Combat may be negative, got ${error.value}`
+    case 'UNKNOWN_COIN_SOURCE':
+      return `Unknown coin source: ${error.source}`
+    case 'INVALID_COIN_VALUE':
+      return error.max === null
+        ? `Coin count must be a whole number of zero or more, got ${error.value}`
+        : `Coin count must be a whole number between 0 and ${error.max}, got ${error.value}`
     case 'UNKNOWN_GOVERNMENT':
       return `Unknown government: ${error.government}`
     case 'BATTLE_ALREADY_ACTIVE':

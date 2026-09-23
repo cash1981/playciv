@@ -11,6 +11,7 @@ import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { itemName } from '@civ/engine'
+import type { CoinSources } from '@civ/engine'
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
 import { inject } from './helpers.js'
@@ -2103,8 +2104,14 @@ describe('board', () => {
 
 describe('player stats (#43)', () => {
   interface StatView {
-    you: { playerId: string; stats: { coins: number; trade: number } }
-    opponents: { playerId: string; stats: { coins: number } }[]
+    you: { playerId: string; stats: { culture: number; trade: number } }
+    opponents: { playerId: string; stats: { culture: number } }[]
+  }
+
+  /** The coin counters ride on the same public stats object. */
+  interface CoinView {
+    you: { playerId: string; stats: { coinSources: CoinSources } }
+    opponents: { playerId: string; stats: { coinSources: CoinSources } }[]
   }
 
   async function ids(gameId: string, token: string): Promise<{ me: string; other: string }> {
@@ -2123,11 +2130,11 @@ describe('player stats (#43)', () => {
       method: 'POST',
       url: `/api/games/${gameId}/players/${other}/stat`,
       headers: bearer(starter),
-      payload: { stat: 'coins', value: 5 },
+      payload: { stat: 'culture', value: 5 },
     })
     expect(setOther.status).toBe(200)
     const afterOther = await setOther.json() as StatView
-    expect(afterOther.opponents.find((o) => o.playerId === other)?.stats.coins).toBe(5)
+    expect(afterOther.opponents.find((o) => o.playerId === other)?.stats.culture).toBe(5)
 
     const setMine = await inject(app, {
       method: 'POST',
@@ -2148,7 +2155,7 @@ describe('player stats (#43)', () => {
       method: 'POST',
       url: `/api/games/${gameId}/players/${other}/stat`,
       headers: bearer(outsider),
-      payload: { stat: 'coins', value: 1 },
+      payload: { stat: 'culture', value: 1 },
     })
     expect(denied.status).toBe(403)
     expect((await denied.json() as { error: string }).error).toBe('NO_ACCESS')
@@ -2176,7 +2183,7 @@ describe('player stats (#43)', () => {
       method: 'POST',
       url: `/api/games/${gameId}/players/${other}/stat`,
       headers: bearer(starter),
-      payload: { stat: 'coins', value: -3 },
+      payload: { stat: 'culture', value: -3 },
     })
     expect(rejected.status).toBe(400)
     expect((await rejected.json() as { error: string }).error).toBe('INVALID_STAT_VALUE')
@@ -2207,11 +2214,11 @@ describe('player stats (#43)', () => {
       method: 'POST',
       url: `/api/games/${gameId}/players/${other}/stat`,
       headers: bearer(starter),
-      payload: { stat: 'coins', value: '5' },
+      payload: { stat: 'culture', value: '5' },
     })
     expect(saved.status).toBe(200)
     const view = await saved.json() as StatView
-    expect(view.opponents.find((o) => o.playerId === other)?.stats.coins).toBe(5)
+    expect(view.opponents.find((o) => o.playerId === other)?.stats.culture).toBe(5)
   })
 
   it('rejects an invalid Movement value', async () => {
@@ -2226,6 +2233,64 @@ describe('player stats (#43)', () => {
     })
     expect(rejected.status).toBe(400)
     expect((await rejected.json() as { error: string }).error).toBe('INVALID_STAT_VALUE')
+  })
+
+  it('lets a member set another player’s coin counter (coin-tab)', async () => {
+    const { gameId, starter } = await startedGame('Coins')
+    const { other } = await ids(gameId, starter)
+
+    const saved = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/coin`,
+      headers: bearer(starter),
+      payload: { source: 'codeOfLaws', value: 4 },
+    })
+    expect(saved.status).toBe(200)
+    const view = await saved.json() as CoinView
+    expect(view.opponents.find((o) => o.playerId === other)?.stats.coinSources.codeOfLaws).toBe(4)
+  })
+
+  it('refuses a coin count above the source’s printed limit', async () => {
+    const { gameId, starter } = await startedGame('CoinsLimit')
+    const { other } = await ids(gameId, starter)
+
+    const rejected = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/coin`,
+      headers: bearer(starter),
+      payload: { source: 'codeOfLaws', value: 5 },
+    })
+    expect(rejected.status).toBe(400)
+    expect((await rejected.json() as { error: string }).error).toBe('INVALID_COIN_VALUE')
+  })
+
+  it('refuses a coin source outside the reference sheet', async () => {
+    const { gameId, starter } = await startedGame('CoinsUnknown')
+    const { other } = await ids(gameId, starter)
+
+    const rejected = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/coin`,
+      headers: bearer(starter),
+      payload: { source: 'gold', value: 1 },
+    })
+    expect(rejected.status).toBe(400)
+    expect((await rejected.json() as { error: string }).error).toBe('UNKNOWN_COIN_SOURCE')
+  })
+
+  it('refuses a non-member on the coin route too', async () => {
+    const { gameId, starter } = await startedGame('CoinsGuard')
+    const { other } = await ids(gameId, starter)
+    const outsider = await register('coins-outsider')
+
+    const denied = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/coin`,
+      headers: bearer(outsider),
+      payload: { source: 'sheet', value: 1 },
+    })
+    expect(denied.status).toBe(403)
+    expect((await denied.json() as { error: string }).error).toBe('NO_ACCESS')
   })
 })
 

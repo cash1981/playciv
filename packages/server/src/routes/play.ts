@@ -3,7 +3,7 @@
  * drawing, battle, techs, social policy, revealing, trading, turns and undo.
  */
 
-import type { Government, PlayerStats, SheetName } from '@civ/engine'
+import type { Government, PlayerStatKey, SheetName } from '@civ/engine'
 import {
   ALL_WONDERS,
   CULTURE_CARD,
@@ -33,6 +33,7 @@ import {
   revealTurnOrder,
   revealedTechsForAllPlayers,
   saveNote,
+  setCoinSource,
   setPlayerStat,
   setPlayerGovernment,
   takeTurn,
@@ -528,7 +529,33 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       setPlayerStat(state, {
         editorPlayerId: currentPlayer(c).id,
         targetPlayerId,
-        stat: stat as keyof PlayerStats,
+        stat: stat as PlayerStatKey,
+        value,
+      }),
+    )
+  })
+
+  /**
+   * Update one coin counter on a player's shared status board. Same shared
+   * bookkeeping rules as `/stat`; the engine validates the source and its limit.
+   */
+  app.post('/api/games/:gameId/players/:targetPlayerId/coin', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const targetPlayerId = c.req.param('targetPlayerId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const source = requireString(body, 'source')
+    if (source === undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'source is required')
+    }
+    const value = optionalNumber(body, 'value')
+    if (value === undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'value must be a number')
+    }
+    return applyToGame(context, c, gameId, (state) =>
+      setCoinSource(state, {
+        editorPlayerId: currentPlayer(c).id,
+        targetPlayerId,
+        source,
         value,
       }),
     )

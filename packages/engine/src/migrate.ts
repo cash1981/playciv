@@ -9,6 +9,7 @@
 import type { ArenaUnit, Battle } from './battle.js'
 import type { Board, BoardHistoryEntry, BoardPiece } from './board.js'
 import { createBoard } from './board.js'
+import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { GameState, Playerhand, PlayerStats } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
@@ -32,12 +33,34 @@ type MaybeOlderPlayerhand = Omit<Playerhand, 'stats' | 'government'> &
 
 /**
  * Fills in the status board and, since issue #102, normalises Movement to its
- * string form: a game saved before then stored it as a number.
+ * string form.
+ *
+ * A game saved before the coin sources existed has a single `coins` number.
+ * The human chose that the new model replaces it rather than carrying it into a
+ * source, so it is dropped and every counter starts at zero. The fields are
+ * listed one by one on purpose: the legacy `coins` property cannot survive the
+ * spread, and a field added to `PlayerStats` later is a compile error here
+ * until its migration is decided.
  */
 const normalizeStats = (stats: Partial<PlayerStats> | undefined): PlayerStats => {
   const merged = { ...DEFAULT_PLAYER_STATS, ...stats }
-  // `?? default` guards a hand-edited or older save that stored neither.
-  return { ...merged, mvmt: String(merged.mvmt ?? DEFAULT_PLAYER_STATS.mvmt) }
+  return {
+    coinSources: { ...EMPTY_COIN_SOURCES, ...merged.coinSources },
+    trade: merged.trade,
+    culture: merged.culture,
+    infantry: merged.infantry,
+    artillery: merged.artillery,
+    mounted: merged.mounted,
+    stacking: merged.stacking,
+    // `?? default` guards a hand-edited or older save that stored neither.
+    mvmt: String(merged.mvmt ?? DEFAULT_PLAYER_STATS.mvmt),
+    combat: merged.combat,
+    handSize: merged.handSize,
+    efta: merged.efta,
+    infra: merged.infra,
+    mic: merged.mic,
+    pe: merged.pe,
+  }
 }
 
 const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({

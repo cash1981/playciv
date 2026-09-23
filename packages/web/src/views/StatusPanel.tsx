@@ -3,19 +3,31 @@
  *
  * Replaces the old shared asset spreadsheet. All values shown here are shared
  * bookkeeping that ANY member may edit for ANY player, saved through
- * `api.setPlayerStat` and `api.setPlayerGovernment`.
+ * `api.setPlayerStat`, `api.setPlayerGovernment` and `api.setPlayerCoin`.
+ *
+ * The panel has two sections behind a tab bar: **Status** (the table above) and
+ * **Coins** (one counter per coin source per player). The Status table's Coins
+ * column is the read-only sum of that player's counters.
  */
 
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
-import { GOVERNMENT_CARDS, GOVERNMENTS, isMovementValue } from '@civ/engine'
-import type { Government } from '@civ/engine'
+import {
+  COIN_SOURCES,
+  GOVERNMENT_CARDS,
+  GOVERNMENTS,
+  isMovementValue,
+  totalCoins,
+} from '@civ/engine'
+import type { Government, PlayerStatKey } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerStats, PlayerView } from '../lib/api.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import type { Run } from './GameView.js'
+import { PlayerTabs } from './PlayerTabs.js'
+import './PlayerTabs.css'
 import { ReferenceCard } from './ReferenceCard.js'
 import { ReferenceDialog } from './ReferenceDialog.js'
 
@@ -37,8 +49,19 @@ interface Row {
   readonly stats: PlayerStats
 }
 
+type Section = 'status' | 'coins'
+
+const SECTIONS = [
+  { key: 'status', label: 'Status', color: null },
+  { key: 'coins', label: 'Coins', color: null },
+] as const
+
 type StatColumn = {
-  readonly key: keyof PlayerStats
+  /**
+   * A numeric status value, or `coinTotal`, the read-only sum of the player's
+   * coin counters (they are a record, edited in the Coins section).
+   */
+  readonly key: PlayerStatKey | 'coinTotal'
   readonly label: string
   readonly signed?: boolean
   /**
@@ -49,7 +72,7 @@ type StatColumn = {
 }
 
 const ACCOUNTING_COLUMNS: readonly StatColumn[] = [
-  { key: 'coins', label: 'Coins' },
+  { key: 'coinTotal', label: 'Coins' },
   { key: 'trade', label: 'Trade' },
   { key: 'culture', label: 'Culture' },
 ]
@@ -88,6 +111,7 @@ const GROUP_START_KEYS = new Set(STATUS_GROUPS.map((g) => g.columns[0]!.key))
 
 export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element {
   const [showGovernmentReference, setShowGovernmentReference] = useState(false)
+  const [section, setSection] = useState<Section>('status')
   const governmentHelpRef = useRef<HTMLButtonElement | null>(null)
   const rows: Row[] = []
 
@@ -121,124 +145,147 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
         These values are shared bookkeeping — anyone in the game can edit them.
         Unit and modifier values start with the standard defaults shown below.
       </p>
-      <div className="scroll-x">
-        <table className="status-table">
-          <thead>
-            <tr>
-              <th rowSpan={2}>Player</th>
-              <th rowSpan={2}>Civilization</th>
-              <th rowSpan={2}>Government</th>
-              {STATUS_GROUPS.map((group, i) => (
-                <th
-                  key={group.label}
-                  colSpan={group.columns.length}
-                  className={`status-group-heading${i > 0 ? ' status-group-start' : ''}`}
-                >
-                  {group.label}
-                </th>
-              ))}
-            </tr>
-            <tr>
-              {STATUS_GROUPS.flatMap((group) => group.columns).map((column) => (
-                <th
-                  key={column.key}
-                  className={GROUP_START_KEYS.has(column.key) ? 'status-group-start' : undefined}
-                >
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr
-                key={row.playerId}
-                /* Carried as a custom property so the cells' bottom border can
-                   take the player's colour; a border set on the row itself would
-                   not reach them. */
-                style={
-                  row.color === null
-                    ? undefined
-                    : ({ '--player-color': row.color.toLowerCase() } as CSSProperties)
-                }
-              >
-                <td>
-                  <span className="row" style={{ justifyContent: 'flex-start' }}>
-                    {row.color !== null && (
-                      <span className="swatch" style={{ background: row.color.toLowerCase() }} />
-                    )}
-                    <strong>{row.username}</strong>
-                    {row.yourTurn && <span className="tag turn">turn</span>}
-                  </span>
-                </td>
-                <td>
-                  {row.civilizationName !== null ? (
-                    <span className="tag revealed">{row.civilizationName}</span>
-                  ) : (
-                    <span className="muted">hidden</span>
-                  )}
-                </td>
-                <td>
-                  <span className="card-control">
-                    <select
-                      className="government-select"
-                      aria-label={`${row.username} government`}
-                      value={row.government}
-                      disabled={busy || readOnly}
-                      onChange={(event) =>
-                        void run(() =>
-                          api.setPlayerGovernment(
-                            gameId,
-                            row.playerId,
-                            event.target.value as Government,
-                          ),
-                        )
-                      }
+      <PlayerTabs
+        tabs={SECTIONS}
+        active={section}
+        onSelect={(key) => setSection(key === 'coins' ? 'coins' : 'status')}
+        ariaLabel="Player status sections"
+        tabId={(key) => `status-tab-${key}`}
+        panelId={(key) => `status-panel-${key}`}
+      />
+      <div role="tabpanel" id={`status-panel-${section}`} aria-labelledby={`status-tab-${section}`}>
+        {section === 'coins' ? (
+          <CoinSection gameId={gameId} rows={rows} busy={busy} readOnly={readOnly} run={run} />
+        ) : (
+          <div className="scroll-x">
+            <table className="status-table">
+              <thead>
+                <tr>
+                  <th rowSpan={2}>Player</th>
+                  <th rowSpan={2}>Civilization</th>
+                  <th rowSpan={2}>Government</th>
+                  {STATUS_GROUPS.map((group, i) => (
+                    <th
+                      key={group.label}
+                      colSpan={group.columns.length}
+                      className={`status-group-heading${i > 0 ? ' status-group-start' : ''}`}
                     >
-                      {GOVERNMENTS.map((government) => (
-                        <option key={government} value={government}>{government}</option>
-                      ))}
-                    </select>
-                    <button
-                      className="help-button"
-                      type="button"
-                      ref={governmentHelpRef}
-                      aria-label="Show government card reference"
-                      title="Show government card reference"
-                      onClick={() => setShowGovernmentReference(true)}
+                      {group.label}
+                    </th>
+                  ))}
+                </tr>
+                <tr>
+                  {STATUS_GROUPS.flatMap((group) => group.columns).map((column) => (
+                    <th
+                      key={column.key}
+                      className={GROUP_START_KEYS.has(column.key) ? 'status-group-start' : undefined}
                     >
-                      ?
-                    </button>
-                  </span>
-                </td>
-                {STATUS_GROUPS.flatMap((group) => group.columns).map((column) => (
-                  <td
-                    key={column.key}
-                    className={GROUP_START_KEYS.has(column.key) ? 'status-group-start' : undefined}
+                      {column.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr
+                    key={row.playerId}
+                    /* Carried as a custom property so the cells' bottom border can
+                       take the player's colour; a border set on the row itself would
+                       not reach them. */
+                    style={
+                      row.color === null
+                        ? undefined
+                        : ({ '--player-color': row.color.toLowerCase() } as CSSProperties)
+                    }
                   >
-                    <StatCell
-                      label={`${row.username} ${column.label}`}
-                      value={row.stats[column.key]}
-                      signed={column.signed === true}
-                      text={column.text === true}
-                      disabled={busy || readOnly}
-                      onCommit={(value) =>
-                        void run(() => api.setPlayerStat(gameId, row.playerId, column.key, value))
-                      }
-                    />
-                  </td>
+                    <td>
+                      <span className="row" style={{ justifyContent: 'flex-start' }}>
+                        {row.color !== null && (
+                          <span className="swatch" style={{ background: row.color.toLowerCase() }} />
+                        )}
+                        <strong>{row.username}</strong>
+                        {row.yourTurn && <span className="tag turn">turn</span>}
+                      </span>
+                    </td>
+                    <td>
+                      {row.civilizationName !== null ? (
+                        <span className="tag revealed">{row.civilizationName}</span>
+                      ) : (
+                        <span className="muted">hidden</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className="card-control">
+                        <select
+                          className="government-select"
+                          aria-label={`${row.username} government`}
+                          value={row.government}
+                          disabled={busy || readOnly}
+                          onChange={(event) =>
+                            void run(() =>
+                              api.setPlayerGovernment(
+                                gameId,
+                                row.playerId,
+                                event.target.value as Government,
+                              ),
+                            )
+                          }
+                        >
+                          {GOVERNMENTS.map((government) => (
+                            <option key={government} value={government}>{government}</option>
+                          ))}
+                        </select>
+                        <button
+                          className="help-button"
+                          type="button"
+                          ref={governmentHelpRef}
+                          aria-label="Show government card reference"
+                          title="Show government card reference"
+                          onClick={() => setShowGovernmentReference(true)}
+                        >
+                          ?
+                        </button>
+                      </span>
+                    </td>
+                    {STATUS_GROUPS.flatMap((group) => group.columns).map((column) => {
+                      const key = column.key
+                      return (
+                        <td
+                          key={key}
+                          className={GROUP_START_KEYS.has(key) ? 'status-group-start' : undefined}
+                        >
+                          {key === 'coinTotal' ? (
+                            <span className="stat-total" aria-label={`${row.username} Coins`}>
+                              {totalCoins(row.stats.coinSources)}
+                            </span>
+                          ) : (
+                            <StatCell
+                              label={`${row.username} ${column.label}`}
+                              value={row.stats[key]}
+                              signed={column.signed === true}
+                              text={column.text === true}
+                              disabled={busy || readOnly}
+                              onCommit={(value) =>
+                                void run(() => api.setPlayerStat(gameId, row.playerId, key, value))
+                              }
+                            />
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
                 ))}
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={COLUMN_COUNT} className="muted">
-                  Nobody has joined yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={COLUMN_COUNT} className="muted">
+                      Nobody has joined yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
       {showGovernmentReference && (
         <ReferenceDialog
@@ -265,6 +312,132 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
         </ReferenceDialog>
       )}
     </CollapsiblePanel>
+  )
+}
+
+/**
+ * The Coins section: one row per coin source from the reference sheet, one
+ * column per player, each cell a `− / +` counter capped at the source's limit.
+ * A final Total row repeats each player's sum, the same number the Status
+ * table's Coins column shows.
+ */
+function CoinSection({
+  gameId,
+  rows,
+  busy,
+  readOnly,
+  run,
+}: {
+  readonly gameId: string
+  readonly rows: readonly Row[]
+  readonly busy: boolean
+  readonly readOnly: boolean
+  readonly run: Run
+}): React.JSX.Element {
+  const disabled = busy || readOnly
+  return (
+    <div className="scroll-x">
+      <table className="status-table coin-table">
+        <thead>
+          <tr>
+            <th>Coin source</th>
+            {rows.map((row) => (
+              <th key={row.playerId}>
+                <span className="row" style={{ justifyContent: 'flex-start' }}>
+                  {row.color !== null && (
+                    <span className="swatch" style={{ background: row.color.toLowerCase() }} />
+                  )}
+                  {row.username}
+                </span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {COIN_SOURCES.map((source) => (
+            <tr key={source.key}>
+              <th scope="row">
+                <span className="coin-source">
+                  <span>{source.label}</span>
+                  <span className="muted">{source.help}</span>
+                </span>
+              </th>
+              {rows.map((row) => (
+                <td key={row.playerId}>
+                  <CoinCounter
+                    label={`${row.username} ${source.label}`}
+                    value={row.stats.coinSources[source.key]}
+                    max={source.max}
+                    disabled={disabled}
+                    onChange={(value) =>
+                      void run(() => api.setPlayerCoin(gameId, row.playerId, source.key, value))
+                    }
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th scope="row">Total</th>
+            {rows.map((row) => (
+              <td
+                key={row.playerId}
+                className="coin-total"
+                aria-label={`${row.username} coin total`}
+              >
+                {totalCoins(row.stats.coinSources)}
+              </td>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}
+
+/**
+ * One player's counter for one source. The value is a number between zero and
+ * the source's limit; `+` and `−` are disabled at the ends so an out-of-range
+ * value cannot be sent, and the engine refuses one anyway.
+ */
+function CoinCounter({
+  label,
+  value,
+  max,
+  disabled,
+  onChange,
+}: {
+  readonly label: string
+  readonly value: number
+  readonly max: number | null
+  readonly disabled: boolean
+  readonly onChange: (value: number) => void
+}): React.JSX.Element {
+  const atMax = max !== null && value >= max
+  return (
+    <span className="coin-counter">
+      <button
+        type="button"
+        aria-label={`Decrease ${label}`}
+        disabled={disabled || value <= 0}
+        onClick={() => onChange(value - 1)}
+      >
+        −
+      </button>
+      <span className="coin-value" aria-label={label}>
+        {value}
+      </span>
+      <button
+        type="button"
+        aria-label={`Increase ${label}`}
+        disabled={disabled || atMax}
+        onClick={() => onChange(value + 1)}
+      >
+        +
+      </button>
+    </span>
   )
 }
 
