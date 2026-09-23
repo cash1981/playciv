@@ -432,11 +432,20 @@ unsubscribing from game mail must not lock a user out of their own account. See
 
 **A player status board instead of a shared spreadsheet.** The old app embedded
 a per-game Google Sheet that players kept by hand. That is now an in-app "Player
-status" panel: shared bookkeeping includes coins, trade, culture, unit counts,
+status" panel: shared bookkeeping includes trade, culture, unit counts,
 movement/combat/stacking values, hand size and EftA/Infra/MIC/PE modifiers.
 Every value is editable by any member of the game, with every edit written to
 the public log; new games start with the standard unit and modifier defaults.
-Movement is the one value written as an expression rather than a plain integer:
+The panel's **Coins** section keeps one counter per coin source per player —
+Code of Laws, Pottery, Civil Service, Democracy, Printing Press, Bureaucracy,
+Railroad, Computers, Bank, Democracy (Govt), Great People, Terrain, Panama
+Canal, Organized Religion and Sheet — capped at the limit printed on the
+reference sheet (4 on the four coin-token techs, 1 on the static sources, none
+on Sheet or Panama Canal), with the status table's Coins column as the
+read-only sum. *The Internet*'s +2 to the tech maximum is not applied yet
+(issue #145). A game saved with the old single coin number loses it: the human
+chose that the counters replace it. Movement is the one value written as an
+expression rather than a plain integer:
 natural religion adds one movement to an army figure, so it is recorded as
 `3+1`. It is still pure bookkeeping, never added up or used in a rule.
 

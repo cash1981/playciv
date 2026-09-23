@@ -96,7 +96,7 @@ coins på panama canal wonder."*
 - New `packages/engine/src/coins.ts`: `CoinSource` (key, label, help, max where
   `null` is unlimited), the `COIN_SOURCES` table, `CoinSourceKey`, `CoinSources`
   (`Readonly<Record<CoinSourceKey, number>>`), `EMPTY_COIN_SOURCES`,
-  `coinSourceMax(key)` and `totalCoins(sources)`.
+  `findCoinSource(key)` and `totalCoins(sources)`.
 - `PlayerStats.coins: number` is replaced by `coinSources: CoinSources`. The
   human chose that the legacy number is replaced by the new model rather than
   carried over, so migration drops it and every source starts at 0.
