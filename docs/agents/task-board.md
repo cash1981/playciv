@@ -24,6 +24,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/web/public/board/markers/` (the four removed coin PNGs)
   - `packages/engine/test/board.test.ts`, `packages/engine/test/board-history.test.ts`
   - `packages/server/test/board-api.test.ts`
+  - `README.md` (the Markers row)
   - `docs/agents/tasks/coin-marker-cleanup.md`
   - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
 - **Notes:** The human asked directly, with a screenshot, to leave one coin

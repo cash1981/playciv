@@ -37,6 +37,7 @@ plain `Coin`.
   `packages/web/public/board/markers/`.
 - Point the tests that used `markers/coin` as a stand-in marker at
   `markers/coin1`, which survives.
+- Correct the `Markers` row of the piece table in `README.md` (11 -> 7).
 
 **Out:**
 
@@ -84,6 +85,7 @@ gain.
 - `packages/engine/test/board.test.ts`
 - `packages/engine/test/board-history.test.ts`
 - `packages/server/test/board-api.test.ts`
+- `README.md` (the Markers row only)
 - `docs/agents/tasks/coin-marker-cleanup.md`
 - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
 
