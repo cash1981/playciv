@@ -2250,3 +2250,38 @@ within its printed limit through `setCoinSource` — a stale client's write to
 an invalid source shows up again because its value is above zero. No state
 shape changed, so no migration is needed. A row-added coverage test fails if a
 new coin source is not wired into one of the availability rules.
+
+## 2026-09-23 — Stepped map slots and the five-player hole (issue #109)
+
+**Decision.** The board carries its shape as a list of playable 4 x 4 slots
+(`Board.slots`) with the placement grid in squares (`Board.slotStep`, 4 on the
+rectangles and 2 on the stepped maps) and one starting slot per player in
+playernumber order (`Board.startSlots`). `createBoardForPlayers` picks the
+board: the 16 x 8 for two, the pyramid from the base rulebook page 9 for three,
+the holed 28 x 18 from the Fame and Fortune rulebook page 6 for five, and the
+full 16 x 16 for one and four. The shape tables were measured off the rendered
+rulebook diagrams and are commented with their page numbers. Starting slots
+walk clockwise from the top (3 players: top, bottom right, bottom left;
+5 players: top, right, bottom right, bottom left, left), as the human chose.
+
+**Why.** Issue #109: three players got a full rectangle and five players had
+player 5 inherit player 1's corner, so two starting tiles stacked at
+`(0, 258, 180)`. The rulebook diagrams were the only reference — the old
+system had no board model, only a Google-slide link — and the human approved
+reading the shape from them. The human also decided there is to be no
+migration of saved three/five-player games (there are none) and no re-seating
+of one/two/four-player games beyond filling the new rectangle shape into old
+saves.
+
+**Consequences.** Tile snapping snaps the piece's top-left to the `slotStep`
+lattice and accepts only a real slot, so on the stepped maps the snap tolerance
+around a slot origin is one square (half-tile) instead of the rectangle's two
+(a full tile); a drop further off-centre over a slot keeps its raw coordinates.
+This follows the existing "round the corner" rule and the brief; if it reads
+badly in play, the fix is to snap to the slot the drop is inside of. The hole
+and the outside have no slots, so they get no fog, no mat, no square name and
+no snap target — the rulebook's "cannot be moved through" is not enforced
+anywhere because the engine has no movement or pathfinding rules; pieces are
+free-dragged and the players apply the rule at the table. `COLUMN_LABELS` and
+the block helpers were replaced by `columnLabel`, `slotOrigin`,
+`nearestSlotOrigin` and `firstFreeSlot`.

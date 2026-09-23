@@ -13,11 +13,29 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 485 engine, 199 server, 179 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 499 engine, 199 server, 183 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Issue #109: the three-player pyramid and the five-player map with a hole.**
+  The board carries its shape as a list of playable 4 x 4 slots with a
+  half-tile placement grid, and one starting slot per player in playernumber
+  order. Three players get the ten-slot stepped pyramid from the base rulebook
+  (starts top, bottom right, bottom left); five players get the 28 x 18
+  twenty-two-slot map from Fame and Fortune with the hole at squares 12..16 by
+  8..14 and five starts clockwise from the top, so the overlapping player-5
+  corner is gone. Tile snapping, drawn-tile placement, square names, fog and
+  the client's green mat all follow the slots; the hole and the outside get no
+  fog, no mat, no name and no snap target. Old saves gain the rectangle shape
+  in `migrateGameState` with no piece moved; one-, two- and four-player games
+  are unchanged. Deliberately no re-seating of saved three/five-player games
+  (none exist) and no movement rules (the engine has none). Read-only review
+  approved with nits only; full checks pass (499 engine, 199 server, 183 web
+  tests) and the browser showed both shapes, the hole, and a tile dropped over
+  the hole staying unsnapped. See `decisions.md` for the snap-tolerance
+  consequence.
 
 - **Issue #158: the Coins tab offers only the sources a player actually has.**
   A source now gets a counter only where it is real — a revealed coin-token

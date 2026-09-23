@@ -12,29 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-109-board-shapes
-
-- **Owner:** opencode (deepseek-flash)
-- **Branch:** `feat/issue-109-board-shapes`
-- **Brief:** `docs/agents/tasks/issue-109-board-shapes.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/board.ts`
-  - `packages/engine/src/create-game.ts`
-  - `packages/engine/src/migrate.ts`
-  - `packages/engine/src/actions/board.ts`
-  - `packages/engine/src/actions/draw.ts`
-  - `packages/engine/src/index.ts`
-  - `packages/engine/test/board-tiles.test.ts`
-  - `packages/engine/test/board.test.ts`
-  - `packages/engine/test/create-game.test.ts`
-  - `packages/engine/test/game-action.test.ts`
-  - `packages/server/test/api.test.ts`
-  - `packages/web/src/views/BoardView.tsx`
-  - `packages/web/src/views/BoardView.test.tsx`
-  - `packages/web/src/styles.css`
-- **Notes:** Board shape only. No migration of old three- and five-player saves
-  (none exist); one-, two- and four-player games must be untouched.
+_Nothing claimed._
 
 ---
 
