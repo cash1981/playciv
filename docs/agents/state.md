@@ -48,7 +48,7 @@ _Last updated: 2026-09-23_
   duplicate-email 409; screenshots were not possible (browser window not
   visible). The provider redirect itself is covered by stubbed-fetch tests;
   production keys remain an operator step (setup checklist in `README.md`).
-  Branch `feat/social-login-email-verification`; PR to open.
+  Branch `feat/social-login-email-verification`; PR #165 open.
 - **The coin mark sits in the top bar, linked home.** The favicon coin is shown
   again inside the `.brand` anchor, to the left of the "Civilization playciv"
   wordmark, so clicking it goes to `/`. Asset-only and presentational:
