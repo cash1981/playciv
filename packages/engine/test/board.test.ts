@@ -136,6 +136,13 @@ describe('the manifest', () => {
     expect(findBoardAsset('figures/whitearmy')).toBeUndefined()
   })
 
+  it('has a single Coin marker and no extra coin denominations', () => {
+    for (const id of ['markers/coin', 'markers/coin2', 'markers/coin3', 'markers/coin4']) {
+      expect(findBoardAsset(id), id).toBeUndefined()
+    }
+    expect(findBoardAsset('markers/coin1')?.label).toBe('Coin')
+  })
+
   it('has the six resources', () => {
     for (const name of ['hut', 'village', 'wheat', 'iron', 'silk', 'incense']) {
       expect(findBoardAsset(`resources/${name}`)).toBeDefined()
@@ -422,7 +429,7 @@ describe('squareOf', () => {
 
   it('reaches P16 in the opposite corner', () => {
     const board = createBoard()
-    const state = place(firstCivGame(), 'markers/coin', 1504 - 60, mapTop(board) + 1504 - 60)
+    const state = place(firstCivGame(), 'markers/coin1', 1504 - 60, mapTop(board) + 1504 - 60)
     const piece = state.board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
     expect(squareOf(state.board, piece)).toBe('P16')
@@ -430,7 +437,7 @@ describe('squareOf', () => {
 
   it('is null below the map, where the player areas are', () => {
     const board = createBoard()
-    const state = place(firstCivGame(), 'markers/coin', 100, areaBandTop(board) + 50)
+    const state = place(firstCivGame(), 'markers/coin1', 100, areaBandTop(board) + 50)
     const piece = state.board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
     expect(squareOf(state.board, piece)).toBeNull()
@@ -552,7 +559,7 @@ describe('player areas', () => {
 
   it('locationOf names the square for pieces on the map', () => {
     const areas = playerAreas(board, firstCivGame().players)
-    const state = place(firstCivGame(), 'markers/coin', 0, mapTop(board))
+    const state = place(firstCivGame(), 'markers/coin1', 0, mapTop(board))
     const piece = state.board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
 
@@ -562,7 +569,7 @@ describe('player areas', () => {
   it('locationOf names the culture space for markers on the track', () => {
     const areas = playerAreas(board, firstCivGame().players)
     // x 0 is nearest the START panel, not space 1 — see issue #4
-    const state = place(firstCivGame(), 'markers/coin', 0, 0)
+    const state = place(firstCivGame(), 'markers/coin1', 0, 0)
     const piece = state.board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
 
@@ -589,7 +596,7 @@ describe('migration', () => {
     // Otherwise stepping back would make them vanish, since replay rebuilds
     // the board from empty
     let state = place(firstCivGame(), 'figures/redarmy', 100, 100)
-    state = place(state, 'markers/coin', 400, 400)
+    state = place(state, 'markers/coin1', 400, 400)
     const older = { ...state, board: { ...state.board, history: undefined } }
 
     const migrated = migrateGameState(older as unknown as GameState)

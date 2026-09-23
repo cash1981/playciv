@@ -154,7 +154,7 @@ from a setup supply, so the player-count cap does not apply to them (issue
 | --- | --- | --- |
 | Figures | 10 | army and scout in five colours |
 | Resources | 6 | hut, village, wheat, iron, silk, incense |
-| Markers | 11 | coin, culture, caravan, fortification, wound, first player |
+| Markers | 7 | coin, culture, caravan, fortification, wound, first player, building program |
 | Cities | 30 | capital/city/metropolis, with and without walls, per colour |
 | City-states | 5 | the five neutral city-states (cs1–cs5) |
 | Buildings | 15 | market, temple, library, … |
