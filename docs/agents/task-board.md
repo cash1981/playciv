@@ -12,18 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-87-rating
-
-- **Owner:** Codex (orchestrator and coder)
-- **Branch:** `codex/issue-87-rating`
-- **Brief:** `docs/agents/tasks/issue-87-rating.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `docs/agents/tasks/issue-87-rating.md`, `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
-  - `packages/engine/src/highscore.ts`, `packages/engine/src/index.ts`, `packages/engine/test/highscore.test.ts`
-  - `packages/server/src/migrate/`, `packages/server/src/store/`, `packages/server/src/routes/public.ts`, `packages/server/src/routes/games.ts`, `packages/server/src/routes/auth.ts`, `packages/server/package.json`, `packages/server/test/`
-  - `packages/worker/migrations/`, `packages/web/src/views/HighscoreView.tsx`, `packages/web/src/lib/api.ts`, `packages/web/test/`, `pnpm-lock.yaml`
-- **Notes:** Issue #87 rating and complete highscore cache. No overlap with current live claims.
+_Nothing claimed._
 
 ---
 

@@ -3,7 +3,7 @@
 - **Slug:** `issue-87-rating`
 - **Branch:** `codex/issue-87-rating`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -33,14 +33,14 @@ As listed on the task board.
 
 ## Acceptance criteria
 
-- [ ] Every old finished game with a valid winner gets one stable result; rerun does not duplicate games or rating effects.
-- [ ] The winner is first; unclear nonwinner ordering ties, including missing data. Culture card transfer and discarded owner IDs are handled conservatively.
-- [ ] OpenSkill produces player rating, including uncertainty; all 2–5-player outcomes are supported.
-- [ ] Existing highscore values stay compatible; the complete public response is served from durable cache on repeated GETs.
-- [ ] Finishing or deleting a game and adding a player keeps the cache correct; tests prove this and that private archived data never reaches the public response.
-- [ ] Ratings sort numerically in the UI.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Browser-visible highscore checked if a browser session is available.
+- [x] Every old finished game with a valid winner gets one stable result; rerun does not duplicate games or rating effects.
+- [x] The winner is first; unclear nonwinner ordering ties, including missing data. Culture card transfer and discarded owner IDs are handled conservatively.
+- [x] OpenSkill produces player rating, including uncertainty; all 2–5-player outcomes are supported.
+- [x] Existing highscore values stay compatible; the complete public response is served from durable cache on repeated GETs.
+- [x] Finishing or deleting a game and adding a player keeps the cache correct; tests prove this and that private archived data never reaches the public response.
+- [x] Ratings sort numerically in the UI.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Browser-visible highscore showed the rating column and sort indicator. The shared local API served no rating values; numeric sorting was verified in the web test.
 
 ## Open questions
 
