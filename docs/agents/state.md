@@ -13,11 +13,29 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 468 engine, 178 server, 141 web |
+| `pnpm -r test` | passing - 468 engine, 178 server, 148 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **The old site icon is back.** The React client's `index.html` had no icon,
+  so the browser tab, a bookmark and a phone home-screen shortcut showed
+  nothing. The old AngularJS client's files are copied in byte for byte:
+  `old-civ-web/app/favicon.ico` (32038 bytes) to
+  `packages/web/public/favicon.ico`, and the old apple-touch icon
+  `old-civ-web/app/apple-touch-icon.png` (19363 bytes, SHA-256 identical to the
+  `images/icons/coin.png` the old `index.html` actually pointed at) to
+  `packages/web/public/apple-touch-icon.png`. `packages/web/index.html` links
+  both from the site root; the old `shortcut icon` spelling becomes the modern
+  `rel="icon"` and the old `?v=2` cache-buster is dropped (Vite fingerprints the
+  build). Asset-only: no engine, server, route or projection change, so nothing
+  can leak. Verified: `pnpm -r typecheck` and `pnpm -r build` pass; the built
+  `dist/` carries both files at its root; `vite preview` answers
+  `GET /favicon.ico` with `200 image/x-icon 32038` and
+  `GET /apple-touch-icon.png` with `200 image/png 19363`. Branch `feat/favicon`;
+  the review gate was waived by the human on request (Sol unavailable). Final
+  `pnpm -r test`: 468 engine, 178 server, 148 web all pass.
 
 - **Coin sources per player, with a Coins section in Player status.** The panel
   has a second section behind a tab bar. It lists the reference sheet's fifteen
@@ -660,6 +678,18 @@ _Nothing._
 _Nothing queued._
 
 ## Known problems and loose ends
+
+- **A `StatusPanel` government-reference test intermittently times out under
+  the full run.** `StatusPanel.test.tsx > StatusPanel governments > shows every
+  government in each dropdown and every reference card with all effects` is
+  synchronous and renders the whole government reference (8 cards, all
+  effects). It takes about 3.8 s when its file runs alone, but can exceed 5 s -
+  vitest's default - under the full parallel web run when the machine is loaded,
+  failing `pnpm -r test`. It failed the same way on `main` before this branch
+  (`876cf6b`), so it is not caused by the favicon change; it was likely made
+  heavier by the Coins section `coin-tab` added to the same panel. It passed in
+  the final verification run here (468 engine, 178 server, 148 web). Raising that
+  one test's timeout, or splitting the assertion, would remove it.
 
 - **A pre-existing `TurnPanel` test flake.** The mocked-editor test
   `MarkdownEditor lifecycle > saves from the fallback and unmounts safely while

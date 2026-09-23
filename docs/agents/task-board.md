@@ -12,8 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed. `coin-tab` is review-approved and awaits the human's merge as
-its pull request; the claim was released with this change._
 ### issue-139-poll-retry
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
