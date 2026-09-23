@@ -21,6 +21,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Claimed paths:**
   - `packages/server/src/store/rating.ts`
   - `packages/server/test/rating.test.ts`
+  - `packages/web/src/views/HighscoreView.tsx`
+  - `packages/web/src/views/HighscoreView.test.tsx`
   - `docs/agents/tasks/rating-current-state.md`
   - `docs/agents/state.md`
   - `docs/agents/task-board.md`
