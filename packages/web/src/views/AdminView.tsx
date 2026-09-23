@@ -31,6 +31,12 @@ export function AdminView({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
+  /** Per-row result of a verify or send-verification action (issue #42). */
+  const [feedback, setFeedback] = useState<{
+    readonly id: string
+    readonly message: string
+    readonly ok: boolean
+  } | null>(null)
 
   /** The broadcast composer (issue #92): subject, Markdown body and the override. */
   const [emailSubject, setEmailSubject] = useState(DEFAULT_SUBJECT)
@@ -125,6 +131,45 @@ export function AdminView({
       setEditingId(null)
     } catch {
       // update() already surfaced the error; stay in edit mode to fix or retry.
+    }
+  }
+
+  /** Marks an account verified by hand (issue #42). */
+  async function verify(user: AdminUserDto): Promise<void> {
+    setBusyId(user.id)
+    setError(null)
+    setFeedback(null)
+    try {
+      const updated = await api.updateAdminUser(user.id, { emailVerified: true })
+      setUsers((current) =>
+        current.map((candidate) => (candidate.id === updated.id ? updated : candidate)),
+      )
+      setFeedback({ id: user.id, message: 'Marked verified.', ok: true })
+    } catch (caught) {
+      if (isUnauthorized(caught)) return onUnauthorized()
+      const message = errorMessage(caught)
+      setError(message)
+      setFeedback({ id: user.id, message, ok: false })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  /** Re-sends the verification link to an account (issue #42). */
+  async function sendVerification(user: AdminUserDto): Promise<void> {
+    setBusyId(user.id)
+    setError(null)
+    setFeedback(null)
+    try {
+      await api.sendVerification(user.id)
+      setFeedback({ id: user.id, message: 'Verification email sent.', ok: true })
+    } catch (caught) {
+      if (isUnauthorized(caught)) return onUnauthorized()
+      const message = errorMessage(caught)
+      setError(message)
+      setFeedback({ id: user.id, message, ok: false })
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -254,7 +299,34 @@ export function AdminView({
                   />
                   Enabled
                 </label>
+                {/* Issue #42: verification status, and the two ways an admin
+                    can act on it. */}
+                <span className={user.emailVerified ? 'tag revealed' : 'tag hidden'}>
+                  {user.emailVerified ? 'Verified' : 'Unverified'}
+                </span>
                 <span className="spacer" style={{ flex: 1 }} />
+
+                {!user.emailVerified && (
+                  <button
+                    className="small"
+                    disabled={busy || editing}
+                    onClick={() => void verify(user)}
+                  >
+                    Verify
+                  </button>
+                )}
+                <button
+                  className="small"
+                  disabled={busy || editing}
+                  onClick={() => void sendVerification(user)}
+                >
+                  Send verification
+                </button>
+                {feedback?.id === user.id && (
+                  <span className={feedback.ok ? 'feedback-ok' : 'feedback-bad'}>
+                    {feedback.message}
+                  </span>
+                )}
 
                 {editing ? (
                   <>
