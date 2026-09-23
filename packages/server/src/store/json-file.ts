@@ -220,6 +220,10 @@ export class JsonFileRepository implements Repository {
     return this.games.get(id)
   }
 
+  async findGameRevisionCounter(id: string): Promise<number | undefined> {
+    return this.games.get(id)?.rev
+  }
+
   async allGames(): Promise<readonly GameState[]> {
     return [...this.games.values()]
   }

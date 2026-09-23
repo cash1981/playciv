@@ -255,25 +255,39 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     return readGame(context, c, gameId)
   })
 
+  app.get('/api/games/:gameId/rev', optionalAuth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const rev = await context.repo.findGameRevisionCounter(gameId)
+    return rev === undefined
+      ? sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+      : c.json({ rev })
+  })
+
   app.get('/api/games/:gameId/revisions', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
-    const game = await context.repo.findGame(gameId)
-    if (game === undefined) {
+    if (await context.repo.findGameRevisionCounter(gameId) === undefined) {
       return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
     }
     const viewerId = c.get('player')?.id ?? ''
-    const actor = c.get('player') ?? SPECTATOR
-    const baselineReady = await context.repo.ensureGameRevision(
-      createGameRevision(undefined, game, actor, new Date().toISOString(), 'History starts here'),
-      game.rev,
-    )
-    if (!baselineReady) {
-      const current = await context.repo.findGame(gameId)
-      return current === undefined
-        ? sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
-        : sendError(c, 409, 'CONFLICT', 'Game changed while history was loading; retry')
+    let revisions = await context.repo.listGameRevisionSummaries(gameId)
+    if (revisions.length === 0) {
+      const game = await context.repo.findGame(gameId)
+      if (game === undefined) {
+        return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+      }
+      const actor = c.get('player') ?? SPECTATOR
+      const baselineReady = await context.repo.ensureGameRevision(
+        createGameRevision(undefined, game, actor, new Date().toISOString(), 'History starts here'),
+        game.rev,
+      )
+      if (!baselineReady) {
+        const current = await context.repo.findGameRevisionCounter(gameId)
+        return current === undefined
+          ? sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+          : sendError(c, 409, 'CONFLICT', 'Game changed while history was loading; retry')
+      }
+      revisions = await context.repo.listGameRevisionSummaries(gameId)
     }
-    const revisions = await context.repo.listGameRevisionSummaries(gameId)
     return c.json(revisions.map((revision) => revisionSummary(revision, viewerId)))
   })
 

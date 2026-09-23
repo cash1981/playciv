@@ -109,6 +109,8 @@ export interface Repository {
    */
   listGameRevisionSummaries(gameId: string): Promise<readonly GameRevisionMetadata[]>
   findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined>
+  /** Reads the live change marker without loading the serialized game. */
+  findGameRevisionCounter(gameId: string): Promise<number | undefined>
   findGame(id: string): Promise<GameState | undefined>
   allGames(): Promise<readonly GameState[]>
   deleteGame(id: string): Promise<boolean>

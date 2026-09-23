@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { GameRevisionSummary, PlayerView } from '../lib/api.js'
-import { AUTO_REFRESH_MS, loadAfterKnownRevision } from './GameView.js'
+import { AUTO_REFRESH_MS, loadAfterKnownRevision, reloadIfRevisionChanged } from './GameView.js'
 
 /** The reload only reads `rev`, so the rest of the view is irrelevant here. */
 const viewAt = (rev: number): PlayerView => ({ rev }) as unknown as PlayerView
@@ -15,8 +15,22 @@ describe('game auto-refresh', () => {
   // The human asked for 10 s specifically ("setter auto refresh til 10
   // sekunder"); the toggle was introduced at 30 s (issue #63). This fails if
   // the interval is changed back without a decision.
-  it('reloads the live game every 10 seconds', () => {
+  it('checks the live game every 10 seconds', () => {
     expect(AUTO_REFRESH_MS).toBe(10_000)
+  })
+
+  it('checks only the marker and skips a full reload when unchanged', async () => {
+    const readRevision = vi.fn(async () => 7)
+    const reload = vi.fn(async () => true)
+    expect(await reloadIfRevisionChanged(readRevision, () => 7, reload)).toBe(false)
+    expect(readRevision).toHaveBeenCalledTimes(1)
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('reloads after the marker changes', async () => {
+    const reload = vi.fn(async () => true)
+    expect(await reloadIfRevisionChanged(async () => 8, () => 7, reload)).toBe(true)
+    expect(reload).toHaveBeenCalledTimes(1)
   })
 })
 
