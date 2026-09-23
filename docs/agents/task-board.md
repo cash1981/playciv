@@ -12,24 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-142-public-hand
-
-- **Owner:** Codex (coder and reviewer roles)
-- **Branch:** `feat/issue-142-public-hand`
-- **Brief:** `docs/agents/tasks/issue-142-public-hand.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/state.ts` (opponent projection)
-  - `packages/engine/test/hidden-info.test.ts`
-  - `packages/web/src/views/GameView.tsx` (hand panel wiring)
-  - `packages/web/src/views/OpponentHandPanel.tsx`
-  - `packages/web/src/views/OpponentHandPanel.test.tsx`
-  - `packages/web/src/styles.css` (face-down cards)
-  - `docs/agents/tasks/issue-142-public-hand.md`
-  - `docs/agents/state.md`
-  - `docs/agents/decisions.md`
-  - `docs/agents/task-board.md` (this claim)
-- **Notes:** Issue #142. One face-down card per item in the five public categories.
+_Nothing claimed._
 
 ---
 
@@ -62,7 +45,7 @@ at a time. Claim them by name.
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
-| `packages/engine/src/state.ts` (`PlayerView` shape) | issue-142-public-hand |
+| `packages/engine/src/state.ts` (`PlayerView` shape) | free |
 | `packages/web/src/lib/api.ts` | free (released with #148's merge) |
 
 The last two are listed because almost every feature wants to touch them, which

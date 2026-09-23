@@ -3,7 +3,7 @@
 - **Slug:** `issue-142-public-hand`
 - **Branch:** `feat/issue-142-public-hand`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -45,16 +45,17 @@ Extend `OpaquePlayerhand` in `packages/engine/src/state.ts` with five counts der
 - `docs/agents/tasks/issue-142-public-hand.md`
 - `docs/agents/state.md`
 - `docs/agents/decisions.md`
+- `README.md`
 - `docs/agents/task-board.md`
 
 ## Acceptance criteria
 
-- [ ] Each opponent's listed categories show one face-down card per item and are read-only.
-- [ ] A spectator can see the same public counts; an owner still sees their own cards and controls.
-- [ ] Changing/replaying a view updates the public hand.
-- [ ] Projection tests prove item identities, numbers, art, and other private fields remain hidden.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
-- [ ] Verify the visible panel in a browser where a local session is available.
+- [x] Each opponent's listed categories show one face-down card per item and are read-only.
+- [x] A spectator can see the same public counts; an owner still sees their own cards and controls.
+- [x] Changing/replaying a view updates the public hand.
+- [x] Projection tests prove item identities, numbers, art, and other private fields remain hidden.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
+- [x] Verified in a local two-player game as a signed-out spectator: five card backs appeared; rewinding one revision removed the unit back.
 
 ## Open questions
 

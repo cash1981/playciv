@@ -19,6 +19,15 @@ _Last updated: 2026-09-23_
 
 ## Done
 
+- **Issue #142: opponents' public hands.** Each opponent and spectator sees one
+  generic face-down card per held culture card, hut, village, great person and
+  unit, grouped by player and category. The projection sends only five numeric
+  counts, never item data. A local two-player spectator browser pass showed all
+  five card backs and confirmed revision replay removed the unit back when
+  rewound. Review gate approved with no findings; the old-system check confirmed
+  this is a human-requested extension using the old client's item categories.
+  Full checks pass (473 engine, 179 server, 154 web tests).
+
 - **Issue #145: wonders in play have explicit owners, and The Internet raises
   coin limits.** The Wonders panel lists pieces in the shared Wonders area,
   lets any member assign or clear an owner, and shows an unassigned state.
