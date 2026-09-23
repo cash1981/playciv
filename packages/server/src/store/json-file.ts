@@ -85,12 +85,20 @@ export class JsonFileRepository implements Repository {
     const snapshot = JSON.parse(raw) as Snapshot
     let normalizedPlayers = false
     for (const player of snapshot.players) {
-      normalizedPlayers ||= player.role === undefined || player.disabled === undefined
+      normalizedPlayers ||=
+        player.role === undefined ||
+        player.disabled === undefined ||
+        player.emailVerified === undefined ||
+        player.oauthProviders === undefined
       this.players.set(player.id, {
         ...player,
         role: player.role === 'admin' ? 'admin' : 'user',
         disabled: player.disabled === true,
         disableEmail: player.disableEmail === true,
+        // A legacy file has no `emailVerified`: those accounts are grandfathered
+        // verified (issue #42), so a missing field must not lock them out.
+        emailVerified: player.emailVerified !== false,
+        oauthProviders: player.oauthProviders ?? [],
       })
     }
     if (normalizedPlayers) this.scheduleWrite()
@@ -114,6 +122,10 @@ export class JsonFileRepository implements Repository {
       role: player.role === 'admin' ? 'admin' : 'user',
       disabled: player.disabled === true,
       disableEmail: player.disableEmail === true,
+      // `emailVerified` is written exactly as given: the routes always set it,
+      // and a missing value later means "grandfathered verified". Only the
+      // identities are normalized, so a legacy caller need not pass an array.
+      oauthProviders: player.oauthProviders ?? [],
     })
     this.scheduleWrite()
   }
