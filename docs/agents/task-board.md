@@ -12,17 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-87-rating-rebase
-
-- **Owner:** Codex
-- **Branch:** `codex/issue-87-rating`
-- **Brief:** `docs/agents/tasks/issue-87-rating.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`
-  - `docs/agents/decisions.md`
-- **Notes:** Resolve PR #155 conflict with newly merged issue #97; preserve both records.
+_Nothing claimed._
 
 ---
 
