@@ -13,9 +13,9 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 173 server, 124 web |
+| `pnpm -r test` | passing - 449 engine, 174 server, 129 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; no open pull requests |
+| `main` pushed to `origin` | yes; earlier PRs await the human's merge (see the task board) |
 
 ## Done
 
@@ -33,6 +33,25 @@ _Last updated: 2026-09-23_
   own player's final keystrokes while `busy` made their editor transiently
   read-only, so it was removed. 1 new web test (124 total). Browser verification
   left to the human.
+
+- **A game page no longer fails with a raw `JSON.parse` message.** Opening a
+  game intermittently answered `503 error code: 1102` - Cloudflare's "Worker
+  exceeded resource limits" - from `GET /api/games/:id/revisions`, and the
+  client's unguarded `JSON.parse` turned that plain-text page into a
+  `SyntaxError` the game page then showed verbatim. The route was building a
+  list of titles by reading the `state` column (the whole game state) of every
+  revision and parsing each one, then discarding all of it. A new
+  `Repository.listGameRevisionSummaries` selects the metadata without `state`,
+  so the HTTP response is unchanged and the D1 read and the parsing are gone;
+  `api.ts` now parses defensively and reports a non-JSON body as an `ApiError`
+  naming the status. Auto-refresh moves from 30 s to 10 s at the human's
+  request, in the same branch because the poll was the heaviest request on the
+  page. `GameRevisionMetadata` is new; `Repository` gains one method. Verified:
+  `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (449 engine,
+  174 server, 129 web), and a repository test asserts the summary query does not
+  select `state`. No browser pass: the banner needs a non-JSON 5xx, which no
+  local route produces. Branch `fix/revisions-503`; PR #138 open; see
+  `decisions.md`.
 
 - **Tapping a board piece on touch arms the move in the same tap.** On a phone,
   one touch on an existing board piece now both selects it and arms destination

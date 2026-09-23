@@ -35,6 +35,12 @@ interface Props {
   readonly onWithdrawn: () => void
 }
 
+/**
+ * How often the live game reloads while auto-refresh is on. The human asked for
+ * 10 s specifically; the toggle was introduced at 30 s (issue #63).
+ */
+export const AUTO_REFRESH_MS = 10_000
+
 /** What can be drawn. Techs are chosen, so they are not listed here. */
 const DRAWABLE: readonly { readonly sheet: SheetName; readonly label: string }[] = [
   { sheet: 'CIV', label: 'Civ' },
@@ -189,7 +195,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
   useEffect(() => {
     try { localStorage.setItem('civ.autoRefresh', String(autoRefresh)) } catch {}
     if (!autoRefresh) return
-    const id = setInterval(() => { void reload() }, 30_000)
+    const id = setInterval(() => { void reload() }, AUTO_REFRESH_MS)
     return () => clearInterval(id)
   }, [autoRefresh, reload])
 
@@ -257,7 +263,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
           <button
             className={'small' + (autoRefresh ? ' revealed' : '')}
             onClick={() => setAutoRefresh((v) => !v)}
-            title="Auto-refresh every 30 seconds"
+            title={`Auto-refresh every ${AUTO_REFRESH_MS / 1000} seconds`}
           >
             {autoRefresh ? 'Auto-refresh on' : 'Auto-refresh off'}
           </button>

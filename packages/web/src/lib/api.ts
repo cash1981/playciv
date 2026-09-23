@@ -185,6 +185,38 @@ export function storeToken(token: string | null): void {
   }
 }
 
+/** Distinguishes "the body was not JSON" from a body that parsed to `undefined`. */
+const NOT_JSON: unique symbol = Symbol('not-json')
+
+function parseBody(text: string): unknown {
+  if (text === '') return undefined
+  try {
+    return JSON.parse(text)
+  } catch {
+    return NOT_JSON
+  }
+}
+
+/**
+ * A failed Worker is answered by Cloudflare's edge, not by our code: a bare
+ * `503` with a `text/plain` body like `error code: 1102`, never the server's
+ * `{ error, message }`. Report that instead of letting `JSON.parse` throw a
+ * `SyntaxError` the banner then shows verbatim.
+ */
+function failureMessage(
+  method: string,
+  path: string,
+  response: Response,
+  text: string,
+): string {
+  const status =
+    response.statusText === '' ? `${response.status}` : `${response.status} ${response.statusText}`
+  const detail = text.trim().replace(/\s+/g, ' ').slice(0, 200)
+  return detail === ''
+    ? `${method} ${path} failed with ${status}`
+    : `${method} ${path} failed with ${status}: ${detail}`
+}
+
 async function request<T>(
   method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT',
   path: string,
@@ -203,14 +235,27 @@ async function request<T>(
   if (response.status === 204) return undefined as T
 
   const text = await response.text()
-  const payload: unknown = text === '' ? undefined : JSON.parse(text)
+  const payload = parseBody(text)
 
   if (!response.ok) {
-    const error = payload as { error?: string; message?: string } | undefined
+    const error =
+      payload === NOT_JSON || payload === undefined
+        ? undefined
+        : (payload as { error?: string; message?: string })
     throw new ApiError(
       response.status,
       error?.error ?? 'UNKNOWN',
-      error?.message ?? `${method} ${path} failed with ${response.status}`,
+      error?.message ?? failureMessage(method, path, response, text),
+    )
+  }
+
+  // A 2xx that is not JSON is not a payload: fail loudly rather than hand a
+  // symbol to the caller as if it were the response body.
+  if (payload === NOT_JSON) {
+    throw new ApiError(
+      response.status,
+      'INVALID_RESPONSE',
+      failureMessage(method, path, response, text),
     )
   }
 

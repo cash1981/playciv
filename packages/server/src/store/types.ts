@@ -66,6 +66,13 @@ export type GameRevisionSummary = Omit<GameRevision, 'state' | 'privateDescripti
   readonly privateDescription: string | null
 }
 
+/**
+ * A revision without its snapshot. The history bar needs the metadata of every
+ * revision but never a single `state`, and loading those snapshots was enough
+ * to tip a Worker over its resource limit (see `listGameRevisionSummaries`).
+ */
+export type GameRevisionMetadata = Omit<GameRevision, 'state'>
+
 export interface Repository {
   createPlayer(player: StoredPlayer): Promise<void>
   findPlayerById(id: string): Promise<StoredPlayer | undefined>
@@ -94,6 +101,13 @@ export interface Repository {
    */
   ensureGameRevision(revision: GameRevision, expectedRevision: number): Promise<boolean>
   listGameRevisions(gameId: string): Promise<readonly GameRevision[]>
+  /**
+   * The metadata of every revision, oldest first, without the `state` each one
+   * carries. The history bar only ever needs the descriptions and the actor, so
+   * loading and parsing the snapshots would be pure waste — and for a game with
+   * many revisions it was enough to trip the Worker's resource limit.
+   */
+  listGameRevisionSummaries(gameId: string): Promise<readonly GameRevisionMetadata[]>
   findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined>
   findGame(id: string): Promise<GameState | undefined>
   allGames(): Promise<readonly GameState[]>

@@ -34,6 +34,39 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   be transiently read-only on the player's own tab while busy, and suppressing
   its changes there could drop the final keystrokes.
 
+### revisions-503
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `fix/revisions-503`
+- **Brief:** `docs/agents/tasks/revisions-503.md`
+- **Status:** review-approved (round 2; round 1's one minor, a missing docs
+  update, fixed; round 2 found nothing above a cosmetic nit) - PR #138 open,
+  awaiting the human's merge. Claim kept until merged.
+- **Claimed paths:**
+  - `packages/server/src/store/types.ts`
+  - `packages/server/src/store/d1.ts`
+  - `packages/server/src/store/json-file.ts`
+  - `packages/server/src/routes/games.ts` (`revisionSummary` and the `/revisions` route only)
+  - `packages/server/test/d1-repository.test.ts`
+  - `packages/web/src/lib/api.ts`
+  - `packages/web/src/lib/api.test.ts` (new)
+  - `packages/web/src/views/GameView.tsx` (the auto-refresh constant, effect and title only)
+  - `packages/web/src/views/GameView.test.tsx` (new)
+  - `docs/agents/tasks/revisions-503.md`
+  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** Fixes the live `JSON.parse` / 1102 report. `GET /api/games/:id/revisions`
+  read `state` (the full game state) for every revision and parsed it, only to
+  return summaries; on the free plan that intermittently exceeds the Worker's
+  limit and Cloudflare answers `503 error code: 1102`, which the client's
+  unguarded `JSON.parse` turned into a `SyntaxError`. Adds a metadata accessor
+  without `state`, and makes the client parse defensively. Also 30 s -> 10 s
+  auto-refresh, per the human. `packages/web/src/lib/api.ts` is a shared
+  resource and is claimed here; `GameView.tsx` and `routes/games.ts` are named in
+  other, finished-but-unmerged claims (`gift-greatperson-civ`, `remove-new-game-email`,
+  `board-tap-to-move`) for a different region of those files, and the human
+  authorised this work directly in-session. No `rules-checker` pass: no game
+  rule, deck or log text changes and the route's payload is unchanged.
+
 ### board-tap-to-move
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
@@ -489,7 +522,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | free |
+| `packages/web/src/lib/api.ts` | `revisions-503` (DeepSeek V4.1 Flash) |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.

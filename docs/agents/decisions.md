@@ -1837,3 +1837,53 @@ path is untouched, including while their editor is transiently read-only.
 Client-only change: no engine, server or projection change; the old client had a
 single combined orders list and no per-player tabs, so there is no old-system
 behaviour to preserve here.
+
+## 2026-09-23 - The revision list stops reading every revision's state
+
+**Decision.** `Repository` gains `listGameRevisionSummaries`, which returns
+`GameRevisionMetadata` (`GameRevision` without `state`) and is what
+`GET /api/games/:id/revisions` now uses. `listGameRevisions`, which returns the
+snapshots, stays because the tests assert on `.state`. The client's `request()`
+parses the response body inside a `try` and reports a body that is not JSON as
+an `ApiError` naming the status and the body, instead of letting `JSON.parse`
+throw.
+
+**Why.** The live game page intermittently showed "JSON.parse: unexpected
+character at line 1 column 1 of the JSON data" and did not load.
+`GET /api/games/:id/revisions` answered `200` with an 84 KB body about half the
+time and otherwise `503` with `text/plain` body `error code: 1102` - Cloudflare's
+"Worker exceeded resource limits". The route was building a list of titles by
+reading the `state` column (the whole game state) of every revision and running
+`JSON.parse` + `migrateGameState` on each row, then discarding all of it. On this
+game that is the work that tips the Worker over its limit, whichever of CPU or
+memory binds first. The banner text was the second half of the bug: the previous
+`api.ts` parsed before checking `response.ok`, so an edge error page became a
+`SyntaxError` shown verbatim, and `GameView.loadConsistentLive` calls
+`api.revisions` before `api.game`, so the whole page failed.
+
+**Consequences.** The response is unchanged - `revisionSummary` still emits
+`logIds` and the viewer's own `privateDescription` - so no projection and no
+hidden-information behaviour changes; the existing leak test still asserts the
+list ships neither `state` nor `privateDescriptions`. Deferred on purpose: an
+automatic client retry for a transient 5xx, and caching or paginating the list.
+The revisit cost on the live deployment, whatever the free plan's exact limit,
+is removed by not reading the column; the endpoint remains O(revisions) in row
+count, which pagination would address and nothing needs yet.
+
+## 2026-09-23 - Auto-refresh polls every 10 seconds
+
+**Decision.** The game page's auto-refresh toggle reloads the live game every
+10 s, not 30 s. `AUTO_REFRESH_MS` in `GameView.tsx` is the single source, used by
+the interval and by the toggle's `title`.
+
+**Why.** The human asked for it directly in the same session ("setter auto
+refresh til 10 sekunder"). The 30 s value was this rewrite's own, introduced by
+issue #63; the old client has no counterpart, so there is no old-system
+behaviour to preserve.
+
+**Consequences.** Three times the request volume per watching client, which is
+why it lands on the same branch as the revision-list fix: the poll was the
+heaviest request on the page. A behavioural test would need the whole `GameView`
+harness; `GameView.test.tsx` pins the constant instead, so a literal `30_000`
+reintroduced in the interval would not fail it, only a change to the constant
+would.

@@ -19,6 +19,7 @@ import type {
   ChatMessage,
   FinishedGame,
   GameRevision,
+  GameRevisionMetadata,
   PlayerUpdate,
   Repository,
   StoredPlayer,
@@ -195,6 +196,20 @@ export class JsonFileRepository implements Repository {
     return [...this.revisions.values()]
       .filter((revision) => revision.gameId === gameId)
       .sort((left, right) => left.revision - right.revision)
+  }
+
+  async listGameRevisionSummaries(gameId: string): Promise<readonly GameRevisionMetadata[]> {
+    // In memory there is nothing to save by dropping `state`, but the method
+    // exists so both stores answer the history route the same way.
+    return (await this.listGameRevisions(gameId)).map((revision) => ({
+      gameId: revision.gameId,
+      revision: revision.revision,
+      createdAt: revision.createdAt,
+      actor: revision.actor,
+      publicDescription: revision.publicDescription,
+      privateDescriptions: revision.privateDescriptions,
+      logIds: revision.logIds,
+    }))
   }
 
   async findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined> {

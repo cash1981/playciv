@@ -7,7 +7,7 @@
  */
 
 import { createGame, itemName, joinGame, toPlayerView } from '@civ/engine'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createApp } from '../src/app.js'
 import type { App } from '../src/app.js'
@@ -125,6 +125,32 @@ describe('D1Repository', () => {
     expect((await repo.findGame(game.id))?.rev).toBe(0)
     expect((await repo.listGameRevisions(game.id)).map((entry) => entry.revision)).toEqual([0])
     expect((await repo.findGameRevision(game.id, 0))?.publicDescription).toBe('Game created')
+  })
+
+  it('lists revision metadata without the state snapshot', async () => {
+    const game = fixtureGame()
+    const baseline = createGameRevision(undefined, game, ACTOR, '2020-01-01T00:00:00.000Z', 'Game created')
+    await repo.saveGameWithRevision(game, baseline, null)
+
+    const prepare = vi.spyOn(adapter.db, 'prepare')
+    const metadata = await repo.listGameRevisionSummaries(game.id)
+    const sql = prepare.mock.calls.map(([query]) => query).join('\n')
+    const [full] = await repo.listGameRevisions(game.id)
+
+    // The history route renders the same fields it always did, minus the
+    // snapshot, which is what tipped the Worker over its limit.
+    expect(metadata).toHaveLength(1)
+    expect(metadata[0]?.revision).toBe(full?.revision)
+    expect(metadata[0]?.publicDescription).toBe(full?.publicDescription)
+    expect(metadata[0]?.privateDescriptions).toEqual(full?.privateDescriptions)
+    expect(metadata[0]?.logIds).toEqual(full?.logIds)
+    expect(metadata[0]).not.toHaveProperty('state')
+
+    // The regression guard: the summary query must not select the column at
+    // all. A `state` key would be easy to drop in the mapper while the query
+    // still read and parsed every snapshot.
+    expect(sql).toMatch(/FROM game_revision/)
+    expect(sql).not.toMatch(/\bstate\b/)
   })
 
   it('refuses a compare-and-set write from a stale revision', async () => {

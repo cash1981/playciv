@@ -33,7 +33,7 @@ import {
   stampLog,
 } from '../context.js'
 import { sendEngineError, sendError } from '../errors.js'
-import type { ChatMessage, GameRevision } from '../store/types.js'
+import type { ChatMessage, GameRevision, GameRevisionMetadata } from '../store/types.js'
 
 /** The summary the game list shows. Java: `PbfDTO`. */
 export interface GameSummary {
@@ -110,7 +110,7 @@ function clampInt(raw: string | undefined, fallback: number, min: number, max: n
   return Math.min(Math.max(value, min), max)
 }
 
-function revisionSummary(revision: GameRevision, viewerId: string) {
+function revisionSummary(revision: GameRevisionMetadata, viewerId: string) {
   return {
     gameId: revision.gameId,
     revision: revision.revision,
@@ -273,7 +273,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
         ? sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
         : sendError(c, 409, 'CONFLICT', 'Game changed while history was loading; retry')
     }
-    const revisions = await context.repo.listGameRevisions(gameId)
+    const revisions = await context.repo.listGameRevisionSummaries(gameId)
     return c.json(revisions.map((revision) => revisionSummary(revision, viewerId)))
   })
 
