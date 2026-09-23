@@ -8,7 +8,7 @@
 
 import {
   areaSlotRegion,
-  firstFreeBlock,
+  firstFreeSlot,
   tileAssetIdForNumber,
   wonderAssetId,
   wondersArea,
@@ -129,7 +129,7 @@ function placeExploredTile(state: GameState, playerId: string, tile: Item): Game
   const assetId = tileAssetIdForNumber(Number(tile.name))
   if (assetId === undefined) return state
 
-  const [x, y] = firstFreeBlock(state.board)
+  const [x, y] = firstFreeSlot(state.board)
   return placeUnchecked(state, { playerId, assetId, x, y }) ?? state
 }
 

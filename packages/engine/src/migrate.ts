@@ -70,9 +70,9 @@ const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   government: player.government ?? DEFAULT_GOVERNMENT,
 })
 
-/** A board from before the player areas and the history existed. */
-type MaybeOlderBoard = Omit<Board, 'areaRows' | 'history'> &
-  Partial<Pick<Board, 'areaRows' | 'history'>>
+/** A board from before the player areas, the history or the shapes existed. */
+type MaybeOlderBoard = Omit<Board, 'areaRows' | 'history' | 'slots' | 'slotStep' | 'startSlots'> &
+  Partial<Pick<Board, 'areaRows' | 'history' | 'slots' | 'slotStep' | 'startSlots'>>
 
 /** An arena unit from before rotation or the undoable kill (issue #71) existed. */
 type MaybeOlderArenaUnit = Omit<ArenaUnit, 'rotation' | 'killed'> &
@@ -109,9 +109,13 @@ function historyForImportedPieces(
 
 export function migrateGameState(state: GameState): GameState {
   const older = state as MaybeOlder
-  const fresh = createBoard()
   const board = older.board as MaybeOlderBoard | undefined
   const battle = older.battle as MaybeOlderBattle | null | undefined
+  // A board saved before the shapes existed is a plain rectangle of its own
+  // size; filling in the shape is a no-op for it. Games saved with a stepped
+  // board carry their shape already, so nothing is ever re-seated.
+  const fresh =
+    board === undefined ? createBoard() : createBoard(board.columns, board.rows)
 
   // A game saved before `wondersDealt` existed is treated as having dealt if the
   // setup is complete or a wonder already exists anywhere (an old game put drawn
@@ -137,6 +141,9 @@ export function migrateGameState(state: GameState): GameState {
         : {
             ...board,
             areaRows: board.areaRows ?? fresh.areaRows,
+            slots: board.slots ?? fresh.slots,
+            slotStep: board.slotStep ?? fresh.slotStep,
+            startSlots: board.startSlots ?? fresh.startSlots,
             history: board.history ?? historyForImportedPieces(board.pieces),
           },
     withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withPlayerDefaults),

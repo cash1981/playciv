@@ -15,18 +15,39 @@ import {
   TILE_SQUARES,
   civTileAssetId,
   createBoard,
+  createBoardForPlayers,
   findBoardAsset,
-  firstFreeBlock,
+  firstFreeSlot,
+  locationOf,
   mapTop,
-  nearestBlockOrigin,
+  nearestSlotOrigin,
+  squareOf,
   startingCorner,
   tileAssetIdForNumber,
 } from '../src/board.js'
+import type { BoardPiece } from '../src/board.js'
 import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer } from '../src/state.js'
 
 import { CASH1981, firstCivGame } from './fixture.js'
+
+/** A stand-in piece for the geometry helpers, which only read its rectangle. */
+const pieceAt = (x: number, y: number, category: BoardPiece['category'] = 'figure'): BoardPiece => ({
+  id: `${category}-${x}-${y}`,
+  assetId: '',
+  path: '',
+  label: '',
+  category,
+  x,
+  y,
+  width: SQUARE_SIZE,
+  height: SQUARE_SIZE,
+  rotation: 0,
+  placedBy: null,
+})
+
+const tileAt = (x: number, y: number): BoardPiece => pieceAt(x, y, 'tile')
 
 const place = (state: GameState, assetId: string, x: number, y: number): GameState =>
   unwrap(placePiece(state, { playerId: CASH1981, assetId, x, y }))
@@ -111,10 +132,146 @@ describe('startingCorner', () => {
   })
 })
 
-describe('firstFreeBlock', () => {
+describe('the stepped three-player board', () => {
+  const board = createBoardForPlayers(3)
+  const top = mapTop(board)
+
+  it('is the ten-slot pyramid from the rulebook', () => {
+    expect(board.columns).toBe(16)
+    expect(board.rows).toBe(16)
+    expect(board.slotStep).toBe(TILE_SQUARES / 2)
+    expect(board.slots).toHaveLength(10)
+    // Four rows of 4, 3, 2 and 1 slots, each stepped half a tile across
+    expect(board.slots.filter((slot) => slot.y === 0).map((slot) => slot.x)).toEqual([6])
+    expect(board.slots.filter((slot) => slot.y === 4).map((slot) => slot.x)).toEqual([4, 8])
+    expect(board.slots.filter((slot) => slot.y === 8).map((slot) => slot.x)).toEqual([2, 6, 10])
+    expect(board.slots.filter((slot) => slot.y === 12).map((slot) => slot.x)).toEqual([
+      0, 4, 8, 12,
+    ])
+  })
+
+  it('seats the players at the top and the two bottom corners, clockwise', () => {
+    expect(startingCorner(board, 1)).toEqual({ x: 6 * SQUARE_SIZE, y: top, rotation: 180 })
+    expect(startingCorner(board, 2)).toEqual({
+      x: 12 * SQUARE_SIZE,
+      y: top + 12 * SQUARE_SIZE,
+      rotation: 270,
+    })
+    expect(startingCorner(board, 3)).toEqual({ x: 0, y: top + 12 * SQUARE_SIZE, rotation: 90 })
+  })
+
+  it('does not snap a tile dropped outside the steps', () => {
+    // The board is 16 x 16, but the top corners are not on the map
+    expect(nearestSlotOrigin(board, 0, top)).toBeUndefined()
+    expect(nearestSlotOrigin(board, 12 * SQUARE_SIZE, top)).toBeUndefined()
+    expect(nearestSlotOrigin(board, 6 * SQUARE_SIZE + 40, top + 40)).toEqual([
+      6 * SQUARE_SIZE,
+      top,
+    ])
+  })
+})
+
+describe('the five-player board with the hole', () => {
+  const board = createBoardForPlayers(5)
+  const top = mapTop(board)
+
+  it('is the 28 x 18 map with twenty-two slots and a hole in the middle', () => {
+    expect(board.columns).toBe(28)
+    expect(board.rows).toBe(18)
+    expect(board.slotStep).toBe(TILE_SQUARES / 2)
+    expect(board.slots).toHaveLength(22)
+    // The hole is one tile wide and one and a half tall: x 12..16, y 8..14
+    for (const slot of board.slots) {
+      const coversHole =
+        slot.x < 16 && slot.x + TILE_SQUARES > 12 && slot.y < 14 && slot.y + TILE_SQUARES > 8
+      expect(coversHole, `slot ${slot.x},${slot.y} covers the hole`).toBe(false)
+    }
+    // The bottom row is half a tile offset and closes the hole
+    expect(board.slots.filter((slot) => slot.y === 14).map((slot) => slot.x)).toEqual([
+      2, 6, 10, 14, 18, 22,
+    ])
+  })
+
+  it('seats five players clockwise from the top', () => {
+    expect(startingCorner(board, 1)).toEqual({
+      x: 12 * SQUARE_SIZE,
+      y: top + 4 * SQUARE_SIZE,
+      rotation: 180,
+    })
+    expect(startingCorner(board, 2)).toEqual({
+      x: 24 * SQUARE_SIZE,
+      y: top + 6 * SQUARE_SIZE,
+      rotation: 270,
+    })
+    expect(startingCorner(board, 3)).toEqual({
+      x: 18 * SQUARE_SIZE,
+      y: top + 14 * SQUARE_SIZE,
+      rotation: 0,
+    })
+    expect(startingCorner(board, 4)).toEqual({
+      x: 6 * SQUARE_SIZE,
+      y: top + 14 * SQUARE_SIZE,
+      rotation: 0,
+    })
+    expect(startingCorner(board, 5)).toEqual({
+      x: 0,
+      y: top + 6 * SQUARE_SIZE,
+      rotation: 90,
+    })
+
+    // The point of the fix: no two starting tiles share a slot any more
+    const seats = [1, 2, 3, 4, 5].map((playernumber) => startingCorner(board, playernumber))
+    expect(new Set(seats.map((seat) => `${seat.x},${seat.y}`)).size).toBe(5)
+  })
+
+  it('does not snap a tile into the hole or off the map', () => {
+    // Dead centre of the hole
+    expect(
+      nearestSlotOrigin(board, 14 * SQUARE_SIZE, top + 11 * SQUARE_SIZE),
+    ).toBeUndefined()
+    // Outside the bounding box
+    expect(nearestSlotOrigin(board, -SQUARE_SIZE, top)).toBeUndefined()
+    // The start slot at the top of the map still snaps
+    expect(
+      nearestSlotOrigin(board, 12 * SQUARE_SIZE + 40, top + 4 * SQUARE_SIZE + 40),
+    ).toEqual([12 * SQUARE_SIZE, top + 4 * SQUARE_SIZE])
+  })
+
+  it('leaves a tile dropped over the hole where it was dropped', () => {
+    const state = place(
+      { ...firstCivGame(), board },
+      'tiles/tile01',
+      14 * SQUARE_SIZE,
+      top + 11 * SQUARE_SIZE,
+    )
+    const tile = state.board.pieces[0]
+    expect([tile?.x, tile?.y]).toEqual([14 * SQUARE_SIZE, top + 11 * SQUARE_SIZE])
+  })
+
+  it('draws exploration tiles into free slots, never into the hole', () => {
+    expect(firstFreeSlot(board)).toEqual([12 * SQUARE_SIZE, top])
+
+    const taken: typeof board = {
+      ...board,
+      pieces: [tileAt(12 * SQUARE_SIZE, top), tileAt(8 * SQUARE_SIZE, top + 2 * SQUARE_SIZE)],
+    }
+    expect(firstFreeSlot(taken)).toEqual([16 * SQUARE_SIZE, top + 2 * SQUARE_SIZE])
+  })
+
+  it('says a piece in the hole is off the board', () => {
+    const inHole = pieceAt(14 * SQUARE_SIZE, top + 10 * SQUARE_SIZE)
+    expect(squareOf(board, inHole)).toBeNull()
+    expect(locationOf(board, [], inHole)).toBe('off the board')
+
+    // A playable square still carries its template name
+    expect(squareOf(board, pieceAt(12 * SQUARE_SIZE, top + 4 * SQUARE_SIZE))).toBe('M5')
+  })
+})
+
+describe('firstFreeSlot', () => {
   it('starts in the top left slot', () => {
     const board = createBoard()
-    expect(firstFreeBlock(board)).toEqual([0, mapTop(board)])
+    expect(firstFreeSlot(board)).toEqual([0, mapTop(board)])
   })
 
   it('skips slots that already hold a tile', () => {
@@ -122,21 +279,21 @@ describe('firstFreeBlock', () => {
     const top = mapTop(state.board)
 
     state = place(state, 'tiles/tile01', 0, top)
-    expect(firstFreeBlock(state.board)).toEqual([376, top])
+    expect(firstFreeSlot(state.board)).toEqual([376, top])
 
     state = place(state, 'tiles/tile02', 376, top)
-    expect(firstFreeBlock(state.board)).toEqual([752, top])
+    expect(firstFreeSlot(state.board)).toEqual([752, top])
   })
 
   it('pays no attention to ordinary pieces', () => {
     const board = createBoard()
     const state = place(firstCivGame(), 'figures/redarmy', 10, mapTop(board) + 10)
-    expect(firstFreeBlock(state.board)).toEqual([0, mapTop(board)])
+    expect(firstFreeSlot(state.board)).toEqual([0, mapTop(board)])
   })
 })
 
 describe('snapping a moved tile to the grid', () => {
-  it('a tile dropped off-grid on the map lands on the nearest block origin', () => {
+  it('a tile dropped off-grid on the map lands on the nearest slot origin', () => {
     let state = place(firstCivGame(), 'tiles/tile01', 0, mapTop(createBoard()))
     const piece = state.board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
@@ -146,7 +303,7 @@ describe('snapping a moved tile to the grid', () => {
     state = unwrap(movePiece(state, { playerId: CASH1981, pieceId: piece.id, x: target.x, y: target.y }))
 
     const moved = state.board.pieces[0]
-    expect([moved?.x, moved?.y]).toEqual(nearestBlockOrigin(state.board, target.x, target.y))
+    expect([moved?.x, moved?.y]).toEqual(nearestSlotOrigin(state.board, target.x, target.y))
   })
 
   it('an ordinary piece dropped off-grid on the map keeps its exact coordinates', () => {

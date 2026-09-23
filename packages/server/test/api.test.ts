@@ -2103,6 +2103,21 @@ describe('board', () => {
       rows: 8,
       squareSize: 94,
       areaRows: 4,
+      slots: [
+        { x: 0, y: 0 },
+        { x: 4, y: 0 },
+        { x: 8, y: 0 },
+        { x: 12, y: 0 },
+        { x: 0, y: 4 },
+        { x: 4, y: 4 },
+        { x: 8, y: 4 },
+        { x: 12, y: 4 },
+      ],
+      slotStep: 4,
+      startSlots: [
+        { x: 0, y: 0, rotation: 90 },
+        { x: 12, y: 4, rotation: 270 },
+      ],
       pieces: [],
       history: [],
     })

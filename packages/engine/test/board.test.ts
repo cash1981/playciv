@@ -19,7 +19,6 @@ import {
 import {
   AREA_LABEL_HEIGHT,
   BOARD_ASSETS,
-  COLUMN_LABELS,
   DEFAULT_AREA_ROWS,
   DEFAULT_COLUMNS,
   DEFAULT_ROWS,
@@ -33,6 +32,7 @@ import {
   boardAreas,
   boardHeight,
   boardWidth,
+  columnLabel,
   createBoard,
   cultureTrackHeight,
   findBoardAsset,
@@ -59,8 +59,14 @@ describe('geometry', () => {
   it('is 16 by 16 squares, as in the four-player template', () => {
     expect(DEFAULT_COLUMNS).toBe(16)
     expect(DEFAULT_ROWS).toBe(16)
-    expect(COLUMN_LABELS[0]).toBe('A')
-    expect(COLUMN_LABELS.at(-1)).toBe('P')
+    expect(columnLabel(0)).toBe('A')
+    expect(columnLabel(DEFAULT_COLUMNS - 1)).toBe('P')
+  })
+
+  it('carries the column letters past Z for the five-player map', () => {
+    expect(columnLabel(25)).toBe('Z')
+    expect(columnLabel(26)).toBe('AA')
+    expect(columnLabel(27)).toBe('AB')
   })
 
   it('a square is 94 pixels, a 375 pixel map tile divided by four', () => {

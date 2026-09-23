@@ -23,7 +23,7 @@ import {
   findBoardAsset,
   findPiece,
   locationOf,
-  nearestBlockOrigin,
+  nearestSlotOrigin,
   nextFreeSlot,
   nextRotation,
   remainingBoardAssetCount,
@@ -162,7 +162,7 @@ export function placeUnchecked(
   const area = areaAt(areas, input.x + asset.width / 2, input.y + asset.height / 2)
   const mapOrigin =
     asset.category === 'tile' || asset.category === 'civtile'
-      ? nearestBlockOrigin(state.board, input.x, input.y)
+      ? nearestSlotOrigin(state.board, input.x, input.y)
       : undefined
   const wanted =
     mapOrigin !== undefined
@@ -248,10 +248,12 @@ export function movePiece(state: GameState, input: MovePieceInput): ActionResult
       })
       return { x: slotX, y: slotY }
     }
-    // Dropped on the map: a 4 x 4 tile snaps to the nearest slot, the same as
-    // placement does. Ordinary pieces keep their raw drop coordinates.
+    // Dropped on the map: a 4 x 4 tile snaps to the nearest playable slot, the
+    // same as placement does. The hole and the outside of a stepped board have
+    // no slot, so a tile dropped there keeps its raw coordinates. Ordinary
+    // pieces keep their raw drop coordinates too.
     if (piece.category === 'tile' || piece.category === 'civtile') {
-      const mapOrigin = nearestBlockOrigin(state.board, input.x, input.y)
+      const mapOrigin = nearestSlotOrigin(state.board, input.x, input.y)
       if (mapOrigin !== undefined) {
         return { x: mapOrigin[0], y: mapOrigin[1] }
       }
