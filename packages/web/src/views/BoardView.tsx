@@ -90,6 +90,10 @@ const assetUrl = (path: string): string =>
 
 const ZOOM_STEPS = [0.3, 0.4, 0.5, 0.65, 0.8, 1] as const
 
+export function fittingBoardZoom(boardWidth: number, availableWidth: number): number {
+  return [...ZOOM_STEPS].reverse().find((step) => boardWidth * step <= availableWidth) ?? ZOOM_STEPS[0]
+}
+
 export interface BoardPaletteProps {
   readonly assets: readonly BoardAsset[]
   readonly category: BoardAsset['category']
@@ -192,10 +196,13 @@ export function BoardView({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [pendingAssetId, setPendingAssetId] = useState<string | null>(null)
   const [moveModeId, setMoveModeId] = useState<string | null>(null)
-  const [zoom, setZoom] = useState(0.4)
+  const [zoomChoice, setZoomChoice] = useState<number | 'auto'>('auto')
+  const [autoZoom, setAutoZoom] = useState<number>(ZOOM_STEPS[0])
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const surfaceRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const frameRef = useRef<HTMLDivElement>(null)
   /**
    * The piece being dragged: the grab offset inside it, and its latest position.
    *
@@ -246,6 +253,31 @@ export function BoardView({
   const pieces = board.pieces
 
   const width = boardWidth(board)
+  const zoom = zoomChoice === 'auto' ? autoZoom : zoomChoice
+
+  useEffect(() => {
+    const scroll = scrollRef.current
+    const frame = frameRef.current
+    if (scroll === null || frame === null) return
+
+    const updateZoom = () => {
+      if (scroll.clientWidth === 0) return
+      const scrollStyle = getComputedStyle(scroll)
+      const frameStyle = getComputedStyle(frame)
+      const inset =
+        (parseFloat(scrollStyle.paddingLeft) || 0) + (parseFloat(scrollStyle.paddingRight) || 0) +
+        (parseFloat(frameStyle.paddingLeft) || 0) + (parseFloat(frameStyle.paddingRight) || 0)
+      setAutoZoom(fittingBoardZoom(width, scroll.clientWidth - inset))
+    }
+    updateZoom()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateZoom)
+      return () => window.removeEventListener('resize', updateZoom)
+    }
+    const observer = new ResizeObserver(updateZoom)
+    observer.observe(scroll)
+    return () => observer.disconnect()
+  }, [width])
   const height = boardHeight(board)
   const trackHeight = cultureTrackHeight(board)
   const mapStart = mapTop(board)
@@ -446,10 +478,11 @@ export function BoardView({
         <label style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <span className="muted">Zoom</span>
           <select
-            value={zoom}
-            onChange={(event) => setZoom(Number(event.target.value))}
+            value={zoomChoice}
+            onChange={(event) => setZoomChoice(event.target.value === 'auto' ? 'auto' : Number(event.target.value))}
             style={{ width: 'auto' }}
           >
+            <option value="auto">Auto ({Math.round(autoZoom * 100)} %)</option>
             {ZOOM_STEPS.map((step) => (
               <option key={step} value={step}>
                 {Math.round(step * 100)} %
@@ -470,8 +503,9 @@ export function BoardView({
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="board-layout">
-        <div className="board-scroll">
+        <div className="board-scroll" ref={scrollRef}>
           <div
+            ref={frameRef}
             className={`board-frame${readOnly ? ' replaying' : ''}`}
             style={{ width: width * zoom + 28, height: height * zoom + 28 }}
           >

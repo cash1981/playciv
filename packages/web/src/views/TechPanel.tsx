@@ -118,7 +118,7 @@ export function TechPanel({
   const active = tabs.find((tab) => tab.playerId === selectedPlayerId) ?? tabs[0]
 
   return (
-    <CollapsiblePanel id="techs" title="Techs" defaultOpen>
+    <CollapsiblePanel id="techs" title="Techs">
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="row">

@@ -67,7 +67,7 @@ export function LogPanel({ gameId, busy, run, reloadCount, historical = null, re
   const entries = tab === 'public' ? publicLog : privateLog
 
   return (
-    <CollapsiblePanel id="log" title="Log" defaultOpen={false}>
+    <CollapsiblePanel id="log" title="Log" defaultOpen>
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="row">

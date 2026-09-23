@@ -556,7 +556,7 @@ function DrawPanel({
   run,
 }: PanelProps & { readonly yourTurn: boolean }): React.JSX.Element {
   return (
-    <CollapsiblePanel id="draw" title="Draw">
+    <CollapsiblePanel id="draw" title="Draw" defaultOpen>
       <p className="muted" style={{ marginTop: 0 }}>
         {yourTurn ? 'It is your turn.' : 'You can only draw on your own turn.'}
       </p>
@@ -581,7 +581,7 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   const opponents = view.opponents
 
   return (
-    <CollapsiblePanel id="hand" title={`Your hand (${items.length})`}>
+    <CollapsiblePanel id="hand" title={`Your hand (${items.length})`} defaultOpen>
       <LootControls
         items={items}
         opponents={opponents}

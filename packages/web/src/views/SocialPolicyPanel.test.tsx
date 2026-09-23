@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SocialPolicyItem } from '@civ/engine'
 
@@ -10,8 +10,10 @@ import type { PlayerView } from '../lib/api.js'
 import { itemImageUrl } from './ItemCard.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 
+beforeEach(() => localStorage.setItem('civ.panel.social-policy', 'true'))
 afterEach(() => {
   cleanup()
+  localStorage.removeItem('civ.panel.social-policy')
   vi.restoreAllMocks()
 })
 
