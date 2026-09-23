@@ -45,3 +45,25 @@ describe('Navigation mobile structure', () => {
     expect(summary.closest('details')?.hasAttribute('open')).toBe(true)
   })
 })
+
+describe('Navigation brand', () => {
+  it('shows the coin icon beside the wordmark, both linking home', () => {
+    render(
+      <Navigation
+        player={null}
+        screen="lobby"
+        theme="dark"
+        onNavigate={vi.fn()}
+        onSignOut={vi.fn()}
+        onToggleTheme={vi.fn()}
+      />,
+    )
+
+    const brand = screen.getByRole('link', { name: /Civilization playciv/i })
+    expect(brand.getAttribute('href')).toBe('/')
+
+    const icon = brand.querySelector('img.brand-icon')
+    expect(icon?.getAttribute('src')).toBe('/favicon.ico')
+    expect(icon?.getAttribute('alt')).toBe('')
+  })
+})
