@@ -3,7 +3,6 @@
  * only information the lobby already exposes to every visitor.
  */
 
-import { highscore } from '@civ/engine'
 import type { Context } from 'hono'
 
 import type { App } from '../app.js'
@@ -39,16 +38,7 @@ export function registerPublicRoutes(app: App, context: AppContext): void {
   })
 
   app.get('/api/highscore', async (c) => {
-    const [games, players] = await Promise.all([
-      context.repo.finishedGamesForHighscore(),
-      context.repo.allPlayers(),
-    ])
-    return c.json(
-      highscore(
-        games,
-        players.map((player) => player.username),
-      ),
-    )
+    return c.json(await context.repo.cachedHighscore())
   })
 
   app.get('/api/chat', async (c) => {

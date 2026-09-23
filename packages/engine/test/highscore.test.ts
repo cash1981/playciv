@@ -6,7 +6,25 @@
 import { describe, expect, it } from 'vitest'
 
 import type { FinishedGame } from '../src/highscore.js'
-import { formatPercentWin, highscore } from '../src/highscore.js'
+import { formatPercentWin, highscore, rankByEvidence } from '../src/highscore.js'
+
+describe('conservative placement', () => {
+  it('keeps the explicit winner first and ties incomplete or incomparable losers', () => {
+    expect(rankByEvidence('Winner', [
+      { username: 'Winner', techs: 0, cultureTier: null, coins: 0 },
+      { username: 'Alice', techs: 4, cultureTier: 2, coins: 1 },
+      { username: 'Bob', techs: 3, cultureTier: 2, coins: 1 },
+      { username: 'Carol', techs: 8, cultureTier: null, coins: 9 },
+      { username: 'Dave', techs: 2, cultureTier: 3, coins: 1 },
+    ])).toEqual([
+      { username: 'Winner', rank: 1 },
+      { username: 'Alice', rank: 2 },
+      { username: 'Carol', rank: 2 },
+      { username: 'Dave', rank: 2 },
+      { username: 'Bob', rank: 5 },
+    ])
+  })
+})
 
 const player = (username: string, civName: string | null = null) => ({ username, civName })
 

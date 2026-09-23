@@ -47,6 +47,58 @@ export interface PlayerHighscoreTable extends HighscoreTable {
 export interface HighscoreResult {
   readonly players: PlayerHighscoreTable
   readonly civs: HighscoreTable
+  readonly ratings?: readonly RatingEntry[]
+}
+
+export interface RatingEntry {
+  readonly username: string
+  readonly rating: number
+  readonly uncertainty: number
+  readonly games: number
+}
+
+export interface PlacementEvidence {
+  readonly username: string
+  readonly techs: number | null
+  readonly cultureTier: number | null
+  readonly coins: number | null
+}
+
+export interface RankedParticipant {
+  readonly username: string
+  /** Competition rank: 1, 2, 2, 4 for a tie. */
+  readonly rank: number
+}
+
+export interface RatedGame {
+  readonly id: string
+  readonly sortKey: string
+  readonly participants: readonly RankedParticipant[]
+}
+
+/** Only complete comparable evidence can establish that one loser outranks another. */
+function dominates(a: PlacementEvidence, b: PlacementEvidence): boolean {
+  const pairs = [[a.techs, b.techs], [a.cultureTier, b.cultureTier], [a.coins, b.coins]] as const
+  return pairs.every(([left, right]) => left !== null && right !== null && left >= right)
+    && pairs.some(([left, right]) => left !== null && right !== null && left > right)
+}
+
+/** The explicit winner is first; incomparable or incomplete loser evidence ties. */
+export function rankByEvidence(
+  winner: string,
+  participants: readonly PlacementEvidence[],
+): readonly RankedParticipant[] {
+  const remaining = participants.filter((participant) => participant.username !== winner)
+  const result: RankedParticipant[] = [{ username: winner, rank: 1 }]
+  while (remaining.length > 0) {
+    const front = remaining.filter((candidate) =>
+      !remaining.some((other) => other !== candidate && dominates(other, candidate)),
+    )
+    const rank = result.length + 1
+    for (const participant of front) result.push({ username: participant.username, rank })
+    for (const participant of front) remaining.splice(remaining.indexOf(participant), 1)
+  }
+  return result
 }
 
 /**

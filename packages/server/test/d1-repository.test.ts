@@ -290,6 +290,37 @@ describe('D1Repository', () => {
     expect(await repo.finishedGamesForHighscore()).toHaveLength(2)
   })
 
+  it('persists the complete highscore cache and refreshes it after a finish or deletion', async () => {
+    await adapter.db.prepare(`INSERT INTO pbf_doc (pbf_id, seq, chunk) VALUES (?, 0, ?)`)
+      .bind('archived', JSON.stringify({ privateLog: 'secret-private-log', items: ['secret-hand-card'], techsChosen: ['secret-unrevealed-tech'] })).run()
+    await repo.createPlayer({ id: 'a', username: 'Alice', email: null, passwordHash: '', createdAt: '' })
+    await repo.createPlayer({ id: 'b', username: 'Bob', email: null, passwordHash: '', createdAt: '' })
+    const base = fixtureGame('Cached highscore')
+    const first = joinGame(base, { playerId: 'a', username: 'Alice', gameCreator: true })
+    const second = first.ok ? joinGame(first.value, { playerId: 'b', username: 'Bob' }) : undefined
+    if (second === undefined || !second.ok) throw new Error('fixture join failed')
+    const running = second.value
+    await repo.saveGame(running)
+    expect((await repo.cachedHighscore()).players.totalNumberOfGames).toBe(0)
+    const initial = await adapter.db.prepare(`SELECT response FROM highscore_cache WHERE key = 'all'`).first<{ response: string }>()
+    expect(initial).not.toBeNull()
+    await repo.createPlayer({ id: 'c', username: 'Carol', email: null, passwordHash: '', createdAt: '' })
+    expect((await repo.cachedHighscore()).players.totalNumberOfPlayers).toBe(3)
+
+    const finished = { ...running, active: false, winner: 'Alice' }
+    await repo.saveGame(finished)
+    const updated = await repo.cachedHighscore()
+    expect(updated.players.totalNumberOfGames).toBe(1)
+    expect(updated.ratings?.find((entry) => entry.username === 'Alice')?.games).toBe(1)
+    expect(JSON.stringify(updated)).not.toContain('privateLog')
+    expect(JSON.stringify(updated)).not.toContain('techsChosen')
+    expect(JSON.stringify(updated)).not.toContain('secret-private-log')
+    expect(JSON.stringify(updated)).not.toContain('secret-hand-card')
+    expect(JSON.stringify(updated)).not.toContain('secret-unrevealed-tech')
+    expect(await repo.deleteGame(finished.id)).toBe(true)
+    expect((await repo.cachedHighscore()).players.totalNumberOfGames).toBe(0)
+  })
+
   it('does not leak a stored hidden hand to another viewer', async () => {
     const base = createGame({ name: 'Hidden', numOfPlayers: 2, seed: 'Hidden:seed' })
     const first = joinGame(base, { playerId: 'a', username: 'Alice', gameCreator: true })
@@ -350,6 +381,19 @@ describe('D1Repository through the API', () => {
     expect(response.status).toBe(201)
     return (await response.json<{ token: string }>()).token
   }
+
+  it('keeps archived private material out of the public cached response', async () => {
+    await register('Alice')
+    await adapter.db.prepare(`INSERT INTO pbf_doc (pbf_id, seq, chunk) VALUES ('old', 0, ?)`)
+      .bind(JSON.stringify({ privateLog: 'private-log-sentinel', items: ['hand-sentinel'], techsChosen: ['hidden-tech-sentinel'] })).run()
+    const first = await inject(app, { url: '/api/highscore' })
+    const second = await inject(app, { url: '/api/highscore' })
+    expect(first.status).toBe(200)
+    expect(second.body).toBe(first.body)
+    for (const secret of ['private-log-sentinel', 'hand-sentinel', 'hidden-tech-sentinel']) {
+      expect(first.body).not.toContain(secret)
+    }
+  })
 
   it('serves registration, a game, its revision history and chat', async () => {
     const token = await register('d1-owner')

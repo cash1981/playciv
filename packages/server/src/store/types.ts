@@ -11,7 +11,7 @@
  * against Cloudflare D1 (production, on the Worker).
  */
 
-import type { FinishedGame, GameState } from '@civ/engine'
+import type { FinishedGame, GameState, HighscoreResult } from '@civ/engine'
 
 export type { FinishedGame }
 
@@ -141,6 +141,8 @@ export interface Repository {
    * `JsonFileRepository` derives it from `allGames()`.
    */
   finishedGamesForHighscore(): Promise<readonly FinishedGame[]>
+  /** Returns the durable complete response, rebuilding only after a relevant write. */
+  cachedHighscore(): Promise<HighscoreResult>
 
   /** Flushes pending changes to disk. A no-op without file storage. */
   flush(): Promise<void>

@@ -2165,3 +2165,30 @@ withdrawn-hand replacement the only option is the retained color. This public
 field exposes no card or other private-hand data. The server checks the choice
 again when the request arrives, so a stale lobby list cannot assign a duplicate
 color. See `docs/agents/tasks/issue-97-color-choice.md`.
+
+---
+
+## 2026-09-23 — Issue #87 uses OpenSkill and conservative placements
+
+**Decision.** Rating is new behavior. Each finished game has the recorded
+winner first. Other players are ordered only when the available technology,
+culture-card tier, and provable coin evidence consistently distinguish them;
+otherwise they share a placement. The one-time backfill reads the archived
+`pbf` documents, including culture cards in a player's hand and discarded
+cards that still carry that player's owner ID. Old culture positions and
+earned coin tokens cannot be reconstructed, so they are not guessed. Nine
+finished old games have only one recorded participant: they retain their win
+statistics but do not update OpenSkill rating.
+
+**Why.** The human chose shared placement under uncertainty and an open-source
+rating library for two- to five-player games. The old Java application had
+win counts, not a rating or a stored culture track.
+
+**Consequences.** Rating is recomputed in deterministic game order from
+idempotent per-game results using OpenSkill. The complete public highscore
+response, including Java-compatible win tables, is stored in a durable cache.
+Database triggers advance a generation when inputs change; a rebuild only
+writes against the generation it read, so a concurrent finish cannot restore
+stale statistics. The archival source document and hidden cards remain outside
+the public response. The backfill is a separate operator command, applied
+once after D1 migration `0003_rating.sql`; it can be rerun safely.
