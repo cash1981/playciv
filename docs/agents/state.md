@@ -13,11 +13,37 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 174 server, 129 web |
+| `pnpm -r test` | passing - 449 engine, 174 server, 136 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; earlier PRs await the human's merge (see the task board) |
+| `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Issue #140: techs and social policy get their own panel, each with a tab
+  per player.** The combined "Techs & Social policy" panel is split in two. Each
+  panel has a tab bar — the viewer first, then one tab per opponent — labelled
+  with the username and accented with the player's board colour, the turn-order
+  tab convention the human picked. The viewer's own tab keeps the controls
+  (Research, Reveal/Remove, hidden badges, "None chosen."); another player's tab
+  is read-only and shows only what that player has revealed. Other players'
+  revealed social policies are visible for the first time, through a new
+  `OpaquePlayerhand.revealedSocialPolicies` projection that mirrors
+  `revealedTechs` — no new route, and hidden policies/techs still never leave
+  their owner's view (the leak test fails if the filter is removed). The pickers
+  and the `?` policy reference stay above the tabs, so a spectator keeps them.
+  The client no longer calls `GET /techs/revealed`; that route and
+  `revealedTechsForAllPlayers` stay as the port of Java's `/tech/all`. 7 new web
+  tests (136 total: `TechPanel` 9, new `SocialPolicyPanel` 10, replacing the old
+  panel's 12). Branch `feat/issue-140-tech-policy-tabs`; PR #143 open;
+  review-approved in two
+  read-only rounds (reviewer `deepseek/deepseek-v4-pro` with the human's
+  approval, as Sol is unavailable; round 1 had two nits, both fixed), and the
+  `rules-checker` confirmed Java never exposed social policies so nothing is
+  invented. Browser-verified in a fresh two-player game: both panels render,
+  switching tabs swaps the pyramid/cards, the opponent's hidden policy is absent
+  from the viewer's DOM, clicking Reveal updated the owner's card after the
+  reload, the ARIA wiring is correct and the console is clean. Screenshots were
+  not possible (browser window not visible). See `decisions.md`.
 
 - **Another player's turn-order text no longer bleeds into your own tab.** Turn
   drafts and live-dirty markers were keyed by turn and phase only, and wired for
@@ -64,7 +90,7 @@ _Last updated: 2026-09-23_
   Client-only: no engine, server, projection or CSS change. Branch
   `feat/board-tap-to-move`; review-approved in one read-only round with nothing
   above a nit (reviewer `deepseek/deepseek-v4-pro`, as Sol is unavailable);
-  PR #136 open.
+  PR #136, merged.
   3 new web tests (123 total). Browser-verified in a real 390 x 844 CSS
   viewport: one tap armed the piece, the next tap sent `movePiece` (HTTP 200,
   the exact tapped board coordinate), a drag moved and disarmed, a swipe sent

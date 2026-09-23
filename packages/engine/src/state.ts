@@ -359,6 +359,14 @@ export interface OpaquePlayerhand {
    */
   readonly revealedTechs: readonly TechItem[]
   /**
+   * Revealed social policies only (issue #140), the mirror of
+   * `revealedTechs`. Java had no public social-policy projection — the
+   * in-repo `revealSocialPolicy` is the port-only feature that publishes one —
+   * so a hidden policy stays private and only `numberOfSocialPolicies` is
+   * public until its owner reveals it.
+   */
+  readonly revealedSocialPolicies: readonly SocialPolicyItem[]
+  /**
    * Public turn-order copies. `gamenote` and `playerTurns` are private and do
    * not appear here.
    */
@@ -387,6 +395,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     numberOfSocialPolicies: player.socialPolicies.length,
     battlehand: player.battlehand,
     revealedTechs: player.techsChosen.filter((tech) => !tech.hidden),
+    revealedSocialPolicies: player.socialPolicies.filter((policy) => !policy.hidden),
     publicTurns: Object.values(state.publicTurns).filter(
       (turn) => turn.username === player.username,
     ),

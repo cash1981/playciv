@@ -160,16 +160,25 @@ describe('toPlayerView', () => {
     const owner = toPlayerView(chosen, CASH1981)
     expect(owner.you?.socialPolicies.some((item) => item.name === policy.name)).toBe(true)
 
-    // Another player sees only a count, not the card, and the name does not
-    // leak anywhere in their view — including the log line for choosing it.
+    // Another player sees only a count and an empty revealed list, not the
+    // card, and the name does not leak anywhere in their view — including the
+    // log line for choosing it.
     const other = toPlayerView(chosen, ITCHI)
     const cash = other.opponents.find((opponent) => opponent.playerId === CASH1981)
     expect(cash).not.toHaveProperty('socialPolicies')
+    expect(cash?.revealedSocialPolicies).toEqual([])
     expect(JSON.stringify(other)).not.toContain(policy.name)
 
     const revealed = unwrap(
       revealSocialPolicy(chosen, { playerId: CASH1981, name: policy.name }),
     )
+
+    // After the reveal the policy is the public thing (issue #140): it shows up
+    // on the opponent projection, and the log line names it.
+    const after = toPlayerView(revealed, ITCHI)
+    const cashAfter = after.opponents.find((opponent) => opponent.playerId === CASH1981)
+    expect(cashAfter?.revealedSocialPolicies.map((item) => item.name)).toEqual([policy.name])
+
     const entry = revealed.log.at(-1)
     if (entry === undefined) throw new Error('no log entry')
     expect(toPublicLog(entry).publicLog).toContain(policy.name)
