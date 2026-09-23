@@ -12,6 +12,28 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### turn-order-draft-bleed
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `fix/turn-order-draft-bleed`
+- **Brief:** `docs/agents/tasks/turn-order-draft-bleed.md`
+- **Status:** review-approved (read-only reviewer, round 2: nothing above a nit;
+  the round-1 read-only-guard finding was fixed, and the remaining comment nit
+  corrected) — PR #137 open, awaiting the human's merge. Claim kept until merged.
+- **Claimed paths:**
+  - `packages/web/src/views/TurnPanel.tsx`
+  - `packages/web/src/views/TurnPanel.test.tsx`
+  - `docs/agents/tasks/turn-order-draft-bleed.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** Live bug report: opening another player's turn-order tab and
+  returning to your own copied that player's text into your editors. Client-only
+  UI state fix: only the signed-in player's own workspace records drafts and
+  live-dirty markers, so a read-only opponent editor cannot write the signed-in
+  player's draft. `MarkdownEditor` is deliberately not changed — an editor can
+  be transiently read-only on the player's own tab while busy, and suppressing
+  its changes there could drop the final keystrokes.
+
 ### board-tap-to-move
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)

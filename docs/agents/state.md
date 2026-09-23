@@ -13,11 +13,26 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 173 server, 123 web |
+| `pnpm -r test` | passing - 449 engine, 173 server, 124 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; no open pull requests |
 
 ## Done
+
+- **Another player's turn-order text no longer bleeds into your own tab.** Turn
+  drafts and live-dirty markers were keyed by turn and phase only, and wired for
+  whichever player tab was showing. The real Milkdown editor flushes its
+  document through `onChange` on unmount, and Crepe can serialize that document
+  differently from the value it was given, so opening an opponent's tab wrote
+  their text into the signed-in player's draft — where it reappeared on return
+  and would have been submitted by "Save all changes". `TurnPanel` now records
+  drafts and live-dirty markers only for the signed-in player's own workspace.
+  Client-only: no engine, server or projection change. Branch
+  `fix/turn-order-draft-bleed`; review-approved in two read-only rounds — round 1
+  showed the first attempt (a read-only guard in `MarkdownEditor`) could drop the
+  own player's final keystrokes while `busy` made their editor transiently
+  read-only, so it was removed. 1 new web test (124 total). Browser verification
+  left to the human.
 
 - **Tapping a board piece on touch arms the move in the same tap.** On a phone,
   one touch on an existing board piece now both selects it and arms destination
@@ -533,6 +548,13 @@ _Nothing._
 _Nothing queued._
 
 ## Known problems and loose ends
+
+- **A pre-existing `TurnPanel` test flake.** The mocked-editor test
+  `MarkdownEditor lifecycle > saves from the fallback and unmounts safely while
+  Crepe is still loading` waits 1 s for a dynamic-import-driven mock to
+  instantiate; under the full parallel run (22 workers spawned) that timeout can
+  expire. It passes when the file runs alone and is unrelated to the turn-order
+  draft fix. Raising that one `waitFor` timeout would remove the flake.
 
 - **A non-member's board is still interactive (found in the `board-tap-to-move`
   mobile pass).** On a public game page a signed-out visitor can tap a piece and

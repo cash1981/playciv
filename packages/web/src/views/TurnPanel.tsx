@@ -897,13 +897,20 @@ export function TurnPanel({
                 )
               }
               onPhaseChange={(phase, markdown) => {
+                // Drafts belong to the signed-in player's own turn. A read-only
+                // opponent editor must never write one: its text would reappear
+                // in this player's editor on return and be saved as theirs.
+                if (selectedPlayer.own !== true) return
                 const key = phaseKey(turnNumber, phase)
                 setDraftValue(key, markdown)
               }}
               onRevealPhase={(phase) => {
                 void run(() => api.revealTurnOrder(gameId, turnNumber, phase))
               }}
-              onPhaseDirty={(phase) => markLiveDirty(phaseKey(turnNumber, phase))}
+              onPhaseDirty={(phase) => {
+                if (selectedPlayer.own !== true) return
+                markLiveDirty(phaseKey(turnNumber, phase))
+              }}
               tabPanelId={playerPanelId(selectedPlayerIndex)}
               labelledBy={playerTabId(selectedPlayerIndex)}
               editorComponent={editorComponent}

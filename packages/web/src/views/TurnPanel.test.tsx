@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { createRef, forwardRef, useImperativeHandle, useRef, useState } from 'react'
+import { createRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -154,6 +154,39 @@ const DelayedEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
           onDirty?.()
           setTimeout(() => onChangeRef.current(markdown), 200)
         }}
+      />
+    )
+  },
+)
+
+const FlushingEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
+  function FlushingEditor({ value, onChange, onDirty, readOnly, ariaLabel }, ref) {
+    const valueRef = useRef(value)
+    const onChangeRef = useRef(onChange)
+    onChangeRef.current = onChange
+    valueRef.current = value
+    useImperativeHandle(ref, () => ({ getMarkdown: () => valueRef.current }))
+    useEffect(
+      () => () => {
+        // The real MarkdownEditor flushes its current document through
+        // `onChange` when it unmounts, and Crepe can serialize that document
+        // differently from the value it was given. Viewing another player's
+        // tab therefore reported their text as a change, which the parent
+        // stored as the signed-in player's draft. This double reports its
+        // document unconditionally, so the test exercises the parent's
+        // ownership guard whatever the editor emits.
+        onChangeRef.current(valueRef.current)
+      },
+      [],
+    )
+    return (
+      <textarea
+        aria-label={ariaLabel}
+        data-readonly={readOnly ? 'true' : 'false'}
+        readOnly={readOnly}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onInput={() => onDirty?.()}
       />
     )
   },
@@ -784,6 +817,48 @@ describe('TurnPanel save all changes', () => {
       'MOVEMENT',
       'Opponent private strategy',
     )
+  })
+
+  it('keeps the signed-in player text when returning from another player tab', async () => {
+    const ownTurn = turn('cash1981', false, 1, { ...orders, MOVEMENT: 'Own movement plan' })
+    const opponentTurn = turn('Andrius', false, 1, {
+      ...orders,
+      MOVEMENT: 'Opponent movement plan',
+    })
+    const playerView = viewFor([ownTurn], [
+      { username: 'Andrius', color: 'Blue', playernumber: 2 } as PlayerView['opponents'][number],
+    ])
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([opponentTurn])
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={FlushingEditor}
+      />,
+    )
+
+    const ownMovement = await screen.findByRole('textbox', {
+      name: /movement orders for cash1981.*turn 1/i,
+    })
+    expect((ownMovement as HTMLTextAreaElement).value).toBe('Own movement plan')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Andrius' }))
+    expect(
+      (screen.getByRole('textbox', {
+        name: /movement orders for Andrius.*turn 1/i,
+      }) as HTMLTextAreaElement).value,
+    ).toBe('Opponent movement plan')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'cash1981' }))
+    expect(
+      (screen.getByRole('textbox', {
+        name: /movement orders for cash1981.*turn 1/i,
+      }) as HTMLTextAreaElement).value,
+    ).toBe('Own movement plan')
   })
 
   it('removes successful drafts so a retry only sends the failed phase', async () => {
