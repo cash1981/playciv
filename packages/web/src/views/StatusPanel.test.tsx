@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBoard, DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS, wondersArea } from '@civ/engine'
-import type { CoinSources } from '@civ/engine'
+import type { CoinSources, Government } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
@@ -28,6 +28,8 @@ const memberView = {
     civilization: null,
     government: 'Despotism',
     stats: DEFAULT_PLAYER_STATS,
+    techsChosen: [],
+    socialPolicies: [],
   },
   opponents: [
     {
@@ -38,6 +40,8 @@ const memberView = {
       civilization: null,
       government: 'Republic',
       stats: DEFAULT_PLAYER_STATS,
+      revealedTechs: [],
+      revealedSocialPolicies: [],
     },
   ],
 } as unknown as PlayerView
@@ -153,21 +157,52 @@ describe('StatusPanel Movement (issue #102)', () => {
 })
 
 describe('StatusPanel Coins section', () => {
-  /** The shared fixture with some coin counters filled in for Alice. */
-  function coinView(coins: Partial<CoinSources>): PlayerView {
+  /**
+   * The shared fixture with counters filled in for Alice, plus the optional
+   * public cards and board state that make a conditional source available.
+   */
+  function coinView(
+    coins: Partial<CoinSources> = {},
+    options: {
+      readonly techs?: readonly string[]
+      readonly policies?: readonly string[]
+      readonly government?: Government
+      readonly panamaOwner?: string
+      readonly panamaOutsideWondersArea?: boolean
+    } = {},
+  ): PlayerView {
+    const board = createBoard(16, 8)
+    const area = wondersArea(board)
+    const pieces =
+      options.panamaOwner === undefined
+        ? []
+        : [
+            {
+              id: 'panama-canal',
+              assetId: 'wonders/panamacanal',
+              ownerId: options.panamaOwner,
+              category: 'wonder' as const,
+              x: options.panamaOutsideWondersArea === true ? 300 : area.x + 20,
+              y: options.panamaOutsideWondersArea === true ? 300 : area.y + 40,
+              width: 86,
+              height: 85,
+            },
+          ]
     return {
-      board: { pieces: [] },
+      board: { ...board, pieces },
       you: {
         playerId: 'player-me',
         username: 'Alice',
         color: 'Red',
         yourTurn: true,
         civilization: null,
-        government: 'Despotism',
+        government: options.government ?? 'Despotism',
         stats: {
           ...DEFAULT_PLAYER_STATS,
           coinSources: { ...EMPTY_COIN_SOURCES, ...coins },
         },
+        techsChosen: (options.techs ?? []).map((name) => ({ name, hidden: false })),
+        socialPolicies: (options.policies ?? []).map((name) => ({ name, hidden: false })),
       },
       opponents: memberView.opponents,
     } as unknown as PlayerView
@@ -177,9 +212,15 @@ describe('StatusPanel Coins section', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Coins' }))
   }
 
-  it('switches from the status table to one counter per source, with the sheet’s helper text', () => {
+  it('switches from the status table to the sources a player has, with the sheet’s helper text', () => {
     render(
-      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({}, { techs: ['Code of Laws'], panamaOwner: 'player-me' })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
     )
 
     expect(screen.getByRole('tab', { name: 'Status' })).toBeTruthy()
@@ -192,6 +233,171 @@ describe('StatusPanel Coins section', () => {
     expect(screen.getByText('Panama Canal')).toBeTruthy()
     expect(screen.getByText('Sheet')).toBeTruthy()
     expect(screen.getByText('Coins from culture cards, loot or village etc.')).toBeTruthy()
+  })
+
+  it('leaves out every source nobody has', () => {
+    render(
+      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+    )
+
+    openCoins()
+
+    // Bank, Great People, Terrain and Sheet are the always-available rows.
+    expect(screen.getByText('Bank (Building)')).toBeTruthy()
+    expect(screen.getByText('Great People')).toBeTruthy()
+    expect(screen.getByText('Terrain')).toBeTruthy()
+    expect(screen.getByText('Sheet')).toBeTruthy()
+    for (const absent of [
+      'Code of Laws (I)',
+      'Pottery (I)',
+      'Civil Service (II)',
+      'Democracy (II)',
+      'Printing Press (II)',
+      'Bureaucracy (II)',
+      'Railroad (III)',
+      'Computers (IV)',
+      'Democracy (Govt)',
+      'Panama Canal',
+      'Organized Religion',
+    ]) {
+      expect(screen.queryByText(absent)).toBeNull()
+    }
+  })
+
+  it('offers a tech row in the column of the player who revealed it only', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({}, { techs: ['Pottery'] })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    openCoins()
+
+    expect(screen.getByRole('button', { name: 'Increase Alice Pottery (I)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Increase Bob Pottery (I)' })).toBeNull()
+  })
+
+  it('a hidden tech adds no row for anyone', () => {
+    const view = {
+      ...memberView,
+      you: {
+        ...memberView.you,
+        techsChosen: [{ name: 'Pottery', hidden: true }],
+      },
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+
+    expect(screen.queryByText('Pottery (I)')).toBeNull()
+  })
+
+  it('offers Democracy (Govt) only to a player whose government is Democracy', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({}, { government: 'Democracy' })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    openCoins()
+
+    expect(screen.getByRole('button', { name: 'Increase Alice Democracy (Govt)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Increase Bob Democracy (Govt)' })).toBeNull()
+  })
+
+  it('offers Organized Religion only with the revealed policy', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({}, { policies: ['Organized Religion'] })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    openCoins()
+
+    expect(screen.getByRole('button', { name: 'Increase Alice Organized Religion' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Increase Bob Organized Religion' })).toBeNull()
+  })
+
+  it('offers Panama Canal only to the wonder’s owner in the Wonders area', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({}, { panamaOwner: 'player-me' })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    openCoins()
+
+    expect(screen.getByRole('button', { name: 'Increase Alice Panama Canal' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Increase Bob Panama Canal' })).toBeNull()
+  })
+
+  it('a Panama Canal piece outside the Wonders area offers nothing', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({}, { panamaOwner: 'player-me', panamaOutsideWondersArea: true })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    openCoins()
+
+    expect(screen.queryByText('Panama Canal')).toBeNull()
+  })
+
+  it('keeps a counter with coins on it visible even when its source is not available', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({ organizedReligion: 1 })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    openCoins()
+
+    // No policy chosen: the value must stay reachable or it could never be lowered.
+    expect(screen.getByRole('button', { name: 'Decrease Alice Organized Religion' })).toBeTruthy()
+  })
+
+  it('shows the Great People row without the removed helper text', () => {
+    render(
+      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+    )
+
+    openCoins()
+
+    expect(screen.getByText('Great People')).toBeTruthy()
+    expect(screen.queryByText('50% chance of providing 1 coin')).toBeNull()
+  })
+
+  it('shows the empty state when nobody has joined', () => {
+    const view = { ...memberView, you: null, opponents: [] } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+
+    expect(screen.getByText('Nobody has joined yet.')).toBeTruthy()
   })
 
   it('increases a counter through the shared runner', async () => {
@@ -212,7 +418,7 @@ describe('StatusPanel Coins section', () => {
     render(
       <StatusPanel
         gameId="game-1"
-        view={coinView({ codeOfLaws: 4 })}
+        view={coinView({ codeOfLaws: 4 }, { techs: ['Code of Laws'], panamaOwner: 'player-me' })}
         busy={false}
         readOnly={false}
         run={run}
@@ -234,7 +440,10 @@ describe('StatusPanel Coins section', () => {
     const board = createBoard(16, 8)
     const area = wondersArea(board)
     const view = {
-      ...coinView({ codeOfLaws: 4, civilService: 1 }),
+      ...coinView(
+        { codeOfLaws: 4, civilService: 1 },
+        { techs: ['Code of Laws', 'Pottery', 'Democracy', 'Printing Press', 'Civil Service'] },
+      ),
       opponents: memberView.opponents.map((opponent) => ({
         ...opponent,
         stats: { ...DEFAULT_PLAYER_STATS, coinSources: { ...EMPTY_COIN_SOURCES, codeOfLaws: 4 } },
