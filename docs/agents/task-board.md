@@ -12,25 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-158-valid-coins
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `feat/issue-158-valid-coins`
-- **Brief:** `docs/agents/tasks/issue-158-valid-coins.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/coins.ts`
-  - `packages/engine/src/actions/player.ts` (the three reducers and the mapping imports only)
-  - `packages/engine/test/coin-sources.test.ts`
-  - `packages/web/src/views/StatusPanel.tsx`
-  - `packages/web/src/views/StatusPanel.test.tsx`
-  - `docs/agents/tasks/issue-158-valid-coins.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`
-  - `docs/agents/decisions.md`
-  - `README.md` (the coin paragraph only)
-- **Notes:** Issue #158. The Coins tab shows only sources a player currently
-  has; the engine resets a counter when its source becomes invalid.
+_Nothing claimed._
 
 ---
 

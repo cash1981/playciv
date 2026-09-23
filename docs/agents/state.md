@@ -13,11 +13,32 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 476 engine, 199 server, 169 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 485 engine, 199 server, 179 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Issue #158: the Coins tab offers only the sources a player actually has.**
+  A source now gets a counter only where it is real — a revealed coin-token
+  tech, the revealed Organized Religion policy, the Democracy government, the
+  Panama Canal wonder in the Wonders area — plus the four always-available rows
+  Bank, Great People, Terrain and Sheet. A player cell without the source is
+  empty and a row with no cell is not drawn. `removeTech`, `removeSocialPolicy`
+  and `setPlayerGovernment` reset the affected counter; a counter that still
+  holds coins stays visible, so a value can never be hidden. The Great People
+  helper text is gone. Display is the only restriction: anyone may still edit
+  any counter, and the engine gate is unchanged. Read-only review approved with
+  no functional findings (one minor was this entry, two nits, one taken); full
+  checks pass (485 engine, 199 server, 179 web). Browser-verified against a
+  local server: only the four unconditional rows at first; Code of Laws and
+  Democracy (Govt) appeared for the owner alone; counter edits moved the total;
+  a government change and a tech removal cleared their row and counter; Panama
+  Canal appeared after placing and owning the wonder, Organized Religion after
+  choosing and revealing it, and its removal cleared it; a Panama piece dragged
+  out of the Wonders area kept its counter visible; the console was clean. No
+  screenshot was possible (browser window not visible). Branch
+  `feat/issue-158-valid-coins`; PR to open.
 
 - **Issue #97 join color picker follow-up (PR #158).** Replaced the inline
   color selector with a compact visual dialog that shows only colors still
