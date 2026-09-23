@@ -200,8 +200,8 @@ describe('shaped boards', () => {
       />,
     )
 
-    // Twenty-two playable slots where the old rectangle had twenty-four blocks;
-    // the slot at the hole (squares 12..16 by 8..14) is not among them.
+    // Twenty-two playable slots where the old rectangle had sixteen blocks;
+    // the hole (squares 12..16 by 8..14) is not among them.
     expect(container.querySelectorAll('.board-fog-tile')).toHaveLength(22)
     expect(container.querySelectorAll('.board-map-slot')).toHaveLength(22)
     expect(container.querySelector('.board-map')).toBeNull()
