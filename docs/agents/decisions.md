@@ -1970,3 +1970,27 @@ not because a GET is read-only. A gateway status is retried, not our own `500`:
 that one is a defect to surface. Left to #139: retrying writes, a network-level
 retry, paginating the revision list, and a behaviour test for the interval
 itself.
+---
+
+## 2026-09-23 — Coin sources replace the single coins number
+
+**Decision.** The status board gets one coin counter per source per player,
+using the fifteen rows of the human's `Civ_Tech_FF-WW.-1.jpg` reference sheet,
+and a **Coins** section in Player status to edit them. Four tech sources
+(Code of Laws, Pottery, Democracy, Printing Press) cap at 4, the static "1
+coin" sources cap at 1, and the Sheet pile and Panama Canal have no limit. Any
+game member may edit any player's counters, the change is logged publicly, and
+the Status table's Coins cell becomes the read-only sum. `PlayerStats.coins`, a
+single editable number, is replaced by `PlayerStats.coinSources`.
+
+**Why.** The old app kept the coin total on the shared spreadsheet and the
+players summed the individual cards by hand ("3 coins on CoL" in the old chat).
+The human asked for per-source counters and specified the caps, the helper
+texts and the `Sheet` row. This is an addition beyond the old model, whose coin
+bookkeeping was entirely manual.
+
+**Consequences.** A game saved with the old `coins` number keeps that number
+nowhere: the human chose that the new model replaces it, so migration drops it
+and every counter starts at zero. The four techs' +2 from *The Internet* is
+deliberately not enforced yet — issue #145 tracks the wonder-ownership view it
+needs. The counters are bookkeeping only; no card effect is applied.

@@ -1,5 +1,6 @@
 /**
- * One coloured tab per player, shared by the Techs and Social policy panels.
+ * One coloured tab per player, shared by the Techs and Social policy panels —
+ * and, without a colour, by the two sections of the Player status panel.
  *
  * The look and the keyboard handling follow the turn-order tabs (`TurnTabs` in
  * `TurnPanel.tsx`): the label is the username and the accent is the player's

@@ -13,7 +13,7 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 450 engine, 174 server, 143 web |
+| `pnpm -r test` | passing - 468 engine, 178 server, 141 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -36,6 +36,23 @@ _Last updated: 2026-09-23_
   not reproduce in 5 consecutive full-suite runs afterwards, and the new tests
   here use virtual timers or plain promises and never flaked. Filed as issue
   #146. Branch `feat/issue-139-poll-retry`; PR #148 open; see `decisions.md`.
+- **Coin sources per player, with a Coins section in Player status.** The panel
+  has a second section behind a tab bar. It lists the reference sheet's fifteen
+  coin sources — Code of Laws, Pottery, Civil Service, Democracy, Printing
+  Press, Bureaucracy, Railroad, Computers, Bank, Democracy (Govt), Great
+  People, Terrain, Panama Canal, Organized Religion and Sheet — with one column
+  per player and `− / +` counters. The techs that hold coin tokens cap at 4,
+  the static "1 coin" sources at 1, and Sheet and Panama Canal have no limit.
+  The Status table's Coins cell is the read-only sum (`totalCoins`);
+  `PlayerStats.coins` is replaced by `PlayerStats.coinSources`, and a legacy
+  `coins` number is dropped on migration, per the human. `setCoinSource` and
+  `POST /api/games/:id/players/:targetId/coin` mirror the stat route. *The
+  Internet*'s +2 is deferred to issue #145. Branch `feat/coin-tab`;
+  review-approved in two read-only rounds (round 1's one minor, the
+  documentation this entry is part of, fixed). 18 new engine tests (468
+  total), 4 server (178), 5 web (141). Browser-verified against a local server:
+  the tab, the 15 rows, `+` to 4 then disabled, four 200s on `/coin`, the
+  read-only total, and a reload with the value kept. See `decisions.md`.
 
 - **Down to a single coin marker.** The board palette had five coin variants;
   it now has one. `Coin`, `Coin 2`, `Coin 3` and `Coin 4` are removed from the

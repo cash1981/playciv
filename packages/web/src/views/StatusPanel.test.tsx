@@ -3,7 +3,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { DEFAULT_PLAYER_STATS, GOVERNMENT_CARDS, GOVERNMENTS } from '@civ/engine'
+import { DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS } from '@civ/engine'
+import type { CoinSources } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
@@ -145,5 +146,115 @@ describe('StatusPanel Movement (issue #102)', () => {
 
     expect(setStat).not.toHaveBeenCalled()
     expect(movement.value).toBe('2')
+  })
+})
+
+describe('StatusPanel Coins section', () => {
+  /** The shared fixture with some coin counters filled in for Alice. */
+  function coinView(coins: Partial<CoinSources>): PlayerView {
+    return {
+      you: {
+        playerId: 'player-me',
+        username: 'Alice',
+        color: 'Red',
+        yourTurn: true,
+        civilization: null,
+        government: 'Despotism',
+        stats: {
+          ...DEFAULT_PLAYER_STATS,
+          coinSources: { ...EMPTY_COIN_SOURCES, ...coins },
+        },
+      },
+      opponents: memberView.opponents,
+    } as unknown as PlayerView
+  }
+
+  function openCoins(): void {
+    fireEvent.click(screen.getByRole('tab', { name: 'Coins' }))
+  }
+
+  it('switches from the status table to one counter per source, with the sheet’s helper text', () => {
+    render(
+      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+    )
+
+    expect(screen.getByRole('tab', { name: 'Status' })).toBeTruthy()
+    expect(screen.queryByText('Code of Laws (I)')).toBeNull()
+
+    openCoins()
+
+    expect(screen.getByText('Code of Laws (I)')).toBeTruthy()
+    expect(screen.getByText('Up to 4 for winning battles')).toBeTruthy()
+    expect(screen.getByText('Panama Canal')).toBeTruthy()
+    expect(screen.getByText('Sheet')).toBeTruthy()
+    expect(screen.getByText('Coins from culture cards, loot or village etc.')).toBeTruthy()
+  })
+
+  it('increases a counter through the shared runner', async () => {
+    const setCoin = vi.spyOn(api, 'setPlayerCoin').mockResolvedValue(memberView)
+    render(
+      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+    )
+
+    openCoins()
+    fireEvent.click(screen.getByRole('button', { name: 'Increase Bob Bank (Building)' }))
+
+    await waitFor(() =>
+      expect(setCoin).toHaveBeenCalledWith('game-1', 'player-them', 'bank', 1),
+    )
+  })
+
+  it('disables + at the printed limit and − at zero, and leaves the two unlimited sources open', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({ codeOfLaws: 4 })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    openCoins()
+
+    const increase = (name: string): HTMLButtonElement =>
+      screen.getByRole('button', { name }) as HTMLButtonElement
+    expect(increase('Increase Alice Code of Laws (I)').disabled).toBe(true)
+    expect(increase('Decrease Alice Code of Laws (I)').disabled).toBe(false)
+    expect(increase('Decrease Alice Sheet').disabled).toBe(true)
+    expect(increase('Increase Alice Sheet').disabled).toBe(false)
+    expect(increase('Increase Alice Panama Canal').disabled).toBe(false)
+  })
+
+  it('shows the summed total in the status table, read-only', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({ codeOfLaws: 4, sheet: 3 })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    expect(screen.getByLabelText('Alice Coins').textContent).toBe('7')
+    expect(screen.queryByRole('textbox', { name: 'Alice Coins' })).toBeNull()
+  })
+
+  it('keeps every counter disabled for a spectator or replay', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({ codeOfLaws: 2 })}
+        busy={false}
+        readOnly={true}
+        run={run}
+      />,
+    )
+
+    openCoins()
+    const counters = screen.getAllByRole('button', { name: /^(Increase|Decrease) / })
+    expect(counters.length).toBeGreaterThan(0)
+    expect(counters.every((button) => (button as HTMLButtonElement).disabled)).toBe(true)
   })
 })

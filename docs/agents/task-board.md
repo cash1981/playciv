@@ -63,6 +63,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   `api.ts` are not touched. This claim replaced every claim that stood here
   before; all of those PRs are merged (checked with `gh pr list --state merged`),
   so their paths are free.
+_Nothing claimed. `coin-tab` is review-approved and awaits the human's merge as
+its pull request; the claim was released with this change._
 
 ---
 

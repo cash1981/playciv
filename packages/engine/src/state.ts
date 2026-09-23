@@ -11,6 +11,8 @@ import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem } from './item
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece } from './board.js'
 import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
+import type { CoinSources } from './coins.js'
+import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { PlayerTurn } from './turn.js'
 import type { Undo } from './undo.js'
 import type { Battle, BattleSideSummary } from './battle.js'
@@ -28,7 +30,11 @@ export type PlayerColor = (typeof PLAYER_COLORS)[number]
  * edit every player's numbers, as at a physical table.
  */
 export interface PlayerStats {
-  readonly coins: number
+  /**
+   * One coin counter per source, replacing the old status board's single
+   * `coins` number. See {@link CoinSources} for the sources and their limits.
+   */
+  readonly coinSources: CoinSources
   readonly trade: number
   readonly culture: number
   readonly infantry: number
@@ -51,7 +57,7 @@ export interface PlayerStats {
 }
 
 export const DEFAULT_PLAYER_STATS: PlayerStats = {
-  coins: 0,
+  coinSources: EMPTY_COIN_SOURCES,
   trade: 0,
   culture: 0,
   infantry: 1,

@@ -12,9 +12,11 @@ import type {
   BoardAsset,
   BoardHistoryEntry,
   BoardPiece,
+  CoinSourceKey,
   HighscoreResult,
   Government,
   Item,
+  PlayerStatKey,
   PlayerStats,
   PlayerTurn,
   PlayerView,
@@ -31,9 +33,11 @@ export type {
   BoardAsset,
   BoardHistoryEntry,
   BoardPiece,
+  CoinSourceKey,
   HighscoreResult,
   Government,
   Item,
+  PlayerStatKey,
   PlayerStats,
   PlayerTurn,
   PlayerView,
@@ -455,12 +459,20 @@ export const api = {
   setPlayerStat: (
     gameId: string,
     targetPlayerId: string,
-    stat: keyof PlayerStats,
+    stat: PlayerStatKey,
     // Movement (issue #102) takes its expression as a string ("3+1"); every
     // other stat is a number.
     value: number | string,
   ) =>
     post<PlayerView>(`/api/games/${gameId}/players/${targetPlayerId}/stat`, { stat, value }),
+  // The coin counters are shared bookkeeping too; the engine caps each source.
+  setPlayerCoin: (
+    gameId: string,
+    targetPlayerId: string,
+    source: CoinSourceKey,
+    value: number,
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/players/${targetPlayerId}/coin`, { source, value }),
   setPlayerGovernment: (
     gameId: string,
     targetPlayerId: string,
