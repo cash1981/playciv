@@ -493,6 +493,8 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/board/pieces`, { assetId, x, y }),
   movePiece: (gameId: string, pieceId: string, x: number, y: number) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/move`, { x, y }),
+  setWonderOwner: (gameId: string, pieceId: string, ownerId: string | null) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/owner`, { ownerId }),
   rotatePiece: (gameId: string, pieceId: string, rotation?: number) =>
     post<PlayerView>(
       `/api/games/${gameId}/board/pieces/${pieceId}/rotate`,

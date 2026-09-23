@@ -13,11 +13,24 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 468 engine, 178 server, 148 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 472 engine, 179 server, 152 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Issue #145: wonders in play have explicit owners, and The Internet raises
+  coin limits.** The Wonders panel lists pieces in the shared Wonders area,
+  lets any member assign or clear an owner, and shows an unassigned state.
+  Ownership is public board data recorded in board history, so replay and undo
+  preserve it. The Internet owner can hold up to 6 coins on Code of Laws,
+  Pottery, Democracy and Printing Press; moving the wonder out of the Wonders
+  area or changing its owner removes that allowance, while existing excess
+  counters can still be lowered. No coins are awarded automatically. Review
+  approved in round 2; PR #150 open. 2 new engine, 1 server and 3 web tests.
+  Full checks pass (472 engine, 179 server, 152 web). Browser verification remains for the
+  human: the local app started, but the Codex browser bridge timed out opening
+  it. See `decisions.md`.
 
 - **The old site icon is back.** The React client's `index.html` had no icon,
   so the browser tab, a bookmark and a phone home-screen shortcut showed
@@ -65,7 +78,7 @@ _Last updated: 2026-09-23_
   `PlayerStats.coins` is replaced by `PlayerStats.coinSources`, and a legacy
   `coins` number is dropped on migration, per the human. `setCoinSource` and
   `POST /api/games/:id/players/:targetId/coin` mirror the stat route. *The
-  Internet*'s +2 is deferred to issue #145. Branch `feat/coin-tab`;
+  Internet*'s +2 cap is implemented by issue #145. Branch `feat/coin-tab`;
   review-approved in two read-only rounds (round 1's one minor, the
   documentation this entry is part of, fixed). 18 new engine tests (468
   total), 4 server (178), 5 web (141). Browser-verified against a local server:
@@ -100,7 +113,7 @@ _Last updated: 2026-09-23_
   `PlayerStats.coins` is replaced by `PlayerStats.coinSources`, and a legacy
   `coins` number is dropped on migration, per the human. `setCoinSource` and
   `POST /api/games/:id/players/:targetId/coin` mirror the stat route. *The
-  Internet*'s +2 is deferred to issue #145. Branch `feat/coin-tab`;
+  Internet*'s +2 cap is implemented by issue #145. Branch `feat/coin-tab`;
   review-approved in two read-only rounds (round 1's one minor, the
   documentation this entry is part of, fixed). 18 new engine tests (468
   total), 4 server (178), 5 web (141). Browser-verified against a local server:

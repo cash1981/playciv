@@ -17,6 +17,7 @@ import {
   COIN_SOURCES,
   GOVERNMENT_CARDS,
   GOVERNMENTS,
+  isInWondersArea,
   isMovementValue,
   totalCoins,
 } from '@civ/engine'
@@ -155,7 +156,21 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
       />
       <div role="tabpanel" id={`status-panel-${section}`} aria-labelledby={`status-tab-${section}`}>
         {section === 'coins' ? (
-          <CoinSection gameId={gameId} rows={rows} busy={busy} readOnly={readOnly} run={run} />
+          <CoinSection
+            gameId={gameId}
+            rows={rows}
+            internetOwners={
+              new Set(
+                view.board.pieces
+                  .filter((piece) => piece.assetId === 'wonders/internet' && isInWondersArea(view.board, piece))
+                  .map((piece) => piece.ownerId)
+                  .filter((owner): owner is string => owner != null),
+              )
+            }
+            busy={busy}
+            readOnly={readOnly}
+            run={run}
+          />
         ) : (
           <div className="scroll-x">
             <table className="status-table">
@@ -324,12 +339,14 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
 function CoinSection({
   gameId,
   rows,
+  internetOwners,
   busy,
   readOnly,
   run,
 }: {
   readonly gameId: string
   readonly rows: readonly Row[]
+  readonly internetOwners: ReadonlySet<string>
   readonly busy: boolean
   readonly readOnly: boolean
   readonly run: Run
@@ -367,7 +384,13 @@ function CoinSection({
                   <CoinCounter
                     label={`${row.username} ${source.label}`}
                     value={row.stats.coinSources[source.key]}
-                    max={source.max}
+                    max={
+                      source.max !== null &&
+                      ['codeOfLaws', 'pottery', 'democracy', 'printingPress'].includes(source.key) &&
+                      internetOwners.has(row.playerId)
+                        ? source.max + 2
+                        : source.max
+                    }
                     disabled={disabled}
                     onChange={(value) =>
                       void run(() => api.setPlayerCoin(gameId, row.playerId, source.key, value))

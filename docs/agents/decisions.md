@@ -1968,6 +1968,29 @@ and every counter starts at zero. The four techs' +2 from *The Internet* is
 deliberately not enforced yet — issue #145 tracks the wonder-ownership view it
 needs. The counters are bookkeeping only; no card effect is applied.
 
+## 2026-09-23 - Wonder ownership is assigned on the shared board
+
+**Decision.** Each wonder in the shared Wonders area has a nullable, explicit
+owner. Any game member can assign or clear that owner in the Wonders panel.
+Assignment is recorded in board history, participates in replay and undo, and
+is carried in the public board projection. A wonder without an assignment is
+shown as unassigned. The player assigned *The Internet* gets a limit of 6
+instead of 4 on Code of Laws, Pottery, Democracy and Printing Press; the coin
+counters remain manual.
+
+**Why.** Issue #145 asks for the wonders in play and their owners, and calls out
+*The Internet*'s +2 capacity. The existing board only records who placed a
+piece; the four starting wonders are system-dealt, so that value cannot
+reliably identify their owner. This port puts wonders in a shared public board
+area, unlike Java's private wonder hand, and has no old UI for board ownership.
+
+**Consequences.** Ownership is explicitly editable rather than inferred from
+the placer. This is new port behavior: Java has an owner on wonder cards in
+hands, but no API/UI for assigning public board ownership. The +2 cap follows
+issue #145; it only increases the allowed counter value and does not add coins
+automatically. Ownership is public because every client already receives the
+shared board.
+
 ## 2026-09-23 - The poll skips the history, and a gateway blip is retried
 
 **Decision.** Two client-only follow-ups to the revision-list fix (#138), from

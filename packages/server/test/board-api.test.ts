@@ -121,6 +121,31 @@ describe('player areas', () => {
 })
 
 describe('history over HTTP', () => {
+  it('sets a wonder owner through the public board route and records it in history', async () => {
+    const { gameId, starter } = await startedGame('WonderOwner')
+    const placed = await place(gameId, starter, 'wonders/internet', 1300, 1800)
+    const piece = (await placed.json() as { board: { pieces: { id: string }[] } }).board.pieces[0]
+    expect(piece).toBeDefined()
+    if (piece === undefined) throw new Error('The placed wonder should be on the board')
+    const state = await repo.findGame(gameId)
+    expect(state).toBeDefined()
+    if (state === undefined) throw new Error('The game should be stored')
+    const firstPlayer = state.players[0]
+    expect(firstPlayer).toBeDefined()
+    if (firstPlayer === undefined) throw new Error('The game should have a player')
+    const ownerId = firstPlayer.playerId
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/owner`,
+      headers: bearer(starter),
+      payload: { ownerId },
+    })
+    expect(response.status).toBe(200)
+    const view = await response.json() as { board: { pieces: { id: string; ownerId?: string }[]; history: { change: { kind: string } }[] } }
+    expect(view.board.pieces.find((candidate) => candidate.id === piece.id)?.ownerId).toBe(ownerId)
+    expect(view.board.history.at(-1)?.change.kind).toBe('owner')
+  })
+
   it('records every change with a description and a timestamp', async () => {
     const { gameId, starter } = await startedGame('History')
     await place(gameId, starter, 'figures/redarmy', 200, 300)

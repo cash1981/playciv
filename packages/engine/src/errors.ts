@@ -71,6 +71,7 @@ export type EngineError =
   /** The physical supply for this board asset has been exhausted. */
   | { readonly kind: 'BOARD_ASSET_LIMIT_REACHED'; readonly assetId: string; readonly limit: number }
   | { readonly kind: 'BOARD_PIECE_NOT_FOUND'; readonly pieceId: string }
+  | { readonly kind: 'UNKNOWN_WONDER_OWNER'; readonly playerId: string }
   /** The board history is empty, so there is nothing to take back */
   | { readonly kind: 'NOTHING_TO_UNDO_ON_BOARD' }
   /** `endTurn` was called but no player has the turn yet — the game has not started */
@@ -169,6 +170,8 @@ export function describeError(error: EngineError): string {
       return `No ${error.assetId} pieces remain available`
     case 'BOARD_PIECE_NOT_FOUND':
       return `No piece on the board with id ${error.pieceId}`
+    case 'UNKNOWN_WONDER_OWNER':
+      return `No player in this game with id ${error.playerId}`
     case 'NOTHING_TO_UNDO_ON_BOARD':
       return 'There is no board change to undo'
     case 'GAME_NOT_STARTED':

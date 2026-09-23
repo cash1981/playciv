@@ -12,6 +12,7 @@ import {
   cultureStepOf,
   cultureTrackHeight,
   findBoardAsset,
+  isInWondersArea,
   leaderAssetId,
   startingCorner,
 } from '../board.js'
@@ -1030,8 +1031,22 @@ export function setCoinSource(state: GameState, input: SetCoinSourceInput): Acti
     return err({ kind: 'UNKNOWN_COIN_SOURCE', source: input.source })
   }
 
-  const max = source.max
-  if (!Number.isInteger(input.value) || input.value < 0 || (max !== null && input.value > max)) {
+  const techCoinSources = new Set(['codeOfLaws', 'pottery', 'democracy', 'printingPress'])
+  const ownsInternet = state.board.pieces.some(
+    (piece) =>
+      piece.assetId === 'wonders/internet' &&
+      (piece.ownerId ?? null) === target.playerId &&
+      isInWondersArea(state.board, piece),
+  )
+  const max = source.max !== null && techCoinSources.has(source.key) && ownsInternet
+    ? source.max + 2
+    : source.max
+  const loweringExistingCount = input.value < target.stats.coinSources[source.key as keyof PlayerStats['coinSources']]
+  if (
+    !Number.isInteger(input.value) ||
+    input.value < 0 ||
+    (max !== null && input.value > max && !loweringExistingCount)
+  ) {
     return err({ kind: 'INVALID_COIN_VALUE', value: input.value, max })
   }
 

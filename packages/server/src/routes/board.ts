@@ -15,6 +15,7 @@ import {
   placePiece,
   removePiece,
   rotatePiece,
+  setWonderOwner,
   sendToBack,
   undoLastBoardChange,
 } from '@civ/engine'
@@ -83,6 +84,17 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
 
     return applyToGame(context, c, gameId, (state) =>
       movePiece(state, { playerId: currentPlayer(c).id, pieceId, x, y, at: now() }),
+    )
+  })
+
+  app.post('/api/games/:gameId/board/pieces/:pieceId/owner', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const pieceId = c.req.param('pieceId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const ownerId = body['ownerId'] === null ? null : requireString(body, 'ownerId')
+    if (ownerId === undefined) return sendError(c, 400, 'BAD_REQUEST', 'ownerId is required')
+    return applyToGame(context, c, gameId, (state) =>
+      setWonderOwner(state, { playerId: currentPlayer(c).id, pieceId, ownerId, at: now() }),
     )
   })
 
