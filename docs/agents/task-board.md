@@ -12,22 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### favicon
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `feat/favicon`
-- **Brief:** `docs/agents/tasks/favicon.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/index.html`
-  - `packages/web/public/favicon.ico` (new)
-  - `packages/web/public/apple-touch-icon.png` (new)
-  - `docs/agents/tasks/favicon.md`
-  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
-- **Notes:** Bring the old `old-civ-web` favicon and apple-touch icon back to the
-  React client. Asset copy plus two `<link>` tags; no code, no projection. No
-  `rules-checker` pass: no game rule, deck, log text or projection changes.
-
 ### issue-139-poll-retry
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)

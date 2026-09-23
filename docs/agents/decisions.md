@@ -1995,6 +1995,7 @@ not because a GET is read-only. A gateway status is retried, not our own `500`:
 that one is a defect to surface. Left to #139: retrying writes, a network-level
 retry, paginating the revision list, and a behaviour test for the interval
 itself.
+
 ---
 
 ## 2026-09-23 — Coin sources replace the single coins number
@@ -2019,3 +2020,26 @@ nowhere: the human chose that the new model replaces it, so migration drops it
 and every counter starts at zero. The four techs' +2 from *The Internet* is
 deliberately not enforced yet — issue #145 tracks the wonder-ownership view it
 needs. The counters are bookkeeping only; no card effect is applied.
+
+## 2026-09-23 - The old site icon returns, renamed to convention
+
+**Decision.** The old AngularJS client's `favicon.ico` and its apple-touch icon
+are copied into `packages/web/public/` and linked from
+`packages/web/index.html`. The old head was
+`<link rel="shortcut icon" href="favicon.ico?v=2" />` and
+`<link rel="apple-touch-icon" href="images/icons/coin.png">`; the new head uses
+`rel="icon" href="/favicon.ico"` and
+`rel="apple-touch-icon" href="/apple-touch-icon.png"`.
+
+**Why.** The human asked for the old icon to be added to the current client.
+The files are byte-identical to the old ones, so no artwork is redrawn.
+
+**Consequences.** Three small deviations from the old markup, all deliberate:
+the legacy `shortcut icon` spelling becomes the modern `icon` (same behaviour,
+and `sizes="any"` helps a browser pick the `.ico`); the apple-touch file is
+stored under the conventional name `apple-touch-icon.png` rather than the
+`images/icons/coin.png` path the old page used, since it is the same bytes and
+the conventional name lets an OS find it without a link; and the old `?v=2`
+cache-buster is dropped because Vite fingerprints the build and the query string
+only existed to bust an old CDN cache. Nothing else changed, and no game state,
+rule or projection is touched.
