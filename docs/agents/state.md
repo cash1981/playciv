@@ -30,10 +30,12 @@ _Last updated: 2026-09-23_
   is what the human's original "and a few retries it suddenly worked" wanted.
   Client-only: no engine, server, route or projection change. Verified:
   `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (450 engine,
-  174 server, 143 web). One web test failed once under machine load and did not
-  reproduce in 9 later runs (three of them full `pnpm -r test`); the new tests
-  use virtual timers or plain promises and are not load-sensitive. Branch
-  `feat/issue-139-poll-retry`; see `decisions.md`.
+  174 server, 143 web). One `TurnPanel.test.tsx` test - a file not in this diff -
+  failed twice in roughly 14 full-suite runs, and only under heavy machine load:
+  the file took about 5.4 s in those runs against 0.3-0.6 s when passing. It did
+  not reproduce in 5 consecutive full-suite runs afterwards, and the new tests
+  here use virtual timers or plain promises and never flaked. Filed as issue
+  #146. Branch `feat/issue-139-poll-retry`; see `decisions.md`.
 
 - **Down to a single coin marker.** The board palette had five coin variants;
   it now has one. `Coin`, `Coin 2`, `Coin 3` and `Coin 4` are removed from the
