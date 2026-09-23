@@ -12,6 +12,31 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### board-tap-to-move
+
+- **Owner:** orchestrator (DeepSeek V4.1 Flash)
+- **Branch:** `feat/board-tap-to-move`
+- **Brief:** `docs/agents/tasks/board-tap-to-move.md`
+- **Status:** review-approved (read-only reviewer on `deepseek/deepseek-v4-pro`,
+  as Sol is not available in this session; no findings above a nit) — PR #136
+  open, awaiting the human's merge. Claim kept until merged.
+- **Claimed paths:**
+  - `packages/web/src/views/BoardView.tsx`
+  - `packages/web/src/views/BoardView.test.tsx`
+  - `docs/agents/tasks/board-tap-to-move.md`
+  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
+- **Notes:** Restores the documented (state.md) mobile flow: tapping an
+  existing board piece arms destination mode so the next board tap moves it,
+  instead of requiring a drag. Touch dragging of the marked piece and board
+  panning from an unmarked piece stay; a completed drag disarms destination
+  mode. Client-only; no engine, server or CSS change (styles.css is claimed
+  elsewhere and is not needed). Verified in a real 390 x 844 CSS viewport:
+  one tap arms, the next tap sends `movePiece` (HTTP 200, position matches the
+  tap), drag and swipe behave, no document overflow. The reviewer considered a
+  `decisions.md` entry optional because this restores already-documented
+  behaviour; the orchestrator kept one recording the reversal of `93bf305`,
+  because the history otherwise reads as a deliberate removal.
+
 ### issue-101-social-policy-reference
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)

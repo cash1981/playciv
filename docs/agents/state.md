@@ -6,18 +6,35 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-22_
+_Last updated: 2026-09-23_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 173 server, 120 web |
+| `pnpm -r test` | passing - 449 engine, 173 server, 123 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; no open pull requests |
+| `main` pushed to `origin` | yes; PR #134 merged; open pull request: #136 (board tap-to-move) |
 
 ## Done
+
+- **Tapping a board piece on touch arms the move in the same tap.** On a phone,
+  one touch on an existing board piece now both selects it and arms destination
+  mode, so the next tap on the board moves it there — the same two-tap flow as
+  a palette asset. Touch-dragging the marked piece still drags it, a completed
+  drag disarms the mode so a later stray tap cannot move the piece again, an
+  8 px swipe still pans without moving, and a tap outside the board still
+  clears the selection. This restores what commit `93bf305` ("Make map taps
+  deselect touch pieces") removed; `state.md` had kept claiming it existed.
+  Client-only: no engine, server, projection or CSS change. Branch
+  `feat/board-tap-to-move`; review-approved in one read-only round with nothing
+  above a nit (reviewer `deepseek/deepseek-v4-pro`, as Sol is unavailable);
+  PR #136 open.
+  3 new web tests (123 total). Browser-verified in a real 390 x 844 CSS
+  viewport: one tap armed the piece, the next tap sent `movePiece` (HTTP 200,
+  the exact tapped board coordinate), a drag moved and disarmed, a swipe sent
+  nothing, and the document had no horizontal overflow.
 
 - **Issue #101: a social policy card reference, and unavailable policies greyed
   out.** The Techs & Social policy panel's "choose a card" dropdown now has a
@@ -516,6 +533,18 @@ _Nothing._
 _Nothing queued._
 
 ## Known problems and loose ends
+
+- **A non-member's board is still interactive (found in the `board-tap-to-move`
+  mobile pass).** On a public game page a signed-out visitor can tap a piece and
+  tap a destination; the move is sent and fails with 401 `Missing bearer token`,
+  shown as an error banner. `GameView.tsx` passes `readOnly={replaying}` to
+  `BoardView`, while the other panels use `displayedView.you === null ||
+  replaying`. The palette, Undo and the piece actions would all honour a
+  `readOnly` board, so the fix is one line plus a test — but `GameView.tsx` is
+  listed in live claims (atlas-redesign `panel order only`,
+  gift-greatperson-civ `GiveControl only`), so it was reported, not fixed. The
+  same pass found no horizontal overflow on the game page at 390 px or 320 px,
+  and the wide status table scrolls inside its own `.scroll-x` as designed.
 
 - **Game fixes done on `feat/game-fixes`** (off `feat/mongodb-storage`), each
   through the review gate: membership on endturn/taketurn (403 for non-members),
