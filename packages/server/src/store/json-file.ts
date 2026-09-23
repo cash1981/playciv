@@ -12,8 +12,10 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-import type { GameState } from '@civ/engine'
+import type { GameState, HighscoreResult } from '@civ/engine'
 import { migrateGameState } from '@civ/engine'
+
+import { ratedHighscore, resultFromGame } from './rating.js'
 
 import type {
   ChatMessage,
@@ -38,6 +40,7 @@ interface Snapshot {
   readonly revisions?: readonly GameRevision[]
   /** Java's two `emailSent` timestamps, kept as one keyed table. */
   readonly emailSent?: Readonly<Record<string, string>>
+  readonly highscore?: HighscoreResult
 }
 
 export interface JsonFileRepositoryOptions {
@@ -53,6 +56,7 @@ export class JsonFileRepository implements Repository {
   private readonly revisions = new Map<string, GameRevision>()
   private readonly emailSent = new Map<string, string>()
   private chat: ChatMessage[] = []
+  private highscoreCache: HighscoreResult | undefined
 
   private readonly filePath: string | null
   private readonly debounceMs: number
@@ -96,12 +100,14 @@ export class JsonFileRepository implements Repository {
       this.revisions.set(this.revisionKey(revision.gameId, revision.revision), migrated)
     }
     this.chat = [...snapshot.chat]
+    this.highscoreCache = snapshot.highscore
     for (const [scope, at] of Object.entries(snapshot.emailSent ?? {})) {
       this.emailSent.set(scope, at)
     }
   }
 
   async createPlayer(player: StoredPlayer): Promise<void> {
+    this.highscoreCache = undefined
     this.players.set(player.id, {
       ...player,
       role: player.role === 'admin' ? 'admin' : 'user',
@@ -139,23 +145,26 @@ export class JsonFileRepository implements Repository {
     if (player === undefined) return undefined
     const updated = { ...player, ...changes }
     this.players.set(id, updated)
+    if (changes.username !== undefined) this.highscoreCache = undefined
     this.scheduleWrite()
     return updated
   }
 
   async deletePlayer(id: string): Promise<boolean> {
     const deleted = this.players.delete(id)
-    if (deleted) this.scheduleWrite()
+    if (deleted) { this.highscoreCache = undefined; this.scheduleWrite() }
     return deleted
   }
 
   async saveGame(game: GameState): Promise<void> {
+    if (!game.active || this.games.get(game.id)?.active === false) this.highscoreCache = undefined
     this.games.set(game.id, game)
     this.scheduleWrite()
   }
 
   async saveGameIfRevision(game: GameState, expectedRevision: number): Promise<boolean> {
     if (this.games.get(game.id)?.rev !== expectedRevision) return false
+    if (!game.active || this.games.get(game.id)?.active === false) this.highscoreCache = undefined
     this.games.set(game.id, game)
     this.scheduleWrite()
     return true
@@ -174,6 +183,7 @@ export class JsonFileRepository implements Repository {
     ) {
       return false
     }
+    if (!game.active || current?.active === false) this.highscoreCache = undefined
     this.games.set(game.id, game)
     this.revisions.set(revisionKey, revision)
     this.scheduleWrite()
@@ -231,6 +241,7 @@ export class JsonFileRepository implements Repository {
   async deleteGame(id: string): Promise<boolean> {
     const deleted = this.games.delete(id)
     if (deleted) {
+      this.highscoreCache = undefined
       for (const [key, revision] of this.revisions) {
         if (revision.gameId === id) this.revisions.delete(key)
       }
@@ -280,6 +291,14 @@ export class JsonFileRepository implements Repository {
     return summaries
   }
 
+  async cachedHighscore(): Promise<HighscoreResult> {
+    if (this.highscoreCache !== undefined) return this.highscoreCache
+    const results = [...this.games.values()].map(resultFromGame).filter((result) => result !== null)
+    this.highscoreCache = ratedHighscore(await this.finishedGamesForHighscore(), await this.allPlayers(), results)
+    this.scheduleWrite()
+    return this.highscoreCache
+  }
+
   async flush(): Promise<void> {
     if (this.timer !== undefined) {
       clearTimeout(this.timer)
@@ -310,6 +329,7 @@ export class JsonFileRepository implements Repository {
       chat: this.chat,
       revisions: [...this.revisions.values()],
       emailSent: Object.fromEntries(this.emailSent),
+      ...(this.highscoreCache === undefined ? {} : { highscore: this.highscoreCache }),
     }
 
     // Serialise the writes, so two quick changes cannot overlap

@@ -76,6 +76,7 @@ export function HighscoreView(): React.JSX.Element {
   }, [])
 
   const nameHeader = top === 'players' ? 'Username' : 'Civilization'
+  const ratings = useMemo(() => new Map(data?.ratings?.map((entry) => [entry.username, entry])), [data])
   // Stable so `SortableTable`'s sort memo is not invalidated every render; only
   // the name header depends on `top`. Every column names its opening direction:
   // the name ascending and the three numeric columns descending, as before.
@@ -88,6 +89,16 @@ export function HighscoreView(): React.JSX.Element {
         render: (entry) => entry.username,
         initialDirection: 'asc',
       },
+      ...(top === 'players' ? [{
+        key: 'rating',
+        header: 'Rating',
+        sortValue: (entry: WinnerEntry) => ratings.get(entry.username)?.rating ?? Number.NEGATIVE_INFINITY,
+        render: (entry: WinnerEntry) => {
+          const value = ratings.get(entry.username)
+          return value === undefined || value.games === 0 ? '—' : value.rating.toFixed(2)
+        },
+        initialDirection: 'desc' as const,
+      }] : []),
       {
         key: 'totalWins',
         header: 'Total wins',
@@ -110,7 +121,7 @@ export function HighscoreView(): React.JSX.Element {
         initialDirection: 'desc',
       },
     ],
-    [nameHeader],
+    [nameHeader, ratings, top],
   )
 
   if (error !== null) return <div className="error">{error}</div>

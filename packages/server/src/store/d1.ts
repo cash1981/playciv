@@ -16,8 +16,10 @@
  * test suite satisfies them with a Node `node:sqlite` adapter.
  */
 
-import type { FinishedGame, GameState } from '@civ/engine'
+import type { FinishedGame, GameState, HighscoreResult, RatedGame } from '@civ/engine'
 import { migrateGameState } from '@civ/engine'
+
+import { ratedHighscore, resultFromGame } from './rating.js'
 
 import type {
   ChatMessage,
@@ -461,6 +463,42 @@ export class D1Repository implements Repository {
       })
     }
     return summaries
+  }
+
+  async cachedHighscore(): Promise<HighscoreResult> {
+    for (;;) {
+      const current = await this.db.prepare(
+        `SELECT g.version, c.response FROM highscore_generation g
+         LEFT JOIN highscore_cache c ON c.key = 'all' AND c.version = g.version
+         WHERE g.id = 1`,
+      ).first<{ version: number; response: string | null }>()
+      if (current === null) throw new Error('Missing highscore generation row')
+      if (current.response !== null) return JSON.parse(current.response) as HighscoreResult
+      const [games, players, old, live] = await Promise.all([
+        this.finishedGamesForHighscore(),
+        this.allPlayers(),
+        this.db.prepare(`SELECT id, sort_key, participants FROM rated_result ORDER BY sort_key, id`).all<{ id: string; sort_key: string; participants: string }>(),
+        this.db.prepare(
+          `SELECT state FROM game WHERE active = 0 AND winner IS NOT NULL AND winner <> ''`,
+        ).all<GameStateRow>(),
+      ])
+      const results: RatedGame[] = old.results.map((row) => ({
+        id: row.id, sortKey: row.sort_key,
+        participants: JSON.parse(row.participants) as RatedGame['participants'],
+      }))
+      for (const row of live.results) {
+        const result = resultFromGame(parseGame(row.state))
+        if (result !== null) results.push(result)
+      }
+      const response = ratedHighscore(games, players, results)
+      const saved = await this.db.prepare(
+        `INSERT INTO highscore_cache (key, version, response)
+         SELECT 'all', version, ? FROM highscore_generation WHERE id = 1 AND version = ?
+         ON CONFLICT(key) DO UPDATE SET version = excluded.version, response = excluded.response`,
+      ).bind(JSON.stringify(response), current.version).run()
+      if (changes(saved) > 0) return response
+      // A write advanced the generation while we calculated: read and rebuild.
+    }
   }
 
   /** No-op: every write above goes straight to D1. */

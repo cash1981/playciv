@@ -5,7 +5,12 @@
   "type": "module",
   "main": "./dist/src/lib.js",
   "types": "./dist/src/lib.d.ts",
-  "exports": { ".": { "types": "./dist/src/lib.d.ts", "default": "./dist/src/lib.js" } },
+  "exports": {
+    ".": {
+      "types": "./dist/src/lib.d.ts",
+      "default": "./dist/src/lib.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "pretypecheck": "pnpm build",
@@ -13,13 +18,15 @@
     "test": "vitest run",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/src/index.js",
-    "migrate:d1": "tsx src/migrate-to-d1.ts"
+    "migrate:d1": "tsx src/migrate-to-d1.ts",
+    "migrate:rating": "tsx src/migrate/rating-backfill.ts"
   },
   "dependencies": {
     "@civ/engine": "workspace:*",
     "@hono/node-server": "^1.13.0",
     "hono": "^4.6.0",
-    "marked": "^18.0.13"
+    "marked": "^18.0.13",
+    "openskill": "^5.0.1"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
