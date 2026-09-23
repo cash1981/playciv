@@ -12,7 +12,19 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### issue-97-color-picker-popup
+
+- **Owner:** Codex (GPT-6)
+- **Branch:** `feat/issue-97-color-picker-popup`
+- **Brief:** `docs/agents/tasks/issue-97-color-picker-popup.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `docs/agents/task-board.md`
+  - `docs/agents/tasks/issue-97-color-picker-popup.md`
+  - `packages/web/src/views/GameList.tsx`
+  - `packages/web/src/views/GameList.test.tsx`
+  - `packages/web/src/styles.css`
+- **Notes:** Follow-up to merged PR #156 from the human's visual feedback; keep the game table compact and show the join color choice in a styled dialog.
 
 ---
 
