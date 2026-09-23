@@ -2250,3 +2250,52 @@ within its printed limit through `setCoinSource` — a stale client's write to
 an invalid source shows up again because its value is above zero. No state
 shape changed, so no migration is needed. A row-added coverage test fails if a
 new coin source is not wired into one of the availability rules.
+
+---
+
+## 2026-09-23 - Email verification and free social login (issues #42 and #121)
+
+**Decision.** Password registration now requires an email address, and the
+account may sign in and read but cannot write until the address is verified
+(`emailVerified`, `403 EMAIL_NOT_VERIFIED`); the resend route is the one write
+an unverified account may make. Social login ships for Google, Facebook and
+Discord, which are free to set up. Apple was dropped because Sign in with
+Apple needs a paid Apple Developer Program membership, which the human
+refused; the provider table makes adding it two environment variables and one
+entry. The old security question ("What is China's starting tech?" → writing)
+stays and is asked for social accounts in a completion step where the user
+picks a username, so no account row exists until it is answered. Provider
+login is OAuth 2.0 authorization code with PKCE S256 and a signed,
+self-contained `state`; the identity is read from the provider's userinfo
+endpoint over TLS with the token from the server-side code exchange. No
+`id_token` is parsed and no JWKS is fetched: Google's userinfo is the standard
+OIDC endpoint, and verifying the id_token locally would add a JWT verifier
+without changing what this server trusts. Email is unique for new accounts
+(case-insensitive, trimmed); an account is auto-linked to a provider when the
+provider reports the address verified and exactly one account matches, while
+two or more matches are refused and sent to the admin. The ~554 migrated
+accounts are grandfathered verified. A password-reset link also verifies the
+address; an admin changing an address clears verification. A social-only
+account stores an empty password hash, which `verifyPassword` always rejects;
+password reset is its recovery path.
+
+**Why.** The human asked for email verification for non-social accounts and
+for "typ openid connect med oauth2.0", then chose: unverified accounts see but
+cannot take part; migrated accounts stay verified; auto-link on a verified
+unique address; unique emails for new accounts; admin can verify and resend;
+and local development without `RESEND_API_KEY` auto-verifies and prints the
+link instead of sending it. Neither the old Java backend nor the old
+AngularJS client had social login or account verification, so this is an
+extension with no old-system reference.
+
+**Consequences.** A D1 migration (`0004_email_verified_oauth.sql`) adds
+`email_verified` and the `oauth_providers` JSON column and marks every existing
+row verified; the import path writes `email_verified = 1` explicitly. Provider
+identities are looked up by scanning `allPlayers()`, the same approach the
+password-reset route already uses, so no new table or repository method is
+needed at this size. Verification links are server HTML pages like the reset
+link, and the six provider variables with their per-provider callback URLs and
+setup steps are in `README.md`. When no mail can be sent at all, a new account
+— password or social — is verified immediately and the link is printed to the
+server console; this is also what production does if `RESEND_API_KEY` is ever
+missing.
