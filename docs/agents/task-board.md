@@ -12,26 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### social-login-email-verification
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash) + `coder` subagent
-- **Branch:** `feat/social-login-email-verification`
-- **Brief:** `docs/agents/tasks/social-login-email-verification.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/server/src/**`
-  - `packages/server/test/**`
-  - `packages/worker/migrations/**`
-  - `packages/worker/src/index.ts`
-  - `packages/web/src/**`
-  - `packages/server/.env.example`
-  - `README.md`
-  - `docs/agents/tasks/social-login-email-verification.md`
-  - `docs/agents/decisions.md`
-  - `.opencode/agents/coder.md`
-- **Notes:** implements issues #42 and #121 together. Uses the shared resources
-  `packages/web/src/lib/api.ts` (claimed below) and `packages/web/src/views/**`.
-  Server first, then client; both inside this claim.
+_Nothing claimed._
 
 ---
 
@@ -65,7 +46,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | `social-login-email-verification` |
+| `packages/web/src/lib/api.ts` | free |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.

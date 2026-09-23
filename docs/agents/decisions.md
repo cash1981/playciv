@@ -2296,6 +2296,6 @@ password-reset route already uses, so no new table or repository method is
 needed at this size. Verification links are server HTML pages like the reset
 link, and the six provider variables with their per-provider callback URLs and
 setup steps are in `README.md`. When no mail can be sent at all, a new account
-— password or social — is verified immediately and the link is printed to the
-server console; this is also what production does if `RESEND_API_KEY` is ever
-missing.
+— password or social — is verified immediately; password registration also
+prints its (redundant) link to the server console, and production behaves the
+same while `RESEND_API_KEY` is missing.

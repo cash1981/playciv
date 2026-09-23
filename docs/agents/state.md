@@ -13,12 +13,42 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 485 engine, 199 server, 179 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 485 engine, 237 server, 196 web (intermittent `StatusPanel` and password-reset timeouts under full-run load are tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
 
+- **Issues #42 and #121: email verification and social login (Google,
+  Facebook, Discord).** Password registration requires an email address and
+  starts unverified: the account can sign in and read, but every write answers
+  `403 EMAIL_NOT_VERIFIED` until the link from the mail is opened; "send a new
+  link" is the one write an unverified account may make. Social login ships for
+  the three free providers (Apple was dropped because Apple Developer Program
+  membership costs 99 USD/year); an identity read from the provider's userinfo
+  endpoint signs in a linked account, auto-links a provider-verified email that
+  matches exactly one account, refuses two or more matches as
+  `oauth_duplicate_email`, and otherwise offers a completion step where a new
+  account picks a username and answers the old "writing" question before any
+  row is created. Emails are unique for new accounts, the ~554 migrated
+  accounts are grandfathered verified, a reset link also verifies, an admin
+  email change clears verification, and a social account has no password
+  (reset is its recovery path). The admin user page shows and can set the
+  verified flag and re-send the link. D1 migration
+  `0004_email_verified_oauth.sql` adds the two columns. Two read-only review
+  rounds: round 1 found a missing decisions entry, a no-mailer lockout for
+  provider-unverified social accounts and an untrimmed-email comparison; all
+  fixed, round 2 approved with one documentation nit, fixed. Full checks pass
+  (485 engine, 237 server, 196 web) plus typecheck and build.
+  Browser-verified locally with no provider keys and no `RESEND_API_KEY`:
+  registration, the forced-unverified banner, `POST /api/games` 403 with its
+  message, resend (link printed to the console), the verified HTML page, game
+  creation 201 after verifying, a signed pending token rendering the
+  completion form and creating a verified social account, and the
+  duplicate-email 409; screenshots were not possible (browser window not
+  visible). The provider redirect itself is covered by stubbed-fetch tests;
+  production keys remain an operator step (setup checklist in `README.md`).
+  Branch `feat/social-login-email-verification`; PR to open.
 - **The coin mark sits in the top bar, linked home.** The favicon coin is shown
   again inside the `.brand` anchor, to the left of the "Civilization playciv"
   wordmark, so clicking it goes to `/`. Asset-only and presentational:
@@ -793,6 +823,14 @@ _Nothing queued._
   heavier by the Coins section `coin-tab` added to the same panel. It passed in
   the final verification run here (468 engine, 178 server, 148 web). Raising that
   one test's timeout, or splitting the assertion, would remove it.
+
+- **A password-reset test intermittently times out under the full run.**
+  `auth-password-reset.test.ts > password reset (issue #37) > mails a signed
+  link that applies the new password` timed out at vitest's 5 s default once in
+  a full `pnpm -r test` on the social-login branch; it passes in 2.2 s alone,
+  and the other full runs, including the final one (485 engine, 237 server,
+  196 web), were green. Same load-sensitive shape as the `StatusPanel` timeout
+  above; raising that one test's timeout would remove it.
 
 - **A non-member's board is still interactive (found in the `board-tap-to-move`
   mobile pass).** On a public game page a signed-out visitor can tap a piece and
