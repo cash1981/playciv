@@ -3,7 +3,7 @@
 - **Slug:** `issue-139-poll-retry`
 - **Branch:** `feat/issue-139-poll-retry`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Status:** review-approved (round 3; nothing above a nit) - PR to open,
+- **Status:** review-approved (round 3; nothing above a nit) - PR #148 open,
   awaiting the human's merge.
 
 ## Goal

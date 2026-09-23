@@ -35,7 +35,7 @@ _Last updated: 2026-09-23_
   the file took about 5.4 s in those runs against 0.3-0.6 s when passing. It did
   not reproduce in 5 consecutive full-suite runs afterwards, and the new tests
   here use virtual timers or plain promises and never flaked. Filed as issue
-  #146. Branch `feat/issue-139-poll-retry`; see `decisions.md`.
+  #146. Branch `feat/issue-139-poll-retry`; PR #148 open; see `decisions.md`.
 
 - **Down to a single coin marker.** The board palette had five coin variants;
   it now has one. `Coin`, `Coin 2`, `Coin 3` and `Coin 4` are removed from the
