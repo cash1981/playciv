@@ -15,7 +15,7 @@ _Last updated: 2026-09-22_
 | `pnpm -r typecheck` | passing |
 | `pnpm -r test` | passing - 449 engine, 173 server, 120 web |
 | `pnpm -r build` | passing |
-| `main` pushed to `origin` | yes; open pull request: #134 (the social policy reference, issue #101) |
+| `main` pushed to `origin` | yes; no open pull requests |
 
 ## Done
 
@@ -86,7 +86,7 @@ _Last updated: 2026-09-22_
   No screenshots were captured — the browser window was not visible — so the
   visual pass is left to the human. Branch `feat/atlas-redesign`; the deliberate
   desktop-first responsive decision and the backdrop's provenance are in
-  `decisions.md`.
+  `decisions.md`. Merged as PR #133.
 
 - **A revealed turn-order version identical to the editor is hidden.** After a
   reveal the newest history version is the text still in the phase editor, so

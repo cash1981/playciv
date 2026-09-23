@@ -40,41 +40,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   `reference-*`; no behaviour, prop or data change elsewhere. Client-only; no
   engine or server change.
 
-### atlas-redesign
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `feat/atlas-redesign`
-- **Brief:** `docs/agents/tasks/atlas-redesign.md`
-- **Status:** review-approved (five read-only rounds; round 5 had nothing above
-  a nit) — PR #133 open, awaiting the human's merge. Claim kept until merged.
-  The visual pass is left to the human: the browser window was not visible, so
-  no screenshots could be taken; the mobile/desktop evidence is measured
-  geometry and computed style from the live app.
-- **Claimed paths:**
-  - `packages/web/src/styles.css`
-  - `packages/web/src/views/GameView.tsx` (panel order only)
-  - `packages/web/src/views/StatusPanel.tsx` (row colour only)
-  - `packages/web/src/views/StatusPanel.test.tsx`
-  - `packages/web/src/views/SiteBackdrop.tsx` (new)
-  - `packages/web/src/views/SiteBackdrop.test.tsx` (new)
-  - `packages/web/src/main.tsx`
-  - `packages/web/public/theme/` (new assets)
-  - `packages/web/public/fonts/` (new assets)
-  - `docs/agents/tasks/atlas-redesign.md`
-  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
-- **Notes:** New site-wide visual identity ("Atlas"), approved by the human from
-  mockups, plus four things they asked for after testing it: the game page's Log
-  and Chat panels move directly under the board; `.app` grows with the viewport
-  instead of sitting at a fixed 1200 px; each player-status row takes the
-  player's colour; and a pre-existing `.tech-pyramid-block` fieldset overflow on
-  phones is fixed. No behaviour, props or data changes — the stylesheet, two
-  self-hosted fonts, one illustrated backdrop asset, a decorative
-  `SiteBackdrop` layer, a reorder of `GameView.tsx`'s existing panel children
-  and one custom property on `StatusPanel.tsx`'s rows.
-  Branched from `main` after PR #131 merged, and it keeps PR #131's mobile blocks
-  verbatim, so the `issue-115-site-mobile` claim below is stale (that PR is
-  merged) and its `styles.css` claim is superseded by this one.
-
 ### issue-115-site-mobile
 
 - **Owner:** Codex
