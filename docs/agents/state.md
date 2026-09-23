@@ -13,11 +13,13 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 472 engine, 179 server, 152 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 475 engine, 184 server, 167 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Issue #97: player color selection.** Creators select any of five board colors; players joining a fresh seat select among currently free colors. A replacement retains the withdrawn hand's color. Engine validation rejects unsupported, taken or conflicting replacement colors, while old requests without a color still auto-assign. Public summaries expose selectable colors without private hand data. Read-only review approved with zero findings; old-system differences are recorded in `decisions.md`. Full checks pass (475 engine, 184 server, 167 web). A browser pass could not run because local server and client ports were occupied.
 
 - **Responsive board and panel defaults.** The board starts at the largest zoom step that fits its available width, up to 100%, and follows container resizing; the manual selector remains available. New visitors see only Log, Draw, Your hand, and Turn orders open, while each browser's existing and later panel choices persist. Client-only, with no rules or projection change. Review-approved in round 2 after restoring the coordinate-label gutter. Full checks pass (473 engine, 182 server, 165 web).
 

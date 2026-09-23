@@ -3,7 +3,7 @@
 - **Slug:** `issue-97-color-choice`
 - **Branch:** `feat/issue-97-color-choice`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -43,14 +43,14 @@ Use the existing `PLAYER_COLORS` as the engine authority. Expose the selectable 
 
 ## Acceptance criteria
 
-- [ ] Creating a game lets the creator choose any of the five colors and stores it.
-- [ ] Joining shows only colors actually available for that seat and stores the chosen one.
-- [ ] A replacement inherits the withdrawn hand's color; a different requested color is rejected.
-- [ ] Invalid or already occupied colors are rejected without persisting a game change.
-- [ ] Existing requests without a color retain automatic assignment for compatibility.
-- [ ] The public summary exposes no private hand information; tests cover its color choices.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
-- [ ] Browser check of create and join selectors when a local browser is available.
+- [x] Creating a game lets the creator choose any of the five colors and stores it.
+- [x] Joining shows only colors actually available for that seat and stores the chosen one.
+- [x] A replacement inherits the withdrawn hand's color; a different requested color is rejected.
+- [x] Invalid or already occupied colors are rejected without persisting a game change.
+- [x] Existing requests without a color retain automatic assignment for compatibility.
+- [x] The public summary exposes no private hand information; tests cover its color choices.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
+- [ ] Browser check of create and join selectors: ports 8787 and 5173 were occupied by other local processes, so this could not be verified against the feature worktree.
 
 ## Open questions
 
