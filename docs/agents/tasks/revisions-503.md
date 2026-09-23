@@ -3,7 +3,7 @@
 - **Slug:** `revisions-503`
 - **Branch:** `fix/revisions-503`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Status:** review-approved (round 2, nothing above a cosmetic nit) - PR to
+- **Status:** review-approved (round 2, nothing above a cosmetic nit) - PR #138
   open, awaiting the human's merge.
 
 ## Goal

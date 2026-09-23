@@ -40,7 +40,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Branch:** `fix/revisions-503`
 - **Brief:** `docs/agents/tasks/revisions-503.md`
 - **Status:** review-approved (round 2; round 1's one minor, a missing docs
-  update, fixed; round 2 found nothing above a cosmetic nit) - PR to open,
+  update, fixed; round 2 found nothing above a cosmetic nit) - PR #138 open,
   awaiting the human's merge. Claim kept until merged.
 - **Claimed paths:**
   - `packages/server/src/store/types.ts`

@@ -50,7 +50,8 @@ _Last updated: 2026-09-23_
   `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (449 engine,
   174 server, 129 web), and a repository test asserts the summary query does not
   select `state`. No browser pass: the banner needs a non-JSON 5xx, which no
-  local route produces. Branch `fix/revisions-503`; see `decisions.md`.
+  local route produces. Branch `fix/revisions-503`; PR #138 open; see
+  `decisions.md`.
 
 - **Tapping a board piece on touch arms the move in the same tap.** On a phone,
   one touch on an existing board piece now both selects it and arms destination
