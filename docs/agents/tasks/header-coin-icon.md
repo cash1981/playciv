@@ -48,8 +48,9 @@ existing asset is reused as-is.
   the `.brand` anchor, `src="/favicon.ico"`, empty `alt` (decorative — the
   adjacent text already names the link), class `brand-icon`.
 - `packages/web/src/styles.css`: a `.brand-icon` rule giving it a square
-  `1.25rem` box and `align-self: center`, and adjust `.brand` to
-  `align-items: center` so the icon and wordmark sit on the same line cleanly.
+  `1.35rem` box, `flex: none` and `align-self: center`. `.brand` keeps its
+  `align-items: baseline`, so the mixed-size wordmark's baseline is untouched;
+  only the coin is centered against the line.
 - `packages/web/src/views/Navigation.test.tsx`: assert the brand anchor goes to
   `/` and contains an image pointing at `/favicon.ico`.
 

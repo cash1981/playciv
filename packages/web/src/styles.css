@@ -440,7 +440,7 @@ label > textarea {
 
 .brand {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.6rem;
   color: inherit;
   text-decoration: none;
@@ -451,6 +451,7 @@ label > textarea {
   width: 1.35rem;
   height: 1.35rem;
   flex: none;
+  align-self: center;
 }
 
 .site-navigation {
