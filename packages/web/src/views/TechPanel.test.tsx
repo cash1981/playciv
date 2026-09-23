@@ -3,11 +3,10 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { SocialPolicyItem, TechItem } from '@civ/engine'
+import type { TechItem } from '@civ/engine'
 
 import { api } from '../lib/api.js'
-import type { PlayerView, RevealedTechsDto } from '../lib/api.js'
-import { itemImageUrl } from './ItemCard.js'
+import type { PlayerView } from '../lib/api.js'
 import { TechPanel } from './TechPanel.js'
 
 afterEach(() => {
@@ -15,271 +14,222 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const tech = (name: string, hidden: boolean): TechItem => ({
+const tech = (name: string, hidden: boolean, level: 1 | 2 | 3 | 4 | 5 = 1): TechItem => ({
   id: `tech-${name}`,
   name,
-  level: 1,
+  level,
   hidden,
   itemNumber: 1,
   description: null,
   used: false,
-  ownerId: 'player-me',
+  ownerId: 'me',
   sheetName: 'LEVEL_1_TECH',
   kind: 'tech',
   type: null,
 })
 
-/** The viewer's own techs, civilization and chosen policies. Everything else is fetched. */
-const view = (
-  techsChosen: readonly TechItem[],
-  civilization: string | null,
-  socialPolicies: readonly SocialPolicyItem[] = [],
-): PlayerView =>
+/** One opponent exactly as `toPlayerView` sends them: revealed techs, count only. */
+const opponent = (
+  playerId: string,
+  username: string,
+  options: {
+    readonly color?: string
+    readonly civilization?: string | null
+    readonly revealedTechs?: readonly TechItem[]
+    readonly numberOfTechsChosen?: number
+  } = {},
+) => ({
+  playerId,
+  username,
+  color: options.color ?? 'Blue',
+  civilization:
+    options.civilization === null
+      ? null
+      : { name: options.civilization ?? `${username}land` },
+  revealedTechs: options.revealedTechs ?? [],
+  numberOfTechsChosen: options.numberOfTechsChosen ?? options.revealedTechs?.length ?? 0,
+})
+
+const view = (techsChosen: readonly TechItem[], opponents: readonly unknown[] = []): PlayerView =>
   ({
     you: {
+      playerId: 'me',
+      username: 'cash1981',
+      color: 'Red',
+      civilization: { name: 'Rome' },
       techsChosen,
-      socialPolicies,
-      civilization: civilization === null ? null : { name: civilization },
     },
+    opponents,
   }) as unknown as PlayerView
 
-/** A signed-out spectator: no `you`, so no civilization of their own. */
-const spectatorView = (): PlayerView => ({ you: null }) as unknown as PlayerView
+/** A signed-out spectator: no `you`, so no tab of their own. */
+const spectatorView = (opponents: readonly unknown[] = []): PlayerView =>
+  ({ you: null, opponents }) as unknown as PlayerView
 
 const run = async (action: () => Promise<unknown>): Promise<void> => {
   await action()
 }
 
-/** The "Yours" list, as opposed to the pyramid above it. */
-function yoursList(container: HTMLElement): HTMLElement {
-  const list = container.querySelector<HTMLElement>('ul.list.scroll')
-  if (list === null) throw new Error('the Yours list is not rendered')
-  return list
-}
-
 interface PanelOptions {
   readonly techsChosen?: readonly TechItem[]
-  readonly civilization?: string | null
-  readonly revealed?: readonly RevealedTechsDto[]
-  /** The fetched catalogue (`api.socialPolicies`), what the reference lists. */
-  readonly catalogue?: readonly SocialPolicyItem[]
-  /** The viewer's own chosen policies (`view.you.socialPolicies`). */
-  readonly policiesChosen?: readonly SocialPolicyItem[]
+  readonly opponents?: readonly unknown[]
   readonly spectator?: boolean
 }
 
 function renderPanel({
   techsChosen = [],
-  civilization = null,
-  revealed = [],
-  catalogue = [],
-  policiesChosen = [],
+  opponents = [],
   spectator = false,
 }: PanelOptions = {}): HTMLElement {
   vi.spyOn(api, 'availableTechs').mockResolvedValue([])
-  vi.spyOn(api, 'revealedTechs').mockResolvedValue([...revealed])
-  vi.spyOn(api, 'socialPolicies').mockResolvedValue([...catalogue])
   const { container } = render(
     <TechPanel
       gameId="game-1"
       busy={false}
       run={run}
-      view={spectator ? spectatorView() : view(techsChosen, civilization, policiesChosen)}
+      view={spectator ? spectatorView(opponents) : view(techsChosen, opponents)}
       reloadCount={0}
     />,
   )
   return container
 }
 
-describe('TechPanel Yours list', () => {
-  it('drops the row of a revealed tech but keeps it on the pyramid', () => {
+function tabNames(): (string | null)[] {
+  return screen.getAllByRole('tab').map((tab) => tab.textContent)
+}
+
+function selectedTab(): HTMLElement {
+  const tab = screen
+    .getAllByRole('tab')
+    .find((candidate) => candidate.getAttribute('aria-selected') === 'true')
+  if (tab === undefined) throw new Error('no tab is selected')
+  return tab
+}
+
+function activePanel(container: HTMLElement): HTMLElement {
+  const panel = container.querySelector<HTMLElement>('[role="tabpanel"]')
+  if (panel === null) throw new Error('the tab panel is not rendered')
+  return panel
+}
+
+describe('TechPanel tabs', () => {
+  it('opens on the viewer\'s own tab: pyramid in full, list without revealed techs', () => {
     const container = renderPanel({
       techsChosen: [tech('Horseback Riding', true), tech('Agriculture', false)],
     })
 
-    const list = yoursList(container)
-    expect(list.textContent).toContain('Horseback Riding')
-    expect(list.textContent).not.toContain('Agriculture')
-    // The revealed tech is still visible above, on the viewer's own pyramid.
-    expect(container.querySelector('.tech-pyramid')?.textContent).toContain('Agriculture')
+    expect(tabNames()).toEqual(['cash1981'])
+    expect(selectedTab().textContent).toBe('cash1981')
+
+    const panel = activePanel(container)
+    expect(panel.querySelector('.tech-pyramid')?.textContent).toContain('Agriculture')
+    expect(panel.querySelector('.tech-pyramid')?.textContent).toContain('Horseback Riding')
+    const list = panel.querySelector('ul.list.scroll')
+    expect(list?.textContent).toContain('Horseback Riding')
+    expect(list?.textContent).not.toContain('Agriculture')
   })
 
   it('says all researched techs are revealed when no hidden one is left', () => {
     const container = renderPanel({ techsChosen: [tech('Writing', false)] })
 
-    expect(yoursList(container).textContent).toContain('All researched techs are revealed.')
+    expect(activePanel(container).querySelector('ul.list.scroll')?.textContent).toContain(
+      'All researched techs are revealed.',
+    )
   })
 
   it('says none chosen when nothing has been researched', () => {
     const container = renderPanel()
 
-    expect(yoursList(container).textContent).toContain('None chosen.')
+    expect(activePanel(container).querySelector('ul.list.scroll')?.textContent).toContain(
+      'None chosen.',
+    )
   })
-})
 
-describe('TechPanel Revealed by other players', () => {
-  it('shows an opponent pyramid but not the viewer own', async () => {
-    renderPanel({
-      civilization: 'Rome',
-      revealed: [
-        { civilization: 'Rome', color: 'Red', techs: [{ name: 'Writing', level: 1 }] },
-        { civilization: 'Egypt', color: 'Blue', techs: [{ name: 'Masonry', level: 1 }] },
+  it('shows one tab per player and swaps the pyramid when another is selected', () => {
+    const container = renderPanel({
+      techsChosen: [tech('Writing', false)],
+      opponents: [
+        opponent('p2', 'Egil', { color: 'Blue', revealedTechs: [tech('Masonry', false)] }),
+        opponent('p3', 'Kari', { color: 'Green', revealedTechs: [tech('Archery', false)] }),
       ],
     })
 
-    expect(await screen.findByText('Egypt')).toBeTruthy()
-    // The viewer's own pyramid stays under "Yours" only.
-    expect(screen.queryByText('Rome')).toBeNull()
+    expect(tabNames()).toEqual(['cash1981', 'Egil', 'Kari'])
+    expect(activePanel(container).textContent).toContain('Writing')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Egil' }))
+
+    expect(selectedTab().textContent).toBe('Egil')
+    expect(activePanel(container).textContent).toContain('Masonry')
+    // The viewer's own pyramid is not stacked below any more (issue #140).
+    expect(activePanel(container).textContent).not.toContain('Writing')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Kari' }))
+    expect(activePanel(container).textContent).toContain('Archery')
   })
 
-  it('says no other player has chosen a civilization when only the viewer has', async () => {
+  it('offers no reveal or remove controls on another player\'s tab', () => {
     renderPanel({
-      civilization: 'Rome',
-      revealed: [{ civilization: 'Rome', color: 'Red', techs: [] }],
+      opponents: [opponent('p2', 'Egil', { revealedTechs: [tech('Masonry', false, 2)] })],
     })
 
-    expect(
-      await screen.findByText('No other player has chosen a civilization yet.'),
-    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'Egil' }))
+
+    expect(screen.queryByRole('button', { name: 'Reveal' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull()
   })
 
-  it('shows every pyramid to a spectator with no civilization of their own', async () => {
+  it('says an opponent has researched but not revealed, using only the public count', () => {
+    const container = renderPanel({
+      opponents: [opponent('p2', 'Egil', { numberOfTechsChosen: 2 })],
+    })
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Egil' }))
+
+    expect(activePanel(container).textContent).toContain(
+      'Has researched technologies, but not revealed any.',
+    )
+    // No hidden tech exists in the data, and the panel never invents one.
+    expect(activePanel(container).querySelector('.tech-slot.researched.hidden')).toBeNull()
+  })
+
+  it('gives a spectator a tab per player and keeps the picker', () => {
     renderPanel({
       spectator: true,
-      revealed: [
-        { civilization: 'Rome', color: 'Red', techs: [{ name: 'Writing', level: 1 }] },
-        { civilization: 'Egypt', color: 'Blue', techs: [{ name: 'Masonry', level: 1 }] },
-      ],
+      opponents: [opponent('p2', 'Egil'), opponent('p3', 'Kari')],
     })
 
-    expect(await screen.findByText('Rome')).toBeTruthy()
-    expect(screen.getByText('Egypt')).toBeTruthy()
-  })
-})
-
-/** A social policy as the deck catalogue serves it (issue #101). */
-const policy = (name: string, flipside: string | null): SocialPolicyItem => ({
-  id: `policy-${name}`,
-  name,
-  flipside,
-  description: `${name} card text`,
-  hidden: false,
-  itemNumber: 1,
-  used: false,
-  ownerId: null,
-  sheetName: 'SOCIAL_POLICY',
-  kind: 'socialpolicy',
-  type: null,
-})
-
-/**
- * The real `SOCIAL_POLICY` sheet, all eight, including the one-way
- * `Military Tradition` → `Patronage` flipside that makes the engine's check
- * directional rather than symmetric (`Patronage` points back at `Rationalism`).
- */
-const CATALOGUE: readonly SocialPolicyItem[] = [
-  policy('Rationalism', 'Patronage'),
-  policy('Natural Religion', 'Organized Religion'),
-  policy('Expansionsim', 'Urban Development'),
-  policy('Pacifism', 'Military Tradition'),
-  policy('Patronage', 'Rationalism'),
-  policy('Organized Religion', 'Natural Religion'),
-  policy('Urban Development', 'Expansionsim'),
-  policy('Military Tradition', 'Patronage'),
-]
-
-describe('TechPanel social policy reference', () => {
-  it('opens a reference with every policy, its picture, text and flipside', async () => {
-    renderPanel({ catalogue: CATALOGUE })
-    await screen.findByRole('option', { name: 'Rationalism' })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show social policy card reference' }))
-
-    expect(document.querySelectorAll('.reference-card')).toHaveLength(CATALOGUE.length)
-    for (const card of CATALOGUE) {
-      const heading = screen.getByRole('heading', { name: card.name })
-      const article = heading.closest('.reference-card')
-      expect(article).not.toBeNull()
-      expect(article?.querySelector('img')?.getAttribute('src')).toBe(itemImageUrl(card))
-      expect(article?.textContent).toContain(`${card.name} card text`)
-      expect(article?.textContent).toContain(`Flipside: ${card.flipside}`)
-    }
+    expect(tabNames()).toEqual(['Egil', 'Kari'])
+    expect(screen.getByRole('combobox')).toBeTruthy()
   })
 
-  it('shows the same reference to a spectator with no chosen policies', async () => {
-    renderPanel({ spectator: true, catalogue: CATALOGUE })
-    await screen.findByRole('option', { name: 'Rationalism' })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show social policy card reference' }))
-
-    expect(document.querySelectorAll('.reference-card')).toHaveLength(CATALOGUE.length)
-  })
-
-  it('closes on Escape and returns focus to the ? button', () => {
-    renderPanel({ catalogue: CATALOGUE })
-    const help = screen.getByRole('button', { name: 'Show social policy card reference' })
-
-    fireEvent.click(help)
-    expect(screen.getByRole('dialog')).toBeTruthy()
-
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(document.activeElement).toBe(help)
-  })
-})
-
-describe('TechPanel social policy availability', () => {
-  it('greys out the chosen policy and one whose flipside is chosen, naming the reason', async () => {
-    renderPanel({ catalogue: CATALOGUE, policiesChosen: [policy('Rationalism', 'Patronage')] })
-    await screen.findByRole('option', { name: 'Rationalism — already chosen' })
-
-    const select = screen.getByRole('combobox', {
-      name: 'Choose a social policy',
-    }) as HTMLSelectElement
-    expect([...select.options].map((option) => [option.textContent, option.disabled])).toEqual([
-      ['choose a card …', false],
-      ['Rationalism — already chosen', true],
-      ['Natural Religion', false],
-      ['Expansionsim', false],
-      ['Pacifism', false],
-      ['Patronage — flipside of Rationalism', true],
-      ['Organized Religion', false],
-      ['Urban Development', false],
-      ['Military Tradition', false],
-    ])
-    const message = screen.getByRole('status').textContent ?? ''
-    expect(message).toContain('Rationalism (already chosen)')
-    expect(message).toContain('Patronage (flipside of Rationalism)')
-  })
-
-  it('mirrors the engine: the flipside check is directional, so Patronage stays selectable', async () => {
+  it('moves between tabs with the arrow keys', () => {
     renderPanel({
-      catalogue: CATALOGUE,
-      policiesChosen: [policy('Military Tradition', 'Patronage')],
+      opponents: [opponent('p2', 'Egil'), opponent('p3', 'Kari')],
     })
-    await screen.findByRole('option', { name: 'Military Tradition — already chosen' })
 
-    const select = screen.getByRole('combobox', {
-      name: 'Choose a social policy',
-    }) as HTMLSelectElement
-    const byLabel = new Map([...select.options].map((option) => [option.textContent, option.disabled]))
-    expect(byLabel.get('Military Tradition — already chosen')).toBe(true)
-    expect(byLabel.get('Pacifism — flipside of Military Tradition')).toBe(true)
-    // A symmetric rule would block this; the engine, and therefore the panel,
-    // does not.
-    expect(byLabel.get('Patronage')).toBe(false)
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'cash1981' }), { key: 'ArrowRight' })
+
+    expect(selectedTab().textContent).toBe('Egil')
   })
 
-  it('chooses an available policy through the shared runner', async () => {
-    const choose = vi.spyOn(api, 'chooseSocialPolicy').mockResolvedValue(view([], null))
-    renderPanel({ catalogue: CATALOGUE })
-    await screen.findByRole('option', { name: 'Rationalism' })
+  it('researches the chosen tech through the shared runner', async () => {
+    const choose = vi.spyOn(api, 'chooseTech').mockResolvedValue({} as PlayerView)
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false)])
+    render(
+      <TechPanel
+        gameId="game-1"
+        busy={false}
+        run={run}
+        view={view([])}
+        reloadCount={0}
+      />,
+    )
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Choose a social policy' }), {
-      target: { value: 'Rationalism' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Choose' }))
+    await screen.findByRole('option', { name: 'Level 1 — Writing' })
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Writing' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Research' }))
 
-    await waitFor(() => expect(choose).toHaveBeenCalledWith('game-1', 'Rationalism'))
+    await waitFor(() => expect(choose).toHaveBeenCalledWith('game-1', 'Writing'))
   })
 })

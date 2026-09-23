@@ -1,0 +1,31 @@
+/* The player tabs of the Techs and Social policy panels. Sized and shaped
+   like `.turn-tab` in TurnPanel.css; kept separate so neither panel depends
+   on the other's stylesheet. */
+
+.player-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0.7rem 0;
+  padding-bottom: 0.2rem;
+  overflow-x: auto;
+}
+
+.player-tab {
+  flex: 0 0 auto;
+  min-width: 7rem;
+  border-bottom: 3px solid var(--player-tab-color, var(--line));
+  border-radius: var(--radius) var(--radius) 0 0;
+  color: var(--text);
+}
+
+.player-tab[aria-selected='true'] {
+  background: color-mix(in srgb, var(--player-tab-color, var(--accent)) 24%, var(--panel-2));
+  border-color: var(--player-tab-color, var(--accent));
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .player-tab {
+    min-width: 6rem;
+  }
+}

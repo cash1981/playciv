@@ -1,22 +1,25 @@
 /**
- * Techs and social policy.
+ * Techs.
  *
- * Both are hidden until the player chooses to reveal them, and the public log
- * only says that "a hidden technology" was researched.
+ * A researched technology is public once revealed and stays hidden until then
+ * (Java: `PlayerAction.revealTech`, `getTechsForAllPlayers`). One tab per
+ * player switches between the pyramids (issue #140); only the viewer's own tab
+ * carries the hidden list with the Reveal and Remove controls.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { SocialPolicyItem, TechItem } from '@civ/engine'
+import type { TechItem } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
-import type { GameRevisionView, PlayerView, RevealedTechsDto } from '../lib/api.js'
+import type { GameRevisionView, PlayerView } from '../lib/api.js'
 import { TechTree } from './TechTree.js'
+import type { TechTreeTech } from './TechTree.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
-import { ItemCard, itemImageUrl } from './ItemCard.js'
-import { ReferenceCard } from './ReferenceCard.js'
-import { ReferenceDialog } from './ReferenceDialog.js'
+import { PlayerTabs } from './PlayerTabs.js'
+import type { PlayerTab } from './PlayerTabs.js'
+import './PlayerTabs.css'
 
 interface Props {
   readonly gameId: string
@@ -28,29 +31,43 @@ interface Props {
   readonly historical?: GameRevisionView | null
 }
 
-export function TechPanel({ gameId, busy, run, view, reloadCount, historical = null }: Props): React.JSX.Element {
+/** One player's tab: their public pyramid, and the hidden techs on the owner's. */
+interface TechTab {
+  readonly playerId: string
+  readonly username: string
+  readonly color: string | null
+  readonly civilization: string | null
+  readonly techs: readonly TechTreeTech[]
+  /** Only ever non-empty on the viewer's own tab. */
+  readonly hiddenTechs: readonly TechItem[]
+  /** Java: the public `numberOfTechsChosen`, shown in the opponent empty state. */
+  readonly chosenCount: number
+  readonly own: boolean
+}
+
+const tabId = (key: string): string => `techs-tab-${key}`
+const panelId = (key: string): string => `techs-panel-${key}`
+
+export function TechPanel({
+  gameId,
+  busy,
+  run,
+  view,
+  reloadCount,
+  historical = null,
+}: Props): React.JSX.Element {
   const [available, setAvailable] = useState<readonly TechItem[]>([])
-  const [revealed, setRevealed] = useState<readonly RevealedTechsDto[]>([])
-  const [policies, setPolicies] = useState<readonly SocialPolicyItem[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [chosenTech, setChosenTech] = useState('')
-  const [chosenPolicy, setChosenPolicy] = useState('')
-  const [showPolicyReference, setShowPolicyReference] = useState(false)
-  const policyHelpRef = useRef<HTMLButtonElement | null>(null)
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
   const requestEpoch = useRef(0)
 
   const load = useCallback(async () => {
     const epoch = ++requestEpoch.current
     try {
-      const [techs, all, socialPolicies] = await Promise.all([
-        api.availableTechs(gameId),
-        api.revealedTechs(gameId),
-        api.socialPolicies(gameId),
-      ])
+      const techs = await api.availableTechs(gameId)
       if (epoch !== requestEpoch.current) return
       setAvailable(techs)
-      setRevealed(all)
-      setPolicies(socialPolicies)
       setLoadError(null)
     } catch (caught) {
       if (epoch !== requestEpoch.current) return
@@ -62,50 +79,46 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
     if (historical !== null) {
       requestEpoch.current += 1
       setAvailable(historical.availableTechs)
-      setRevealed(historical.revealedTechs)
-      setPolicies(historical.socialPolicies)
       setLoadError(null)
       return
     }
     void load()
   }, [historical, load, reloadCount])
 
-  const yourTechs = view.you?.techsChosen ?? []
-  const yourPolicies = view.you?.socialPolicies ?? []
-  // A revealed tech is already on the pyramid, so only the hidden ones keep a
-  // row with the Reveal and Remove controls.
-  const hiddenTechs = yourTechs.filter((tech) => tech.hidden)
-  // The viewer's own pyramid is already under "Yours"; drop it from the
-  // opponents' section so it is not drawn twice.
-  const otherRevealed = revealed.filter(
-    (entry) => entry.civilization !== view.you?.civilization?.name,
-  )
-
-  /**
-   * Why a social policy cannot be chosen, or null when it can. Mirrors
-   * `chooseSocialPolicy` in the engine exactly — a policy already held, or one
-   * whose own flipside is held, is rejected there (Java:
-   * `PlayerAction.chooseSocialPolicy`). The comparison is deliberately
-   * directional, like the engine's: the candidate's `flipside` is checked, not
-   * "same pair both ways", so a card the engine would accept stays selectable.
-   */
-  const chosenPolicyNames = new Set(yourPolicies.map((policy) => policy.name))
-  function policyUnavailableReason(policy: SocialPolicyItem): string | null {
-    if (chosenPolicyNames.has(policy.name)) return 'already chosen'
-    if (policy.flipside !== null && chosenPolicyNames.has(policy.flipside)) {
-      return `flipside of ${policy.flipside}`
-    }
-    return null
-  }
-  const unavailablePolicies = policies.filter((policy) => policyUnavailableReason(policy) !== null)
-  const chosenPolicyBlocked =
-    chosenPolicy !== '' &&
-    policies.some(
-      (policy) => policy.name === chosenPolicy && policyUnavailableReason(policy) !== null,
-    )
+  const tabs: readonly TechTab[] = [
+    ...(view.you === null
+      ? []
+      : [
+          {
+            playerId: view.you.playerId,
+            username: view.you.username,
+            color: view.you.color,
+            civilization: view.you.civilization?.name ?? null,
+            techs: view.you.techsChosen.map((tech) => ({
+              name: tech.name,
+              level: tech.level,
+              hidden: tech.hidden,
+            })),
+            hiddenTechs: view.you.techsChosen.filter((tech) => tech.hidden),
+            chosenCount: view.you.techsChosen.length,
+            own: true,
+          },
+        ]),
+    ...view.opponents.map((opponent) => ({
+      playerId: opponent.playerId,
+      username: opponent.username,
+      color: opponent.color,
+      civilization: opponent.civilization?.name ?? null,
+      techs: opponent.revealedTechs.map((tech) => ({ name: tech.name, level: tech.level })),
+      hiddenTechs: [],
+      chosenCount: opponent.numberOfTechsChosen,
+      own: false,
+    })),
+  ]
+  const active = tabs.find((tab) => tab.playerId === selectedPlayerId) ?? tabs[0]
 
   return (
-    <CollapsiblePanel id="techs-social-policy" title="Techs & Social policy" defaultOpen>
+    <CollapsiblePanel id="techs" title="Techs" defaultOpen>
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="row">
@@ -135,169 +148,72 @@ export function TechPanel({ gameId, busy, run, view, reloadCount, historical = n
         </button>
       </div>
 
-      <h3 style={{ marginTop: '0.8rem' }}>Yours ({yourTechs.length})</h3>
-      <TechTree
-        techs={yourTechs.map((tech) => ({ name: tech.name, level: tech.level, hidden: tech.hidden }))}
-      />
-      <ul className="list scroll">
-        {hiddenTechs.map((tech) => (
-          <li key={tech.id}>
-            <span>{tech.name}</span>
-            <span className="muted">level {tech.level}</span>
-            <span className="tag hidden">hidden</span>
-            <span style={{ flex: 1 }} />
-            <button
-              className="small"
-              disabled={busy}
-              onClick={() => void run(() => api.revealTech(gameId, tech.name))}
-            >
-              Reveal
-            </button>
-            <button
-              className="small"
-              disabled={busy}
-              onClick={() => void run(() => api.removeTech(gameId, tech.name))}
-            >
-              Remove
-            </button>
-          </li>
-        ))}
-        {hiddenTechs.length === 0 && (
-          <li className="muted">
-            {yourTechs.length === 0 ? 'None chosen.' : 'All researched techs are revealed.'}
-          </li>
+      <PlayerTabs
+        tabs={tabs.map(
+          ({ playerId, username, color }): PlayerTab => ({
+            key: playerId,
+            label: username,
+            color,
+          }),
         )}
-      </ul>
+        active={active?.playerId ?? ''}
+        onSelect={setSelectedPlayerId}
+        ariaLabel="Technologies by player"
+        tabId={tabId}
+        panelId={panelId}
+      />
 
-      <h3 style={{ marginTop: '0.8rem' }}>Revealed by other players</h3>
-      {otherRevealed.map((entry) => (
-        <fieldset
-          key={entry.civilization}
-          className="tech-pyramid-block"
-          style={{ borderColor: entry.color?.toLowerCase() ?? 'var(--line)' }}
+      {active !== undefined && (
+        <div
+          role="tabpanel"
+          id={panelId(active.playerId)}
+          aria-labelledby={tabId(active.playerId)}
         >
-          <legend style={{ color: entry.color?.toLowerCase() ?? 'var(--muted)' }}>
-            {entry.civilization}
-          </legend>
-          <TechTree techs={entry.techs.map((tech) => ({ name: tech.name, level: tech.level as 1 | 2 | 3 | 4 | 5 }))} />
-        </fieldset>
-      ))}
-      {otherRevealed.length === 0 && (
-        <p className="muted">
-          {revealed.length === 0
-            ? 'Nobody has chosen a civilization yet.'
-            : 'No other player has chosen a civilization yet.'}
-        </p>
-      )}
+          {active.civilization !== null && <p className="muted">{active.civilization}</p>}
+          <TechTree techs={active.techs} />
 
-      <h2 style={{ marginTop: '1rem' }}>Social policy</h2>
-      <div className="row">
-        <span className="card-control" style={{ flex: 1 }}>
-          <select
-            aria-label="Choose a social policy"
-            value={chosenPolicy}
-            onChange={(event) => setChosenPolicy(event.target.value)}
-            style={{ flex: 1 }}
-          >
-            <option value="">choose a card …</option>
-            {policies.map((policy) => {
-              const reason = policyUnavailableReason(policy)
-              return (
-                <option key={policy.id} value={policy.name} disabled={reason !== null}>
-                  {reason === null ? policy.name : `${policy.name} — ${reason}`}
-                </option>
-              )
-            })}
-          </select>
-          <button
-            className="help-button"
-            type="button"
-            ref={policyHelpRef}
-            aria-label="Show social policy card reference"
-            title="Show social policy card reference"
-            onClick={() => setShowPolicyReference(true)}
-          >
-            ?
-          </button>
-        </span>
-        <button
-          disabled={busy || chosenPolicy === '' || chosenPolicyBlocked}
-          onClick={() =>
-            void run(async () => {
-              const result = await api.chooseSocialPolicy(gameId, chosenPolicy)
-              setChosenPolicy('')
-              return result
-            })
-          }
-        >
-          Choose
-        </button>
-      </div>
-      {unavailablePolicies.length > 0 && (
-        <p className="muted" role="status">
-          {unavailablePolicies
-            .map((policy) => `${policy.name} (${policyUnavailableReason(policy)})`)
-            .join(', ')}{' '}
-          cannot be chosen.
-        </p>
-      )}
-      <ul className="card-grid small">
-        {yourPolicies.map((policy) => (
-          <ItemCard key={policy.id} item={policy}>
-            {policy.flipside !== null && (
-              <span className="muted">flipside: {policy.flipside}</span>
-            )}
-            <span className={policy.hidden ? 'tag hidden' : 'tag revealed'}>
-              {policy.hidden ? 'hidden' : 'revealed'}
-            </span>
-            {policy.hidden && (
-              <button
-                className="small"
-                disabled={busy}
-                onClick={() => void run(() => api.revealSocialPolicy(gameId, policy.name))}
-              >
-                Reveal
-              </button>
-            )}
-            <button
-              className="small"
-              disabled={busy}
-              onClick={() => void run(() => api.removeSocialPolicy(gameId, policy.name))}
-            >
-              Remove
-            </button>
-          </ItemCard>
-        ))}
-        {yourPolicies.length === 0 && <li className="muted">None chosen.</li>}
-      </ul>
-
-      {showPolicyReference && (
-        <ReferenceDialog
-          titleId="social-policy-reference-title"
-          title="Social policy card reference"
-          returnFocusTo={policyHelpRef}
-          onClose={() => setShowPolicyReference(false)}
-        >
-          <p className="muted">
-            Card text is shown for reference only; the engine records the chosen policy but does
-            not enforce its effects.
-          </p>
-          <div className="reference-card-grid">
-            {policies.map((policy) => (
-              <ReferenceCard
-                key={policy.id}
-                name={policy.name}
-                image={itemImageUrl(policy)}
-                imageAlt={`${policy.name} social policy card`}
-              >
-                {policy.description !== null && policy.description !== '' && (
-                  <p>{policy.description}</p>
-                )}
-                {policy.flipside !== null && <p className="muted">Flipside: {policy.flipside}</p>}
-              </ReferenceCard>
-            ))}
-          </div>
-        </ReferenceDialog>
+          {active.own ? (
+            <ul className="list scroll">
+              {active.hiddenTechs.map((tech) => (
+                <li key={tech.id}>
+                  <span>{tech.name}</span>
+                  <span className="muted">level {tech.level}</span>
+                  <span className="tag hidden">hidden</span>
+                  <span style={{ flex: 1 }} />
+                  <button
+                    className="small"
+                    disabled={busy}
+                    onClick={() => void run(() => api.revealTech(gameId, tech.name))}
+                  >
+                    Reveal
+                  </button>
+                  <button
+                    className="small"
+                    disabled={busy}
+                    onClick={() => void run(() => api.removeTech(gameId, tech.name))}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+              {active.hiddenTechs.length === 0 && (
+                <li className="muted">
+                  {active.chosenCount === 0
+                    ? 'None chosen.'
+                    : 'All researched techs are revealed.'}
+                </li>
+              )}
+            </ul>
+          ) : (
+            active.techs.length === 0 && (
+              <p className="muted">
+                {active.chosenCount === 0
+                  ? 'Has not researched any technologies.'
+                  : 'Has researched technologies, but not revealed any.'}
+              </p>
+            )
+          )}
+        </div>
       )}
     </CollapsiblePanel>
   )

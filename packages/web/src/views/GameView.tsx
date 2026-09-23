@@ -20,6 +20,7 @@ import { ChatPanel } from './ChatPanel.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import { RevealedPanel } from './RevealedPanel.js'
+import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
 import { TechPanel } from './TechPanel.js'
 import { TurnPanel } from './TurnPanel.js'
@@ -392,6 +393,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
         <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
+        <SocialPolicyPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         <TurnPanel gameId={gameId} busy={interactionBusy} run={run} reloadCount={reloadCount} historical={historical} />
         <StatusPanel
           gameId={gameId}
