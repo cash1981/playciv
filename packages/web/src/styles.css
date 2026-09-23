@@ -2208,3 +2208,82 @@ ul.history > li {
   width: 2.4rem;
   padding: 0.1rem 0.2rem;
 }
+
+/* ─── Social sign-in and email verification (issues #42, #121) ────────────── */
+
+/* The provider sign-in options read as buttons but stay real links: clicking
+   one leaves the SPA and starts the OAuth flow. */
+.provider-signin {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.provider-signin p {
+  margin: 0 0 0.5rem;
+}
+
+.provider-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+a.provider-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--pill);
+  background: var(--panel-2);
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+a.provider-button:hover {
+  border-color: var(--accent);
+}
+
+/* The unverified-account notice that rides on every signed-in screen. */
+.verify-banner {
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.8rem;
+  background: color-mix(in srgb, var(--warn) 14%, var(--panel));
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+}
+
+.verify-banner p {
+  margin: 0 0 0.5rem;
+}
+
+.verify-banner form {
+  margin-bottom: 0;
+}
+
+.verify-banner .notice,
+.verify-banner .error {
+  margin-top: 0.5rem;
+}
+
+/* Per-row result of a verify or send-verification action in the admin list. */
+.feedback-ok {
+  color: var(--good);
+  font-size: 0.85rem;
+}
+
+.feedback-bad {
+  color: var(--bad);
+  font-size: 0.85rem;
+}
+
+/* Touch-sized controls on the narrow layout, matching the rest of the site. */
+@media (max-width: 900px) {
+  a.provider-button,
+  .verify-banner button {
+    min-height: 2.75rem;
+  }
+}
+
