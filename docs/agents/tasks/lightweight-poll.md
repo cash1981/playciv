@@ -3,7 +3,7 @@
 - **Slug:** `lightweight-poll`
 - **Branch:** `fix/lightweight-poll`
 - **Owner:** Codex
-- **Status:** review-approved (round 2; no findings or nits)
+- **Status:** review-approved (round 2; no findings or nits); PR #153 open
 
 ## Goal
 
