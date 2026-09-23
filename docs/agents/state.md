@@ -13,7 +13,7 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 476 engine, 197 server, 169 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 476 engine, 199 server, 169 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -29,6 +29,19 @@ _Last updated: 2026-09-23_
   approved with two nits, both fixed. Full checks pass (476 engine, 197 server,
   169 web). Branch `feat/header-coin-icon`; PR #160. Per the human's request the
   review/test gate was not re-run after the final cosmetic commit.
+- **Issue #97 join color picker follow-up (PR #158).** Replaced the inline
+  color selector with a compact visual dialog that shows only colors still
+  available, updates if availability changes, and restores focus on close.
+  Read-only review approved with zero findings; typecheck and build pass, and
+  all tests pass (476 engine, 199 server, 169 web). Browser-verified.
+
+- **Current game rating evidence and display.** Fresh finished games rank
+  nonwinners using the actual culture marker step and the coin total from
+  player status; the old migration's estimates remain unchanged. The rating
+  column shows rounded OpenSkill points on a 100-times scale, including valid
+  negative values, while sorting and cached API values stay unscaled.
+  Read-only review approved with no findings; full checks pass (476 engine,
+  199 server, 169 web tests). Branch `fix/rating-current-state`.
 
 - **Issue #87: multiplayer rating and durable highscore cache.** OpenSkill rates
   two- to five-player results using the explicit winner and conservative
