@@ -65,7 +65,9 @@ async function emailInUse(
   const wanted = address.trim().toLowerCase()
   return (await context.repo.allPlayers()).some(
     (player) =>
-      player.id !== exceptId && player.email !== null && player.email.toLowerCase() === wanted,
+      player.id !== exceptId &&
+      player.email !== null &&
+      player.email.trim().toLowerCase() === wanted,
   )
 }
 

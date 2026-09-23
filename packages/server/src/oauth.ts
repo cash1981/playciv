@@ -259,7 +259,7 @@ export function registerOAuthRoutes(app: App, context: AppContext): void {
     if (identity.email !== null && identity.emailVerified) {
       const wanted = identity.email.trim().toLowerCase()
       const matches = players.filter(
-        (player) => player.email !== null && player.email.toLowerCase() === wanted,
+        (player) => player.email !== null && player.email.trim().toLowerCase() === wanted,
       )
       if (matches.length > 1) {
         return redirectToClient(c, context, 'error=oauth_duplicate_email')
@@ -316,7 +316,7 @@ export function registerOAuthRoutes(app: App, context: AppContext): void {
     if (registration.email !== null) {
       const wanted = registration.email.trim().toLowerCase()
       const taken = (await context.repo.allPlayers()).some(
-        (player) => player.email !== null && player.email.toLowerCase() === wanted,
+        (player) => player.email !== null && player.email.trim().toLowerCase() === wanted,
       )
       if (taken) {
         return sendError(c, 409, 'EMAIL_TAKEN', `Email ${registration.email} is already in use`)

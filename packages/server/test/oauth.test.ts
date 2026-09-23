@@ -183,6 +183,30 @@ describe('callback (issue #121)', () => {
     ])
   })
 
+  it('auto-links a stored address that has surrounding whitespace', async () => {
+    const { app, repo } = await oauthApp()
+    // A migrated or admin-set address can carry surrounding whitespace; the
+    // link match trims the stored value before comparing.
+    await repo.createPlayer({
+      id: 'spaced',
+      username: 'spaced',
+      email: '  spaced@example.com  ',
+      passwordHash: '',
+      createdAt: '2020-01-01T00:00:00.000Z',
+      emailVerified: true,
+    })
+
+    stubProvider('google', { sub: 'g-spaced', email: 'spaced@example.com', email_verified: true })
+    const response = await inject(app, { url: callbackUrl('google', signState('google')) })
+
+    const token = tokenFromFragment(response.headers['location'] ?? '', 'token')
+    const me = await inject(app, { url: '/api/auth/me', headers: bearer(token) })
+    expect((await me.json<{ id: string }>()).id).toBe('spaced')
+    expect((await repo.findPlayerById('spaced'))?.oauthProviders).toEqual([
+      { provider: 'google', providerUserId: 'g-spaced' },
+    ])
+  })
+
   it('does not link an address the provider calls unverified', async () => {
     const { app, repo } = await oauthApp()
     await repo.createPlayer({
