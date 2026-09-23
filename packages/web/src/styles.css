@@ -994,6 +994,39 @@ ul.list > li:last-child {
   list-style: none;
 }
 
+.opponent-hand + .opponent-hand {
+  border-top: 1px solid var(--line);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.opponent-hand h3,
+.opponent-hand h4 {
+  margin: 0 0 0.5rem;
+}
+
+.opponent-hand-category + .opponent-hand-category {
+  margin-top: 0.75rem;
+}
+
+.opponent-hand-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.opponent-hand-card {
+  width: 2.5rem;
+  height: 3.5rem;
+  border: 2px solid var(--line);
+  border-radius: 0.25rem;
+  background: repeating-linear-gradient(45deg, var(--panel-2), var(--panel-2) 0.35rem, var(--line) 0.35rem, var(--line) 0.45rem);
+  box-shadow: inset 0 0 0 0.2rem var(--panel-2);
+}
+
 .card-grid.small {
   grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
 }

@@ -401,6 +401,14 @@ tests match on them.
 
 ## Deliberate improvements
 
+**Opponents' public hands show face-down cards.** Issue #142 adds one generic
+card back for each culture card, hut, village, great person and unit in another
+player's hand, grouped by player and category. Spectators see the same counts.
+The server projects category totals only; it sends no item identity or card
+artwork through this view. Java and the old client showed only the owner's own
+hand, so this is a requested extension rather than a ported display. See
+`docs/agents/decisions.md`.
+
 **Social policies are revealed like technologies.** Java stored a chosen policy
 in the player's hand hidden and never revealed it; the port adds
 `revealSocialPolicy` (issue #6) and shows every player's revealed policies on

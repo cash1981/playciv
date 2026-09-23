@@ -2096,6 +2096,27 @@ rejected: it hides the race. `BoardView`, `LoginView` and `StatusPanel` were
 seen hitting the 5 s kill in the same loads; that is outside #146 and is
 reported to the human rather than changed here.
 
+---
+
+## 2026-09-23 — Opponents' public hands show category counts
+
+**Decision.** Issue #142 shows one generic face-down card per item in each
+opponent's culture-card, hut, village, great-person and unit categories. The
+five category totals are derived from the stored hand in `OpaquePlayerhand`;
+the client never receives the underlying items through that projection. The
+same view is available to spectators and follows revision replay.
+
+**Why.** The human requested an open-knowledge view of other players' hands
+and explicitly confirmed a card back per item. Java's `GameAction.mapGameDTO`
+only returned `Playerhand` to its owner, and the old AngularJS `game.html`
+rendered only "My Items". The five categories match those in its
+`UserItemController.js`, but making their counts public is a deliberate
+extension beyond the old system.
+
+**Consequences.** Other viewers learn the category and count of these held
+cards, while card identity, instance number, front artwork, stats and order
+remain absent from the opponent-hand projection. Other hand categories are
+left out of this display because issue #142 named only these five.
 ## 2026-09-23 - Poll the stored revision counter before reloading a game
 
 **Decision.** The existing monotonic game `rev` is the change marker; no hash of
