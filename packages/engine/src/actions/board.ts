@@ -366,6 +366,34 @@ export function rotatePiece(state: GameState, input: RotatePieceInput): ActionRe
   )
 }
 
+/** Assigns or clears ownership of a wonder. Ownership changes are replayable and undoable. */
+export function setWonderOwner(
+  state: GameState,
+  input: PieceInput & { readonly ownerId: string | null },
+): ActionResult {
+  const denied = requireAccess(state, input.playerId)
+  if (denied !== undefined) return err(denied)
+  const piece = findPiece(state.board, input.pieceId)
+  if (piece === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+  if (piece.category !== 'wonder') return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+  const owner = input.ownerId === null ? undefined : findPlayer(state, input.ownerId)
+  if (input.ownerId !== null && owner === undefined) {
+    return err({ kind: 'UNKNOWN_WONDER_OWNER', playerId: input.ownerId })
+  }
+  const from = piece.ownerId ?? null
+  const pieces = state.board.pieces.map((other) =>
+    other.id === piece.id ? { ...other, ownerId: input.ownerId } : other,
+  )
+  return ok(record(input, {
+    state,
+    pieces,
+    change: { kind: 'owner', pieceId: piece.id, from, to: input.ownerId },
+    description: input.ownerId === null
+      ? `cleared the owner of ${piece.label}`
+      : `assigned ${piece.label} to ${owner?.username ?? input.ownerId}`,
+  }))
+}
+
 // ---------------------------------------------------------------------------
 // Removing
 // ---------------------------------------------------------------------------

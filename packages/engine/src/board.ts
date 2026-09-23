@@ -235,6 +235,8 @@ export interface BoardPiece {
   readonly rotation: Rotation
   /** Who put it there. Anyone may move it afterwards. */
   readonly placedBy: string | null
+  /** Explicit owner of a wonder; legacy pieces and unowned wonders omit it. */
+  readonly ownerId?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +269,7 @@ export type BoardChange =
       readonly from: Rotation
       readonly to: Rotation
     }
+  | { readonly kind: 'owner'; readonly pieceId: string; readonly from: string | null; readonly to: string | null }
   | {
       readonly kind: 'reorder'
       readonly pieceId: string
@@ -568,6 +571,14 @@ export function wondersArea(board: Board): BoardArea {
     width,
     height: board.areaRows * board.squareSize,
   }
+}
+
+/** Whether a piece's centre lies inside the shared Wonders area. */
+export function isInWondersArea(board: Board, piece: BoardPiece): boolean {
+  const area = wondersArea(board)
+  const x = piece.x + piece.width / 2
+  const y = piece.y + piece.height / 2
+  return x >= area.x && x < area.x + area.width && y >= area.y && y < area.y + area.height
 }
 
 /**
@@ -964,6 +975,8 @@ export function applyChange(
       return pieces.map((piece) =>
         piece.id === change.pieceId ? { ...piece, rotation: change.to } : piece,
       )
+    case 'owner':
+      return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ownerId: change.to } : piece)
     case 'reorder': {
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces
@@ -1004,6 +1017,8 @@ export function revertChange(
       return pieces.map((piece) =>
         piece.id === change.pieceId ? { ...piece, rotation: change.from } : piece,
       )
+    case 'owner':
+      return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ownerId: change.from } : piece)
     case 'reorder': {
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces

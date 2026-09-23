@@ -22,6 +22,7 @@ import { LogPanel } from './LogPanel.js'
 import { RevealedPanel } from './RevealedPanel.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
+import { WondersPanel } from './WondersPanel.js'
 import { TechPanel } from './TechPanel.js'
 import { TurnPanel } from './TurnPanel.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
@@ -426,6 +427,13 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
         <SocialPolicyPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         <TurnPanel gameId={gameId} busy={interactionBusy} run={run} reloadCount={reloadCount} historical={historical} />
         <StatusPanel
+          gameId={gameId}
+          view={displayedView}
+          busy={interactionBusy}
+          readOnly={displayedView.you === null || replaying}
+          run={run}
+        />
+        <WondersPanel
           gameId={gameId}
           view={displayedView}
           busy={interactionBusy}

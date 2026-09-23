@@ -12,7 +12,9 @@ import {
   movePiece,
   placePiece,
   removePiece,
+  setWonderOwner,
   sendToBack,
+  undoLastBoardChange,
 } from '../src/actions/board.js'
 import {
   AREA_LABEL_HEIGHT,
@@ -94,6 +96,29 @@ describe('geometry', () => {
 
   it('a new game starts with an empty board', () => {
     expect(firstCivGame().board.pieces).toHaveLength(0)
+  })
+})
+
+describe('wonder ownership', () => {
+  it('is public, reversible board history and can be cleared', () => {
+    const placed = place(firstCivGame(), 'wonders/internet', 1300, 1600)
+    const wonder = placed.board.pieces.find((piece) => piece.category === 'wonder')
+    if (wonder === undefined) throw new Error('The placed wonder should be on the board')
+    const assigned = unwrap(setWonderOwner(placed, {
+      playerId: CASH1981, pieceId: wonder.id, ownerId: KARANDRAS1,
+    }))
+    expect(assigned.board.pieces.find((piece) => piece.id === wonder.id)?.ownerId).toBe(KARANDRAS1)
+    expect(piecesAtStep(assigned.board.history, assigned.board.history.length)
+      .find((piece) => piece.id === wonder.id)?.ownerId).toBe(KARANDRAS1)
+    expect(assigned.board.history.at(-1)?.change).toMatchObject({
+      kind: 'owner', pieceId: wonder.id, from: null, to: KARANDRAS1,
+    })
+    const undone = unwrap(undoLastBoardChange(assigned, CASH1981))
+    expect(undone.board.pieces.find((piece) => piece.id === wonder.id)?.ownerId).toBeNull()
+    const cleared = unwrap(setWonderOwner(assigned, {
+      playerId: CASH1981, pieceId: wonder.id, ownerId: null,
+    }))
+    expect(cleared.board.pieces.find((piece) => piece.id === wonder.id)?.ownerId).toBeNull()
   })
 })
 

@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS } from '@civ/engine'
+import { createBoard, DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS, wondersArea } from '@civ/engine'
 import type { CoinSources } from '@civ/engine'
 
 import { api } from '../lib/api.js'
@@ -17,6 +17,7 @@ afterEach(() => {
 })
 
 const memberView = {
+  board: { pieces: [] },
   you: {
     playerId: 'player-me',
     username: 'Alice',
@@ -153,6 +154,7 @@ describe('StatusPanel Coins section', () => {
   /** The shared fixture with some coin counters filled in for Alice. */
   function coinView(coins: Partial<CoinSources>): PlayerView {
     return {
+      board: { pieces: [] },
       you: {
         playerId: 'player-me',
         username: 'Alice',
@@ -224,6 +226,33 @@ describe('StatusPanel Coins section', () => {
     expect(increase('Decrease Alice Sheet').disabled).toBe(true)
     expect(increase('Increase Alice Sheet').disabled).toBe(false)
     expect(increase('Increase Alice Panama Canal').disabled).toBe(false)
+  })
+
+  it('raises each tech source limit to six only for The Internet owner', () => {
+    const board = createBoard(16, 8)
+    const area = wondersArea(board)
+    const view = {
+      ...coinView({ codeOfLaws: 4, civilService: 1 }),
+      opponents: memberView.opponents.map((opponent) => ({
+        ...opponent,
+        stats: { ...DEFAULT_PLAYER_STATS, coinSources: { ...EMPTY_COIN_SOURCES, codeOfLaws: 4 } },
+      })),
+      board: {
+        ...board,
+        pieces: [{
+          id: 'internet', assetId: 'wonders/internet', ownerId: 'player-me',
+          category: 'wonder' as const, x: area.x + 20, y: area.y + 40, width: 88, height: 90,
+        }],
+      },
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="g" view={view} busy={false} readOnly={false} run={run} />)
+    openCoins()
+    expect((screen.getByRole('button', { name: 'Increase Alice Code of Laws (I)' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: 'Increase Bob Code of Laws (I)' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Increase Alice Democracy (II)' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: 'Increase Alice Pottery (I)' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: 'Increase Alice Printing Press (II)' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: 'Increase Alice Civil Service (II)' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('shows the summed total in the status table, read-only', () => {

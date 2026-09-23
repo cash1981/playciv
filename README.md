@@ -442,8 +442,10 @@ Railroad, Computers, Bank, Democracy (Govt), Great People, Terrain, Panama
 Canal, Organized Religion and Sheet — capped at the limit printed on the
 reference sheet (4 on the four coin-token techs, 1 on the static sources, none
 on Sheet or Panama Canal), with the status table's Coins column as the
-read-only sum. *The Internet*'s +2 to the tech maximum is not applied yet
-(issue #145). A game saved with the old single coin number loses it: the human
+read-only sum. The player assigned to *The Internet* can hold up to two extra
+coins on each of the four technology sources; the counters remain manual, so
+no coins are added automatically. Wonders in play are listed with an
+assignable owner. A game saved with the old single coin number loses it: the human
 chose that the counters replace it. Movement is the one value written as an
 expression rather than a plain integer:
 natural religion adds one movement to an army figure, so it is recorded as

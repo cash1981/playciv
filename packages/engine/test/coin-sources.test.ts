@@ -10,8 +10,10 @@
 import { describe, expect, it } from 'vitest'
 
 import { setCoinSource } from '../src/actions/player.js'
+import { movePiece, placePiece, setWonderOwner } from '../src/actions/board.js'
 import { COIN_SOURCES, EMPTY_COIN_SOURCES, findCoinSource, totalCoins } from '../src/coins.js'
 import { migrateGameState } from '../src/migrate.js'
+import { isInWondersArea, wondersArea } from '../src/board.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer } from '../src/state.js'
 import type { GameState } from '../src/state.js'
@@ -72,6 +74,76 @@ describe('totalCoins', () => {
 })
 
 describe('setCoinSource', () => {
+  it('raises the four technology limits by two only for The Internet owner', () => {
+    const state = firstCivGame()
+    const area = wondersArea(state.board)
+    const placed = unwrap(placePiece(state, {
+      playerId: CASH1981, assetId: 'wonders/internet', x: area.x + 20, y: area.y + 40,
+    }))
+    const wonder = placed.board.pieces.at(-1)
+    if (wonder === undefined) throw new Error('The Internet should be on the board')
+    expect(isInWondersArea(placed.board, wonder)).toBe(true)
+    const owned = unwrap(setWonderOwner(placed, {
+      playerId: CASH1981, pieceId: wonder.id, ownerId: KARANDRAS1,
+    }))
+    for (const source of ['codeOfLaws', 'pottery', 'democracy', 'printingPress']) {
+      expect(unwrap(setCoinSource(owned, {
+        editorPlayerId: CASH1981, targetPlayerId: KARANDRAS1, source, value: 6,
+      }))).toBeDefined()
+      expect(unwrapErr(setCoinSource(owned, {
+        editorPlayerId: CASH1981, targetPlayerId: KARANDRAS1, source, value: 7,
+      }))).toEqual({ kind: 'INVALID_COIN_VALUE', value: 7, max: 6 })
+      expect(unwrapErr(setCoinSource(owned, {
+        editorPlayerId: CASH1981, targetPlayerId: CASH1981, source, value: 5,
+      }))).toEqual({ kind: 'INVALID_COIN_VALUE', value: 5, max: 4 })
+    }
+  })
+
+  it('lets a player lower a counter after losing The Internet even while it is over the new cap', () => {
+    const state = firstCivGame()
+    const area = wondersArea(state.board)
+    const placed = unwrap(placePiece(state, {
+      playerId: CASH1981, assetId: 'wonders/internet', x: area.x + 20, y: area.y + 40,
+    }))
+    const wonder = placed.board.pieces.at(-1)
+    if (wonder === undefined) throw new Error('The Internet should be on the board')
+    const owned = unwrap(setWonderOwner(placed, {
+      playerId: CASH1981, pieceId: wonder.id, ownerId: CASH1981,
+    }))
+    const six = unwrap(setCoinSource(owned, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'pottery', value: 6,
+    }))
+    const unowned = unwrap(setWonderOwner(six, {
+      playerId: CASH1981, pieceId: wonder.id, ownerId: null,
+    }))
+    const five = unwrap(setCoinSource(unowned, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'pottery', value: 5,
+    }))
+    expect(findPlayer(five, CASH1981)?.stats.coinSources.pottery).toBe(5)
+    expect(unwrapErr(setCoinSource(five, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'pottery', value: 6,
+    }))).toEqual({ kind: 'INVALID_COIN_VALUE', value: 6, max: 4 })
+  })
+
+  it('does not apply The Internet bonus after the wonder leaves the shared Wonders area', () => {
+    const state = firstCivGame()
+    const area = wondersArea(state.board)
+    const placed = unwrap(placePiece(state, {
+      playerId: CASH1981, assetId: 'wonders/internet', x: area.x + 20, y: area.y + 40,
+    }))
+    const wonder = placed.board.pieces.at(-1)
+    if (wonder === undefined) throw new Error('The Internet should be on the board')
+    const owned = unwrap(setWonderOwner(placed, {
+      playerId: CASH1981, pieceId: wonder.id, ownerId: CASH1981,
+    }))
+    const moved = unwrap(movePiece(owned, {
+      playerId: CASH1981, pieceId: wonder.id, x: 300, y: 300,
+    }))
+    expect(unwrapErr(setCoinSource(moved, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'pottery', value: 5,
+    }))).toEqual({ kind: 'INVALID_COIN_VALUE', value: 5, max: 4 })
+  })
+
   it('sets one counter and writes a public log entry', () => {
     const state = unwrap(
       setCoinSource(firstCivGame(), {
