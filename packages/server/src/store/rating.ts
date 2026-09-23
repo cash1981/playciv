@@ -1,4 +1,4 @@
-import { highscore, rankByEvidence, totalCoins } from '@civ/engine'
+import { cultureMarkerLevelOf, highscore, rankByEvidence, totalCoins } from '@civ/engine'
 import type { FinishedGame, GameState, HighscoreResult, PlacementEvidence, RatedGame } from '@civ/engine'
 import { ordinal, rate, rating } from 'openskill'
 
@@ -38,13 +38,10 @@ export function ratedHighscore(
 export function resultFromGame(game: GameState): RatedGame | null {
   if (game.active || game.winner === null || game.winner === '') return null
   const evidence: PlacementEvidence[] = game.players.map((player) => {
-    const culture = [...player.items, ...game.discardedItems]
-      .filter((item) => item.ownerId === player.playerId)
-      .reduce((tier, item) => Math.max(tier, item.kind === 'cultureIII' ? 3 : item.kind === 'cultureII' ? 2 : item.kind === 'cultureI' ? 1 : 0), 0)
     return {
       username: player.username,
       techs: player.techsChosen.length,
-      cultureTier: culture || null,
+      cultureTier: cultureMarkerLevelOf(game, player.playerId),
       coins: totalCoins(player.stats.coinSources),
     }
   })

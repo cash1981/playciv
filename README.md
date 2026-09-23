@@ -340,8 +340,12 @@ games. Old games use only evidence in the archive: known techs, owned culture
 cards (including owned discards), and provable printed coins. The winner is
 first; uncertain nonwinners share a placement. Nine old wins have just one
 recorded participant and count toward wins but cannot update a multiplayer
-rating. The complete public response is stored in `highscore_cache` and rebuilt
-only when source data changes. The Highscore page can sort players by rating.
+rating. New games use each player's culture marker position at the finish and
+the coin total from the player's status counters; culture cards are not used
+to infer their progress. The complete public response is stored in
+`highscore_cache` and rebuilt only when source data changes. The Highscore page
+can sort players by rating and shows the conservative OpenSkill value as a
+rounded integer multiplied by 100; this value can be negative.
 
 ## Game data
 

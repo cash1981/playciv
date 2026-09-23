@@ -2192,3 +2192,24 @@ writes against the generation it read, so a concurrent finish cannot restore
 stale statistics. The archival source document and hidden cards remain outside
 the public response. The backfill is a separate operator command, applied
 once after D1 migration `0003_rating.sql`; it can be rerun safely.
+
+---
+
+## 2026-09-23 — Current games rate their recorded culture position
+
+**Decision.** A newly finished game's nonwinner placement compares the actual
+leader marker positions on the culture track, the number of chosen technologies,
+and the sum of coin sources in player status. Culture cards, including discarded
+ones, supply no position estimate for these games. A missing marker stays
+unknown; START is position zero. The historical backfill retains its cautious
+card and printed-coin estimates because those old documents lack track and
+status-counter data.
+
+**Why.** The current game state records the board position and coin counters at
+the finish, so estimates would discard better evidence. The human clarified
+that estimates were intended only for migrated games.
+
+**Consequences.** The public API and durable cache retain the unscaled
+conservative OpenSkill value. The highscore UI displays that value times 100,
+rounded to an integer, and may show negative numbers. Numeric sorting and
+existing stored historical results stay unchanged.

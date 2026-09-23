@@ -3,7 +3,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { createGame, joinGame } from '@civ/engine'
+import { createGame, cultureCellCenter, findBoardAsset, joinGame, leaderAssetId } from '@civ/engine'
+import type { GameState } from '@civ/engine'
 
 import { legacyRatedGame } from '../src/migrate/legacy-rating.js'
 import { writeRatingBackfill } from '../src/migrate/rating-backfill.js'
@@ -106,21 +107,83 @@ describe('legacy rating backfill', () => {
   })
 })
 
-it('credits a discarded owned culture III card in a newly finished game', () => {
-  const base = createGame({ name: 'Culture result', numOfPlayers: 3, seed: 'culture-result' })
-  const alice = joinGame(base, { playerId: 'a', username: 'Alice', gameCreator: true })
-  const bob = alice.ok ? joinGame(alice.value, { playerId: 'b', username: 'Bob' }) : undefined
-  const carol = bob?.ok ? joinGame(bob.value, { playerId: 'c', username: 'Carol' }) : undefined
-  if (carol === undefined || !carol.ok) throw new Error('fixture join failed')
-  const third = carol.value.items.find((item) => item.kind === 'cultureIII')
-  const first = carol.value.items.find((item) => item.kind === 'cultureI')
+function finishedGameWithCultureMarkers(bobStep: number, carolStep: number): GameState {
+  const base = createGame({
+    name: 'Culture result', numOfPlayers: 3, seed: 'culture-result',
+    players: [
+      { playerId: 'a', username: 'Alice', color: 'Red' },
+      { playerId: 'b', username: 'Bob', color: 'Blue' },
+      { playerId: 'c', username: 'Carol', color: 'Green' },
+    ],
+  })
+  const civs = base.items.filter((item) => item.kind === 'civ')
+  const players = base.players.map((player, index) => {
+    const civilization = civs[index]
+    if (civilization === undefined) throw new Error('civilization card missing')
+    return { ...player, civilization }
+  })
+  const pieces = players.map((player, index) => {
+    const assetId = leaderAssetId(player.civilization.name, player.color ?? '')
+    const asset = assetId === undefined ? undefined : findBoardAsset(assetId)
+    if (asset === undefined) throw new Error('leader asset missing')
+    const step = index === 1 ? bobStep : index === 2 ? carolStep : 0
+    const center = cultureCellCenter(base.board, step)
+    return {
+      id: `leader:${player.playerId}`, assetId: asset.id, path: asset.path,
+      label: asset.label, category: asset.category,
+      x: Math.round(center.x - asset.width / 2), y: Math.round(center.y - asset.height / 2),
+      width: asset.width, height: asset.height, rotation: 0 as const, placedBy: player.playerId,
+    }
+  })
+  return { ...base, active: false, winner: 'Alice', players, board: { ...base.board, pieces } }
+}
+
+it('uses culture marker steps including START instead of held or discarded culture cards', () => {
+  const base = finishedGameWithCultureMarkers(0, 5)
+  const third = base.items.find((item) => item.kind === 'cultureIII')
+  const first = base.items.find((item) => item.kind === 'cultureI')
   if (third === undefined || first === undefined) throw new Error('culture cards missing')
   const game = {
-    ...carol.value, active: false, winner: 'Alice',
+    ...base,
     discardedItems: [{ ...third, ownerId: 'b' }],
-    players: carol.value.players.map((player) => player.username === 'Carol'
+    players: base.players.map((player) => player.playerId === 'c'
       ? { ...player, items: [{ ...first, ownerId: 'c' }] }
       : player),
+  }
+  expect(resultFromGame(game)?.participants).toEqual([
+    { username: 'Alice', rank: 1 },
+    { username: 'Carol', rank: 2 },
+    { username: 'Bob', rank: 3 },
+  ])
+})
+
+it('ties unknown culture positions even when one player has drawn a culture card', () => {
+  const base = finishedGameWithCultureMarkers(0, 5)
+  const third = base.items.find((item) => item.kind === 'cultureIII')
+  if (third === undefined) throw new Error('culture card missing')
+  const game = {
+    ...base,
+    board: { ...base.board, pieces: base.board.pieces.filter((piece) => piece.placedBy !== 'b') },
+    players: base.players.map((player) => player.playerId === 'b'
+      ? { ...player, items: [{ ...third, ownerId: 'b' }] }
+      : player),
+  }
+  expect(resultFromGame(game)?.participants).toEqual([
+    { username: 'Alice', rank: 1 },
+    { username: 'Bob', rank: 2 },
+    { username: 'Carol', rank: 2 },
+  ])
+})
+
+it('uses the sum of player status coin counters for fresh-game placement', () => {
+  const base = finishedGameWithCultureMarkers(0, 0)
+  const game = {
+    ...base,
+    players: base.players.map((player) => player.playerId === 'b'
+      ? { ...player, stats: { ...player.stats, coinSources: { ...player.stats.coinSources, codeOfLaws: 2, sheet: 1 } } }
+      : player.playerId === 'c'
+        ? { ...player, stats: { ...player.stats, coinSources: { ...player.stats.coinSources, terrain: 1 } } }
+        : player),
   }
   expect(resultFromGame(game)?.participants).toEqual([
     { username: 'Alice', rank: 1 },
