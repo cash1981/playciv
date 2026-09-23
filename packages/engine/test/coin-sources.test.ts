@@ -9,9 +9,24 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { setCoinSource } from '../src/actions/player.js'
+import {
+  chooseSocialPolicy,
+  chooseTech,
+  removeSocialPolicy,
+  removeTech,
+  setCoinSource,
+  setPlayerGovernment,
+} from '../src/actions/player.js'
 import { movePiece, placePiece, setWonderOwner } from '../src/actions/board.js'
-import { COIN_SOURCES, EMPTY_COIN_SOURCES, findCoinSource, totalCoins } from '../src/coins.js'
+import {
+  ALWAYS_AVAILABLE_COIN_SOURCES,
+  COIN_SOURCES,
+  EMPTY_COIN_SOURCES,
+  findCoinSource,
+  socialPolicyCoinSource,
+  techCoinSource,
+  totalCoins,
+} from '../src/coins.js'
 import { migrateGameState } from '../src/migrate.js'
 import { isInWondersArea, wondersArea } from '../src/board.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -46,10 +61,13 @@ describe('COIN_SOURCES', () => {
     ])
   })
 
-  it('gives every source a helper text from the sheet’s second column', () => {
+  it('gives every source a helper text from the sheet’s second column, except Great People', () => {
     for (const source of COIN_SOURCES) {
+      if (source.key === 'greatPeople') continue
       expect(source.help.length).toBeGreaterThan(0)
     }
+    // Issue #158: the human asked for "50% chance of providing 1 coin" to go.
+    expect(findCoinSource('greatPeople')?.help).toBe('')
     expect(findCoinSource('codeOfLaws')?.help).toBe('Up to 4 for winning battles')
     expect(findCoinSource('sheet')?.help).toBe('Coins from culture cards, loot or village etc.')
   })
@@ -63,6 +81,54 @@ describe('COIN_SOURCES', () => {
 
   it('findCoinSource returns undefined for a key that is not in the table', () => {
     expect(findCoinSource('fame')).toBeUndefined()
+  })
+})
+
+/** Issue #158: which sources are real for a player, and what clears them. */
+describe('coin source availability', () => {
+  it('maps each coin-token tech name to its source, and no other tech', () => {
+    expect(techCoinSource('Code of Laws')).toBe('codeOfLaws')
+    expect(techCoinSource('Pottery')).toBe('pottery')
+    expect(techCoinSource('Civil Service')).toBe('civilService')
+    expect(techCoinSource('Democracy')).toBe('democracy')
+    expect(techCoinSource('Printing Press')).toBe('printingPress')
+    expect(techCoinSource('Bureaucracy')).toBe('bureaucracy')
+    expect(techCoinSource('Railroad')).toBe('railroad')
+    expect(techCoinSource('Computers')).toBe('computers')
+    expect(techCoinSource('Navy')).toBeUndefined()
+  })
+
+  it('maps Organized Religion to its source but not its flipside', () => {
+    expect(socialPolicyCoinSource('Organized Religion')).toBe('organizedReligion')
+    // Natural Religion is the printed flipside and carries a different effect.
+    expect(socialPolicyCoinSource('Natural Religion')).toBeUndefined()
+    expect(socialPolicyCoinSource('Urban Development')).toBeUndefined()
+  })
+
+  it('leaves no source without an availability rule', () => {
+    // If a row is ever added to COIN_SOURCES without being wired into one of
+    // the four rules, this test fails rather than the row silently vanishing
+    // from the Coins tab.
+    const reachable = new Set<string>(ALWAYS_AVAILABLE_COIN_SOURCES)
+    for (const techName of [
+      'Code of Laws',
+      'Pottery',
+      'Civil Service',
+      'Democracy',
+      'Printing Press',
+      'Bureaucracy',
+      'Railroad',
+      'Computers',
+    ]) {
+      const key = techCoinSource(techName)
+      if (key !== undefined) reachable.add(key)
+    }
+    const policy = socialPolicyCoinSource('Organized Religion')
+    if (policy !== undefined) reachable.add(policy)
+    reachable.add('democracyGovernment')
+    reachable.add('panamaCanal')
+
+    expect([...reachable].sort()).toEqual(COIN_SOURCES.map((source) => source.key).sort())
   })
 })
 
@@ -306,6 +372,159 @@ describe('setCoinSource', () => {
       codeOfLaws: 2,
       sheet: 1,
     })
+  })
+})
+
+describe('a counter does not outlive its source (issue #158)', () => {
+  it('clears a tech’s counter when the tech is removed, and keeps the others', () => {
+    let state = unwrap(
+      chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Code of Laws' }),
+    )
+    state = unwrap(
+      setCoinSource(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        source: 'codeOfLaws',
+        value: 3,
+      }),
+    )
+    state = unwrap(
+      setCoinSource(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        source: 'sheet',
+        value: 2,
+      }),
+    )
+
+    state = unwrap(removeTech(state, { playerId: CASH1981, techName: 'Code of Laws' }))
+
+    expect(findPlayer(state, CASH1981)?.stats.coinSources).toEqual({
+      ...EMPTY_COIN_SOURCES,
+      sheet: 2,
+    })
+  })
+
+  it('leaves every counter alone when the removed tech has no coin source', () => {
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
+    state = unwrap(
+      setCoinSource(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        source: 'bureaucracy',
+        value: 1,
+      }),
+    )
+
+    state = unwrap(removeTech(state, { playerId: CASH1981, techName: 'Navy' }))
+
+    expect(findPlayer(state, CASH1981)?.stats.coinSources.bureaucracy).toBe(1)
+  })
+
+  it('clears the Organized Religion counter when the policy is removed', () => {
+    const game = firstCivGame()
+    const policy = game.socialPolicies.find(
+      (candidate) => candidate.name === 'Organized Religion',
+    )
+    if (policy === undefined) throw new Error('Organized Religion is missing from the data set')
+
+    let state = unwrap(chooseSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
+    state = unwrap(
+      setCoinSource(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        source: 'organizedReligion',
+        value: 1,
+      }),
+    )
+    state = unwrap(
+      setCoinSource(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        source: 'terrain',
+        value: 1,
+      }),
+    )
+
+    state = unwrap(removeSocialPolicy(state, { playerId: CASH1981, name: policy.name }))
+
+    expect(findPlayer(state, CASH1981)?.stats.coinSources).toEqual({
+      ...EMPTY_COIN_SOURCES,
+      terrain: 1,
+    })
+  })
+
+  it('clears the Democracy (Govt) counter when the government leaves Democracy', () => {
+    let state = unwrap(
+      setPlayerGovernment(firstCivGame(), {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        government: 'Democracy',
+      }),
+    )
+    state = unwrap(
+      setCoinSource(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        source: 'democracyGovernment',
+        value: 1,
+      }),
+    )
+    state = unwrap(
+      setCoinSource(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        source: 'greatPeople',
+        value: 1,
+      }),
+    )
+
+    state = unwrap(
+      setPlayerGovernment(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        government: 'Monarchy',
+      }),
+    )
+
+    expect(findPlayer(state, CASH1981)?.stats.coinSources).toEqual({
+      ...EMPTY_COIN_SOURCES,
+      greatPeople: 1,
+    })
+  })
+
+  it('does not touch another player’s counters when a source is removed', () => {
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Pottery' }))
+    state = unwrap(
+      setCoinSource(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: KARANDRAS1,
+        source: 'pottery',
+        value: 2,
+      }),
+    )
+
+    state = unwrap(removeTech(state, { playerId: CASH1981, techName: 'Pottery' }))
+
+    expect(findPlayer(state, CASH1981)?.stats.coinSources.pottery).toBe(0)
+    expect(findPlayer(state, KARANDRAS1)?.stats.coinSources.pottery).toBe(2)
+  })
+
+  it('adds no log line of its own when a removal clears a counter', () => {
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Pottery' }))
+    state = unwrap(
+      setCoinSource(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        source: 'pottery',
+        value: 1,
+      }),
+    )
+    const afterCoinLog = state.log.length
+
+    state = unwrap(removeTech(state, { playerId: CASH1981, techName: 'Pottery' }))
+
+    expect(state.log.length).toBe(afterCoinLog + 1)
   })
 })
 

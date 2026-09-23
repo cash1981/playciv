@@ -11,6 +11,14 @@
  *
  * The counters are bookkeeping, like the rest of the status board: no card
  * effect is applied and nothing beyond the printed limit is enforced.
+ *
+ * Issue #158: most sources only exist while the card or card-like thing that
+ * holds them does — a tech is researched and revealed, a social policy is
+ * chosen, the Democracy government is in play, the Panama Canal wonder is on
+ * the table. {@link techCoinSource} and {@link socialPolicyCoinSource} are the
+ * name → source mapping the engine and the client share, and the three
+ * reducers that invalidate a source reset its counter instead of leaving a
+ * hidden value behind. See `docs/agents/tasks/issue-158-valid-coins.md`.
  */
 
 export interface CoinSource {
@@ -45,7 +53,10 @@ export const COIN_SOURCES = [
   { key: 'computers', label: 'Computers (IV)', help: '1 coin', max: 1 },
   { key: 'bank', label: 'Bank (Building)', help: '1 coin', max: 1 },
   { key: 'democracyGovernment', label: 'Democracy (Govt)', help: '1 coin', max: 1 },
-  { key: 'greatPeople', label: 'Great People', help: '50% chance of providing 1 coin', max: 1 },
+  // The human asked for the "50% chance of providing 1 coin" text to go
+  // (issue #158): the source needs no explanation, and the Coins tab only
+  // shows it while it is real anyway.
+  { key: 'greatPeople', label: 'Great People', help: '', max: 1 },
   { key: 'terrain', label: 'Terrain', help: 'Some terrain spots provide 1 coin', max: 1 },
   {
     key: 'panamaCanal',
@@ -90,6 +101,62 @@ export const EMPTY_COIN_SOURCES: CoinSources = {
 const BY_KEY: ReadonlyMap<string, CoinSource> = new Map(
   COIN_SOURCES.map((source) => [source.key, source] as const),
 )
+
+/**
+ * The tech cards that hold coin tokens, by printed tech name. The player's
+ * chosen tech is a copy of the catalogue entry, so the name is the identity.
+ */
+const TECH_COIN_SOURCES: ReadonlyMap<string, CoinSourceKey> = new Map([
+  ['Code of Laws', 'codeOfLaws'],
+  ['Pottery', 'pottery'],
+  ['Civil Service', 'civilService'],
+  ['Democracy', 'democracy'],
+  ['Printing Press', 'printingPress'],
+  ['Bureaucracy', 'bureaucracy'],
+  ['Railroad', 'railroad'],
+  ['Computers', 'computers'],
+])
+
+/**
+ * The coin source a tech's card holds, or `undefined` for every other tech.
+ * `removeTech` clears the source, and the Coins tab only offers it to a player
+ * who has the tech revealed.
+ */
+export function techCoinSource(techName: string): CoinSourceKey | undefined {
+  return TECH_COIN_SOURCES.get(techName)
+}
+
+/**
+ * The coin source a social policy holds. Organized Religion is the only policy
+ * on the reference sheet that gains a coin; its flipside, Natural Religion,
+ * prints a different effect and does not.
+ */
+export function socialPolicyCoinSource(policyName: string): CoinSourceKey | undefined {
+  return policyName === 'Organized Religion' ? 'organizedReligion' : undefined
+}
+
+/**
+ * The sources the Coins table always offers, for every player. None of them is
+ * tracked per player in the game state: the Bank building and the Great Person
+ * draws are public events, terrain coin spots sit on the shared board, and
+ * Sheet is the catch-all the human asked for. The other rows are conditional;
+ * see `techCoinSource`, `socialPolicyCoinSource` and `docs/agents/tasks/issue-158-valid-coins.md`.
+ */
+export const ALWAYS_AVAILABLE_COIN_SOURCES: readonly CoinSourceKey[] = [
+  'bank',
+  'greatPeople',
+  'terrain',
+  'sheet',
+]
+
+/** A copy of the counters with one source set to `value`. */
+export function withCoinSource(
+  sources: CoinSources,
+  key: CoinSourceKey,
+  value: number,
+): CoinSources {
+  return { ...sources, [key]: value } as CoinSources
+}
 
 /**
  * The source for a key, or `undefined` when the key is unknown. A key arriving

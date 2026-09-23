@@ -475,7 +475,14 @@ Railroad, Computers, Bank, Democracy (Govt), Great People, Terrain, Panama
 Canal, Organized Religion and Sheet — capped at the limit printed on the
 reference sheet (4 on the four coin-token techs, 1 on the static sources, none
 on Sheet or Panama Canal), with the status table's Coins column as the
-read-only sum. The player assigned to *The Internet* can hold up to two extra
+read-only sum. Only the sources a player actually has get a counter in that
+player's column: a revealed coin-token tech, a revealed Organized Religion
+policy, the Democracy government, and the Panama Canal in the Wonders area,
+plus the four always-available rows Bank, Great People, Terrain and Sheet. A
+row nobody can use is not drawn, and a counter that still holds coins stays
+visible until it is lowered. Removing the source — a government change away
+from Democracy, a removed tech or social policy — clears its counter. The
+player assigned to *The Internet* can hold up to two extra
 coins on each of the four technology sources; the counters remain manual, so
 no coins are added automatically. Wonders in play are listed with an
 assignable owner. A game saved with the old single coin number loses it: the human
