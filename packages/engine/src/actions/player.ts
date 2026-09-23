@@ -15,6 +15,7 @@ import {
   leaderAssetId,
   startingCorner,
 } from '../board.js'
+import { findCoinSource } from '../coins.js'
 import type { EngineError } from '../errors.js'
 import type { Government } from '../government.js'
 import { isGovernment, startingGovernmentFor } from '../government.js'
@@ -825,8 +826,7 @@ export function saveNote(state: GameState, playerId: string, note: string): Acti
 // reach across the physical table and update someone else's tally.
 // ---------------------------------------------------------------------------
 
-const STAT_KEYS: readonly (keyof PlayerStats)[] = [
-  'coins',
+const STAT_KEYS = [
   'trade',
   'culture',
   'infantry',
@@ -840,10 +840,16 @@ const STAT_KEYS: readonly (keyof PlayerStats)[] = [
   'infra',
   'mic',
   'pe',
-]
+] as const satisfies readonly (keyof PlayerStats)[]
 
-const STAT_LABEL: Readonly<Record<keyof PlayerStats, string>> = {
-  coins: 'coins',
+/**
+ * A status-board key `setPlayerStat` accepts. Coin sources are deliberately not
+ * here: they are a record of their own, written through `setCoinSource`, so
+ * `stat: 'coinSources'` is a compile error rather than an `UNKNOWN_STAT`.
+ */
+export type PlayerStatKey = (typeof STAT_KEYS)[number]
+
+const STAT_LABEL: Readonly<Record<PlayerStatKey, string>> = {
   trade: 'trade',
   culture: 'culture',
   infantry: 'infantry',
@@ -859,7 +865,7 @@ const STAT_LABEL: Readonly<Record<keyof PlayerStats, string>> = {
   pe: 'PE',
 }
 
-function isPlayerStatKey(stat: string): stat is keyof PlayerStats {
+function isPlayerStatKey(stat: string): stat is PlayerStatKey {
   return (STAT_KEYS as readonly string[]).includes(stat)
 }
 
@@ -867,14 +873,14 @@ function isPlayerStatKey(stat: string): stat is keyof PlayerStats {
  * The value `setPlayerStat` accepts for a given stat. Everything is a number
  * except Movement (issue #102), whose expression (`3+1`) is a string — though a
  * bare number is still accepted and normalised, so older callers keep working.
- * `K` is inferred from `stat`, so passing a Movement expression to `coins` is a
- * compile error as well as a runtime one.
+ * `K` is inferred from `stat`, so passing a Movement expression to `combat` is
+ * a compile error as well as a runtime one.
  */
-export type PlayerStatValue<K extends keyof PlayerStats> = K extends 'mvmt'
+export type PlayerStatValue<K extends PlayerStatKey> = K extends 'mvmt'
   ? number | string
   : PlayerStats[K]
 
-export type SetPlayerStatInput<K extends keyof PlayerStats = keyof PlayerStats> = {
+export type SetPlayerStatInput<K extends PlayerStatKey = PlayerStatKey> = {
   readonly editorPlayerId: string
   readonly targetPlayerId: string
   readonly stat: K
@@ -888,7 +894,7 @@ export type SetPlayerStatInput<K extends keyof PlayerStats = keyof PlayerStats> 
  * other current player's numbers — the board is shared bookkeeping, not a
  * private hand, so there is no owner-only restriction here.
  */
-export function setPlayerStat<K extends keyof PlayerStats>(
+export function setPlayerStat<K extends PlayerStatKey>(
   state: GameState,
   input: SetPlayerStatInput<K>,
 ): ActionResult {
@@ -981,6 +987,68 @@ export function setPlayerGovernment(
     editor.playerId === target.playerId
       ? `set their government to ${input.government}`
       : `set ${target.username}'s government to ${input.government}`
+
+  return ok(
+    appendLog(next, {
+      username: editor.username,
+      playerId: editor.playerId,
+      publicLog: `${editor.username} ${message}`,
+      privateLog: '',
+      createdAt: input.at ?? null,
+    }),
+  )
+}
+
+export interface SetCoinSourceInput {
+  readonly editorPlayerId: string
+  readonly targetPlayerId: string
+  /** The row's key from {@link COIN_SOURCES}; validated at runtime. */
+  readonly source: string
+  readonly value: number
+  /** ISO timestamp for the log entry. The engine itself stays pure. */
+  readonly at?: string
+}
+
+/**
+ * Sets one coin counter on a player's status board. Like `setPlayerStat`, any
+ * current player may maintain any other player's counters — they are shared
+ * bookkeeping, not a private hand. The value must be a whole number from zero
+ * up to the source's printed limit; `null` means no limit, as the reference
+ * sheet prints none for the Sheet pile and Panama Canal.
+ */
+export function setCoinSource(state: GameState, input: SetCoinSourceInput): ActionResult {
+  const editorAccess = requireAccess(state, input.editorPlayerId)
+  if (!editorAccess.ok) return editorAccess
+  const editor = editorAccess.value
+
+  const targetAccess = requireAccess(state, input.targetPlayerId)
+  if (!targetAccess.ok) return targetAccess
+  const target = targetAccess.value
+
+  const source = findCoinSource(input.source)
+  if (source === undefined) {
+    return err({ kind: 'UNKNOWN_COIN_SOURCE', source: input.source })
+  }
+
+  const max = source.max
+  if (!Number.isInteger(input.value) || input.value < 0 || (max !== null && input.value > max)) {
+    return err({ kind: 'INVALID_COIN_VALUE', value: input.value, max })
+  }
+
+  const next = withPlayer(state, {
+    ...target,
+    stats: {
+      ...target.stats,
+      // The lookup above proves the key; a computed key cannot carry its
+      // narrowed type through the spread, so the cast states what is known.
+      coinSources: { ...target.stats.coinSources, [source.key]: input.value } as PlayerStats['coinSources'],
+    },
+  })
+
+  const message =
+    editor.playerId === target.playerId
+      ? `set their coins on ${source.label} to ${input.value}`
+      : `set ${target.username}'s coins on ${source.label} to ${input.value}`
 
   return ok(
     appendLog(next, {

@@ -1,7 +1,8 @@
 /**
  * The status board (issue #43), which replaces the manual spreadsheet the
- * players used to keep next to the game: coins, trade, culture and victory
- * points, plus a few numbers derived from the board itself.
+ * players used to keep next to the game: trade, culture and victory points,
+ * plus a few numbers derived from the board itself. The coin sources get their
+ * own file, `coin-sources.test.ts`.
  *
  * There is no old system to port here — Java had no board and no status
  * board at all — so these tests are written directly against the brief.
@@ -11,7 +12,8 @@ import { describe, expect, it } from 'vitest'
 
 import { placePiece } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
-import { chooseTech, revealItem, setPlayerStat } from '../src/actions/player.js'
+import { chooseTech, revealItem, setCoinSource, setPlayerStat } from '../src/actions/player.js'
+import { EMPTY_COIN_SOURCES } from '../src/coins.js'
 import { createGame } from '../src/create-game.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -57,7 +59,7 @@ function chooseCiv(start: GameState, playerId: string): GameState {
 describe('setPlayerStat', () => {
   it('starts the status board with the requested defaults', () => {
     expect(findPlayer(firstCivGame(), CASH1981)?.stats).toMatchObject({
-      coins: 0,
+      coinSources: EMPTY_COIN_SOURCES,
       trade: 0,
       culture: 0,
       infantry: 1,
@@ -74,7 +76,7 @@ describe('setPlayerStat', () => {
     })
   })
 
-  it('fills new status fields on an older saved player without losing old values', () => {
+  it('fills new status fields on an older saved player and replaces the legacy coin number', () => {
     const original = firstCivGame()
     const older = {
       ...original,
@@ -85,12 +87,12 @@ describe('setPlayerStat', () => {
     } as unknown as GameState
 
     const migrated = migrateGameState(older)
-    expect(findPlayer(migrated, CASH1981)?.stats).toEqual({
-      ...DEFAULT_PLAYER_STATS,
-      coins: 9,
-      trade: 2,
-      culture: 4,
-    })
+    const stats = findPlayer(migrated, CASH1981)?.stats
+    expect(stats).toEqual({ ...DEFAULT_PLAYER_STATS, trade: 2, culture: 4 })
+    // The single legacy number is replaced by the counters, per the human:
+    // "Det tallet som står der idag på coins tallet på eksisterende spill skal
+    // erstattes med det nye."
+    expect(Object.hasOwn(stats ?? {}, 'coins')).toBe(false)
   })
 
   it('normalises a numeric Movement from a game saved before issue #102', () => {
@@ -111,14 +113,14 @@ describe('setPlayerStat', () => {
       setPlayerStat(firstCivGame(), {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
-        stat: 'coins',
+        stat: 'culture',
         value: 7,
       }),
     )
 
-    expect(findPlayer(state, CASH1981)?.stats.coins).toBe(7)
+    expect(findPlayer(state, CASH1981)?.stats.culture).toBe(7)
     const entry = state.log.at(-1)
-    expect(entry?.publicLog).toBe('cash1981 set their coins to 7')
+    expect(entry?.publicLog).toBe('cash1981 set their culture to 7')
     expect(entry?.privateLog).toBe('')
   })
 
@@ -137,12 +139,12 @@ describe('setPlayerStat', () => {
     expect(state.log.at(-1)?.publicLog).toBe("cash1981 set Karandras1's trade to 3")
   })
 
-  it('leaves the other three stats untouched', () => {
+  it('leaves the other stats untouched', () => {
     let state = unwrap(
       setPlayerStat(firstCivGame(), {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
-        stat: 'coins',
+        stat: 'culture',
         value: 5,
       }),
     )
@@ -157,7 +159,7 @@ describe('setPlayerStat', () => {
 
     expect(findPlayer(state, CASH1981)?.stats).toEqual({
       ...DEFAULT_PLAYER_STATS,
-      coins: 5,
+      culture: 5,
       combat: 2,
     })
   })
@@ -167,7 +169,7 @@ describe('setPlayerStat', () => {
       setPlayerStat(firstCivGame(), {
         editorPlayerId: 'not-a-player',
         targetPlayerId: CASH1981,
-        stat: 'coins',
+        stat: 'trade',
         value: 1,
       }),
     )
@@ -179,7 +181,7 @@ describe('setPlayerStat', () => {
       setPlayerStat(firstCivGame(), {
         editorPlayerId: CASH1981,
         targetPlayerId: 'not-a-player',
-        stat: 'coins',
+        stat: 'trade',
         value: 1,
       }),
     )
@@ -206,7 +208,7 @@ describe('setPlayerStat', () => {
         setPlayerStat(firstCivGame(), {
           editorPlayerId: CASH1981,
           targetPlayerId: CASH1981,
-          stat: 'coins',
+          stat: 'culture',
           value,
         }),
       )
@@ -294,8 +296,8 @@ describe('setPlayerStat', () => {
       setPlayerStat(firstCivGame(), {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
-        stat: 'coins',
-        // @ts-expect-error — a Movement expression is not a valid coins value
+        stat: 'combat',
+        // @ts-expect-error — a Movement expression is not a valid combat value
         value: '3+1',
       }),
     )
@@ -361,10 +363,10 @@ describe('cityCountOf and buildingCountOf', () => {
 describe('projections carry the status board', () => {
   it('toPlayerView exposes stats and the derived board numbers for yourself and opponents', () => {
     let state = unwrap(
-      setPlayerStat(fourColorGame(), {
+      setCoinSource(fourColorGame(), {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
-        stat: 'coins',
+        source: 'codeOfLaws',
         value: 4,
       }),
     )
@@ -380,7 +382,10 @@ describe('projections carry the status board', () => {
     expect(view.you?.buildingCount).toBe(0)
 
     const cash = view.opponents.find((opponent) => opponent.playerId === CASH1981)
-    expect(cash?.stats).toEqual({ ...DEFAULT_PLAYER_STATS, coins: 4 })
+    expect(cash?.stats).toEqual({
+      ...DEFAULT_PLAYER_STATS,
+      coinSources: { ...EMPTY_COIN_SOURCES, codeOfLaws: 4 },
+    })
     expect(cash?.cityCount).toBe(1)
     expect(cash?.buildingCount).toBe(0)
     expect(cash?.cultureMarkerLevel).toBeNull()

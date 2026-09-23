@@ -40,6 +40,8 @@ export function statusFor(error: EngineError): number {
     // A player-stat update named an unknown stat or an invalid value
     case 'UNKNOWN_STAT':
     case 'INVALID_STAT_VALUE':
+    case 'UNKNOWN_COIN_SOURCE':
+    case 'INVALID_COIN_VALUE':
     case 'UNKNOWN_GOVERNMENT':
     case 'INVALID_ARENA_STAT_VALUE':
     case 'CANNOT_BATTLE_YOURSELF':

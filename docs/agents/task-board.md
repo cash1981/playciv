@@ -12,31 +12,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-140-tech-policy-tabs
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `feat/issue-140-tech-policy-tabs`
-- **Brief:** `docs/agents/tasks/issue-140-tech-policy-tabs.md`
-- **Status:** review-approved — PR #143 open, awaiting the human's merge. Claim
-  kept until merged.
-- **Claimed paths:**
-  - `packages/engine/src/state.ts` (`OpaquePlayerhand` and `opaque()` only)
-  - `packages/engine/test/hidden-info.test.ts`
-  - `packages/web/src/views/PlayerTabs.tsx` (new), `packages/web/src/views/PlayerTabs.css` (new)
-  - `packages/web/src/views/TechPanel.tsx`, `packages/web/src/views/TechPanel.test.tsx`
-  - `packages/web/src/views/SocialPolicyPanel.tsx` (new), `packages/web/src/views/SocialPolicyPanel.test.tsx` (new)
-  - `packages/web/src/views/GameView.tsx` (the panel list only)
-  - `docs/agents/tasks/issue-140-tech-policy-tabs.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
-- **Notes:** Issue #140. Splits the combined Techs & Social policy panel into two
-  panels, each with a tab per player. Other players' revealed social policies
-  become visible through a new `OpaquePlayerhand.revealedSocialPolicies`
-  projection (no new route). The human chose: own data as the first tab,
-  username + player colour labels, pickers above the tabs. `styles.css` and
-  `api.ts` are not touched. This claim replaced every claim that stood here
-  before; all of those PRs are merged (checked with `gh pr list --state merged`),
-  so their paths are free.
+_Nothing claimed. `coin-tab` is review-approved and awaits the human's merge as
+its pull request; the claim was released with this change._
 
 ---
 
