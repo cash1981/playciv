@@ -30,13 +30,17 @@ current TypeScript.
 **In:**
 
 - Ensure only the signed-in player's own, editable workspace records turn-order
-  drafts and live-dirty markers.
-- Ensure a read-only editor never reports a change to its parent.
-- Regression tests for both: switching away from and back to your own tab keeps
-  your text.
+  drafts and live-dirty markers, so a read-only opponent editor can never write
+  the signed-in player's draft.
+- Regression test: switching away from and back to your own tab keeps your text.
 
 **Out:**
 
+- Changing `MarkdownEditor`'s read-only emission. An editor can be read-only
+  only transiently on the signed-in player's own tab (while a save or another
+  action is in flight), and suppressing its changes there would risk dropping
+  the final keystrokes. The ownership check belongs in `TurnPanel`, which knows
+  whose orders are shown.
 - Any change to what the server sends for another player's turn orders
   (revealing rules, projection) — untouched.
 - The private log — it is a single signed-in-player surface and is not part of
@@ -52,22 +56,18 @@ draft bookkeeping is the reference.
 
 ## Approach
 
-Two independent invariants, both currently violated:
-
-1. **`TurnPanel`** keys drafts and live-dirty markers by `${turnNumber}:${phase}`
-   with no player, and wires `onPhaseChange` / `onPhaseDirty` for whichever
-   player tab is showing. Guard both handlers so only the signed-in player's own
-   workspace writes them; another player's orders never become your draft.
-2. **`MarkdownEditor`** flushes `getMarkdown()` through `onChange` on unmount
-   even when `readOnly`. Crepe can serialize the mounted document differently
-   from the value it was given (a trailing newline is enough), so a read-only
-   opponent editor reports a "change" that the parent stores as the signed-in
-   player's. A read-only editor must not emit changes at all.
+One invariant, currently violated: **`TurnPanel`** keys drafts and live-dirty
+markers by `${turnNumber}:${phase}` with no player, and wires `onPhaseChange` /
+`onPhaseDirty` for whichever player tab is showing. Guard both handlers so only
+the signed-in player's own workspace writes them; another player's read-only
+orders never become your draft. A read-only editor may still report a change —
+it flushes its document through `onChange` on unmount, and Crepe can serialize
+that document differently from the value it was given — but the handler now
+ignores it because the workspace is not the signed-in player's own.
 
 ## Claimed paths
 
 - `packages/web/src/views/TurnPanel.tsx`
-- `packages/web/src/views/MarkdownEditor.tsx`
 - `packages/web/src/views/TurnPanel.test.tsx`
 - `docs/agents/tasks/turn-order-draft-bleed.md`
 - `docs/agents/task-board.md`
@@ -77,10 +77,8 @@ Two independent invariants, both currently violated:
 
 - [ ] Switching to another player's tab and back to your own leaves your own
       phase text unchanged.
-- [ ] A read-only `MarkdownEditor` never calls `onChange`, including on unmount
-      when its serialized Markdown differs from its given value.
-- [ ] "Save all changes" on the signed-in player's tab never sends another
-      player's text.
+- [ ] A read-only opponent editor cannot write a draft or a live-dirty marker,
+      so "Save all changes" never sends another player's text.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
 - [ ] Hidden information: a read-only opponent editor cannot write a draft, so
       it cannot be submitted as the signed-in player's orders; covered by the

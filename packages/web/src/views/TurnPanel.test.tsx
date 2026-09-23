@@ -32,8 +32,6 @@ const milkdownLifecycle = vi.hoisted(() => ({
   create: (): Promise<void> => Promise.resolve(),
   getMarkdownCalls: 0,
   instances: [] as MockCrepeBuilderRecord[],
-  /** Simulates Crepe serializing the document differently from its value. */
-  serialize: (markdown: string): string => markdown,
 }))
 
 vi.mock('@milkdown/crepe/builder', () => ({
@@ -72,7 +70,7 @@ vi.mock('@milkdown/crepe/builder', () => ({
     getMarkdown(): string {
       milkdownLifecycle.getMarkdownCalls += 1
       if (!this.created) throw new Error('getMarkdown called before create completed')
-      return milkdownLifecycle.serialize(this.markdown)
+      return this.markdown
     }
 
     destroy(): Promise<void> {
@@ -196,7 +194,6 @@ afterEach(() => {
   milkdownLifecycle.create = () => Promise.resolve()
   milkdownLifecycle.getMarkdownCalls = 0
   milkdownLifecycle.instances.length = 0
-  milkdownLifecycle.serialize = (markdown) => markdown
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
@@ -273,39 +270,6 @@ describe('MarkdownEditor lifecycle', () => {
 
     expect(saved).toEqual(['Fallback Markdown'])
     expect(milkdownLifecycle.getMarkdownCalls).toBe(0)
-  })
-
-  it('reports an editable document when it unmounts but never a read-only one', async () => {
-    // Crepe can serialize the mounted document differently from the value it
-    // was given — a trailing newline is enough. That difference must not look
-    // like a change when the editor is read-only (another player's orders).
-    milkdownLifecycle.serialize = (markdown) => `${markdown}\n`
-
-    const editableChange = vi.fn()
-    const editable = render(
-      <MarkdownEditor
-        value="My orders"
-        onChange={editableChange}
-        readOnly={false}
-        ariaLabel="Editable editor"
-      />,
-    )
-    await waitFor(() => expect(milkdownLifecycle.instances).toHaveLength(1))
-    editable.unmount()
-    expect(editableChange).toHaveBeenCalledWith('My orders\n')
-
-    const readOnlyChange = vi.fn()
-    const readOnly = render(
-      <MarkdownEditor
-        value="Their orders"
-        onChange={readOnlyChange}
-        readOnly={true}
-        ariaLabel="Read-only editor"
-      />,
-    )
-    await waitFor(() => expect(milkdownLifecycle.instances).toHaveLength(2))
-    readOnly.unmount()
-    expect(readOnlyChange).not.toHaveBeenCalled()
   })
 })
 
