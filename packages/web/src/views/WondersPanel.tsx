@@ -28,7 +28,7 @@ export function WondersPanel({
   ]
 
   return (
-    <CollapsiblePanel id="wonders" title={`Wonders in play (${pieces.length})`}>
+    <CollapsiblePanel id="wonders" title={`Wonders in play (${pieces.length})`} defaultOpen={false}>
       {pieces.length === 0 ? (
         <p className="muted">No wonders in play.</p>
       ) : (

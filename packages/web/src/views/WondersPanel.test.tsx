@@ -9,7 +9,7 @@ import type { PlayerView } from '../lib/api.js'
 import type { Run } from './GameView.js'
 import { WondersPanel } from './WondersPanel.js'
 
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear() })
 
 const board = createBoard(16, 8)
 const area = wondersArea(board)
@@ -29,6 +29,9 @@ describe('WondersPanel', () => {
   it('lists wonders in play, identifies owners, and persists an owner assignment', async () => {
     const setOwner = vi.spyOn(api, 'setWonderOwner').mockResolvedValue(view)
     render(<WondersPanel gameId="g" view={view} busy={false} readOnly={false} run={run} />)
+    const toggle = screen.getByRole('button', { name: 'Wonders in play (1)' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(toggle)
     expect(screen.getByText('The Internet')).toBeTruthy()
     expect(screen.queryByText('Red army')).toBeNull()
     const owner = screen.getByRole('combobox', { name: 'The Internet owner' }) as HTMLSelectElement
@@ -45,6 +48,6 @@ describe('WondersPanel', () => {
 
   it('keeps owner controls disabled in a read-only view', () => {
     render(<WondersPanel gameId="g" view={view} busy={false} readOnly={true} run={run} />)
-    expect((screen.getByRole('combobox', { name: 'The Internet owner' }) as HTMLSelectElement).disabled).toBe(true)
+    expect((screen.getByRole('combobox', { name: 'The Internet owner', hidden: true }) as HTMLSelectElement).disabled).toBe(true)
   })
 })
