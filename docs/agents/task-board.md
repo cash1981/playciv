@@ -12,31 +12,32 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-140-tech-policy-tabs
+### coin-tab
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `feat/issue-140-tech-policy-tabs`
-- **Brief:** `docs/agents/tasks/issue-140-tech-policy-tabs.md`
-- **Status:** review-approved — PR #143 open, awaiting the human's merge. Claim
-  kept until merged.
+- **Branch:** `feat/coin-tab`
+- **Brief:** `docs/agents/tasks/coin-tab.md`
+- **Status:** in progress
 - **Claimed paths:**
-  - `packages/engine/src/state.ts` (`OpaquePlayerhand` and `opaque()` only)
-  - `packages/engine/test/hidden-info.test.ts`
-  - `packages/web/src/views/PlayerTabs.tsx` (new), `packages/web/src/views/PlayerTabs.css` (new)
-  - `packages/web/src/views/TechPanel.tsx`, `packages/web/src/views/TechPanel.test.tsx`
-  - `packages/web/src/views/SocialPolicyPanel.tsx` (new), `packages/web/src/views/SocialPolicyPanel.test.tsx` (new)
-  - `packages/web/src/views/GameView.tsx` (the panel list only)
-  - `docs/agents/tasks/issue-140-tech-policy-tabs.md`
+  - `packages/engine/src/coins.ts` (new)
+  - `packages/engine/src/state.ts` (`PlayerStats`, `DEFAULT_PLAYER_STATS`)
+  - `packages/engine/src/actions/player.ts` (`STAT_KEYS`, `STAT_LABEL`, `setPlayerStat`, `setCoinSource`)
+  - `packages/engine/src/errors.ts`, `packages/engine/src/index.ts`, `packages/engine/src/migrate.ts`
+  - `packages/engine/test/player-stats.test.ts`, `packages/engine/test/coin-sources.test.ts` (new)
+  - `packages/server/src/routes/play.ts` (the new coin route only)
+  - `packages/server/src/errors.ts`, `packages/server/test/api.test.ts`
+  - `packages/web/src/lib/api.ts` (`setPlayerCoin` only)
+  - `packages/web/src/views/StatusPanel.tsx`, `packages/web/src/views/StatusPanel.test.tsx`
+  - `packages/web/src/views/PlayerTabs.tsx` (doc comment only)
+  - `packages/web/src/styles.css`
+  - `docs/agents/tasks/coin-tab.md`
   - `docs/agents/task-board.md`
   - `docs/agents/state.md`, `docs/agents/decisions.md`, `README.md`
-- **Notes:** Issue #140. Splits the combined Techs & Social policy panel into two
-  panels, each with a tab per player. Other players' revealed social policies
-  become visible through a new `OpaquePlayerhand.revealedSocialPolicies`
-  projection (no new route). The human chose: own data as the first tab,
-  username + player colour labels, pickers above the tabs. `styles.css` and
-  `api.ts` are not touched. This claim replaced every claim that stood here
-  before; all of those PRs are merged (checked with `gh pr list --state merged`),
-  so their paths are free.
+- **Notes:** The new **Coins** tab in Player status: one counter per coin source
+  per player, capped at 4 / 1, unlimited for Sheet and Panama Canal, and a
+  read-only total in the status table. The Internet is deferred to issue #145.
+  This claim also releases `issue-140-tech-policy-tabs` (PR #143 merged; checked
+  with `gh pr view 143`).
 
 ---
 
@@ -69,8 +70,8 @@ at a time. Claim them by name.
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
-| `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | free |
+| `packages/engine/src/state.ts` (`PlayerView` shape) | `coin-tab` (DeepSeek V4.1 Flash) |
+| `packages/web/src/lib/api.ts` | `coin-tab` (DeepSeek V4.1 Flash) |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.
