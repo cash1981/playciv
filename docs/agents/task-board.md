@@ -12,22 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-146-turnpanel-test-flake
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `fix/issue-146-turnpanel-test-flake`
-- **Brief:** `docs/agents/tasks/issue-146-turnpanel-test-flake.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/TurnPanel.test.tsx`
-  - `docs/agents/tasks/issue-146-turnpanel-test-flake.md`
-  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
-- **Notes:** Issue #146. Test-only: removes the file's wall-clock waits
-  (`waitFor`/`findBy*`) in favour of `act` flushes and
-  `vi.dynamicImportSettled()`. The `issue-139-poll-retry` and
-  `issue-140-tech-policy-tabs` claims that stood here were released in this
-  change: their PRs (#148, #143) are merged and their paths are free. No
-  `rules-checker` pass: no game rule, deck, log text or projection changes.
+_Nothing claimed._
 
 ---
 

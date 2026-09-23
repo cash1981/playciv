@@ -2043,3 +2043,32 @@ the conventional name lets an OS find it without a link; and the old `?v=2`
 cache-buster is dropped because Vite fingerprints the build and the query string
 only existed to bust an old CDN cache. Nothing else changed, and no game state,
 rule or projection is touched.
+---
+
+## 2026-09-23 — Web tests do not race wall-clock polls
+
+**Decision.** Where a web test waits for something promise-driven, it waits on
+microtasks, not on a deadline: an `act` flush for the mocked api promises and
+the render they trigger, `vi.dynamicImportSettled()` for the module runner's
+dynamic imports. Testing Library's `findBy*`/`waitFor` one-second deadline is
+not used there.
+
+**Why.** Issue #146: `TurnPanel.test.tsx`'s `MarkdownEditor lifecycle` test
+waited for the mocked editor's dynamic imports, which Vite serves through the
+transform pipeline shared by every parallel worker. Under load the imports can
+miss the one-second deadline. Reproduced in full web-suite runs — twice in six
+on an idle machine, twice in two under twelve CPU burners — always as
+`AssertionError: expected [] to have a length of 1` at the `waitFor`, or as
+Vitest's 5 s test kill. Vitest's fake timers do not make Testing Library's
+deadline virtual either: `@testing-library/dom` 10.4.2 only consults them when
+a global `jest` exists, which Vitest does not define.
+
+**Consequences.** The file passes where it failed: three full web suites and
+one full `pnpm -r test` green under the burners, while the previous file failed
+2 of 2 under the same load. Removing the polling also makes the file faster
+(about 2.3 s to 1 s when run alone). The waits now have no wall-clock deadline
+at all, so a genuine regression still fails the assertion, just without a
+one-second grace period. Raising `testTimeout` or lowering `maxWorkers` was
+rejected: it hides the race. `BoardView`, `LoginView` and `StatusPanel` were
+seen hitting the 5 s kill in the same loads; that is outside #146 and is
+reported to the human rather than changed here.
