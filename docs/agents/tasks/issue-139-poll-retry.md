@@ -35,7 +35,10 @@ answered `200` on 8 of 8 requests on 2026-09-23, recorded on #139.
 **In:**
 
 - A bounded retry in `api.ts`: at most two more attempts, 250 ms then 1 s, and
-  **only** for `GET` requests that answer `502`, `503` or `504`.
+  **only** for `GET` requests that answer `502`, `503` or `504`. A GET is safe to
+  retry because every one the client makes is idempotent — including the
+  revisions route, whose only side effect (`ensureGameRevision`) is guarded and
+  idempotent — not because a GET is read-only.
 - A poll that reads the game first and skips the revision list while `rev` has
   not moved (`loadAfterKnownRevision`), delegating to the existing history-first
   pair (`loadConsistentLive`, issue #70) when it has.
@@ -45,8 +48,10 @@ answered `200` on 8 of 8 requests on 2026-09-23, recorded on #139.
 
 - **Paginating or caching the revision list.** The largest remaining item and a
   design of its own; #139 says nothing needs it yet. Next slice if wanted.
-- **Retrying writes.** The game's actions are not idempotent: a retried
-  `endTurn` or `draw` could apply twice. Only `GET` is retried.
+- **Retrying writes.** The game's own actions are not idempotent: a retried
+  `endTurn` or `draw` could apply twice. The retry boundary is therefore the
+  method (`GET`), which is safe because the client's GETs are idempotent, not
+  because they are read-only.
 - **Retrying a network-level failure** (`fetch` itself rejecting). The issue
   names transient 5xx; a VPN or offline blip is a different decision.
 - **A behavioural test for the interval itself.** `GameView.test.tsx` keeps
@@ -71,12 +76,15 @@ moves.
   Everything else keeps today's behaviour; the final failure is the same
   `ApiError` as before.
 - `packages/web/src/views/GameView.tsx`: a new exported
-  `loadAfterKnownRevision(loadRevisions, loadView, newestKnownRevision)`.
-  It calls `loadView()` once; when `view.rev <= newestKnownRevision` it returns
+  `loadAfterKnownRevision(loadRevisions, loadView, knownRevision)`.
+  It calls `loadView()` once; when `view.rev === knownRevision` it returns
   `{ view, revisions: null }`, meaning "keep the list you have". Otherwise it
   returns `loadConsistentLive(...)`, so the same-revision guarantee of #70 still
   applies to the read that can actually be inconsistent. `reload` calls
-  `applyRevisionList` only when the list is not `null`.
+  `applyRevisionList` only when the list is not `null`. The predicate compares
+  against the applied view's revision rather than the newest revision number
+  because `rev` also advances on a private note, which writes no revision:
+  "unchanged" is the only safe direction.
 - Tests: `api.test.ts` drives the retry cases with fake timers and asserts a
   write is not retried; `GameView.test.tsx` asserts the skip and the refetch.
 

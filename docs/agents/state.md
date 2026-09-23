@@ -13,11 +13,27 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 450 engine, 174 server, 136 web |
+| `pnpm -r test` | passing - 450 engine, 174 server, 143 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **The 10 s poll skips the history when nothing has moved, and a gateway blip
+  is retried.** Two client-only follow-ups from issue #139. `GameView` reloads
+  through `loadAfterKnownRevision`: it reads the view first and, when `view.rev`
+  equals the revision already applied, keeps the revision list it has; otherwise
+  it reads the history-first pair (issue #70). Since `rev` also advances on a
+  private note that writes no revision, the comparison is against the applied
+  view's revision, not the newest revision number. `api.ts` retries a **GET**
+  twice (250 ms, then 1 s) on `502`/`503`/`504` and never retries a write, which
+  is what the human's original "and a few retries it suddenly worked" wanted.
+  Client-only: no engine, server, route or projection change. Verified:
+  `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (450 engine,
+  174 server, 143 web). One web test failed once under machine load and did not
+  reproduce in 9 later runs (three of them full `pnpm -r test`); the new tests
+  use virtual timers or plain promises and are not load-sensitive. Branch
+  `feat/issue-139-poll-retry`; see `decisions.md`.
 
 - **Down to a single coin marker.** The board palette had five coin variants;
   it now has one. `Coin`, `Coin 2`, `Coin 3` and `Coin 4` are removed from the

@@ -107,20 +107,23 @@ describe('api request error handling', () => {
 })
 
 describe('api retry on a transient gateway failure', () => {
-  it('retries a GET that answers 503 once and then succeeds', async () => {
+  it('retries a GET 250 ms after a 503, then succeeds', async () => {
     const fetchMock = respondInSequence([
       stubResponse(503, 'error code: 1102'),
       stubResponse(200, JSON.stringify({ id: 'some-game', rev: 4 }), 'OK'),
     ])
 
     const pending = api.game('some-game')
-    await vi.advanceTimersByTimeAsync(250)
+    // The retry is not made before the 250 ms back-off elapses.
+    await vi.advanceTimersByTimeAsync(249)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
 
     await expect(pending).resolves.toEqual({ id: 'some-game', rev: 4 })
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('retries a GET twice, with a longer second wait', async () => {
+  it('retries a GET twice, waiting 250 ms and then 1 s', async () => {
     const fetchMock = respondInSequence([
       stubResponse(503, ''),
       stubResponse(502, ''),
@@ -128,7 +131,12 @@ describe('api retry on a transient gateway failure', () => {
     ])
 
     const pending = api.game('some-game')
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    // The second wait is 1 s, so the third attempt is not made at 999 ms.
+    await vi.advanceTimersByTimeAsync(999)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
 
     await expect(pending).resolves.toEqual({ status: 'ok' })
     expect(fetchMock).toHaveBeenCalledTimes(3)

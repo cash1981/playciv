@@ -255,8 +255,10 @@ async function request<T>(
   const payload = parseBody(text)
 
   if (!response.ok) {
-    // Only a safe request is retried: the game's own actions are not
-    // idempotent, so a retried write could apply twice.
+    // Only a GET is retried. That is safe because every GET the client makes
+    // is idempotent — the one side effect, the revisions route's baseline
+    // `ensureGameRevision`, is itself guarded and idempotent — while the game's
+    // own actions are not: a retried `endTurn` or `draw` could apply twice.
     const retryable =
       method === 'GET' && RETRYABLE_STATUSES.has(response.status) && attempt < RETRY_DELAYS_MS.length
     if (retryable) {
