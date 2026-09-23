@@ -11,7 +11,7 @@ describe('Navigation mobile structure', () => {
   it('keeps primary links and account actions in responsive containers', () => {
     render(
       <Navigation
-        player={{ id: 'p1', username: 'cash1981', email: null, role: 'user', disabled: false }}
+        player={{ id: 'p1', username: 'cash1981', email: null, role: 'user', disabled: false, disableEmail: false, emailVerified: true }}
         screen="lobby"
         theme="dark"
         onNavigate={vi.fn()}

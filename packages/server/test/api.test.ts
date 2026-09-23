@@ -201,7 +201,14 @@ describe('auth', () => {
     const again = await inject(app, {
       method: 'POST',
       url: '/api/auth/register',
-      payload: { username: 'CASH1981', password: 'hemmelig', securityAnswer: 'writing' },
+      payload: {
+        username: 'CASH1981',
+        password: 'hemmelig',
+        // Registration now requires an email (issue #42); the username clash is
+        // what this test is about, so a valid unused one keeps it in play.
+        email: 'cash1981b@example.com',
+        securityAnswer: 'writing',
+      },
     })
     expect(again.status).toBe(409)
   })

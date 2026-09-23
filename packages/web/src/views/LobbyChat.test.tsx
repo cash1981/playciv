@@ -18,6 +18,8 @@ const player: PlayerDto = {
   email: null,
   role: 'user',
   disabled: false,
+  disableEmail: false,
+  emailVerified: true,
 }
 
 /** Newest first, like the server: index 0 is the most recent. */

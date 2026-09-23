@@ -17,6 +17,19 @@ export type { FinishedGame }
 
 export type UserRole = 'user' | 'admin'
 
+/**
+ * The social providers the app signs in with. Apple is deliberately absent:
+ * it needs a paid Apple Developer Program membership, which the owner refused.
+ * Adding one later is a new entry in the provider table in `oauth.ts`.
+ */
+export type ProviderId = 'google' | 'facebook' | 'discord'
+
+/** One provider identity linked to an account. Stored as JSON text in D1. */
+export interface OAuthIdentity {
+  readonly provider: ProviderId
+  readonly providerUserId: string
+}
+
 export interface StoredPlayer {
   readonly id: string
   readonly username: string
@@ -32,6 +45,16 @@ export interface StoredPlayer {
    * default; the legacy `player` documents already carry this field.
    */
   readonly disableEmail?: boolean
+  /**
+   * Whether the account has proven control of its address. Optional at the
+   * boundary because the ~554 migrated records predate the field; a missing
+   * value means **verified**, since those accounts are grandfathered. New
+   * records always carry it explicitly, so a forgotten `false` on a fresh
+   * account is a review finding rather than a silent bypass.
+   */
+  readonly emailVerified?: boolean
+  /** Provider identities linked to this account; missing means none. */
+  readonly oauthProviders?: readonly OAuthIdentity[]
 }
 
 export interface PlayerUpdate {
@@ -40,6 +63,8 @@ export interface PlayerUpdate {
   readonly role?: UserRole
   readonly disabled?: boolean
   readonly disableEmail?: boolean
+  readonly emailVerified?: boolean
+  readonly oauthProviders?: readonly OAuthIdentity[]
 }
 
 export interface ChatMessage {

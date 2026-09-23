@@ -65,6 +65,13 @@ export interface PlayerDto {
   readonly email: string | null
   readonly role: 'user' | 'admin'
   readonly disabled: boolean
+  /** Opted out of notification email. Set through the unsubscribe link. */
+  readonly disableEmail: boolean
+  /**
+   * False until the account opens its verification link (issue #42). A missing
+   * stored value means a grandfathered, verified account.
+   */
+  readonly emailVerified: boolean
 }
 
 export interface AdminUserDto extends PlayerDto {
@@ -76,6 +83,13 @@ export interface AdminUserUpdate {
   readonly email?: string | null
   readonly role?: 'user' | 'admin'
   readonly disabled?: boolean
+  readonly emailVerified?: boolean
+}
+
+/** One configured social provider (issue #121); the client shows a button each. */
+export interface AuthProvider {
+  readonly id: string
+  readonly displayName: string
 }
 
 export interface GameSummary {
@@ -318,10 +332,27 @@ export const api = {
       newpassword: newPassword,
     }),
   me: () => get<PlayerDto>('/api/auth/me'),
+  /** Public: only the configured providers are listed (issue #121). */
+  providers: () => get<AuthProvider[]>('/api/auth/providers'),
+  /**
+   * Re-sends the verification link (issue #42), optionally to a new address
+   * that starts out unverified. The one write an unverified account may make.
+   */
+  verifyEmailResend: (email?: string) =>
+    post<{ readonly ok: boolean }>(
+      '/api/auth/verify-email/resend',
+      email === undefined ? {} : { email },
+    ),
+  /** The completion step after a first provider login (issue #121). */
+  completeRegistration: (pending: string, username: string, securityAnswer: string) =>
+    post<AuthResponse>('/api/auth/complete-registration', { pending, username, securityAnswer }),
 
   adminUsers: () => get<AdminUserDto[]>('/api/admin/users'),
   updateAdminUser: (userId: string, changes: AdminUserUpdate) =>
     patch<AdminUserDto>(`/api/admin/users/${userId}`, changes),
+  /** Re-sends a verification link to an account (issue #42). */
+  sendVerification: (userId: string) =>
+    post<{ readonly ok: boolean }>(`/api/admin/users/${userId}/send-verification`),
   deleteAdminUser: (userId: string) => del<void>(`/api/admin/users/${userId}`),
   /** Issue #92. Sends one personalised mail per eligible account. */
   broadcastEmail: (subject: string, markdown: string, includeUnsubscribed: boolean) =>

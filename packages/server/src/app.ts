@@ -6,12 +6,19 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 
-import { ResetTokenSigner, TokenSigner } from './auth.js'
-import type { AppContext, Variables } from './context.js'
+import {
+  EmailVerifyTokenSigner,
+  OAuthStateSigner,
+  PendingRegistrationSigner,
+  ResetTokenSigner,
+  TokenSigner,
+} from './auth.js'
+import type { AppContext, ProviderConfigMap, Variables } from './context.js'
 import { sendError } from './errors.js'
 import type { Mailer } from './mail.js'
 import { noopMailer } from './mail.js'
 import { DEFAULT_APP_ORIGIN, createNotifications } from './notifications.js'
+import { registerOAuthRoutes } from './oauth.js'
 import { registerAuthRoutes } from './routes/auth.js'
 import { registerAdminRoutes } from './routes/admin.js'
 import { registerArenaRoutes } from './routes/arena.js'
@@ -37,6 +44,12 @@ export interface CreateAppOptions {
   readonly mailer?: Mailer
   /** Absolute base URL of the web app, used in email links. */
   readonly appOrigin?: string
+  /**
+   * OAuth providers with credentials (issue #121). A provider without both a
+   * client id and a secret is hidden from `/api/auth/providers` and refused by
+   * the start route, so the client only offers what is configured.
+   */
+  readonly providers?: ProviderConfigMap
   /** Injectable clock for the notification cooldowns; for tests. */
   readonly now?: () => Date
 }
@@ -82,12 +95,16 @@ export function createApp(options: CreateAppOptions): App {
     repo: options.repo,
     tokens: new TokenSigner(options.tokenSecret),
     resetTokens: new ResetTokenSigner(options.tokenSecret),
+    verifyTokens: new EmailVerifyTokenSigner(options.tokenSecret),
+    oauthStates: new OAuthStateSigner(options.tokenSecret),
+    pendingRegistrations: new PendingRegistrationSigner(options.tokenSecret),
     notifications: createNotifications({
       repo: options.repo,
       mailer: options.mailer ?? noopMailer,
       appOrigin,
       ...(options.now !== undefined ? { now: options.now } : {}),
     }),
+    providers: options.providers ?? {},
     appOrigin,
   }
 
@@ -102,6 +119,7 @@ export function createApp(options: CreateAppOptions): App {
   app.get('/api/health', (c) => c.json({ status: 'ok' }))
 
   registerAuthRoutes(app, context)
+  registerOAuthRoutes(app, context)
   registerAdminRoutes(app, context)
   registerGameRoutes(app, context)
   registerPlayRoutes(app, context)

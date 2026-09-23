@@ -18,6 +18,13 @@
  *   APP_ORIGIN     base URL of the web app, defaults to https://playciv.app.
  *                  Used in the links inside notification email.
  *
+ * Social login (issue #121) is configured per provider by a client id and a
+ * client secret; a provider missing either is hidden from the client:
+ *
+ *   GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+ *   FACEBOOK_CLIENT_ID / FACEBOOK_CLIENT_SECRET
+ *   DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET
+ *
  * For local development these can live in a gitignored `packages/server/.env`;
  * `./load-env.js` loads it.
  */
@@ -30,10 +37,12 @@ import { resolve } from 'node:path'
 import { serve } from '@hono/node-server'
 
 import { createApp } from './app.js'
+import type { ProviderCredentials } from './context.js'
 import type { Mailer } from './mail.js'
 import { createResendMailer, noopMailer } from './mail.js'
 import { DEFAULT_APP_ORIGIN } from './notifications.js'
 import { JsonFileRepository } from './store/json-file.js'
+import type { ProviderId } from './store/types.js'
 
 const port = Number(process.env['PORT'] ?? 8787)
 const host = process.env['HOST'] ?? '0.0.0.0'
@@ -66,6 +75,30 @@ if (resendKey === undefined || resendKey === '') {
   console.log(`Email: Resend, from ${mailFrom}`)
 }
 
+// A provider is offered only when both credentials are present; an empty value
+// counts as absent, so an unfilled `.env` line does not enable anything.
+const providers: Partial<Record<ProviderId, ProviderCredentials>> = {}
+const providerEnvs: readonly (readonly [ProviderId, string])[] = [
+  ['google', 'GOOGLE'],
+  ['facebook', 'FACEBOOK'],
+  ['discord', 'DISCORD'],
+]
+for (const [id, prefix] of providerEnvs) {
+  const clientId = process.env[`${prefix}_CLIENT_ID`]
+  const clientSecret = process.env[`${prefix}_CLIENT_SECRET`]
+  if (
+    clientId !== undefined &&
+    clientId !== '' &&
+    clientSecret !== undefined &&
+    clientSecret !== ''
+  ) {
+    providers[id] = { clientId, clientSecret }
+  }
+}
+if (Object.keys(providers).length > 0) {
+  console.log(`Social login: ${Object.keys(providers).join(', ')}`)
+}
+
 const app = createApp({
   repo,
   tokenSecret,
@@ -73,6 +106,7 @@ const app = createApp({
   corsOrigin,
   mailer,
   appOrigin,
+  providers,
 })
 
 const server = serve({ fetch: app.fetch, port, hostname: host })

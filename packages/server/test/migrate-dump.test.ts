@@ -102,6 +102,10 @@ describe('dump mapping', () => {
       role: 'admin',
       disabled: 0,
       disable_email: 1,
+      // Migrated accounts are grandfathered verified (issue #42); the import
+      // writes this explicitly because it is a fresh INSERT after migration
+      // 0004's default of 0.
+      email_verified: 1,
     })
     expect(playerRow({ _id: 'u1', username: 'Åse' })).toMatchObject({
       username: 'Åse',
@@ -111,6 +115,7 @@ describe('dump mapping', () => {
       disabled: 0,
       disable_email: 0,
       email: null,
+      email_verified: 1,
     })
   })
 

@@ -25,6 +25,7 @@ import type {
   ChatMessage,
   GameRevision,
   GameRevisionMetadata,
+  OAuthIdentity,
   PlayerUpdate,
   Repository,
   StoredPlayer,
@@ -60,6 +61,9 @@ interface PlayerRow {
   readonly role: string
   readonly disabled: number
   readonly disable_email: number
+  readonly email_verified: number
+  /** The linked provider identities as JSON text. */
+  readonly oauth_providers: string
 }
 
 interface GameStateRow {
@@ -106,7 +110,7 @@ interface OkRow {
 }
 
 const PLAYER_SELECT = `SELECT id, username, username_lower, email, password, created_at,
-                              role, disabled, disable_email
+                              role, disabled, disable_email, email_verified, oauth_providers
                        FROM player`
 
 export class D1Repository implements Repository {
@@ -123,8 +127,8 @@ export class D1Repository implements Repository {
   async createPlayer(player: StoredPlayer): Promise<void> {
     await this.db
       .prepare(
-        `INSERT INTO player (id, username, username_lower, email, password, created_at, role, disabled, disable_email)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO player (id, username, username_lower, email, password, created_at, role, disabled, disable_email, email_verified, oauth_providers)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         player.id,
@@ -136,6 +140,11 @@ export class D1Repository implements Repository {
         player.role === 'admin' ? 'admin' : 'user',
         player.disabled === true ? 1 : 0,
         player.disableEmail === true ? 1 : 0,
+        // A missing value means "grandfathered verified"; the column is NOT
+        // NULL, so bind the normalized boolean rather than leaving it to the
+        // default 0, which would lock out a legacy-style caller.
+        player.emailVerified === false ? 0 : 1,
+        JSON.stringify(player.oauthProviders ?? []),
       )
       .run()
   }
@@ -195,6 +204,14 @@ export class D1Repository implements Repository {
     if (changes.disableEmail !== undefined) {
       sets.push('disable_email = ?')
       values.push(changes.disableEmail ? 1 : 0)
+    }
+    if (changes.emailVerified !== undefined) {
+      sets.push('email_verified = ?')
+      values.push(changes.emailVerified ? 1 : 0)
+    }
+    if (changes.oauthProviders !== undefined) {
+      sets.push('oauth_providers = ?')
+      values.push(JSON.stringify(changes.oauthProviders))
     }
     if (sets.length > 0) {
       await this.db
@@ -565,6 +582,10 @@ function toStoredPlayer(row: PlayerRow): StoredPlayer {
     role: row.role === 'admin' ? 'admin' : 'user',
     disabled: row.disabled !== 0,
     disableEmail: row.disable_email !== 0,
+    // Migration 0004 back-fills every existing row with 1, so this is always
+    // explicit here; the JSON boundary is where "missing means verified" lives.
+    emailVerified: row.email_verified !== 0,
+    oauthProviders: JSON.parse(row.oauth_providers) as OAuthIdentity[],
   }
 }
 

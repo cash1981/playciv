@@ -11,9 +11,18 @@ vi.mock('../lib/api.js', () => ({
     login: vi.fn(),
     register: vi.fn().mockResolvedValue({
       token: 'token',
-      player: { id: 'p1', username: 'cash1981', email: null, role: 'user', disabled: false },
+      player: {
+        id: 'p1',
+        username: 'cash1981',
+        email: null,
+        role: 'user',
+        disabled: false,
+        disableEmail: false,
+        emailVerified: true,
+      },
     }),
     forgotPassword: vi.fn().mockResolvedValue({ ok: true }),
+    providers: vi.fn().mockResolvedValue([]),
   },
   storeToken: vi.fn(),
 }))
@@ -81,5 +90,37 @@ describe('LoginView register security question (issue #40)', () => {
       )
     })
     expect(onSignedIn).toHaveBeenCalled()
+  })
+})
+
+describe('LoginView social providers (issue #121)', () => {
+  it('links to each configured provider', async () => {
+    vi.mocked(api.providers).mockResolvedValue([
+      { id: 'google', displayName: 'Google' },
+      { id: 'discord', displayName: 'Discord' },
+    ])
+    render(<LoginView onSignedIn={vi.fn()} />)
+
+    const google = await screen.findByRole('link', { name: 'Sign in with Google' })
+    expect(google.getAttribute('href')).toBe('/api/auth/oauth/google')
+    expect(
+      screen.getByRole('link', { name: 'Sign in with Discord' }).getAttribute('href'),
+    ).toBe('/api/auth/oauth/discord')
+  })
+
+  it('hides the section when no provider is configured', async () => {
+    vi.mocked(api.providers).mockResolvedValue([])
+    render(<LoginView onSignedIn={vi.fn()} />)
+
+    await waitFor(() => expect(vi.mocked(api.providers)).toHaveBeenCalled())
+    expect(screen.queryByText('or sign in with')).toBeNull()
+  })
+
+  it('hides the section when the provider call fails', async () => {
+    vi.mocked(api.providers).mockRejectedValue(new Error('down'))
+    render(<LoginView onSignedIn={vi.fn()} />)
+
+    await waitFor(() => expect(vi.mocked(api.providers)).toHaveBeenCalled())
+    expect(screen.queryByText('or sign in with')).toBeNull()
   })
 })

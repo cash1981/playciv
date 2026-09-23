@@ -20,6 +20,14 @@ export interface PlayerRow {
   readonly role: string
   readonly disabled: number
   readonly disable_email: number
+  /**
+   * Written as 1 explicitly. `0004_email_verified_oauth.sql` already sets the
+   * column default to 0, but the import is a fresh INSERT: the migrated
+   * accounts predate verification and are grandfathered, so relying on the
+   * default (or on the migration's `UPDATE`, which runs before the import)
+   * would leave every one of them unverified and unable to act.
+   */
+  readonly email_verified: number
 }
 
 export interface GameRow {
@@ -138,6 +146,7 @@ export function playerRow(doc: DumpDoc): PlayerRow {
     role: doc['role'] === 'admin' ? 'admin' : 'user',
     disabled: doc['disabled'] === true ? 1 : 0,
     disable_email: doc['disableEmail'] === true ? 1 : 0,
+    email_verified: 1,
   }
 }
 

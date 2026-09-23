@@ -30,6 +30,13 @@ export interface NotificationsConfig {
 }
 
 export interface Notifications {
+  /**
+   * True when the injected `Mailer` really sends. Registration reads this to
+   * decide whether an account starts verified (issue #42): with no provider,
+   * the account cannot be verified by mail, so it starts verified and the link
+   * is printed instead.
+   */
+  readonly emailDeliveryEnabled: boolean
   /** Java `GameAction.joinGame` — the other players. */
   playerJoined(game: GameState, joinerPlayerId: string): Promise<void>
   /** Java `PlayerAction.endTurn` → `sendYourTurn` — the next player. */
@@ -60,6 +67,13 @@ export interface Notifications {
    * their own account.
    */
   passwordReset(email: string, link: string): Promise<void>
+  /**
+   * The "please verify your email" link (issue #42). Transactional like
+   * `passwordReset`: it ignores `disableEmail` and carries no unsubscribe line,
+   * because unsubscribing from game mail must not stop an account from proving
+   * its own address.
+   */
+  emailVerification(email: string, link: string): Promise<void>
   /**
    * Java `GameAction.sendMailToAll(msg)` — the admin's message to every
    * account. Its old endpoint was commented out, so this is the first time it
@@ -156,6 +170,8 @@ export function createNotifications(config: NotificationsConfig): Notifications 
   }
 
   return {
+    emailDeliveryEnabled: mailer.enabled,
+
     async playerJoined(game: GameState, joinerPlayerId: string): Promise<void> {
       const joiner = game.players.find((player) => player.playerId === joinerPlayerId)
       const body =
@@ -246,7 +262,8 @@ export function createNotifications(config: NotificationsConfig): Notifications 
     async passwordReset(email: string, link: string): Promise<void> {
       try {
         // Java `SendEmail.sendMessage` body, on our own host. No unsubscribe
-        // line: this is the one mail that must always reach the account.
+        // line: transactional account mail (this, and the verification link)
+        // must always reach the account.
         await mailer.send({
           to: email,
           subject: 'Please verify your email',
@@ -256,6 +273,20 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         })
       } catch (error) {
         console.error(`Password-reset email to ${email} failed`, error)
+      }
+    },
+
+    async emailVerification(email: string, link: string): Promise<void> {
+      try {
+        await mailer.send({
+          to: email,
+          subject: 'Please verify your email address',
+          text:
+            'Please verify your email address by opening this link: ' +
+            `${link}\n\nIf you did not create this account, you can ignore this message.`,
+        })
+      } catch (error) {
+        console.error(`Verification email to ${email} failed`, error)
       }
     },
 

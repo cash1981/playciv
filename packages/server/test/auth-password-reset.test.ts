@@ -12,9 +12,10 @@ import type { App } from '../src/app.js'
 import { createTestApp } from '../src/app.js'
 import { ResetTokenSigner } from '../src/auth.js'
 import type { Mailer, OutgoingEmail } from '../src/mail.js'
-import { bearer, inject } from './helpers.js'
+import { bearer, inject, verifyRecordedEmail } from './helpers.js'
 
 class FakeMailer implements Mailer {
+  readonly enabled = true
   readonly sent: OutgoingEmail[] = []
 
   async send(email: OutgoingEmail): Promise<void> {
@@ -24,8 +25,12 @@ class FakeMailer implements Mailer {
 
 const APP_ORIGIN = 'https://example.test'
 
+/** The mailer of the app under test, for the register helper below. */
+let activeMailer: FakeMailer
+
 async function setup(): Promise<{ app: App; mailer: FakeMailer }> {
   const mailer = new FakeMailer()
+  activeMailer = mailer
   const { app } = await createTestApp({ mailer, appOrigin: APP_ORIGIN })
   return { app, mailer }
 }
@@ -42,6 +47,9 @@ async function register(
   })
   expect(response.status).toBe(201)
   const body = await response.json<{ readonly token: string; readonly player: { readonly id: string } }>()
+  // A live mailer makes registration send a verification link. Open it and drop
+  // that mail, so the reset tests count only the reset mails.
+  await verifyRecordedEmail(app, activeMailer, email)
   return { token: body.token, id: body.player.id }
 }
 

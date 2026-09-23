@@ -14,6 +14,8 @@ import { GameView } from './views/GameView.js'
 import { HighscoreView } from './views/HighscoreView.js'
 import { LandingView } from './views/LandingView.js'
 import { LoginView } from './views/LoginView.js'
+import { AuthCallbackView } from './views/AuthCallbackView.js'
+import { VerifyEmailBanner } from './views/VerifyEmailBanner.js'
 import { AdminView } from './views/AdminView.js'
 import { Navigation } from './views/Navigation.js'
 import { FaqView } from './views/FaqView.js'
@@ -28,6 +30,7 @@ type Screen =
   | { readonly name: 'highscore' }
   | { readonly name: 'faq' }
   | { readonly name: 'about' }
+  | { readonly name: 'auth-callback' }
   | { readonly name: 'game'; readonly gameId: string }
 
 function screenFromPath(pathname: string): Screen {
@@ -35,6 +38,8 @@ function screenFromPath(pathname: string): Screen {
   if (/^\/highscore\/?$/.test(pathname)) return { name: 'highscore' }
   if (/^\/faq\/?$/.test(pathname)) return { name: 'faq' }
   if (/^\/about\/?$/.test(pathname)) return { name: 'about' }
+  // The OAuth callback redirects here with a fragment (issue #121).
+  if (/^\/auth\/callback\/?$/.test(pathname)) return { name: 'auth-callback' }
   const match = /^\/game\/([^/]+)\/?$/.exec(pathname)
   if (match === null) return { name: 'lobby' }
 
@@ -93,6 +98,16 @@ export function App(): React.JSX.Element {
     if (!confirmNavigation()) return
     storeToken(null)
     setPlayer(null)
+    setShowLogin(false)
+    window.history.replaceState(null, '', '/')
+    lastPathRef.current = '/'
+    setScreen({ name: 'lobby' })
+  }, [])
+
+  // The OAuth callback and the completion step both end here: the session is
+  // already stored, so land on the lobby (issue #121).
+  const completeSignIn = useCallback((signedIn: PlayerDto) => {
+    setPlayer(signedIn)
     setShowLogin(false)
     window.history.replaceState(null, '', '/')
     lastPathRef.current = '/'
@@ -160,11 +175,28 @@ export function App(): React.JSX.Element {
     )
   }
 
+  // The unverified notice rides along on every signed-in screen (issue #42).
+  const verifyBanner =
+    player !== null && !player.emailVerified ? <VerifyEmailBanner player={player} /> : null
+
+  // The OAuth callback (issue #121) is public: it consumes the fragment and
+  // either signs the player in or shows the completion form.
+  if (screen.name === 'auth-callback') {
+    return (
+      <div className="app">
+        <Navigation player={player} screen={'lobby'} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
+        <AuthCallbackView onSignedIn={completeSignIn} />
+        <Footer />
+      </div>
+    )
+  }
+
   // The FAQ is public: it renders whether or not anyone is signed in.
   if (screen.name === 'faq') {
     return (
       <div className="app">
         <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
+        {verifyBanner}
         <FaqView />
         <Footer />
       </div>
@@ -176,6 +208,7 @@ export function App(): React.JSX.Element {
     return (
       <div className="app">
         <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
+        {verifyBanner}
         <AboutView />
         <Footer />
       </div>
@@ -187,6 +220,7 @@ export function App(): React.JSX.Element {
     return (
       <div className="app">
         <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
+        {verifyBanner}
         <HighscoreView />
         <Footer />
       </div>
@@ -199,6 +233,7 @@ export function App(): React.JSX.Element {
     return (
       <div className="app">
         <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
+        {verifyBanner}
         <GameView
           gameId={screen.gameId}
           player={player}
@@ -239,6 +274,7 @@ export function App(): React.JSX.Element {
   return (
     <div className="app">
       <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
+      {verifyBanner}
 
       {screen.name === 'admin' && player.role === 'admin' ? (
         <AdminView player={player} onUnauthorized={signOut} onBack={backToGames} />

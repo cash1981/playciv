@@ -12,9 +12,10 @@ import type { App } from '../src/app.js'
 import { createTestApp } from '../src/app.js'
 import type { Mailer, OutgoingEmail } from '../src/mail.js'
 import type { JsonFileRepository } from '../src/store/json-file.js'
-import { bearer, inject } from './helpers.js'
+import { bearer, inject, verifyRecordedEmail } from './helpers.js'
 
 class FakeMailer implements Mailer {
+  readonly enabled = true
   readonly sent: OutgoingEmail[] = []
   fail = false
 
@@ -37,7 +38,7 @@ beforeEach(async () => {
 
 async function register(
   username: string,
-  email: string | null = `${username}@example.com`,
+  email: string = `${username}@example.com`,
 ): Promise<{ id: string; token: string }> {
   const response = await inject(app, {
     method: 'POST',
@@ -52,6 +53,9 @@ async function register(
   })
   expect(response.status).toBe(201)
   const body = (await response.json()) as { token: string; player: { id: string } }
+  // A live mailer makes registration send a verification link. Open it and
+  // remove that mail, so the broadcast counts only the broadcast mails.
+  await verifyRecordedEmail(app, mailer, email)
   return { id: body.player.id, token: body.token }
 }
 
@@ -84,7 +88,10 @@ describe('admin email broadcast', () => {
     const optedIn = await register('opted-in')
     const optedOut = await register('opted-out')
     await unsubscribe(optedOut.id)
-    await register('no-address', null)
+    // Registration now requires an address, so make an address-less account the
+    // way a provider without an email does: register, then clear it.
+    const noAddress = await register('no-address')
+    await repo.updatePlayer(noAddress.id, { email: null })
 
     const response = await broadcast(admin.token, {
       subject: 'Message from cash at playciv.app',

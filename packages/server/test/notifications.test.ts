@@ -18,9 +18,10 @@ import {
   createNotifications,
 } from '../src/notifications.js'
 import type { JsonFileRepository } from '../src/store/json-file.js'
-import { inject, bearer } from './helpers.js'
+import { inject, bearer, verifyRecordedEmail } from './helpers.js'
 
 class FakeMailer implements Mailer {
+  readonly enabled = true
   readonly sent: OutgoingEmail[] = []
   fail = false
 
@@ -64,6 +65,9 @@ async function register(username: string): Promise<{ token: string; id: string }
   })
   expect(response.status).toBe(201)
   const body = (await response.json()) as { token: string; player: { id: string } }
+  // This suite passes a live mailer, so registration mails a verification link.
+  // Open it and drop that mail, so each test counts only the mails it asserts.
+  await verifyRecordedEmail(app, mailer, `${username}@example.com`)
   return { token: body.token, id: body.player.id }
 }
 
