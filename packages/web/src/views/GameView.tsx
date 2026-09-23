@@ -39,7 +39,7 @@ interface Props {
 }
 
 /**
- * How often the live game reloads while auto-refresh is on. The human asked for
+ * How often the live game checks for changes while auto-refresh is on. The human asked for
  * 10 s specifically; the toggle was introduced at 30 s (issue #63).
  */
 export const AUTO_REFRESH_MS = 10_000
@@ -128,6 +128,15 @@ export async function loadAfterKnownRevision(
   return loadConsistentLive(loadRevisions, loadView)
 }
 
+export async function reloadIfRevisionChanged(
+  readRevision: () => Promise<number>,
+  knownRevision: () => number,
+  reload: () => Promise<boolean | void>,
+): Promise<boolean> {
+  const revision = await readRevision()
+  return revision === knownRevision() ? false : Boolean(await reload())
+}
+
 export async function loadHistoricalIfCurrent(
   load: () => Promise<GameRevisionView>,
   isCurrent: () => boolean,
@@ -150,6 +159,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
   const liveRevisionRef = useRef(-1)
   const latestStoredRevisionRef = useRef(-1)
   const revisionRequestEpochRef = useRef(0)
+  const pollPendingRef = useRef(false)
   const activeGameIdRef = useRef(gameId)
   activeGameIdRef.current = gameId
 
@@ -228,9 +238,27 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
   useEffect(() => {
     try { localStorage.setItem('civ.autoRefresh', String(autoRefresh)) } catch {}
     if (!autoRefresh) return
-    const id = setInterval(() => { void reload() }, AUTO_REFRESH_MS)
+    const poll = async () => {
+      if (pollPendingRef.current) return
+      pollPendingRef.current = true
+      try {
+        await reloadIfRevisionChanged(
+          async () => (await api.gameRev(gameId)).rev,
+          () => activeGameIdRef.current === gameId ? liveRevisionRef.current : -1,
+          async () => activeGameIdRef.current === gameId ? reload() : false,
+        )
+      } catch (caught) {
+        if (activeGameIdRef.current === gameId) {
+          if (isUnauthorized(caught) && player !== null) onUnauthorized()
+          else setError(errorMessage(caught))
+        }
+      } finally {
+        pollPendingRef.current = false
+      }
+    }
+    const id = setInterval(() => { void poll() }, AUTO_REFRESH_MS)
     return () => clearInterval(id)
-  }, [autoRefresh, reload])
+  }, [autoRefresh, gameId, onUnauthorized, player, reload])
 
   useEffect(() => {
     void reload()
@@ -418,6 +446,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
               run={run}
               player={player}
               reloadCount={reloadCount}
+              autoRefresh={autoRefresh}
             />
           )}
         </div>

@@ -153,6 +153,18 @@ describe('D1Repository', () => {
     expect(sql).not.toMatch(/\bstate\b/)
   })
 
+  it('reads only the D1 revision column for a game marker', async () => {
+    const game = fixtureGame()
+    await repo.saveGame(game)
+    const prepare = vi.spyOn(adapter.db, 'prepare')
+    expect(await repo.findGameRevisionCounter(game.id)).toBe(game.rev)
+    expect(await repo.findGameRevisionCounter('missing')).toBeUndefined()
+    expect(prepare.mock.calls.map(([query]) => query)).toEqual([
+      'SELECT rev FROM game WHERE id = ?',
+      'SELECT rev FROM game WHERE id = ?',
+    ])
+  })
+
   it('refuses a compare-and-set write from a stale revision', async () => {
     const game = fixtureGame()
     const baseline = createGameRevision(undefined, game, ACTOR, '2020-01-01T00:00:00.000Z', 'Game created')

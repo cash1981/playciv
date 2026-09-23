@@ -46,7 +46,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | free (released with #148's merge) |
+| `packages/web/src/lib/api.ts` | free |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.

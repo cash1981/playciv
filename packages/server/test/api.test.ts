@@ -896,6 +896,40 @@ describe('hidden information over HTTP', () => {
 })
 
 describe('global game revisions', () => {
+  it('returns only a public revision counter and 404 for a missing game', async () => {
+    const { gameId, starter, waiting } = await startedGame('Revision marker')
+    const current = await repo.findGame(gameId)
+    const expected = JSON.stringify({ rev: current?.rev })
+    for (const headers of [bearer(starter), bearer(waiting), undefined]) {
+      const response = await inject(app, {
+        url: `/api/games/${gameId}/rev`,
+        ...(headers === undefined ? {} : { headers }),
+      })
+      expect(response.status).toBe(200)
+      expect(response.body).toBe(expected)
+      expect(Object.keys(await response.json())).toEqual(['rev'])
+    }
+    expect((await inject(app, { url: '/api/games/missing/rev' })).status).toBe(404)
+  })
+
+  it('lists existing history without loading or serializing a baseline', async () => {
+    const token = await register('history-owner')
+    const gameId = await createGame(token, 'Existing history')
+    const originalFind = repo.findGame.bind(repo)
+    const originalEnsure = repo.ensureGameRevision.bind(repo)
+    repo.findGame = async () => { throw new Error('full game read') }
+    repo.ensureGameRevision = async () => { throw new Error('baseline serialization') }
+    try {
+      const response = await inject(app, { url: `/api/games/${gameId}/revisions`, headers: bearer(token) })
+      expect(response.status).toBe(200)
+      expect((await response.json<{ revision: number }[]>())).toHaveLength(1)
+    } finally {
+      repo.findGame = originalFind
+      repo.ensureGameRevision = originalEnsure
+    }
+    expect((await inject(app, { url: '/api/games/missing/revisions' })).status).toBe(404)
+  })
+
   it('lets only one of two mutations from the same revision commit', async () => {
     const { gameId, starter } = await startedGame('Revision race')
     const before = await repo.findGame(gameId)

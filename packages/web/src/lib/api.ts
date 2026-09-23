@@ -338,6 +338,7 @@ export const api = {
     post<GameSummary>('/api/games', { name, numOfPlayers }),
   game: (gameId: string) => get<PlayerView>(`/api/games/${gameId}`),
   revisions: (gameId: string) => get<GameRevisionSummary[]>(`/api/games/${gameId}/revisions`),
+  gameRev: (gameId: string) => get<{ readonly rev: number }>(`/api/games/${gameId}/rev`),
   revision: (gameId: string, revision: number) =>
     get<GameRevisionView>(`/api/games/${gameId}/revisions/${revision}`),
   join: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/join`),
