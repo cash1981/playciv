@@ -3,27 +3,47 @@
  * and the AngularJS login page. Issue #37 added the third mode.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { errorMessage } from '../App.js'
 import { api, storeToken } from '../lib/api.js'
-import type { PlayerDto } from '../lib/api.js'
+import type { AuthProvider, PlayerDto } from '../lib/api.js'
 
 interface Props {
   readonly onSignedIn: (player: PlayerDto) => void
+  /** Set by the OAuth callback screen when a provider sign-in failed. */
+  readonly initialError?: string | undefined
 }
 
 type Mode = 'login' | 'register' | 'forgot'
 
-export function LoginView({ onSignedIn }: Props): React.JSX.Element {
+export function LoginView({ onSignedIn, initialError }: Props): React.JSX.Element {
   const [mode, setMode] = useState<Mode>('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [email, setEmail] = useState('')
   const [securityAnswer, setSecurityAnswer] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(initialError ?? null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Only the configured providers get a button; an empty list or a failed
+  // fetch hides the section entirely (issue #121).
+  const [providers, setProviders] = useState<readonly AuthProvider[]>([])
+
+  useEffect(() => {
+    let active = true
+    api
+      .providers()
+      .then((list) => {
+        if (active) setProviders(list)
+      })
+      .catch(() => {
+        if (active) setProviders([])
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   function switchMode(next: Mode): void {
     setMode(next)
@@ -148,6 +168,25 @@ export function LoginView({ onSignedIn }: Props): React.JSX.Element {
           )}
         </div>
       </form>
+
+      {providers.length > 0 && (
+        <section className="provider-signin">
+          <p className="muted">or sign in with</p>
+          <div className="provider-buttons">
+            {providers.map((provider) => (
+              // A real link: the browser leaves the SPA and starts the OAuth
+              // flow, which is the whole point of the button (issue #121).
+              <a
+                key={provider.id}
+                className="provider-button"
+                href={`/api/auth/oauth/${encodeURIComponent(provider.id)}`}
+              >
+                Sign in with {provider.displayName}
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
