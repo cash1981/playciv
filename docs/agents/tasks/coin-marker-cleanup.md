@@ -3,7 +3,8 @@
 - **Slug:** `coin-marker-cleanup`
 - **Branch:** `feat/coin-marker-cleanup`
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Status:** draft
+- **Status:** review-approved — two read-only rounds; round 1's one nit (a
+  missing guard test) was fixed and round 2 found nothing above it. PR open.
 
 ## Goal
 

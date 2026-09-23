@@ -1887,3 +1887,24 @@ heaviest request on the page. A behavioural test would need the whole `GameView`
 harness; `GameView.test.tsx` pins the constant instead, so a literal `30_000`
 reintroduced in the interval would not fail it, only a change to the constant
 would.
+
+## 2026-09-23 - One coin marker, and old placements lose their image
+
+**Decision.** The board palette offers a single coin marker. The `Coin`, `Coin
+2`, `Coin 3` and `Coin 4` sources are excluded in `tools/board-assets.ps1` and
+their PNGs deleted; `coin1` survives and is re-labelled `Coin` through a new
+`$labelOverrides` map. The surviving asset keeps its id `markers/coin1` — the id
+is not player-visible, and renaming it would need generator machinery for no
+gain.
+
+**Why.** The human asked for it directly, with a screenshot, and confirmed when
+asked that `Coin 4` goes too: "Skal bare være en coin igjen." No old-system rule
+is involved, and markers have no supply limit, so no other behaviour depends on
+these ids.
+
+**Consequences.** A game that already placed one of the removed markers keeps
+the piece's stored position, but its stored `path` points at a PNG that is gone,
+so that one image 404s. That is accepted with the request; no migration is
+written. A new engine test pins both the absence of the four ids and the
+survivor's `Coin` label. `$labelOverrides` is a new, general mechanism next to
+`$wonderLabels`.

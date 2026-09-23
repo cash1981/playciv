@@ -12,32 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### coin-marker-cleanup
-
-- **Owner:** orchestrator (DeepSeek V4.1 Flash)
-- **Branch:** `feat/coin-marker-cleanup`
-- **Brief:** `docs/agents/tasks/coin-marker-cleanup.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `tools/board-assets.ps1`
-  - `packages/engine/data/board-assets.json`
-  - `packages/web/public/board/markers/` (the four removed coin PNGs)
-  - `packages/engine/test/board.test.ts`, `packages/engine/test/board-history.test.ts`
-  - `packages/server/test/board-api.test.ts`
-  - `README.md` (the Markers row)
-  - `docs/agents/tasks/coin-marker-cleanup.md`
-  - `docs/agents/task-board.md`, `docs/agents/state.md`, `docs/agents/decisions.md`
-- **Notes:** The human asked directly, with a screenshot, to leave one coin
-  marker: remove `Coin`, `Coin 2`, `Coin 3` and `Coin 4` (artwork included) and
-  rename `Coin 1` to `Coin`. Takes the generated `board-assets.json` shared
-  resource; the `culture-track-artwork` claim held it but its PR #106 is merged,
-  so the claim block is released below. The `citystate-pieces` block also lists
-  `board-assets.json`, but its PR #57 is long merged and the block is stale. The
-  three test files use `markers/coin` only as a stand-in marker, so they move to
-  `markers/coin1`; `board-api.test.ts` is also named by the unmerged
-  `issue-40-signup-security-question` claim, on unrelated lines (registration
-  payloads), so the two do not conflict.
-
 ### turn-order-draft-bleed
 
 - **Owner:** orchestrator (DeepSeek V4.1 Flash)
@@ -523,7 +497,7 @@ at a time. Claim them by name.
 
 | Resource | Owned by |
 | --- | --- |
-| `packages/engine/data/board-assets.json` and `packages/web/public/board/` | `coin-marker-cleanup` (DeepSeek V4.1 Flash) |
+| `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |

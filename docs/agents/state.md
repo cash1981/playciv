@@ -13,11 +13,25 @@ _Last updated: 2026-09-23_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 449 engine, 174 server, 129 web |
+| `pnpm -r test` | passing - 450 engine, 174 server, 129 web |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes; earlier PRs await the human's merge (see the task board) |
 
 ## Done
+
+- **Down to a single coin marker.** The board palette had five coin variants;
+  it now has one. `Coin`, `Coin 2`, `Coin 3` and `Coin 4` are removed from the
+  manifest and their artwork deleted, and the old `Coin 1` is relabelled `Coin`.
+  The human asked for it directly, with a screenshot, and confirmed `Coin 4` goes
+  too. Built through `tools/board-assets.ps1` (the four sources added to
+  `$exclude`, plus a new general `$labelOverrides` map) rather than hand-editing
+  the generated JSON; the README marker count goes 11 → 7. The three test files
+  that used `markers/coin` only as a stand-in marker now use `markers/coin1`, and
+  one new engine test pins the absence of the four ids and the survivor's `Coin`
+  label (450 engine tests). A previously placed coin piece keeps its stored
+  position but its image 404s now the PNG is gone — accepted with the request,
+  no migration. Branch `feat/coin-marker-cleanup`; review-approved in two
+  read-only rounds (round 1's one nit, a missing guard test, fixed).
 
 - **Another player's turn-order text no longer bleeds into your own tab.** Turn
   drafts and live-dirty markers were keyed by turn and phase only, and wired for
