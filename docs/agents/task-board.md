@@ -28,6 +28,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/engine/test/board-tiles.test.ts`
   - `packages/engine/test/board.test.ts`
   - `packages/engine/test/create-game.test.ts`
+  - `packages/engine/test/game-action.test.ts`
+  - `packages/server/test/api.test.ts`
   - `packages/web/src/views/BoardView.tsx`
   - `packages/web/src/views/BoardView.test.tsx`
   - `packages/web/src/styles.css`
