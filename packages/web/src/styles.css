@@ -1249,6 +1249,13 @@ ul.list > li:last-child {
   cursor: pointer;
 }
 
+/* Any clickable card — the level tabs' "available to research" grid uses the
+   same `.card` as everywhere else, marked with `role="button"` only when it
+   opens a detail view. */
+.card[role='button'] {
+  cursor: pointer;
+}
+
 .tech-slot.available {
   color: var(--muted);
   font-weight: 400;

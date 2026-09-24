@@ -316,6 +316,21 @@ describe('TechPanel picker', () => {
     expect(screen.getByText('Sailing')).toBeTruthy()
   })
 
+  it('clicking the active level tab again hides the grid', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false, 1)])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Level 1' }))
+    expect(screen.getByText('Writing')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Level 1' }))
+    expect(screen.queryByText('Writing')).toBeNull()
+
+    // Toggles back open on a third click, same as picking it fresh.
+    fireEvent.click(screen.getByRole('button', { name: 'Level 1' }))
+    expect(screen.getByText('Writing')).toBeTruthy()
+  })
+
   it('says nothing is available at a level with no techs left, once that level is picked', async () => {
     vi.spyOn(api, 'availableTechs').mockResolvedValue([])
     render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)

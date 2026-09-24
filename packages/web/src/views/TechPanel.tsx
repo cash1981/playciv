@@ -170,7 +170,13 @@ export function TechPanel({
       <Tabs
         tabs={LEVELS.map((level) => ({ key: levelTabKey(level), label: `Level ${level}` }))}
         active={activeLevel === null ? '' : levelTabKey(activeLevel)}
-        onSelect={(key) => setActiveLevel(Number(key) as Level)}
+        onSelect={(key) => {
+          const level = Number(key) as Level
+          // Clicking the already-active level again hides the grid and
+          // returns to just the pyramid, instead of being stuck open once any
+          // level has been picked.
+          setActiveLevel((current) => (current === level ? null : level))
+        }}
       />
       {activeLevel !== null && (
         <ul className="card-grid">
