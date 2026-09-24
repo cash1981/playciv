@@ -409,8 +409,11 @@ export function itemImage(item: Item): string | null {
       return `klein${item.name}${PNG}`.replace(/ /g, '')
     case 'hut':
     case 'village':
-    case 'tech':
       return `${item.name}${PNG}`.replace(/ /g, '')
+    // Tech card photos were prepared separately and are .jpg, not .png like
+    // every other item kind. See `tools/tech-assets.ps1`.
+    case 'tech':
+      return `${item.name}.jpg`.replace(/ /g, '')
     // The WaW social-policy files are lower case, unlike hut/village/tech
     // artwork above. `Expansionsim` is a typo in the spreadsheet data; the
     // file on disk is `expansionism.png`, so `tools/item-assets.ps1` copies

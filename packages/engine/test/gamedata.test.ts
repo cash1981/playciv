@@ -193,11 +193,12 @@ describe('image filenames', () => {
     }
   })
 
-  it('every image filename ends in .png', () => {
+  it('every image filename ends in .png, except tech which is .jpg', () => {
     for (const item of game.items) {
       const image = itemImage(item)
       if (image === null) continue
-      expect(image.endsWith('.png')).toBe(true)
+      const expectedExtension = item.kind === 'tech' ? '.jpg' : '.png'
+      expect(image.endsWith(expectedExtension)).toBe(true)
     }
   })
 
