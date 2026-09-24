@@ -207,7 +207,10 @@ export function TechPanel({
           titleId="tech-detail-title"
           title={`${detailTech.name} — Level ${detailTech.level}`}
           returnFocusTo={detailOpenerRef}
-          onClose={() => setDetailTech(null)}
+          onClose={() => {
+            setDetailTech(null)
+            setDetailCanResearch(false)
+          }}
         >
           <ReferenceCard
             name={detailTech.name}
@@ -227,6 +230,7 @@ export function TechPanel({
                 onClick={() => {
                   const techName = detailTech.name
                   setDetailTech(null)
+                  setDetailCanResearch(false)
                   void run(() => api.chooseTech(gameId, techName))
                 }}
               >

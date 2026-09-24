@@ -475,4 +475,27 @@ describe('TechPanel picker', () => {
 
     expect(screen.queryByRole('dialog')).toBeNull()
   })
+
+  it('opens the detail dialog when Enter is pressed on the tech slot itself', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    const { container } = render(
+      <TechPanel
+        gameId="game-1"
+        busy={false}
+        run={run}
+        view={view([tech('Writing', false, 1)])}
+        reloadCount={0}
+      />,
+    )
+
+    await screen.findByText('Writing')
+    // Fired on the slot div itself (not a nested stepper button) — proves the
+    // `event.target !== event.currentTarget` guard does not also suppress a
+    // keypress that genuinely targets the slot.
+    const slot = container.querySelector('.tech-slot.researched')
+    if (slot === null) throw new Error('the researched tech slot is not rendered')
+    fireEvent.keyDown(slot, { key: 'Enter' })
+
+    expect(screen.getByRole('dialog').textContent).toContain('Writing — Level 1')
+  })
 })
