@@ -667,3 +667,81 @@ describe('BoardView mobile placement', () => {
     cleanup()
   })
 })
+
+describe('BoardView undo and redo', () => {
+  const historyEntry = (playerId: string) => ({
+    id: 'h1',
+    at: null,
+    playerId,
+    username: 'someone',
+    description: 'someone did something',
+    change: { kind: 'place' as const, piece: piece('figures/redarmy', 'p1'), onTop: true },
+    logLength: 0,
+  })
+
+  it('disables Undo when the board has no history yet', () => {
+    render(
+      <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} youId="alice" run={async () => undefined} />,
+    )
+    expect(screen.getByRole('button', { name: 'Undo' }).hasAttribute('disabled')).toBe(true)
+    cleanup()
+  })
+
+  it('disables Undo when the last change belongs to someone else', () => {
+    const board = { ...createBoard(), history: [historyEntry('bob')] }
+    render(
+      <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} youId="alice" run={async () => undefined} />,
+    )
+    expect(screen.getByRole('button', { name: 'Undo' }).hasAttribute('disabled')).toBe(true)
+    cleanup()
+  })
+
+  it('enables Undo and calls the API when the last change is your own', async () => {
+    const undoBoard = vi.spyOn(api, 'undoBoard').mockResolvedValue({} as PlayerView)
+    const board = { ...createBoard(), history: [historyEntry('alice')] }
+    render(
+      <BoardView
+        gameId="game"
+        board={board}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        youId="alice"
+        run={async action => { await action() }}
+      />,
+    )
+    const undo = screen.getByRole('button', { name: 'Undo' })
+    expect(undo.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(undo)
+    await waitFor(() => expect(undoBoard).toHaveBeenCalledWith('game'))
+    undoBoard.mockRestore()
+    cleanup()
+  })
+
+  it('disables Redo until there is something to redo, then calls the API', async () => {
+    const redoBoard = vi.spyOn(api, 'redoBoard').mockResolvedValue({} as PlayerView)
+    const { rerender } = render(
+      <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} youId="alice" run={async () => undefined} />,
+    )
+    expect(screen.getByRole('button', { name: 'Redo' }).hasAttribute('disabled')).toBe(true)
+
+    const board = { ...createBoard(), redo: [historyEntry('alice')] }
+    rerender(
+      <BoardView
+        gameId="game"
+        board={board}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        youId="alice"
+        run={async action => { await action() }}
+      />,
+    )
+    const redo = screen.getByRole('button', { name: 'Redo' })
+    expect(redo.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(redo)
+    await waitFor(() => expect(redoBoard).toHaveBeenCalledWith('game'))
+    redoBoard.mockRestore()
+    cleanup()
+  })
+})

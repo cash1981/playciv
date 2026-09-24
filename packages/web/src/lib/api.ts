@@ -517,6 +517,7 @@ export const api = {
   removePiece: (gameId: string, pieceId: string) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/remove`),
   undoBoard: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/board/undo`),
+  redoBoard: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/board/redo`),
 
   chat: (gameId: string) => get<ChatMessageDto[]>(`/api/games/${gameId}/chat`),
   sendChat: (gameId: string, message: string) =>

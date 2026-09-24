@@ -213,9 +213,9 @@ describe('undo over HTTP', () => {
     expect(board.history).toHaveLength(0)
   })
 
-  it('the other player can undo your change', async () => {
+  it('the other player cannot undo your change', async () => {
     const { gameId, starter, waiting } = await startedGame('UndoOther')
-    await place(gameId, starter, 'figures/redarmy', 200, 300)
+    const placed = await place(gameId, starter, 'figures/redarmy', 200, 300)
 
     const undone = await inject(app, {
       method: 'POST',
@@ -223,7 +223,9 @@ describe('undo over HTTP', () => {
       headers: bearer(waiting),
       payload: {},
     })
-    expect(undone.status).toBe(200)
+    expect(undone.status).toBe(403)
+    expect((await undone.json() as { error: string }).error).toBe('BOARD_UNDO_NOT_YOURS')
+    expect((await placed.json() as { board: { pieces: unknown[] } }).board.pieces).toHaveLength(1)
   })
 
   it('an empty history gives 412', async () => {
@@ -237,6 +239,72 @@ describe('undo over HTTP', () => {
 
     expect(undone.status).toBe(412)
     expect((await undone.json() as { error: string }).error).toBe('NOTHING_TO_UNDO_ON_BOARD')
+  })
+})
+
+describe('redo over HTTP', () => {
+  it('brings back the change undo just took away', async () => {
+    const { gameId, starter } = await startedGame('Redo')
+    await place(gameId, starter, 'figures/redarmy', 200, 300)
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/undo`,
+      headers: bearer(starter),
+      payload: {},
+    })
+
+    const redone = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/redo`,
+      headers: bearer(starter),
+      payload: {},
+    })
+
+    const board = (await redone.json() as { board: { pieces: unknown[]; history: unknown[] } }).board
+    expect(redone.status).toBe(200)
+    expect(board.pieces).toHaveLength(1)
+    expect(board.history).toHaveLength(1)
+  })
+
+  it('is available to the other player too', async () => {
+    const { gameId, starter, waiting } = await startedGame('RedoOther')
+    await place(gameId, starter, 'figures/redarmy', 200, 300)
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/undo`,
+      headers: bearer(starter),
+      payload: {},
+    })
+
+    const redone = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/redo`,
+      headers: bearer(waiting),
+      payload: {},
+    })
+    expect(redone.status).toBe(200)
+  })
+
+  it('is cleared by a further change and gives 412', async () => {
+    const { gameId, starter } = await startedGame('RedoCleared')
+    await place(gameId, starter, 'figures/redarmy', 200, 300)
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/undo`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    await place(gameId, starter, 'figures/bluearmy', 400, 400)
+
+    const redone = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/redo`,
+      headers: bearer(starter),
+      payload: {},
+    })
+
+    expect(redone.status).toBe(412)
+    expect((await redone.json() as { error: string }).error).toBe('NOTHING_TO_REDO_ON_BOARD')
   })
 })
 

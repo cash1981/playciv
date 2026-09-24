@@ -9,13 +9,15 @@
  * arbitrary image reference on the board.
  *
  * Every change is recorded in `board.history`, which makes two things possible:
- * undoing the last change, and stepping through the whole game to see what the
- * others did while you were away. The game log is not written to from here — a
- * turn is made of many small adjustments and the log would drown.
+ * undoing your own last change (with a matching redo), and stepping through the
+ * whole game to see what the others did while you were away. The game log is
+ * not written to from here — a turn is made of many small adjustments and the
+ * log would drown.
  */
 
 import type { Board, BoardArea, BoardChange, BoardPiece, Rotation } from '../board.js'
 import {
+  applyChange,
   areaAt,
   boardAssetLimit,
   boardAreas,
@@ -95,6 +97,9 @@ function record(
           logLength: state.log.length,
         },
       ],
+      // A fresh change invalidates whatever undo the redo stack was offering
+      // to bring back — the same way a text editor's redo dies once you type.
+      redo: [],
     },
   }
 }
@@ -425,11 +430,17 @@ export function removePiece(state: GameState, input: PieceInput): ActionResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Takes back the last board change, whoever made it.
+ * Takes back the board's last change, but only the player's own.
  *
- * Anyone may undo, because anyone may move anything — the history shows who
- * did what. The entry is dropped rather than kept and marked, so stepping
- * through the game shows the corrected timeline rather than a dead end.
+ * Everyone may move everything on this shared board, but Undo is scoped to
+ * whoever made the change: it only fires when the caller's own action is
+ * still the most recent one, so one player's Undo can never revert another
+ * player's move (issue #174). Undoing repeatedly walks back through a
+ * player's own consecutive changes; it stops as soon as it reaches an entry
+ * made by someone else.
+ *
+ * The entry moves onto `redo` rather than being dropped, so a single Redo can
+ * bring it straight back.
  */
 export function undoLastBoardChange(state: GameState, playerId: string): ActionResult {
   const denied = requireAccess(state, playerId)
@@ -437,12 +448,39 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
 
   const last = state.board.history.at(-1)
   if (last === undefined) return err({ kind: 'NOTHING_TO_UNDO_ON_BOARD' })
+  if (last.playerId !== playerId) return err({ kind: 'BOARD_UNDO_NOT_YOURS' })
 
   return ok(
     withBoard(state, {
       ...state.board,
       pieces: revertChange(state.board.pieces, last.change),
       history: state.board.history.slice(0, -1),
+      redo: [...state.board.redo, last],
+    }),
+  )
+}
+
+/**
+ * Brings back the single most recently undone change.
+ *
+ * Left open to any player with access, not only whoever undid it — the same
+ * "everyone may move everything" philosophy as the rest of the board. Any new
+ * change clears this stack (see `record`), so a redo is only ever offered
+ * right after an undo, before anyone has acted since.
+ */
+export function redoLastBoardChange(state: GameState, playerId: string): ActionResult {
+  const denied = requireAccess(state, playerId)
+  if (denied !== undefined) return err(denied)
+
+  const last = state.board.redo.at(-1)
+  if (last === undefined) return err({ kind: 'NOTHING_TO_REDO_ON_BOARD' })
+
+  return ok(
+    withBoard(state, {
+      ...state.board,
+      pieces: applyChange(state.board.pieces, last.change),
+      history: [...state.board.history, last],
+      redo: state.board.redo.slice(0, -1),
     }),
   )
 }
