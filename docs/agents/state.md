@@ -13,11 +13,40 @@ _Last updated: 2026-09-24_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 486 engine, 199 server, 190 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 503 engine, 204 server, 204 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Issue #168 follow-up: freeform tech-pyramid repositioning, for Nikola
+  Tesla and Sir Isaac Newton.** A player can move any of their own chosen
+  techs to a different pyramid row (`TechItem.slot`, a stepper control on
+  their own tab only) and can place the Great Person "Sir Isaac Newton" as a
+  permanent blank occupant of a row (`Playerhand.pyramidPlacements`, a
+  Newton-only "Place in tech pyramid" button in the hand). Neither Tesla's
+  nor Newton's printed rule is implemented or checked — the human explicitly
+  asked for the bare capability only, self-managed by the player, with no
+  legality checking and no public log entry for a move or a placement; three
+  new engine actions (`setTechSlot`, `placeGreatPersonInPyramid`,
+  `setPyramidPlacementSlot`) do nothing but persist what the owner asks for,
+  gated only by ownership. A round-1 review caught a real hidden-information
+  bug: the first version exposed a placed Great Person's *name* to opponents,
+  contradicting Newton's printed "facedown... blank tech card" text; fixed by
+  scrubbing the name out of the public projection (`OpaquePlayerhand` carries
+  only `{ slot }`, the owner's own view keeps `{ name, slot }`) and proven by
+  tests at the engine, server and UI layers. Two other round-1 findings and
+  two round-2 nits were also fixed (a missing `decisions.md`/`README.md`
+  entry, a weak ownership test, a missing image error fallback, two
+  non-null assertions). Round 2: approve. 17 new engine tests (503 total), 1
+  new server-route test file addition (204 total), 14 new web tests (204
+  total). Full checks pass. Two design calls made without a full
+  confirmation from the human — immediate public visibility of a *slot* (not
+  identity), and a stepper control instead of drag-and-drop — are recorded as
+  open/reversible in `decisions.md`. Same branch as issue #168's PR #170
+  (more commits, not a new PR, per the human's request). See
+  `docs/agents/tasks/issue-168-tech-revamp-pyramid-reposition.md` and
+  `decisions.md`.
 
 - **Issue #168: the tech tree shows real card art, and a level-tabbed picker
   replaces the tech combo box.** A researched pyramid slot (`TechTree.tsx`) now
