@@ -35,7 +35,7 @@ export const WONDER_DESCRIPTIONS: Readonly<Record<string, string>> = Object.from
     .filter((entry): entry is WonderReference & { description: string } =>
       entry.description !== null && entry.description !== '',
     )
-    .map((entry) => [entry.name, entry.description]),
+    .map((entry): readonly [string, string] => [entry.name, entry.description]),
 )
 
 export interface NewPlayer {

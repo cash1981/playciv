@@ -33,31 +33,32 @@ export function WondersPanel({
         <p className="muted">No wonders in play.</p>
       ) : (
         <ul className="card-grid">
-          {pieces.map((piece) => (
-            <li key={piece.id} className="card">
-              <img src={`/board/${piece.path}`} alt="" style={{ width: 56, height: 56, objectFit: 'contain' }} />
-              <strong>{piece.label}</strong>
-              {WONDER_DESCRIPTIONS[piece.label] !== undefined && (
-                <span className="card-text">{WONDER_DESCRIPTIONS[piece.label]}</span>
-              )}
-              <label>
-                Owner
-                <select
-                  aria-label={`${piece.label} owner`}
-                  value={piece.ownerId ?? ''}
-                  disabled={busy || readOnly}
-                  onChange={(event) =>
-                    void run(() => api.setWonderOwner(gameId, piece.id, event.target.value || null))
-                  }
-                >
-                  <option value="">Unassigned</option>
-                  {players.map((player) => (
-                    <option key={player.playerId} value={player.playerId}>{player.username}</option>
-                  ))}
-                </select>
-              </label>
-            </li>
-          ))}
+          {pieces.map((piece) => {
+            const description = WONDER_DESCRIPTIONS[piece.label]
+            return (
+              <li key={piece.id} className="card">
+                <img src={`/board/${piece.path}`} alt="" style={{ width: 56, height: 56, objectFit: 'contain' }} />
+                <strong>{piece.label}</strong>
+                {description !== undefined && <span className="card-text">{description}</span>}
+                <label>
+                  Owner
+                  <select
+                    aria-label={`${piece.label} owner`}
+                    value={piece.ownerId ?? ''}
+                    disabled={busy || readOnly}
+                    onChange={(event) =>
+                      void run(() => api.setWonderOwner(gameId, piece.id, event.target.value || null))
+                    }
+                  >
+                    <option value="">Unassigned</option>
+                    {players.map((player) => (
+                      <option key={player.playerId} value={player.playerId}>{player.username}</option>
+                    ))}
+                  </select>
+                </label>
+              </li>
+            )
+          })}
         </ul>
       )}
     </CollapsiblePanel>

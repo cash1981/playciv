@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
+import { BOARD_ASSETS } from '../src/board.js'
 import { createGame, WONDER_DESCRIPTIONS } from '../src/create-game.js'
 import type { CivItem, SheetName, WonderItem } from '../src/index.js'
 import { itemImage, itemName, revealAll, revealPublic } from '../src/item.js'
@@ -169,9 +170,10 @@ describe('column pairing', () => {
     expect(game.items.some((item) => itemName(item).toLowerCase().includes('wonders'))).toBe(false)
   })
 
-  it('every wonder drawn into a hand carries the sheet description', () => {
-    // WONDER_DESCRIPTIONS is a static player aid; this checks it agrees with
-    // the per-game deck's own WonderItem.description for the same names.
+  it('WONDER_DESCRIPTIONS agrees with each drawn WonderItem.description for the same name', () => {
+    // WONDER_DESCRIPTIONS is a static player aid, parsed independently of any
+    // game's deck. This checks it agrees with the per-game deck's own
+    // WonderItem.description for the same names.
     const wonders = game.items.filter((item): item is WonderItem => item.kind === 'wonder')
     expect(wonders).toHaveLength(27)
     for (const wonder of wonders) {
@@ -184,6 +186,45 @@ describe('column pairing', () => {
     expect(WONDER_DESCRIPTIONS['Medieval Wonders']).toBeUndefined()
     expect(WONDER_DESCRIPTIONS['Modern Wonders']).toBeUndefined()
     expect(Object.values(WONDER_DESCRIPTIONS).every((text) => text !== '')).toBe(true)
+  })
+
+  it('every wonder-category board asset label has a WONDER_DESCRIPTIONS entry', () => {
+    // WondersPanel looks up a placed piece's description by its board-asset
+    // label, a hand-maintained manifest string independent of the sheet name
+    // WONDER_DESCRIPTIONS is keyed by. Today the two happen to agree for all
+    // 27 wonders; this pins that agreement so a manifest label that drifts
+    // from the sheet (a respelling, for example) fails a test instead of
+    // silently losing its description in the panel.
+    const wonderAssets = BOARD_ASSETS.filter((asset) => asset.category === 'wonder')
+    expect(wonderAssets).toHaveLength(27)
+    for (const asset of wonderAssets) {
+      expect(WONDER_DESCRIPTIONS[asset.label], asset.label).not.toBeUndefined()
+    }
+  })
+
+  it("readWonders' shuffle is unaffected by reusing wonderReference (regression pin for a fixed seed)", () => {
+    // wonderReference() now backs readWonders too; this pins the exact
+    // shuffled order for seed 'gamedata' so any future change to either
+    // function that alters RNG consumption order is caught here rather than
+    // only reasoned about.
+    const byType = (type: string): readonly string[] =>
+      game.items
+        .filter((item): item is WonderItem => item.kind === 'wonder')
+        .filter((item) => item.type === type)
+        .map((item) => item.name)
+
+    expect(byType('Ancient')).toEqual([
+      'Stonehenge', 'The Oracle', 'The Great Wall', 'The Colossus', 'The Hanging Gardens',
+      'Chichen Itza', 'The Pyramids', 'The Great Lighthouse', 'Statue of Zeus',
+    ])
+    expect(byType('Medieval')).toEqual([
+      'Machu Pichu', 'Porcelain Tower', "Leonardo's Workshop", 'Brandenburg Gate', 'Taj Mahal',
+      'Himeji Samurai Castle', 'Angkor Wat', 'Notre-Dame', 'The Louvre',
+    ])
+    expect(byType('Modern')).toEqual([
+      'Statue of Liberty', 'Sydney Opera House', 'Big Ben', 'The Kremlin', 'Cristo Redentor',
+      'The Pentagon', 'United Nations', 'Panama Canal', 'The Internet',
+    ])
   })
 
   it('tiles are whole numbers, not "1.0"', () => {

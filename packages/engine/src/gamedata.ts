@@ -399,7 +399,7 @@ export interface WonderReference {
   readonly type: WonderItem['type']
 }
 
-const WONDER_SHEET_NAME: Record<WonderItem['type'], WonderItem['sheetName']> = {
+const WONDER_SHEET_NAME: Readonly<Record<WonderItem['type'], WonderItem['sheetName']>> = {
   Ancient: 'ANCIENT_WONDERS',
   Medieval: 'MEDIEVAL_WONDERS',
   Modern: 'MODERN_WONDERS',
