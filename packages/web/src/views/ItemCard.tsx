@@ -2,9 +2,10 @@
  * An item shown as its card, the way the AngularJS app did it.
  *
  * The file name comes from `itemImage()` in the engine, which is a port of the
- * Java `Image` implementations, so the client never invents a path. The one
- * card with no artwork is Space Flight, which is added in code rather than read
- * from the spreadsheet; that falls back to the name in a frame.
+ * Java `Image` implementations, so the client never invents a path. Space
+ * Flight is the level 5 tech added in code rather than read from the
+ * spreadsheet, but it does have card art, copied separately by
+ * `tools/tech-assets.ps1`.
  *
  * Showing the picture is a private matter. Your own hand renders in the clear
  * because it is yours; an opponent's hand never reaches the client at all, and

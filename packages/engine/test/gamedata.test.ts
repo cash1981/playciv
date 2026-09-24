@@ -105,6 +105,12 @@ describe('technologies', () => {
     const b = other.techs.find((tech) => tech.name === 'Space Flight')
     expect(a?.id).not.toBe(b?.id)
   })
+
+  it('Space Flight is the one tech with real card art, in .jpg', () => {
+    const spaceFlight = game.techs.find((tech) => tech.name === 'Space Flight')
+    expect(spaceFlight).toBeDefined()
+    expect(itemImage(spaceFlight!)).toBe('SpaceFlight.jpg')
+  })
 })
 
 describe('social policies', () => {
@@ -193,12 +199,11 @@ describe('image filenames', () => {
     }
   })
 
-  it('every image filename ends in .png, except tech which is .jpg', () => {
+  it('every image filename ends in .png', () => {
     for (const item of game.items) {
       const image = itemImage(item)
       if (image === null) continue
-      const expectedExtension = item.kind === 'tech' ? '.jpg' : '.png'
-      expect(image.endsWith(expectedExtension)).toBe(true)
+      expect(image.endsWith('.png')).toBe(true)
     }
   })
 

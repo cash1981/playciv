@@ -185,16 +185,18 @@ export function TechPanel({
           >
             {TECH_TEXT[detailTech.name] !== undefined && <p>{TECH_TEXT[detailTech.name]}</p>}
           </ReferenceCard>
+          <p className="muted">
+            Card text is shown for reference only; the engine records the chosen tech but does
+            not enforce its effects.
+          </p>
           <div className="row">
             <button
               disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  const result = await api.chooseTech(gameId, detailTech.name)
-                  setDetailTech(null)
-                  return result
-                })
-              }
+              onClick={() => {
+                const techName = detailTech.name
+                setDetailTech(null)
+                void run(() => api.chooseTech(gameId, techName))
+              }}
             >
               Research
             </button>
