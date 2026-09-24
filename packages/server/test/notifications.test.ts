@@ -94,20 +94,33 @@ async function loadGame(gameId: string): Promise<GameState> {
   return state
 }
 
-/** A started two-player game: the creator plus one joiner. */
+/**
+ * A started two-player game: the creator plus one joiner. `starter` is always
+ * the creator's own credentials (several tests need the actual creator, e.g.
+ * to end or delete the game), which is independent of who goes first —
+ * `actions/game.ts` shuffles the starting `yourTurn`, so `waitingPlayer` (the
+ * one NOT currently on turn) is resolved dynamically and may be either
+ * account.
+ */
 async function startedGame(
   name: string,
-): Promise<{ gameId: string; starter: { token: string; id: string }; waiting: string }> {
+): Promise<{
+  gameId: string
+  starter: { token: string; id: string }
+  waiting: string
+  waitingPlayer: { token: string; id: string }
+}> {
   const creator = await register(`${name}-a`)
   const gameId = await createGame(creator.token, name, 2)
   const other = await register(`${name}-b`)
   await join(other.token, gameId)
 
   const state = await loadGame(gameId)
-  const waitingName = state.players.find((player) => !player.yourTurn)?.username
-  if (waitingName === undefined) throw new Error('no waiting player')
+  const waitingPlayerState = state.players.find((player) => !player.yourTurn)
+  if (waitingPlayerState === undefined) throw new Error('no waiting player')
+  const waitingPlayer = waitingPlayerState.playerId === creator.id ? creator : other
 
-  return { gameId, starter: creator, waiting: waitingName }
+  return { gameId, starter: creator, waiting: waitingPlayerState.username, waitingPlayer }
 }
 
 describe('your turn', () => {
@@ -128,9 +141,42 @@ describe('your turn', () => {
     expect(mail?.to).toBe(`${waiting}@example.com`)
     expect(mail?.subject).toBe('It is your turn')
     expect(mail?.text).toContain(`It's your turn to play in turn!`)
+    expect(mail?.text).toContain('Continue with the start of turn phase.')
     expect(mail?.text).toContain(`https://playciv.app/game/${gameId}`)
     // Issue #30 puts the unsubscribe link on every mail, including this one.
     expect(mail?.text).toContain('/api/admin/email/notification/')
+  })
+
+  it('names the phase the next player actually left off on, not just the default', async () => {
+    const { gameId, starter, waitingPlayer } = await startedGame('phase')
+    // The waiting player worked ahead and already revealed SOT for turn 1, so
+    // once the turn reaches them the mail should point at Trade, not SOT.
+    const updateResponse = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/turns/update`,
+      headers: bearer(waitingPlayer.token),
+      payload: { turnNumber: 1, phase: 'SOT', order: 'ready' },
+    })
+    expect(updateResponse.status).toBe(200)
+    const revealResponse = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/turns/reveal`,
+      headers: bearer(waitingPlayer.token),
+      payload: { turnNumber: 1, phase: 'SOT' },
+    })
+    expect(revealResponse.status).toBe(200)
+    mailer.sent.length = 0
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/endturn`,
+      headers: bearer(starter.token),
+      payload: {},
+    })
+    expect(response.status).toBe(200)
+
+    expect(mailer.sent).toHaveLength(1)
+    expect(mailer.sent[0]?.text).toContain('Continue with the trade phase.')
   })
 
   it('sends nothing on the take-turn button', async () => {

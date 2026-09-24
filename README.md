@@ -451,7 +451,14 @@ its owner has revealed — oldest first, greyed and struck through above the
 current editor — so editing after a reveal does not erase what was published
 before. The revealed versions and the editor each keep a bounded,
 independently scrollable height — the long phases taller than trade and
-research — so a long order cannot make the section enormous.
+research — so a long order cannot make the section enormous. Each phase also
+has its own Save button beside Reveal, and Reveal itself now saves the phase
+first if it has unsaved edits, instead of staying disabled until a separate
+save. A single status — whose turn it is, and which of the five phases they
+are on — is derived from the phases already revealed (never the order text)
+and shown by the game's title, logged when a turn passes to the next player,
+and named in the "it's your turn" email; none of this existed in the old
+client. See `docs/agents/decisions.md`.
 
 **The password reset link is a signed, expiring token.** Java emailed
 `/api/auth/verify/{playerId}` and stored the pending password in plaintext on

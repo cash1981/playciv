@@ -699,7 +699,10 @@ describe('changing turn', () => {
 
     expect(isYourTurn(state, CHUL)).toBe(true)
     expect(isYourTurn(state, CASH1981)).toBe(false)
-    expect(state.log.at(-1)?.publicLog).toBe('Chul took turn button')
+    expect(state.log.at(-2)?.publicLog).toBe('Chul took turn button')
+    expect(state.log.at(-1)?.publicLog).toBe(
+      "System: Turn 1 - it is now Chul's turn (start of turn phase)",
+    )
   })
 })
 

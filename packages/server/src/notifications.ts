@@ -9,6 +9,7 @@
  */
 
 import type { GameState, TurnPhase } from '@civ/engine'
+import { activeTurnStatus, TURN_PHASE_LABEL } from '@civ/engine'
 
 import type { Mailer } from './mail.js'
 import { escapeHtml, renderMarkdown } from './markdown.js'
@@ -168,10 +169,13 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       const previous = before.players.find((player) => player.yourTurn)?.playerId
       const next = after.players.find((player) => player.yourTurn)
       if (next === undefined || next.playerId === previous) return
+      const status = activeTurnStatus(after)
+      const phaseText =
+        status === null ? '' : ` Continue with the ${TURN_PHASE_LABEL[status.phase]} phase.`
       await notify(
         next.playerId,
         'It is your turn',
-        `It's your turn to play in ${after.name}!\n\n` +
+        `It's your turn to play in ${after.name}!${phaseText}\n\n` +
           `Go to ${gameLink(after.id)} to start your turn`,
       )
     },

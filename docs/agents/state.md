@@ -13,7 +13,7 @@ _Last updated: 2026-09-24_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 526 engine, 204 server, 214 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 513 engine, 205 server, 213 web on `feat/turn-order-phase-tracker` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -80,6 +80,35 @@ _Last updated: 2026-09-24_
   server's deck; no browser tool was connected this session, so the visual
   pass in a real game page is left to the human. Branch
   `feat/issue-167-wonder-descriptions`.
+
+- **Turn orders: per-phase save, and a whose-turn/which-phase status.** Each
+  phase section (SOT, Trade, City management, Movement, Research) now has its
+  own Save button beside Reveal; Reveal saves the phase first if it has
+  unsaved edits — reading the editor directly and trusting the same
+  live-dirty signal `saveAll` already used, not just `values`, so a keystroke
+  Milkdown has not yet flushed can no longer be silently skipped and the
+  previous, stale text revealed in its place (a round-1 review finding, now
+  covered by a `TurnPanel.test.tsx` regression test). A new pure
+  `currentPhaseStatus`/`activeTurnStatus` pair (`turn.ts`/`state.ts`) derives
+  who is on turn and which of the five phases they should be working on, from
+  the already-public `revealed` flags only, never order text (proven by a
+  `toPlayerView` leak test); it is exposed as `PlayerView.activeTurn`, shown
+  in the game title row next to "Your turn"/"<opponent>'s turn", logged as a
+  `System:` line on `endTurn`/`takeTurn`, and named in the "it's your turn"
+  email. The Great Person Khalid's turn-steal is explicitly out of scope,
+  confirmed with the human — filed as a future issue, not guessed at. Two
+  review rounds (round 1: one major finding on the live-dirty race, fixed;
+  round 2: approved with nits, the cheap ones fixed — a `revealed`-flag
+  consistency rule between the two new helpers, letting Save clear an
+  emptied phase, a `PlayerView | unknown` type tightened, and one more
+  decision recorded). Browser-verified end to end against a real dev server:
+  the title status, the Save/"Save & reveal" buttons, and the `endTurn` log
+  line and email phase all matched. 15 new engine tests (513 total), 2 new
+  server tests (205 total, one an intermittent flake in the new test itself
+  from `actions/game.ts`'s start-player shuffle, fixed and confirmed over 8
+  repeated runs), 4 new web tests (213 total). Full checks pass. Branch
+  `feat/turn-order-phase-tracker`; PR not yet opened. See
+  `docs/agents/tasks/turn-order-phase-tracker.md` and `decisions.md`.
 
 - **Issue #168 follow-up: freeform tech-pyramid repositioning, for Nikola
   Tesla and Sir Isaac Newton.** A player can move any of their own chosen

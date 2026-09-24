@@ -403,7 +403,7 @@ describe('TurnOrderWorkspace', () => {
     expect(onRevealPhase).toHaveBeenCalledWith('SOT')
   })
 
-  it('disables reveal until the phase has been saved', () => {
+  it('offers a save-and-reveal for a phase with unsaved edits', () => {
     render(
       <TurnOrderWorkspace
         gameId="game-1"
@@ -425,9 +425,40 @@ describe('TurnOrderWorkspace', () => {
     )
 
     expect(
-      (screen.getByRole('button', { name: 'Save before reveal' }) as HTMLButtonElement).disabled,
-    ).toBe(true)
+      (screen.getByRole('button', { name: 'Save & reveal' }) as HTMLButtonElement).disabled,
+    ).toBe(false)
     expect(screen.getAllByRole('button', { name: 'Reveal' })).toHaveLength(4)
+  })
+
+  it('offers a per-phase Save button that saves without revealing', () => {
+    const onSavePhase = vi.fn()
+    render(
+      <TurnOrderWorkspace
+        gameId="game-1"
+        busy={false}
+        run={run}
+        player={{ username: 'cash1981', color: 'Red', own: true }}
+        turnNumber={3}
+        turnNumbers={[3]}
+        current={turn('cash1981')}
+        values={{ ...orders, CM: 'New unsaved plan' }}
+        savedValues={orders}
+        onTurnNumberChange={noop}
+        onNewTurn={noop}
+        onPhaseChange={noop}
+        onSavePhase={onSavePhase}
+        tabPanelId="panel"
+        labelledBy="tab"
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    const saveButtons = screen
+      .getAllByRole('button', { name: 'Save' })
+      .filter((button) => !(button as HTMLButtonElement).disabled)
+    expect(saveButtons).toHaveLength(1)
+    fireEvent.click(saveButtons[0] as HTMLElement)
+    expect(onSavePhase).toHaveBeenCalledWith('CM')
   })
 
   it('renders another player orders read-only without publishing controls', () => {
@@ -837,6 +868,73 @@ describe('TurnPanel save all changes', () => {
       'MOVEMENT',
       'Opponent private strategy',
     )
+  })
+
+  it('reveal saves an edit still pending in the editor before publishing it, never the stale saved text', async () => {
+    const ownTurn = turn('cash1981', false, 1)
+    const playerView = viewFor([ownTurn])
+    const updateTurn = vi.spyOn(api, 'updateTurn').mockResolvedValue(playerView)
+    const revealTurnOrder = vi.spyOn(api, 'revealTurnOrder').mockResolvedValue(playerView)
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([])
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    await settle()
+    vi.useFakeTimers()
+    fireEvent.change(screen.getByRole('textbox', { name: /movement orders.*turn 1/i }), {
+      target: { value: 'Move at dawn' },
+    })
+    // DelayedEditor calls onDirty synchronously but, like the real Milkdown
+    // editor, only flushes onChange 200 ms later — clicking now must not take
+    // the "already saved" reveal-only path and publish the old text.
+    const revealButton = screen.getByRole('button', { name: 'Save & reveal' })
+    fireEvent.click(revealButton)
+    await act(async () => Promise.resolve())
+    act(() => vi.advanceTimersByTime(200))
+    await act(async () => Promise.resolve())
+
+    expect(updateTurn).toHaveBeenCalledWith('game-1', 1, 'MOVEMENT', 'Move at dawn')
+    expect(revealTurnOrder).toHaveBeenCalledWith('game-1', 1, 'MOVEMENT')
+    expect(updateTurn.mock.invocationCallOrder[0]).toBeLessThan(
+      revealTurnOrder.mock.invocationCallOrder[0] as number,
+    )
+  })
+
+  it('a reveal that fails after a successful save leaves the phase marked saved, not failed', async () => {
+    const ownTurn = turn('cash1981', false, 1)
+    const playerView = viewFor([ownTurn])
+    vi.spyOn(api, 'updateTurn').mockResolvedValue(playerView)
+    vi.spyOn(api, 'revealTurnOrder').mockRejectedValue(new Error('reveal failed'))
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([])
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={FlushingEditor}
+      />,
+    )
+
+    await settle()
+    fireEvent.change(screen.getByRole('textbox', { name: /movement orders.*turn 1/i }), {
+      target: { value: 'Move at dawn' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save & reveal' }))
+    await settle()
+
+    expect(screen.getByText('Saved movement')).toBeTruthy()
   })
 
   it('keeps the signed-in player text when returning from another player tab', async () => {

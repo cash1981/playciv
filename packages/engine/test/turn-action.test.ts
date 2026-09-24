@@ -17,11 +17,12 @@ import {
   revealTurnOrder,
   updateTurn,
 } from '../src/actions/turn.js'
+import { endTurn } from '../src/actions/player.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { migrateGameState } from '../src/migrate.js'
-import { findPlayer } from '../src/state.js'
+import { activeTurnStatus, findPlayer, toPlayerView } from '../src/state.js'
 import type { PlayerTurn, TurnPhase } from '../src/turn.js'
-import { TURN_PHASES, migratePlayerTurn } from '../src/turn.js'
+import { currentPhaseStatus, TURN_PHASES, migratePlayerTurn } from '../src/turn.js'
 
 import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -408,5 +409,141 @@ describe('hidden information', () => {
       { markdown: 'published plan', at: 't1' },
     ])
     expect(JSON.stringify(state.publicTurns)).not.toContain('new private draft')
+  })
+})
+
+describe('currentPhaseStatus', () => {
+  it('is SOT for a turn that has not been saved yet', () => {
+    expect(currentPhaseStatus(undefined)).toBe('SOT')
+  })
+
+  it('is the first phase not yet revealed', () => {
+    let state = firstCivGame()
+    state = unwrap(updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'a' }))
+    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', at: 't1' }))
+    const turn = findPlayer(state, CASH1981)?.playerTurns.find((candidate) => candidate.turnNumber === 1)
+    expect(currentPhaseStatus(turn)).toBe('TRADE')
+  })
+
+  it('is SOT again once every phase of the turn has been revealed', () => {
+    let state = firstCivGame()
+    for (const phase of TURN_PHASES) {
+      state = unwrap(updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase, order: 'x' }))
+      state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase, at: 't' }))
+    }
+    const turn = findPlayer(state, CASH1981)?.playerTurns.find((candidate) => candidate.turnNumber === 1)
+    expect(currentPhaseStatus(turn)).toBe('SOT')
+  })
+})
+
+describe('activeTurnStatus', () => {
+  it('is null before the game has started', () => {
+    const state = firstCivGame()
+    const noOneOnTurn = {
+      ...state,
+      players: state.players.map((player) => ({ ...player, yourTurn: false })),
+    }
+    expect(activeTurnStatus(noOneOnTurn)).toBeNull()
+  })
+
+  it('reports SOT and turn 1 for a fresh active player', () => {
+    const state = firstCivGame()
+    expect(activeTurnStatus(state)).toEqual({
+      playerId: CASH1981,
+      username: 'cash1981',
+      turnNumber: 1,
+      phase: 'SOT',
+    })
+  })
+
+  it('reports the first unrevealed phase of the active player, not order text', () => {
+    let state = firstCivGame()
+    state = unwrap(updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'secret plan' }))
+    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', at: 't1' }))
+
+    const status = activeTurnStatus(state)
+    expect(status).toEqual({ playerId: CASH1981, username: 'cash1981', turnNumber: 1, phase: 'TRADE' })
+    // Never leaks the order text, only the phase name.
+    expect(JSON.stringify(status)).not.toContain('secret plan')
+  })
+
+  it('rolls over to SOT of the next turn number once every phase is revealed', () => {
+    let state = firstCivGame()
+    for (const phase of TURN_PHASES) {
+      state = unwrap(updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase, order: 'x' }))
+      state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase, at: 't' }))
+    }
+    expect(activeTurnStatus(state)).toEqual({
+      playerId: CASH1981,
+      username: 'cash1981',
+      turnNumber: 2,
+      phase: 'SOT',
+    })
+  })
+
+  it('exposes on PlayerView without leaking order text to another player', () => {
+    let state = firstCivGame()
+    state = unwrap(
+      updateTurn(state, {
+        playerId: CASH1981,
+        turnNumber: 1,
+        phase: 'SOT',
+        order: 'top secret plan',
+      }),
+    )
+
+    // Neither the owner's own view nor an opponent's view can leak the text
+    // through `activeTurn` — only `you`/`opponents[].publicTurns` may carry it,
+    // and only for its owner.
+    const ownView = toPlayerView(state, CASH1981)
+    const opponentView = toPlayerView(state, KARANDRAS1)
+    expect(ownView.activeTurn).toEqual({
+      playerId: CASH1981,
+      username: 'cash1981',
+      turnNumber: 1,
+      phase: 'SOT',
+    })
+    expect(opponentView.activeTurn).toEqual(ownView.activeTurn)
+    expect(JSON.stringify(opponentView.activeTurn)).not.toContain('top secret plan')
+  })
+
+  it('endTurn logs the phase the newly active player is actually on, not just SOT', () => {
+    let state = firstCivGame()
+    // KARANDRAS1 has already worked ahead and revealed SOT for turn 1, so once
+    // the turn reaches them they should be pointed at TRADE, not SOT.
+    state = unwrap(
+      updateTurn(state, { playerId: KARANDRAS1, turnNumber: 1, phase: 'SOT', order: 'ready' }),
+    )
+    state = unwrap(
+      revealTurnOrder(state, { playerId: KARANDRAS1, turnNumber: 1, phase: 'SOT', at: 't1' }),
+    )
+
+    const afterEndTurn = unwrap(endTurn(state))
+    expect(activeTurnStatus(afterEndTurn)).toEqual({
+      playerId: KARANDRAS1,
+      username: 'Karandras1',
+      turnNumber: 1,
+      phase: 'TRADE',
+    })
+    expect(afterEndTurn.log.at(-1)?.publicLog).toBe(
+      "System: Turn 1 - it is now Karandras1's turn (trade phase)",
+    )
+  })
+
+  it('follows the turn to whoever it is passed to', () => {
+    const state = firstCivGame()
+    const passed = {
+      ...state,
+      players: state.players.map((player) => ({
+        ...player,
+        yourTurn: player.playerId === KARANDRAS1,
+      })),
+    }
+    expect(activeTurnStatus(passed)).toEqual({
+      playerId: KARANDRAS1,
+      username: 'Karandras1',
+      turnNumber: 1,
+      phase: 'SOT',
+    })
   })
 })
