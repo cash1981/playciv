@@ -37,6 +37,16 @@ _Last updated: 2026-09-23_
   the hole staying unsnapped. See `decisions.md` for the snap-tolerance
   consequence.
 
+- **The coin mark sits in the top bar, linked home.** The favicon coin is shown
+  again inside the `.brand` anchor, to the left of the "Civilization playciv"
+  wordmark, so clicking it goes to `/`. Asset-only and presentational:
+  `Navigation.tsx` gets an `<img class="brand-icon" src="/favicon.ico" alt="">`,
+  `styles.css` sizes it `1.35rem` square with `align-self: center` while
+  `.brand` keeps its baseline alignment, and a `Navigation` test pins the link
+  and the icon `src`/`alt`. No new artwork; the existing icon is reused. Review
+  approved with two nits, both fixed. Full checks pass (476 engine, 197 server,
+  169 web). Branch `feat/header-coin-icon`; PR #160. Per the human's request the
+  review/test gate was not re-run after the final cosmetic commit.
 - **Issue #158: the Coins tab offers only the sources a player actually has.**
   A source now gets a counter only where it is real — a revealed coin-token
   tech, the revealed Organized Religion policy, the Democracy government, the

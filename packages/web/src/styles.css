@@ -447,6 +447,13 @@ label > textarea {
   white-space: nowrap;
 }
 
+.brand-icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: none;
+  align-self: center;
+}
+
 .site-navigation {
   display: flex;
   align-items: center;
