@@ -1,4 +1,4 @@
-import { isInWondersArea, WONDERS_AREA_ID } from '@civ/engine'
+import { isInWondersArea, WONDER_DESCRIPTIONS, WONDERS_AREA_ID } from '@civ/engine'
 
 import type { PlayerView } from '../lib/api.js'
 import { api } from '../lib/api.js'
@@ -37,6 +37,9 @@ export function WondersPanel({
             <li key={piece.id} className="card">
               <img src={`/board/${piece.path}`} alt="" style={{ width: 56, height: 56, objectFit: 'contain' }} />
               <strong>{piece.label}</strong>
+              {WONDER_DESCRIPTIONS[piece.label] !== undefined && (
+                <span className="card-text">{WONDER_DESCRIPTIONS[piece.label]}</span>
+              )}
               <label>
                 Owner
                 <select

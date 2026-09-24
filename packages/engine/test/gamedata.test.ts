@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { createGame } from '../src/create-game.js'
+import { createGame, WONDER_DESCRIPTIONS } from '../src/create-game.js'
 import type { CivItem, SheetName, WonderItem } from '../src/index.js'
 import { itemImage, itemName, revealAll, revealPublic } from '../src/item.js'
 
@@ -167,6 +167,23 @@ describe('column pairing', () => {
     expect(byType('Modern')).toContain('Big Ben')
     // The divider rows "Medieval Wonders" and "Modern Wonders" must not become items
     expect(game.items.some((item) => itemName(item).toLowerCase().includes('wonders'))).toBe(false)
+  })
+
+  it('every wonder drawn into a hand carries the sheet description', () => {
+    // WONDER_DESCRIPTIONS is a static player aid; this checks it agrees with
+    // the per-game deck's own WonderItem.description for the same names.
+    const wonders = game.items.filter((item): item is WonderItem => item.kind === 'wonder')
+    expect(wonders).toHaveLength(27)
+    for (const wonder of wonders) {
+      expect(WONDER_DESCRIPTIONS[wonder.name]).toBe(wonder.description)
+    }
+  })
+
+  it('WONDER_DESCRIPTIONS has no divider-row entries and no empty text', () => {
+    expect(Object.keys(WONDER_DESCRIPTIONS)).toHaveLength(27)
+    expect(WONDER_DESCRIPTIONS['Medieval Wonders']).toBeUndefined()
+    expect(WONDER_DESCRIPTIONS['Modern Wonders']).toBeUndefined()
+    expect(Object.values(WONDER_DESCRIPTIONS).every((text) => text !== '')).toBe(true)
   })
 
   it('tiles are whole numbers, not "1.0"', () => {
