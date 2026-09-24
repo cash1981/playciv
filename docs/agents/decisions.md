@@ -2318,3 +2318,71 @@ conversion dependency to a PowerShell asset script that had never needed one.
 `itemImage()`'s `tech` case must change again. The orphaned tech `.png`
 placeholders remain on disk and in git history; deleting them (and, if wanted,
 teaching `item-assets.ps1` to stop recreating them) is left as a follow-up.
+
+---
+
+## 2026-09-24 - Freeform tech-pyramid repositioning is a new, deliberately unenforced mechanic
+
+**Decision.** A player may freely change which row of their own tech pyramid
+one of their chosen techs is displayed in (`TechItem.slot`, separate from its
+real `level`), and may place the Great Person "Sir Isaac Newton" as a
+permanent blank occupant of a pyramid row
+(`Playerhand.pyramidPlacements`). Both are plain, self-only actions
+(`setTechSlot`, `placeGreatPersonInPyramid`, `setPyramidPlacementSlot`) that
+store whatever the player asks for, with no legality checking of any kind —
+not which techs are eligible, not whether a triggering card was actually
+discarded, not a level-difference bound, not turn/phase gating — and no
+public log entry for a move or a placement. `old-civ-rest`/`old-civ-web` have
+no Nikola Tesla or Isaac Newton logic at all (confirmed by grep: zero
+matches), so this is new ground, not a port; Thomas Edison, initially thought
+to be the relevant card, was not implemented at all, since choosing a tech
+already covers his actual printed effect once the human checked the card.
+
+**Why.** Quoting the human directly: *"Poenget er det samme. Vi trenger
+funksjonaliteten... la spillerne selv få lov til å flytte rundt på
+plasseringene av techene sine. For nå tenker jeg det ikke er nødvendig å
+logge selve flyttingene."* Tesla's and Newton's printed cards
+(`gamedata-faf-waw.json`'s `Great Person` sheet) exist to explain *why* a
+tech pyramid needs this at all; implementing their triggering conditions was
+explicitly out of scope.
+
+**Consequences — two calls made without a full round-trip from the human,
+both cheap to reverse if wrong:**
+1. A moved tech's slot, and a Newton placement's slot, are immediately public
+   — exposed in `opaque()` the same way `revealedTechs` already is, no
+   separate reveal step. Reasoned from "PBF game, opponents should see the
+   same board", not an explicit instruction.
+2. The interaction is a stepper (▲/▼ buttons on each pyramid slot), not real
+   drag-and-drop — chosen for build/test cost and accessibility.
+
+**A third call was corrected during review, not left as a judgment call:**
+the *identity* of a placed Great Person is not exposed to opponents, only the
+*slot* it occupies. Newton's printed text is explicit that he goes in
+**facedown**, as a **blank** tech card; the first implementation put his
+name in the public projection unfiltered, which a read-only review caught as
+a hidden-information leak before merge (see `workflow.md`'s "What must never
+pass" list — a projection carrying private card identity with no test
+proving otherwise is exactly that). `OpaquePlayerhand.pyramidPlacements`
+therefore carries only `{ slot }`; `Playerhand.pyramidPlacements` (the
+owner's own view) still carries `{ name, slot }`, so a player can always see
+which of their own cards is where. `TechTree.tsx` shows a generic "blank tech
+card" label wherever the name is absent, never inventing a name.
+
+**Left as a known, low-risk edge case, not fixed:** a placement is looked up
+by `name` (both in the owner's own action calls and, incidentally, by
+`TechTree`'s React `key`). Two placements sharing a name, or a name
+colliding with a tech's own name, would move together — unreachable today,
+since the client only offers the "place" control for one Great Person
+(Newton) and Great Person names are unique in the data sheet. A future
+addition of a second placeable Great Person should give `PyramidPlacement` a
+stable id instead of matching by name.
+
+**Also worth knowing:** a placed Great Person is removed from `items`
+without moving to `state.discardedItems` (correct — Newton stays in the
+pyramid for the rest of the game, he is not discarded, and `draw.ts`'s
+reshuffle must never pull him back into the deck). One side effect: the
+original `DRAW` log entry's undo now hits a clean `ITEM_NOT_FOUND` refusal
+rather than restoring him, since `putItemBack` only knows `items` and
+`discardedItems`. Acceptable — an already-placed Newton being un-drawn was
+never a real scenario — but worth knowing if undo behaviour here ever
+confuses a player.
