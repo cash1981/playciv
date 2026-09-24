@@ -12,25 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### turn-order-phase-tracker
-
-- **Owner:** Claude (Sonnet 5)
-- **Branch:** `feat/turn-order-phase-tracker`
-- **Brief:** `docs/agents/tasks/turn-order-phase-tracker.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/turn.ts`
-  - `packages/engine/src/state.ts`
-  - `packages/engine/src/actions/player.ts`
-  - `packages/engine/src/index.ts`
-  - `packages/server/src/notifications.ts`
-  - `packages/web/src/views/TurnPanel.tsx`
-  - `packages/web/src/views/TurnPanel.css`
-  - `packages/web/src/views/GameView.tsx`
-- **Notes:** Per-phase Save button next to Reveal (Reveal now saves-then-reveals
-  in one click); a global "whose turn / which phase" status computed from
-  reveal flags only (no order text), shown near the game title, in the
-  end-turn log line and in the "it's your turn" email.
+_Nothing claimed._
 
 ---
 
