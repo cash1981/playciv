@@ -14,7 +14,8 @@ import type { Board, BoardArea, BoardPiece } from './board.js'
 import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
 import type { CoinSources } from './coins.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
-import type { PlayerTurn } from './turn.js'
+import type { PlayerTurn, TurnPhase } from './turn.js'
+import { currentPhaseStatus } from './turn.js'
 import type { Undo } from './undo.js'
 import type { Battle, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
@@ -242,6 +243,36 @@ export function findPlayer(state: GameState, playerId: string): Playerhand | und
 /** Java: `PBF.getNameOfUsersTurn()`. */
 export function nameOfPlayersTurn(state: GameState): string {
   return state.players.find((player) => player.yourTurn)?.username ?? ''
+}
+
+/**
+ * New in the port, no Java counterpart. Who is on turn, and which phase of
+ * their turn they should be working on — see `currentPhaseStatus`. `null`
+ * when nobody is on turn yet (game not started). Derived only from public
+ * `revealed` flags, never order text, so it is safe in `PlayerView` for every
+ * viewer, not just the active player.
+ */
+export interface ActiveTurnStatus {
+  readonly playerId: string
+  readonly username: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+}
+
+export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
+  const current = state.players.find((player) => player.yourTurn)
+  if (current === undefined) return null
+
+  const latest = current.playerTurns.reduce<PlayerTurn | undefined>(
+    (best, turn) => (best === undefined || turn.turnNumber > best.turnNumber ? turn : best),
+    undefined,
+  )
+  const phase = currentPhaseStatus(latest)
+  const roundDone = latest !== undefined && phase === 'SOT' &&
+    Object.values(latest.revealed).every((revealed) => revealed)
+  const turnNumber = latest === undefined ? 1 : roundDone ? latest.turnNumber + 1 : latest.turnNumber
+
+  return { playerId: current.playerId, username: current.username, turnNumber, phase }
 }
 
 export function findPlayerByUsername(
@@ -490,6 +521,8 @@ export interface PlayerView {
   readonly numberOfDiscardedItems: number
   readonly you: PlayerViewSelf | null
   readonly opponents: readonly OpaquePlayerhand[]
+  /** Whose turn it is and which phase they should be working on. */
+  readonly activeTurn: ActiveTurnStatus | null
   readonly techs: readonly TechItem[]
   /** The board is public — everyone sees the same pieces. */
   readonly board: Board
@@ -568,6 +601,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     opponents: state.players
       .filter((player) => player.playerId !== viewerId)
       .map((player) => opaque(state, player)),
+    activeTurn: activeTurnStatus(state),
     techs: state.techs,
     board: state.board,
     boardAreas: boardAreas(state.board, state.players),

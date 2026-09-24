@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { isTradable, isUnit, itemName, itemType } from '@civ/engine'
+import { isTradable, isUnit, itemName, itemType, TURN_PHASE_LABEL } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
@@ -329,10 +329,18 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
             {autoRefresh ? 'Auto-refresh on' : 'Auto-refresh off'}
           </button>
           {yourTurn ? (
-            <span className="tag turn">Your turn</span>
+            <span className="tag turn">
+              Your turn
+              {displayedView.activeTurn !== null &&
+                ` — ${TURN_PHASE_LABEL[displayedView.activeTurn.phase]} phase`}
+            </span>
           ) : (
             <span className="muted">
-              {displayedView.opponents.find((opponent) => opponent.yourTurn)?.username ?? 'nobody'}'s turn
+              {(displayedView.activeTurn?.username ??
+                displayedView.opponents.find((opponent) => opponent.yourTurn)?.username ??
+                'nobody')}'s turn
+              {displayedView.activeTurn !== null &&
+                ` — ${TURN_PHASE_LABEL[displayedView.activeTurn.phase]} phase`}
             </span>
           )}
         </div>

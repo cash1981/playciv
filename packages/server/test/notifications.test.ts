@@ -128,6 +128,7 @@ describe('your turn', () => {
     expect(mail?.to).toBe(`${waiting}@example.com`)
     expect(mail?.subject).toBe('It is your turn')
     expect(mail?.text).toContain(`It's your turn to play in turn!`)
+    expect(mail?.text).toContain('Continue with the start of turn phase.')
     expect(mail?.text).toContain(`https://playciv.app/game/${gameId}`)
     // Issue #30 puts the unsubscribe link on every mail, including this one.
     expect(mail?.text).toContain('/api/admin/email/notification/')

@@ -182,3 +182,19 @@ export function publicTurnKey(turn: PlayerTurn): string {
 export function nextTurnNumber(turn: PlayerTurn): number {
   return turn.turnNumber + 1
 }
+
+/**
+ * New in the port, no Java counterpart. The phase a player should currently be
+ * working on: the first phase of their given turn not yet revealed, or `SOT`
+ * once every phase of that turn has been revealed (they are between rounds,
+ * waiting to start the next one). A missing turn (nothing saved yet) is also
+ * `SOT`. Never `null`, so a caller always has something concrete to point a
+ * player at.
+ *
+ * Reads only the `revealed` flags, which are already public (`publicTurn`
+ * masks order text, not these booleans), so this is safe to expose to anyone.
+ */
+export function currentPhaseStatus(turn: PlayerTurn | undefined): TurnPhase {
+  if (turn === undefined) return 'SOT'
+  return TURN_PHASES.find((phase) => !turn.revealed[phase]) ?? 'SOT'
+}

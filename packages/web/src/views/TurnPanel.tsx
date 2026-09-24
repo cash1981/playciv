@@ -57,6 +57,7 @@ interface WorkspaceProps {
   readonly onTurnNumberChange: (turnNumber: number) => void
   readonly onNewTurn: () => void
   readonly onPhaseChange: (phase: TurnPhase, markdown: string) => void
+  readonly onSavePhase?: (phase: TurnPhase) => void
   readonly onRevealPhase?: (phase: TurnPhase) => void
   readonly onPhaseDirty?: (phase: TurnPhase) => void
   readonly tabPanelId: string
@@ -179,6 +180,7 @@ export function TurnOrderWorkspace({
   onTurnNumberChange,
   onNewTurn,
   onPhaseChange,
+  onSavePhase,
   onRevealPhase,
   onPhaseDirty,
   tabPanelId,
@@ -263,42 +265,35 @@ export function TurnOrderWorkspace({
         >
           <div className="turn-phase-heading">
             <h3>{TURN_PHASE_LABEL[phase]}</h3>
-            {player.own && (
-              <>
-                <SaveStatusBadge
-                  status={
-                    phaseStatuses?.[phase] ??
-                      (values[phase] !== savedValues[phase] ? 'unsaved' : 'saved')
-                  }
-                  label={TURN_PHASE_LABEL[phase]}
-                />
-                <button
-                  type="button"
-                  className="small"
-                  disabled={
-                    busy ||
-                    locked ||
-                    current === undefined ||
-                    values[phase] === '' ||
-                    values[phase] !== savedValues[phase] ||
-                    (phaseStatuses?.[phase] !== undefined && phaseStatuses[phase] !== 'saved') ||
-                    current.revealed[phase]
-                  }
-                  title={
-                    values[phase] !== savedValues[phase]
-                      ? 'Save this phase before revealing it'
-                      : undefined
-                  }
-                  onClick={() => onRevealPhase?.(phase)}
-                >
-                  {current?.revealed[phase]
-                    ? 'Revealed'
-                    : values[phase] !== savedValues[phase]
-                      ? 'Save before reveal'
-                      : 'Reveal'}
-                </button>
-              </>
-            )}
+            {player.own && (() => {
+              const dirty = values[phase] !== savedValues[phase]
+              const saving = phaseStatuses?.[phase] === 'saving'
+              const revealed = current?.revealed[phase] === true && !dirty
+              return (
+                <>
+                  <SaveStatusBadge
+                    status={phaseStatuses?.[phase] ?? (dirty ? 'unsaved' : 'saved')}
+                    label={TURN_PHASE_LABEL[phase]}
+                  />
+                  <button
+                    type="button"
+                    className="small"
+                    disabled={busy || locked || saving || values[phase] === '' || !dirty}
+                    onClick={() => onSavePhase?.(phase)}
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    className="small"
+                    disabled={busy || locked || saving || values[phase] === '' || revealed}
+                    onClick={() => onRevealPhase?.(phase)}
+                  >
+                    {revealed ? 'Revealed' : dirty ? 'Save & reveal' : 'Reveal'}
+                  </button>
+                </>
+              )
+            })()}
             {!player.own && current !== undefined && (
               <span className="tag">{current.revealed[phase] ? 'revealed' : 'private'}</span>
             )}
@@ -730,6 +725,32 @@ export function TurnPanel({
     setSaveStatuses((existing) => ({ ...existing, [key]: 'saved' }))
   }
 
+  /** Saves one phase of the selected player's own turn and, optionally, reveals it. */
+  const submitPhase = (phase: TurnPhase, options: { readonly reveal: boolean }): void => {
+    if (view?.you === null || view === null || selectedPlayer?.own !== true) return
+    const key = phaseKey(turnNumber, phase)
+    const dirty = values[phase] !== savedValues[phase]
+
+    if (!dirty) {
+      if (options.reveal) void run(() => api.revealTurnOrder(gameId, turnNumber, phase))
+      return
+    }
+
+    const markdown = editorRefs.current[phase]?.getMarkdown() ?? values[phase]
+    setDraftValue(key, markdown)
+    setSaveStatuses((existing) => ({ ...existing, [key]: 'saving' }))
+    void run(async () => {
+      try {
+        const savedView = await api.updateTurn(gameId, turnNumber, phase, markdown)
+        reconcileSuccessfulPhase(key, { turn: turnNumber, phase, markdown })
+        return options.reveal ? await api.revealTurnOrder(gameId, turnNumber, phase) : savedView
+      } catch (caught) {
+        setSaveStatuses((existing) => ({ ...existing, [key]: 'failed' }))
+        throw caught
+      }
+    })
+  }
+
   const saveAll = (): void => {
     if (view?.you === null || view === null) return
 
@@ -904,9 +925,8 @@ export function TurnPanel({
                 const key = phaseKey(turnNumber, phase)
                 setDraftValue(key, markdown)
               }}
-              onRevealPhase={(phase) => {
-                void run(() => api.revealTurnOrder(gameId, turnNumber, phase))
-              }}
+              onSavePhase={(phase) => submitPhase(phase, { reveal: false })}
+              onRevealPhase={(phase) => submitPhase(phase, { reveal: true })}
               onPhaseDirty={(phase) => {
                 if (selectedPlayer.own !== true) return
                 markLiveDirty(phaseKey(turnNumber, phase))

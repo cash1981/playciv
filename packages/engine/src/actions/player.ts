@@ -36,7 +36,8 @@ import { shuffle } from '../random.js'
 import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
 import type { GameState, Playerhand, PlayerStats } from '../state.js'
-import { findPlayer, hasUserAccess, isMovementValue, withPlayer } from '../state.js'
+import { activeTurnStatus, findPlayer, hasUserAccess, isMovementValue, withPlayer } from '../state.js'
+import { TURN_PHASE_LABEL } from '../turn.js'
 
 import { placeUnchecked } from './board.js'
 import { draw, drawWonderToBoard } from './draw.js'
@@ -853,6 +854,18 @@ export interface EndTurnActor {
   readonly username: string
 }
 
+/**
+ * New in the port, no Java counterpart: a "System" log line naming the newly
+ * active player and the phase they should continue with, so the log (and, via
+ * `notifications.turnEnded`, the "it's your turn" email) always says what to
+ * do next rather than just who is up.
+ */
+function activeTurnLogMessage(state: GameState): string | undefined {
+  const status = activeTurnStatus(state)
+  if (status === null) return undefined
+  return `Turn ${status.turnNumber} - it is now ${status.username}'s turn (${TURN_PHASE_LABEL[status.phase]} phase)`
+}
+
 // `_actor` is accepted (and passed by the route) but never read: Java's
 // endTurn does not care who calls, and membership is gated at the route.
 export function endTurn(state: GameState, _actor?: EndTurnActor): ActionResult {
@@ -878,14 +891,16 @@ export function endTurn(state: GameState, _actor?: EndTurnActor): ActionResult {
 
   if (nextPlayer === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId: '' })
 
-  return ok({
+  const next: GameState = {
     ...state,
     players: state.players.map((player) => {
       if (player.playerId === nextPlayer.playerId) return { ...player, yourTurn: true }
       if (player.playerId === current.playerId) return { ...player, yourTurn: false }
       return player
     }),
-  })
+  }
+  const message = activeTurnLogMessage(next)
+  return ok(message === undefined ? next : appendInfoLog(next, message))
 }
 
 /**
@@ -905,7 +920,9 @@ export function takeTurn(state: GameState, playerId: string): ActionResult {
     })),
   }
 
-  return ok(appendPublicLog(next, player.username, playerId, 'took turn button'))
+  const withLog = appendPublicLog(next, player.username, playerId, 'took turn button')
+  const message = activeTurnLogMessage(withLog)
+  return ok(message === undefined ? withLog : appendInfoLog(withLog, message))
 }
 
 /** Java: `PlayerAction.isYourTurn` — a plain read, with no throwing. */

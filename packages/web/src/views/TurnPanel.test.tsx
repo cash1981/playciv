@@ -403,7 +403,7 @@ describe('TurnOrderWorkspace', () => {
     expect(onRevealPhase).toHaveBeenCalledWith('SOT')
   })
 
-  it('disables reveal until the phase has been saved', () => {
+  it('offers a save-and-reveal for a phase with unsaved edits', () => {
     render(
       <TurnOrderWorkspace
         gameId="game-1"
@@ -425,9 +425,40 @@ describe('TurnOrderWorkspace', () => {
     )
 
     expect(
-      (screen.getByRole('button', { name: 'Save before reveal' }) as HTMLButtonElement).disabled,
-    ).toBe(true)
+      (screen.getByRole('button', { name: 'Save & reveal' }) as HTMLButtonElement).disabled,
+    ).toBe(false)
     expect(screen.getAllByRole('button', { name: 'Reveal' })).toHaveLength(4)
+  })
+
+  it('offers a per-phase Save button that saves without revealing', () => {
+    const onSavePhase = vi.fn()
+    render(
+      <TurnOrderWorkspace
+        gameId="game-1"
+        busy={false}
+        run={run}
+        player={{ username: 'cash1981', color: 'Red', own: true }}
+        turnNumber={3}
+        turnNumbers={[3]}
+        current={turn('cash1981')}
+        values={{ ...orders, CM: 'New unsaved plan' }}
+        savedValues={orders}
+        onTurnNumberChange={noop}
+        onNewTurn={noop}
+        onPhaseChange={noop}
+        onSavePhase={onSavePhase}
+        tabPanelId="panel"
+        labelledBy="tab"
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    const saveButtons = screen
+      .getAllByRole('button', { name: 'Save' })
+      .filter((button) => !(button as HTMLButtonElement).disabled)
+    expect(saveButtons).toHaveLength(1)
+    fireEvent.click(saveButtons[0] as HTMLElement)
+    expect(onSavePhase).toHaveBeenCalledWith('CM')
   })
 
   it('renders another player orders read-only without publishing controls', () => {
