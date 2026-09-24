@@ -13,7 +13,7 @@ _Last updated: 2026-09-24_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 522 engine, 204 server, 214 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 526 engine, 204 server, 214 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -55,6 +55,31 @@ _Last updated: 2026-09-24_
   tests) and the browser showed both shapes, the hole, and a tile dropped over
   the hole staying unsnapped. See `decisions.md` for the snap-tolerance
   consequence.
+
+- **Issue #167: each wonder in the Wonders panel shows its printed effect.**
+  The Wonders sheet's Description column was already parsed into
+  `WonderItem.description` (unlike the Tech sheet's, which is always empty —
+  see `techText.ts`), but that text was dropped once a wonder became a board
+  piece (issue #145). A new pure `wonderReference()` reader in
+  `packages/engine/src/gamedata.ts` returns every wonder's name/era/text with
+  no RNG or ids, and now backs both a static `WONDER_DESCRIPTIONS` export
+  (name → text, computed once, like `GOVERNMENT_CARDS`) and `readWonders`
+  itself, so there is one parser instead of two. `WondersPanel` looks up each
+  in-play piece's description by its label and renders it with the same
+  `card-text` styling `ItemCard` already uses for a hand card. The
+  `rules-checker` found the old client (`old-civ-web`) already showed this
+  same text in the hand/revealed views before wonders moved to the shared
+  board — this restores lost old-system behaviour rather than inventing
+  anything. Review round 1 found three minor gaps, all fixed: a type-unsound
+  `Object.fromEntries` call that resolved to `any`, no test pinning that a
+  board-asset manifest label always has a matching description (now added,
+  guarding against future label/sheet-name drift), and no regression pin on
+  the refactored `readWonders`' shuffle order for a fixed seed (now added).
+  Round 2 approved. 4 new engine tests, 1 new web test. Verified: the wonder
+  text is confirmed present in the built web bundle and in a running local
+  server's deck; no browser tool was connected this session, so the visual
+  pass in a real game page is left to the human. Branch
+  `feat/issue-167-wonder-descriptions`.
 
 - **Issue #168 follow-up: freeform tech-pyramid repositioning, for Nikola
   Tesla and Sir Isaac Newton.** A player can move any of their own chosen

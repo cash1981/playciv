@@ -10,8 +10,8 @@
 import gamedataWaw from '../data/gamedata-faf-waw.json' with { type: 'json' }
 
 import { createBoardForPlayers } from './board.js'
-import type { GameDataFile } from './gamedata.js'
-import { readDeck } from './gamedata.js'
+import type { GameDataFile, WonderReference } from './gamedata.js'
+import { readDeck, wonderReference } from './gamedata.js'
 import type { Item, SocialPolicyItem, TechItem } from './item.js'
 import type { Rng } from './random.js'
 import { nextIntBetween, nextId, seedFrom } from './random.js'
@@ -22,6 +22,21 @@ import { DEFAULT_GOVERNMENT } from './government.js'
 const GAMEDATA: Readonly<Record<GameType, GameDataFile>> = {
   WAW: gamedataWaw as GameDataFile,
 }
+
+/**
+ * Every wonder's printed text, by name — a player aid, computed once, not
+ * per game. Unlike `TECH_TEXT` (`packages/web/src/views/techText.ts`, which
+ * has to be transcribed because the sheet's tech Description column was
+ * never filled in), the Wonders sheet's Description column is populated, so
+ * this reads straight from `gamedataWaw` rather than inventing wording.
+ */
+export const WONDER_DESCRIPTIONS: Readonly<Record<string, string>> = Object.fromEntries(
+  wonderReference(GAMEDATA.WAW)
+    .filter((entry): entry is WonderReference & { description: string } =>
+      entry.description !== null && entry.description !== '',
+    )
+    .map((entry): readonly [string, string] => [entry.name, entry.description]),
+)
 
 export interface NewPlayer {
   readonly playerId: string

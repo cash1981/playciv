@@ -33,6 +33,9 @@ describe('WondersPanel', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(toggle)
     expect(screen.getByText('The Internet')).toBeTruthy()
+    expect(
+      screen.getByText('The maximum number of coins you can add to each of your techs is increased by 2.'),
+    ).toBeTruthy()
     expect(screen.queryByText('Red army')).toBeNull()
     const owner = screen.getByRole('combobox', { name: 'The Internet owner' }) as HTMLSelectElement
     expect(owner.value).toBe('')
