@@ -9,7 +9,8 @@ import { describe, expect, it } from 'vitest'
 
 import { movePiece, placePiece, rotatePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
-import { revealItem } from '../src/actions/player.js'
+import { endTurn, revealItem } from '../src/actions/player.js'
+import { createGame } from '../src/create-game.js'
 import {
   SQUARE_SIZE,
   TILE_SQUARES,
@@ -447,4 +448,69 @@ describe('automatic placement', () => {
     // Either way the same starting tile must not turn up again.
     expect(before).toBe(1)
   })
+})
+
+describe('revealing civilizations, one player at a time (issue #171)', () => {
+  // The unit-level tests above cover `startingCorner` in isolation; this
+  // exercises the actual reveal flow a game goes through, to prove the fix
+  // holds end to end rather than only in the helper it happens to call.
+  const playersFor = (numOfPlayers: number) =>
+    Array.from({ length: numOfPlayers }, (_unused, index) => ({
+      playerId: `player-${index + 1}`,
+      username: `Player ${index + 1}`,
+      color: 'Red',
+      yourTurn: index === 0,
+    }))
+
+  it.each([3, 5])(
+    'seats every player at a distinct starting tile in a %i-player game',
+    (numOfPlayers) => {
+      let state = createGame({
+        name: `${numOfPlayers}p game`,
+        numOfPlayers,
+        seed: `issue-171-${numOfPlayers}p`,
+        players: playersFor(numOfPlayers),
+      })
+
+      for (let turn = 0; turn < numOfPlayers; turn++) {
+        const current = state.players.find((player) => player.yourTurn)
+        if (current === undefined) throw new Error('no current player')
+
+        state = unwrap(draw(state, { playerId: current.playerId, sheetName: 'CIV' }))
+        const civ = findPlayer(state, current.playerId)?.items.find((item) => item.kind === 'civ')
+        if (civ?.kind !== 'civ') throw new Error('no civ in the hand')
+
+        state = unwrap(
+          revealItem(state, {
+            playerId: current.playerId,
+            sheetName: 'CIV',
+            itemNumber: civ.itemNumber,
+          }),
+        )
+
+        if (turn < numOfPlayers - 1) state = unwrap(endTurn(state))
+      }
+
+      const civTiles = state.board.pieces.filter((piece) => piece.category === 'civtile')
+      expect(civTiles).toHaveLength(numOfPlayers)
+
+      // The reported bug: every player after the first landed on player
+      // one's slot. A set-size check on (x, y) alone would still pass if two
+      // tiles merely landed a few squares apart and visibly overlapped, so
+      // this checks the tiles' rectangles do not overlap at all.
+      const tileSize = TILE_SQUARES * SQUARE_SIZE
+      for (let a = 0; a < civTiles.length; a++) {
+        for (let b = a + 1; b < civTiles.length; b++) {
+          const first = civTiles[a] as BoardPiece
+          const second = civTiles[b] as BoardPiece
+          const disjoint =
+            first.x + tileSize <= second.x ||
+            second.x + tileSize <= first.x ||
+            first.y + tileSize <= second.y ||
+            second.y + tileSize <= first.y
+          expect(disjoint, `${first.assetId} and ${second.assetId} overlap`).toBe(true)
+        }
+      }
+    },
+  )
 })

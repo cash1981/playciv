@@ -8,7 +8,7 @@
 
 import type { ArenaUnit, Battle } from './battle.js'
 import type { Board, BoardHistoryEntry, BoardPiece } from './board.js'
-import { createBoard } from './board.js'
+import { createBoard, createBoardForPlayers } from './board.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { GameState, Playerhand, PlayerStats } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
@@ -119,6 +119,28 @@ export function migrateGameState(state: GameState): GameState {
   const fresh =
     board === undefined ? createBoard() : createBoard(board.columns, board.rows)
 
+  // A save missing its shape gets the shape its player count would build
+  // fresh today (issue #171), but only when both of these hold: it is the
+  // same size board it already has, and it has no pieces on it yet. A
+  // 3-player board is 16 x 16 either way, so size lets this rescue a save
+  // from before the three-player pyramid existed; a 5-player board is not
+  // (28 x 18 now, 16 x 16 before), and resizing an existing board would shift
+  // `mapTop` and therefore every already-placed piece, so an old five-player
+  // save keeps the plain rectangle's corners, wrap-around and all. The empty
+  // check matters even at the same size: an in-progress three-player save
+  // already has exploration tiles snapped to the rectangle's slots, and the
+  // pyramid's are in different places (and a finer step), so re-seating it
+  // under those tiles would manufacture new overlaps rather than remove the
+  // one this issue reported.
+  const shaped = createBoardForPlayers(state.numOfPlayers)
+  const shapeSource =
+    board !== undefined &&
+    board.columns === shaped.columns &&
+    board.rows === shaped.rows &&
+    board.pieces.length === 0
+      ? shaped
+      : fresh
+
   // A game saved before `wondersDealt` existed is treated as having dealt if the
   // setup is complete or a wonder already exists anywhere (an old game put drawn
   // wonders in a hand). That way the deal never re-fires on a game past setup,
@@ -143,9 +165,9 @@ export function migrateGameState(state: GameState): GameState {
         : {
             ...board,
             areaRows: board.areaRows ?? fresh.areaRows,
-            slots: board.slots ?? fresh.slots,
-            slotStep: board.slotStep ?? fresh.slotStep,
-            startSlots: board.startSlots ?? fresh.startSlots,
+            slots: board.slots ?? shapeSource.slots,
+            slotStep: board.slotStep ?? shapeSource.slotStep,
+            startSlots: board.startSlots ?? shapeSource.startSlots,
             history: board.history ?? historyForImportedPieces(board.pieces),
           },
     withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withPlayerDefaults),

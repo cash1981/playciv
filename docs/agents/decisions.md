@@ -2421,3 +2421,71 @@ rather than restoring him, since `putItemBack` only knows `items` and
 `discardedItems`. Acceptable — an already-placed Newton being un-drawn was
 never a real scenario — but worth knowing if undo behaviour here ever
 confuses a player.
+
+---
+
+## 2026-09-24 — Issue #171: the reveal flow was already correct; the gap was migrating an existing board
+
+**Decision.** Issue #171 ("starting tiles are put on top of each other" on
+3- and 5-player games) is not a bug in the reveal flow. The human confirmed
+the game was created to try this branch's board shapes, and the civilization
+was chosen first, in the normal order — which rules out a stale deploy of
+`main` and a player drawing something else before revealing. Simulating the
+real `draw` → `revealItem` → `placeStartingTile` sequence end to end, for a
+freshly created 3- and 5-player game, produces non-overlapping starting tiles
+every time; `board-tiles.test.ts` now has
+`describe('revealing civilizations, one player at a time (issue #171)')`
+proving it, checking that every tile's rectangle is disjoint from every
+other's (not just that their `(x, y)` pairs differ, which would still pass if
+two tiles landed a few squares apart and visibly overlapped).
+
+`board` is computed once, at `createGame` time, and never recomputed. The
+three- and five-player shapes (`Board.slots`/`startSlots`/`slotStep`) were all
+added in a single commit (`891e343`, "Make the board a list of playable slots
+for the stepped maps") — there was no intermediate state on this branch where
+those fields existed but held the wrong values. So the only board this can
+have left behind is one with no shape fields at all, saved before that
+commit — functionally the same as a game created on `main` today.
+`migrateGameState` did nothing to rescue such a save: on read, a board
+missing `slots`/`startSlots` fell back to `createBoard(board.columns,
+board.rows)` — the plain four-corner rectangle — regardless of player count.
+
+`migrateGameState` now instead falls back to
+`createBoardForPlayers(state.numOfPlayers)`'s shape, when three things all
+hold: the board is missing its shape fields, that shape is the *same size*
+board the save already has, and the board has no pieces on it yet. A
+three-player board is 16 x 16 either way, so an empty pre-shape three-player
+save is re-seated at the correct pyramid corners. A five-player board is not
+(28 x 18 now, 16 x 16 before): resizing an existing board would shift
+`mapTop`, and with it every already-placed piece's effective position, which
+is a bigger and riskier change than a missing-field fallback, so a five-player
+save is left at its old rectangle regardless of whether it has pieces. The
+empty-board check matters even at the same size: an in-progress three-player
+save already has exploration tiles snapped to the rectangle's slots, which
+sit in different places (and on a coarser step) than the pyramid's, so
+re-seating it underneath those tiles would manufacture new overlaps instead
+of removing the one this issue reported. Three new tests in `board.test.ts`'s
+`describe('migration', ...)` cover the rescued case, the piece-guarded case,
+and the five-player non-rescue.
+
+**Why.** The reveal flow needed a stronger regression test, which it now has,
+but was not the cause. The only mechanism that survives everything the human
+ruled out is a board saved before this branch's board-shapes commit existed —
+plausible if the game was created against a very early preview of this same
+branch (`50676eb`, the claim commit, predates `891e343` by about eight
+minutes) — which the migration path had no logic for at all. This does not
+confirm that
+is what happened; it is the best remaining explanation, and closing the gap
+in migration is safe and worth doing regardless.
+
+**Consequence.** This is confirmed to help only a genuinely pre-shape,
+still-empty three-player save. It will not rescue: a five-player save of any
+kind (deliberately, see above); a three-player save that already has a piece
+placed (deliberately, see above); or *any* save created after `891e343`
+landed, since that commit's boards already carry correct shape fields and the
+`??` fallback never fires on a field that is merely wrong rather than
+missing. If the human's own test game still shows the overlap after this
+lands, the most likely reason is that its board already carries shape fields
+from a version of `createBoardForPlayers` before the final, tested one —
+which this migration cannot detect, and which only recreating the game (or a
+deliberate one-off data fix on that specific game) can resolve.

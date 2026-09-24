@@ -13,11 +13,30 @@ _Last updated: 2026-09-24_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 517 engine, 204 server, 214 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 522 engine, 204 server, 214 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Issue #171: the reveal flow was already correct; the real gap was
+  migrating a pre-shape board.** A new end-to-end test
+  (`board-tiles.test.ts`, `draw` → `revealItem` → `placeStartingTile` for
+  every player in turn order, asserting no two starting tiles' rectangles
+  overlap) proves a freshly created 3- or 5-player game seats every player
+  correctly today. `board` is computed once at game creation and never
+  recomputed, and the three-/five-player shape fields were all added in one
+  commit on this branch — so the only board this can rescue is one saved
+  before that commit, with no shape fields at all. `migrateGameState` now
+  re-seats such a board at the correct shape, but only when it is empty (no
+  pieces yet — re-seating under existing pieces would create new overlaps)
+  and the same size as the saved board (three players: yes, 16 x 16 either
+  way; five players: no, the correct map is a bigger 28 x 18, and resizing
+  would shift every already-placed piece — deliberately left as a known
+  limitation). This does not confirm what produced the human's report: it
+  is the best explanation that survived their answers (fresh game, normal
+  reveal order), closes a real gap either way, but may not be enough — see
+  `decisions.md`'s "Consequence".
 
 - **Issue #109: the three-player pyramid and the five-player map with a hole.**
   The board carries its shape as a list of playable 4 x 4 slots with a
