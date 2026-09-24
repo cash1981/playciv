@@ -1,9 +1,18 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { Item } from '@civ/engine'
+
+import { api } from '../lib/api.js'
 import type { GameRevisionSummary, PlayerView } from '../lib/api.js'
-import { AUTO_REFRESH_MS, loadAfterKnownRevision, reloadIfRevisionChanged } from './GameView.js'
+import { AUTO_REFRESH_MS, HandItem, loadAfterKnownRevision, reloadIfRevisionChanged } from './GameView.js'
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 /** The reload only reads `rev`, so the rest of the view is irrelevant here. */
 const viewAt = (rev: number): PlayerView => ({ rev }) as unknown as PlayerView
@@ -70,5 +79,75 @@ describe('loadAfterKnownRevision', () => {
 
     expect(result.revisions).toBe(revisions)
     expect(loadRevisions).toHaveBeenCalledTimes(1)
+  })
+})
+
+const base = {
+  itemNumber: 1,
+  description: null,
+  used: false,
+  hidden: true,
+  ownerId: 'player-me',
+  type: null,
+} as const
+
+const run = async (action: () => Promise<unknown>): Promise<void> => {
+  await action()
+}
+
+/**
+ * New in this port — see the pyramid-reposition task brief. "Place in tech
+ * pyramid" must appear only for Sir Isaac Newton, by exact name match, never
+ * for any other Great Person.
+ */
+describe('HandItem: place a Great Person in the tech pyramid (#168 follow-up)', () => {
+  const newton: Item = {
+    ...base,
+    id: 'gp-newton',
+    sheetName: 'GREAT_PERSON',
+    kind: 'greatperson',
+    name: 'Sir Isaac Newton',
+    type: 'Scientist',
+  }
+
+  const otherGreatPerson: Item = {
+    ...base,
+    id: 'gp-other',
+    sheetName: 'GREAT_PERSON',
+    kind: 'greatperson',
+    name: 'Louis Pasteur',
+    type: 'Scientist',
+  }
+
+  it('shows the control only for Sir Isaac Newton, by exact name match', () => {
+    const { unmount } = render(
+      <HandItem item={newton} gameId="g" busy={false} run={run} opponents={[]} />,
+    )
+    expect(screen.getByRole('button', { name: 'Place in tech pyramid' })).toBeTruthy()
+    unmount()
+
+    render(<HandItem item={otherGreatPerson} gameId="g" busy={false} run={run} opponents={[]} />)
+    expect(screen.queryByRole('button', { name: 'Place in tech pyramid' })).toBeNull()
+  })
+
+  it('calls placeGreatPersonInPyramid with the item id and the chosen row', () => {
+    const place = vi.spyOn(api, 'placeGreatPersonInPyramid').mockResolvedValue({} as PlayerView)
+    render(<HandItem item={newton} gameId="game-1" busy={false} run={run} opponents={[]} />)
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Pyramid row for Sir Isaac Newton' }), {
+      target: { value: '3' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Place in tech pyramid' }))
+
+    expect(place).toHaveBeenCalledWith('game-1', 'gp-newton', 3)
+  })
+
+  it('defaults the chosen row to 1', () => {
+    const place = vi.spyOn(api, 'placeGreatPersonInPyramid').mockResolvedValue({} as PlayerView)
+    render(<HandItem item={newton} gameId="game-1" busy={false} run={run} opponents={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Place in tech pyramid' }))
+
+    expect(place).toHaveBeenCalledWith('game-1', 'gp-newton', 1)
   })
 })
