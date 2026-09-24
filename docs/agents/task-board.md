@@ -12,7 +12,27 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### issue-168-tech-revamp
+
+- **Owner:** Claude (Opus 5.5, orchestrator) + coder subagent (Sonnet 5)
+- **Branch:** `feat/issue-168-tech-revamp`
+- **Brief:** `docs/agents/tasks/issue-168-tech-revamp.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/item.ts`
+  - `packages/web/src/views/TechTree.tsx`
+  - `packages/web/src/views/TechTree.test.tsx`
+  - `packages/web/src/views/TechPanel.tsx`
+  - `packages/web/src/views/TechPanel.test.tsx`
+  - `packages/web/src/views/techText.ts` (new — written by the orchestrator, transcribed from
+    `packages/web/public/help/Civ_Tech_FF-WW.-2.jpg`)
+  - `packages/web/src/styles.css`
+  - `tools/tech-assets.ps1` (new)
+  - `packages/web/public/items/` (shared resource, see below)
+- **Notes:** Implements issue #168 (tech tree with real card images, and a level-tabbed card
+  browser replacing the tech combo box). Card source images
+  (`Civilization/Moderator/techs/*.jpg`, gitignored) were already prepared and cropped in a
+  separate session.
 
 ---
 
@@ -43,7 +63,7 @@ at a time. Claim them by name.
 | Resource | Owned by |
 | --- | --- |
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
-| `packages/web/public/items/` | free |
+| `packages/web/public/items/` | issue-168-tech-revamp |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
 | `packages/web/src/lib/api.ts` | free |
