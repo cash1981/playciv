@@ -418,6 +418,12 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/techs/remove`, { name }),
   revealTech: (gameId: string, name: string) =>
     post<PlayerView>(`/api/games/${gameId}/techs/reveal`, { name }),
+  setTechSlot: (gameId: string, name: string, slot: 1 | 2 | 3 | 4 | 5) =>
+    post<PlayerView>(`/api/games/${gameId}/techs/slot`, { name, slot }),
+  placeGreatPersonInPyramid: (gameId: string, itemId: string, slot: 1 | 2 | 3 | 4 | 5) =>
+    post<PlayerView>(`/api/games/${gameId}/greatperson/place`, { itemId, slot }),
+  setPyramidPlacementSlot: (gameId: string, name: string, slot: 1 | 2 | 3 | 4 | 5) =>
+    post<PlayerView>(`/api/games/${gameId}/greatperson/slot`, { name, slot }),
 
   socialPolicies: (gameId: string) =>
     get<SocialPolicyItem[]>(`/api/games/${gameId}/socialpolicies`),

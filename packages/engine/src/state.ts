@@ -7,7 +7,7 @@
  * away.
  */
 
-import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem } from './item.js'
+import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement } from './item.js'
 import { isUnit } from './item.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece } from './board.js'
@@ -106,6 +106,9 @@ export interface Playerhand {
   /** A hidden hand. Only the owner should see the contents. */
   readonly items: readonly Item[]
   readonly techsChosen: readonly TechItem[]
+  /** Great Persons placed face-down as a blank pyramid occupant (Sir Isaac
+   *  Newton). Always public once placed — see the task brief. */
+  readonly pyramidPlacements: readonly PyramidPlacement[]
   /** Java: at most three barbarian units at a time. */
   readonly barbarians: readonly UnitItem[]
   readonly battlehand: readonly UnitItem[]
@@ -344,6 +347,14 @@ export function buildingCountOf(state: GameState, playerId: string): number {
 // Projections — what a given player gets to see
 // ---------------------------------------------------------------------------
 
+/**
+ * A blank pyramid occupant as an opponent sees it: the slot only, never the
+ * placed card's name. See `OpaquePlayerhand.pyramidPlacements`.
+ */
+export interface PublicPyramidPlacement {
+  readonly slot: 1 | 2 | 3 | 4 | 5
+}
+
 /** What other players see of a hand: counts, not contents. */
 export interface PublicHandCounts {
   readonly cultureCards: number
@@ -384,6 +395,13 @@ export interface OpaquePlayerhand {
    */
   readonly revealedSocialPolicies: readonly SocialPolicyItem[]
   /**
+   * Great Persons placed face-down as a blank pyramid occupant. The *slot* is
+   * public — everyone sees the pyramid layout — but the card's identity is
+   * not: Sir Isaac Newton's printed effect places the card "facedown" as a
+   * "blank" tech card, so the name is stripped in `opaque()` below.
+   */
+  readonly pyramidPlacements: readonly PublicPyramidPlacement[]
+  /**
    * Public turn-order copies. `gamenote` and `playerTurns` are private and do
    * not appear here.
    */
@@ -420,6 +438,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     battlehand: player.battlehand,
     revealedTechs: player.techsChosen.filter((tech) => !tech.hidden),
     revealedSocialPolicies: player.socialPolicies.filter((policy) => !policy.hidden),
+    pyramidPlacements: player.pyramidPlacements.map((placement) => ({ slot: placement.slot })),
     publicTurns: Object.values(state.publicTurns).filter(
       (turn) => turn.username === player.username,
     ),

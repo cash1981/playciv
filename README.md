@@ -651,6 +651,17 @@ pieces. Huts and Villages are deliberately **not** capped: they are collected
 during play, not dealt at setup, so the player-count limit does not apply to
 them (issue #116). See `docs/agents/decisions.md`.
 
+**A player may freely reposition their own tech pyramid.** Neither the old
+backend nor the old client had any notion of this — it exists so a player can
+reflect what Nikola Tesla's and Sir Isaac Newton's printed cards do (move a
+learned tech to a lower pyramid row; place Newton face-down as a blank
+occupant of a row), without the engine implementing either card's effect or
+its trigger condition. The player manages both entirely themselves: nothing
+is validated beyond ownership, and neither a move nor a placement is logged.
+A placed Great Person's identity stays private to its owner — only the row it
+occupies is public, matching the printed "facedown... blank tech card" text.
+See `docs/agents/decisions.md`.
+
 ## Deferred
 
 - **Card artwork.** The hand is shown as text. `itemImage()` in the engine

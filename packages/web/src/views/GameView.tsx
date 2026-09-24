@@ -715,7 +715,7 @@ export function GreatPersonDiscardControls({
   )
 }
 
-function HandItem({
+export function HandItem({
   item,
   gameId,
   busy,
@@ -765,7 +765,56 @@ function HandItem({
         run={run}
         opponents={opponents}
       />
+      {item.kind === 'greatperson' && item.name === 'Sir Isaac Newton' && (
+        <PlaceGreatPersonControl item={item} gameId={gameId} busy={busy} run={run} />
+      )}
     </ItemCard>
+  )
+}
+
+/**
+ * "Place in tech pyramid" — Sir Isaac Newton's printed effect: *"Before
+ * researching, you may place this card facedown in your tech pyramid as a
+ * blank tech card of level IV or less. It remains in your tech pyramid for
+ * the rest of the game, even if Newton dies."* New in this port, no
+ * old-system equivalent — see the pyramid-reposition task brief. Deliberately
+ * unvalidated: any pyramid row 1-5 is accepted, not just "level IV or less".
+ */
+function PlaceGreatPersonControl({
+  item,
+  gameId,
+  busy,
+  run,
+}: {
+  readonly item: Item
+  readonly gameId: string
+  readonly busy: boolean
+  readonly run: Run
+}): React.JSX.Element {
+  const [slot, setSlot] = useState<1 | 2 | 3 | 4 | 5>(1)
+
+  return (
+    <span className="row">
+      <select
+        aria-label={`Pyramid row for ${itemName(item)}`}
+        value={slot}
+        disabled={busy}
+        onChange={(event) => setSlot(Number(event.target.value) as 1 | 2 | 3 | 4 | 5)}
+      >
+        {[1, 2, 3, 4, 5].map((level) => (
+          <option key={level} value={level}>
+            Row {level}
+          </option>
+        ))}
+      </select>
+      <button
+        className="small"
+        disabled={busy}
+        onClick={() => void run(() => api.placeGreatPersonInPyramid(gameId, item.id, slot))}
+      >
+        Place in tech pyramid
+      </button>
+    </span>
   )
 }
 

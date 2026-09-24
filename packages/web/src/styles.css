@@ -1240,15 +1240,47 @@ ul.list > li:last-child {
   background: var(--panel-2);
   color: var(--text);
   font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: normal;
 }
 
 .tech-slot.researched.hidden {
   border-color: var(--warn);
 }
 
+.tech-slot.researched[role='button'] {
+  cursor: pointer;
+}
+
+/* Any clickable card — the level tabs' "available to research" grid uses the
+   same `.card` as everywhere else, marked with `role="button"` only when it
+   opens a detail view. */
+.card[role='button'] {
+  cursor: pointer;
+}
+
 .tech-slot.available {
   color: var(--muted);
   font-weight: 400;
+}
+
+/* A missing/broken card image is hidden by `onError`, leaving `.tech-slot-label`
+   as the fallback, same pattern as `.card-art-fallback`. */
+.tech-slot-image {
+  width: 100%;
+  max-height: 5rem;
+  object-fit: contain;
+  border-radius: 2px;
+}
+
+.tech-slot-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 /* Wraps one player's public pyramid, tinted with their colour */
@@ -1270,6 +1302,25 @@ ul.list > li:last-child {
   padding: 0 0.3rem;
   font-size: 0.85rem;
   font-weight: 600;
+}
+
+/* Stepper for the freeform pyramid reposition (issue #168 follow-up): moves a
+   tech, or a placed Great Person, to a different pyramid row. Only rendered on
+   the viewer's own pyramid — see `TechTree.tsx`. */
+.tech-slot-move {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.tech-slot-move button {
+  padding: 0 0.3rem;
+  line-height: 1.4;
+}
+
+/* A placed Great Person (Sir Isaac Newton) — same look as a researched tech,
+   but with a generic card back instead of name-derived art. */
+.tech-slot.placement {
+  font-style: italic;
 }
 
 /* --- Replay --------------------------------------------------------------- */

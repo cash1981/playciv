@@ -871,6 +871,168 @@ describe('great person discard', () => {
   })
 })
 
+/**
+ * New in this port, no old-system equivalent — see
+ * `docs/agents/tasks/issue-168-tech-revamp-pyramid-reposition.md`. Both routes
+ * are deliberately unvalidated beyond ownership and shape, and write no log
+ * entry.
+ */
+describe('tech pyramid repositioning (#168 follow-up)', () => {
+  it('moves a chosen tech to a different pyramid slot', async () => {
+    const { gameId, starter } = await startedGame('Pyramid reposition')
+
+    const available = await inject(app, {
+      url: `/api/games/${gameId}/techs/available`,
+      headers: bearer(starter),
+    })
+    const techName = (await available.json<{ name: string; level: number }[]>())[0]?.name
+    expect(techName).toBeDefined()
+
+    const chosen = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/techs/choose`,
+      headers: bearer(starter),
+      payload: { name: techName },
+    })
+    expect(chosen.status).toBe(200)
+    const logLengthBeforeMove = (await repo.findGame(gameId))?.log.length
+
+    const moved = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/techs/slot`,
+      headers: bearer(starter),
+      payload: { name: techName, slot: 4 },
+    })
+    expect(moved.status).toBe(200)
+
+    const state = await repo.findGame(gameId)
+    const owner = state?.players.find((player) => player.yourTurn)
+    const tech = owner?.techsChosen.find((candidate) => candidate.name === techName)
+    expect(tech?.slot).toBe(4)
+    // No new log entry was appended by the slot move itself.
+    expect(state?.log.length).toBe(logLengthBeforeMove)
+  })
+
+  it('rejects a bad slot with 400', async () => {
+    const { gameId, starter } = await startedGame('Pyramid bad slot')
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/techs/slot`,
+      headers: bearer(starter),
+      payload: { name: 'Navy', slot: 9 },
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({ error: 'BAD_REQUEST' })
+  })
+
+  it('places a Great Person face down as a blank pyramid occupant, slot visible to an opponent but not the name', async () => {
+    const { gameId, starter, waiting } = await startedGame('Pyramid placement')
+
+    const drawn = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/GREAT_PERSON`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(drawn.status).toBe(200)
+
+    const before = await repo.findGame(gameId)
+    const owner = before?.players.find((player) => player.yourTurn)
+    const card = owner?.items.find((item) => item.kind === 'greatperson')
+    expect(card).toBeDefined()
+
+    const placed = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/greatperson/place`,
+      headers: bearer(starter),
+      payload: { itemId: card?.id, slot: 2 },
+    })
+    expect(placed.status).toBe(200)
+
+    const after = await repo.findGame(gameId)
+    const ownerAfter = after?.players.find((player) => player.playerId === owner?.playerId)
+    expect(ownerAfter?.items.some((item) => item.id === card?.id)).toBe(false)
+    expect(ownerAfter?.pyramidPlacements).toEqual([{ name: card?.name, slot: 2 }])
+
+    // Public by slot: the opponent's own PlayerView carries the placement's
+    // row, but not the card's name — Newton's printed effect places it
+    // "facedown" as a "blank" tech card.
+    const opponentView = await inject(app, {
+      url: `/api/games/${gameId}`,
+      headers: bearer(waiting),
+    })
+    const opponentPayload = await opponentView.json<{
+      opponents: { playerId: string; pyramidPlacements: { slot: number }[] }[]
+    }>()
+    const opponentSeesOwner = opponentPayload.opponents.find(
+      (candidate) => candidate.playerId === owner?.playerId,
+    )
+    expect(opponentSeesOwner?.pyramidPlacements).toEqual([{ slot: 2 }])
+    expect(JSON.stringify(opponentSeesOwner?.pyramidPlacements)).not.toContain(card?.name)
+  })
+
+  it('moves an already-placed Great Person to a different row', async () => {
+    const { gameId, starter } = await startedGame('Pyramid placement move')
+
+    const drawn = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/GREAT_PERSON`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    const before = await repo.findGame(gameId)
+    const owner = before?.players.find((player) => player.yourTurn)
+    const card = owner?.items.find((item) => item.kind === 'greatperson')
+    expect(drawn.status).toBe(200)
+    expect(card).toBeDefined()
+
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/greatperson/place`,
+      headers: bearer(starter),
+      payload: { itemId: card?.id, slot: 2 },
+    })
+
+    const moved = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/greatperson/slot`,
+      headers: bearer(starter),
+      payload: { name: card?.name, slot: 5 },
+    })
+    expect(moved.status).toBe(200)
+
+    const after = await repo.findGame(gameId)
+    const ownerAfter = after?.players.find((player) => player.playerId === owner?.playerId)
+    expect(ownerAfter?.pyramidPlacements).toEqual([{ name: card?.name, slot: 5 }])
+  })
+
+  it("rejects another player's attempt to move a tech they do not own", async () => {
+    const { gameId, starter, waiting } = await startedGame('Pyramid ownership')
+
+    const available = await inject(app, {
+      url: `/api/games/${gameId}/techs/available`,
+      headers: bearer(starter),
+    })
+    const techName = (await available.json<{ name: string }[]>())[0]?.name
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/techs/choose`,
+      headers: bearer(starter),
+      payload: { name: techName },
+    })
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/techs/slot`,
+      headers: bearer(waiting),
+      payload: { name: techName, slot: 4 },
+    })
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({ error: 'ITEM_NOT_FOUND' })
+  })
+})
+
 describe('hidden information over HTTP', () => {
   it('an opponent sees the number of cards, not their contents', async () => {
     const creator = await register('cash1981')

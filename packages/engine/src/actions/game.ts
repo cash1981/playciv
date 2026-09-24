@@ -103,6 +103,7 @@ export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
       civilization: null,
       items: [],
       techsChosen: [],
+      pyramidPlacements: [],
       barbarians: [],
       battlehand: [],
       socialPolicies: [],

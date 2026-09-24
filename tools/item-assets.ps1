@@ -104,4 +104,4 @@ Write-Host '  alias        expansionism.png -> expansionsim.png'
 $total++
 
 Write-Host "`nWrote $total images to $WebPublic"
-Write-Host 'Space Flight has no artwork: it is the level 5 tech added in code, not from the spreadsheet.'
+Write-Host 'Space Flight has no artwork here: it is the level 5 tech added in code, not from the spreadsheet; its card art is copied separately by tools/tech-assets.ps1.'

@@ -105,6 +105,12 @@ describe('technologies', () => {
     const b = other.techs.find((tech) => tech.name === 'Space Flight')
     expect(a?.id).not.toBe(b?.id)
   })
+
+  it('Space Flight, the tech added in code, resolves to a .jpg card image', () => {
+    const spaceFlight = game.techs.find((tech) => tech.name === 'Space Flight')
+    expect(spaceFlight).toBeDefined()
+    expect(itemImage(spaceFlight!)).toBe('SpaceFlight.jpg')
+  })
 })
 
 describe('social policies', () => {

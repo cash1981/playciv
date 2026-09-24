@@ -39,6 +39,8 @@ const opponent = (
     readonly civilization?: string | null
     readonly revealedTechs?: readonly TechItem[]
     readonly numberOfTechsChosen?: number
+    /** Mirrors `OpaquePlayerhand.pyramidPlacements`: slot only, no name. */
+    readonly pyramidPlacements?: readonly { readonly slot: number }[]
   } = {},
 ) => ({
   playerId,
@@ -50,9 +52,14 @@ const opponent = (
       : { name: options.civilization ?? `${username}land` },
   revealedTechs: options.revealedTechs ?? [],
   numberOfTechsChosen: options.numberOfTechsChosen ?? options.revealedTechs?.length ?? 0,
+  pyramidPlacements: options.pyramidPlacements ?? [],
 })
 
-const view = (techsChosen: readonly TechItem[], opponents: readonly unknown[] = []): PlayerView =>
+const view = (
+  techsChosen: readonly TechItem[],
+  opponents: readonly unknown[] = [],
+  pyramidPlacements: readonly { readonly name: string; readonly slot: number }[] = [],
+): PlayerView =>
   ({
     you: {
       playerId: 'me',
@@ -60,6 +67,7 @@ const view = (techsChosen: readonly TechItem[], opponents: readonly unknown[] = 
       color: 'Red',
       civilization: { name: 'Rome' },
       techsChosen,
+      pyramidPlacements,
     },
     opponents,
   }) as unknown as PlayerView
@@ -76,12 +84,14 @@ interface PanelOptions {
   readonly techsChosen?: readonly TechItem[]
   readonly opponents?: readonly unknown[]
   readonly spectator?: boolean
+  readonly pyramidPlacements?: readonly { readonly name: string; readonly slot: number }[]
 }
 
 function renderPanel({
   techsChosen = [],
   opponents = [],
   spectator = false,
+  pyramidPlacements = [],
 }: PanelOptions = {}): HTMLElement {
   vi.spyOn(api, 'availableTechs').mockResolvedValue([])
   const { container } = render(
@@ -89,7 +99,7 @@ function renderPanel({
       gameId="game-1"
       busy={false}
       run={run}
-      view={spectator ? spectatorView(opponents) : view(techsChosen, opponents)}
+      view={spectator ? spectatorView(opponents) : view(techsChosen, opponents, pyramidPlacements)}
       reloadCount={0}
     />,
   )
@@ -202,7 +212,7 @@ describe('TechPanel tabs', () => {
     })
 
     expect(tabNames()).toEqual(['Egil', 'Kari'])
-    expect(screen.getByRole('combobox', { name: 'Choose a tech' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Level 1' })).toBeTruthy()
   })
 
   it('moves between tabs with the arrow keys', () => {
@@ -214,26 +224,293 @@ describe('TechPanel tabs', () => {
 
     expect(selectedTab().textContent).toBe('Egil')
   })
+})
 
-  it('researches the chosen tech through the shared runner', async () => {
+/**
+ * New in this port — see the pyramid-reposition task brief. The stepper is
+ * rendered only on the viewer's own tab, never an opponent's, because
+ * `onTechSlotChange`/`onPlacementSlotChange` are only passed when `active.own`.
+ */
+describe('TechPanel pyramid repositioning (#168 follow-up)', () => {
+  it('shows the stepper control on the own tab and calls setTechSlot with the new slot', () => {
+    const setTechSlot = vi.spyOn(api, 'setTechSlot').mockResolvedValue({} as PlayerView)
+    const container = renderPanel({ techsChosen: [tech('Writing', false)] })
+
+    const buttons = activePanel(container).querySelectorAll('.tech-slot-move button')
+    expect(buttons.length).toBeGreaterThan(0)
+    fireEvent.click(buttons[1] as Element) // ▲, move to a higher row
+
+    expect(setTechSlot).toHaveBeenCalledWith('game-1', 'Writing', 2)
+  })
+
+  it('does not show the stepper on an opponent\'s tab', () => {
+    const container = renderPanel({
+      opponents: [opponent('p2', 'Egil', { revealedTechs: [tech('Masonry', false)] })],
+    })
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Egil' }))
+
+    expect(activePanel(container).querySelector('.tech-slot-move')).toBeNull()
+  })
+
+  it('renders a placed Great Person with its real name on the owner\'s own tab', () => {
+    const ownContainer = renderPanel({
+      pyramidPlacements: [{ name: 'Sir Isaac Newton', slot: 2 }],
+    })
+    const ownPlacement = activePanel(ownContainer).querySelector('.tech-slot.placement')
+    expect(ownPlacement?.textContent).toContain('Sir Isaac Newton')
+    expect(ownPlacement?.querySelector('img')?.getAttribute('src')).toBe('/items/greatperson_back.jpg')
+  })
+
+  it('renders a placed Great Person as a generic blank occupant on an opponent\'s tab, never the real name', () => {
+    const opponentContainer = renderPanel({
+      opponents: [opponent('p2', 'Egil', { pyramidPlacements: [{ slot: 2 }] })],
+    })
+    fireEvent.click(screen.getByRole('tab', { name: 'Egil' }))
+    const opponentPlacement = activePanel(opponentContainer).querySelector('.tech-slot.placement')
+    expect(opponentPlacement?.textContent).not.toContain('Sir Isaac Newton')
+    expect(opponentPlacement?.textContent).toContain('Blank tech card')
+    expect(opponentContainer.innerHTML).not.toContain('Sir Isaac Newton')
+    expect(opponentPlacement?.querySelector('img')?.getAttribute('src')).toBe('/items/greatperson_back.jpg')
+  })
+
+  it('moves a placed Great Person via the same stepper control, calling setPyramidPlacementSlot', () => {
+    const setPyramidPlacementSlot = vi
+      .spyOn(api, 'setPyramidPlacementSlot')
+      .mockResolvedValue({} as PlayerView)
+    const container = renderPanel({
+      pyramidPlacements: [{ name: 'Sir Isaac Newton', slot: 2 }],
+    })
+
+    const buttons = activePanel(container).querySelectorAll('.tech-slot-move button')
+    fireEvent.click(buttons[0] as Element) // ▼, move to a lower row
+
+    expect(setPyramidPlacementSlot).toHaveBeenCalledWith('game-1', 'Sir Isaac Newton', 1)
+  })
+})
+
+describe('TechPanel picker', () => {
+  it('shows level tabs 1-5 with no level selected until clicked, then filters the card grid', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([
+      tech('Writing', false, 1),
+      tech('Sailing', false, 2),
+    ])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
+
+    await screen.findByRole('button', { name: 'Level 1' })
+    for (const level of [1, 2, 3, 4, 5]) {
+      expect(screen.getByRole('button', { name: `Level ${level}` })).toBeTruthy()
+    }
+    // Nothing is picked by default — the player sees their pyramid first.
+    expect(screen.queryByText('Writing')).toBeNull()
+    expect(screen.queryByText('Sailing')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Level 1' }))
+
+    expect(screen.getByText('Writing')).toBeTruthy()
+    expect(screen.queryByText('Sailing')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Level 2' }))
+
+    expect(screen.queryByText('Writing')).toBeNull()
+    expect(screen.getByText('Sailing')).toBeTruthy()
+  })
+
+  it('clicking the active level tab again hides the grid', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false, 1)])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Level 1' }))
+    expect(screen.getByText('Writing')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Level 1' }))
+    expect(screen.queryByText('Writing')).toBeNull()
+
+    // Toggles back open on a third click, same as picking it fresh.
+    fireEvent.click(screen.getByRole('button', { name: 'Level 1' }))
+    expect(screen.getByText('Writing')).toBeTruthy()
+  })
+
+  it('says nothing is available at a level with no techs left, once that level is picked', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
+
+    expect(screen.queryByText('No level 1 techs available to research.')).toBeNull()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Level 1' }))
+
+    await screen.findByText('No level 1 techs available to research.')
+  })
+
+  it('opens a detail dialog with the card art, level and effect text on click', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false, 1)])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Level 1' }))
+    fireEvent.click(screen.getByText('Writing'))
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.textContent).toContain('Writing — Level 1')
+    expect(dialog.querySelector('img')?.getAttribute('src')).toBe('/items/Writing.jpg')
+    // Writing has an entry in TECH_TEXT — spot check a fragment of it rather
+    // than the whole transcribed paragraph.
+    expect(dialog.textContent).toContain('Library building')
+  })
+
+  it("shows Space Flight's own effect text, and never falls back to tech.description", async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([
+      { ...tech('Space Flight', false, 5), description: 'should never be shown' },
+    ])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
+
+    await screen.findByRole('button', { name: 'Level 1' })
+    fireEvent.click(screen.getByRole('button', { name: 'Level 5' }))
+    fireEvent.click(screen.getByText('Space Flight'))
+
+    const dialog = screen.getByRole('dialog')
+    // Space Flight has no entry on the printed tech reference sheet (it is
+    // added in code, not from the spreadsheet), so this line is the human's
+    // own text, not a transcription — see techText.ts.
+    expect(dialog.textContent).toContain('Immediately win the game with a Tech victory.')
+    expect(dialog.textContent).not.toContain('should never be shown')
+  })
+
+  it('researches the chosen tech through the shared runner and closes the dialog', async () => {
     const choose = vi.spyOn(api, 'chooseTech').mockResolvedValue({} as PlayerView)
-    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false)])
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false, 1)])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Level 1' }))
+    fireEvent.click(screen.getByText('Writing'))
+    fireEvent.click(screen.getByRole('button', { name: 'Research' }))
+
+    await waitFor(() => expect(choose).toHaveBeenCalledWith('game-1', 'Writing'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('disables Research while busy', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false, 1)])
+    render(<TechPanel gameId="game-1" busy={true} run={run} view={view([])} reloadCount={0} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Level 1' }))
+    fireEvent.click(screen.getByText('Writing'))
+
+    expect((screen.getByRole('button', { name: 'Research' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+  })
+
+  it('opens the same detail dialog for a tech already in the pyramid, with no Research button', async () => {
+    // The same tech, same id, also sits in `available` (as it would for any
+    // OTHER player who has not chosen it yet) — proves the Research button is
+    // gated on how the dialog was opened, not on an id lookup that a shared
+    // catalogue id would satisfy either way.
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false, 1)])
     render(
       <TechPanel
         gameId="game-1"
         busy={false}
         run={run}
-        view={view([])}
+        view={view([tech('Writing', false, 1)])}
         reloadCount={0}
       />,
     )
 
-    await screen.findByRole('option', { name: 'Level 1 — Writing' })
-    fireEvent.change(screen.getByRole('combobox', { name: 'Choose a tech' }), {
-      target: { value: 'Writing' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Research' }))
+    fireEvent.click(await screen.findByText('Writing'))
 
-    await waitFor(() => expect(choose).toHaveBeenCalledWith('game-1', 'Writing'))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.textContent).toContain('Writing — Level 1')
+    expect(dialog.textContent).toContain('Library building')
+    expect(screen.queryByRole('button', { name: 'Research' })).toBeNull()
+  })
+
+  it("opens the detail dialog for a tech read from an opponent's revealed pyramid, still with no Research button", async () => {
+    // Masonry is also in `available` for the viewer, same id `chooseTech`
+    // would copy verbatim — the failure case this guards against is opening
+    // Egil's pyramid card and being offered Research for HIS tech.
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Masonry', false, 1)])
+    render(
+      <TechPanel
+        gameId="game-1"
+        busy={false}
+        run={run}
+        view={view([], [opponent('p2', 'Egil', { revealedTechs: [tech('Masonry', false, 1)] })])}
+        reloadCount={0}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Egil' }))
+    fireEvent.click(screen.getByText('Masonry'))
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.textContent).toContain('Masonry — Level 1')
+    expect(screen.queryByRole('button', { name: 'Research' })).toBeNull()
+  })
+
+  it("moving a researched tech's pyramid row with the mouse does not also open its detail dialog", async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    vi.spyOn(api, 'setTechSlot').mockResolvedValue({} as PlayerView)
+    render(
+      <TechPanel
+        gameId="game-1"
+        busy={false}
+        run={run}
+        view={view([tech('Writing', false, 1)])}
+        reloadCount={0}
+      />,
+    )
+
+    await screen.findByText('Writing')
+    fireEvent.click(screen.getByRole('button', { name: 'Move Writing to a higher pyramid row' }))
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it("pressing Enter on the stepper button does not open the tech's detail dialog", async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    vi.spyOn(api, 'setTechSlot').mockResolvedValue({} as PlayerView)
+    render(
+      <TechPanel
+        gameId="game-1"
+        busy={false}
+        run={run}
+        view={view([tech('Writing', false, 1)])}
+        reloadCount={0}
+      />,
+    )
+
+    await screen.findByText('Writing')
+    const moveButton = screen.getByRole('button', { name: 'Move Writing to a higher pyramid row' })
+    // A keydown on a focused descendant button bubbles to the pyramid slot's
+    // own onKeyDown regardless of whether the button's native Enter-activates-
+    // click behaviour also fires (jsdom does not simulate that browser default
+    // action) — the bug this guards against is the slot's handler treating the
+    // bubbled event as if the slot itself had been activated.
+    fireEvent.keyDown(moveButton, { key: 'Enter' })
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('opens the detail dialog when Enter is pressed on the tech slot itself', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    const { container } = render(
+      <TechPanel
+        gameId="game-1"
+        busy={false}
+        run={run}
+        view={view([tech('Writing', false, 1)])}
+        reloadCount={0}
+      />,
+    )
+
+    await screen.findByText('Writing')
+    // Fired on the slot div itself (not a nested stepper button) — proves the
+    // `event.target !== event.currentTarget` guard does not also suppress a
+    // keypress that genuinely targets the slot.
+    const slot = container.querySelector('.tech-slot.researched')
+    if (slot === null) throw new Error('the researched tech slot is not rendered')
+    fireEvent.keyDown(slot, { key: 'Enter' })
+
+    expect(screen.getByRole('dialog').textContent).toContain('Writing — Level 1')
   })
 })
