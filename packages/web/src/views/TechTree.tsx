@@ -18,6 +18,11 @@
  * are unenforced and unlogged by design; this component only renders the
  * stepper controls when the caller provides the matching `onXSlotChange` prop
  * (only the viewer's own pyramid does).
+ *
+ * A researched slot is also clickable when `onTechClick` is given, so a
+ * player can read a tech's own card text after choosing it, not only while
+ * browsing the level tabs. The stepper buttons stop the click from bubbling
+ * so moving a tech does not also open its detail view.
  */
 
 type Level = 1 | 2 | 3 | 4 | 5
@@ -60,6 +65,8 @@ interface Props {
   /** Present only on the viewer's own pyramid. */
   readonly onTechSlotChange?: (techName: string, slot: Level) => void
   readonly onPlacementSlotChange?: (name: string, slot: Level) => void
+  /** Opens a researched tech's detail view; offered on any visible pyramid. */
+  readonly onTechClick?: (techName: string, opener: HTMLElement) => void
 }
 
 /** Java's TechController hard-coded these: 5, 4, 3, 2, 1 slots per level. */
@@ -83,6 +90,7 @@ export function TechTree({
   disabled,
   onTechSlotChange,
   onPlacementSlotChange,
+  onTechClick,
 }: Props): React.JSX.Element {
   return (
     <div className="tech-pyramid">
@@ -102,6 +110,22 @@ export function TechTree({
                   key={tech.name}
                   className={tech.hidden === true ? 'tech-slot researched hidden' : 'tech-slot researched'}
                   title={tech.name}
+                  role={onTechClick !== undefined ? 'button' : undefined}
+                  tabIndex={onTechClick !== undefined ? 0 : undefined}
+                  onClick={
+                    onTechClick === undefined
+                      ? undefined
+                      : (event) => onTechClick(tech.name, event.currentTarget)
+                  }
+                  onKeyDown={
+                    onTechClick === undefined
+                      ? undefined
+                      : (event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return
+                          event.preventDefault()
+                          onTechClick(tech.name, event.currentTarget)
+                        }
+                  }
                 >
                   <img
                     className="tech-slot-image"
@@ -114,7 +138,7 @@ export function TechTree({
                   />
                   <span className="tech-slot-label">{tech.name}</span>
                   {onTechSlotChange !== undefined && (
-                    <span className="tech-slot-move">
+                    <span className="tech-slot-move" onClick={(event) => event.stopPropagation()}>
                       <button
                         type="button"
                         className="small"

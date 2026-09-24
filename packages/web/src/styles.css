@@ -1245,6 +1245,10 @@ ul.list > li:last-child {
   border-color: var(--warn);
 }
 
+.tech-slot.researched[role='button'] {
+  cursor: pointer;
+}
+
 .tech-slot.available {
   color: var(--muted);
   font-weight: 400;

@@ -8,11 +8,16 @@
  *
  * Choosing a tech to research (issue #168) is a set of level tabs (1-5) over a
  * card grid of that level's available techs — the old `<select>` combo box is
- * gone. Clicking a card opens a `ReferenceDialog`/`ReferenceCard` detail view
- * with the card art, `TECH_TEXT` (for levels 1-4) and the Research button,
- * following the same pattern `SocialPolicyPanel`'s card reference already
- * uses. Per-tech effects are display text only; the engine does not enforce
- * them, exactly as that dialog's own note already says for social policies.
+ * gone. No tab is selected by default, so a player sees their pyramid first
+ * and opts into browsing a level rather than always landing on Level 1.
+ * Clicking a card, from the grid or from a slot already in the pyramid, opens
+ * a `ReferenceDialog`/`ReferenceCard` detail view with the card art and
+ * `TECH_TEXT` (for levels 1-4), following the same pattern
+ * `SocialPolicyPanel`'s card reference already uses. The Research button only
+ * appears when the tech shown is still in `available` — a tech read from the
+ * pyramid is already chosen, so there is nothing to research. Per-tech
+ * effects are display text only; the engine does not enforce them, exactly as
+ * that dialog's own note already says for social policies.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -56,6 +61,8 @@ interface TechTab {
   readonly civilization: string | null
   readonly techs: readonly TechTreeTech[]
   readonly placements: readonly TechTreePlacement[]
+  /** The same techs as `techs`, in full, so a pyramid click can open the detail dialog. */
+  readonly techItems: readonly TechItem[]
   /** Only ever non-empty on the viewer's own tab. */
   readonly hiddenTechs: readonly TechItem[]
   /** Java: the public `numberOfTechsChosen`, shown in the opponent empty state. */
@@ -76,7 +83,7 @@ export function TechPanel({
 }: Props): React.JSX.Element {
   const [available, setAvailable] = useState<readonly TechItem[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [activeLevel, setActiveLevel] = useState<Level>(1)
+  const [activeLevel, setActiveLevel] = useState<Level | null>(null)
   const [detailTech, setDetailTech] = useState<TechItem | null>(null)
   const detailOpenerRef = useRef<HTMLElement | null>(null)
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
@@ -121,6 +128,7 @@ export function TechPanel({
               ...(tech.slot !== undefined ? { slot: tech.slot } : {}),
             })),
             placements: view.you.pyramidPlacements,
+            techItems: view.you.techsChosen,
             hiddenTechs: view.you.techsChosen.filter((tech) => tech.hidden),
             chosenCount: view.you.techsChosen.length,
             own: true,
@@ -137,6 +145,7 @@ export function TechPanel({
         ...(tech.slot !== undefined ? { slot: tech.slot } : {}),
       })),
       placements: opponent.pyramidPlacements,
+      techItems: opponent.revealedTechs,
       hiddenTechs: [],
       chosenCount: opponent.numberOfTechsChosen,
       own: false,
@@ -150,34 +159,36 @@ export function TechPanel({
 
       <Tabs
         tabs={LEVELS.map((level) => ({ key: levelTabKey(level), label: `Level ${level}` }))}
-        active={levelTabKey(activeLevel)}
+        active={activeLevel === null ? '' : levelTabKey(activeLevel)}
         onSelect={(key) => setActiveLevel(Number(key) as Level)}
       />
-      <ul className="card-grid">
-        {available
-          .filter((tech) => tech.level === activeLevel)
-          .map((tech) => (
-            <ItemCard
-              key={tech.id}
-              item={tech}
-              role="button"
-              tabIndex={0}
-              onClick={(event) => {
-                detailOpenerRef.current = event.currentTarget
-                setDetailTech(tech)
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return
-                event.preventDefault()
-                detailOpenerRef.current = event.currentTarget
-                setDetailTech(tech)
-              }}
-            />
-          ))}
-        {available.filter((tech) => tech.level === activeLevel).length === 0 && (
-          <li className="muted">No level {activeLevel} techs available to research.</li>
-        )}
-      </ul>
+      {activeLevel !== null && (
+        <ul className="card-grid">
+          {available
+            .filter((tech) => tech.level === activeLevel)
+            .map((tech) => (
+              <ItemCard
+                key={tech.id}
+                item={tech}
+                role="button"
+                tabIndex={0}
+                onClick={(event) => {
+                  detailOpenerRef.current = event.currentTarget
+                  setDetailTech(tech)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
+                  detailOpenerRef.current = event.currentTarget
+                  setDetailTech(tech)
+                }}
+              />
+            ))}
+          {available.filter((tech) => tech.level === activeLevel).length === 0 && (
+            <li className="muted">No level {activeLevel} techs available to research.</li>
+          )}
+        </ul>
+      )}
 
       {detailTech !== null && (
         <ReferenceDialog
@@ -197,18 +208,20 @@ export function TechPanel({
             Card text is shown for reference only; the engine records the chosen tech but does
             not enforce its effects.
           </p>
-          <div className="row">
-            <button
-              disabled={busy}
-              onClick={() => {
-                const techName = detailTech.name
-                setDetailTech(null)
-                void run(() => api.chooseTech(gameId, techName))
-              }}
-            >
-              Research
-            </button>
-          </div>
+          {available.some((tech) => tech.id === detailTech.id) && (
+            <div className="row">
+              <button
+                disabled={busy}
+                onClick={() => {
+                  const techName = detailTech.name
+                  setDetailTech(null)
+                  void run(() => api.chooseTech(gameId, techName))
+                }}
+              >
+                Research
+              </button>
+            </div>
+          )}
         </ReferenceDialog>
       )}
 
@@ -238,6 +251,12 @@ export function TechPanel({
             techs={active.techs}
             placements={active.placements}
             disabled={busy}
+            onTechClick={(techName, opener) => {
+              const item = active.techItems.find((candidate) => candidate.name === techName)
+              if (item === undefined) return
+              detailOpenerRef.current = opener
+              setDetailTech(item)
+            }}
             {...(active.own
               ? {
                   onTechSlotChange: (techName: string, slot: Level) =>
