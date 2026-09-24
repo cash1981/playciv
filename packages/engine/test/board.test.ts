@@ -19,7 +19,6 @@ import {
 import {
   AREA_LABEL_HEIGHT,
   BOARD_ASSETS,
-  COLUMN_LABELS,
   DEFAULT_AREA_ROWS,
   DEFAULT_COLUMNS,
   DEFAULT_ROWS,
@@ -33,7 +32,9 @@ import {
   boardAreas,
   boardHeight,
   boardWidth,
+  columnLabel,
   createBoard,
+  createBoardForPlayers,
   cultureTrackHeight,
   findBoardAsset,
   locationOf,
@@ -43,9 +44,11 @@ import {
   playerAreas,
   remainingBoardAssetCount,
   squareOf,
+  startingCorner,
   wondersArea,
   wondersAreaWidth,
 } from '../src/board.js'
+import { createGame } from '../src/create-game.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
@@ -59,8 +62,14 @@ describe('geometry', () => {
   it('is 16 by 16 squares, as in the four-player template', () => {
     expect(DEFAULT_COLUMNS).toBe(16)
     expect(DEFAULT_ROWS).toBe(16)
-    expect(COLUMN_LABELS[0]).toBe('A')
-    expect(COLUMN_LABELS.at(-1)).toBe('P')
+    expect(columnLabel(0)).toBe('A')
+    expect(columnLabel(DEFAULT_COLUMNS - 1)).toBe('P')
+  })
+
+  it('carries the column letters past Z for the five-player map', () => {
+    expect(columnLabel(25)).toBe('Z')
+    expect(columnLabel(26)).toBe('AA')
+    expect(columnLabel(27)).toBe('AB')
   })
 
   it('a square is 94 pixels, a 375 pixel map tile divided by four', () => {
@@ -629,6 +638,72 @@ describe('migration', () => {
     expect(migrated.board.history[0]?.username).toBe('System')
     expect(piecesAtStep(migrated.board.history, 2)).toHaveLength(2)
     expect(piecesAtStep(migrated.board.history, 0)).toHaveLength(0)
+  })
+
+  // Issue #171: a game saved before the three- and five-player shapes
+  // existed carries a board with no `slots`/`startSlots` at all, at the old
+  // default 16 x 16 size every player count but two used to get — not the
+  // shape `createBoardForPlayers` would build for that count today.
+  const staleBoard = (numOfPlayers: number): GameState => {
+    const state = createGame({
+      name: 'stale',
+      numOfPlayers,
+      seed: 'issue-171-migrate',
+      players: [{ playerId: CASH1981, username: 'cash1981', color: 'Red', yourTurn: true }],
+    })
+    const { slots: _slots, slotStep: _slotStep, startSlots: _startSlots, ...rest } = createBoard()
+    return { ...state, board: rest as unknown as GameState['board'] }
+  }
+
+  it('re-seats an empty three-player save at the correct pyramid, same board size', () => {
+    const migrated = migrateGameState(staleBoard(3))
+    const shaped = createBoardForPlayers(3)
+
+    expect(migrated.board.columns).toBe(shaped.columns)
+    expect(migrated.board.rows).toBe(shaped.rows)
+    expect(migrated.board.slots).toEqual(shaped.slots)
+    expect(migrated.board.slotStep).toBe(shaped.slotStep)
+    expect(migrated.board.startSlots).toEqual(shaped.startSlots)
+    expect(startingCorner(migrated.board, 2)).toEqual(startingCorner(shaped, 2))
+  })
+
+  it('does not reshape a three-player save that already has a piece on it', () => {
+    // A rectangle slot and a pyramid slot are not the same squares, so
+    // re-seating a save with something already down would manufacture new
+    // overlaps rather than remove the one issue #171 reported. The piece has
+    // to be placed before the shape is stripped — a board with no `slots`
+    // cannot resolve a placement itself.
+    const state = createGame({
+      name: 'stale',
+      numOfPlayers: 3,
+      seed: 'issue-171-migrate',
+      players: [{ playerId: CASH1981, username: 'cash1981', color: 'Red', yourTurn: true }],
+    })
+    const withPiece = place(state, 'tiles/tile01', 0, mapTop(state.board))
+    const { slots: _slots, slotStep: _slotStep, startSlots: _startSlots, ...rest } = withPiece.board
+    const stale = { ...withPiece, board: rest as unknown as GameState['board'] }
+
+    const migrated = migrateGameState(stale)
+    const rectangle = createBoard(16, 16)
+    expect(migrated.board.slots).toEqual(rectangle.slots)
+    expect(migrated.board.slotStep).toBe(rectangle.slotStep)
+    expect(migrated.board.startSlots).toEqual(rectangle.startSlots)
+  })
+
+  it('does not resize a five-player save, and so keeps its old wrap-around corners', () => {
+    const migrated = migrateGameState(staleBoard(5))
+    const rectangle = createBoard(16, 16)
+
+    // The correct shape is a bigger canvas (28 x 18); re-seating an existing
+    // save to it would shift mapTop and every already-placed piece, so this
+    // is deliberately left at its old 16 x 16 size and the plain rectangle's
+    // slots, unlike the three-player rescue above.
+    expect(migrated.board.columns).toBe(16)
+    expect(migrated.board.rows).toBe(16)
+    expect(migrated.board.slots).toEqual(rectangle.slots)
+    expect(migrated.board.slotStep).toBe(rectangle.slotStep)
+    // The old four-corner table wraps: player 5 shares player 1's corner
+    expect(startingCorner(migrated.board, 5)).toEqual(startingCorner(migrated.board, 1))
   })
 })
 

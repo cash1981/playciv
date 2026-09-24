@@ -2251,6 +2251,41 @@ an invalid source shows up again because its value is above zero. No state
 shape changed, so no migration is needed. A row-added coverage test fails if a
 new coin source is not wired into one of the availability rules.
 
+## 2026-09-23 — Stepped map slots and the five-player hole (issue #109)
+
+**Decision.** The board carries its shape as a list of playable 4 x 4 slots
+(`Board.slots`) with the placement grid in squares (`Board.slotStep`, 4 on the
+rectangles and 2 on the stepped maps) and one starting slot per player in
+playernumber order (`Board.startSlots`). `createBoardForPlayers` picks the
+board: the 16 x 8 for two, the pyramid from the base rulebook page 9 for three,
+the holed 28 x 18 from the Fame and Fortune rulebook page 6 for five, and the
+full 16 x 16 for one and four. The shape tables were measured off the rendered
+rulebook diagrams and are commented with their page numbers. Starting slots
+walk clockwise from the top (3 players: top, bottom right, bottom left;
+5 players: top, right, bottom right, bottom left, left), as the human chose.
+
+**Why.** Issue #109: three players got a full rectangle and five players had
+player 5 inherit player 1's corner, so two starting tiles stacked at
+`(0, 258, 180)`. The rulebook diagrams were the only reference — the old
+system had no board model, only a Google-slide link — and the human approved
+reading the shape from them. The human also decided there is to be no
+migration of saved three/five-player games (there are none) and no re-seating
+of one/two/four-player games beyond filling the new rectangle shape into old
+saves.
+
+**Consequences.** Tile snapping snaps the piece's top-left to the `slotStep`
+lattice and accepts only a real slot, so on the stepped maps the snap tolerance
+around a slot origin is one square (half-tile) instead of the rectangle's two
+(a full tile); a drop further off-centre over a slot keeps its raw coordinates.
+This follows the existing "round the corner" rule and the brief; if it reads
+badly in play, the fix is to snap to the slot the drop is inside of. The hole
+and the outside have no slots, so they get no fog, no mat, no square name and
+no snap target — the rulebook's "cannot be moved through" is not enforced
+anywhere because the engine has no movement or pathfinding rules; pieces are
+free-dragged and the players apply the rule at the table. `COLUMN_LABELS` and
+the block helpers were replaced by `columnLabel`, `slotOrigin`,
+`nearestSlotOrigin` and `firstFreeSlot`.
+
 ---
 
 ## 2026-09-24 - Tech card text is transcribed from the help sheet, not routed through TechItem.description
@@ -2386,3 +2421,71 @@ rather than restoring him, since `putItemBack` only knows `items` and
 `discardedItems`. Acceptable — an already-placed Newton being un-drawn was
 never a real scenario — but worth knowing if undo behaviour here ever
 confuses a player.
+
+---
+
+## 2026-09-24 — Issue #171: the reveal flow was already correct; the gap was migrating an existing board
+
+**Decision.** Issue #171 ("starting tiles are put on top of each other" on
+3- and 5-player games) is not a bug in the reveal flow. The human confirmed
+the game was created to try this branch's board shapes, and the civilization
+was chosen first, in the normal order — which rules out a stale deploy of
+`main` and a player drawing something else before revealing. Simulating the
+real `draw` → `revealItem` → `placeStartingTile` sequence end to end, for a
+freshly created 3- and 5-player game, produces non-overlapping starting tiles
+every time; `board-tiles.test.ts` now has
+`describe('revealing civilizations, one player at a time (issue #171)')`
+proving it, checking that every tile's rectangle is disjoint from every
+other's (not just that their `(x, y)` pairs differ, which would still pass if
+two tiles landed a few squares apart and visibly overlapped).
+
+`board` is computed once, at `createGame` time, and never recomputed. The
+three- and five-player shapes (`Board.slots`/`startSlots`/`slotStep`) were all
+added in a single commit (`891e343`, "Make the board a list of playable slots
+for the stepped maps") — there was no intermediate state on this branch where
+those fields existed but held the wrong values. So the only board this can
+have left behind is one with no shape fields at all, saved before that
+commit — functionally the same as a game created on `main` today.
+`migrateGameState` did nothing to rescue such a save: on read, a board
+missing `slots`/`startSlots` fell back to `createBoard(board.columns,
+board.rows)` — the plain four-corner rectangle — regardless of player count.
+
+`migrateGameState` now instead falls back to
+`createBoardForPlayers(state.numOfPlayers)`'s shape, when three things all
+hold: the board is missing its shape fields, that shape is the *same size*
+board the save already has, and the board has no pieces on it yet. A
+three-player board is 16 x 16 either way, so an empty pre-shape three-player
+save is re-seated at the correct pyramid corners. A five-player board is not
+(28 x 18 now, 16 x 16 before): resizing an existing board would shift
+`mapTop`, and with it every already-placed piece's effective position, which
+is a bigger and riskier change than a missing-field fallback, so a five-player
+save is left at its old rectangle regardless of whether it has pieces. The
+empty-board check matters even at the same size: an in-progress three-player
+save already has exploration tiles snapped to the rectangle's slots, which
+sit in different places (and on a coarser step) than the pyramid's, so
+re-seating it underneath those tiles would manufacture new overlaps instead
+of removing the one this issue reported. Three new tests in `board.test.ts`'s
+`describe('migration', ...)` cover the rescued case, the piece-guarded case,
+and the five-player non-rescue.
+
+**Why.** The reveal flow needed a stronger regression test, which it now has,
+but was not the cause. The only mechanism that survives everything the human
+ruled out is a board saved before this branch's board-shapes commit existed —
+plausible if the game was created against a very early preview of this same
+branch (`50676eb`, the claim commit, predates `891e343` by about eight
+minutes) — which the migration path had no logic for at all. This does not
+confirm that
+is what happened; it is the best remaining explanation, and closing the gap
+in migration is safe and worth doing regardless.
+
+**Consequence.** This is confirmed to help only a genuinely pre-shape,
+still-empty three-player save. It will not rescue: a five-player save of any
+kind (deliberately, see above); a three-player save that already has a piece
+placed (deliberately, see above); or *any* save created after `891e343`
+landed, since that commit's boards already carry correct shape fields and the
+`??` fallback never fires on a field that is merely wrong rather than
+missing. If the human's own test game still shows the overlap after this
+lands, the most likely reason is that its board already carries shape fields
+from a version of `createBoardForPlayers` before the final, tested one —
+which this migration cannot detect, and which only recreating the game (or a
+deliberate one-off data fix on that specific game) can resolve.

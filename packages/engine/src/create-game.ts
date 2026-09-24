@@ -9,7 +9,7 @@
 
 import gamedataWaw from '../data/gamedata-faf-waw.json' with { type: 'json' }
 
-import { createBoard } from './board.js'
+import { createBoardForPlayers } from './board.js'
 import type { GameDataFile, WonderReference } from './gamedata.js'
 import { readDeck, wonderReference } from './gamedata.js'
 import type { Item, SocialPolicyItem, TechItem } from './item.js'
@@ -142,9 +142,10 @@ export function createGame(options: CreateGameOptions): GameState {
     discardedItems: [],
     withdrawnPlayers: [],
     publicTurns: {},
-    // Two-player games use a half-height 16 × 8 board (A–P, 1–8); three or more
-    // players get the full 16 × 16.
-    board: options.numOfPlayers === 2 ? createBoard(16, 8) : createBoard(),
+    // Each player count gets the board the rulebooks draw: the half-height
+    // 16 × 8 for two, the stepped pyramid for three, the holed 28 × 18 for
+    // five, and the full 16 × 16 for one and four.
+    board: createBoardForPlayers(options.numOfPlayers),
     players: (options.players ?? []).map((player, index) =>
       emptyPlayerhand(player, index + 1),
     ),

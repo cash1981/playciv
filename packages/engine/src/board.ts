@@ -13,6 +13,11 @@
  * how the PowerPoint template was used, and it is what makes it possible to
  * stack several pieces in one square or park one half outside the edge.
  *
+ * The rectangle is not the only shape: the rulebooks draw a stepped pyramid
+ * for three players and a bigger map with a hole for five, so a board carries
+ * the list of playable 4 x 4 slots it is made of rather than only its width
+ * and height. See `createBoardForPlayers`.
+ *
  * Below the map is a band of player areas, one per player. Dropping a piece
  * there tidies it into the next free slot, so a pile of collected huts reads as
  * a row rather than a heap.
@@ -57,10 +62,22 @@ export const WONDERS_AREA_SQUARES = 3
  */
 export const WONDERS_AREA_ID = '__wonders__'
 
-/** Column labels from the template: A through P. */
-export const COLUMN_LABELS = Array.from({ length: DEFAULT_COLUMNS }, (_, index) =>
-  String.fromCharCode(65 + index),
-)
+/**
+ * Column label for a zero-based column: A through Z, then AA, AB and on.
+ *
+ * The template's boards are sixteen squares wide, but the five-player map is
+ * twenty-eight, past the single letters.
+ */
+export function columnLabel(index: number): string {
+  let remaining = index + 1
+  let label = ''
+  while (remaining > 0) {
+    remaining -= 1
+    label = String.fromCharCode(65 + (remaining % 26)) + label
+    remaining = Math.floor(remaining / 26)
+  }
+  return label
+}
 
 export type BoardAssetCategory =
   | 'figure'
@@ -300,6 +317,20 @@ export interface BoardHistoryEntry {
 }
 
 /**
+ * One playable 4 x 4 slot on the map, as its top-left corner in squares from
+ * the map's own top-left corner.
+ */
+export interface BoardSlot {
+  readonly x: number
+  readonly y: number
+}
+
+/** A player's starting slot, and the way the tile's arrow points in it. */
+export interface BoardStart extends BoardSlot {
+  readonly rotation: Rotation
+}
+
+/**
  * The board. The order of `pieces` IS the stacking order: the last element is
  * drawn on top. That removes the need for a z-index, and "bring to front" is
  * just a move to the end of the list.
@@ -310,6 +341,22 @@ export interface Board {
   readonly squareSize: number
   /** Height of the player-area band below the map, in squares. */
   readonly areaRows: number
+  /**
+   * The playable 4 x 4 slots, in reading order. A rectangle lists every block
+   * of it; the stepped maps list only the slots the rulebook draws, so the
+   * hole and the outside simply do not exist.
+   */
+  readonly slots: readonly BoardSlot[]
+  /**
+   * Distance between neighbouring slot origins, in squares. Four on the
+   * rectangles, two on the stepped maps, whose tiles sit at half-tile offsets.
+   */
+  readonly slotStep: number
+  /**
+   * Each player's starting slot, in playernumber order. Wraps when there are
+   * more players than entries, as five players used to share the corners.
+   */
+  readonly startSlots: readonly BoardStart[]
   readonly pieces: readonly BoardPiece[]
   readonly history: readonly BoardHistoryEntry[]
 }
@@ -319,7 +366,136 @@ export function createBoard(
   rows = DEFAULT_ROWS,
   areaRows = DEFAULT_AREA_ROWS,
 ): Board {
-  return { columns, rows, squareSize: SQUARE_SIZE, areaRows, pieces: [], history: [] }
+  return {
+    columns,
+    rows,
+    squareSize: SQUARE_SIZE,
+    areaRows,
+    ...rectangleShape(columns, rows),
+    pieces: [],
+    history: [],
+  }
+}
+
+/** The slots and starts of a plain rectangle: every 4 x 4 block of it. */
+function rectangleShape(
+  columns: number,
+  rows: number,
+): Pick<Board, 'slots' | 'slotStep' | 'startSlots'> {
+  const slots: BoardSlot[] = []
+  for (let y = 0; y < rows; y += TILE_SQUARES) {
+    for (let x = 0; x < columns; x += TILE_SQUARES) slots.push({ x, y })
+  }
+
+  // Player 1 takes the top-left and the rest walk clockwise. The two-player
+  // board is only two block rows tall and its players sit in opposite corners,
+  // so player 2 takes the south-east corner rather than the top-right.
+  const startSlots: BoardStart[] =
+    Math.floor(rows / TILE_SQUARES) === 2
+      ? [
+          { x: 0, y: 0, rotation: 90 },
+          { x: columns - TILE_SQUARES, y: rows - TILE_SQUARES, rotation: 270 },
+        ]
+      : [
+          { x: 0, y: 0, rotation: 180 },
+          { x: columns - TILE_SQUARES, y: 0, rotation: 180 },
+          { x: columns - TILE_SQUARES, y: rows - TILE_SQUARES, rotation: 0 },
+          { x: 0, y: rows - TILE_SQUARES, rotation: 0 },
+        ]
+
+  return { slots, slotStep: TILE_SQUARES, startSlots }
+}
+
+/**
+ * The three-player map from the base rulebook, printed page 9, "MAP SETUP BY
+ * NUMBER OF PLAYERS": a pyramid of 4 + 3 + 2 + 1 tiles, each row stepped half
+ * a tile across, centred on the sixteen-square board.
+ */
+const THREE_PLAYER_SLOTS: readonly BoardSlot[] = [
+  { x: 6, y: 0 },
+  { x: 4, y: 4 },
+  { x: 8, y: 4 },
+  { x: 2, y: 8 },
+  { x: 6, y: 8 },
+  { x: 10, y: 8 },
+  { x: 0, y: 12 },
+  { x: 4, y: 12 },
+  { x: 8, y: 12 },
+  { x: 12, y: 12 },
+]
+
+/** Clockwise from the top: top, bottom right, bottom left. */
+const THREE_PLAYER_STARTS: readonly BoardStart[] = [
+  { x: 6, y: 0, rotation: 180 },
+  { x: 12, y: 12, rotation: 270 },
+  { x: 0, y: 12, rotation: 90 },
+]
+
+/**
+ * The five-player map from the Fame and Fortune rulebook, printed page 6:
+ * twenty-two tiles around a hole one tile wide and one and a half tiles tall,
+ * at x 12..16, y 8..14. The hole is closed at the bottom by the upper halves
+ * of the two tiles below it, so it is an inside gap rather than a bay.
+ */
+const FIVE_PLAYER_SLOTS: readonly BoardSlot[] = [
+  { x: 12, y: 0 },
+  { x: 8, y: 2 },
+  { x: 16, y: 2 },
+  { x: 12, y: 4 },
+  { x: 0, y: 6 },
+  { x: 4, y: 6 },
+  { x: 8, y: 6 },
+  { x: 16, y: 6 },
+  { x: 20, y: 6 },
+  { x: 24, y: 6 },
+  { x: 0, y: 10 },
+  { x: 4, y: 10 },
+  { x: 8, y: 10 },
+  { x: 16, y: 10 },
+  { x: 20, y: 10 },
+  { x: 24, y: 10 },
+  { x: 2, y: 14 },
+  { x: 6, y: 14 },
+  { x: 10, y: 14 },
+  { x: 14, y: 14 },
+  { x: 18, y: 14 },
+  { x: 22, y: 14 },
+]
+
+/** Clockwise from the top: top, right, bottom right, bottom left, left. */
+const FIVE_PLAYER_STARTS: readonly BoardStart[] = [
+  { x: 12, y: 4, rotation: 180 },
+  { x: 24, y: 6, rotation: 270 },
+  { x: 18, y: 14, rotation: 0 },
+  { x: 6, y: 14, rotation: 0 },
+  { x: 0, y: 6, rotation: 90 },
+]
+
+/**
+ * The board a game with this many players is played on: the long, short two-
+ * player board, the stepped three-player pyramid, the holed five-player map,
+ * or the full 16 x 16 for one and four players.
+ */
+export function createBoardForPlayers(numOfPlayers: number): Board {
+  if (numOfPlayers === 2) return createBoard(16, 8)
+  if (numOfPlayers === 3) return shapedBoard(16, 16, THREE_PLAYER_SLOTS, THREE_PLAYER_STARTS)
+  if (numOfPlayers === 5) return shapedBoard(28, 18, FIVE_PLAYER_SLOTS, FIVE_PLAYER_STARTS)
+  return createBoard()
+}
+
+/** A board whose slots are drawn by hand rather than filling a rectangle. */
+function shapedBoard(
+  columns: number,
+  rows: number,
+  slots: readonly BoardSlot[],
+  startSlots: readonly BoardStart[],
+): Board {
+  return {
+    ...createBoard(columns, rows),
+    slots,
+    slotStep: TILE_SQUARES / 2,
+    startSlots,
+  }
 }
 
 export const boardWidth = (board: Board): number => board.columns * board.squareSize
@@ -672,12 +848,23 @@ export function clampToBoard(
   ]
 }
 
-/** The square a piece sits in, by its centre. `null` when off the map. */
+/**
+ * The square a piece sits in, by its centre. `null` when off the map — which
+ * includes the hole and the outside of a stepped board, where no slot covers
+ * the square.
+ */
 export function squareOf(board: Board, piece: BoardPiece): string | null {
   const column = Math.floor((piece.x + piece.width / 2) / board.squareSize)
   const row = Math.floor((piece.y + piece.height / 2 - mapTop(board)) / board.squareSize)
-  if (column < 0 || column >= board.columns || row < 0 || row >= board.rows) return null
-  return `${COLUMN_LABELS[column] ?? '?'}${row + 1}`
+  const onSlot = board.slots.some(
+    (slot) =>
+      column >= slot.x &&
+      column < slot.x + TILE_SQUARES &&
+      row >= slot.y &&
+      row < slot.y + TILE_SQUARES,
+  )
+  if (!onSlot) return null
+  return `${columnLabel(column)}${row + 1}`
 }
 
 /** Where a piece is, in words: a culture space, a map square or a player's area. */
@@ -709,66 +896,53 @@ export function findPiece(board: Board, pieceId: string): BoardPiece | undefined
 }
 
 // ---------------------------------------------------------------------------
-// Map tiles: slots, corners and orientation
+// Map tiles: slots and orientation
 // ---------------------------------------------------------------------------
 
-/** Number of 4 x 4 slots along each edge. Sixteen squares gives four. */
-export const blockColumns = (board: Board): number =>
-  Math.floor(board.columns / TILE_SQUARES)
-export const blockRows = (board: Board): number => Math.floor(board.rows / TILE_SQUARES)
-
-/** Top-left corner of the slot at (block column, block row), in pixels. */
-export function blockOrigin(
-  board: Board,
-  blockColumn: number,
-  blockRow: number,
-): readonly [x: number, y: number] {
-  const size = TILE_SQUARES * board.squareSize
-  return [blockColumn * size, mapTop(board) + blockRow * size]
+/** Top-left corner of a slot, in board pixels. */
+export function slotOrigin(board: Board, slot: BoardSlot): readonly [x: number, y: number] {
+  return [slot.x * board.squareSize, mapTop(board) + slot.y * board.squareSize]
 }
 
 /**
- * Returns the 4 x 4 map slot nearest to a point, or undefined outside the map.
- * Keeping this calculation here makes both automatic and manual tile
- * placement use the same origin as the coordinate grid.
+ * Returns the playable slot nearest to a point, or undefined when the point is
+ * not on one — outside the map, or over the hole. Keeping this calculation here
+ * makes both automatic and manual tile placement use the same origin as the
+ * coordinate grid.
  */
-export function nearestBlockOrigin(
+export function nearestSlotOrigin(
   board: Board,
   x: number,
   y: number,
 ): readonly [x: number, y: number] | undefined {
   const top = mapTop(board)
-  const size = TILE_SQUARES * board.squareSize
+  const step = board.slotStep
   // x and y are the piece's top-left corner. Rounding that corner absorbs
   // small pointer offsets without moving a piece dropped exactly on a grid
-  // boundary into the next block.
-  const column = Math.round(x / size)
-  const row = Math.round((y - top) / size)
-  if (column < 0 || column >= blockColumns(board) || row < 0 || row >= blockRows(board)) {
-    return undefined
-  }
-  return blockOrigin(board, column, row)
+  // boundary into the next slot.
+  const slotX = Math.round(x / board.squareSize / step) * step
+  const slotY = Math.round((y - top) / board.squareSize / step) * step
+  const slot = board.slots.find((candidate) => candidate.x === slotX && candidate.y === slotY)
+  return slot === undefined ? undefined : slotOrigin(board, slot)
 }
 
 /**
  * Where a civilization's starting tile goes, and which way it faces.
  *
- * Player 1 always takes the top-left slot (A1-D4). On the full board the rest
- * walk clockwise: 2 the top-right, 3 the bottom-right and 4 the bottom-left,
- * matching the example board. The two-player board is only two block rows tall
- * and its players sit in opposite corners, so player 2 takes the south-east
- * corner (M5-P8) rather than the top-right.
+ * The board carries one starting slot per player in playernumber order — four
+ * corners clockwise from the top left on the full board, opposite corners on
+ * the two-player board, the top and the two lower corners on the three-player
+ * pyramid, and five slots around the hole on the five-player map. A board with
+ * fewer starting slots than seats wraps, as five players used to share the four
+ * corners.
  *
  * Starting tiles carry an arrow showing which way the tile goes, and it should
  * point in towards the middle. Every image file has the arrow on the bottom
  * edge pointing up — checked against all sixteen civ tiles and the physical
  * America tile in Civilization/Civs/america.jpg — so it is the rotation that
- * turns it. On the full board the top two corners need 180 degrees to point the
- * arrow down at the middle and the bottom two stay at 0 degrees to point it up.
- * On the long, short two-player board the arrows instead run along the long
- * axis, at each other: 90 degrees out of the north-west corner (pointing east)
- * and 270 out of the south-east corner (pointing west). Turning clockwise
- * carries it round from there.
+ * turns it: 0 up, 90 right, 180 down, 270 left. `createBoardForPlayers` builds
+ * the tables, including the two-player board's arrows, which run along the long
+ * axis at each other.
  *
  * The tile can be turned freely afterwards, so this is a starting point rather
  * than a constraint.
@@ -777,54 +951,37 @@ export function startingCorner(
   board: Board,
   playernumber: number,
 ): { readonly x: number; readonly y: number; readonly rotation: Rotation } {
-  const lastColumn = blockColumns(board) - 1
-  const lastRow = blockRows(board) - 1
-
-  // The two-player board is two block rows, so its two corners are the two the
-  // players use; every bigger board walks all four clockwise from the top left.
-  const corners: readonly { blockColumn: number; blockRow: number; rotation: Rotation }[] =
-    blockRows(board) === 2
-      ? [
-          { blockColumn: 0, blockRow: 0, rotation: 90 },
-          { blockColumn: lastColumn, blockRow: lastRow, rotation: 270 },
-        ]
-      : [
-          { blockColumn: 0, blockRow: 0, rotation: 180 },
-          { blockColumn: lastColumn, blockRow: 0, rotation: 180 },
-          { blockColumn: lastColumn, blockRow: lastRow, rotation: 0 },
-          { blockColumn: 0, blockRow: lastRow, rotation: 0 },
-        ]
-
-  // playernumber is 1-based; more than four players share the corners again
-  const corner = corners[
-    (Math.max(playernumber, 1) - 1) % corners.length
-  ] as (typeof corners)[number]
-  const [x, y] = blockOrigin(board, corner.blockColumn, corner.blockRow)
-  return { x, y, rotation: corner.rotation }
+  const start =
+    board.startSlots[(Math.max(playernumber, 1) - 1) % board.startSlots.length] ??
+    board.startSlots[0]
+  if (start === undefined) return { x: 0, y: 0, rotation: 0 }
+  const [x, y] = slotOrigin(board, start)
+  return { x, y, rotation: start.rotation }
 }
 
 /**
- * First free 4 x 4 slot, read row by row. Used when an exploration tile is
- * drawn: the system does not know which area the player is exploring, so the
- * tile lands somewhere there is room and is dragged into place from there.
+ * First free 4 x 4 slot, in the board's own order. Used when an exploration
+ * tile is drawn: the system does not know which area the player is exploring,
+ * so the tile lands somewhere there is room and is dragged into place from
+ * there. The hole and the outside of a stepped board are not slots, so a drawn
+ * tile never lands on them.
  *
- * Falls back to the top-left slot when the map is full.
+ * Falls back to the first slot when the map is full.
  */
-export function firstFreeBlock(board: Board): readonly [x: number, y: number] {
-  const size = TILE_SQUARES * board.squareSize
-  const top = mapTop(board)
-  const taken = new Set(
-    board.pieces
-      .filter((piece) => piece.category === 'tile' || piece.category === 'civtile')
-      .map((piece) => `${Math.round(piece.x / size)},${Math.round((piece.y - top) / size)}`),
-  )
-
-  for (let row = 0; row < blockRows(board); row++) {
-    for (let column = 0; column < blockColumns(board); column++) {
-      if (!taken.has(`${column},${row}`)) return blockOrigin(board, column, row)
-    }
+export function firstFreeSlot(board: Board): readonly [x: number, y: number] {
+  const taken = new Set<string>()
+  for (const piece of board.pieces) {
+    if (piece.category !== 'tile' && piece.category !== 'civtile') continue
+    const origin = nearestSlotOrigin(board, piece.x, piece.y)
+    if (origin !== undefined) taken.add(`${origin[0]},${origin[1]}`)
   }
-  return blockOrigin(board, 0, 0)
+
+  for (const slot of board.slots) {
+    const origin = slotOrigin(board, slot)
+    if (!taken.has(`${origin[0]},${origin[1]}`)) return origin
+  }
+  const [first] = board.slots
+  return first === undefined ? [0, mapTop(board)] : slotOrigin(board, first)
 }
 
 /**
