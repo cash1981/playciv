@@ -5,6 +5,14 @@
  * (Java: `PlayerAction.revealTech`, `getTechsForAllPlayers`). One tab per
  * player switches between the pyramids (issue #140); only the viewer's own tab
  * carries the hidden list with the Reveal and Remove controls.
+ *
+ * Choosing a tech to research (issue #168) is a set of level tabs (1-5) over a
+ * card grid of that level's available techs — the old `<select>` combo box is
+ * gone. Clicking a card opens a `ReferenceDialog`/`ReferenceCard` detail view
+ * with the card art, `TECH_TEXT` (for levels 1-4) and the Research button,
+ * following the same pattern `SocialPolicyPanel`'s card reference already
+ * uses. Per-tech effects are display text only; the engine does not enforce
+ * them, exactly as that dialog's own note already says for social policies.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -17,9 +25,18 @@ import type { GameRevisionView, PlayerView } from '../lib/api.js'
 import { TechTree } from './TechTree.js'
 import type { TechTreeTech } from './TechTree.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { ItemCard, itemImageUrl } from './ItemCard.js'
 import { PlayerTabs } from './PlayerTabs.js'
 import type { PlayerTab } from './PlayerTabs.js'
+import { ReferenceCard } from './ReferenceCard.js'
+import { ReferenceDialog } from './ReferenceDialog.js'
+import { Tabs } from './Tabs.js'
+import { TECH_TEXT } from './techText.js'
 import './PlayerTabs.css'
+
+type Level = 1 | 2 | 3 | 4 | 5
+const LEVELS: readonly Level[] = [1, 2, 3, 4, 5]
+const levelTabKey = (level: Level): string => String(level)
 
 interface Props {
   readonly gameId: string
@@ -58,7 +75,9 @@ export function TechPanel({
 }: Props): React.JSX.Element {
   const [available, setAvailable] = useState<readonly TechItem[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [chosenTech, setChosenTech] = useState('')
+  const [activeLevel, setActiveLevel] = useState<Level>(1)
+  const [detailTech, setDetailTech] = useState<TechItem | null>(null)
+  const detailOpenerRef = useRef<HTMLElement | null>(null)
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
   const requestEpoch = useRef(0)
 
@@ -121,33 +140,67 @@ export function TechPanel({
     <CollapsiblePanel id="techs" title="Techs">
       {loadError !== null && <div className="error">{loadError}</div>}
 
-      <div className="row">
-        <select
-          aria-label="Choose a tech"
-          value={chosenTech}
-          onChange={(event) => setChosenTech(event.target.value)}
-          style={{ flex: 1 }}
-        >
-          <option value="">choose a tech …</option>
-          {available.map((tech) => (
-            <option key={tech.id} value={tech.name}>
-              Level {tech.level} — {tech.name}
-            </option>
+      <Tabs
+        tabs={LEVELS.map((level) => ({ key: levelTabKey(level), label: `Level ${level}` }))}
+        active={levelTabKey(activeLevel)}
+        onSelect={(key) => setActiveLevel(Number(key) as Level)}
+      />
+      <ul className="card-grid">
+        {available
+          .filter((tech) => tech.level === activeLevel)
+          .map((tech) => (
+            <ItemCard
+              key={tech.id}
+              item={tech}
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
+                detailOpenerRef.current = event.currentTarget
+                setDetailTech(tech)
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return
+                event.preventDefault()
+                detailOpenerRef.current = event.currentTarget
+                setDetailTech(tech)
+              }}
+            />
           ))}
-        </select>
-        <button
-          disabled={busy || chosenTech === ''}
-          onClick={() =>
-            void run(async () => {
-              const result = await api.chooseTech(gameId, chosenTech)
-              setChosenTech('')
-              return result
-            })
-          }
+        {available.filter((tech) => tech.level === activeLevel).length === 0 && (
+          <li className="muted">No level {activeLevel} techs available to research.</li>
+        )}
+      </ul>
+
+      {detailTech !== null && (
+        <ReferenceDialog
+          titleId="tech-detail-title"
+          title={`${detailTech.name} — Level ${detailTech.level}`}
+          returnFocusTo={detailOpenerRef}
+          onClose={() => setDetailTech(null)}
         >
-          Research
-        </button>
-      </div>
+          <ReferenceCard
+            name={detailTech.name}
+            image={itemImageUrl(detailTech)}
+            imageAlt={`${detailTech.name} tech card`}
+          >
+            {TECH_TEXT[detailTech.name] !== undefined && <p>{TECH_TEXT[detailTech.name]}</p>}
+          </ReferenceCard>
+          <div className="row">
+            <button
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const result = await api.chooseTech(gameId, detailTech.name)
+                  setDetailTech(null)
+                  return result
+                })
+              }
+            >
+              Research
+            </button>
+          </div>
+        </ReferenceDialog>
+      )}
 
       <PlayerTabs
         tabs={tabs.map(

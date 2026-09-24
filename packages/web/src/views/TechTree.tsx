@@ -4,12 +4,21 @@
  * Model: `old-civ-web/app/views/partials/techtree.html` and
  * `TechController.getChosenTech` / `getAvailableTech`. Five rows, level 1 at
  * the base with 5 slots, narrowing to level 5 at the apex with 1 slot. A
- * researched slot shows the name; an empty slot shows the trade cost for that
- * level. The component only lays out whatever list of techs it is given — it
- * does not know or care whether those are the viewer's own or a public set.
+ * researched slot shows the card art (issue #168), with the name kept as
+ * `title`/text underneath as a fallback; an empty slot shows the trade cost
+ * for that level. The component only lays out whatever list of techs it is
+ * given — it does not know or care whether those are the viewer's own or a
+ * public set, so it deliberately does not import the engine `Item` type or
+ * `itemImage()`. The file name is built inline instead, following the same
+ * rule as `itemImage()`'s `tech` case in `item.ts`.
  */
 
 type Level = 1 | 2 | 3 | 4 | 5
+
+/** Mirrors `itemImage()`'s `tech` case: `${name}.jpg` with spaces stripped. */
+export function techCardImageUrl(name: string): string {
+  return `/items/${encodeURIComponent(`${name}.jpg`.replace(/ /g, ''))}`
+}
 
 export interface TechTreeTech {
   readonly name: string
@@ -51,7 +60,16 @@ export function TechTree({ techs }: Props): React.JSX.Element {
                 className={tech.hidden === true ? 'tech-slot researched hidden' : 'tech-slot researched'}
                 title={tech.name}
               >
-                {tech.name}
+                <img
+                  className="tech-slot-image"
+                  src={techCardImageUrl(tech.name)}
+                  alt=""
+                  onError={(event) => {
+                    // A missing file should leave the name readable, not a broken icon.
+                    event.currentTarget.style.display = 'none'
+                  }}
+                />
+                <span className="tech-slot-label">{tech.name}</span>
               </div>
             ))}
             {Array.from({ length: emptyCount }, (_unused, index) => (

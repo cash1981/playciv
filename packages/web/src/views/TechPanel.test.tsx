@@ -202,7 +202,7 @@ describe('TechPanel tabs', () => {
     })
 
     expect(tabNames()).toEqual(['Egil', 'Kari'])
-    expect(screen.getByRole('combobox', { name: 'Choose a tech' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Level 1' })).toBeTruthy()
   })
 
   it('moves between tabs with the arrow keys', () => {
@@ -214,26 +214,84 @@ describe('TechPanel tabs', () => {
 
     expect(selectedTab().textContent).toBe('Egil')
   })
+})
 
-  it('researches the chosen tech through the shared runner', async () => {
+describe('TechPanel picker', () => {
+  it('shows level tabs 1-5, defaulting to level 1, and filters the card grid by the active level', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([
+      tech('Writing', false, 1),
+      tech('Sailing', false, 2),
+    ])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
+
+    await screen.findByText('Writing')
+    for (const level of [1, 2, 3, 4, 5]) {
+      expect(screen.getByRole('button', { name: `Level ${level}` })).toBeTruthy()
+    }
+    expect(screen.queryByText('Sailing')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Level 2' }))
+
+    expect(screen.queryByText('Writing')).toBeNull()
+    expect(screen.getByText('Sailing')).toBeTruthy()
+  })
+
+  it('says nothing is available at a level with no techs left', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
+
+    await screen.findByText('No level 1 techs available to research.')
+  })
+
+  it('opens a detail dialog with the card art, level and effect text on click', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false, 1)])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
+
+    fireEvent.click(await screen.findByText('Writing'))
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.textContent).toContain('Writing — Level 1')
+    expect(dialog.querySelector('img')?.getAttribute('src')).toBe('/items/Writing.jpg')
+    // Writing has an entry in TECH_TEXT — spot check a fragment of it rather
+    // than the whole transcribed paragraph.
+    expect(dialog.textContent).toContain('Library building')
+  })
+
+  it("shows no effect-text paragraph for Space Flight, and never falls back to tech.description", async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([
+      { ...tech('Space Flight', false, 5), description: 'should never be shown' },
+    ])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
+
+    await screen.findByRole('button', { name: 'Level 1' })
+    fireEvent.click(screen.getByRole('button', { name: 'Level 5' }))
+    fireEvent.click(screen.getByText('Space Flight'))
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.querySelector('.reference-card-copy p')).toBeNull()
+    expect(dialog.textContent).not.toContain('should never be shown')
+  })
+
+  it('researches the chosen tech through the shared runner and closes the dialog', async () => {
     const choose = vi.spyOn(api, 'chooseTech').mockResolvedValue({} as PlayerView)
-    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false)])
-    render(
-      <TechPanel
-        gameId="game-1"
-        busy={false}
-        run={run}
-        view={view([])}
-        reloadCount={0}
-      />,
-    )
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false, 1)])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
 
-    await screen.findByRole('option', { name: 'Level 1 — Writing' })
-    fireEvent.change(screen.getByRole('combobox', { name: 'Choose a tech' }), {
-      target: { value: 'Writing' },
-    })
+    fireEvent.click(await screen.findByText('Writing'))
     fireEvent.click(screen.getByRole('button', { name: 'Research' }))
 
     await waitFor(() => expect(choose).toHaveBeenCalledWith('game-1', 'Writing'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('disables Research while busy', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false, 1)])
+    render(<TechPanel gameId="game-1" busy={true} run={run} view={view([])} reloadCount={0} />)
+
+    fireEvent.click(await screen.findByText('Writing'))
+
+    expect((screen.getByRole('button', { name: 'Research' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    )
   })
 })
