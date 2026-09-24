@@ -72,8 +72,10 @@ _Last updated: 2026-09-24_
   file, `packages/web/src/views/techText.ts`, transcribed by the orchestrator
   from the tech reference sheet the old client already ships
   (`packages/web/public/help/Civ_Tech_FF-WW.-2.jpg`) rather than invented;
-  Space Flight has no entry there (added in code, not from the spreadsheet)
-  and gets no effect-text paragraph. A visible disclaimer in the dialog says
+  Space Flight has no entry there (added in code, not from the spreadsheet);
+  its line ("Immediately win the game with a Tech victory.") is the human's
+  own text, added directly, not a transcription. A visible disclaimer in the
+  dialog says
   the text is reference-only and not engine-enforced, matching
   `SocialPolicyPanel`'s existing one. Two review rounds, both approved (round 1
   "approve with nits" — two nits promoted to real bugs and fixed: the dialog
@@ -882,7 +884,6 @@ _Nothing queued._
   already in place (Luna) and confirmed working. 297 engine + 51 server tests
   pass. Branch pushed; PR still to open.
 
-- **Space Flight has no artwork.** Nothing to fix; there is no such card.
 - **Card images are large** — up to 1 MB each, straight from the old client.
   Fine locally, wasteful over a network. Nobody has decided to optimise them.
 - **Authentication is development grade.** scrypt and signed bearer tokens that

@@ -12,7 +12,8 @@
  * corrected; wording and effects are not.
  *
  * Space Flight has no entry on that sheet (Java added it in code, not from
- * the spreadsheet — see `gamedata.ts`), so it has no text here either.
+ * the spreadsheet — see `gamedata.ts`); its line below is the human's own
+ * text, not a transcription of anything printed.
  */
 export const TECH_TEXT: Readonly<Record<string, string>> = {
   'Animal Husbandry':
@@ -126,4 +127,6 @@ export const TECH_TEXT: Readonly<Record<string, string>> = {
     'Start of turn: once per turn, build a unit, figure or building you’ve unlocked for free. ' +
     'Wheat — City Management: one of your cities produces an extra 10 production this turn.',
   'Replacement Parts': 'Unlocks: a stacking limit of 6, Level IV Infantry units.',
+
+  'Space Flight': 'Immediately win the game with a Tech victory.',
 }

@@ -330,7 +330,7 @@ describe('TechPanel picker', () => {
     expect(dialog.textContent).toContain('Library building')
   })
 
-  it("shows no effect-text paragraph for Space Flight, and never falls back to tech.description", async () => {
+  it("shows Space Flight's own effect text, and never falls back to tech.description", async () => {
     vi.spyOn(api, 'availableTechs').mockResolvedValue([
       { ...tech('Space Flight', false, 5), description: 'should never be shown' },
     ])
@@ -341,7 +341,10 @@ describe('TechPanel picker', () => {
     fireEvent.click(screen.getByText('Space Flight'))
 
     const dialog = screen.getByRole('dialog')
-    expect(dialog.querySelector('.reference-card-copy p')).toBeNull()
+    // Space Flight has no entry on the printed tech reference sheet (it is
+    // added in code, not from the spreadsheet), so this line is the human's
+    // own text, not a transcription — see techText.ts.
+    expect(dialog.textContent).toContain('Immediately win the game with a Tech victory.')
     expect(dialog.textContent).not.toContain('should never be shown')
   })
 
