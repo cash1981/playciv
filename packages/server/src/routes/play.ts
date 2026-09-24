@@ -21,6 +21,7 @@ import {
   initiateUndo,
   lockOrUnlockTurn,
   loot,
+  placeGreatPersonInPyramid,
   playerPutsItemBackInDeck,
   playersActiveUndos,
   remainingTechsForPlayer,
@@ -36,6 +37,8 @@ import {
   setCoinSource,
   setPlayerStat,
   setPlayerGovernment,
+  setPyramidPlacementSlot,
+  setTechSlot,
   takeTurn,
   tradeToPlayer,
   updateTurn,
@@ -233,6 +236,48 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     }
     return applyToGame(context, c, gameId, (state) =>
       revealTech(state, { playerId: currentPlayer(c).id, techName }),
+    )
+  })
+
+  /** New in this port — see the pyramid-reposition task brief. No old-system equivalent. */
+  app.post('/api/games/:gameId/techs/slot', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const techName = requireString(body, 'name')
+    const slot = body['slot']
+    if (techName === undefined || typeof slot !== 'number' || !Number.isInteger(slot) || slot < 1 || slot > 5) {
+      return sendError(c, 400, 'BAD_REQUEST', 'name and an integer slot 1-5 are required')
+    }
+    return applyToGame(context, c, gameId, (state) =>
+      setTechSlot(state, { playerId: currentPlayer(c).id, techName, slot: slot as 1 | 2 | 3 | 4 | 5 }),
+    )
+  })
+
+  /** New in this port — see the pyramid-reposition task brief. No old-system equivalent. */
+  app.post('/api/games/:gameId/greatperson/place', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const itemId = requireString(body, 'itemId')
+    const slot = body['slot']
+    if (itemId === undefined || typeof slot !== 'number' || !Number.isInteger(slot) || slot < 1 || slot > 5) {
+      return sendError(c, 400, 'BAD_REQUEST', 'itemId and an integer slot 1-5 are required')
+    }
+    return applyToGame(context, c, gameId, (state) =>
+      placeGreatPersonInPyramid(state, { playerId: currentPlayer(c).id, itemId, slot: slot as 1 | 2 | 3 | 4 | 5 }),
+    )
+  })
+
+  /** New in this port — see the pyramid-reposition task brief. No old-system equivalent. */
+  app.post('/api/games/:gameId/greatperson/slot', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const name = requireString(body, 'name')
+    const slot = body['slot']
+    if (name === undefined || typeof slot !== 'number' || !Number.isInteger(slot) || slot < 1 || slot > 5) {
+      return sendError(c, 400, 'BAD_REQUEST', 'name and an integer slot 1-5 are required')
+    }
+    return applyToGame(context, c, gameId, (state) =>
+      setPyramidPlacementSlot(state, { playerId: currentPlayer(c).id, name, slot: slot as 1 | 2 | 3 | 4 | 5 }),
     )
   })
 
