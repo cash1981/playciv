@@ -268,9 +268,9 @@ export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
     undefined,
   )
   const phase = currentPhaseStatus(latest)
-  // A missing `revealed` flag is treated as revealed, matching `publicTurn`
-  // and `migratePlayerTurn`'s treatment of a legacy turn.
-  const roundDone = latest !== undefined && TURN_PHASES.every((candidate) => latest.revealed[candidate] ?? true)
+  // Same rule as `currentPhaseStatus`: a missing `revealed` flag blocks
+  // nothing, only an explicit `false` does.
+  const roundDone = latest !== undefined && TURN_PHASES.every((candidate) => latest.revealed[candidate] !== false)
   const turnNumber = latest === undefined ? 1 : roundDone ? latest.turnNumber + 1 : latest.turnNumber
 
   return { playerId: current.playerId, username: current.username, turnNumber, phase }

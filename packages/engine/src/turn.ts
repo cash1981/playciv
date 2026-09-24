@@ -193,8 +193,13 @@ export function nextTurnNumber(turn: PlayerTurn): number {
  *
  * Reads only the `revealed` flags, which are already public (`publicTurn`
  * masks order text, not these booleans), so this is safe to expose to anyone.
+ *
+ * A flag missing from a legacy, not-yet-migrated `revealed` map is treated as
+ * revealed (blocking only on an explicit `false`), the same rule
+ * `activeTurnStatus` uses to decide a turn is fully done — so the two never
+ * disagree about whether a round is complete.
  */
 export function currentPhaseStatus(turn: PlayerTurn | undefined): TurnPhase {
   if (turn === undefined) return 'SOT'
-  return TURN_PHASES.find((phase) => !turn.revealed[phase]) ?? 'SOT'
+  return TURN_PHASES.find((phase) => turn.revealed[phase] === false) ?? 'SOT'
 }

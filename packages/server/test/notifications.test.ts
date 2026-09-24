@@ -97,7 +97,12 @@ async function loadGame(gameId: string): Promise<GameState> {
 /** A started two-player game: the creator plus one joiner. */
 async function startedGame(
   name: string,
-): Promise<{ gameId: string; starter: { token: string; id: string }; waiting: string }> {
+): Promise<{
+  gameId: string
+  starter: { token: string; id: string }
+  waiting: string
+  waitingPlayer: { token: string; id: string }
+}> {
   const creator = await register(`${name}-a`)
   const gameId = await createGame(creator.token, name, 2)
   const other = await register(`${name}-b`)
@@ -107,7 +112,7 @@ async function startedGame(
   const waitingName = state.players.find((player) => !player.yourTurn)?.username
   if (waitingName === undefined) throw new Error('no waiting player')
 
-  return { gameId, starter: creator, waiting: waitingName }
+  return { gameId, starter: creator, waiting: waitingName, waitingPlayer: other }
 }
 
 describe('your turn', () => {
@@ -132,6 +137,36 @@ describe('your turn', () => {
     expect(mail?.text).toContain(`https://playciv.app/game/${gameId}`)
     // Issue #30 puts the unsubscribe link on every mail, including this one.
     expect(mail?.text).toContain('/api/admin/email/notification/')
+  })
+
+  it('names the phase the next player actually left off on, not just the default', async () => {
+    const { gameId, starter, waitingPlayer } = await startedGame('phase')
+    // The waiting player worked ahead and already revealed SOT for turn 1, so
+    // once the turn reaches them the mail should point at Trade, not SOT.
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/turns/update`,
+      headers: bearer(waitingPlayer.token),
+      payload: { turnNumber: 1, phase: 'SOT', order: 'ready' },
+    })
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/turns/reveal`,
+      headers: bearer(waitingPlayer.token),
+      payload: { turnNumber: 1, phase: 'SOT' },
+    })
+    mailer.sent.length = 0
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/endturn`,
+      headers: bearer(starter.token),
+      payload: {},
+    })
+    expect(response.status).toBe(200)
+
+    expect(mailer.sent).toHaveLength(1)
+    expect(mailer.sent[0]?.text).toContain('Continue with the trade phase.')
   })
 
   it('sends nothing on the take-turn button', async () => {

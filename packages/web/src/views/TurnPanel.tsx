@@ -283,7 +283,7 @@ export function TurnOrderWorkspace({
                   <button
                     type="button"
                     className="small"
-                    disabled={busy || locked || saving || values[phase] === '' || !dirty}
+                    disabled={busy || locked || saving || !dirty}
                     onClick={() => onSavePhase?.(phase)}
                   >
                     Save
@@ -749,7 +749,7 @@ export function TurnPanel({
     setDraftValue(key, markdown)
     setSaveStatuses((existing) => ({ ...existing, [key]: 'saving' }))
     void run(async () => {
-      let savedView: PlayerView | unknown
+      let savedView: PlayerView
       try {
         savedView = await api.updateTurn(gameId, turnNumber, phase, markdown)
         reconcileSuccessfulPhase(key, { turn: turnNumber, phase, markdown })

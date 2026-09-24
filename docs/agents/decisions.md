@@ -2406,7 +2406,11 @@ to whichever player currently has `yourTurn`, and is exposed on
 `PlayerView.activeTurn` for every viewer — it reads only the `revealed`
 booleans, which `publicTurn` already keeps public independently of the order
 text, so this is provably not a new hidden-information leak (see the
-`toPlayerView` leak test in `turn-action.test.ts`).
+`toPlayerView` leak test in `turn-action.test.ts`). When every phase of the
+player's latest tracked turn is revealed, `activeTurnStatus` reports
+`turnNumber + 1` alongside `SOT` — a player who has just revealed Research
+for turn 3 is shown as "turn 4, start of turn", even though nothing has
+written a turn-4 record yet.
 
 **Explicitly out of scope, confirmed with the human:** a future Great Person
 (Khalid) can steal the turn out of the fixed phase order. Nothing here
