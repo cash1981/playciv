@@ -6,18 +6,54 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-23_
+_Last updated: 2026-09-24_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 485 engine, 199 server, 179 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 486 engine, 199 server, 190 web (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Issue #168: the tech tree shows real card art, and a level-tabbed picker
+  replaces the tech combo box.** A researched pyramid slot (`TechTree.tsx`) now
+  shows the tech's card image (name and `title` stay as the fallback/alt text),
+  including level 5, Space Flight, which never had art before. Choosing a tech
+  to research is no longer a `<select>`: `TechPanel.tsx` now has a `Tabs` bar
+  for levels 1-5 filtering the level's available techs into a `card-grid` of
+  `ItemCard`s; clicking one opens a `ReferenceDialog`/`ReferenceCard` detail
+  view with the full card art, its effect text (see below) and a "Research"
+  button that closes the dialog unconditionally (so a rejected `chooseTech`
+  leaves the page's error banner visible, not hidden behind the modal) before
+  calling the API. `itemImage()`'s `tech` case now resolves to `.jpg` instead
+  of sharing the `.png` constant with `hut`/`village`, since the 45 card
+  photos (`Civilization/Moderator/techs/*.jpg`, gitignored, cropped and
+  background-removed in a separate session) are jpg; a new
+  `tools/tech-assets.ps1`, modeled on `tools/item-assets.ps1`, copies and
+  renames them into `packages/web/public/items/` via an explicit map (not a
+  derived transform — several tech names don't transform mechanically from the
+  photo filenames). Neither `TechItem` nor `chooseTech`/`availableTechs`
+  changed; this is presentation only. `TechItem.description` is `null` for
+  every tech (the spreadsheet's "Description" column was never filled in), so
+  the per-tech effect/unlock text shown in the dialog is a new client-side
+  file, `packages/web/src/views/techText.ts`, transcribed by the orchestrator
+  from the tech reference sheet the old client already ships
+  (`packages/web/public/help/Civ_Tech_FF-WW.-2.jpg`) rather than invented;
+  Space Flight has no entry there (added in code, not from the spreadsheet)
+  and gets no effect-text paragraph. A visible disclaimer in the dialog says
+  the text is reference-only and not engine-enforced, matching
+  `SocialPolicyPanel`'s existing one. Two review rounds, both approved (round 1
+  "approve with nits" — two nits promoted to real bugs and fixed: the dialog
+  swallowing the Research error, and the missing disclaimer; round 2
+  "approve", one cosmetic nit fixed directly). 3 new engine tests (486 total),
+  11 new web tests (190 total, replacing the removed `<select>` coverage).
+  Full checks pass. Browser verification not done in this session — left to
+  the human; see `docs/agents/tasks/issue-168-tech-revamp.md` and
+  `decisions.md`. Branch `feat/issue-168-tech-revamp`.
 
 - **The coin mark sits in the top bar, linked home.** The favicon coin is shown
   again inside the `.brand` anchor, to the left of the "Civilization playciv"
@@ -639,9 +675,8 @@ _Last updated: 2026-09-23_
   that leader on Start. The band is drawn `CULTURE_TRACK_SCALE` (1.3×) taller
   than its bare aspect so it reads well at any zoom (issue #22); 1.3 keeps the
   printed band the same height as before the artwork was replaced.
-- **Card artwork.** 346 of 347 items have a picture; only Space Flight does
-  not, because it is added in code rather than read from the spreadsheet. The
-  hand renders as cards.
+- **Card artwork.** Every item, including Space Flight, has a picture (see
+  issue #168 below for its tech art specifically). The hand renders as cards.
 - **MongoDB storage (superseded by D1, issue #72).** `MongoRepository` ran
   against the restored `playciv` database, with the JSON file as fallback. It
   reused `player`/`chat`, read old `pbf` games for highscore, and stored new
