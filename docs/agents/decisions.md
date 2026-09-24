@@ -2623,11 +2623,12 @@ human before starting rather than guessed:
 
 **A consequence worth knowing, not itself a decision:** a change made by a
 player who later withdraws from the game can no longer be undone by anyone,
-including that player — `undoLastBoardChange` checks the entry's `playerId`
-against the caller, and a withdrawn player can no longer authenticate as
-themselves. The piece would need removing by hand instead. Unreachable
-today except by withdrawing immediately after moving something, and no
-worse than leaving the piece as it is.
+including that player — `undoLastBoardChange` requires access via
+`hasUserAccess`, which a withdrawn player fails once moved to
+`withdrawnPlayers`, so the request is refused with `NO_ACCESS` before the
+`playerId` match is even reached. The piece would need removing by hand
+instead. Unreachable today except by withdrawing immediately after moving
+something, and no worse than leaving the piece as it is.
 
 **Also worth knowing:** a change brought back by Redo gets its `logLength`
 refreshed to the log's current length rather than keeping the value from

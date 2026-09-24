@@ -3,7 +3,7 @@
 - **Slug:** `issue-174-board-undo-redo`
 - **Branch:** `feat/issue-174-board-undo-redo`
 - **Owner:** Claude (Sonnet 5)
-- **Status:** draft
+- **Status:** done
 
 ## Goal
 

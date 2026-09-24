@@ -100,7 +100,7 @@ Java counterpart: `resource/*` and `application/*` under Dropwizard.
 | `src/routes/play.ts` | `DrawResource` + `PlayerResource` — draws, battle, tech, reveals, trade, turns, undo |
 | `src/errors.ts` | `EngineError` → HTTP status |
 | `src/auth.ts` | scrypt passwords, HMAC-signed bearer tokens and the reset-link signer |
-| `src/routes/board.ts` | the board — place, move, rotate, front, back, remove, undo, history |
+| `src/routes/board.ts` | the board — place, move, rotate, front, back, remove, undo, redo, history |
 | `src/routes/arena.ts` | battle arena — initiate, place units, move, return to hand, set stats, rotate, kill, end turn, end battle |
 | `src/store/` | the storage interface, `D1Repository` (production) and `JsonFileRepository` (local dev) |
 | `src/migrate/` | the one-off mapping from the old Mongo export to D1 rows |
@@ -245,7 +245,9 @@ Recording the operation rather than a snapshot is what makes the rest work:
   start, so the back and forward arrows walk through the whole game from the
   first placement to the present. While replaying, the board is read-only and
   the log is trimmed to what was known at that step — each entry remembers the
-  length of the game log at the time. That is how you can watch what an opponent
+  length of the game log at the time it last became current (a change brought
+  back by redo gets this refreshed, since it is current again only once redone).
+  That is how you can watch what an opponent
   did while it was not your turn.
 
 Board moves are deliberately **not** written to the game log. A turn consists of

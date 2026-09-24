@@ -12,27 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-174-board-undo-redo
-
-- **Owner:** Claude (Sonnet 5)
-- **Branch:** `feat/issue-174-board-undo-redo`
-- **Brief:** `docs/agents/tasks/issue-174-board-undo-redo.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/board.ts`
-  - `packages/engine/src/actions/board.ts`
-  - `packages/engine/src/errors.ts`
-  - `packages/engine/src/migrate.ts`
-  - `packages/server/src/routes/board.ts`
-  - `packages/server/src/errors.ts`
-  - `packages/web/src/lib/api.ts`
-  - `packages/web/src/views/BoardView.tsx`
-  - `packages/web/src/views/GameView.tsx`
-  - `packages/web/src/views/FaqView.tsx`
-  - `packages/engine/test/board-history.test.ts`
-  - `packages/server/test/board-api.test.ts`
-- **Notes:** touches the shared `packages/web/src/lib/api.ts` — adding
-  `redoBoard` only, no change to existing exports.
+_Nothing claimed._
 
 ---
 
@@ -66,7 +46,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | `issue-174-board-undo-redo` |
+| `packages/web/src/lib/api.ts` | free |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.
