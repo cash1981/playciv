@@ -266,13 +266,18 @@ export function TurnOrderWorkspace({
           <div className="turn-phase-heading">
             <h3>{TURN_PHASE_LABEL[phase]}</h3>
             {player.own && (() => {
-              const dirty = values[phase] !== savedValues[phase]
-              const saving = phaseStatuses?.[phase] === 'saving'
+              // Prefer the status the parent already tracks: it also catches a
+              // keystroke Milkdown has not flushed into `values` yet (see
+              // `onPhaseDirty`/`markLiveDirty`), which `values !== savedValues`
+              // alone would miss and reveal stale, unsaved text.
+              const status = phaseStatuses?.[phase]
+              const dirty = status !== undefined ? status !== 'saved' : values[phase] !== savedValues[phase]
+              const saving = status === 'saving'
               const revealed = current?.revealed[phase] === true && !dirty
               return (
                 <>
                   <SaveStatusBadge
-                    status={phaseStatuses?.[phase] ?? (dirty ? 'unsaved' : 'saved')}
+                    status={status ?? (dirty ? 'unsaved' : 'saved')}
                     label={TURN_PHASE_LABEL[phase]}
                   />
                   <button
@@ -729,25 +734,32 @@ export function TurnPanel({
   const submitPhase = (phase: TurnPhase, options: { readonly reveal: boolean }): void => {
     if (view?.you === null || view === null || selectedPlayer?.own !== true) return
     const key = phaseKey(turnNumber, phase)
-    const dirty = values[phase] !== savedValues[phase]
+    // Read the editor directly, and trust a pending live-dirty flag: Milkdown
+    // batches its `onChange`, so a keystroke can be un-flushed in `values` even
+    // though the player just typed it (`onDirty`/`markLiveDirty` catches that).
+    // Deciding from `values` alone risks revealing stale, already-saved text.
+    const markdown = editorRefs.current[phase]?.getMarkdown() ?? values[phase]
+    const dirty = markdown !== savedValues[phase] || liveDirtyKeysRef.current[key] === true
 
     if (!dirty) {
       if (options.reveal) void run(() => api.revealTurnOrder(gameId, turnNumber, phase))
       return
     }
 
-    const markdown = editorRefs.current[phase]?.getMarkdown() ?? values[phase]
     setDraftValue(key, markdown)
     setSaveStatuses((existing) => ({ ...existing, [key]: 'saving' }))
     void run(async () => {
+      let savedView: PlayerView | unknown
       try {
-        const savedView = await api.updateTurn(gameId, turnNumber, phase, markdown)
+        savedView = await api.updateTurn(gameId, turnNumber, phase, markdown)
         reconcileSuccessfulPhase(key, { turn: turnNumber, phase, markdown })
-        return options.reveal ? await api.revealTurnOrder(gameId, turnNumber, phase) : savedView
       } catch (caught) {
         setSaveStatuses((existing) => ({ ...existing, [key]: 'failed' }))
         throw caught
       }
+      // The save already succeeded and is reconciled above; a reveal failure
+      // here must not re-mark the phase as unsaved/failed.
+      return options.reveal ? await api.revealTurnOrder(gameId, turnNumber, phase) : savedView
     })
   }
 

@@ -15,7 +15,7 @@ import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
 import type { CoinSources } from './coins.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
-import { currentPhaseStatus } from './turn.js'
+import { currentPhaseStatus, TURN_PHASES } from './turn.js'
 import type { Undo } from './undo.js'
 import type { Battle, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
@@ -268,8 +268,9 @@ export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
     undefined,
   )
   const phase = currentPhaseStatus(latest)
-  const roundDone = latest !== undefined && phase === 'SOT' &&
-    Object.values(latest.revealed).every((revealed) => revealed)
+  // A missing `revealed` flag is treated as revealed, matching `publicTurn`
+  // and `migratePlayerTurn`'s treatment of a legacy turn.
+  const roundDone = latest !== undefined && TURN_PHASES.every((candidate) => latest.revealed[candidate] ?? true)
   const turnNumber = latest === undefined ? 1 : roundDone ? latest.turnNumber + 1 : latest.turnNumber
 
   return { playerId: current.playerId, username: current.username, turnNumber, phase }

@@ -870,6 +870,73 @@ describe('TurnPanel save all changes', () => {
     )
   })
 
+  it('reveal saves an edit still pending in the editor before publishing it, never the stale saved text', async () => {
+    const ownTurn = turn('cash1981', false, 1)
+    const playerView = viewFor([ownTurn])
+    const updateTurn = vi.spyOn(api, 'updateTurn').mockResolvedValue(playerView)
+    const revealTurnOrder = vi.spyOn(api, 'revealTurnOrder').mockResolvedValue(playerView)
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([])
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={DelayedEditor}
+      />,
+    )
+
+    await settle()
+    vi.useFakeTimers()
+    fireEvent.change(screen.getByRole('textbox', { name: /movement orders.*turn 1/i }), {
+      target: { value: 'Move at dawn' },
+    })
+    // DelayedEditor calls onDirty synchronously but, like the real Milkdown
+    // editor, only flushes onChange 200 ms later — clicking now must not take
+    // the "already saved" reveal-only path and publish the old text.
+    const revealButton = screen.getByRole('button', { name: 'Save & reveal' })
+    fireEvent.click(revealButton)
+    await act(async () => Promise.resolve())
+    act(() => vi.advanceTimersByTime(200))
+    await act(async () => Promise.resolve())
+
+    expect(updateTurn).toHaveBeenCalledWith('game-1', 1, 'MOVEMENT', 'Move at dawn')
+    expect(revealTurnOrder).toHaveBeenCalledWith('game-1', 1, 'MOVEMENT')
+    expect(updateTurn.mock.invocationCallOrder[0]).toBeLessThan(
+      revealTurnOrder.mock.invocationCallOrder[0] as number,
+    )
+  })
+
+  it('a reveal that fails after a successful save leaves the phase marked saved, not failed', async () => {
+    const ownTurn = turn('cash1981', false, 1)
+    const playerView = viewFor([ownTurn])
+    vi.spyOn(api, 'updateTurn').mockResolvedValue(playerView)
+    vi.spyOn(api, 'revealTurnOrder').mockRejectedValue(new Error('reveal failed'))
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([])
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={FlushingEditor}
+      />,
+    )
+
+    await settle()
+    fireEvent.change(screen.getByRole('textbox', { name: /movement orders.*turn 1/i }), {
+      target: { value: 'Move at dawn' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save & reveal' }))
+    await settle()
+
+    expect(screen.getByText('Saved movement')).toBeTruthy()
+  })
+
   it('keeps the signed-in player text when returning from another player tab', async () => {
     const ownTurn = turn('cash1981', false, 1, { ...orders, MOVEMENT: 'Own movement plan' })
     const opponentTurn = turn('Andrius', false, 1, {

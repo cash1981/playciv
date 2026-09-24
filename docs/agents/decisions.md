@@ -2386,3 +2386,44 @@ rather than restoring him, since `putItemBack` only knows `items` and
 `discardedItems`. Acceptable — an already-placed Newton being un-drawn was
 never a real scenario — but worth knowing if undo behaviour here ever
 confuses a player.
+
+## 2026-09-24 - A derived whose-turn/which-phase status, with no old-system counterpart
+
+Per the human's request: each turn-order phase gets its own Save button next
+to Reveal, Reveal now saves first if the phase has unsaved edits, and a
+single status — whose turn it is and which phase they should be working on —
+is shown near the game title, logged when the turn passes, and named in the
+"it's your turn" email. None of this existed in `old-civ-rest`/`old-civ-web`;
+Java's turn tabs had one Reveal per phase with no auto-save, no derived
+"current phase", and `sendYourTurn`'s mail said only that it was the
+recipient's turn.
+
+**The phase is derived, never stored**, by `currentPhaseStatus(turn)`
+(`turn.ts`): the first of `SOT → TRADE → CM → MOVEMENT → RESEARCH` not yet
+`revealed`, or `SOT` again once every phase of that turn is revealed (the
+player is between rounds). `activeTurnStatus(state)` (`state.ts`) applies it
+to whichever player currently has `yourTurn`, and is exposed on
+`PlayerView.activeTurn` for every viewer — it reads only the `revealed`
+booleans, which `publicTurn` already keeps public independently of the order
+text, so this is provably not a new hidden-information leak (see the
+`toPlayerView` leak test in `turn-action.test.ts`).
+
+**Explicitly out of scope, confirmed with the human:** a future Great Person
+(Khalid) can steal the turn out of the fixed phase order. Nothing here
+special-cases it; it needs its own issue once that card is implemented, not a
+guess now.
+
+**Reveal now silently saves first.** The old per-phase Reveal button was
+disabled until a separate save; the human asked for Reveal to save-and-reveal
+in one click instead, so the button now reads "Save & reveal" while the
+phase has unsaved edits (including a keystroke the editor has not flushed
+into `values` yet — read via `editorRefs.current[phase]?.getMarkdown()` and
+the same `liveDirtyKeys` signal `saveAll` already relies on, never derived
+from `values` alone, which would risk revealing stale text). A reveal that
+fails after its save already succeeded leaves the phase marked saved, not
+failed — the save is not undone.
+
+**`endTurn`/`takeTurn` now append a `System:` log line** naming the new
+active player and phase, and `notifications.ts`'s `turnEnded` mail gets one
+extra sentence naming the phase. Both reuse `activeTurnStatus`, so the log,
+the mail and the on-screen status can never disagree.
