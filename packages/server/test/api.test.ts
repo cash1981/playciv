@@ -926,7 +926,7 @@ describe('tech pyramid repositioning (#168 follow-up)', () => {
     expect(await response.json()).toMatchObject({ error: 'BAD_REQUEST' })
   })
 
-  it('places a Great Person face down as a blank pyramid occupant, visible to an opponent', async () => {
+  it('places a Great Person face down as a blank pyramid occupant, slot visible to an opponent but not the name', async () => {
     const { gameId, starter, waiting } = await startedGame('Pyramid placement')
 
     const drawn = await inject(app, {
@@ -955,18 +955,21 @@ describe('tech pyramid repositioning (#168 follow-up)', () => {
     expect(ownerAfter?.items.some((item) => item.id === card?.id)).toBe(false)
     expect(ownerAfter?.pyramidPlacements).toEqual([{ name: card?.name, slot: 2 }])
 
-    // Public: the opponent's own PlayerView carries the placement too.
+    // Public by slot: the opponent's own PlayerView carries the placement's
+    // row, but not the card's name — Newton's printed effect places it
+    // "facedown" as a "blank" tech card.
     const opponentView = await inject(app, {
       url: `/api/games/${gameId}`,
       headers: bearer(waiting),
     })
     const opponentPayload = await opponentView.json<{
-      opponents: { playerId: string; pyramidPlacements: { name: string; slot: number }[] }[]
+      opponents: { playerId: string; pyramidPlacements: { slot: number }[] }[]
     }>()
     const opponentSeesOwner = opponentPayload.opponents.find(
       (candidate) => candidate.playerId === owner?.playerId,
     )
-    expect(opponentSeesOwner?.pyramidPlacements).toEqual([{ name: card?.name, slot: 2 }])
+    expect(opponentSeesOwner?.pyramidPlacements).toEqual([{ slot: 2 }])
+    expect(JSON.stringify(opponentSeesOwner?.pyramidPlacements)).not.toContain(card?.name)
   })
 
   it('moves an already-placed Great Person to a different row', async () => {

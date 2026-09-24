@@ -51,12 +51,25 @@ describe('setTechSlot', () => {
     expect(error).toEqual({ kind: 'ITEM_NOT_FOUND' })
   })
 
-  it('another player cannot move a tech they do not own', () => {
-    const chosen = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
-    // CHUL has not chosen Navy at all, so this is also an ownership check —
-    // CHUL's own hand simply has no such tech to move.
-    const error = unwrapErr(setTechSlot(chosen, { playerId: CHUL, techName: 'Navy', slot: 3 }))
-    expect(error).toEqual({ kind: 'ITEM_NOT_FOUND' })
+  it('another player moving a same-named tech only affects their own hand', () => {
+    // Both players choose Navy independently — `state.techs` is a catalogue,
+    // not an ownership list, so nothing stops that. Without CHUL also owning
+    // a Navy, `setTechSlot(playerId: CHUL, techName: 'Navy', ...)` would
+    // always fail with ITEM_NOT_FOUND regardless of whether the function is
+    // correctly scoped to the caller's own hand or Navy just doesn't exist
+    // anywhere — so this test would prove nothing. Giving CHUL their own
+    // Navy makes the call succeed, and the real assertion is that it moves
+    // only CHUL's copy, leaving CASH1981's untouched.
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
+    state = unwrap(chooseTech(state, { playerId: CHUL, techName: 'Navy' }))
+
+    const moved = unwrap(setTechSlot(state, { playerId: CHUL, techName: 'Navy', slot: 3 }))
+
+    const chulNavy = findPlayer(moved, CHUL)?.techsChosen.find((tech) => tech.name === 'Navy')
+    expect(chulNavy?.slot).toBe(3)
+    // CASH1981's own Navy is untouched by CHUL's call.
+    const cashNavy = findPlayer(moved, CASH1981)?.techsChosen.find((tech) => tech.name === 'Navy')
+    expect(cashNavy?.slot).toBeUndefined()
   })
 
   it('an unknown player is rejected with NO_ACCESS', () => {
@@ -184,15 +197,18 @@ describe('projection', () => {
     expect(ownView.you?.techsChosen.find((tech) => tech.name === 'Navy')?.slot).toBe(4)
   })
 
-  it('pyramidPlacements is public: it appears on an opponent\'s projection unfiltered', () => {
+  it('pyramidPlacements is public by slot, but the placed card\'s name is not', () => {
     const { state, itemId } = drawGreatPerson(firstCivGame(), CASH1981)
     const placed = unwrap(placeGreatPersonInPyramid(state, { playerId: CASH1981, itemId, slot: 3 }))
 
+    const ownName = findPlayer(placed, CASH1981)?.pyramidPlacements[0]?.name
+    if (ownName === undefined) throw new Error('fixture did not place a Great Person')
+
     const opponentView = toPlayerView(placed, CHUL)
     const opponent = opponentView.opponents.find((candidate) => candidate.playerId === CASH1981)
-    expect(opponent?.pyramidPlacements).toEqual(findPlayer(placed, CASH1981)?.pyramidPlacements)
-    // Considered, not omitted: `pyramidPlacements` carries no hidden data by
-    // design (see the task brief's acceptance criteria), so there is nothing
-    // to leak-test here the way `revealedTechs` needs one.
+    expect(opponent?.pyramidPlacements).toEqual([{ slot: 3 }])
+    // Newton's printed effect places the card "facedown" as a "blank" tech
+    // card — the slot is public, but the identity must not leak to opponents.
+    expect(JSON.stringify(opponent?.pyramidPlacements)).not.toContain(ownName)
   })
 })

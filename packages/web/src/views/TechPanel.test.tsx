@@ -39,7 +39,8 @@ const opponent = (
     readonly civilization?: string | null
     readonly revealedTechs?: readonly TechItem[]
     readonly numberOfTechsChosen?: number
-    readonly pyramidPlacements?: readonly { readonly name: string; readonly slot: number }[]
+    /** Mirrors `OpaquePlayerhand.pyramidPlacements`: slot only, no name. */
+    readonly pyramidPlacements?: readonly { readonly slot: number }[]
   } = {},
 ) => ({
   playerId,
@@ -252,20 +253,25 @@ describe('TechPanel pyramid repositioning (#168 follow-up)', () => {
     expect(activePanel(container).querySelector('.tech-slot-move')).toBeNull()
   })
 
-  it('renders a placed Great Person as a blank occupant with the generic card back, on both own and opponent tabs', () => {
+  it('renders a placed Great Person with its real name on the owner\'s own tab', () => {
     const ownContainer = renderPanel({
       pyramidPlacements: [{ name: 'Sir Isaac Newton', slot: 2 }],
     })
     const ownPlacement = activePanel(ownContainer).querySelector('.tech-slot.placement')
     expect(ownPlacement?.textContent).toContain('Sir Isaac Newton')
     expect(ownPlacement?.querySelector('img')?.getAttribute('src')).toBe('/items/greatperson_back.jpg')
+  })
 
+  it('renders a placed Great Person as a generic blank occupant on an opponent\'s tab, never the real name', () => {
     const opponentContainer = renderPanel({
-      opponents: [opponent('p2', 'Egil', { pyramidPlacements: [{ name: 'Sir Isaac Newton', slot: 2 }] })],
+      opponents: [opponent('p2', 'Egil', { pyramidPlacements: [{ slot: 2 }] })],
     })
     fireEvent.click(screen.getByRole('tab', { name: 'Egil' }))
     const opponentPlacement = activePanel(opponentContainer).querySelector('.tech-slot.placement')
-    expect(opponentPlacement?.textContent).toContain('Sir Isaac Newton')
+    expect(opponentPlacement?.textContent).not.toContain('Sir Isaac Newton')
+    expect(opponentPlacement?.textContent).toContain('Blank tech card')
+    expect(opponentContainer.innerHTML).not.toContain('Sir Isaac Newton')
+    expect(opponentPlacement?.querySelector('img')?.getAttribute('src')).toBe('/items/greatperson_back.jpg')
   })
 
   it('moves a placed Great Person via the same stepper control, calling setPyramidPlacementSlot', () => {

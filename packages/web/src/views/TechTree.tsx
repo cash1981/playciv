@@ -39,11 +39,19 @@ export interface TechTreeTech {
   readonly slot?: Level
 }
 
-/** A Great Person placed face-down as a blank pyramid occupant (Sir Isaac Newton). */
+/**
+ * A Great Person placed face-down as a blank pyramid occupant (Sir Isaac
+ * Newton). `name` is present only on the viewer's own pyramid — the card is
+ * placed facedown as a blank tech card, so an opponent's projection carries
+ * the slot only, never the identity of the placed card.
+ */
 export interface TechTreePlacement {
-  readonly name: string
+  readonly name?: string
   readonly slot: Level
 }
+
+/** Shown in place of the real name when an opponent's placement has none. */
+const BLANK_PLACEMENT_LABEL = 'Blank tech card'
 
 interface Props {
   readonly techs: readonly TechTreeTech[]
@@ -130,34 +138,49 @@ export function TechTree({
                 </div>
               )
             })}
-            {placed.map((placement) => (
-              <div key={placement.name} className="tech-slot researched placement" title={placement.name}>
-                <img className="tech-slot-image" src={GREAT_PERSON_PLACEMENT_IMAGE} alt="" />
-                <span className="tech-slot-label">{placement.name}</span>
-                {onPlacementSlotChange !== undefined && (
-                  <span className="tech-slot-move">
-                    <button
-                      type="button"
-                      className="small"
-                      disabled={disabled === true || placement.slot <= 1}
-                      aria-label={`Move ${placement.name} to a lower pyramid row`}
-                      onClick={() => onPlacementSlotChange(placement.name, (placement.slot - 1) as Level)}
-                    >
-                      ▼
-                    </button>
-                    <button
-                      type="button"
-                      className="small"
-                      disabled={disabled === true || placement.slot >= 5}
-                      aria-label={`Move ${placement.name} to a higher pyramid row`}
-                      onClick={() => onPlacementSlotChange(placement.name, (placement.slot + 1) as Level)}
-                    >
-                      ▲
-                    </button>
-                  </span>
-                )}
-              </div>
-            ))}
+            {placed.map((placement, index) => {
+              const label = placement.name ?? BLANK_PLACEMENT_LABEL
+              return (
+                <div
+                  key={placement.name ?? `placement-${level}-${index}`}
+                  className="tech-slot researched placement"
+                  title={label}
+                >
+                  <img
+                    className="tech-slot-image"
+                    src={GREAT_PERSON_PLACEMENT_IMAGE}
+                    alt={label}
+                    onError={(event) => {
+                      // A missing file should leave the label readable, not a broken icon.
+                      event.currentTarget.style.display = 'none'
+                    }}
+                  />
+                  <span className="tech-slot-label">{label}</span>
+                  {onPlacementSlotChange !== undefined && placement.name !== undefined && (
+                    <span className="tech-slot-move">
+                      <button
+                        type="button"
+                        className="small"
+                        disabled={disabled === true || placement.slot <= 1}
+                        aria-label={`Move ${placement.name} to a lower pyramid row`}
+                        onClick={() => onPlacementSlotChange(placement.name!, (placement.slot - 1) as Level)}
+                      >
+                        ▼
+                      </button>
+                      <button
+                        type="button"
+                        className="small"
+                        disabled={disabled === true || placement.slot >= 5}
+                        aria-label={`Move ${placement.name} to a higher pyramid row`}
+                        onClick={() => onPlacementSlotChange(placement.name!, (placement.slot + 1) as Level)}
+                      >
+                        ▲
+                      </button>
+                    </span>
+                  )}
+                </div>
+              )
+            })}
             {Array.from({ length: emptyCount }, (_unused, index) => (
               <div
                 key={`empty-${level}-${index}`}
