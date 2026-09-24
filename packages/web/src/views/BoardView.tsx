@@ -503,7 +503,7 @@ export function BoardView({
         <button
           className="small"
           disabled={busy || readOnly || board.redo.length === 0}
-          title="Bring back the change you just undid"
+          title="Bring back the last undone change"
           onClick={() => void run(() => api.redoBoard(gameId))}
         >
           Redo

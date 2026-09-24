@@ -293,6 +293,21 @@ describe('redo', () => {
     state = unwrap(redoLastBoardChange(state, CASH1981))
     expect(snapshot(state.board.pieces)).toBe(afterBoth)
   })
+
+  it('refreshes logLength on redo, since the log may have grown while it waited', () => {
+    let state = place(firstCivGame(), 'figures/redarmy', 200, 300)
+    const originalLogLength = state.board.history[0]?.logLength
+    expect(originalLogLength).toBe(0)
+
+    state = unwrap(undoLastBoardChange(state, CASH1981))
+    // A non-board action grows the log without touching history or redo
+    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'HUTS' }))
+    expect(state.log.length).toBeGreaterThan(0)
+
+    state = unwrap(redoLastBoardChange(state, CASH1981))
+    expect(state.board.history.at(-1)?.logLength).toBe(state.log.length)
+    expect(state.board.history.at(-1)?.logLength).not.toBe(originalLogLength)
+  })
 })
 
 describe('replay', () => {

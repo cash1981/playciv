@@ -43,11 +43,12 @@ reporter directly:
 - Undoing anything other than the single most recent entry belonging to the
   player (no reaching back over other players' more recent, unrelated moves —
   confirmed with the human; see Open questions).
-- A multi-level redo *stack* deeper than the one change just undone — also
-  confirmed with the human as out of scope for the stack depth question, but
-  see note below: the human asked for "a full stack" for undo/redo depth,
-  which this brief satisfies by chaining single-step undo/redo rather than
-  keeping a separate multi-entry buffer (see Approach).
+- A *separate* multi-entry undo/redo buffer alongside `history`. The human
+  did ask for full-stack depth (several undos, then several redos), and
+  `board.redo` genuinely holds more than one entry when several of a
+  player's own changes are undone in a row — the "out" here is only the
+  implementation choice: no bespoke buffer, just `history` and `redo` acting
+  as the two ends of one stack (see Approach).
 - The unrelated card-draw/discard undo-by-vote system
   (`packages/engine/src/actions/undo.ts`, `LogPanel`'s "Ask for undo"). Human
   confirmed this issue is about the board only.

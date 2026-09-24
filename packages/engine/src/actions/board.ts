@@ -479,7 +479,12 @@ export function redoLastBoardChange(state: GameState, playerId: string): ActionR
     withBoard(state, {
       ...state.board,
       pieces: applyChange(state.board.pieces, last.change),
-      history: [...state.board.history, last],
+      // Re-appended at the tail of history, so its logLength is refreshed to
+      // now rather than kept from when it first happened — a non-board action
+      // (a card draw, say) may have grown the log while it sat on the redo
+      // stack, and a stale, smaller value here would break the invariant that
+      // logLength never decreases along history, which replay relies on.
+      history: [...state.board.history, { ...last, logLength: state.log.length }],
       redo: state.board.redo.slice(0, -1),
     }),
   )

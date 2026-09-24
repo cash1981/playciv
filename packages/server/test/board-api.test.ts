@@ -215,7 +215,7 @@ describe('undo over HTTP', () => {
 
   it('the other player cannot undo your change', async () => {
     const { gameId, starter, waiting } = await startedGame('UndoOther')
-    const placed = await place(gameId, starter, 'figures/redarmy', 200, 300)
+    await place(gameId, starter, 'figures/redarmy', 200, 300)
 
     const undone = await inject(app, {
       method: 'POST',
@@ -225,7 +225,16 @@ describe('undo over HTTP', () => {
     })
     expect(undone.status).toBe(403)
     expect((await undone.json() as { error: string }).error).toBe('BOARD_UNDO_NOT_YOURS')
-    expect((await placed.json() as { board: { pieces: unknown[] } }).board.pieces).toHaveLength(1)
+
+    // The refused undo must not have touched the board at all
+    const board = await inject(app, {
+      method: 'GET',
+      url: `/api/games/${gameId}/board`,
+      headers: bearer(starter),
+    })
+    const current = await board.json() as { pieces: unknown[]; history: unknown[] }
+    expect(current.pieces).toHaveLength(1)
+    expect(current.history).toHaveLength(1)
   })
 
   it('an empty history gives 412', async () => {

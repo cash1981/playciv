@@ -234,8 +234,13 @@ semantic operation itself.
 
 Recording the operation rather than a snapshot is what makes the rest work:
 
-- **Undo** reverts the last entry exactly and pops it off the history. Anyone
-  may undo, the same way anyone may move a piece.
+- **Undo** reverts the last entry exactly, but only your own: it works while
+  your change is still the most recent one, and refuses once someone else has
+  acted since (issue #174). The entry moves onto a redo stack rather than
+  being dropped.
+- **Redo** brings back the change an undo just took away. Anyone may redo, the
+  same way anyone may move a piece — it is only undo that is scoped to its
+  author. Any further change to the board, by anyone, clears the redo stack.
 - **Replay** rebuilds the board at any step by applying the entries from the
   start, so the back and forward arrows walk through the whole game from the
   first placement to the present. While replaying, the board is read-only and
