@@ -386,7 +386,11 @@ describe('TechPanel picker', () => {
   })
 
   it('opens the same detail dialog for a tech already in the pyramid, with no Research button', async () => {
-    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    // The same tech, same id, also sits in `available` (as it would for any
+    // OTHER player who has not chosen it yet) — proves the Research button is
+    // gated on how the dialog was opened, not on an id lookup that a shared
+    // catalogue id would satisfy either way.
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Writing', false, 1)])
     render(
       <TechPanel
         gameId="game-1"
@@ -405,8 +409,11 @@ describe('TechPanel picker', () => {
     expect(screen.queryByRole('button', { name: 'Research' })).toBeNull()
   })
 
-  it("opens the detail dialog for a tech read from an opponent's revealed pyramid", async () => {
-    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+  it("opens the detail dialog for a tech read from an opponent's revealed pyramid, still with no Research button", async () => {
+    // Masonry is also in `available` for the viewer, same id `chooseTech`
+    // would copy verbatim — the failure case this guards against is opening
+    // Egil's pyramid card and being offered Research for HIS tech.
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Masonry', false, 1)])
     render(
       <TechPanel
         gameId="game-1"
@@ -425,7 +432,7 @@ describe('TechPanel picker', () => {
     expect(screen.queryByRole('button', { name: 'Research' })).toBeNull()
   })
 
-  it("moving a researched tech's pyramid row does not also open its detail dialog", async () => {
+  it("moving a researched tech's pyramid row with the mouse does not also open its detail dialog", async () => {
     vi.spyOn(api, 'availableTechs').mockResolvedValue([])
     vi.spyOn(api, 'setTechSlot').mockResolvedValue({} as PlayerView)
     render(
@@ -440,6 +447,31 @@ describe('TechPanel picker', () => {
 
     await screen.findByText('Writing')
     fireEvent.click(screen.getByRole('button', { name: 'Move Writing to a higher pyramid row' }))
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it("pressing Enter on the stepper button does not open the tech's detail dialog", async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    vi.spyOn(api, 'setTechSlot').mockResolvedValue({} as PlayerView)
+    render(
+      <TechPanel
+        gameId="game-1"
+        busy={false}
+        run={run}
+        view={view([tech('Writing', false, 1)])}
+        reloadCount={0}
+      />,
+    )
+
+    await screen.findByText('Writing')
+    const moveButton = screen.getByRole('button', { name: 'Move Writing to a higher pyramid row' })
+    // A keydown on a focused descendant button bubbles to the pyramid slot's
+    // own onKeyDown regardless of whether the button's native Enter-activates-
+    // click behaviour also fires (jsdom does not simulate that browser default
+    // action) — the bug this guards against is the slot's handler treating the
+    // bubbled event as if the slot itself had been activated.
+    fireEvent.keyDown(moveButton, { key: 'Enter' })
 
     expect(screen.queryByRole('dialog')).toBeNull()
   })

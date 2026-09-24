@@ -85,6 +85,16 @@ export function TechPanel({
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activeLevel, setActiveLevel] = useState<Level | null>(null)
   const [detailTech, setDetailTech] = useState<TechItem | null>(null)
+  /**
+   * Whether `detailTech` came from the "available to research" grid, so the
+   * Research button belongs on it. Tracked explicitly rather than re-deriving
+   * from `available.some((tech) => tech.id === detailTech.id)`: `chooseTech`
+   * copies the catalogue card's id verbatim, so a tech someone else has
+   * already chosen keeps the same id it has in `available` for everyone who
+   * has not chosen it — an id lookup alone would wrongly offer Research on a
+   * tech read from another player's pyramid.
+   */
+  const [detailCanResearch, setDetailCanResearch] = useState(false)
   const detailOpenerRef = useRef<HTMLElement | null>(null)
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
   const requestEpoch = useRef(0)
@@ -175,12 +185,14 @@ export function TechPanel({
                 onClick={(event) => {
                   detailOpenerRef.current = event.currentTarget
                   setDetailTech(tech)
+                  setDetailCanResearch(true)
                 }}
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter' && event.key !== ' ') return
                   event.preventDefault()
                   detailOpenerRef.current = event.currentTarget
                   setDetailTech(tech)
+                  setDetailCanResearch(true)
                 }}
               />
             ))}
@@ -208,7 +220,7 @@ export function TechPanel({
             Card text is shown for reference only; the engine records the chosen tech but does
             not enforce its effects.
           </p>
-          {available.some((tech) => tech.id === detailTech.id) && (
+          {detailCanResearch && (
             <div className="row">
               <button
                 disabled={busy}
@@ -256,6 +268,7 @@ export function TechPanel({
               if (item === undefined) return
               detailOpenerRef.current = opener
               setDetailTech(item)
+              setDetailCanResearch(false)
             }}
             {...(active.own
               ? {

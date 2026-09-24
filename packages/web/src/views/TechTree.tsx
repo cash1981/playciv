@@ -121,6 +121,14 @@ export function TechTree({
                     onTechClick === undefined
                       ? undefined
                       : (event) => {
+                          // An Enter/Space keydown on a focused stepper button bubbles
+                          // up here before the button's own click-on-activate default
+                          // action runs, so without this guard `preventDefault()` below
+                          // would cancel that button's activation and open the dialog
+                          // instead of moving the tech. Mouse clicks on the stepper never
+                          // reach this element's onClick at all — its own
+                          // `stopPropagation` handles that path.
+                          if (event.target !== event.currentTarget) return
                           if (event.key !== 'Enter' && event.key !== ' ') return
                           event.preventDefault()
                           onTechClick(tech.name, event.currentTarget)
