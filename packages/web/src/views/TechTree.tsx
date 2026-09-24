@@ -156,28 +156,33 @@ export function TechTree({
                     }}
                   />
                   <span className="tech-slot-label">{label}</span>
-                  {onPlacementSlotChange !== undefined && placement.name !== undefined && (
-                    <span className="tech-slot-move">
-                      <button
-                        type="button"
-                        className="small"
-                        disabled={disabled === true || placement.slot <= 1}
-                        aria-label={`Move ${placement.name} to a lower pyramid row`}
-                        onClick={() => onPlacementSlotChange(placement.name!, (placement.slot - 1) as Level)}
-                      >
-                        ▼
-                      </button>
-                      <button
-                        type="button"
-                        className="small"
-                        disabled={disabled === true || placement.slot >= 5}
-                        aria-label={`Move ${placement.name} to a higher pyramid row`}
-                        onClick={() => onPlacementSlotChange(placement.name!, (placement.slot + 1) as Level)}
-                      >
-                        ▲
-                      </button>
-                    </span>
-                  )}
+                  {onPlacementSlotChange !== undefined &&
+                    placement.name !== undefined &&
+                    (() => {
+                      const placementName = placement.name
+                      return (
+                        <span className="tech-slot-move">
+                          <button
+                            type="button"
+                            className="small"
+                            disabled={disabled === true || placement.slot <= 1}
+                            aria-label={`Move ${placementName} to a lower pyramid row`}
+                            onClick={() => onPlacementSlotChange(placementName, (placement.slot - 1) as Level)}
+                          >
+                            ▼
+                          </button>
+                          <button
+                            type="button"
+                            className="small"
+                            disabled={disabled === true || placement.slot >= 5}
+                            aria-label={`Move ${placementName} to a higher pyramid row`}
+                            onClick={() => onPlacementSlotChange(placementName, (placement.slot + 1) as Level)}
+                          >
+                            ▲
+                          </button>
+                        </span>
+                      )
+                    })()}
                 </div>
               )
             })}
