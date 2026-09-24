@@ -3,7 +3,7 @@
 - **Slug:** `issue-167-wonder-descriptions`
 - **Branch:** `feat/issue-167-wonder-descriptions`
 - **Owner:** orchestrator (Claude)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -73,19 +73,25 @@ hand card's text.
 
 ## Acceptance criteria
 
-- [ ] Every one of the 27 wonders' printed text is available by name from
+- [x] Every one of the 27 wonders' printed text is available by name from
   `@civ/engine`, sourced only from the sheet (no invented text).
-- [ ] `WondersPanel` shows each in-play wonder's description text.
-- [ ] A wonder with no description text (should not happen for this sheet, but
+- [x] `WondersPanel` shows each in-play wonder's description text.
+- [x] A wonder with no description text (should not happen for this sheet, but
   the code must not assume it) renders without a stray empty text block.
-- [ ] Refactoring `readWonders` to reuse the new reader does not change the
+- [x] Refactoring `readWonders` to reuse the new reader does not change the
   shuffled deck it produces for a given seed (existing deck-order tests still
-  pass unmodified).
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: none — wonder text is already public print art; no
+  pass unmodified; a new test also pins the exact shuffled order for a fixed
+  seed).
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (507
+  engine, 204 server, 210 web tests).
+- [x] Hidden information: none — wonder text is already public print art; no
   new leak surface (this only touches board pieces already in the shared,
   public Wonders area).
-- [ ] Verified in the browser: a wonder in the Wonders panel shows its text.
+- [~] Verified in the browser: no browser tool was connected this session.
+  Instead verified that the description text is present in the production
+  web bundle and matches a running local server's deck data; the component
+  test renders the panel in jsdom and asserts the exact text appears. The
+  visual pass in a real game page is left to the human.
 
 ## Open questions
 

@@ -12,20 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-167-wonder-descriptions
-
-- **Owner:** orchestrator (Claude)
-- **Branch:** `feat/issue-167-wonder-descriptions`
-- **Brief:** `docs/agents/tasks/issue-167-wonder-descriptions.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/gamedata.ts`
-  - `packages/engine/src/create-game.ts`
-  - `packages/engine/test/gamedata.test.ts`
-  - `packages/web/src/views/WondersPanel.tsx`
-  - `packages/web/src/views/WondersPanel.test.tsx`
-- **Notes:** adds wonder description text to the Wonders panel (issue #167);
-  no shared-resource files touched.
+_Nothing claimed._
 
 ---
 
