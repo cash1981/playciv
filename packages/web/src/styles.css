@@ -1287,6 +1287,25 @@ ul.list > li:last-child {
   font-weight: 600;
 }
 
+/* Stepper for the freeform pyramid reposition (issue #168 follow-up): moves a
+   tech, or a placed Great Person, to a different pyramid row. Only rendered on
+   the viewer's own pyramid — see `TechTree.tsx`. */
+.tech-slot-move {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.tech-slot-move button {
+  padding: 0 0.3rem;
+  line-height: 1.4;
+}
+
+/* A placed Great Person (Sir Isaac Newton) — same look as a researched tech,
+   but with a generic card back instead of name-derived art. */
+.tech-slot.placement {
+  font-style: italic;
+}
+
 /* --- Replay --------------------------------------------------------------- */
 
 .replay-bar {

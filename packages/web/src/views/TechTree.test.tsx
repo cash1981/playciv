@@ -4,7 +4,7 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { TechTree, techCardImageUrl } from './TechTree.js'
-import type { TechTreeTech } from './TechTree.js'
+import type { TechTreePlacement, TechTreeTech } from './TechTree.js'
 
 afterEach(() => cleanup())
 
@@ -72,5 +72,78 @@ describe('TechTree', () => {
 
   it('strips spaces from a multi-word tech name for the image URL', () => {
     expect(techCardImageUrl('Horseback Riding')).toBe('/items/HorsebackRiding.jpg')
+  })
+
+  it('renders a tech in its overridden slot, not its real level', () => {
+    const techs: readonly TechTreeTech[] = [{ name: 'Writing', level: 1, slot: 4 }]
+    const { container } = render(<TechTree techs={techs} />)
+
+    const rows = container.querySelectorAll('.tech-pyramid-row')
+    // Apex (level 5) first, base (level 1) last — slot 4 is rows[1].
+    expect(rows[1]?.textContent).toContain('Writing')
+    expect(rows[4]?.textContent).not.toContain('Writing')
+  })
+
+  it('renders a placement as a blank occupant with the generic card back', () => {
+    const placements: readonly TechTreePlacement[] = [{ name: 'Sir Isaac Newton', slot: 3 }]
+    const { container } = render(<TechTree techs={[]} placements={placements} />)
+
+    const rows = container.querySelectorAll('.tech-pyramid-row')
+    const slot = rows[2]?.querySelector('.tech-slot.placement')
+    expect(slot?.textContent).toContain('Sir Isaac Newton')
+    expect(slot?.querySelector('img')?.getAttribute('src')).toBe('/items/greatperson_back.jpg')
+  })
+
+  it('does not render a stepper when no onXSlotChange handler is given (read-only, e.g. an opponent tab)', () => {
+    const techs: readonly TechTreeTech[] = [{ name: 'Writing', level: 1 }]
+    const placements: readonly TechTreePlacement[] = [{ name: 'Sir Isaac Newton', slot: 3 }]
+    const { container } = render(<TechTree techs={techs} placements={placements} />)
+
+    expect(container.querySelector('.tech-slot-move')).toBeNull()
+  })
+
+  it('moves a tech one row at a time via the stepper, calling back with the new slot', () => {
+    const techs: readonly TechTreeTech[] = [{ name: 'Writing', level: 1, slot: 3 }]
+    const calls: [string, number][] = []
+    const { container } = render(
+      <TechTree techs={techs} onTechSlotChange={(name, slot) => calls.push([name, slot])} />,
+    )
+
+    const buttons = container.querySelectorAll('.tech-slot-move button')
+    expect(buttons).toHaveLength(2)
+    buttons[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    buttons[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    expect(calls).toEqual([
+      ['Writing', 2],
+      ['Writing', 4],
+    ])
+  })
+
+  it('moves a placement one row at a time via the stepper, calling back with the new slot', () => {
+    const placements: readonly TechTreePlacement[] = [{ name: 'Sir Isaac Newton', slot: 3 }]
+    const calls: [string, number][] = []
+    const { container } = render(
+      <TechTree
+        techs={[]}
+        placements={placements}
+        onPlacementSlotChange={(name, slot) => calls.push([name, slot])}
+      />,
+    )
+
+    const buttons = container.querySelectorAll('.tech-slot-move button')
+    expect(buttons).toHaveLength(2)
+    buttons[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    expect(calls).toEqual([['Sir Isaac Newton', 2]])
+  })
+
+  it('disables the stepper buttons at the pyramid edges', () => {
+    const techs: readonly TechTreeTech[] = [{ name: 'Writing', level: 1, slot: 1 }]
+    const { container } = render(<TechTree techs={techs} onTechSlotChange={() => {}} />)
+
+    const buttons = container.querySelectorAll<HTMLButtonElement>('.tech-slot-move button')
+    expect(buttons[0]?.disabled).toBe(true) // already at row 1, cannot go lower
+    expect(buttons[1]?.disabled).toBe(false)
   })
 })

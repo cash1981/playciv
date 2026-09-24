@@ -23,7 +23,7 @@ import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { GameRevisionView, PlayerView } from '../lib/api.js'
 import { TechTree } from './TechTree.js'
-import type { TechTreeTech } from './TechTree.js'
+import type { TechTreePlacement, TechTreeTech } from './TechTree.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { ItemCard, itemImageUrl } from './ItemCard.js'
 import { PlayerTabs } from './PlayerTabs.js'
@@ -55,6 +55,7 @@ interface TechTab {
   readonly color: string | null
   readonly civilization: string | null
   readonly techs: readonly TechTreeTech[]
+  readonly placements: readonly TechTreePlacement[]
   /** Only ever non-empty on the viewer's own tab. */
   readonly hiddenTechs: readonly TechItem[]
   /** Java: the public `numberOfTechsChosen`, shown in the opponent empty state. */
@@ -117,7 +118,9 @@ export function TechPanel({
               name: tech.name,
               level: tech.level,
               hidden: tech.hidden,
+              ...(tech.slot !== undefined ? { slot: tech.slot } : {}),
             })),
+            placements: view.you.pyramidPlacements,
             hiddenTechs: view.you.techsChosen.filter((tech) => tech.hidden),
             chosenCount: view.you.techsChosen.length,
             own: true,
@@ -128,7 +131,12 @@ export function TechPanel({
       username: opponent.username,
       color: opponent.color,
       civilization: opponent.civilization?.name ?? null,
-      techs: opponent.revealedTechs.map((tech) => ({ name: tech.name, level: tech.level })),
+      techs: opponent.revealedTechs.map((tech) => ({
+        name: tech.name,
+        level: tech.level,
+        ...(tech.slot !== undefined ? { slot: tech.slot } : {}),
+      })),
+      placements: opponent.pyramidPlacements,
       hiddenTechs: [],
       chosenCount: opponent.numberOfTechsChosen,
       own: false,
@@ -226,7 +234,19 @@ export function TechPanel({
           aria-labelledby={tabId(active.playerId)}
         >
           {active.civilization !== null && <p className="muted">{active.civilization}</p>}
-          <TechTree techs={active.techs} />
+          <TechTree
+            techs={active.techs}
+            placements={active.placements}
+            disabled={busy}
+            {...(active.own
+              ? {
+                  onTechSlotChange: (techName: string, slot: Level) =>
+                    void run(() => api.setTechSlot(gameId, techName, slot)),
+                  onPlacementSlotChange: (name: string, slot: Level) =>
+                    void run(() => api.setPyramidPlacementSlot(gameId, name, slot)),
+                }
+              : {})}
+          />
 
           {active.own ? (
             <ul className="list scroll">

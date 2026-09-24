@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 
 import { chooseTech, placeGreatPersonInPyramid, setPyramidPlacementSlot, setTechSlot } from '../src/actions/player.js'
 import { draw } from '../src/actions/draw.js'
+import type { GreatPersonItem } from '../src/item.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
@@ -69,7 +70,9 @@ describe('placeGreatPersonInPyramid', () => {
   it('takes the Great Person out of the hand and records a blank pyramid occupant', () => {
     const { state, itemId } = drawGreatPerson(firstCivGame(), CASH1981)
     const before = findPlayer(state, CASH1981)
-    const greatPerson = before?.items.find((item) => item.id === itemId)
+    const greatPerson = before?.items.find(
+      (item): item is GreatPersonItem => item.id === itemId && item.kind === 'greatperson',
+    )
     if (greatPerson === undefined) throw new Error('fixture did not draw a Great Person')
 
     const placed = unwrap(

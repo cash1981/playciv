@@ -39,6 +39,7 @@ const opponent = (
     readonly civilization?: string | null
     readonly revealedTechs?: readonly TechItem[]
     readonly numberOfTechsChosen?: number
+    readonly pyramidPlacements?: readonly { readonly name: string; readonly slot: number }[]
   } = {},
 ) => ({
   playerId,
@@ -50,9 +51,14 @@ const opponent = (
       : { name: options.civilization ?? `${username}land` },
   revealedTechs: options.revealedTechs ?? [],
   numberOfTechsChosen: options.numberOfTechsChosen ?? options.revealedTechs?.length ?? 0,
+  pyramidPlacements: options.pyramidPlacements ?? [],
 })
 
-const view = (techsChosen: readonly TechItem[], opponents: readonly unknown[] = []): PlayerView =>
+const view = (
+  techsChosen: readonly TechItem[],
+  opponents: readonly unknown[] = [],
+  pyramidPlacements: readonly { readonly name: string; readonly slot: number }[] = [],
+): PlayerView =>
   ({
     you: {
       playerId: 'me',
@@ -60,6 +66,7 @@ const view = (techsChosen: readonly TechItem[], opponents: readonly unknown[] = 
       color: 'Red',
       civilization: { name: 'Rome' },
       techsChosen,
+      pyramidPlacements,
     },
     opponents,
   }) as unknown as PlayerView
@@ -76,12 +83,14 @@ interface PanelOptions {
   readonly techsChosen?: readonly TechItem[]
   readonly opponents?: readonly unknown[]
   readonly spectator?: boolean
+  readonly pyramidPlacements?: readonly { readonly name: string; readonly slot: number }[]
 }
 
 function renderPanel({
   techsChosen = [],
   opponents = [],
   spectator = false,
+  pyramidPlacements = [],
 }: PanelOptions = {}): HTMLElement {
   vi.spyOn(api, 'availableTechs').mockResolvedValue([])
   const { container } = render(
@@ -89,7 +98,7 @@ function renderPanel({
       gameId="game-1"
       busy={false}
       run={run}
-      view={spectator ? spectatorView(opponents) : view(techsChosen, opponents)}
+      view={spectator ? spectatorView(opponents) : view(techsChosen, opponents, pyramidPlacements)}
       reloadCount={0}
     />,
   )
@@ -213,6 +222,64 @@ describe('TechPanel tabs', () => {
     fireEvent.keyDown(screen.getByRole('tab', { name: 'cash1981' }), { key: 'ArrowRight' })
 
     expect(selectedTab().textContent).toBe('Egil')
+  })
+})
+
+/**
+ * New in this port — see the pyramid-reposition task brief. The stepper is
+ * rendered only on the viewer's own tab, never an opponent's, because
+ * `onTechSlotChange`/`onPlacementSlotChange` are only passed when `active.own`.
+ */
+describe('TechPanel pyramid repositioning (#168 follow-up)', () => {
+  it('shows the stepper control on the own tab and calls setTechSlot with the new slot', () => {
+    const setTechSlot = vi.spyOn(api, 'setTechSlot').mockResolvedValue({} as PlayerView)
+    const container = renderPanel({ techsChosen: [tech('Writing', false)] })
+
+    const buttons = activePanel(container).querySelectorAll('.tech-slot-move button')
+    expect(buttons.length).toBeGreaterThan(0)
+    fireEvent.click(buttons[1] as Element) // ▲, move to a higher row
+
+    expect(setTechSlot).toHaveBeenCalledWith('game-1', 'Writing', 2)
+  })
+
+  it('does not show the stepper on an opponent\'s tab', () => {
+    const container = renderPanel({
+      opponents: [opponent('p2', 'Egil', { revealedTechs: [tech('Masonry', false)] })],
+    })
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Egil' }))
+
+    expect(activePanel(container).querySelector('.tech-slot-move')).toBeNull()
+  })
+
+  it('renders a placed Great Person as a blank occupant with the generic card back, on both own and opponent tabs', () => {
+    const ownContainer = renderPanel({
+      pyramidPlacements: [{ name: 'Sir Isaac Newton', slot: 2 }],
+    })
+    const ownPlacement = activePanel(ownContainer).querySelector('.tech-slot.placement')
+    expect(ownPlacement?.textContent).toContain('Sir Isaac Newton')
+    expect(ownPlacement?.querySelector('img')?.getAttribute('src')).toBe('/items/greatperson_back.jpg')
+
+    const opponentContainer = renderPanel({
+      opponents: [opponent('p2', 'Egil', { pyramidPlacements: [{ name: 'Sir Isaac Newton', slot: 2 }] })],
+    })
+    fireEvent.click(screen.getByRole('tab', { name: 'Egil' }))
+    const opponentPlacement = activePanel(opponentContainer).querySelector('.tech-slot.placement')
+    expect(opponentPlacement?.textContent).toContain('Sir Isaac Newton')
+  })
+
+  it('moves a placed Great Person via the same stepper control, calling setPyramidPlacementSlot', () => {
+    const setPyramidPlacementSlot = vi
+      .spyOn(api, 'setPyramidPlacementSlot')
+      .mockResolvedValue({} as PlayerView)
+    const container = renderPanel({
+      pyramidPlacements: [{ name: 'Sir Isaac Newton', slot: 2 }],
+    })
+
+    const buttons = activePanel(container).querySelectorAll('.tech-slot-move button')
+    fireEvent.click(buttons[0] as Element) // ▼, move to a lower row
+
+    expect(setPyramidPlacementSlot).toHaveBeenCalledWith('game-1', 'Sir Isaac Newton', 1)
   })
 })
 
