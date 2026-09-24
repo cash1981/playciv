@@ -94,7 +94,14 @@ async function loadGame(gameId: string): Promise<GameState> {
   return state
 }
 
-/** A started two-player game: the creator plus one joiner. */
+/**
+ * A started two-player game: the creator plus one joiner. `starter` is always
+ * the creator's own credentials (several tests need the actual creator, e.g.
+ * to end or delete the game), which is independent of who goes first —
+ * `actions/game.ts` shuffles the starting `yourTurn`, so `waitingPlayer` (the
+ * one NOT currently on turn) is resolved dynamically and may be either
+ * account.
+ */
 async function startedGame(
   name: string,
 ): Promise<{
@@ -109,10 +116,11 @@ async function startedGame(
   await join(other.token, gameId)
 
   const state = await loadGame(gameId)
-  const waitingName = state.players.find((player) => !player.yourTurn)?.username
-  if (waitingName === undefined) throw new Error('no waiting player')
+  const waitingPlayerState = state.players.find((player) => !player.yourTurn)
+  if (waitingPlayerState === undefined) throw new Error('no waiting player')
+  const waitingPlayer = waitingPlayerState.playerId === creator.id ? creator : other
 
-  return { gameId, starter: creator, waiting: waitingName, waitingPlayer: other }
+  return { gameId, starter: creator, waiting: waitingPlayerState.username, waitingPlayer }
 }
 
 describe('your turn', () => {
@@ -143,18 +151,20 @@ describe('your turn', () => {
     const { gameId, starter, waitingPlayer } = await startedGame('phase')
     // The waiting player worked ahead and already revealed SOT for turn 1, so
     // once the turn reaches them the mail should point at Trade, not SOT.
-    await inject(app, {
+    const updateResponse = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/turns/update`,
       headers: bearer(waitingPlayer.token),
       payload: { turnNumber: 1, phase: 'SOT', order: 'ready' },
     })
-    await inject(app, {
+    expect(updateResponse.status).toBe(200)
+    const revealResponse = await inject(app, {
       method: 'POST',
       url: `/api/games/${gameId}/turns/reveal`,
       headers: bearer(waitingPlayer.token),
       payload: { turnNumber: 1, phase: 'SOT' },
     })
+    expect(revealResponse.status).toBe(200)
     mailer.sent.length = 0
 
     const response = await inject(app, {
