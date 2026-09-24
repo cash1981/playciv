@@ -123,6 +123,21 @@ export interface TechItem extends ItemBase {
   readonly name: string
   readonly type: string | null
   readonly level: 1 | 2 | 3 | 4 | 5
+  /** Where a Great Person (Nikola Tesla) has moved this tech's pyramid row.
+   *  Unenforced display override; `level` itself never changes. Defaults to
+   *  `level` when absent. */
+  readonly slot?: 1 | 2 | 3 | 4 | 5
+}
+
+/**
+ * A Great Person placed face-down as a blank pyramid occupant (Sir Isaac
+ * Newton's printed effect). New in this port, no old-system equivalent — see
+ * decisions.md. Lives here rather than as a full item because it is a
+ * pyramid-slot occupant, not a hand item once placed.
+ */
+export interface PyramidPlacement {
+  readonly name: string
+  readonly slot: 1 | 2 | 3 | 4 | 5
 }
 
 export interface SocialPolicyItem extends ItemBase {

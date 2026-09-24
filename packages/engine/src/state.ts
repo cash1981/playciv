@@ -7,7 +7,7 @@
  * away.
  */
 
-import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem } from './item.js'
+import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement } from './item.js'
 import { isUnit } from './item.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece } from './board.js'
@@ -106,6 +106,9 @@ export interface Playerhand {
   /** A hidden hand. Only the owner should see the contents. */
   readonly items: readonly Item[]
   readonly techsChosen: readonly TechItem[]
+  /** Great Persons placed face-down as a blank pyramid occupant (Sir Isaac
+   *  Newton). Always public once placed — see the task brief. */
+  readonly pyramidPlacements: readonly PyramidPlacement[]
   /** Java: at most three barbarian units at a time. */
   readonly barbarians: readonly UnitItem[]
   readonly battlehand: readonly UnitItem[]
@@ -383,6 +386,10 @@ export interface OpaquePlayerhand {
    * public until its owner reveals it.
    */
   readonly revealedSocialPolicies: readonly SocialPolicyItem[]
+  /** Great Persons placed face-down as a blank pyramid occupant. Public by
+   *  design, unlike `techsChosen`, so no filtering is needed here — see
+   *  `Playerhand.pyramidPlacements`. */
+  readonly pyramidPlacements: readonly PyramidPlacement[]
   /**
    * Public turn-order copies. `gamenote` and `playerTurns` are private and do
    * not appear here.
@@ -420,6 +427,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     battlehand: player.battlehand,
     revealedTechs: player.techsChosen.filter((tech) => !tech.hidden),
     revealedSocialPolicies: player.socialPolicies.filter((policy) => !policy.hidden),
+    pyramidPlacements: player.pyramidPlacements,
     publicTurns: Object.values(state.publicTurns).filter(
       (turn) => turn.username === player.username,
     ),

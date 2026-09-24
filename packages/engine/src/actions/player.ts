@@ -144,6 +144,93 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
   return ok(appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed))
 }
 
+export interface SetTechSlotInput {
+  readonly playerId: string
+  readonly techName: string
+  readonly slot: 1 | 2 | 3 | 4 | 5
+}
+
+/**
+ * New in this port, no old-system equivalent — see decisions.md. Lets a
+ * player change which pyramid row one of their own chosen techs displays in.
+ * Deliberately unvalidated against any card's printed rule text (Nikola
+ * Tesla's effect, or anything else): the player manages this themselves.
+ */
+export function setTechSlot(state: GameState, input: SetTechSlotInput): ActionResult {
+  const access = requireAccess(state, input.playerId)
+  if (!access.ok) return access
+  const player = access.value
+
+  const tech = player.techsChosen.find((candidate) => candidate.name === input.techName)
+  if (tech === undefined) return err({ kind: 'ITEM_NOT_FOUND' })
+
+  const moved: TechItem = { ...tech, slot: input.slot }
+  return ok(
+    withPlayer(state, {
+      ...player,
+      techsChosen: player.techsChosen.map((candidate) =>
+        candidate.name === tech.name ? moved : candidate,
+      ),
+    }),
+  )
+}
+
+export interface PlaceGreatPersonInput {
+  readonly playerId: string
+  readonly itemId: string
+  readonly slot: 1 | 2 | 3 | 4 | 5
+}
+
+/**
+ * New in this port, no old-system equivalent — see decisions.md. Takes a
+ * Great Person out of the normal hand and records it as a blank pyramid
+ * occupant at the given row (Sir Isaac Newton's printed effect). Anyone's
+ * Great Person can be placed at the engine level — the web client is what
+ * restricts the button to Newton by name; see the task brief.
+ */
+export function placeGreatPersonInPyramid(state: GameState, input: PlaceGreatPersonInput): ActionResult {
+  const access = requireAccess(state, input.playerId)
+  if (!access.ok) return access
+  const player = access.value
+
+  const item = player.items.find((candidate) => candidate.id === input.itemId)
+  if (item === undefined || item.kind !== 'greatperson') return err({ kind: 'ITEM_NOT_FOUND' })
+
+  return ok(
+    withPlayer(state, {
+      ...player,
+      items: player.items.filter((candidate) => candidate.id !== item.id),
+      pyramidPlacements: [...player.pyramidPlacements, { name: item.name, slot: input.slot }],
+    }),
+  )
+}
+
+export interface SetPyramidPlacementSlotInput {
+  readonly playerId: string
+  readonly name: string
+  readonly slot: 1 | 2 | 3 | 4 | 5
+}
+
+/** Moves an already-placed Great Person (see `placeGreatPersonInPyramid`) to
+ *  a different pyramid row. Same unenforced/unlogged shape as `setTechSlot`. */
+export function setPyramidPlacementSlot(state: GameState, input: SetPyramidPlacementSlotInput): ActionResult {
+  const access = requireAccess(state, input.playerId)
+  if (!access.ok) return access
+  const player = access.value
+
+  const placement = player.pyramidPlacements.find((candidate) => candidate.name === input.name)
+  if (placement === undefined) return err({ kind: 'ITEM_NOT_FOUND' })
+
+  return ok(
+    withPlayer(state, {
+      ...player,
+      pyramidPlacements: player.pyramidPlacements.map((candidate) =>
+        candidate.name === input.name ? { ...candidate, slot: input.slot } : candidate,
+      ),
+    }),
+  )
+}
+
 /**
  * Java: `PlayerAction.getRemaingTechsForPlayer`.
  *

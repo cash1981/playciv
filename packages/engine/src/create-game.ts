@@ -58,6 +58,7 @@ export function emptyPlayerhand(player: NewPlayer, playernumber: number): Player
     civilization: null,
     items: [],
     techsChosen: [],
+    pyramidPlacements: [],
     barbarians: [],
     battlehand: [],
     socialPolicies: [],
