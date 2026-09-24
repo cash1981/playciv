@@ -70,16 +70,16 @@ describe('createGame board geometry', () => {
     expect(squareOf(state.board, bottomRight)).toBe('P8')
   })
 
-  it.each([3, 4, 5])('uses the full 16 by 16 board for %s players', (numOfPlayers) => {
-    const state = createGame({
-      name: 'standard-map',
-      numOfPlayers,
-      seed: `players-${numOfPlayers}`,
-    })
+  it('gives four players the full 16 by 16 board', () => {
+    const state = createGame({ name: 'standard-map', numOfPlayers: 4, seed: 'players-4' })
 
     expect(state.board.columns).toBe(16)
     expect(state.board.rows).toBe(16)
+    expect(state.board.slots).toHaveLength(16)
   })
+
+  // Three and five players get the stepped and holed maps the rulebooks draw;
+  // their slots are pinned in `create-game.test.ts`.
 })
 
 describe('joinGame', () => {

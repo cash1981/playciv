@@ -21,10 +21,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   AREA_LABEL_HEIGHT,
-  blockColumns,
-  blockOrigin,
-  blockRows,
-  COLUMN_LABELS,
   CULTURE_TRACK,
   CULTURE_TRACK_CELLS,
   ROTATIONS,
@@ -33,12 +29,15 @@ import {
   areaBandTop,
   boardHeight,
   boardWidth,
+  columnLabel,
   cultureCellCenter,
   cultureTrackHeight,
   locationOf,
   mapHeight,
   mapTop,
+  nearestSlotOrigin,
   remainingBoardAssetCount,
+  slotOrigin,
 } from '@civ/engine'
 import type { Board, BoardArea, BoardAsset, BoardPiece } from '@civ/engine'
 
@@ -287,24 +286,24 @@ export function BoardView({
   const selected = pieces.find((piece) => piece.id === selectedId) ?? null
   const pendingAsset = assets.find((asset) => asset.id === pendingAssetId) ?? null
 
-  /** Empty map slots are unknown territory until a tile is placed there. */
+  /**
+   * Empty map slots are unknown territory until a tile is placed there. Only
+   * the board's own slots fog: the hole and the outside of a stepped board are
+   * not slots, so nothing is drawn there.
+   */
   const fogSlots = useMemo(() => {
-    const tileSize = TILE_SQUARES * board.squareSize
-    const occupied = new Set(
-      pieces
-        .filter((piece) => piece.category === 'tile' || piece.category === 'civtile')
-        .map(
-          (piece) =>
-            `${Math.round(piece.x / tileSize)},${Math.round((piece.y - mapStart) / tileSize)}`,
-        ),
-    )
+    const occupied = new Set<string>()
+    for (const piece of pieces) {
+      if (piece.category !== 'tile' && piece.category !== 'civtile') continue
+      const origin = nearestSlotOrigin(board, piece.x, piece.y)
+      if (origin !== undefined) occupied.add(`${origin[0]},${origin[1]}`)
+    }
 
-    return Array.from({ length: blockRows(board) }, (_, row) =>
-      Array.from({ length: blockColumns(board) }, (_, column) => ({ column, row })),
-    )
-      .flat()
-      .filter(({ column, row }) => !occupied.has(`${column},${row}`))
-  }, [board, mapStart, pieces])
+    return board.slots.filter((slot) => {
+      const [x, y] = slotOrigin(board, slot)
+      return !occupied.has(`${x},${y}`)
+    })
+  }, [board, pieces])
 
   /** Mouse coordinates into board coordinates, with the zoom taken out. */
   const toBoard = useCallback(
@@ -551,23 +550,46 @@ export function BoardView({
                 })}
               </div>
 
-              {/* The grid covers the map only, not the track or the areas */}
-              <div
-                className="board-map"
-                style={{
-                  width: width * zoom,
-                  top: mapStart * zoom,
-                  height: mapHeight(board) * zoom,
-                  backgroundSize: `${board.squareSize * zoom}px ${board.squareSize * zoom}px`,
-                }}
-              />
+              {/* The grid covers the map only, not the track or the areas.
+                  A rectangle keeps one mat with an outline; a stepped board
+                  gets one mat per slot, because there is no rectangle to
+                  outline any more. */}
+              {board.slotStep === TILE_SQUARES ? (
+                <div
+                  className="board-map"
+                  style={{
+                    width: width * zoom,
+                    top: mapStart * zoom,
+                    height: mapHeight(board) * zoom,
+                    backgroundSize: `${board.squareSize * zoom}px ${board.squareSize * zoom}px`,
+                  }}
+                />
+              ) : (
+                board.slots.map((slot) => {
+                  const [x, y] = slotOrigin(board, slot)
+                  const size = TILE_SQUARES * board.squareSize * zoom
+                  return (
+                    <div
+                      key={`mat-${slot.x}-${slot.y}`}
+                      className="board-map-slot"
+                      style={{
+                        left: x * zoom,
+                        top: y * zoom,
+                        width: size,
+                        height: size,
+                        backgroundSize: `${board.squareSize * zoom}px ${board.squareSize * zoom}px`,
+                      }}
+                    />
+                  )
+                })
+              )}
 
-              {fogSlots.map(({ column, row }) => {
-                const [x, y] = blockOrigin(board, column, row)
+              {fogSlots.map((slot) => {
+                const [x, y] = slotOrigin(board, slot)
                 const size = TILE_SQUARES * board.squareSize * zoom
                 return (
                   <img
-                    key={`fog-${column}-${row}`}
+                    key={`fog-${slot.x}-${slot.y}`}
                     className="board-fog-tile"
                     src="/board/tiles/tileback.png"
                     alt=""
@@ -791,7 +813,7 @@ function ColumnLabels({
     >
       {Array.from({ length: board.columns }, (_, index) => (
         <span key={index} style={{ width: board.squareSize * zoom }}>
-          {COLUMN_LABELS[index]}
+          {columnLabel(index)}
         </span>
       ))}
     </div>

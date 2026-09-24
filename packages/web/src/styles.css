@@ -869,15 +869,21 @@ ul.list > li:last-child {
   opacity: 1;
 }
 
-/* Only the map part carries the grid; the player areas sit below it */
-.board-map {
+/* The green mat and its grid; the player areas sit below it. A rectangle is one
+   div with an outline; a stepped board is one div per slot, so the mat follows
+   the shape. */
+.board-map,
+.board-map-slot {
   position: absolute;
-  top: 0;
-  left: 0;
   background-color: #1f2a20;
   background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.11) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.11) 1px, transparent 1px);
+}
+
+.board-map {
+  top: 0;
+  left: 0;
   outline: 1px solid var(--line);
 }
 

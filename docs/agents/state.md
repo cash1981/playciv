@@ -19,6 +19,68 @@ _Last updated: 2026-09-24_
 
 ## Done
 
+- **Issue #171: the reveal flow was already correct; the real gap was
+  migrating a pre-shape board.** A new end-to-end test
+  (`board-tiles.test.ts`, `draw` → `revealItem` → `placeStartingTile` for
+  every player in turn order, asserting no two starting tiles' rectangles
+  overlap) proves a freshly created 3- or 5-player game seats every player
+  correctly today. `board` is computed once at game creation and never
+  recomputed, and the three-/five-player shape fields were all added in one
+  commit on this branch — so the only board this can rescue is one saved
+  before that commit, with no shape fields at all. `migrateGameState` now
+  re-seats such a board at the correct shape, but only when it is empty (no
+  pieces yet — re-seating under existing pieces would create new overlaps)
+  and the same size as the saved board (three players: yes, 16 x 16 either
+  way; five players: no, the correct map is a bigger 28 x 18, and resizing
+  would shift every already-placed piece — deliberately left as a known
+  limitation). This does not confirm what produced the human's report: it
+  is the best explanation that survived their answers (fresh game, normal
+  reveal order), closes a real gap either way, but may not be enough — see
+  `decisions.md`'s "Consequence".
+
+- **Issue #109: the three-player pyramid and the five-player map with a hole.**
+  The board carries its shape as a list of playable 4 x 4 slots with a
+  half-tile placement grid, and one starting slot per player in playernumber
+  order. Three players get the ten-slot stepped pyramid from the base rulebook
+  (starts top, bottom right, bottom left); five players get the 28 x 18
+  twenty-two-slot map from Fame and Fortune with the hole at squares 12..16 by
+  8..14 and five starts clockwise from the top, so the overlapping player-5
+  corner is gone. Tile snapping, drawn-tile placement, square names, fog and
+  the client's green mat all follow the slots; the hole and the outside get no
+  fog, no mat, no name and no snap target. Old saves gain the rectangle shape
+  in `migrateGameState` with no piece moved; one-, two- and four-player games
+  are unchanged. Deliberately no re-seating of saved three/five-player games
+  (none exist) and no movement rules (the engine has none). Read-only review
+  approved with nits only; full checks pass (499 engine, 199 server, 183 web
+  tests) and the browser showed both shapes, the hole, and a tile dropped over
+  the hole staying unsnapped. See `decisions.md` for the snap-tolerance
+  consequence.
+
+- **Issue #167: each wonder in the Wonders panel shows its printed effect.**
+  The Wonders sheet's Description column was already parsed into
+  `WonderItem.description` (unlike the Tech sheet's, which is always empty —
+  see `techText.ts`), but that text was dropped once a wonder became a board
+  piece (issue #145). A new pure `wonderReference()` reader in
+  `packages/engine/src/gamedata.ts` returns every wonder's name/era/text with
+  no RNG or ids, and now backs both a static `WONDER_DESCRIPTIONS` export
+  (name → text, computed once, like `GOVERNMENT_CARDS`) and `readWonders`
+  itself, so there is one parser instead of two. `WondersPanel` looks up each
+  in-play piece's description by its label and renders it with the same
+  `card-text` styling `ItemCard` already uses for a hand card. The
+  `rules-checker` found the old client (`old-civ-web`) already showed this
+  same text in the hand/revealed views before wonders moved to the shared
+  board — this restores lost old-system behaviour rather than inventing
+  anything. Review round 1 found three minor gaps, all fixed: a type-unsound
+  `Object.fromEntries` call that resolved to `any`, no test pinning that a
+  board-asset manifest label always has a matching description (now added,
+  guarding against future label/sheet-name drift), and no regression pin on
+  the refactored `readWonders`' shuffle order for a fixed seed (now added).
+  Round 2 approved. 4 new engine tests, 1 new web test. Verified: the wonder
+  text is confirmed present in the built web bundle and in a running local
+  server's deck; no browser tool was connected this session, so the visual
+  pass in a real game page is left to the human. Branch
+  `feat/issue-167-wonder-descriptions`.
+
 - **Turn orders: per-phase save, and a whose-turn/which-phase status.** Each
   phase section (SOT, Trade, City management, Movement, Research) now has its
   own Save button beside Reveal; Reveal saves the phase first if it has

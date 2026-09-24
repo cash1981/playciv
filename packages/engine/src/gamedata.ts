@@ -392,50 +392,80 @@ type BaseFn = (sheetName: Item['sheetName'], description: string | null) => {
   ownerId: null
 }
 
+/** One wonder's name, era and printed text, independent of any game's deck. */
+export interface WonderReference {
+  readonly name: string
+  readonly description: string | null
+  readonly type: WonderItem['type']
+}
+
+const WONDER_SHEET_NAME: Readonly<Record<WonderItem['type'], WonderItem['sheetName']>> = {
+  Ancient: 'ANCIENT_WONDERS',
+  Medieval: 'MEDIEVAL_WONDERS',
+  Modern: 'MODERN_WONDERS',
+}
+
 /**
  * Java: `extractShuffledWondersFromExcel`. The sheet holds nine ancient
  * wonders, then a row called "Medieval Wonders", nine medieval, a row "Modern
  * Wonders", and nine modern. Java polled names until it hit one containing
  * "wonders", discarding both that name and the description beside it.
+ *
+ * This reads every wonder once, in print order, with no shuffling and no
+ * item ids — the shape a player-aid reference wants. `readWonders` below
+ * turns the same rows into the shuffled, id-bearing deck.
  */
-function readWonders(
-  data: GameDataFile,
-  build: ItemBuilder,
-  base: BaseFn,
-): Pick<Deck, 'ancientWonders' | 'medievalWonders' | 'modernWonders'> {
+export function wonderReference(data: GameDataFile): readonly WonderReference[] {
   const sheet = sheetOf(data, SHEET_LABEL.WONDERS)
   const names = column(sheet, 0, { trim: true })
   const descriptions = column(sheet, 1, { trim: true })
   const separator = SHEET_LABEL.WONDERS.toLowerCase()
 
   let cursor = 0
-  const takeBlock = (
-    type: WonderItem['type'],
-    sheetName: WonderItem['sheetName'],
-    stopAtSeparator: boolean,
-  ): WonderItem[] => {
-    const block: WonderItem[] = []
+  const takeBlock = (type: WonderItem['type'], stopAtSeparator: boolean): WonderReference[] => {
+    const block: WonderReference[] = []
     while (cursor < names.length) {
       const name = names[cursor] as string
       const description = descriptions[cursor] ?? null
       cursor += 1
       if (stopAtSeparator && name.toLowerCase().includes(separator)) break
-      block.push({
-        ...base(sheetName, description),
-        sheetName,
-        kind: 'wonder',
-        name,
-        type,
-      })
+      block.push({ name, description, type })
     }
-    return build.shuffle(block)
+    return block
   }
 
-  return {
-    ancientWonders: takeBlock('Ancient', 'ANCIENT_WONDERS', true),
-    medievalWonders: takeBlock('Medieval', 'MEDIEVAL_WONDERS', true),
+  return [
+    ...takeBlock('Ancient', true),
+    ...takeBlock('Medieval', true),
     // Java took the rest without looking for a separator
-    modernWonders: takeBlock('Modern', 'MODERN_WONDERS', false),
+    ...takeBlock('Modern', false),
+  ]
+}
+
+function readWonders(
+  data: GameDataFile,
+  build: ItemBuilder,
+  base: BaseFn,
+): Pick<Deck, 'ancientWonders' | 'medievalWonders' | 'modernWonders'> {
+  const toItem = (entry: WonderReference): WonderItem => {
+    const sheetName = WONDER_SHEET_NAME[entry.type]
+    return {
+      ...base(sheetName, entry.description),
+      sheetName,
+      kind: 'wonder',
+      name: entry.name,
+      type: entry.type,
+    }
+  }
+
+  const entries = wonderReference(data)
+  const byType = (type: WonderItem['type']): WonderItem[] =>
+    entries.filter((entry) => entry.type === type).map(toItem)
+
+  return {
+    ancientWonders: build.shuffle(byType('Ancient')),
+    medievalWonders: build.shuffle(byType('Medieval')),
+    modernWonders: build.shuffle(byType('Modern')),
   }
 }
 
