@@ -7,7 +7,14 @@ import type { Item } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { GameRevisionSummary, PlayerDto, PlayerView } from '../lib/api.js'
-import { AUTO_REFRESH_MS, GameView, HandItem, loadAfterKnownRevision, reloadIfRevisionChanged } from './GameView.js'
+import {
+  AUTO_REFRESH_MS,
+  GameView,
+  HandItem,
+  gameMenuGate,
+  loadAfterKnownRevision,
+  reloadIfRevisionChanged,
+} from './GameView.js'
 
 vi.mock('./BoardView.js', () => ({ BoardView: () => <div data-testid="board" /> }))
 vi.mock('./ChatPanel.js', () => ({ ChatPanel: () => <section><h2>Chat</h2></section> }))
@@ -30,6 +37,62 @@ const viewAt = (rev: number): PlayerView => ({ rev }) as unknown as PlayerView
 
 const revisionsUpTo = (revision: number): readonly GameRevisionSummary[] =>
   [{ revision }] as unknown as readonly GameRevisionSummary[]
+
+const you = (overrides: Partial<PlayerView['you']> = {}): PlayerView['you'] =>
+  ({ playerId: 'p1', gameCreator: false, ...overrides }) as unknown as PlayerView['you']
+
+describe('gameMenuGate', () => {
+  it('offers nothing while the game has not loaded yet', () => {
+    expect(gameMenuGate(null, false, false)).toBeNull()
+  })
+
+  it('offers nothing to a plain spectator', () => {
+    expect(gameMenuGate({ you: null, active: true }, false, false)).toBeNull()
+  })
+
+  it('offers Withdraw only, disabled once the game has ended, to an ordinary player', () => {
+    expect(gameMenuGate({ you: you(), active: true }, false, false)).toEqual({
+      canWithdraw: true,
+      withdrawDisabled: false,
+      canDelete: false,
+      deleteDisabled: false,
+    })
+    expect(gameMenuGate({ you: you(), active: false }, false, false)?.withdrawDisabled).toBe(true)
+  })
+
+  it('offers both, to the game creator', () => {
+    expect(gameMenuGate({ you: you({ gameCreator: true }), active: true }, false, false)).toEqual({
+      canWithdraw: true,
+      withdrawDisabled: false,
+      canDelete: true,
+      deleteDisabled: false,
+    })
+  })
+
+  // The regression this pins: an admin who is not a player in the game (`you`
+  // is `null`) must still get Delete — old-civ-web's own "Admin settings"
+  // dropdown gated Delete on the admin flag alone, never on membership. An
+  // admin has no hand to withdraw, so Withdraw stays absent.
+  it('offers Delete but not Withdraw to an admin who never joined', () => {
+    // `withdrawDisabled` only reflects busy/game-active state; the button is
+    // never rendered at all for this viewer, gated by `canWithdraw` instead.
+    expect(gameMenuGate({ you: null, active: true }, true, false)).toEqual({
+      canWithdraw: false,
+      withdrawDisabled: false,
+      canDelete: true,
+      deleteDisabled: false,
+    })
+  })
+
+  it('disables both while an action is already in flight', () => {
+    expect(gameMenuGate({ you: you(), active: true }, false, true)).toEqual({
+      canWithdraw: true,
+      withdrawDisabled: true,
+      canDelete: false,
+      deleteDisabled: true,
+    })
+  })
+})
 
 describe('game auto-refresh', () => {
   // The human asked for 10 s specifically ("setter auto refresh til 10

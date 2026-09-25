@@ -16,6 +16,7 @@ import { LandingView } from './views/LandingView.js'
 import { LoginView } from './views/LoginView.js'
 import { AdminView } from './views/AdminView.js'
 import { Navigation } from './views/Navigation.js'
+import type { GameMenuActions } from './views/Navigation.js'
 import { FaqView } from './views/FaqView.js'
 import { AboutView } from './views/AboutView.js'
 import { Footer } from './views/Footer.js'
@@ -53,6 +54,7 @@ export function App(): React.JSX.Element {
   const [checking, setChecking] = useState(true)
   const [screen, setScreen] = useState<Screen>(() => screenFromPath(window.location.pathname))
   const [theme, setTheme] = useState<Theme>(() => storedTheme())
+  const [gameActions, setGameActions] = useState<GameMenuActions | null>(null)
   const lastPathRef = useRef(window.location.pathname)
 
   useEffect(() => {
@@ -198,13 +200,22 @@ export function App(): React.JSX.Element {
   if (screen.name === 'game') {
     return (
       <div className="app">
-        <Navigation player={player} screen={screen.name} theme={theme} onNavigate={navigate} onSignOut={signOut} onToggleTheme={toggleTheme} />
+        <Navigation
+          player={player}
+          screen={screen.name}
+          theme={theme}
+          onNavigate={navigate}
+          onSignOut={signOut}
+          onToggleTheme={toggleTheme}
+          game={gameActions}
+        />
         <GameView
           gameId={screen.gameId}
           player={player}
           onUnauthorized={signOut}
           onDeleted={backToGames}
           onWithdrawn={backToGames}
+          onGameActions={setGameActions}
         />
         <Footer />
       </div>

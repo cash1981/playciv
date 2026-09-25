@@ -13,12 +13,68 @@ _Last updated: 2026-09-25_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 548 engine, 208 server, 223 web on `feat/draw-before-chat-log` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 548 engine, 208 server, 239 web on `feat/issue-177-176-menu-landscape` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
 
+- **Issues #177/#176: a hamburger menu with a Game section, a turn/phase
+  title, and a landscape-width fix.** Two client-only issues from the
+  human, one PR. Issue #177: `Navigation` collapses FAQ/About/Highscore/
+  Rules-and-help and the theme/sign-in controls behind a single hamburger
+  `<details>` menu, on every screen width — the human explicitly asked for
+  this on desktop too, not just mobile. On a game page the same menu gains
+  a "Game" section (Withdraw for any player, Delete for the creator or an
+  admin — matching old-civ-web's `nav.html`, whose own "Admin settings"
+  dropdown gated Delete on the admin flag alone, membership-independent),
+  moved out of `GameView`'s action row via a new `onGameActions` callback
+  prop; `App.tsx` holds the resulting state and threads it to both
+  `Navigation` and `GameView`, since they are siblings, not parent/child.
+  "Back to games" is gone from the top nav on both the game and admin
+  screens (a different, unrelated "Back to games" link inside `AdminView`'s
+  own page content is untouched). `GameView`'s h1 swaps from the game's
+  name to "Your turn — X phase" / "<name>'s turn — X phase" (previously a
+  `<span>` beside it); the name becomes a small subtitle. The civilization
+  tag, colour swatch and Auto-refresh toggle are deliberately untouched —
+  the human's explicit minimal-risk choice. Issue #176: `.board-layout`
+  already switched to a column below 900px width, but `.board-scroll`/
+  `.board-palette` only got `width: 100%` below 700px — so a landscape
+  phone (700-930px wide, ~350-430px tall) fell into that gap and each sized
+  itself off its own content instead of the container, overflowing the
+  page horizontally (verified live: `document.documentElement.scrollWidth`
+  went from 426 to matching `clientWidth` after the fix). Closed with a new
+  rule at the same 900px condition, plus a separate
+  `@media (max-height: 500px) and (orientation: landscape)` block that
+  reclaims vertical space and stacks the full-width board/palette (tighter
+  `.app`/`.topbar` padding, `.board-scroll` max-height 80vh → 55vh)
+  regardless of width. Two read-only review rounds:
+  round 1 found a real regression (an admin viewing a game they had not
+  joined lost Delete game entirely, since the gating logic bailed out
+  before checking the admin role) and a real test-coverage gap (the
+  riskiest logic — who gets which button — had no test at all); both fixed
+  by extracting the gating into a pure, now-unit-tested `gameMenuGate`
+  function, plus several nits (a `.spacer` class collision that broke the
+  hamburger's right-alignment at 700-900px width, a dead guard clause, a
+  misattributed CSS comment). Round 2: approved with nits (a scope-wording
+  fix to the brief, one more test tying the disabled flags to the rendered
+  `disabled` attribute). 5 new `GameMenuActions`/`gameMenuGate` tests, 3 new
+  Navigation tests. A later merge from `main` retained the `gameMenuGate`
+  tests but dropped their named import; the reopened build fix restored it.
+  Its review also caught and closed the short-landscape 901-930px gap, with
+  a source-contract regression test for the complete height-based block.
+  Full checks pass (548 engine, 208 server, 239 web).
+  Browser-verified: mobile portrait (375x812, menu open/closed/nested
+  submenu, Game section for a player and separately for creator/admin, no
+  Back to games anywhere), tablet (800px, hamburger right-aligned), desktop
+  (1280x720, anchored flyout dropdown), landscape (812x375, no horizontal
+  overflow before/after measured directly). Two unrelated pre-existing bugs
+  were found and spun off separately rather than folded in: a "Reveal"
+  button that overflows the viewport at 375px width (`TurnPanel.css`'s
+  `.turn-phase-heading` had no `flex-wrap`), and a `@media (max-width:
+  900px)` block in `styles.css` that never closes, silently scoping a large
+  chunk of item-card CSS to under-900px viewports only. Branch
+  `feat/issue-177-176-menu-landscape`.
 - **The turn phase heading row no longer overflows the page at phone width.**
   Found incidentally while browser-verifying an unrelated branch: `.turn-phase-
   heading` (`TurnPanel.css`) — the row holding a phase's label, save-status

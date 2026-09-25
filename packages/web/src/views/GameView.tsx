@@ -19,6 +19,7 @@ import { BoardView } from './BoardView.js'
 import { ChatPanel } from './ChatPanel.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
+import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
 import { RevealedPanel } from './RevealedPanel.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
@@ -36,6 +37,16 @@ interface Props {
   readonly onUnauthorized: () => void
   readonly onDeleted: () => void
   readonly onWithdrawn: () => void
+  /**
+   * Reports Withdraw/Delete for the site menu's "Game" section (issue #177);
+   * `null` while there is nothing to offer yet (spectator who is not an
+   * admin, or still loading). Optional so tests that do not care about the
+   * menu can omit it. Must be referentially stable (e.g. a `useState`
+   * setter, as `App.tsx` passes) — it sits in this effect's dependency
+   * array and is called with a fresh object each run, so an inline arrow
+   * here would re-run the effect every render.
+   */
+  readonly onGameActions?: (actions: GameMenuActions | null) => void
 }
 
 /**
@@ -145,7 +156,47 @@ export async function loadHistoricalIfCurrent(
   return isCurrent() ? revision : null
 }
 
-export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdrawn }: Props): React.JSX.Element {
+export interface GameMenuGate {
+  readonly canWithdraw: boolean
+  readonly withdrawDisabled: boolean
+  readonly canDelete: boolean
+  readonly deleteDisabled: boolean
+}
+
+/**
+ * The booleans behind the site menu's "Game" section (issue #177), pulled
+ * out as a pure function so the one real risk in that wiring — who gets
+ * Delete and who gets Withdraw — is testable without rendering the whole
+ * page. `null` means nothing to offer: the game has not loaded yet, or the
+ * viewer is a plain spectator (no hand in this game, not an admin). An
+ * admin who never joined still needs Delete, matching old-civ-web's
+ * `nav.html`, whose "Admin settings" → "Delete game" was gated only on the
+ * admin flag, membership-independent (`GameOption.setShowAdminValue` in
+ * `GameController.js`) — `you === null` alone must not suppress it.
+ */
+export function gameMenuGate(
+  currentView: Pick<PlayerView, 'you' | 'active'> | null,
+  isAdmin: boolean,
+  busyNow: boolean,
+): GameMenuGate | null {
+  if (currentView === null || (currentView.you === null && !isAdmin)) return null
+  const currentYou = currentView.you
+  return {
+    canWithdraw: currentYou !== null,
+    withdrawDisabled: busyNow || !currentView.active,
+    canDelete: currentYou?.gameCreator === true || isAdmin,
+    deleteDisabled: busyNow,
+  }
+}
+
+export function GameView({
+  gameId,
+  player,
+  onUnauthorized,
+  onDeleted,
+  onWithdrawn,
+  onGameActions,
+}: Props): React.JSX.Element {
   const [view, setView] = useState<PlayerView | null>(null)
   const [revisions, setRevisions] = useState<readonly GameRevisionSummary[]>([])
   const [selectedRevision, setSelectedRevision] = useState<number | null>(null)
@@ -289,6 +340,49 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
     [gameId, reload, onUnauthorized, player],
   )
 
+  // Exposes Withdraw/Delete to the site menu's "Game" section (issue #177).
+  // Recomputed from `view`/`historical` directly, rather than the
+  // `displayedView`/`you` consts below, which only exist after the loading
+  // guard: hooks must run unconditionally, before any conditional return.
+  useEffect(() => {
+    if (onGameActions === undefined) return
+    const currentView = selectedRevision !== null && historical !== null ? historical.view : view
+    const busyNow = busy || (selectedRevision !== null && historical !== null)
+    const gate = gameMenuGate(currentView, player?.role === 'admin', busyNow)
+    if (gate === null) {
+      onGameActions(null)
+      return
+    }
+    onGameActions({
+      ...gate,
+      onWithdraw: () => {
+        setBusy(true)
+        setError(null)
+        void api.withdraw(gameId).then(
+          () => {
+            onWithdrawn()
+            // Withdrawing already succeeded; if `onWithdrawn` (e.g.
+            // navigating away) got vetoed by unsaved turn orders, this view
+            // stays mounted and must not stay stuck busy.
+            setBusy(false)
+          },
+          (caught: unknown) => {
+            if (isUnauthorized(caught)) return onUnauthorized()
+            setError(errorMessage(caught))
+            setBusy(false)
+          },
+        )
+      },
+      onDelete: () => {
+        void run(async () => {
+          await api.deleteGame(gameId)
+          onDeleted()
+        })
+      },
+    })
+    return () => onGameActions(null)
+  }, [onGameActions, view, historical, selectedRevision, busy, gameId, player, onWithdrawn, onDeleted, onUnauthorized, run])
+
   if (view === null) {
     return (
       <>
@@ -307,8 +401,17 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
   return (
     <>
       <div className="panel">
-        <div className="row">
-          <h1 style={{ margin: 0 }}>{displayedView.name}</h1>
+        <div className="row" style={{ alignItems: 'baseline' }}>
+          <h1 style={{ margin: 0 }}>
+            {yourTurn
+              ? 'Your turn'
+              : `${(displayedView.activeTurn?.username ??
+                  displayedView.opponents.find((opponent) => opponent.yourTurn)?.username ??
+                  'nobody')}'s turn`}
+            {displayedView.activeTurn !== null &&
+              ` — ${TURN_PHASE_LABEL[displayedView.activeTurn.phase]} phase`}
+          </h1>
+          <span className="muted" style={{ fontSize: '0.9rem' }}>{displayedView.name}</span>
           {!displayedView.active && <span className="tag">ended</span>}
           {displayedView.winner !== null && <span className="tag revealed">{displayedView.winner} won</span>}
           {you?.civilization != null && (
@@ -328,21 +431,6 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
           >
             {autoRefresh ? 'Auto-refresh on' : 'Auto-refresh off'}
           </button>
-          {yourTurn ? (
-            <span className="tag turn">
-              Your turn
-              {displayedView.activeTurn !== null &&
-                ` — ${TURN_PHASE_LABEL[displayedView.activeTurn.phase]} phase`}
-            </span>
-          ) : (
-            <span className="muted">
-              {(displayedView.activeTurn?.username ??
-                displayedView.opponents.find((opponent) => opponent.yourTurn)?.username ??
-                'nobody')}'s turn
-              {displayedView.activeTurn !== null &&
-                ` — ${TURN_PHASE_LABEL[displayedView.activeTurn.phase]} phase`}
-            </span>
-          )}
         </div>
 
         <div className="row" style={{ marginTop: '0.6rem' }}>
@@ -357,50 +445,6 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
             </>
           )}
           {you === null && <span className="muted">Watching (not a player)</span>}
-          <span style={{ flex: 1 }} />
-          {you !== null && (
-            <button
-              className="danger"
-              disabled={interactionBusy || !displayedView.active}
-              onClick={() => {
-                if (!window.confirm('Withdraw from this game?')) return
-                setBusy(true)
-                setError(null)
-                void api.withdraw(gameId).then(
-                  () => {
-                    onWithdrawn()
-                    // Withdrawing already succeeded; if `onWithdrawn` (e.g.
-                    // navigating away) got vetoed by unsaved turn orders,
-                    // this view stays mounted and must not stay stuck busy.
-                    setBusy(false)
-                  },
-                  (caught: unknown) => {
-                    if (isUnauthorized(caught)) return onUnauthorized()
-                    setError(errorMessage(caught))
-                    setBusy(false)
-                  },
-                )
-              }}
-            >
-              Withdraw
-            </button>
-          )}
-          {(you?.gameCreator === true || player?.role === 'admin') && (
-            <button
-              className="danger"
-              disabled={interactionBusy}
-              onClick={() => {
-                if (window.confirm('Delete this game permanently?')) {
-                  void run(async () => {
-                    await api.deleteGame(gameId)
-                    onDeleted()
-                  })
-                }
-              }}
-            >
-              Delete game
-            </button>
-          )}
         </div>
       </div>
 
