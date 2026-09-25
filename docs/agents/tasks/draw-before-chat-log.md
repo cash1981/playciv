@@ -3,7 +3,7 @@
 - **Slug:** `draw-before-chat-log`
 - **Branch:** `feat/draw-before-chat-log`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
