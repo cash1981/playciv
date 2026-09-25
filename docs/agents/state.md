@@ -13,11 +13,34 @@ _Last updated: 2026-09-25_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 548 engine, 208 server, 241 web on `feat/issue-173-coin-source-civ-name` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 556 engine, 208 server, 245 web on `feat/issue-166-revealed-discarded-pager` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Issue #166: the Revealed/Discarded panel loads 6 items at first, then 5
+  more per "Load more" click.** Replaced the fixed-size-20 Previous/Next
+  pager in `RevealedPanel` with a single growing `visibleSize` state (start
+  6, +5 per click) that re-requests page 1 of the unchanged
+  `/api/games/:gameId/revealed` route with a larger size each time and
+  replaces the shown list wholesale, never appending client-side. Client-only,
+  confirmed with the human as a growing list rather than a smaller-paged
+  Previous/Next pager (no old-system precedent either way — `old-civ-web` had
+  no pagination at all for this feed). Three review rounds, each with a real
+  finding fixed: round 1 (past the server's pre-existing 100-item cap,
+  "Load more" looped on a dead request forever and items past 100 became
+  unreachable — fixed by detecting the response's own clamped `size`), round 2
+  (a failed "Load more" click could look identical to hitting that cap and
+  wrongly disable the button until a manual Refresh), round 3 (a transient,
+  false "cap hit" reading while a request was still in flight — fixed by
+  comparing against the size actually asked for, not the in-flight one).
+  Approved after. The 100-item ceiling itself is a deliberate, human-confirmed
+  tradeoff to keep this a small client-only fix rather than touching the
+  server; see the 2026-09-25 decisions.md entry. No live-browser check was
+  done — reproducing a game with 100+ revealed/discarded rows was
+  disproportionate for this fix's size; left to the human to confirm
+  visually.
 
 - **Issue #172: Egypt's own starting wonder no longer suppresses the
   start-of-game wonder deal.** Egypt's private starting wonder used to set the

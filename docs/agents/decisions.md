@@ -2735,3 +2735,53 @@ setup-time logic anywhere in either old repository.
   drawn anything. Narrow enough — it requires a moderator's manual assignment
   to land exactly on an Egypt player who was never due a wonder — that it is
   recorded here rather than coded around.
+
+## 2026-09-25 — Issue #166: the Revealed/Discarded panel's "Load more" cannot reach past 100 items
+
+The human, from a small GitHub issue: "There should be a maximum of 6 items on
+discarded / revealed page. Then when you push the next page you can server
+side load the next 5." Confirmed with the human before implementing: this
+means a growing "Load more" list (start at 6, +5 per click), not a
+traditional Previous/Next pager with a smaller page size. `old-civ-web`'s
+`ReavledController.js`/`revealed.html` had no pagination at all for this feed
+— the page/size mechanism itself is new, introduced under issue #51 — so
+there is no old-system rule being overridden here, only a change to `main`'s
+own prior behaviour.
+
+`RevealedPanel` (`packages/web/src/views/RevealedPanel.tsx`) now keeps a
+single `visibleSize` state, starting at `INITIAL_SIZE` (6) and growing by
+`LOAD_MORE_SIZE` (5) per click, re-requesting page 1 of the existing
+`/api/games/:gameId/revealed?page=&size=` route with the larger size each
+time and replacing the shown list wholesale — never appending client-side, so
+a feed that changes between loads (e.g. a reshuffle emptying the discard
+pile) can never leave a stale or duplicated entry on screen. The route and
+its engine projection (`revealedFeed`) were deliberately left untouched, on
+the client-only scope agreed for this small fix.
+
+**The consequence, found in review and confirmed with the human as
+acceptable:** the route already clamps `size` to `MAX_REVEALED_SIZE` (100,
+from issue #51, to bound the payload the browser ever loads at once). The
+previous Previous/Next pager could still reach an arbitrarily long feed by
+turning pages at a fixed size of 20; this "Load more" design cannot, because
+every click asks for a bigger *first* page rather than a next one. Once the
+requested size exceeds 100, the response's own (clamped) `size` field comes
+back smaller than what was actually asked for that request — `RevealedPanel`
+reads that pairing as "the cap was hit" and disables the "Load more" button,
+appending " — older items are not shown here" to the "Showing N of M"
+caption beside it, rather than looping on an identical 100-item request
+forever. Items beyond the 100th in the feed become unreachable from this
+panel.
+
+The human chose, when presented with three options (raise/remove the
+server's cap; build true accumulating pagination that keeps every item
+reachable; or accept the 100-item ceiling and document it), to accept the
+ceiling rather than widen the scope of what was meant to be a small,
+client-only hotfix. A sufficiently long game — `revealedFeed`
+(`packages/engine/src/actions/game.ts`) unions every discarded item with
+every player's non-hidden hand items over the whole game, so a finished
+four-to-five-player game is not an unusual case — can exceed 100 such
+entries and lose access to the oldest of them through this panel. If that
+turns out to matter in practice, the fix is on the server side
+(`MAX_REVEALED_SIZE` in `packages/server/src/routes/games.ts`) or a redesign
+of this panel to accumulate pages instead of replacing them; neither was
+done here.

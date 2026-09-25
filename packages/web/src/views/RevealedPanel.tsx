@@ -8,6 +8,13 @@
  * plus the total, so the browser never loads the whole history; images on the
  * page load lazily on top of that.
  *
+ * The panel shows an initial `INITIAL_SIZE` items; each "Load more" click
+ * re-requests page 1 with a larger size and replaces the shown list wholesale
+ * (issue #166), rather than appending client-side — so a feed that changes
+ * between loads (e.g. a reshuffle) can never leave a stale or duplicated
+ * entry on screen. See the `atCap` comment below for the server's 100-item
+ * cap and the known limitation it leaves (recorded in `decisions.md`).
+ *
  * Everything here is already public — the server only ever returns discarded
  * items and non-hidden hand items — so the full card face is shown.
  */
@@ -21,7 +28,8 @@ import type { GameRevisionView, RevealedEntry, RevealedPage } from '../lib/api.j
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { itemImageUrl } from './ItemCard.js'
 
-const PAGE_SIZE = 20
+const INITIAL_SIZE = 6
+const LOAD_MORE_SIZE = 5
 
 interface Props {
   readonly gameId: string
@@ -30,49 +38,66 @@ interface Props {
 }
 
 export function RevealedPanel({ gameId, reloadCount, historical = null }: Props): React.JSX.Element {
-  const [page, setPage] = useState(1)
+  const [visibleSize, setVisibleSize] = useState(INITIAL_SIZE)
   const [data, setData] = useState<RevealedPage | null>(null)
+  // The size actually asked for in the request `data` answers — paired with
+  // `data` on every successful response, never with the in-flight
+  // `visibleSize`, so comparing the two below cannot flash a false "capped"
+  // reading while a request is still in the air.
+  const [askedSize, setAskedSize] = useState<number | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const requestEpoch = useRef(0)
 
-  const load = useCallback(async () => {
-    const epoch = ++requestEpoch.current
-    if (historical !== null) {
-      const start = (page - 1) * PAGE_SIZE
-      setData({
-        items: historical.revealed.slice(start, start + PAGE_SIZE),
-        total: historical.revealed.length,
-        page,
-        size: PAGE_SIZE,
-      })
-      setLoadError(null)
-      return
-    }
-    try {
-      const next = await api.revealed(gameId, page, PAGE_SIZE)
-      if (epoch !== requestEpoch.current) return
-      setData(next)
-      setLoadError(null)
-    } catch (caught) {
-      if (epoch !== requestEpoch.current) return
-      setLoadError(errorMessage(caught))
-    }
-  }, [gameId, historical, page])
+  const load = useCallback(
+    async (size: number) => {
+      const epoch = ++requestEpoch.current
+      if (historical !== null) {
+        setData({
+          items: historical.revealed.slice(0, size),
+          total: historical.revealed.length,
+          page: 1,
+          size,
+        })
+        setAskedSize(size)
+        setLoadError(null)
+        return
+      }
+      try {
+        const next = await api.revealed(gameId, 1, size)
+        if (epoch !== requestEpoch.current) return
+        setData(next)
+        setAskedSize(size)
+        setLoadError(null)
+      } catch (caught) {
+        if (epoch !== requestEpoch.current) return
+        setLoadError(errorMessage(caught))
+      }
+    },
+    [gameId, historical],
+  )
+
+  // A different game (or entering/leaving replay) starts over at the top of
+  // its own feed rather than carrying over how much of the previous one had
+  // been loaded.
+  useEffect(() => {
+    setVisibleSize(INITIAL_SIZE)
+  }, [gameId, historical])
 
   useEffect(() => {
-    void load()
-  }, [load, reloadCount])
+    void load(visibleSize)
+  }, [load, reloadCount, visibleSize])
 
   const total = data?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const items = data?.items ?? []
-
-  // If the feed shrinks (e.g. a reshuffle empties the discard pile) the current
-  // page can fall past the end; step back so the viewer is not left on a blank
-  // page with Next disabled.
-  useEffect(() => {
-    if (data !== null && page > totalPages) setPage(totalPages)
-  }, [data, page, totalPages])
+  // The server clamps `size` to `MAX_REVEALED_SIZE` (100); once the requested
+  // size exceeds that, the response's own `size` comes back smaller than what
+  // was asked for it. That is the signal used here to stop offering
+  // "Load more" rather than requesting the same capped 100 forever. Known
+  // limitation: a feed past 100 entries has no way to reach the rest from
+  // this panel — see the 2026-09-25 "issue #166" entry in decisions.md.
+  const atCap = data !== null && askedSize !== null && data.size < askedSize
+  const hasMore = !atCap && items.length < total
+  const capped = atCap && items.length < total
 
   return (
     <CollapsiblePanel id="revealed" title={`Revealed and Discarded Items (${total})`} defaultOpen={false}>
@@ -86,21 +111,19 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
       </ul>
 
       <div className="row" style={{ marginTop: '0.5rem', alignItems: 'center' }}>
-        <button className="small" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>
-          Previous
-        </button>
         <span className="muted">
-          Page {Math.min(page, totalPages)} of {totalPages}
+          Showing {items.length} of {total}
+          {capped && ' — older items are not shown here'}
         </span>
         <button
           className="small"
-          disabled={page >= totalPages}
-          onClick={() => setPage((current) => current + 1)}
+          disabled={!hasMore}
+          onClick={() => setVisibleSize((current) => current + LOAD_MORE_SIZE)}
         >
-          Next
+          Load more
         </button>
         <span style={{ flex: 1 }} />
-        <button className="small" onClick={() => void load()}>
+        <button className="small" onClick={() => void load(visibleSize)}>
           Refresh
         </button>
       </div>
