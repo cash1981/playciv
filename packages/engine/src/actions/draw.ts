@@ -32,7 +32,7 @@ import { err, ok } from '../result.js'
 import { placeUnchecked } from './board.js'
 import type { SheetName } from '../sheet-name.js'
 import { SHEET_LABEL, SHUFFLABLE_ITEMS, TECHS } from '../sheet-name.js'
-import type { GameLogEntry, GameState, Playerhand } from '../state.js'
+import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, withPlayer } from '../state.js'
 
 type DrawResult = Result<GameState, EngineError>
@@ -323,45 +323,6 @@ export function drawUnitsForBattle(state: GameState, input: BattlehandInput): Dr
 }
 
 /**
- * The exact message template `revealAndDiscardBattlehand` writes (via
- * `appendPublicLog`, which prepends `${username} `) — exported so
- * `migrate.ts` can recognise and parse the very same shape when retroactively
- * fixing an old save, without the two ever drifting apart. `MESSAGE_PREFIX`
- * itself starts with a space (Java's own wording), so the full line reads
- * `${username}  reveals ${names} from their battlehand` (two spaces).
- */
-const BATTLEHAND_REVEAL_MESSAGE_PREFIX = ' reveals '
-const BATTLEHAND_REVEAL_MESSAGE_SUFFIX = ' from their battlehand'
-
-/**
- * If `entry` is a `revealAndDiscardBattlehand` log line, returns the display
- * names it named (in order, one string per unit, as `revealAll()` produced
- * them) — otherwise `null`.
- */
-export function parseBattlehandRevealLog(
-  entry: Pick<GameLogEntry, 'username' | 'publicLog'>,
-): readonly string[] | null {
-  // Matches `appendPublicLog`'s own `${username} ${message}` template exactly
-  // — the explicit space here, plus the leading space already inside
-  // `BATTLEHAND_REVEAL_MESSAGE_PREFIX`, is why the real line reads with two
-  // spaces before "reveals".
-  const prefix = `${entry.username} ${BATTLEHAND_REVEAL_MESSAGE_PREFIX}`
-  const suffix = BATTLEHAND_REVEAL_MESSAGE_SUFFIX
-  if (!entry.publicLog.startsWith(prefix) || !entry.publicLog.endsWith(suffix)) return null
-  return entry.publicLog.slice(prefix.length, entry.publicLog.length - suffix.length).split(', ')
-}
-
-/**
- * Builds the exact `publicLog` text `revealAndDiscardBattlehand` writes for a
- * given username and (already comma-joined) list of revealed display names.
- * Exported so tests can construct a realistic log line without hand-typing
- * the literal spacing `parseBattlehandRevealLog` depends on.
- */
-export function formatBattlehandRevealPublicLog(username: string, revealedNames: string): string {
-  return `${username} ${BATTLEHAND_REVEAL_MESSAGE_PREFIX}${revealedNames}${BATTLEHAND_REVEAL_MESSAGE_SUFFIX}`
-}
-
-/**
  * Java: `DrawAction.revealAndDiscardBattlehand`.
  *
  * The name overstates it: units are not discarded to `discardedItems`, the
@@ -369,13 +330,16 @@ export function formatBattlehandRevealPublicLog(username: string, revealedNames:
  *
  * Java's own `revealUnitConsumer` never flips the unit's hidden flag either —
  * it only builds the log message — so this was ported the same way at first.
- * But this engine's `revealedFeed` (issue #51, no old-system counterpart)
- * treats `hidden` as the single source of truth for "is this publicly known",
- * and the log line itself already declares these specific units public. Not
- * flipping `hidden` here made the log say one thing and the panel show
- * another, so these units never appeared in it at all. Fixed by revealing the
- * exact battlehand item instances (matched by `id`, unambiguous) alongside
- * emptying the battlehand.
+ * That turns out to be a pre-existing Java bug, not a deliberate design: the
+ * same "public items" set this engine's `revealedFeed` ports faithfully from
+ * `GameAction.getAllRevealedItems` (issue #51) never showed these units
+ * either, in Java or here, even though the log line right next to it already
+ * declares the exact same units public. Fixed by revealing the exact
+ * battlehand item instances (matched by `id`, unambiguous) alongside emptying
+ * the battlehand, so the log and the public-items view agree. See
+ * decisions.md — deliberately not backported to games already affected, since
+ * only the log's free-text names survive for those, not a reliable item
+ * reference.
  */
 export function revealAndDiscardBattlehand(
   state: GameState,
@@ -402,7 +366,7 @@ export function revealAndDiscardBattlehand(
       next,
       player.username,
       player.playerId,
-      `${BATTLEHAND_REVEAL_MESSAGE_PREFIX}${revealed}${BATTLEHAND_REVEAL_MESSAGE_SUFFIX}`,
+      ` reveals ${revealed} from their battlehand`,
     ),
   )
 }

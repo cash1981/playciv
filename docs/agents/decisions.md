@@ -2785,3 +2785,92 @@ turns out to matter in practice, the fix is on the server side
 (`MAX_REVEALED_SIZE` in `packages/server/src/routes/games.ts`) or a redesign
 of this panel to accumulate pages instead of replacing them; neither was
 done here.
+
+## 2026-09-25 — Two Revealed/Discarded panel bugs from a live game report; no migration for the battlehand one
+
+The human, from their own game (`https://playciv.app/game/b87c44725c869148`):
+"The discarded units from both me and the barbarians from the battle doesnt
+show who owned the discarded units," followed by a second, more precise
+repro once the first was investigated and found not to reproduce for a
+player's own manually-discarded unit: "cash reveals Mounted 1.3, Mounted
+3.1, Infantry 2.2 from their battlehand, but I cannot see these in revealed
+and discarded items."
+
+**Bug 1 — the battlehand reveal never actually revealed anything.**
+`DrawAction.revealAndDiscardBattlehand` (Java) only builds the public log
+message via `revealUnitConsumer`, which appends to a `StringBuilder` and
+never calls `setHidden(false)` on the actual units — confirmed by reading
+`DrawAction.java:308-331`, `revealUnitConsumer` at line 58, and
+`DrawActionTest.java:352-375` (which only asserts the battlehand list itself
+empties, never checks `hidden`). Crucially, this was **not** a harmless gap
+in something new: the same public-items set `revealedFeed`/`allRevealedItems`
+ports faithfully from `GameAction.getAllRevealedItems` (`GameAction.java:852-864`,
+already cited in this engine's own `allRevealedItems` doc comment) never
+showed these units in Java either, because it also filters on `!isHidden()`.
+The log line already declared the exact units public; the structured "what's
+publicly known" view simply never agreed, in Java or in the first TS port of
+this action. Corrected by revealing the exact battlehand item instances
+(matched by `id`, taken directly from `player.items` at
+`drawUnitsForBattle`-time so the ids always line up — unambiguous, unlike a
+display name) alongside emptying the battlehand.
+
+A migration to backfill already-affected games was attempted and then
+dropped. The first version matched a log entry's named display names
+(`revealAll()` strings — the log carries no structured item reference for
+this action, unlike a normal `DISCARD`/`REVEAL` entry) against the player's
+current still-hidden units, revealing a name only when the count the log
+named matched the count of still-hidden candidates with that name exactly.
+Read-only review (round 1) found this genuinely unsafe, more so than
+initially scoped: unit display names come from a small pool
+(`gamedata-faf-waw.json` gives the Infantry sheet alone five separate rows
+reading `1.3`), so two same-named hidden units coexisting in one hand is
+routine, not an edge case — and the failure mode is not limited to old saves.
+It can fire on an ordinary post-fix game the moment two same-labelled units
+exist and only one has been revealed: the count-based rule cannot tell "the
+other twin is still there, unrevealed" from "the named unit is gone and a
+different, never-named unit with the same label was drawn later," and reveals
+the wrong card either way, which is a genuine rule-4 hidden-information leak,
+not merely an "under-fixes an ambiguous case" limitation as the migration's
+own comment claimed. Presented with the corrected risk (not just the
+originally-described "two duplicates already in hand at once," but also "the
+named unit was discarded and a fresh duplicate drawn later," which is
+ordinary play), the human chose to drop the migration entirely rather than
+accept it, tighten it further, or ship it as-is. **Forward-only**: a game
+already holding a unit stuck in this state before the fix keeps it hidden.
+Nothing was salvageable without a much larger change (replaying the log
+through the engine to reconstruct historical hand contents, rather than
+inferring from the current hand alone), which was out of scope for what
+started as a small bug report.
+
+**Bug 2 — a discarded barbarian unit shows no owner at all.**
+`DrawAction.discardBarbarians` (Java) nulls a barbarian unit's owner before
+adding it to `discardedItems` (`DrawAction.java:296-306`,
+`unit.setOwnerId(null)`) — the port matches, and this is correct: a barbarian
+unit is not owned by any player. Neither Java nor the old client ever showed
+an owner for anything on this view at all (`old-civ-web`'s
+`revealed.html`/`ReavledController.js` render every category — civs, items,
+great persons, units, tiles, culture cards, huts, villages — with no
+username/owner anywhere), so a blank barbarian row was already faithful to
+the old client. But the new Revealed/Discarded panel (issue #51, no old-system
+counterpart — old-civ-web had no structured public-items *view*, only the raw
+item set Java served into `revealedItems`) shows a "by &lt;username&gt;" tag
+on every other row, so a barbarian's row reads as broken rather than
+intentionally unowned. `revealedFeed` now labels such a row `username:
+'Barbarians'`. `playerId` itself is left `null` — no player identity is
+invented, and the label is generic regardless of which player happened to be
+controlling the barbarians at the time (the human's explicit choice, over
+showing the controlling player as if they owned the unit).
+
+**Consequences.**
+- A unit revealed via `revealAndDiscardBattlehand` now shows the "published"
+  tag in its owner's own hand and loses its individual "Reveal" button
+  (`RevealedPanel`/`GameView.tsx`'s existing rendering, unchanged by this fix
+  — it already treated `hidden: false` as public everywhere). Calling
+  `revealItem` on such a unit afterward now correctly returns
+  `ITEM_ALREADY_REVEALED` instead of silently re-revealing it a second time;
+  previously a battlehand-selected unit could still be individually
+  "revealed" again because `hidden` had never actually flipped.
+- No hidden information is exposed beyond what each fix's own log line, or
+  the pre-existing `discardBarbarians` behaviour, already declared public.
+  Neither engine change adds a field to `RevealedEntry`, a server route, or
+  any client-facing type.

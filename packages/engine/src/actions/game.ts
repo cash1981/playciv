@@ -272,9 +272,14 @@ export interface RevealedEntry {
   readonly item: Item
   /**
    * Java: `Item.ownerId` — the revealing/owning player, kept even once
-   * discarded. `null` only for a discarded barbarian unit (`ownerId` is
-   * deliberately cleared in `discardBarbarians`, matching Java) — `username`
-   * below reads `'Barbarians'` for that case rather than inventing a player.
+   * discarded. Today this is seeded `null` only for a discarded barbarian
+   * unit (`discardBarbarians` deliberately clears `ownerId`, matching Java);
+   * `username` below reads `'Barbarians'` for that case rather than inventing
+   * a player. Not an absolute invariant — the log-enrichment step a few lines
+   * down can still backfill a real `playerId` onto such a row from an
+   * unrelated `REVEAL`/`DISCARD` entry sharing the same `itemNumber` (e.g. a
+   * discard, reshuffle, and later barbarian re-draw of the same slot) —
+   * pre-existing behaviour, unchanged here.
    */
   readonly playerId: string | null
   readonly username: string | null

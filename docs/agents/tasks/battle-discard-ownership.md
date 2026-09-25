@@ -18,9 +18,10 @@ human's own game (`https://playciv.app/game/b87c44725c869148`):
    against the barbarians ends) shows up in the panel, but with no "by X" tag,
    so it is indistinguishable from a blank/unknown entry.
 
-Both should be fixed going forward, and — as much as can be done safely
-without risking a hidden-information leak — for games that already have
-affected data.
+Both are fixed going forward. A migration to backfill already-affected games
+for bug 1 was attempted, found genuinely unsafe on review (not just for old
+saves — it could misfire on an ordinary new game too), and dropped at the
+human's choice; see Approach and `decisions.md`.
 
 ## Why
 
@@ -33,9 +34,14 @@ revealed and discarded items."
 Confirmed with the human:
 - Bug 1 (battlehand): fix it (agreed it is a real bug, not an old-system
   quirk to preserve).
-- Bug 1, existing games: attempt a migration, accepting the small
-  documented risk below (a specific, low-probability false-positive reveal
-  scenario) rather than leaving old data unfixed.
+- Bug 1, existing games: first agreed to attempt a migration, accepting a
+  documented risk. Read-only review found the actual risk broader than
+  described — not just two duplicate-named hidden units coexisting, but the
+  ordinary case of a named unit later being discarded and a fresh duplicate
+  drawn afterward, which the migration could not tell apart from the
+  original and would misidentify even in new, post-fix games. Presented with
+  the corrected risk, the human chose to drop the migration entirely rather
+  than tighten it further or ship it as-is.
 - Bug 2 (barbarian ownership): show a generic "Barbarians" label rather than
   the player who happened to be controlling them, since barbarians are not
   actually owned by any player.
@@ -55,13 +61,7 @@ Confirmed with the human:
   `username: 'Barbarians'`, instead of leaving `username: null`. `playerId`
   stays `null` — no synthetic player identity is invented, only a display
   label.
-- `packages/engine/src/migrate.ts`: a new step in `migrateGameState` that
-  retroactively reveals (`hidden: false`) units named in an existing
-  `"<username> reveals <names> from their battlehand"` public log line, for
-  hidden unit items still identifiable in that player's hand — see Approach
-  for the exact-count-match safety rule. Runs on every read, like every other
-  migration in this file; no separate script.
-- Tests for all three (see Acceptance criteria).
+- Tests for both (see Acceptance criteria).
 
 **Out:**
 
@@ -75,29 +75,39 @@ Confirmed with the human:
 - No UI/`RevealedPanel.tsx` change — `RevealedRow` already renders
   `by {username}` whenever `username !== null`, so both fixes are entirely
   visible through the existing rendering.
+- No migration. `packages/engine/src/migrate.ts` is untouched: a game already
+  holding a unit stuck hidden from before this fix stays that way. See
+  Approach and `decisions.md`, 2026-09-25, for why a name-matching migration
+  was attempted and abandoned.
 
 ## Reference
 
-No old-system rule is being changed. Investigated both old repos:
+**Correction from round-1 review:** an earlier draft of this brief claimed
+`revealedFeed` had no old-system counterpart at all. That is wrong.
+`allRevealedItems` (`packages/engine/src/actions/game.ts`) already ports
+`GameAction.getAllRevealedItems` (`GameAction.java:852-864`) verbatim —
+discarded items plus every player's non-hidden hand items — and
+`revealedFeed` is seeded from exactly that set. So bug 1 is not a gap in
+something new; it is **an old-system bug being corrected**:
 
-- `old-civ-rest`'s `DrawAction.discardBarbarians` also nulls the unit's owner
-  before adding to `discardedItems` (`unit.setOwnerId(null)`), and its
-  `revealAndDiscardUnits` (called by `revealAndDiscardBattlehand`) only
-  appends to a log-message `StringBuilder` — it never flips `Unit.hidden`
-  either. Both TS behaviours are faithful ports.
-- `old-civ-web`'s `revealed.html` shows no owner/username for anything, in
-  any category — there was no old "Barbarians" pseudo-owner label to port,
-  and no structured "is this publicly known" view at all comparable to the
-  new `revealedFeed`/`RevealedPanel` (issue #51, confirmed already with no
-  precedent when issue #166 was investigated).
-
-Both bugs exist only because `revealedFeed` (new, issue #51) invented a
-structured invariant — "shows exactly what is publicly known" via
-`item.hidden` and `item.ownerId` — that the two Java actions above were never
-written to keep consistent, because Java had no equivalent read model
-depending on those fields for this purpose. Fixing them makes the new panel
-correctly implement its own already-stated promise; it does not restore or
-contradict an old rule.
+- `old-civ-rest`'s `DrawAction.revealAndDiscardBattlehand`
+  (`DrawAction.java:308-331`) calls `revealAndDiscardUnits`, whose
+  `revealUnitConsumer` (line 58) only appends to a log-message
+  `StringBuilder` — it never calls `setHidden(false)` on the actual units.
+  `DrawActionTest.java:352-375` only asserts the battlehand list itself
+  empties; it never checks `hidden`. Since `getAllRevealedItems` also filters
+  on `!isHidden()`, these units were invisible to Java's own public-items
+  view too, despite the log line right next to it declaring them public.
+  Corrected here; not backported to old data (see Scope/Approach — the
+  migration that would have done this was abandoned).
+- `old-civ-rest`'s `DrawAction.discardBarbarians` (`DrawAction.java:296-306`)
+  nulls the unit's owner before adding it to `discardedItems`
+  (`unit.setOwnerId(null)`) — correct, faithfully ported, and *not* changed
+  by this fix. `old-civ-web`'s `revealed.html`/`ReavledController.js` show no
+  owner/username for anything, in any category, so there is no old
+  "Barbarians" pseudo-owner label to port from — that part of bug 2 is a new
+  display choice, not a correction of an old rule. It is recorded as a
+  "Deliberate improvement" in README, not a "Known difference".
 
 ## Approach
 
@@ -109,31 +119,30 @@ clearing it, and map `player.items` to flip `hidden: false` on any item whose
 `id` (unique) rather than by display name avoids any ambiguity for the
 forward-fix path.
 
-### Bug 1 — migration for existing games
+### Bug 1 — migration for existing games: attempted, abandoned
 
-`migrateGameState` runs on every read (per its own doc comment), so this is a
-read-time fix with no separate script, consistent with every other migration
-in that file.
+A first version matched a `state.log` entry's `publicLog` text (the literal
+`` `${username} reveals ${names} from their battlehand` `` template) to get
+the `revealAll()` display names it named, then resolved a name to a hidden
+unit item in the acting player's current hand only when the count of times
+that name appeared in the log entry exactly matched the count of still-hidden
+candidates with that name in the hand — otherwise leaving every item with
+that name untouched.
 
-For each `state.log` entry whose `publicLog` matches exactly
-`` `${entry.username} reveals ${namesPart} from their battlehand` `` (the
-literal template `revealAndDiscardBattlehand` writes), split `namesPart` on
-`', '` to get the list of `revealAll()` display names it named, and look up
-the acting player via `entry.playerId`.
-
-**Safety rule (the small, documented risk the human accepted):** display
-names are not unique identifiers — two hidden units of the same type/level
-can coexist in one hand. So for each distinct name in that log entry's list,
-compare two counts: how many times the name appears in *this event's* list,
-versus how many still-hidden unit items with that exact `revealAll()` name
-exist in the player's current hand. Only reveal (all of) them when the two
-counts match exactly; otherwise leave every item with that name untouched for
-that entry. This never reveals a card that cannot be positively identified,
-at the cost of leaving a genuinely-ambiguous historical case still hidden
-(logged as a residual limitation in `decisions.md`, not solved here).
-
-Iterate `state.log` in its existing (chronological) order so an earlner event
-cannot double-claim a unit a later event also names.
+Round-1 review found this unsafe beyond what was scoped: the count rule
+compares against the *current* hand, which cannot distinguish "the other
+same-named unit is still there, unrevealed" from "the named unit left the
+hand since (discarded, looted, reshuffled) and a different, never-named unit
+with the same display name was drawn afterward" — an ordinary sequence of
+play, not a rare coincidence, and not limited to old saves: it could
+misidentify a unit in a brand-new, post-fix game the moment two same-labelled
+units exist and only one has actually been revealed. That is a genuine
+hidden-information leak (AGENTS.md rule 4), not the narrower "leaves an
+ambiguous case unfixed" trade-off originally described to the human. Given
+the corrected picture, the human chose to drop the migration rather than
+tighten it (e.g. cross-checking the log for a later re-draw of the same
+sheet) or ship it as-is — see `decisions.md`. `packages/engine/src/migrate.ts`
+is untouched by the final diff.
 
 ### Bug 2 — "Barbarians" label
 
@@ -148,43 +157,38 @@ keeps `username: null` exactly as before.
 
 - `packages/engine/src/actions/draw.ts`
 - `packages/engine/src/actions/game.ts`
-- `packages/engine/src/migrate.ts`
 - `packages/engine/test/revealed-feed.test.ts`
-- `packages/engine/test/migrate.test.ts` (or wherever existing migration
-  tests live — confirm exact file before editing)
-- `packages/engine/test/draw.test.ts` (or wherever `revealAndDiscardBattlehand`
-  is already tested — confirm before editing)
+- `packages/engine/test/draw-action.test.ts`
+- `README.md`
+- `docs/agents/decisions.md`
 
 ## Acceptance criteria
 
-- [ ] A unit revealed via `revealAndDiscardBattlehand` is `hidden: false`
+- [x] A unit revealed via `revealAndDiscardBattlehand` is `hidden: false`
       afterward and appears in `revealedFeed` with `revealed: true`.
-- [ ] A discarded barbarian unit's `revealedFeed` entry has `username:
+- [x] A discarded barbarian unit's `revealedFeed` entry has `username:
       'Barbarians'` and `playerId: null`.
-- [ ] The existing test documenting "none of the discarded barbarians get
+- [x] The existing test documenting "none of the discarded barbarians get
       enriched" (ordering test, `revealed-feed.test.ts`) still passes
       unchanged — this fix only changes the derived `username`, not
       `playerId`/`createdAt`/`logOrder`.
-- [ ] Migration test: a hand-built old-shaped `GameState` with a
-      battlehand-reveal log line and a matching still-hidden unit gets it
-      revealed by `migrateGameState`.
-- [ ] Migration test: the same, but with two hidden units sharing the exact
-      display name where the log only named one — `migrateGameState` leaves
-      both hidden (the safety rule proven, not just asserted in a comment).
-- [ ] No hidden-information regression elsewhere: a hidden item never named
-      in any battlehand-reveal log line stays hidden after migration.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Read-only `reviewer` pass, run to zero findings.
-- [ ] Read-only `rules-checker` pass (this touches a projection and a
-      migration), run to zero findings.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (559
+      engine, 208 server, 245 web tests).
+- [ ] Read-only `reviewer` pass, run to zero findings. Round 1 found the
+      migration unsafe (dropped, see above) plus a missing `decisions.md`/
+      README write-up (added); round 2 pending on the updated diff.
+- [x] Read-only `rules-checker` pass — round 1 confirmed both fixes correct
+      an old-system bug / add a new display choice rather than contradicting
+      a real old rule, and flagged the missing write-up (now added) and the
+      brief's own wrong "no old precedent" claim (now corrected above).
 - [ ] Verified in the browser against the human's real game
       (`https://playciv.app/game/b87c44725c869148`) once deployed: the
-      barbarian-discarded units show "by Barbarians", and (if that game has
-      no further battlehand-reveal event to check live) at least the
-      migration test stands in for the "existing games" criterion.
+      barbarian-discarded units show "by Barbarians". The battlehand fix
+      itself cannot be re-verified live on that specific game without a new
+      battlehand-reveal event, since no migration restores the one already
+      in its history; covered instead by the engine tests.
 
 ## Open questions
 
-None outstanding — both the battlehand fix-forward decision and the
-migration-vs-not decision (with its residual risk) were confirmed with the
-human before starting.
+None outstanding. The migration-vs-not decision was revisited once, with
+corrected information from round-1 review, and resolved: no migration.
