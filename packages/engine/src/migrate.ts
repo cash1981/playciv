@@ -10,10 +10,29 @@ import type { ArenaUnit, Battle } from './battle.js'
 import type { Board, BoardHistoryEntry, BoardPiece } from './board.js'
 import { createBoard, createBoardForPlayers } from './board.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
+import type { SocialPolicyItem } from './item.js'
 import type { GameState, Playerhand, PlayerStats } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
 import { migratePlayerTurn } from './turn.js'
+
+/**
+ * Issue #175: a game saved before `gamedata.ts` started correcting the
+ * `Military Tradition` / `Pacifism` flipside pair still carries the old,
+ * one-way value in its own `socialPolicies` — the game's catalogue and any
+ * player's already-chosen copy both freeze whatever `readGameData` returned
+ * when the card was dealt. Corrected here too, so an existing game does not
+ * need a fresh deal to stop reproducing the bug. See decisions.md,
+ * 2026-09-25.
+ */
+const correctSocialPolicyFlipsides = (
+  policies: readonly SocialPolicyItem[],
+): readonly SocialPolicyItem[] =>
+  policies.map((policy) =>
+    policy.name === 'Military Tradition' && policy.flipside === 'Patronage'
+      ? { ...policy, flipside: 'Pacifism' }
+      : policy,
+  )
 
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
@@ -27,10 +46,13 @@ type MaybeOlder = Omit<
     >
   >
 
-/** A hand from before the status board, governments (issue #43) or the tech
- *  pyramid placements existed. */
-type MaybeOlderPlayerhand = Omit<Playerhand, 'stats' | 'government' | 'pyramidPlacements'> &
-  Partial<Pick<Playerhand, 'stats' | 'government' | 'pyramidPlacements'>>
+/** A hand from before the status board, governments (issue #43), the tech
+ *  pyramid placements, or its own `socialPolicies` array existed. */
+type MaybeOlderPlayerhand = Omit<
+  Playerhand,
+  'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies'
+> &
+  Partial<Pick<Playerhand, 'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies'>>
 
 /**
  * Fills in the status board and, since issue #102, normalises Movement to its
@@ -70,6 +92,7 @@ const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   stats: normalizeStats(player.stats),
   government: player.government ?? DEFAULT_GOVERNMENT,
   pyramidPlacements: player.pyramidPlacements ?? [],
+  socialPolicies: correctSocialPolicyFlipsides(player.socialPolicies ?? []),
 })
 
 /** A board from before the player areas, the history or the shapes existed. */
@@ -170,6 +193,7 @@ export function migrateGameState(state: GameState): GameState {
             startSlots: board.startSlots ?? shapeSource.startSlots,
             history: board.history ?? historyForImportedPieces(board.pieces),
           },
+    socialPolicies: correctSocialPolicyFlipsides(state.socialPolicies),
     withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withPlayerDefaults),
     publicTurns: Object.fromEntries(
       Object.entries(older.publicTurns ?? {}).map(([key, turn]) => [key, migratePlayerTurn(turn)]),

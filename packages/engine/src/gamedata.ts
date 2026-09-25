@@ -355,7 +355,17 @@ export function readDeck(data: GameDataFile, rng: Rng, startCounter: number): De
       kind: 'socialpolicy',
       name,
       type: null,
-      flipside: spFlipsides[i] ?? null,
+      // Issue #175: the source spreadsheet has `Military Tradition` pointing
+      // at `Patronage` instead of back at `Pacifism`, the only one of the
+      // four flipside pairs that isn't symmetric — the two are opposite
+      // sides of one physical card, same as the other three pairs. See
+      // decisions.md, 2026-09-25. Corrected here rather than in the
+      // generated JSON, so re-running `pnpm gamedata` cannot silently
+      // reintroduce it.
+      flipside:
+        name === 'Military Tradition' && spFlipsides[i] === 'Patronage'
+          ? 'Pacifism'
+          : (spFlipsides[i] ?? null),
     })),
   )
 

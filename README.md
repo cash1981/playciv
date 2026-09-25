@@ -420,6 +420,15 @@ artwork under `Civilization/WaW/`, which is all lower case. See
 `docs/agents/decisions.md`. The `Expansionsim` spreadsheet typo is kept in the
 data; only the on-disk file is aliased.
 
+**One social policy flipside is corrected, unlike the `Expansionsim` typo
+above.** The sheet had `Military Tradition` pointing at `Patronage` instead of
+back at `Pacifism` — the only one of the four flipside pairs that wasn't
+symmetric, and unlike `Expansionsim` this typo changed rejection behaviour
+(issue #175: `Military Tradition` stayed choosable after `Pacifism`, when the
+two are opposite sides of one physical card). Corrected in `gamedata.ts` at
+parse time, plus a migration for games saved with the old value. See
+`docs/agents/decisions.md`, 2026-09-25.
+
 **Double spaces in the log are kept.** Java wrote
 `username + " drew " + " - " + …`. The texts are comparable data and the old
 tests match on them.
