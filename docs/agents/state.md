@@ -13,11 +13,36 @@ _Last updated: 2026-09-25_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 556 engine, 208 server, 245 web on `feat/issue-166-revealed-discarded-pager` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 559 engine, 208 server, 245 web on `fix/battle-discard-ownership` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Two Revealed/Discarded panel bugs from a live game report: a battlehand
+  reveal that never actually revealed anything, and a barbarian discard
+  with no owner shown.** `revealAndDiscardBattlehand` logged a public line
+  naming specific units as revealed but never flipped `hidden: false` on
+  them — a real Java bug too (`GameAction.getAllRevealedItems`, the direct
+  ancestor of `revealedFeed`, filters on the same flag Java's own
+  `revealUnitConsumer` never touched), not a design choice; fixed by
+  revealing the exact battlehand item instances by `id`. Separately,
+  `revealedFeed` now labels a discarded barbarian unit `'Barbarians'`
+  instead of showing no owner at all (`playerId` stays `null`; no player
+  identity invented) — a new display choice, since neither Java nor
+  `old-civ-web` ever showed owner attribution for anything. Both are
+  forward-only: a migration to backfill already-affected games was
+  attempted, found genuinely unsafe on review (its name-matching could
+  misidentify a same-named unit even in a brand-new post-fix game, not only
+  old saves), and dropped at the human's choice once shown the corrected
+  risk. See the 2026-09-25 decisions.md entry and the README's "Known
+  differences"/"Deliberate improvements" sections. Two review rounds (round
+  1: the migration's real risk, a missing decisions.md/README write-up, an
+  overstated doc comment; round 2: approved with nits, both applied) plus a
+  `rules-checker` pass that caught the brief's own wrong claim that
+  `revealedFeed` had no old-system counterpart. 559 engine tests (+3). No
+  server or web change needed — `RevealedRow` already renders whatever
+  `revealedFeed` returns.
 
 - **Issue #166: the Revealed/Discarded panel loads 6 items at first, then 5
   more per "Load more" click.** Replaced the fixed-size-20 Previous/Next

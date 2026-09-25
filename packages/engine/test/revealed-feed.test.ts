@@ -212,4 +212,25 @@ describe('revealedFeed', () => {
     // Seeded in barbarians[] order (index 0..n-1); newest-first must reverse it.
     expect(feedOrder).toEqual([...barbarians].reverse().map((b) => b.itemNumber))
   })
+
+  it('labels a discarded barbarian unit "Barbarians" rather than leaving it unattributed', () => {
+    // discardBarbarians deliberately clears ownerId (matching Java), and its
+    // log line names no single item, so the row can never be enriched with a
+    // real playerId. A generic label beats showing nothing at all, but no
+    // player identity is invented: playerId stays null.
+    let state = firstCivGame()
+    state = unwrap(drawBarbarians(state, CASH1981))
+    const barbarians = findPlayer(state, CASH1981)!.barbarians
+    state = unwrap(discardBarbarians(state, CASH1981))
+
+    const rows = revealedFeed(state).filter((entry) =>
+      barbarians.some((b) => b.itemNumber === entry.item.itemNumber),
+    )
+    expect(rows.length).toBe(barbarians.length)
+    for (const row of rows) {
+      expect(row.playerId).toBeNull()
+      expect(row.username).toBe('Barbarians')
+      expect(row.discarded).toBe(true)
+    }
+  })
 })
