@@ -119,6 +119,17 @@ describe('social policies', () => {
     expect(game.socialPolicies).toHaveLength(8)
     expect(game.socialPolicies.every((policy) => policy.flipside !== null)).toBe(true)
   })
+
+  it('every flipside pair points back at each other (issue #175)', () => {
+    const byName = new Map(game.socialPolicies.map((policy) => [policy.name, policy]))
+    for (const policy of game.socialPolicies) {
+      const partner = byName.get(policy.flipside ?? '')
+      expect(partner, `${policy.name} names a flipside that is not on the sheet`).toBeDefined()
+      expect(partner?.flipside, `${policy.name} <-> ${policy.flipside} is not symmetric`).toBe(
+        policy.name,
+      )
+    }
+  })
 })
 
 describe('column pairing', () => {

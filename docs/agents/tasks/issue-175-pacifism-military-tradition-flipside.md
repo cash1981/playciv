@@ -21,15 +21,24 @@ physical card.
 
 **In:**
 
-- Correct the `Military Tradition` row's flipside value in
-  `packages/engine/data/gamedata-faf-waw.json` from `Patronage` to `Pacifism`,
-  so the pair is symmetric like the other three (`Rationalism` ↔ `Patronage`,
-  `Natural Religion` ↔ `Organized Religion`, `Expansionsim` ↔
-  `Urban Development`).
+- Correct `Military Tradition`'s flipside from `Patronage` to `Pacifism` at
+  parse time in `packages/engine/src/gamedata.ts` (not by hand-editing the
+  generated JSON — see Approach), so the pair is symmetric like the other
+  three (`Rationalism` ↔ `Patronage`, `Natural Religion` ↔
+  `Organized Religion`, `Expansionsim` ↔ `Urban Development`).
+- Migrate existing saved games in `packages/engine/src/migrate.ts`: a game
+  created before this fix froze the old value into its own `socialPolicies`
+  catalogue and into any player's already-chosen copy, so those need the same
+  correction on read.
 - Update `SocialPolicyPanel.test.tsx`'s `CATALOGUE` fixture and the test that
   asserted the old one-way behaviour, so it now proves the pair is symmetric.
+- Add a `gamedata.test.ts` test over the real parsed catalogue asserting all
+  eight cards pair up symmetrically, so a regression here fails a test that
+  isn't just a hand-written fixture.
 - Record the correction in `docs/agents/decisions.md`, since it reverses the
-  2026-09-22 decision that read this asymmetry as intentional.
+  2026-09-22 decision that read this asymmetry as intentional, plus a short
+  note in `README.md`'s "Known differences from Java" and a correction to a
+  now-stale claim in `docs/agents/state.md`'s issue #101 entry.
 
 **Out:**
 
@@ -64,29 +73,43 @@ the data and that entry's conclusion.
 
 ## Approach
 
-- Edit the two affected cells in `gamedata-faf-waw.json` directly (the file
-  is committed and is what the engine actually reads at runtime; the source
-  `.xlsx` lives in the gitignored `old-civ-rest` reference copy and isn't
-  shared, so fixing only there would not reach anyone else's checkout).
-- No engine code changes: `PlayerAction.chooseSocialPolicy`'s TS port and
+- Leave `gamedata-faf-waw.json` exactly as `pnpm gamedata` produces it — its
+  own header says not to hand-edit it, and re-running the generator against
+  the (still-typo'd) source spreadsheet would silently revert a hand edit.
+  Correct the value where the sheet is parsed into typed items instead
+  (`gamedata.ts`), so it survives regeneration.
+- Add a migration in `migrate.ts` (same pattern as its other backfills) so a
+  game saved before this fix — including whatever game issue #175 was filed
+  from — is corrected on read, not only a freshly created one.
+- No other engine code changes: `chooseSocialPolicy`'s TS port and
   `policyUnavailableReason` in `SocialPolicyPanel.tsx` already do the right
   check; they were just fed a bad value for one row.
-- Update the `SocialPolicyPanel.test.tsx` fixture and its directional test to
-  match.
+- Update the `SocialPolicyPanel.test.tsx` fixture and its directional tests to
+  match, and add a `gamedata.test.ts` test over the real parsed data.
 
 ## Claimed paths
 
-- `packages/engine/data/gamedata-faf-waw.json` (shared resource — claiming it)
+- `packages/engine/src/gamedata.ts`
+- `packages/engine/src/migrate.ts`
+- `packages/engine/test/gamedata.test.ts`
+- `packages/engine/test/migrate-social-policy.test.ts` (new)
+- `packages/web/src/views/SocialPolicyPanel.tsx` (comment only)
 - `packages/web/src/views/SocialPolicyPanel.test.tsx`
 - `docs/agents/decisions.md` (append only)
+- `docs/agents/state.md`
+- `README.md`
 
 ## Acceptance criteria
 
-- [ ] `Military Tradition`'s flipside in `gamedata-faf-waw.json` is `Pacifism`
-- [ ] `Pacifism`'s flipside is still `Military Tradition` (unchanged)
+- [ ] `game.socialPolicies` (the real parsed catalogue) has `Military
+      Tradition` → `Pacifism` and `Pacifism` → `Military Tradition`
+      (unchanged)
+- [ ] A game saved with the old `Patronage` value is corrected by
+      `migrateGameState`, both the catalogue and an already-chosen card
 - [ ] Picker: choosing `Pacifism` greys out `Military Tradition`, and vice versa
 - [ ] `SocialPolicyPanel.test.tsx` reflects the symmetric pair, no test asserts
       the old one-way behaviour
+- [ ] `gamedata.test.ts` fails if a future edit reintroduces an asymmetric pair
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
 - [ ] Hidden information: n/a — no projection or hand data touched
 - [ ] Verified in the browser: choose `Pacifism` for the signed-in player, and
@@ -96,4 +119,7 @@ the data and that entry's conclusion.
 ## Open questions
 
 None — the fix is narrow and the human filed the issue describing the exact
-symptom to correct.
+symptom to correct. The review gate additionally found: existing saved games
+weren't covered (addressed with the migration above), and hand-editing the
+generated JSON was unguarded against regeneration (addressed by moving the
+fix into `gamedata.ts`).

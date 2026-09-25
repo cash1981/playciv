@@ -19,6 +19,18 @@ _Last updated: 2026-09-24_
 
 ## Done
 
+- **Issue #175: Military Tradition's flipside was a data typo, not a one-way
+  design.** The source spreadsheet had `Military Tradition` pointing at
+  `Patronage` instead of back at `Pacifism`, the only one of the four
+  social-policy flipside pairs that wasn't symmetric. Corrected at parse time
+  in `gamedata.ts` (not by hand-editing the generated JSON, so re-running
+  `pnpm gamedata` cannot silently reintroduce it), with a real-data symmetry
+  test in `gamedata.test.ts`. `migrateGameState` also corrects any game saved
+  before the fix, both the catalogue and a player's already-chosen copy, so
+  existing games stop reproducing the bug without a fresh deal. See
+  `decisions.md`, 2026-09-25, which supersedes the 2026-09-22 entry that had
+  read this exact asymmetry as intentional.
+
 - **Issue #171: the reveal flow was already correct; the real gap was
   migrating a pre-shape board.** A new end-to-end test
   (`board-tiles.test.ts`, `draw` → `revealItem` → `placeStartingTile` for
@@ -451,9 +463,11 @@ _Last updated: 2026-09-24_
   the engine's `SOCIAL_POLICY_ALREADY_CHOSEN` / `SOCIAL_POLICY_FLIPSIDE_TAKEN`
   rejection is visible before the click. The client mirrors the engine's
   directional flipside check exactly (Java `PlayerAction.chooseSocialPolicy`),
-  including the one-way `Military Tradition → Patronage` asymmetry, so nothing
-  the server would accept is greyed out and nothing it would reject stays
-  selectable. The Government reference was factored into shared
+  so nothing the server would accept is greyed out and nothing it would reject
+  stays selectable — at the time this landed, that included a one-way
+  `Military Tradition → Patronage` asymmetry, later found to be a data typo
+  and corrected (issue #175; all four pairs are symmetric now). The Government
+  reference was factored into shared
   `ReferenceDialog` / `ReferenceCard` with generic `reference-*` CSS; its only
   behaviour change is that focus returns to the `?` on close. Client-only: no
   engine, server or projection change — the reference renders the already-public

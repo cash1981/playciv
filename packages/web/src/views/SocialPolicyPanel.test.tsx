@@ -283,7 +283,7 @@ describe('SocialPolicyPanel availability', () => {
     expect(message).toContain('Patronage (flipside of Rationalism)')
   })
 
-  it('blocks Military Tradition once Pacifism is chosen, and vice versa (issue #175)', async () => {
+  it('blocks Military Tradition once Pacifism is chosen (issue #175)', async () => {
     renderPanel({
       catalogue: CATALOGUE,
       policiesChosen: [policy('Pacifism', 'Military Tradition')],
@@ -298,6 +298,21 @@ describe('SocialPolicyPanel availability', () => {
     expect(byLabel.get('Military Tradition — flipside of Pacifism')).toBe(true)
     // Unrelated pairs stay unaffected.
     expect(byLabel.get('Patronage')).toBe(false)
+  })
+
+  it('blocks Pacifism once Military Tradition is chosen (the other direction of the same pair)', async () => {
+    renderPanel({
+      catalogue: CATALOGUE,
+      policiesChosen: [policy('Military Tradition', 'Pacifism')],
+    })
+    await screen.findByRole('option', { name: 'Military Tradition — already chosen' })
+
+    const select = screen.getByRole('combobox', {
+      name: 'Choose a social policy',
+    }) as HTMLSelectElement
+    const byLabel = new Map([...select.options].map((option) => [option.textContent, option.disabled]))
+    expect(byLabel.get('Military Tradition — already chosen')).toBe(true)
+    expect(byLabel.get('Pacifism — flipside of Military Tradition')).toBe(true)
   })
 
   it('chooses an available policy through the shared runner', async () => {

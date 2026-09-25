@@ -95,8 +95,10 @@ export function SocialPolicyPanel({
    * `chooseSocialPolicy` in the engine exactly — a policy already held, or one
    * whose own flipside is held, is rejected there (Java:
    * `PlayerAction.chooseSocialPolicy`). The comparison is deliberately
-   * directional, like the engine's: the candidate's `flipside` is checked, not
-   * "same pair both ways", so a card the engine would accept stays selectable.
+   * directional, like the engine's: only the candidate's own `flipside` is
+   * checked, not "same pair both ways". In practice all four pairs are
+   * symmetric (issue #175 fixed the one that wasn't), so this only matters if
+   * the sheet ever adds an asymmetric pair again.
    */
   const chosenPolicyNames = new Set(yourPolicies.map((policy) => policy.name))
   function policyUnavailableReason(policy: SocialPolicyItem): string | null {

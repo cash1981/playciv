@@ -17,13 +17,20 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** Claude (Sonnet 5)
 - **Branch:** `feat/issue-175-pacifism-military-tradition-flipside`
 - **Brief:** `docs/agents/tasks/issue-175-pacifism-military-tradition-flipside.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
-  - `packages/engine/data/gamedata-faf-waw.json`
+  - `packages/engine/src/gamedata.ts`
+  - `packages/engine/src/migrate.ts`
+  - `packages/engine/test/gamedata.test.ts`
+  - `packages/engine/test/migrate-social-policy.test.ts`
+  - `packages/web/src/views/SocialPolicyPanel.tsx`
   - `packages/web/src/views/SocialPolicyPanel.test.tsx`
   - `docs/agents/decisions.md`
-- **Notes:** one-cell data fix (Military Tradition's flipside), no engine
-  logic change; see the brief for why this reverses the 2026-09-22 decision.
+  - `docs/agents/state.md`
+  - `README.md`
+- **Notes:** flipside data typo corrected at parse time (not a hand-edit of
+  the generated JSON) plus a migration for existing saved games; see the
+  brief for why this reverses the 2026-09-22 decision.
 
 ---
 
@@ -55,7 +62,7 @@ at a time. Claim them by name.
 | --- | --- |
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
-| `packages/engine/data/gamedata-faf-waw.json` | issue-175-pacifism-military-tradition-flipside |
+| `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
 | `packages/web/src/lib/api.ts` | free |
 
