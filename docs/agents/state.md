@@ -13,7 +13,7 @@ _Last updated: 2026-09-25_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 548 engine, 208 server, 222 web on `feat/issue-174-board-undo-redo` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 548 engine, 208 server, 223 web on `feat/draw-before-chat-log` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -70,6 +70,28 @@ _Last updated: 2026-09-25_
   900px)` block in `styles.css` that never closes, silently scoping a large
   chunk of item-card CSS to under-900px viewports only. Branch
   `feat/issue-177-176-menu-landscape`.
+- **The turn phase heading row no longer overflows the page at phone width.**
+  Found incidentally while browser-verifying an unrelated branch: `.turn-phase-
+  heading` (`TurnPanel.css`) — the row holding a phase's label, save-status
+  badge, Save button and Reveal/Save & reveal/Revealed button — was
+  `display: flex` with no `flex-wrap`, so at 375px width it overflowed the
+  page horizontally (`document.documentElement.scrollWidth` 428 vs
+  `clientWidth` 375). One-line fix: `flex-wrap: wrap`. Confirmed live
+  (`scrollWidth` back to matching `clientWidth`, the row visibly wrapping for
+  a long phase label and staying single-line for a short one) and read-only
+  reviewed with no findings above a nit (wrap is a no-op wherever content
+  already fits; the opponent read-only view and the private-log heading,
+  which reuse the same class, both benefit the same way; no RTL/long-content
+  concern applies). Branch `fix/turnpanel-reveal-button-overflow`.
+- **Draw is the first panel after the board.** The existing Draw panel now
+  appears above the responsive Log/Chat pair; Hand and every later panel keep
+  their previous order. A `GameView` regression test pins the board, Draw,
+  Log/Chat and Hand composition directly. Read-only review approved after the
+  first round required this stronger composition-level test. Full checks pass
+  (548 engine, 208 server, 223 web tests), and a local spectator browser pass
+  confirmed Draw above Log after the board. Branch
+  `feat/draw-before-chat-log`.
+
 - **Item card styles no longer inherit the 900px breakpoint.** Closed the
   navigation/touch-target media query immediately after `.board-palette`,
   keeping both board layout rules scoped to 900px while restoring the item
