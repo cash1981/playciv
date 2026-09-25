@@ -394,8 +394,11 @@ describe('battle hand', () => {
     expect(revealedUnits).toHaveLength(3)
     expect(revealedUnits.every((item) => !item.hidden)).toBe(true)
 
-    const feedIds = new Set(revealedFeed(state).map((entry) => entry.item.id))
-    for (const id of battlehandIds) expect(feedIds.has(id)).toBe(true)
+    const feed = revealedFeed(state)
+    const feedById = new Map(feed.map((entry) => [entry.item.id, entry]))
+    for (const id of battlehandIds) {
+      expect(feedById.get(id)?.revealed).toBe(true)
+    }
   })
 
   it('does not reveal a unit that was never drawn into the battlehand', () => {
@@ -405,13 +408,19 @@ describe('battle hand', () => {
     }
     state = unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 2 }))
     const battlehandIds = new Set(findPlayer(state, CASH1981)!.battlehand.map((u) => u.id))
+    const allUnitIds = new Set(handOf(state, CASH1981).filter(isUnit).map((item) => item.id))
+    expect(allUnitIds.size).toBe(4)
 
     state = unwrap(revealAndDiscardBattlehand(state, CASH1981))
 
     const stillHidden = handOf(state, CASH1981).filter(
       (item) => isUnit(item) && item.hidden && !battlehandIds.has(item.id),
     )
-    expect(stillHidden.length).toBeGreaterThan(0)
+    // Exactly the two units never drawn into the battlehand — no more, no less.
+    expect(stillHidden.map((item) => item.id).sort()).toEqual(
+      [...allUnitIds].filter((id) => !battlehandIds.has(id)).sort(),
+    )
+    expect(stillHidden).toHaveLength(2)
   })
 })
 

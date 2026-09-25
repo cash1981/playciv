@@ -3,7 +3,7 @@
 - **Slug:** `battle-discard-ownership`
 - **Branch:** `fix/battle-discard-ownership`
 - **Owner:** Claude (orchestrator)
-- **Status:** draft
+- **Status:** done
 
 ## Goal
 
@@ -174,9 +174,10 @@ keeps `username: null` exactly as before.
       `playerId`/`createdAt`/`logOrder`.
 - [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (559
       engine, 208 server, 245 web tests).
-- [ ] Read-only `reviewer` pass, run to zero findings. Round 1 found the
+- [x] Read-only `reviewer` pass, run to zero findings. Round 1 found the
       migration unsafe (dropped, see above) plus a missing `decisions.md`/
-      README write-up (added); round 2 pending on the updated diff.
+      README write-up (added). Round 2: approved with nits (a README
+      wording fix and two test-strength improvements, both applied).
 - [x] Read-only `rules-checker` pass — round 1 confirmed both fixes correct
       an old-system bug / add a new display choice rather than contradicting
       a real old rule, and flagged the missing write-up (now added) and the

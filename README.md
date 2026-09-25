@@ -449,9 +449,11 @@ tests match on them.
 `DrawAction.revealAndDiscardBattlehand`'s `revealUnitConsumer` only built the
 log message (`" reveals " + names + " from their battlehand"`); it never
 called anything like `setHidden(false)` on the actual units. That is a bug
-Java itself had in `GameAction.getAllRevealedItems` — the direct ancestor of
-this engine's `revealedFeed`/`allRevealedItems` (issue #51) — not a design
-choice: the log line already declared those exact units public, but the
+Java itself had, not a design choice — visible through
+`GameAction.getAllRevealedItems`, the direct ancestor of this engine's
+`revealedFeed`/`allRevealedItems` (issue #51), whose own `!isHidden()` filter
+is correct as written but could only ever see what `revealUnitConsumer` left
+unhidden. The log line already declared those exact units public, but the
 structured "what's publicly known" view never agreed, in Java or in the first
 port of this action. Corrected here by revealing the exact battlehand item
 instances (matched by `id`) alongside emptying the battlehand, so the log and
