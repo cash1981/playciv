@@ -13,11 +13,25 @@ _Last updated: 2026-09-25_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 513 engine, 205 server, 213 web on `feat/turn-order-phase-tracker` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 536 engine, 205 server, 217 web on `fix/turnpanel-reveal-button-overflow` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **The turn phase heading row no longer overflows the page at phone width.**
+  Found incidentally while browser-verifying an unrelated branch: `.turn-phase-
+  heading` (`TurnPanel.css`) — the row holding a phase's label, save-status
+  badge, Save button and Reveal/Save & reveal/Revealed button — was
+  `display: flex` with no `flex-wrap`, so at 375px width it overflowed the
+  page horizontally (`document.documentElement.scrollWidth` 428 vs
+  `clientWidth` 375). One-line fix: `flex-wrap: wrap`. Confirmed live
+  (`scrollWidth` back to matching `clientWidth`, the row visibly wrapping for
+  a long phase label and staying single-line for a short one) and read-only
+  reviewed with no findings above a nit (wrap is a no-op wherever content
+  already fits; the opponent read-only view and the private-log heading,
+  which reuse the same class, both benefit the same way; no RTL/long-content
+  concern applies). Branch `fix/turnpanel-reveal-button-overflow`.
 
 - **Issue #175: Military Tradition's flipside was a data typo, not a one-way
   design.** The source spreadsheet had `Military Tradition` pointing at

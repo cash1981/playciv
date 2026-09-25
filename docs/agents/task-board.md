@@ -12,16 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### turnpanel-reveal-button-overflow
-
-- **Owner:** Claude (Sonnet 5)
-- **Branch:** `fix/turnpanel-reveal-button-overflow`
-- **Brief:** `docs/agents/tasks/turnpanel-reveal-button-overflow.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/TurnPanel.css`
-- **Notes:** small, contained CSS fix for a phone-width horizontal-overflow
-  bug found incidentally while verifying an unrelated branch.
+_Nothing claimed._
 
 ---
 

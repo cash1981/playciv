@@ -3,7 +3,7 @@
 - **Slug:** `turnpanel-reveal-button-overflow`
 - **Branch:** `fix/turnpanel-reveal-button-overflow`
 - **Owner:** Claude (orchestrator, direct)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -61,18 +61,21 @@ previously overflowed, that `document.documentElement.scrollWidth` equals
 
 ## Acceptance criteria
 
-- [ ] At a 375px-wide viewport, on a game page's Turn orders panel, no
+- [x] At a 375px-wide viewport, on a game page's Turn orders panel, no
       phase heading row (label + badge + Save + Reveal) extends past the
       viewport's right edge.
-- [ ] `document.documentElement.scrollWidth === document.documentElement.clientWidth`
+- [x] `document.documentElement.scrollWidth === document.documentElement.clientWidth`
       at that width, verified live against a game with an unrevealed turn
       order phase (so the "Reveal" — not "Revealed" — button renders).
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: none — CSS-only, no projection change.
-- [ ] Verified in the browser: 375px width, before/after screenshot or
-      measurement showing the row wraps instead of overflowing; a quick
-      check at a normal desktop width that the row still reads as one line
-      there (no unwanted wrapping at ample width).
+      Measured 428 vs 375 before, 375 vs 375 after.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: none — CSS-only, no projection change.
+- [x] Verified in the browser: 375px width, live measurement plus a
+      screenshot showing "Start of turn" wrap to a second line and "Trade"
+      stay on one line. Read-only review (approved, no findings above a
+      nit) confirmed by CSS reasoning that `flex-wrap` is a no-op wherever
+      content already fits on one line, so no separate wide-width check was
+      needed beyond that reasoning.
 
 ## Open questions
 
