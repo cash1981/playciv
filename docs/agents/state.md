@@ -19,6 +19,19 @@ _Last updated: 2026-09-25_
 
 ## Done
 
+- **The turn phase heading row no longer overflows the page at phone width.**
+  Found incidentally while browser-verifying an unrelated branch: `.turn-phase-
+  heading` (`TurnPanel.css`) — the row holding a phase's label, save-status
+  badge, Save button and Reveal/Save & reveal/Revealed button — was
+  `display: flex` with no `flex-wrap`, so at 375px width it overflowed the
+  page horizontally (`document.documentElement.scrollWidth` 428 vs
+  `clientWidth` 375). One-line fix: `flex-wrap: wrap`. Confirmed live
+  (`scrollWidth` back to matching `clientWidth`, the row visibly wrapping for
+  a long phase label and staying single-line for a short one) and read-only
+  reviewed with no findings above a nit (wrap is a no-op wherever content
+  already fits; the opponent read-only view and the private-log heading,
+  which reuse the same class, both benefit the same way; no RTL/long-content
+  concern applies). Branch `fix/turnpanel-reveal-button-overflow`.
 - **Draw is the first panel after the board.** The existing Draw panel now
   appears above the responsive Log/Chat pair; Hand and every later panel keep
   their previous order. A `GameView` regression test pins the board, Draw,
