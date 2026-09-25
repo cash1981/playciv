@@ -1931,9 +1931,12 @@ ul.history > li {
   border-top: 1px solid var(--line);
 }
 
-/* Vertical dividers between section groups */
+/* Vertical dividers between section groups (and, in the Coins table, between
+   each player's own column — a single-row thead, so the divider is set on
+   the header `<th>` directly rather than needing a second header row). */
 .status-table th.status-group-heading.status-group-start,
 .status-table thead tr + tr th.status-group-start,
+.status-table thead tr:only-child th.status-group-start,
 .status-table td.status-group-start {
   border-left: 2px solid var(--line);
 }

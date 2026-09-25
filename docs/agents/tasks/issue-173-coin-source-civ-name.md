@@ -3,7 +3,7 @@
 - **Slug:** `issue-173-coin-source-civ-name`
 - **Branch:** `feat/issue-173-coin-source-civ-name`
 - **Owner:** Claude (orchestrator)
-- **Status:** draft
+- **Status:** in review
 
 ## Goal
 
@@ -34,8 +34,11 @@ not by player identity.
   nickname it replaces.
 - A vertical divider between each player's column in the Coins table, reusing
   the Status table's existing divider treatment (`border-left` on
-  `.status-group-start`), applied to every player column here since each one
-  is its own player rather than a same-player group.
+  `.status-group-start`). In the Status table that class marks the first
+  column of *every* group, including the very first one (it divides
+  Government from the first stat group too) — the Coins table follows the
+  same rule: every player column gets the divider, including the first
+  player's, which then divides it from the "Coin source" label column.
 
 **Out:**
 
@@ -56,12 +59,9 @@ is the pattern to reuse, per the issue's own wording.
 
 `StatusPanel.tsx`: in `CoinSection`'s header row, render
 `row.civilizationName ?? row.username` instead of `row.username`, keeping the
-swatch. Add a `coin-table-column` (or similar) class to every per-player `<th>`
-and `<td>` (including the `tfoot` Total row's cells) so `styles.css` can give
-each one a `border-left`, mirroring `.status-group-start` but applied per
-column instead of per group — the first player's column stays undivided from
-the source-label column, matching how the Status table's first group is
-undivided from Player/Civilization/Government.
+swatch. Reuse the existing `status-group-start` class on every per-player
+`<th>` and `<td>` (header, body and the `tfoot` Total row), giving each player
+column the same `border-left` divider the Status table already draws.
 
 ## Claimed paths
 
@@ -71,14 +71,14 @@ undivided from Player/Civilization/Government.
 
 ## Acceptance criteria
 
-- [ ] The Coins tab's player column headers show the civilization name once
+- [x] The Coins tab's player column headers show the civilization name once
       chosen, and the nickname when not.
-- [ ] Each player's column in the Coins table (header, body and Total row) has
-      a visible left divider, except the first player's column.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: no change — civilization name is already public
+- [x] Each player's column in the Coins table (header, body and Total row) has
+      a visible left divider.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: no change — civilization name is already public
       (the Status tab shows it), so nothing new can leak.
-- [ ] Verified in the browser: the Coins tab in a game with at least two
+- [x] Verified in the browser: the Coins tab in a game with at least two
       players, at least one with a chosen civilization, one without.
 
 ## Open questions
