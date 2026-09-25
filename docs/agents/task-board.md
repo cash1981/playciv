@@ -12,7 +12,17 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### styles-900px-unclosed-media-query
+
+- **Owner:** Claude (Sonnet 5)
+- **Branch:** `fix/styles-900px-unclosed-media-query`
+- **Brief:** `docs/agents/tasks/styles-900px-unclosed-media-query.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/styles.css`
+- **Notes:** pre-existing structural CSS bug found incidentally while
+  reviewing an unrelated branch. Small but not trivial — see the brief's
+  "Approach" before assuming a one-line fix.
 
 ---
 
