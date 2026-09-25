@@ -422,12 +422,12 @@ function CoinSection({
           <tr>
             <th>Coin source</th>
             {rows.map((row) => (
-              <th key={row.playerId}>
+              <th key={row.playerId} className="status-group-start">
                 <span className="row" style={{ justifyContent: 'flex-start' }}>
                   {row.color !== null && (
                     <span className="swatch" style={{ background: row.color.toLowerCase() }} />
                   )}
-                  {row.username}
+                  {row.civilizationName ?? row.username}
                 </span>
               </th>
             ))}
@@ -443,7 +443,7 @@ function CoinSection({
                 </span>
               </th>
               {rows.map((row) => (
-                <td key={row.playerId}>
+                <td key={row.playerId} className="status-group-start">
                   {renders(row, source.key) && (
                     <CoinCounter
                       label={`${row.username} ${source.label}`}
@@ -479,7 +479,7 @@ function CoinSection({
             {rows.map((row) => (
               <td
                 key={row.playerId}
-                className="coin-total"
+                className="coin-total status-group-start"
                 aria-label={`${row.username} coin total`}
               >
                 {totalCoins(row.stats.coinSources)}

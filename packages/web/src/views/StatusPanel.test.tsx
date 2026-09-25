@@ -497,4 +497,34 @@ describe('StatusPanel Coins section', () => {
     expect(counters.length).toBeGreaterThan(0)
     expect(counters.every((button) => (button as HTMLButtonElement).disabled)).toBe(true)
   })
+
+  it('heads a player column with their civilization once chosen, and their username while it is not (issue #173)', () => {
+    const view = {
+      ...coinView(),
+      you: { ...coinView().you, civilization: { name: 'Egypt' } },
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+
+    const headers = [...document.querySelectorAll('.coin-table thead th')].slice(1)
+    expect(headers.map((header) => header.textContent)).toEqual(['Egypt', 'Bob'])
+  })
+
+  it('gives every player column in the Coins table the same vertical divider the Status table uses (issue #173)', () => {
+    render(
+      <StatusPanel gameId="game-1" view={coinView({ sheet: 1 })} busy={false} readOnly={false} run={run} />,
+    )
+
+    openCoins()
+
+    const headers = [...document.querySelectorAll('.coin-table thead th')].slice(1)
+    expect(headers.every((header) => header.classList.contains('status-group-start'))).toBe(true)
+    const bodyCells = [...document.querySelectorAll('.coin-table tbody td')]
+    expect(bodyCells.length).toBeGreaterThan(0)
+    expect(bodyCells.every((cell) => cell.classList.contains('status-group-start'))).toBe(true)
+    const totalCells = [...document.querySelectorAll('.coin-table tfoot td')]
+    expect(totalCells.length).toBeGreaterThan(0)
+    expect(totalCells.every((cell) => cell.classList.contains('status-group-start'))).toBe(true)
+  })
 })
