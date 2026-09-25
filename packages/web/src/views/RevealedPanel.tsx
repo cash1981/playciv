@@ -12,7 +12,12 @@
  * re-requests page 1 with a larger size and replaces the shown list wholesale
  * (issue #166), rather than appending client-side — so a feed that changes
  * between loads (e.g. a reshuffle) can never leave a stale or duplicated
- * entry on screen.
+ * entry on screen. The server clamps `size` to `MAX_REVEALED_SIZE` (100); once
+ * the requested size exceeds that, the response's own `size` comes back
+ * smaller than what was asked for, which is the signal used below to stop
+ * offering "Load more" rather than requesting the same capped 100 forever.
+ * Known limitation: a feed past 100 entries has no way to reach the rest from
+ * this panel (see `decisions.md`).
  *
  * Everything here is already public — the server only ever returns discarded
  * items and non-hidden hand items — so the full card face is shown.
@@ -74,7 +79,8 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
 
   const total = data?.total ?? 0
   const items = data?.items ?? []
-  const hasMore = items.length < total
+  const atCap = data !== null && data.size < visibleSize
+  const hasMore = !atCap && items.length < total
 
   return (
     <CollapsiblePanel id="revealed" title={`Revealed and Discarded Items (${total})`} defaultOpen={false}>
