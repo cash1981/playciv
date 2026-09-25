@@ -95,9 +95,14 @@ const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   socialPolicies: correctSocialPolicyFlipsides(player.socialPolicies ?? []),
 })
 
-/** A board from before the player areas, the history or the shapes existed. */
-type MaybeOlderBoard = Omit<Board, 'areaRows' | 'history' | 'slots' | 'slotStep' | 'startSlots'> &
-  Partial<Pick<Board, 'areaRows' | 'history' | 'slots' | 'slotStep' | 'startSlots'>>
+/** A board from before the player areas, history, redo stack or shapes existed. */
+type MaybeOlderBoard = Omit<
+  Board,
+  'areaRows' | 'history' | 'redo' | 'slots' | 'slotStep' | 'startSlots'
+> &
+  Partial<
+    Pick<Board, 'areaRows' | 'history' | 'redo' | 'slots' | 'slotStep' | 'startSlots'>
+  >
 
 /** An arena unit from before rotation or the undoable kill (issue #71) existed. */
 type MaybeOlderArenaUnit = Omit<ArenaUnit, 'rotation' | 'killed'> &
@@ -192,6 +197,7 @@ export function migrateGameState(state: GameState): GameState {
             slotStep: board.slotStep ?? shapeSource.slotStep,
             startSlots: board.startSlots ?? shapeSource.startSlots,
             history: board.history ?? historyForImportedPieces(board.pieces),
+            redo: board.redo ?? [],
           },
     socialPolicies: correctSocialPolicyFlipsides(state.socialPolicies),
     withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withPlayerDefaults),

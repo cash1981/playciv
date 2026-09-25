@@ -1,13 +1,24 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Item } from '@civ/engine'
 
 import { api } from '../lib/api.js'
-import type { GameRevisionSummary, PlayerView } from '../lib/api.js'
-import { AUTO_REFRESH_MS, HandItem, loadAfterKnownRevision, reloadIfRevisionChanged } from './GameView.js'
+import type { GameRevisionSummary, PlayerDto, PlayerView } from '../lib/api.js'
+import { AUTO_REFRESH_MS, GameView, HandItem, loadAfterKnownRevision, reloadIfRevisionChanged } from './GameView.js'
+
+vi.mock('./BoardView.js', () => ({ BoardView: () => <div data-testid="board" /> }))
+vi.mock('./ChatPanel.js', () => ({ ChatPanel: () => <section><h2>Chat</h2></section> }))
+vi.mock('./LogPanel.js', () => ({ LogPanel: () => <section><h2>Log</h2></section> }))
+vi.mock('./OpponentHandPanel.js', () => ({ OpponentHandPanel: () => <section><h2>Other players' hands</h2></section> }))
+vi.mock('./RevealedPanel.js', () => ({ RevealedPanel: () => <section><h2>Revealed</h2></section> }))
+vi.mock('./SocialPolicyPanel.js', () => ({ SocialPolicyPanel: () => <section><h2>Social policy</h2></section> }))
+vi.mock('./StatusPanel.js', () => ({ StatusPanel: () => <section><h2>Player status</h2></section> }))
+vi.mock('./TechPanel.js', () => ({ TechPanel: () => <section><h2>Techs</h2></section> }))
+vi.mock('./TurnPanel.js', () => ({ TurnPanel: () => <section><h2>Turn orders</h2></section> }))
+vi.mock('./WondersPanel.js', () => ({ WondersPanel: () => <section><h2>Wonders</h2></section> }))
 
 afterEach(() => {
   cleanup()
@@ -94,6 +105,55 @@ const base = {
 const run = async (action: () => Promise<unknown>): Promise<void> => {
   await action()
 }
+
+describe('primary game panel order', () => {
+  it('shows Draw immediately after the board and before the responsive Log and Chat pair', async () => {
+    localStorage.setItem('civ.autoRefresh', 'false')
+    const view = {
+      rev: 1,
+      name: 'Panel order test',
+      active: true,
+      winner: null,
+      activeTurn: null,
+      you: null,
+      opponents: [],
+      board: {},
+      boardAreas: [],
+      numOfPlayers: 2,
+      battle: null,
+      battleSummary: [],
+    } as unknown as PlayerView
+    vi.spyOn(api, 'game').mockResolvedValue(view)
+    vi.spyOn(api, 'revisions').mockResolvedValue([])
+
+    const { container } = render(
+      <GameView
+        gameId="game-1"
+        player={{ username: 'viewer' } as unknown as PlayerDto}
+        onUnauthorized={vi.fn()}
+        onDeleted={vi.fn()}
+        onWithdrawn={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Draw' })).toBeTruthy())
+
+    const board = screen.getByTestId('board')
+    const panelStack = container.querySelector('.panel-stack')
+    const draw = screen.getByRole('heading', { name: 'Draw' }).closest('section')
+    const log = screen.getByRole('heading', { name: 'Log' }).closest('section')
+    const chat = screen.getByRole('heading', { name: 'Chat' }).closest('section')
+    const hand = screen.getByRole('heading', { name: 'Your hand (0)' }).closest('section')
+    const logChatPair = log?.parentElement
+
+    expect(board.nextElementSibling).toBe(panelStack)
+    expect(panelStack?.children[0]).toBe(draw)
+    expect(panelStack?.children[1]).toBe(logChatPair)
+    expect(logChatPair?.classList.contains('panel-pair')).toBe(true)
+    expect(Array.from(logChatPair?.children ?? [])).toEqual([log, chat])
+    expect(panelStack?.children[2]).toBe(hand)
+  })
+})
 
 /**
  * New in this port — see the pyramid-reposition task brief. "Place in tech

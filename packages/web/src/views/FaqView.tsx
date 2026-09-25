@@ -56,8 +56,10 @@ export function FaqView(): React.JSX.Element {
           </p>
           <p className="faq-answer">
             Use <strong>Zoom</strong> to change the board size. Select a piece to rotate it, move
-            it to the front or back, or remove it. The board history lets you undo changes and
-            replay earlier positions; the board is read-only while replaying.
+            it to the front or back, or remove it. <strong>Undo</strong> takes back your own last
+            change — it is disabled once someone else has acted since — and <strong>Redo</strong>{' '}
+            brings it straight back, until any further change clears it. The board history also
+            lets you replay earlier positions; the board is read-only while replaying.
           </p>
         </CollapsiblePanel>
 

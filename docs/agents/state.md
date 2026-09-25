@@ -13,7 +13,7 @@ _Last updated: 2026-09-25_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 536 engine, 205 server, 217 web on `fix/turnpanel-reveal-button-overflow` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 548 engine, 208 server, 223 web on `feat/draw-before-chat-log` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -32,6 +32,24 @@ _Last updated: 2026-09-25_
   already fits; the opponent read-only view and the private-log heading,
   which reuse the same class, both benefit the same way; no RTL/long-content
   concern applies). Branch `fix/turnpanel-reveal-button-overflow`.
+- **Draw is the first panel after the board.** The existing Draw panel now
+  appears above the responsive Log/Chat pair; Hand and every later panel keep
+  their previous order. A `GameView` regression test pins the board, Draw,
+  Log/Chat and Hand composition directly. Read-only review approved after the
+  first round required this stronger composition-level test. Full checks pass
+  (548 engine, 208 server, 223 web tests), and a local spectator browser pass
+  confirmed Draw above Log after the board. Branch
+  `feat/draw-before-chat-log`.
+
+- **Item card styles no longer inherit the 900px breakpoint.** Closed the
+  navigation/touch-target media query immediately after `.board-palette`,
+  keeping both board layout rules scoped to 900px while restoring the item
+  card rules and nested 600px query to their intended scope. Brace counts
+  remain balanced (321/321). Read-only review approved with no findings;
+  typecheck, all tests (540 engine, 205 server, 218 web) and build pass.
+  Browser-verified at 2530px: the revealed German ItemCard showed its art,
+  title, description and status badge correctly; the Metalworking card view
+  showed its art and text. Branch `fix/styles-900px-unclosed-media-query`.
 
 - **Issue #175: Military Tradition's flipside was a data typo, not a one-way
   design.** The source spreadsheet had `Military Tradition` pointing at
@@ -81,6 +99,36 @@ _Last updated: 2026-09-25_
   tests) and the browser showed both shapes, the hole, and a tile dropped over
   the hole staying unsnapped. See `decisions.md` for the snap-tolerance
   consequence.
+- **Issue #174: board Undo is scoped to the acting player, and gets a Redo.**
+  Undo used to take back whatever the board's single most recent change was,
+  regardless of who made it — reported directly by the human, who also lost
+  a change to an accidental extra undo with no way back. Before starting, the
+  human answered four clarifying questions (no old-system reference exists
+  for the board at all): Undo only works while the caller's own change is
+  still the board's very last one — it does not reach back past another
+  player's more recent, unrelated moves; undo/redo supports a full stack,
+  delivered by chaining single steps rather than a separate buffer; Redo is
+  cleared by *any* further change, by anyone; and Redo itself is not scoped
+  to whoever undid the change, matching the board's existing "everyone may
+  move everything" rule. `Board` gained a `redo: readonly BoardHistoryEntry[]`
+  array; `undoLastBoardChange` now refuses with a new `BOARD_UNDO_NOT_YOURS`
+  error unless the history's last entry belongs to the caller, moving it onto
+  `redo` instead of dropping it; a new `redoLastBoardChange` pops it back.
+  `BoardView` gained a `youId` prop to gate the Undo button and a new Redo
+  button. Round 1 review found three real gaps (all fixed): `README.md`
+  still described the old unscoped rule, no `decisions.md` entry despite the
+  brief promising one, and a server test that asserted against a stale HTTP
+  response captured before the refused undo, so it could never fail. Also
+  fixed from round 1's nits: a redone entry's `logLength` is now refreshed to
+  the log's current length rather than kept stale, which could otherwise run
+  backwards along history if an unrelated action grew the log while the
+  change sat on the redo stack. Round 2 approved, with three more wording-only
+  doc nits closed on top. 8 new engine tests, 5 new server-route tests, 4 new
+  web tests. Full checks pass. No browser tool was available this session (a
+  Chrome extension install was started but not completed); the visual pass —
+  button enablement in a live game, and layout of the two buttons in the panel
+  header at mobile width — is left to the human. Branch
+  `feat/issue-174-board-undo-redo`.
 
 - **Issue #167: each wonder in the Wonders panel shows its printed effect.**
   The Wonders sheet's Description column was already parsed into

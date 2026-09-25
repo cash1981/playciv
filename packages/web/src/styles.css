@@ -1417,7 +1417,12 @@ ul.history > li {
     flex-direction: column;
   }
 
-  /* ---------------------------------------------------------------------------
+  .board-palette {
+    width: 100%;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Item cards
 
    The AngularJS app showed a hand as Bootstrap thumbnails: picture on top,
@@ -1656,11 +1661,6 @@ ul.history > li {
   width: auto;
   min-width: 0;
   flex: 1 1 5rem;
-}
-
-.board-palette {
-    width: 100%;
-  }
 }
 
 /* --- Pill tabs and sortable tables -----------------------------------------
