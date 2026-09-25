@@ -2591,6 +2591,7 @@ candidate's own `flipside` against the names held, not "same pair both ways"
 — is still correct and unchanged; it was only ever fed a bad value for this
 one row. A future reader should not restore `Military Tradition` → `Patronage`
 on the theory that this decision was wrong the first time.
+
 ---
 
 ## 2026-09-24 — Issue #174: board undo is scoped to the acting player, and gets a redo
