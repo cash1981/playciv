@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { placePiece } from '../src/actions/board.js'
+import { placePiece, redoLastBoardChange, undoLastBoardChange } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
 import { isInWondersArea } from '../src/board.js'
 import {
@@ -394,6 +394,36 @@ describe('reveal civilization', () => {
 
     // Only one player has revealed so far, so the bulk deal has not run yet.
     expect(state.wondersDealt).toBe(false)
+  })
+
+  /**
+   * The owner must be part of the same `place` board-history entry as the
+   * piece, not patched onto the state afterwards — otherwise an undo followed
+   * by a redo (a normal board correction, not cheating) would silently drop
+   * it and reopen the exact bug this fix closes: `drawStartingWonders` would
+   * no longer see Egypt as holding a wonder and would deal a 4th ancient
+   * wonder instead of the medieval one.
+   */
+  it("Egypt's own wonder keeps its owner through an undo and a redo", () => {
+    const revealed = unwrap(revealCivFor(giveCiv(firstCivGame(), CASH1981, 'Egyptians'), CASH1981))
+    const before = revealed.board.pieces.find((piece) => piece.category === 'wonder')
+    if (before === undefined) throw new Error('no wonder piece')
+    expect(before.ownerId).toBe(CASH1981)
+
+    // The reveal also places the starting tile and the leader marker, all
+    // three under CASH1981, so it takes three undos — the tile and the
+    // marker, then the wonder itself — to reach the wonder placement.
+    let state = revealed
+    for (let i = 0; i < 3; i++) {
+      state = unwrap(undoLastBoardChange(state, CASH1981))
+    }
+    expect(state.board.pieces.some((piece) => piece.category === 'wonder')).toBe(false)
+
+    for (let i = 0; i < 3; i++) {
+      state = unwrap(redoLastBoardChange(state, CASH1981))
+    }
+    const after = state.board.pieces.find((piece) => piece.category === 'wonder')
+    expect(after?.ownerId).toBe(CASH1981)
   })
 
   const wonderDeckCounts = (state: GameState) => ({

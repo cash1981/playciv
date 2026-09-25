@@ -191,19 +191,24 @@ export function drawWonderToBoard(
 
   const assetId = wonderAssetId(item.name)
   const region = areaSlotRegion(area)
-  const placed = placeUnchecked(withDeck, { playerId, assetId, x: region.x, y: region.y })
+  // A wonder placed in a player's own area is theirs from the moment it lands
+  // — Egypt's starting wonder, per issue #172 — recorded as part of the same
+  // `place` history entry so undo and replay carry the ownership with it. A
+  // wonder placed in the shared Wonders area starts unowned, as before:
+  // `setWonderOwner` assigns it explicitly, later, as its own history entry.
+  const next = placeUnchecked(withDeck, {
+    playerId,
+    assetId,
+    x: region.x,
+    y: region.y,
+    ...(destination === 'own-area' ? { ownerId: playerId } : {}),
+  })
   // The wonder is off the deck now; if its art is missing there is nowhere to
   // put it, so fail rather than silently drop it and log a placement that did
   // not happen.
-  if (placed === undefined) {
+  if (next === undefined) {
     return err({ kind: 'BOARD_ASSET_NOT_FOUND', assetId })
   }
-
-  // A wonder placed in a player's own area is theirs — Egypt's starting
-  // wonder, per issue #172. A wonder placed in the shared Wonders area starts
-  // unowned, as before: `setWonderOwner` assigns it explicitly.
-  const next =
-    destination === 'own-area' ? assignLastPlacedPieceTo(placed, playerId) : placed
 
   const message =
     destination === 'own-area'
@@ -214,28 +219,6 @@ export function drawWonderToBoard(
       ? appendInfoLog(next, message)
       : appendPublicLog(next, player.username, playerId, message),
   )
-}
-
-/**
- * `placeUnchecked` always appends a newly placed non-tile piece — a wonder is
- * never a tile — to the end of `board.pieces`, so that is the piece just
- * placed. This is not a general "set the owner of the last piece" helper: it
- * exists only so {@link drawWonderToBoard} can assign Egypt's own wonder to
- * Egypt at the moment it is placed, without going through the turn-gated,
- * history-recording {@link setWonderOwner} the client uses for a manual
- * reassignment.
- */
-function assignLastPlacedPieceTo(state: GameState, ownerId: string): GameState {
-  const pieces = state.board.pieces
-  const lastIndex = pieces.length - 1
-  if (lastIndex < 0) return state
-  return {
-    ...state,
-    board: {
-      ...state.board,
-      pieces: pieces.map((piece, index) => (index === lastIndex ? { ...piece, ownerId } : piece)),
-    },
-  }
 }
 
 /**

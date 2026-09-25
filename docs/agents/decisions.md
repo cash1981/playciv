@@ -2641,7 +2641,7 @@ draw, say) grew the log while the change sat on the redo stack.
 
 ---
 
-## 2026-09-25 — Issue #172: Egypt's own wonder no longer suppresses the deal
+## 2026-09-25 — Issue #172: Egypt's own wonder no longer suppresses the deal (supersedes part of the 2026-09-17 "Wonders live on the board" entry)
 
 **Decision.** Egypt's own starting wonder — drawn alongside its starting units
 when Egypt's civilization card is revealed — is placed directly in Egypt's own
@@ -2721,3 +2721,17 @@ setup-time logic anywhere in either old repository.
   `PlayerAction.java` and the Zulu card text in `gamedata-faf-waw.json` ("2
   extra artillery units", i.e. the default 1 plus 2) mean three. Found while
   checking this diff against Java; not touched here, filed as its own issue.
+- Egypt's ownership of its own wonder is set in the same `place` board-history
+  entry as the piece itself (`PlacePieceInput.ownerId`, threaded through
+  `placeUnchecked`), not patched onto the state afterwards, so an undo
+  followed by a redo of that placement keeps the ownership — proven by a
+  round-2 review finding and closed with a regression test before this
+  landed. Whether the shared deal treats Egypt as having its own wonder is
+  read the same way, from a wonder piece owned by the Egyptian player, not
+  from Egypt's civilization alone — so a rare inverse case is possible: an
+  Egypt player who drew a unit before revealing (so never got the bonus
+  wonder) and whose piece art someone had already assigned to them by hand
+  from the palette would trigger the 3-plus-1 branch without ever having
+  drawn anything. Narrow enough — it requires a moderator's manual assignment
+  to land exactly on an Egypt player who was never due a wonder — that it is
+  recorded here rather than coded around.

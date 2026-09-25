@@ -3,7 +3,7 @@
 - **Slug:** `issue-172-egypt-wonder-reveal`
 - **Branch:** `feat/issue-172-egypt-wonder-reveal`
 - **Owner:** Claude (orchestrator)
-- **Status:** draft
+- **Status:** done
 
 ## Goal
 
@@ -93,38 +93,61 @@ human's direct answer above.
 
 - `drawStartingItems`: Egypt's `ANCIENT_WONDERS` draw passes
   `destination: 'own-area'` and no longer sets `wondersDealt: true`.
-- `drawStartingWonders`: checks whether any player's `civilization.name` is
-  `'Egyptians'`. If so, draws 3 `ANCIENT_WONDERS` + 1 `MEDIEVAL_WONDERS` (all
-  `destination: 'wonders'`, `actor: 'system'`); otherwise draws the existing 4
-  `ANCIENT_WONDERS`. Still sets `wondersDealt: true` at the end either way —
-  this function is now the only thing that sets the flag.
+- `drawStartingWonders`: checks whether a wonder board piece exists with
+  `ownerId` equal to the Egyptian player's id — not whether any player's
+  `civilization.name` is `'Egyptians'`, which round 2 of the review gate found
+  could misfire when Egypt never actually drew its own wonder (it had already
+  drawn a unit before revealing, a faithful Java quirk that skips the whole
+  starting-items draw). If Egypt holds a wonder, draws 3 `ANCIENT_WONDERS` + 1
+  `MEDIEVAL_WONDERS` (all `destination: 'wonders'`, `actor: 'system'`);
+  otherwise draws the usual 4 `ANCIENT_WONDERS`. Still sets `wondersDealt:
+  true` at the end either way — this function is now the only thing that sets
+  the flag.
 - `shouldDrawWonders` is unchanged in shape; its behaviour changes as a
   consequence of `wondersDealt` no longer being set early by Egypt's own draw.
+
+`packages/engine/src/actions/board.ts`:
+
+- `PlacePieceInput` gains an optional `ownerId`, set on the `BoardPiece` at
+  construction in `placeUnchecked` (only when passed — `exactOptionalPropertyTypes`
+  keeps every other caller's piece exactly as before). `drawWonderToBoard`
+  passes it for the `'own-area'` destination. Round 2 of the review gate found
+  the first version (patching `ownerId` onto the state after `placeUnchecked`
+  returned) never reached the recorded `place` history entry, so an undo
+  followed by a redo of the placement silently dropped the ownership; setting
+  it inside the same call fixes that, closed with a regression test.
 
 ## Claimed paths
 
 - `packages/engine/src/actions/draw.ts`
 - `packages/engine/src/actions/player.ts`
+- `packages/engine/src/actions/board.ts`
 - `packages/engine/test/player-action.test.ts`
 - `packages/engine/test/draw-action.test.ts`
+- `packages/engine/test/board.test.ts`
+- `README.md`
 - `docs/agents/decisions.md`
 - `docs/agents/state.md`
 - `docs/agents/task-board.md`
 
 ## Acceptance criteria
 
-- [ ] A game with Egypt among the revealed civs, once every seat's civ is
+- [x] A game with Egypt among the revealed civs, once every seat's civ is
       revealed: Egypt's own hand/board has one `wonder` piece in Egypt's own
-      player area, credited to Egypt in the public log; the shared Wonders
-      area has 3 `ANCIENT_WONDERS` + 1 `MEDIEVAL_WONDERS`, credited to System.
-- [ ] A game with no Egypt: unchanged — 4 `ANCIENT_WONDERS` in the shared
+      player area, owned by Egypt, credited to Egypt in the public log; the
+      shared Wonders area has 3 `ANCIENT_WONDERS` + 1 `MEDIEVAL_WONDERS`,
+      credited to System.
+- [x] A game with no Egypt: unchanged — 4 `ANCIENT_WONDERS` in the shared
       Wonders area, credited to System, `wondersDealt` true.
-- [ ] No wonder ever lands in a hand (existing invariant, still holds).
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: unaffected — wonders are already public once drawn,
-      on either the shared area or a player's own area.
-- [ ] Verified in the browser if a session is available: Egypt's own wonder in
-      its player area, the other 4 in the Wonders area, correct log lines.
+- [x] No wonder ever lands in a hand (existing invariant, still holds).
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (556
+      engine, 208 server, 239 web).
+- [x] Hidden information: unaffected — wonders are already public once drawn,
+      on either the shared area or a player's own area; nothing added to
+      `toPlayerView` or any route response.
+- [ ] Verified in the browser: no browser session was available in this
+      environment (CLI only) — left to the human, as several other recent
+      entries in `state.md` also record.
 
 ## Open questions
 
