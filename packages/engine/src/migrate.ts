@@ -6,12 +6,14 @@
  * explicitly, and every storage implementation calls this when it reads a game.
  */
 
+import { parseBattlehandRevealLog } from './actions/draw.js'
 import type { ArenaUnit, Battle } from './battle.js'
 import type { Board, BoardHistoryEntry, BoardPiece } from './board.js'
 import { createBoard, createBoardForPlayers } from './board.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { SocialPolicyItem } from './item.js'
-import type { GameState, Playerhand, PlayerStats } from './state.js'
+import { isUnit, revealAll } from './item.js'
+import type { GameLogEntry, GameState, Playerhand, PlayerStats } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
 import { migratePlayerTurn } from './turn.js'
@@ -83,6 +85,76 @@ const normalizeStats = (stats: Partial<PlayerStats> | undefined): PlayerStats =>
     infra: merged.infra,
     mic: merged.mic,
     pe: merged.pe,
+  }
+}
+
+/**
+ * Found from a live game report: `revealAndDiscardBattlehand` used to only
+ * build the public log message, never actually revealing the units it named
+ * (see decisions.md). A game saved before that fix still has those specific
+ * units stuck `hidden: true`, even though the log already publicly named
+ * them, so they never showed in the Revealed/Discarded panel.
+ *
+ * Retroactively reveals them by matching the exact wording
+ * `revealAndDiscardBattlehand` writes — `"<username> reveals <names> from
+ * their battlehand"` — against the acting player's still-hidden unit items,
+ * by `revealAll()` display name (the log carries no structured item
+ * reference, unlike a normal `DISCARD`/`REVEAL` entry).
+ *
+ * A display name is not a unique identifier — two hidden units of the same
+ * type/level can coexist in one hand — so `revealNamedUnits` only resolves a
+ * name when the count this log entry names matches the count of still-hidden
+ * candidates with that name exactly; anything else is left untouched. That
+ * can under-fix a genuinely ambiguous historical case, but it can never
+ * reveal a card that was not actually named — the human accepted this
+ * narrower residual risk over leaving every affected game unfixed. See
+ * decisions.md.
+ */
+function revealBattlehandUnits(
+  log: readonly GameLogEntry[],
+  hands: readonly Playerhand[],
+): readonly Playerhand[] {
+  let result = hands
+
+  for (const entry of log) {
+    if (entry.playerId === null) continue
+    const names = parseBattlehandRevealLog(entry)
+    if (names === null) continue
+
+    const index = result.findIndex((hand) => hand.playerId === entry.playerId)
+    if (index < 0) continue
+
+    result = result.map((hand, i) => (i === index ? revealNamedUnits(hand, names) : hand))
+  }
+
+  return result
+}
+
+function revealNamedUnits(hand: Playerhand, names: readonly string[]): Playerhand {
+  const wanted = new Map<string, number>()
+  for (const name of names) wanted.set(name, (wanted.get(name) ?? 0) + 1)
+
+  const available = new Map<string, number>()
+  for (const item of hand.items) {
+    if (!item.hidden || !isUnit(item)) continue
+    const label = revealAll(item)
+    available.set(label, (available.get(label) ?? 0) + 1)
+  }
+
+  const resolvable = new Set(
+    [...wanted.entries()]
+      .filter(([label, count]) => available.get(label) === count)
+      .map(([label]) => label),
+  )
+  if (resolvable.size === 0) return hand
+
+  return {
+    ...hand,
+    items: hand.items.map((item) =>
+      item.hidden && isUnit(item) && resolvable.has(revealAll(item))
+        ? { ...item, hidden: false }
+        : item,
+    ),
   }
 }
 
@@ -186,7 +258,7 @@ export function migrateGameState(state: GameState): GameState {
     ...state,
     createdAt: older.createdAt ?? null,
     log: state.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
-    players: state.players.map(withPlayerDefaults),
+    players: revealBattlehandUnits(state.log, state.players).map(withPlayerDefaults),
     board:
       board === undefined
         ? fresh
@@ -200,7 +272,9 @@ export function migrateGameState(state: GameState): GameState {
             redo: board.redo ?? [],
           },
     socialPolicies: correctSocialPolicyFlipsides(state.socialPolicies),
-    withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withPlayerDefaults),
+    withdrawnPlayers: revealBattlehandUnits(state.log, older.withdrawnPlayers ?? []).map(
+      withPlayerDefaults,
+    ),
     publicTurns: Object.fromEntries(
       Object.entries(older.publicTurns ?? {}).map(([key, turn]) => [key, migratePlayerTurn(turn)]),
     ),

@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 
 import { draw, drawUnitsForBattle, revealAndDiscardBattlehand } from '../src/actions/draw.js'
 import { drawBarbarians, discardBarbarians, drawWonder, drawWonderToBoard, loot } from '../src/actions/draw.js'
+import { revealedFeed } from '../src/actions/game.js'
 import { playerAreas, wondersArea } from '../src/board.js'
 import type { Item, ItemKind } from '../src/item.js'
 import { isUnit, itemImage, itemName, itemValueEquals } from '../src/item.js'
@@ -373,6 +374,44 @@ describe('battle hand', () => {
     expect(findPlayer(state, CASH1981)?.battlehand).toHaveLength(0)
     // The units stay in the hand — Java does not move them to the discard pile
     expect(handOf(state, CASH1981).filter(isUnit)).toHaveLength(5)
+  })
+
+  it('reveals the exact units it names, so they show in the Revealed/Discarded panel', () => {
+    // A bug found from a live game: the log line said these units were public
+    // ("X reveals A, B, C from their battlehand"), but the hidden flag was
+    // never actually flipped, so revealedFeed never showed them.
+    let state = firstCivGame()
+    for (const sheetName of ['INFANTRY', 'ARTILLERY', 'MOUNTED'] as const) {
+      state = unwrap(draw(state, { playerId: CASH1981, sheetName }))
+    }
+    state = unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 3 }))
+    const battlehandIds = new Set(findPlayer(state, CASH1981)!.battlehand.map((u) => u.id))
+    expect(battlehandIds.size).toBe(3)
+
+    state = unwrap(revealAndDiscardBattlehand(state, CASH1981))
+
+    const revealedUnits = handOf(state, CASH1981).filter((item) => battlehandIds.has(item.id))
+    expect(revealedUnits).toHaveLength(3)
+    expect(revealedUnits.every((item) => !item.hidden)).toBe(true)
+
+    const feedIds = new Set(revealedFeed(state).map((entry) => entry.item.id))
+    for (const id of battlehandIds) expect(feedIds.has(id)).toBe(true)
+  })
+
+  it('does not reveal a unit that was never drawn into the battlehand', () => {
+    let state = firstCivGame()
+    for (const sheetName of ['INFANTRY', 'ARTILLERY', 'MOUNTED', 'MOUNTED'] as const) {
+      state = unwrap(draw(state, { playerId: CASH1981, sheetName }))
+    }
+    state = unwrap(drawUnitsForBattle(state, { playerId: CASH1981, numberOfDraws: 2 }))
+    const battlehandIds = new Set(findPlayer(state, CASH1981)!.battlehand.map((u) => u.id))
+
+    state = unwrap(revealAndDiscardBattlehand(state, CASH1981))
+
+    const stillHidden = handOf(state, CASH1981).filter(
+      (item) => isUnit(item) && item.hidden && !battlehandIds.has(item.id),
+    )
+    expect(stillHidden.length).toBeGreaterThan(0)
   })
 })
 

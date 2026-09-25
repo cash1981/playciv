@@ -16,7 +16,7 @@
 import type { EngineError } from '../errors.js'
 import type { Item } from '../item.js'
 import { DEFAULT_GOVERNMENT } from '../government.js'
-import { compareItems } from '../item.js'
+import { compareItems, isUnit } from '../item.js'
 import { appendInfoLog, appendPrivatePublicLog, appendPublicLog } from '../log.js'
 import { shuffle } from '../random.js'
 import type { Result } from '../result.js'
@@ -270,7 +270,12 @@ export function allRevealedItems(state: GameState): readonly Item[] {
  */
 export interface RevealedEntry {
   readonly item: Item
-  /** Java: `Item.ownerId` — the revealing/owning player, kept even once discarded. */
+  /**
+   * Java: `Item.ownerId` — the revealing/owning player, kept even once
+   * discarded. `null` only for a discarded barbarian unit (`ownerId` is
+   * deliberately cleared in `discardBarbarians`, matching Java) — `username`
+   * below reads `'Barbarians'` for that case rather than inventing a player.
+   */
   readonly playerId: string | null
   readonly username: string | null
   readonly revealed: boolean
@@ -301,6 +306,14 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
       state.withdrawnPlayers.find((withdrawn) => withdrawn.playerId === playerId)
     return player?.username ?? null
   }
+
+  // A discarded unit with no owner is, today, only ever a barbarian
+  // (`discardBarbarians` deliberately clears `ownerId`, matching Java) — a
+  // generic label, not the player who happened to be controlling them, since
+  // barbarians are not actually owned by anyone. Any other unowned item (none
+  // exist today) keeps showing no attribution at all, same as before.
+  const displayName = (row: Pick<Row, 'item' | 'playerId'>): string | null =>
+    row.playerId === null && isUnit(row.item) ? 'Barbarians' : nameOf(row.playerId)
 
   interface Row {
     item: Item
@@ -381,7 +394,7 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     .map(({ row }) => ({
       item: row.item,
       playerId: row.playerId,
-      username: nameOf(row.playerId),
+      username: displayName(row),
       revealed: row.revealed,
       discarded: row.discarded,
       createdAt: row.createdAt,
