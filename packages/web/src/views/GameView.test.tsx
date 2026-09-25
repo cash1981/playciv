@@ -7,7 +7,14 @@ import type { Item } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { GameRevisionSummary, PlayerDto, PlayerView } from '../lib/api.js'
-import { AUTO_REFRESH_MS, GameView, HandItem, loadAfterKnownRevision, reloadIfRevisionChanged } from './GameView.js'
+import {
+  AUTO_REFRESH_MS,
+  GameView,
+  HandItem,
+  gameMenuGate,
+  loadAfterKnownRevision,
+  reloadIfRevisionChanged,
+} from './GameView.js'
 
 vi.mock('./BoardView.js', () => ({ BoardView: () => <div data-testid="board" /> }))
 vi.mock('./ChatPanel.js', () => ({ ChatPanel: () => <section><h2>Chat</h2></section> }))
