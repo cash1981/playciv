@@ -12,7 +12,19 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### draw-before-chat-log
+
+- **Owner:** Codex (GPT-5)
+- **Branch:** `feat/draw-before-chat-log`
+- **Brief:** `docs/agents/tasks/draw-before-chat-log.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/GameView.tsx`
+  - `packages/web/src/views/GameView.test.tsx`
+  - `docs/agents/tasks/draw-before-chat-log.md`
+  - `docs/agents/task-board.md`
+  - `docs/agents/state.md`
+- **Notes:** Presentation-only reorder of Draw above the existing Chat/Log pair.
 
 ---
 
