@@ -39,8 +39,12 @@ interface Props {
   readonly onWithdrawn: () => void
   /**
    * Reports Withdraw/Delete for the site menu's "Game" section (issue #177);
-   * `null` while there is nothing to offer yet (spectator, or still loading).
-   * Optional so tests that do not care about the menu can omit it.
+   * `null` while there is nothing to offer yet (spectator who is not an
+   * admin, or still loading). Optional so tests that do not care about the
+   * menu can omit it. Must be referentially stable (e.g. a `useState`
+   * setter, as `App.tsx` passes) — it sits in this effect's dependency
+   * array and is called with a fresh object each run, so an inline arrow
+   * here would re-run the effect every render.
    */
   readonly onGameActions?: (actions: GameMenuActions | null) => void
 }
@@ -150,6 +154,39 @@ export async function loadHistoricalIfCurrent(
 ): Promise<GameRevisionView | null> {
   const revision = await load()
   return isCurrent() ? revision : null
+}
+
+export interface GameMenuGate {
+  readonly canWithdraw: boolean
+  readonly withdrawDisabled: boolean
+  readonly canDelete: boolean
+  readonly deleteDisabled: boolean
+}
+
+/**
+ * The booleans behind the site menu's "Game" section (issue #177), pulled
+ * out as a pure function so the one real risk in that wiring — who gets
+ * Delete and who gets Withdraw — is testable without rendering the whole
+ * page. `null` means nothing to offer: the game has not loaded yet, or the
+ * viewer is a plain spectator (no hand in this game, not an admin). An
+ * admin who never joined still needs Delete, matching old-civ-web's
+ * `nav.html`, whose "Admin settings" → "Delete game" was gated only on the
+ * admin flag, membership-independent (`GameOption.setShowAdminValue` in
+ * `GameController.js`) — `you === null` alone must not suppress it.
+ */
+export function gameMenuGate(
+  currentView: Pick<PlayerView, 'you' | 'active'> | null,
+  isAdmin: boolean,
+  busyNow: boolean,
+): GameMenuGate | null {
+  if (currentView === null || (currentView.you === null && !isAdmin)) return null
+  const currentYou = currentView.you
+  return {
+    canWithdraw: currentYou !== null,
+    withdrawDisabled: busyNow || !currentView.active,
+    canDelete: currentYou?.gameCreator === true || isAdmin,
+    deleteDisabled: busyNow,
+  }
 }
 
 export function GameView({
@@ -310,14 +347,14 @@ export function GameView({
   useEffect(() => {
     if (onGameActions === undefined) return
     const currentView = selectedRevision !== null && historical !== null ? historical.view : view
-    if (currentView === null || currentView.you === null) {
+    const busyNow = busy || (selectedRevision !== null && historical !== null)
+    const gate = gameMenuGate(currentView, player?.role === 'admin', busyNow)
+    if (gate === null) {
       onGameActions(null)
       return
     }
-    const currentYou = currentView.you
-    const busyNow = busy || (selectedRevision !== null && historical !== null)
     onGameActions({
-      withdrawDisabled: busyNow || !currentView.active,
+      ...gate,
       onWithdraw: () => {
         setBusy(true)
         setError(null)
@@ -336,8 +373,6 @@ export function GameView({
           },
         )
       },
-      canDelete: currentYou.gameCreator === true || player?.role === 'admin',
-      deleteDisabled: busyNow,
       onDelete: () => {
         void run(async () => {
           await api.deleteGame(gameId)

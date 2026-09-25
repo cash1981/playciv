@@ -23,6 +23,8 @@ const helpLinks = [
  * component; `onWithdraw`/`onDelete` are the already-confirmed actions.
  */
 export interface GameMenuActions {
+  /** `false` for an admin viewing a game they never joined — see `canDelete`. */
+  readonly canWithdraw: boolean
   readonly withdrawDisabled: boolean
   readonly onWithdraw: () => void
   readonly canDelete: boolean
@@ -53,12 +55,11 @@ export function Navigation({
   const nextTheme = theme === 'dark' ? 'light' : 'dark'
   const menuRef = useRef<HTMLDetailsElement>(null)
 
-  // Close the menu after any link or button inside it is used, except the
-  // nested "Rules and help" summary — clicking that should only open its own
-  // submenu, not collapse the outer one it lives inside.
+  // Close the menu after any link or button inside it is used. Clicking the
+  // nested "Rules and help" summary itself does not match `a, button`, so it
+  // only opens that submenu without closing this one.
   const closeMenuAfterAction = (event: React.MouseEvent<HTMLDivElement>): void => {
     const target = event.target as HTMLElement
-    if (target.closest('.rules-menu > summary') !== null) return
     if (target.closest('a, button') !== null) menuRef.current?.removeAttribute('open')
   }
 
@@ -69,7 +70,7 @@ export function Navigation({
         <strong>Civilization</strong>
         <span className="muted">playciv</span>
       </a>
-      <span className="spacer" />
+      <span className="brand-spacer" />
       <details className="navigation-menu main-menu" ref={menuRef}>
         <summary aria-label="Menu">
           <span className="hamburger-icon" aria-hidden="true">
@@ -101,17 +102,19 @@ export function Navigation({
           </nav>
 
           {game !== null && (
-            <div className="navigation-game-actions" aria-label="Game">
+            <div className="navigation-game-actions" role="group" aria-label="Game">
               <h3>Game</h3>
-              <button
-                className="danger"
-                disabled={game.withdrawDisabled}
-                onClick={() => {
-                  if (window.confirm('Withdraw from this game?')) game.onWithdraw()
-                }}
-              >
-                Withdraw
-              </button>
+              {game.canWithdraw && (
+                <button
+                  className="danger"
+                  disabled={game.withdrawDisabled}
+                  onClick={() => {
+                    if (window.confirm('Withdraw from this game?')) game.onWithdraw()
+                  }}
+                >
+                  Withdraw
+                </button>
+              )}
               {game.canDelete && (
                 <button
                   className="danger"

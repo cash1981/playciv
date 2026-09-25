@@ -8,8 +8,13 @@
  *
  * Everything below the palettes is the original stylesheet with its visual
  * values replaced. No selector was removed, and the two mobile blocks near the
- * bottom (`@media (max-width: 900px)` and `@media (max-width: 600px)`) are
+ * bottom (`@media (max-width: 900px)` and `@media (max-width: 600px)`, the
+ * ones right after `.card-grid` and `.navigation-dropdown` respectively) are
  * kept exactly as they were, because `SiteMobileStyles.test.ts` asserts them.
+ * Later additions reuse both of those exact conditions in *separate* new
+ * blocks (issues #176/#177) rather than editing inside the protected ones —
+ * check a block's neighbouring rules, not just its `@media` line, before
+ * assuming it is one of the two the test pins.
  */
 
 @font-face {
@@ -438,6 +443,16 @@ label > textarea {
   flex: 1;
 }
 
+/* Pushes the hamburger trigger to the far edge of the topbar, at every
+   width — a distinct class from `.spacer` above on purpose, since the
+   `max-width: 900px` block below hides `.topbar .spacer` (that one only
+   ever separated the old nav row from the old actions row, both gone from
+   `.topbar` now) and a shared class would have hidden this one too,
+   leaving the hamburger glued to the brand instead of right-aligned. */
+.brand-spacer {
+  flex: 1;
+}
+
 .brand {
   display: inline-flex;
   align-items: baseline;
@@ -542,13 +557,14 @@ label > textarea {
   gap: 0.3rem;
 }
 
-/* `.site-navigation`/`.topbar-actions` get `flex: 1 1 100%` from the
-   `max-width: 600px` block below, sized for when they were direct row
-   children of `.topbar` stacking to full-width rows. Nested inside this
-   flex *column* instead, a 100% flex-basis on the main (vertical) axis made
-   each one try to fill the whole panel height, splitting it between them —
-   a two-class selector overrides that regardless of media-query source
-   order, without touching the protected block itself. */
+/* `.site-navigation` gets `flex: 1 1 100%` from the `max-width: 600px`
+   block below, and `.topbar-actions` from the `max-width: 900px` block —
+   both sized for when they were direct row children of `.topbar` stacking
+   to full-width rows. Nested inside this flex *column* instead, a 100%
+   flex-basis on the main (vertical) axis made each one try to fill the
+   whole panel height, splitting it between them — a two-class selector
+   overrides that regardless of media-query source order, without touching
+   either protected block. */
 .main-dropdown .site-navigation,
 .main-dropdown .topbar-actions {
   flex: 0 1 auto;
@@ -2412,5 +2428,18 @@ ul.history > li {
 
   .board-scroll {
     max-height: 55vh;
+  }
+}
+
+/* The `max-width: 600px` block's `.main-dropdown { padding-top: 5.75rem }`
+   reserves room for the hamburger's own corner at that block's `.app`/
+   `.topbar` padding. The landscape block above tightens both, so a device
+   matching both conditions (a small phone held sideways) needs less — left
+   at 5.75rem it would waste real space in an already-short panel. Source
+   order, not specificity, is why this must come after both: media queries
+   add none, so the later rule simply wins wherever more than one matches. */
+@media (max-width: 600px) and (max-height: 500px) and (orientation: landscape) {
+  .main-dropdown {
+    padding-top: 4.85rem;
   }
 }

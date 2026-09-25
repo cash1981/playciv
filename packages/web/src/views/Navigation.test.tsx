@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { Navigation } from './Navigation.js'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('Navigation hamburger menu', () => {
   it('keeps the site links and account actions inside one collapsible menu', () => {
@@ -48,6 +51,8 @@ describe('Navigation hamburger menu', () => {
     expect(menu.hasAttribute('open')).toBe(false)
     fireEvent.click(summary)
     expect(menu.hasAttribute('open')).toBe(true)
+    fireEvent.click(summary)
+    expect(menu.hasAttribute('open')).toBe(false)
   })
 
   it('closes the menu after a link inside it is used', () => {
@@ -135,7 +140,7 @@ describe('Navigation game menu section', () => {
         onNavigate={vi.fn()}
         onSignOut={vi.fn()}
         onToggleTheme={vi.fn()}
-        game={{ withdrawDisabled: false, onWithdraw, canDelete: false, deleteDisabled: false, onDelete }}
+        game={{ canWithdraw: true, withdrawDisabled: false, onWithdraw, canDelete: false, deleteDisabled: false, onDelete }}
       />,
     )
 
@@ -143,8 +148,6 @@ describe('Navigation game menu section', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Withdraw' }))
     expect(window.confirm).toHaveBeenCalledWith('Withdraw from this game?')
     expect(onWithdraw).toHaveBeenCalledOnce()
-
-    vi.restoreAllMocks()
   })
 
   it('skips the action when the confirmation is declined', () => {
@@ -159,14 +162,36 @@ describe('Navigation game menu section', () => {
         onNavigate={vi.fn()}
         onSignOut={vi.fn()}
         onToggleTheme={vi.fn()}
-        game={{ withdrawDisabled: false, onWithdraw: vi.fn(), canDelete: true, deleteDisabled: false, onDelete }}
+        game={{ canWithdraw: true, withdrawDisabled: false, onWithdraw: vi.fn(), canDelete: true, deleteDisabled: false, onDelete }}
       />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete game' }))
     expect(onDelete).not.toHaveBeenCalled()
+  })
 
-    vi.restoreAllMocks()
+  it('offers Delete but not Withdraw to an admin who never joined the game', () => {
+    render(
+      <Navigation
+        player={{ id: 'admin1', username: 'admin', email: null, role: 'admin', disabled: false }}
+        screen="game"
+        theme="dark"
+        onNavigate={vi.fn()}
+        onSignOut={vi.fn()}
+        onToggleTheme={vi.fn()}
+        game={{
+          canWithdraw: false,
+          withdrawDisabled: true,
+          onWithdraw: vi.fn(),
+          canDelete: true,
+          deleteDisabled: false,
+          onDelete: vi.fn(),
+        }}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: 'Withdraw' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Delete game' })).not.toBeNull()
   })
 })
 
