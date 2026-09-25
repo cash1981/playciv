@@ -13,11 +13,41 @@ _Last updated: 2026-09-25_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 548 engine, 208 server, 239 web on `feat/issue-177-176-menu-landscape` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 548 engine, 208 server, 241 web on `feat/issue-173-coin-source-civ-name` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Issue #173: the Coins tab heads each player's column with their
+  civilization, and draws a vertical divider between every column.** The
+  human, with a screenshot: "Coin source should have civ name not nickname"
+  plus "Can we also get vertical bars like the status table has". Both were
+  small: `CoinSection` (`StatusPanel.tsx`) now renders
+  `row.civilizationName ?? row.username` in each `<th>` — the username stays
+  as the fallback for a player who has not revealed a civilization yet, since
+  an empty header would be worse than the nickname it replaces — and every
+  per-player cell (header, body and the `tfoot` Total row) reuses the Status
+  table's existing `status-group-start` class for its `border-left` divider.
+  The Coins table's `<thead>` has a single row, unlike the Status table's two,
+  so a new `.status-table thead tr:only-child th.status-group-start` CSS rule
+  was needed alongside the existing selectors — read-only reviewed and
+  confirmed it cannot also start matching the Status table (whose `<thead>`
+  keeps two rows). No old-system reference: the Coins tab (issue #158) is
+  original to this project. No hidden-information change — `civilizationName`
+  reads the same `PlayerView.civilization` field the Status tab's own
+  Civilization column already shows, which the engine only populates once a
+  player actually reveals their civilization. Read-only review approved in one
+  round, two nits left as-is (a test fixture could reuse one `coinView()` call;
+  a revealed player's counter buttons keep their username in `aria-label` while
+  the header now shows the civ name — the username is the unambiguous
+  identity, so this was left deliberately). 2 new web tests (241 total,
+  548 engine, 208 server unchanged). Full checks pass. Browser-verified against
+  a real local server: registered two users, joined a 2-player game, revealed
+  one player's civilization ("French") through the real reveal API, and
+  confirmed the Coins tab showed "FRENCH" for that column and the username for
+  the other, with a visible divider between every column; the Status tab was
+  unaffected. Branch `feat/issue-173-coin-source-civ-name`.
 
 - **Issues #177/#176: a hamburger menu with a Game section, a turn/phase
   title, and a landscape-width fix.** Two client-only issues from the
