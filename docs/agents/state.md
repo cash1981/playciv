@@ -13,11 +13,20 @@ _Last updated: 2026-09-25_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 548 engine, 208 server, 222 web on `feat/issue-174-board-undo-redo` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 548 engine, 208 server, 223 web on `feat/draw-before-chat-log` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Draw is the first panel after the board.** The existing Draw panel now
+  appears above the responsive Log/Chat pair; Hand and every later panel keep
+  their previous order. A `GameView` regression test pins the board, Draw,
+  Log/Chat and Hand composition directly. Read-only review approved after the
+  first round required this stronger composition-level test. Full checks pass
+  (548 engine, 208 server, 223 web tests), and a local spectator browser pass
+  confirmed Draw above Log after the board. Branch
+  `feat/draw-before-chat-log`.
 
 - **Item card styles no longer inherit the 900px breakpoint.** Closed the
   navigation/touch-target media query immediately after `.board-palette`,

@@ -436,9 +436,9 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
       />
 
       <div className="panel-stack">
-        {/* Log and chat sit directly under the board: it is what a player
-            reading a turn-by-forum game looks at first. Side by side when the
-            viewport has room, stacked when it does not (`.panel-pair`). */}
+        {/* Draw is the first panel after the board. Log and chat retain their
+            responsive side-by-side pair below it (`.panel-pair`). */}
+        <DrawPanel gameId={gameId} busy={interactionBusy} yourTurn={yourTurn} run={run} view={displayedView} />
         <div className="panel-pair">
           <LogPanel
             gameId={gameId}
@@ -459,7 +459,6 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
             />
           )}
         </div>
-        <DrawPanel gameId={gameId} busy={interactionBusy} yourTurn={yourTurn} run={run} view={displayedView} />
         <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <OpponentHandPanel opponents={displayedView.opponents} />
         <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
