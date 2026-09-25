@@ -12,12 +12,8 @@
  * re-requests page 1 with a larger size and replaces the shown list wholesale
  * (issue #166), rather than appending client-side — so a feed that changes
  * between loads (e.g. a reshuffle) can never leave a stale or duplicated
- * entry on screen. The server clamps `size` to `MAX_REVEALED_SIZE` (100); once
- * the requested size exceeds that, the response's own `size` comes back
- * smaller than what was asked for, which is the signal used below to stop
- * offering "Load more" rather than requesting the same capped 100 forever.
- * Known limitation: a feed past 100 entries has no way to reach the rest from
- * this panel (see `decisions.md`).
+ * entry on screen. See the `atCap` comment below for the server's 100-item
+ * cap and the known limitation it leaves (recorded in `decisions.md`).
  *
  * Everything here is already public — the server only ever returns discarded
  * items and non-hidden hand items — so the full card face is shown.
@@ -79,8 +75,21 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
 
   const total = data?.total ?? 0
   const items = data?.items ?? []
-  const atCap = data !== null && data.size < visibleSize
+  // The server clamps `size` to `MAX_REVEALED_SIZE` (100); once the requested
+  // size exceeds that, the response's own `size` comes back smaller than what
+  // was asked for. That is the signal used here to stop offering "Load more"
+  // rather than requesting the same capped 100 forever. Known limitation: a
+  // feed past 100 entries has no way to reach the rest from this panel — see
+  // the 2026-09-25 "issue #166" entry in decisions.md.
+  //
+  // Gated on `loadError === null`: a failed request leaves `data` at its
+  // last successful (smaller) size while `visibleSize` has already moved on,
+  // which would otherwise look identical to hitting the cap and disable
+  // "Load more" until a manual Refresh — the error banner plus a still-live
+  // button is the honest state instead.
+  const atCap = data !== null && loadError === null && data.size < visibleSize
   const hasMore = !atCap && items.length < total
+  const capped = atCap && items.length < total
 
   return (
     <CollapsiblePanel id="revealed" title={`Revealed and Discarded Items (${total})`} defaultOpen={false}>
@@ -96,6 +105,7 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
       <div className="row" style={{ marginTop: '0.5rem', alignItems: 'center' }}>
         <span className="muted">
           Showing {items.length} of {total}
+          {capped && ' — older items are not shown here'}
         </span>
         <button
           className="small"

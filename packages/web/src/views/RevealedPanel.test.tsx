@@ -127,11 +127,40 @@ describe('RevealedPanel', () => {
       fireEvent.click(button)
       visibleSize += 5
       const expectedShown = Math.min(visibleSize, 100)
-      await waitFor(() => expect(screen.getByText(`Showing ${expectedShown} of 105`)).toBeTruthy())
+      const expectedText =
+        visibleSize > 100
+          ? `Showing ${expectedShown} of 105 — older items are not shown here`
+          : `Showing ${expectedShown} of 105`
+      await waitFor(() => expect(screen.getByText(expectedText)).toBeTruthy())
     }
 
-    expect(screen.getByText('Showing 100 of 105')).toBeTruthy()
+    expect(screen.getByText('Showing 100 of 105 — older items are not shown here')).toBeTruthy()
     expect(screen.getByText('Load more')).toHaveProperty('disabled', true)
+  })
+
+  it('does not mistake a failed "Load more" click for hitting the cap', async () => {
+    const revealed = vi
+      .spyOn(api, 'revealed')
+      .mockImplementationOnce(serverRevealed(feed(20)))
+      .mockImplementationOnce(() => Promise.reject(new Error('network blip')))
+      .mockImplementation(serverRevealed(feed(20)))
+
+    render(<RevealedPanel gameId="game-1" reloadCount={0} />)
+    await waitFor(() => expect(screen.getByText('Item 6')).toBeTruthy())
+
+    fireEvent.click(screen.getByText('Load more'))
+
+    await waitFor(() => expect(screen.getByText('network blip')).toBeTruthy())
+    // Still showing the last good page, and Load more is live again (not
+    // stuck disabled by a stale comparison against the failed request's size).
+    expect(screen.getByText('Showing 6 of 20')).toBeTruthy()
+    expect(screen.getByText('Load more')).toHaveProperty('disabled', false)
+
+    fireEvent.click(screen.getByText('Refresh'))
+
+    await waitFor(() => expect(screen.getByText('Item 11')).toBeTruthy())
+    expect(screen.getByText('Showing 11 of 20')).toBeTruthy()
+    expect(revealed).toHaveBeenNthCalledWith(3, 'game-1', 1, 11)
   })
 
   it('paginates the historical (replay) feed client-side the same way', async () => {
