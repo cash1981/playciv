@@ -496,6 +496,99 @@ label > textarea {
   text-decoration: none;
 }
 
+/* The hamburger menu (issue #177) reuses `.navigation-menu`/
+   `.navigation-dropdown` — the disclosure "Rules and help" already used —
+   for both the outer site menu and the nested Rules-and-help submenu, so the
+   `max-width: 600px` block's fixed-full-panel treatment further down applies
+   to both without extra rules. This part is unconditional: the hamburger
+   trigger replaces the site links/account row at every width, not only on a
+   narrow screen. */
+.main-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  color: var(--text);
+}
+
+.navigation-menu > summary {
+  list-style: none;
+}
+
+.navigation-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.hamburger-icon {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 1.3rem;
+}
+
+.hamburger-icon span {
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.main-dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+/* `.site-navigation`/`.topbar-actions` get `flex: 1 1 100%` from the
+   `max-width: 600px` block below, sized for when they were direct row
+   children of `.topbar` stacking to full-width rows. Nested inside this
+   flex *column* instead, a 100% flex-basis on the main (vertical) axis made
+   each one try to fill the whole panel height, splitting it between them —
+   a two-class selector overrides that regardless of media-query source
+   order, without touching the protected block itself. */
+.main-dropdown .site-navigation,
+.main-dropdown .topbar-actions {
+  flex: 0 1 auto;
+}
+
+/* The `max-width: 600px` block below keeps `.navigation-menu > summary` at
+   `z-index: 11`, above its own now-open `.navigation-dropdown`, so the
+   trigger stays reachable to close the panel again. For the outer hamburger
+   that summary sits at the panel's own top-left corner, so without this the
+   panel's first row renders right underneath/behind it. A fresh media query
+   (not an edit of the protected block) reserves that corner. */
+@media (max-width: 600px) {
+  .main-dropdown {
+    padding-top: 5.75rem;
+  }
+}
+
+/* Withdraw/Delete, moved out of the game page's own header (issue #177) —
+   only rendered while a game page is showing, see `Navigation`'s `game`
+   prop. Matches old-civ-web's `nav.html`, which had the same two actions in
+   its own top navbar's "Game options"/"Admin settings" dropdowns. */
+.navigation-game-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  margin: 0.2rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.navigation-game-actions h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 .navigation-dropdown a:hover,
 .navigation-dropdown a:focus-visible {
   background: var(--panel-2);
@@ -2264,4 +2357,60 @@ ul.history > li {
 .arena-unit-card input[type='number'] {
   width: 2.4rem;
   padding: 0.1rem 0.2rem;
+}
+
+/* --- Landscape phones (issue #176) -----------------------------------------
+   A real bug, found by measuring a 812x375 viewport rather than guessing from
+   the human's screenshot: `.board-layout` switches to `flex-direction: column`
+   below `max-width: 900px` (a rule further up), stacking `.board-scroll`
+   above `.board-palette`. In that column direction the two become cross-axis
+   (horizontal) items, and `.board-layout`'s own `align-items: flex-start`
+   (also further up) leaves their width at fit-content instead of stretching
+   them to the container — so each sized itself off its own wide inline-styled
+   content (the zoomed board frame, the palette grid) instead of the space
+   actually available, overflowing the page horizontally by about 80px in
+   that test. The `max-width: 700px` block further down already gives both
+   `width: 100%` for exactly this reason; it just stops one breakpoint too
+   early; a landscape phone (700-930px wide, so past that cutoff) fell
+   through the gap. This is the real mechanism behind "the map draws over the
+   blue background" — not a z-index/overlap bug, a plain width overflow.
+   Closing the gap at the *same* `max-width: 900px` the column-stacking
+   itself uses (not editing that protected rule, a fresh one beside it) fixes
+   it at every width that can stack, landscape phone or not.
+
+   Every rule above this point otherwise keys its compact/mobile treatment
+   off viewport *width* alone (600/700/900px). A phone in landscape is wide
+   but short (roughly 350-430px tall), so it still fell through to the
+   desktop-height rules in a viewport that is actually cramped:
+   `.board-scroll`'s default `max-height: 80vh` ate most of a short
+   viewport, squeezing the topbar and the game header into a sliver. This
+   second block keys off *height* instead, so a short landscape viewport
+   gets the same reclaiming of vertical space regardless of its width.
+   `width: 100%` on `.app` mirrors the same declaration in the
+   `max-width: 600px` block further down, so nothing narrower than the
+   viewport is left unfilled there either. */
+@media (max-width: 900px) {
+  .board-scroll {
+    width: 100%;
+  }
+
+  .board-palette {
+    width: 100%;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .app {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .topbar {
+    padding: 0.35rem 0.6rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .board-scroll {
+    max-height: 55vh;
+  }
 }
