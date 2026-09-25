@@ -12,7 +12,23 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### issue-172-egypt-wonder-reveal
+
+- **Owner:** Claude (orchestrator)
+- **Branch:** `feat/issue-172-egypt-wonder-reveal`
+- **Brief:** `docs/agents/tasks/issue-172-egypt-wonder-reveal.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/actions/draw.ts`
+  - `packages/engine/src/actions/player.ts`
+  - `packages/engine/test/player-action.test.ts`
+  - `packages/engine/test/draw-action.test.ts`
+  - `docs/agents/decisions.md`
+  - `docs/agents/state.md`
+  - `docs/agents/task-board.md`
+- **Notes:** Fixes issue #172 — Egypt's own starting wonder no longer
+  suppresses the start-of-game bulk wonder deal; see the brief for the agreed
+  wonder count.
 
 ---
 
