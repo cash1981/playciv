@@ -2,8 +2,8 @@
 
 - **Slug:** `styles-900px-unclosed-media-query`
 - **Branch:** `fix/styles-900px-unclosed-media-query`
-- **Owner:** Claude (orchestrator, direct)
-- **Status:** in progress
+- **Owner:** Codex (continued from Claude's started task)
+- **Status:** done
 
 ## Goal
 
@@ -91,22 +91,26 @@ as intended.
 
 ## Acceptance criteria
 
-- [ ] `.card-grid`, `.card-grid.small`, `.card-grid.scroll`, `.card`,
+- [x] `.card-grid`, `.card-grid.small`, `.card-grid.scroll`, `.card`,
       `.card-actions` and siblings, and the entire `@media (max-width: 600px)`
       block, are no longer nested inside the `@media (max-width: 900px)`
       block (verified by tracing brace depth, not just reading indentation).
-- [ ] `.board-layout { flex-direction: column }` and
+- [x] `.board-layout { flex-direction: column }` and
       `.board-palette { width: 100% }` are still both scoped to
       `@media (max-width: 900px)`, exactly as before the fix — no
       behaviour change for the board's responsive layout.
-- [ ] The file's total brace count is unchanged (this is a move + a
+- [x] The file's total brace count is unchanged (this is a move + a
       duplicate removal, not a net addition or removal of braces).
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: none — CSS-only, no projection change.
-- [ ] Verified in the browser at a normal desktop width: item-card styling
-      (`.card-grid` layout, card art, actions row) still renders correctly
-      — closing the block does not suddenly make something that depended on
-      being (accidentally) inside it render unstyled.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: none — CSS-only, no projection change.
+- [x] Verified in the browser at a normal desktop width (2530px): the
+      revealed German ItemCard showed its art, title, description and status
+      badge in a correctly sized grid card; the Metalworking card view showed
+      its art and text.
+
+Read-only review approved with no findings. Verification: typecheck passed;
+540 engine, 205 server and 218 web tests passed; build passed; `git diff --check`
+clean.
 
 ## Open questions
 
