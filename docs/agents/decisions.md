@@ -2765,10 +2765,12 @@ previous Previous/Next pager could still reach an arbitrarily long feed by
 turning pages at a fixed size of 20; this "Load more" design cannot, because
 every click asks for a bigger *first* page rather than a next one. Once the
 requested size exceeds 100, the response's own (clamped) `size` field comes
-back smaller than what was asked for — `RevealedPanel` reads that as "the
-cap was hit" and disables "Load more" (labelled "— older items are not shown
-here"), rather than looping on an identical 100-item request forever. Items
-beyond the 100th in the feed become unreachable from this panel.
+back smaller than what was actually asked for that request — `RevealedPanel`
+reads that pairing as "the cap was hit" and disables the "Load more" button,
+appending " — older items are not shown here" to the "Showing N of M"
+caption beside it, rather than looping on an identical 100-item request
+forever. Items beyond the 100th in the feed become unreachable from this
+panel.
 
 The human chose, when presented with three options (raise/remove the
 server's cap; build true accumulating pagination that keeps every item

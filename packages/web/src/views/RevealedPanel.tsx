@@ -40,6 +40,11 @@ interface Props {
 export function RevealedPanel({ gameId, reloadCount, historical = null }: Props): React.JSX.Element {
   const [visibleSize, setVisibleSize] = useState(INITIAL_SIZE)
   const [data, setData] = useState<RevealedPage | null>(null)
+  // The size actually asked for in the request `data` answers — paired with
+  // `data` on every successful response, never with the in-flight
+  // `visibleSize`, so comparing the two below cannot flash a false "capped"
+  // reading while a request is still in the air.
+  const [askedSize, setAskedSize] = useState<number | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const requestEpoch = useRef(0)
 
@@ -53,6 +58,7 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
           page: 1,
           size,
         })
+        setAskedSize(size)
         setLoadError(null)
         return
       }
@@ -60,6 +66,7 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
         const next = await api.revealed(gameId, 1, size)
         if (epoch !== requestEpoch.current) return
         setData(next)
+        setAskedSize(size)
         setLoadError(null)
       } catch (caught) {
         if (epoch !== requestEpoch.current) return
@@ -69,6 +76,13 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
     [gameId, historical],
   )
 
+  // A different game (or entering/leaving replay) starts over at the top of
+  // its own feed rather than carrying over how much of the previous one had
+  // been loaded.
+  useEffect(() => {
+    setVisibleSize(INITIAL_SIZE)
+  }, [gameId, historical])
+
   useEffect(() => {
     void load(visibleSize)
   }, [load, reloadCount, visibleSize])
@@ -77,17 +91,11 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
   const items = data?.items ?? []
   // The server clamps `size` to `MAX_REVEALED_SIZE` (100); once the requested
   // size exceeds that, the response's own `size` comes back smaller than what
-  // was asked for. That is the signal used here to stop offering "Load more"
-  // rather than requesting the same capped 100 forever. Known limitation: a
-  // feed past 100 entries has no way to reach the rest from this panel — see
-  // the 2026-09-25 "issue #166" entry in decisions.md.
-  //
-  // Gated on `loadError === null`: a failed request leaves `data` at its
-  // last successful (smaller) size while `visibleSize` has already moved on,
-  // which would otherwise look identical to hitting the cap and disable
-  // "Load more" until a manual Refresh — the error banner plus a still-live
-  // button is the honest state instead.
-  const atCap = data !== null && loadError === null && data.size < visibleSize
+  // was asked for it. That is the signal used here to stop offering
+  // "Load more" rather than requesting the same capped 100 forever. Known
+  // limitation: a feed past 100 entries has no way to reach the rest from
+  // this panel — see the 2026-09-25 "issue #166" entry in decisions.md.
+  const atCap = data !== null && askedSize !== null && data.size < askedSize
   const hasMore = !atCap && items.length < total
   const capped = atCap && items.length < total
 

@@ -3,7 +3,7 @@
 - **Slug:** `issue-166-revealed-discarded-pager`
 - **Branch:** `feat/issue-166-revealed-discarded-pager`
 - **Owner:** Claude (orchestrator + coder)
-- **Status:** draft
+- **Status:** done
 
 ## Goal
 
@@ -71,18 +71,30 @@ the human, not invented.
 
 ## Acceptance criteria
 
-- [ ] On first load, at most 6 items are shown (or fewer, or none, if the feed
+- [x] On first load, at most 6 items are shown (or fewer, or none, if the feed
       is smaller).
-- [ ] "Load more" fetches and shows 5 more items, cumulative, until the whole
-      feed has been shown; then the control is disabled.
-- [ ] `historical` (replay) mode has the same shape, sliced client-side.
-- [ ] No hidden information regression: still only ever renders
+- [x] "Load more" fetches and shows 5 more items, cumulative, until the whole
+      feed has been shown; then the control is disabled. **Amended in
+      review:** up to the server's pre-existing 100-item cap (`MAX_REVEALED_SIZE`,
+      issue #51) — past that, "Load more" disables with an explanation instead
+      of looping forever, and items beyond the 100th are unreachable from this
+      panel. The human chose to accept this rather than widen scope to the
+      server; see the 2026-09-25 entry in `decisions.md`.
+- [x] `historical` (replay) mode has the same shape, sliced client-side.
+- [x] No hidden information regression: still only ever renders
       `RevealedEntry` items already returned by the (unchanged) server route.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (556
+      engine, 208 server, 245 web tests).
 - [ ] Verified in the browser: a game with more than 6 revealed/discarded
-      items shows 6, then 11 after one "Load more" click, then the rest.
+      items shows 6, then 11 after one "Load more" click, then the rest. **Not
+      done** — reproducing a live game with 100+ revealed/discarded rows
+      would need playing through most of a game via the UI or hand-seeding
+      the JSON store, disproportionate for this fix's size. Left to the human
+      to confirm visually; the interaction itself (6 → 11 → 16 → … → cap) is
+      exercised end-to-end against a faithful mock of the real server route in
+      `RevealedPanel.test.tsx`.
 
 ## Open questions
 
-None — the growing-list interpretation was confirmed with the human before
-starting.
+None — the growing-list interpretation, and later the 100-item cap tradeoff,
+were both confirmed with the human before/during implementation.

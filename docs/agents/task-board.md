@@ -12,17 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-166-revealed-discarded-pager
-
-- **Owner:** Claude (Sonnet 5)
-- **Branch:** `feat/issue-166-revealed-discarded-pager`
-- **Brief:** `docs/agents/tasks/issue-166-revealed-discarded-pager.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/RevealedPanel.tsx`
-  - `packages/web/src/views/RevealedPanel.test.tsx`
-- **Notes:** Small client-only fix for GitHub issue #166. Server route and
-  engine projection are untouched.
+_Nothing claimed._
 
 ---
 
