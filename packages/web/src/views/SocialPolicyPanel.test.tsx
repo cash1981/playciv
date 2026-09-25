@@ -37,9 +37,9 @@ const policy = (
 })
 
 /**
- * The real `SOCIAL_POLICY` sheet, all eight, including the one-way
- * `Military Tradition` → `Patronage` flipside that makes the engine's check
- * directional rather than symmetric (`Patronage` points back at `Rationalism`).
+ * The real `SOCIAL_POLICY` sheet, all eight, in its four flipside pairs
+ * (issue #175: `Military Tradition` used to point at `Patronage` instead of
+ * back at `Pacifism`, a data typo now corrected in `gamedata-faf-waw.json`).
  */
 const CATALOGUE: readonly SocialPolicyItem[] = [
   policy('Rationalism', 'Patronage'),
@@ -49,7 +49,7 @@ const CATALOGUE: readonly SocialPolicyItem[] = [
   policy('Patronage', 'Rationalism'),
   policy('Organized Religion', 'Natural Religion'),
   policy('Urban Development', 'Expansionsim'),
-  policy('Military Tradition', 'Patronage'),
+  policy('Military Tradition', 'Pacifism'),
 ]
 
 /** One opponent exactly as `toPlayerView` sends them: revealed policies only. */
@@ -283,21 +283,20 @@ describe('SocialPolicyPanel availability', () => {
     expect(message).toContain('Patronage (flipside of Rationalism)')
   })
 
-  it('mirrors the engine: the flipside check is directional, so Patronage stays selectable', async () => {
+  it('blocks Military Tradition once Pacifism is chosen, and vice versa (issue #175)', async () => {
     renderPanel({
       catalogue: CATALOGUE,
-      policiesChosen: [policy('Military Tradition', 'Patronage')],
+      policiesChosen: [policy('Pacifism', 'Military Tradition')],
     })
-    await screen.findByRole('option', { name: 'Military Tradition — already chosen' })
+    await screen.findByRole('option', { name: 'Pacifism — already chosen' })
 
     const select = screen.getByRole('combobox', {
       name: 'Choose a social policy',
     }) as HTMLSelectElement
     const byLabel = new Map([...select.options].map((option) => [option.textContent, option.disabled]))
-    expect(byLabel.get('Military Tradition — already chosen')).toBe(true)
-    expect(byLabel.get('Pacifism — flipside of Military Tradition')).toBe(true)
-    // A symmetric rule would block this; the engine, and therefore the panel,
-    // does not.
+    expect(byLabel.get('Pacifism — already chosen')).toBe(true)
+    expect(byLabel.get('Military Tradition — flipside of Pacifism')).toBe(true)
+    // Unrelated pairs stay unaffected.
     expect(byLabel.get('Patronage')).toBe(false)
   })
 

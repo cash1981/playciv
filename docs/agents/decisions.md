@@ -2534,3 +2534,36 @@ failed — the save is not undone.
 active player and phase, and `notifications.ts`'s `turnEnded` mail gets one
 extra sentence naming the phase. Both reuse `activeTurnStatus`, so the log,
 the mail and the on-screen status can never disagree.
+
+## 2026-09-25 - Issue #175: Military Tradition's flipside was a data typo, not a one-way design
+
+**Decision.** `gamedata-faf-waw.json`'s `Social Policy` sheet had `Military
+Tradition`'s flipside recorded as `Patronage`; corrected to `Pacifism`, so the
+pair is symmetric like the other three (`Rationalism` ↔ `Patronage`,
+`Natural Religion` ↔ `Organized Religion`, `Expansionsim` ↔
+`Urban Development`). `Pacifism`'s own flipside was already `Military
+Tradition` and is unchanged. `SocialPolicyPanel.test.tsx`'s `CATALOGUE`
+fixture and its test for this pair were updated to match.
+
+**Why.** Issue #175: with `Pacifism` chosen, `Military Tradition` stayed
+selectable in the picker. Re-running `pnpm --filter @civ/engine gamedata`
+against the local (gitignored) `old-civ-rest` reference copy reproduced the
+same bad value byte-for-byte, confirming this is a data-entry error in the
+old system's own spreadsheet rather than a porting bug — 7 of the 8 rows
+already paired up symmetrically, and the two cards are opposite sides of one
+physical FFG card, same as the other three pairs.
+
+**This corrects the 2026-09-22 entry** ("The social policy picker greys out
+exactly what the engine rejects"), which read this exact asymmetry as
+intentional and warned against "fixing" it into symmetry. That reasoning
+mistook the typo for a deliberate one-way design. The check itself —
+`chooseSocialPolicy` and `policyUnavailableReason` comparing only the
+candidate's own `flipside` against the names held, not "same pair both ways"
+— is still correct and unchanged; it was only ever fed a bad value for this
+one row. A future reader should not restore `Military Tradition` → `Patronage`
+on the theory that this decision was wrong the first time.
+
+**Consequences.** The source `.xlsx` in `old-civ-rest` was left as is — that
+copy is gitignored and not shared between checkouts, so fixing only there
+would not reach anyone else. The committed JSON is what the engine actually
+reads at runtime and is now the corrected source of truth for this cell.
