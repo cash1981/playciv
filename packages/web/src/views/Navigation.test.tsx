@@ -170,6 +170,30 @@ describe('Navigation game menu section', () => {
     expect(onDelete).not.toHaveBeenCalled()
   })
 
+  it('disables Withdraw/Delete exactly as `withdrawDisabled`/`deleteDisabled` say', () => {
+    render(
+      <Navigation
+        player={{ id: 'p1', username: 'cash1981', email: null, role: 'admin', disabled: false }}
+        screen="game"
+        theme="dark"
+        onNavigate={vi.fn()}
+        onSignOut={vi.fn()}
+        onToggleTheme={vi.fn()}
+        game={{
+          canWithdraw: true,
+          withdrawDisabled: true,
+          onWithdraw: vi.fn(),
+          canDelete: true,
+          deleteDisabled: false,
+          onDelete: vi.fn(),
+        }}
+      />,
+    )
+
+    expect((screen.getByRole('button', { name: 'Withdraw' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Delete game' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('offers Delete but not Withdraw to an admin who never joined the game', () => {
     render(
       <Navigation

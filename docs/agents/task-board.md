@@ -12,21 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-177-176-menu-landscape
-
-- **Owner:** Claude (Sonnet 5)
-- **Branch:** `feat/issue-177-176-menu-landscape`
-- **Brief:** `docs/agents/tasks/issue-177-176-menu-landscape.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/Navigation.tsx`
-  - `packages/web/src/views/Navigation.test.tsx`
-  - `packages/web/src/views/GameView.tsx`
-  - `packages/web/src/views/GameView.test.tsx`
-  - `packages/web/src/App.tsx`
-  - `packages/web/src/styles.css`
-- **Notes:** issues #177 (menu/title redesign) and #176 (landscape layout),
-  one branch and PR per the human's request.
+_Nothing claimed._
 
 ---
 

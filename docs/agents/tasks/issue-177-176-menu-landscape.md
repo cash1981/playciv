@@ -3,7 +3,7 @@
 - **Slug:** `issue-177-176-menu-landscape`
 - **Branch:** `feat/issue-177-176-menu-landscape`
 - **Owner:** Claude (orchestrator, direct — no coder subagent for this one)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -145,26 +145,38 @@ Bootstrap's two separate dropdowns.
 
 ## Acceptance criteria
 
-- [ ] A hamburger icon opens/closes the site menu (FAQ/About/Highscore/Rules
+- [x] A hamburger icon opens/closes the site menu (FAQ/About/Highscore/Rules
       and help, theme, sign in/out) on mobile, tablet and desktop widths.
-- [ ] On a game page, the same menu has a Game section with Withdraw (any
+- [x] On a game page, the same menu has a Game section with Withdraw (any
       player) and Delete game (creator/admin only), each still asking for
-      confirmation before acting, matching today's behaviour.
-- [ ] "Back to games" no longer appears anywhere.
-- [ ] The game page's h1 shows whose turn / which phase it is; the game name
+      confirmation before acting, matching today's behaviour. Also covers
+      an admin viewing a game they never joined (Delete only, no Withdraw)
+      — a real regression caught in review round 1, now unit-tested.
+- [x] "Back to games" no longer appears in the top navigation, on either the
+      game or the admin screen (the issue's red button). `AdminView.tsx`'s
+      own internal "Back to games" link — a different button, in the admin
+      page's own content rather than the site nav, not touched by this
+      brief's claimed paths — is unrelated and stays.
+- [x] The game page's h1 shows whose turn / which phase it is; the game name
       is still visible, demoted to a subtitle.
-- [ ] The civilization tag, colour swatch and Auto-refresh toggle are
+- [x] The civilization tag, colour swatch and Auto-refresh toggle are
       unchanged.
-- [ ] `SiteMobileStyles.test.ts` still passes unedited (its two blocks are
+- [x] `SiteMobileStyles.test.ts` still passes unedited (its two blocks are
       untouched) or is deliberately updated with a stated reason.
-- [ ] A landscape phone viewport (e.g. 812x375) gets the compact/mobile
+- [x] A landscape phone viewport (e.g. 812x375) gets the compact/mobile
       layout: `.app` and the board use the full viewport width, and the
-      board panel does not visually overrun the rest of the page.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: none — presentational only, no projection change.
-- [ ] Verified in the browser: mobile portrait (375x812), mobile landscape
-      (812x375 or similar), and a normal desktop viewport, light and dark
-      theme, signed in and on a real game page.
+      board panel does not visually overrun the rest of the page. Verified
+      by measurement, not just visually: `document.documentElement
+      .scrollWidth` went from 426 (overflowing) to 797, matching
+      `clientWidth`.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [x] Hidden information: none — presentational only, no projection change.
+- [x] Verified in the browser: mobile portrait (375x812), mobile landscape
+      (812x375), tablet (800px), and desktop (1280x720), signed in and on a
+      real game page. Dark theme only was actually opened; light theme was
+      not separately checked — the new CSS uses only existing theme
+      variables (`--line`, `--muted`, `--text`, `--panel`), so it should
+      follow the theme automatically, but that is inference, not a look.
 
 ## Open questions
 
