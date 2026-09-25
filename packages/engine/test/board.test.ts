@@ -704,6 +704,15 @@ describe('migration', () => {
     expect(migrated.board.slotStep).toBe(rectangle.slotStep)
     // The old four-corner table wraps: player 5 shares player 1's corner
     expect(startingCorner(migrated.board, 5)).toEqual(startingCorner(migrated.board, 1))
+
+  })
+
+  it('gives a board saved before redo existed an empty redo stack', () => {
+    const state = place(firstCivGame(), 'figures/redarmy', 100, 100)
+    const older = { ...state, board: { ...state.board, redo: undefined } }
+
+    const migrated = migrateGameState(older as unknown as GameState)
+    expect(migrated.board.redo).toEqual([])
   })
 })
 

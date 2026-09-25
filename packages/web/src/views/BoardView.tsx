@@ -14,7 +14,7 @@
  *   piece on board     tap/select/move on touch, plus pointer dragging with a mouse
  *
  * Global replay is owned by GameView; this component only renders the supplied
- * live or historical board. Live board undo remains available.
+ * live or historical board. Live board undo and redo remain available.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -52,6 +52,8 @@ interface Props {
   readonly areas: readonly BoardArea[]
   readonly busy: boolean
   readonly readOnly?: boolean
+  /** Whose Undo button this is — only enabled when they made the last change. */
+  readonly youId?: string | null
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
 }
 
@@ -188,6 +190,7 @@ export function BoardView({
   areas,
   busy,
   readOnly = false,
+  youId = null,
   run,
 }: Props): React.JSX.Element {
   const [assets, setAssets] = useState<readonly BoardAsset[]>([])
@@ -491,11 +494,19 @@ export function BoardView({
         </label>
         <button
           className="small"
-          disabled={busy || readOnly || board.history.length === 0}
-          title="Take back the last change to the board"
+          disabled={busy || readOnly || board.history.at(-1)?.playerId !== youId}
+          title="Take back your last change to the board"
           onClick={() => void run(() => api.undoBoard(gameId))}
         >
           Undo
+        </button>
+        <button
+          className="small"
+          disabled={busy || readOnly || board.redo.length === 0}
+          title="Bring back the last undone change"
+          onClick={() => void run(() => api.redoBoard(gameId))}
+        >
+          Redo
         </button>
       </div>
 

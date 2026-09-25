@@ -30,8 +30,9 @@ export function statusFor(error: EngineError): number {
     case 'BOARD_PIECE_NOT_FOUND':
     case 'UNKNOWN_WONDER_OWNER':
       return 404
-    // Nothing on the board to take back
+    // Nothing on the board to take back, or nothing undone to bring back
     case 'NOTHING_TO_UNDO_ON_BOARD':
+    case 'NOTHING_TO_REDO_ON_BOARD':
       return 412
     // Java: 409 Conflict — there is no current turn to end yet
     case 'GAME_NOT_STARTED':
@@ -64,6 +65,7 @@ export function statusFor(error: EngineError): number {
     case 'NO_ACCESS':
     case 'GAME_CREATOR_MUST_END_GAME':
     case 'ONLY_GAME_CREATOR_CAN_END_GAME':
+    case 'BOARD_UNDO_NOT_YOURS':
       return 403
     case 'ITEM_NOT_LOOTABLE':
       return 406

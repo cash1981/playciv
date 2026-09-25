@@ -2591,3 +2591,50 @@ candidate's own `flipside` against the names held, not "same pair both ways"
 — is still correct and unchanged; it was only ever fed a bad value for this
 one row. A future reader should not restore `Military Tradition` → `Patronage`
 on the theory that this decision was wrong the first time.
+
+---
+
+## 2026-09-24 — Issue #174: board undo is scoped to the acting player, and gets a redo
+
+Reported directly by the human: "Undo is broken. It undos other players
+orders. It should only undo your current orders, and then there should be a
+way to redo the undo. I did one undo too much and I couldnt redo it." The
+board and its undo have no old-system reference (Java had only a link to a
+Google slide), so this is new design, not a port, and was clarified with the
+human before starting rather than guessed:
+
+1. **Undo does not reach back past another player's more recent, unrelated
+   move.** It only fires while the caller's own change is still the board's
+   very last one; once anyone else acts, that player's Undo button goes back
+   to disabled until they act again. The alternative — skipping past other
+   players' moves to find your own last one, then replaying — was offered
+   and declined as more surprising on a board everyone edits at once.
+2. **Undo/redo supports a full stack, delivered by chaining single steps.**
+   There is no separate multi-entry undo buffer; each Undo simply asks "is
+   the board's last change mine?" again, so a player can walk back through
+   several of their own consecutive changes, and forward again through
+   `redo`, as long as nobody else has acted in between.
+3. **Redo is cleared by anyone's next change, not only the same player's.**
+   Any board change at all invalidates it — the same way a text editor's
+   redo dies once you keep typing, regardless of who is typing.
+4. **Redo is not scoped to whoever undid the change.** Undo is deliberately
+   scoped to its author (that is the bug being fixed), but redo follows the
+   board's existing "everyone may move everything" rule: once something is
+   sitting on the redo stack, any player with access may bring it back.
+
+**A consequence worth knowing, not itself a decision:** a change made by a
+player who later withdraws from the game can no longer be undone by anyone,
+including that player — `undoLastBoardChange` requires access via
+`hasUserAccess`, which a withdrawn player fails once moved to
+`withdrawnPlayers`, so the request is refused with `NO_ACCESS` before the
+`playerId` match is even reached. The piece would need removing by hand
+instead. Unreachable today except by withdrawing immediately after moving
+something, and no worse than leaving the piece as it is.
+
+**Also worth knowing:** a change brought back by Redo gets its `logLength`
+refreshed to the log's current length rather than keeping the value from
+when it first happened. `logLength` only exists so replay can trim the game
+log to what was known at each step, and since Redo re-appends the entry at
+the *end* of history, using its original value could make `logLength` go
+backwards along the history array if an unrelated non-board action (a card
+draw, say) grew the log while the change sat on the redo stack.

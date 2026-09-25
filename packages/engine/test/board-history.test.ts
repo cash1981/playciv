@@ -13,6 +13,7 @@ import {
   bringToFront,
   movePiece,
   placePiece,
+  redoLastBoardChange,
   removePiece,
   rotatePiece,
   sendToBack,
@@ -195,11 +196,13 @@ describe('undo', () => {
     expect(state.board.pieces[0]?.rotation).toBe(0)
   })
 
-  it('another player can undo your change', () => {
-    // Everyone may move everything, so everyone may take it back
+  it('another player cannot undo your change', () => {
+    // Everyone may move everything, but only your own moves are yours to undo
     const state = place(firstCivGame(), 'figures/redarmy', 200, 300)
-    const undone = unwrap(undoLastBoardChange(state, KARANDRAS1))
-    expect(undone.board.pieces).toHaveLength(0)
+    expect(unwrapErr(undoLastBoardChange(state, KARANDRAS1))).toEqual({
+      kind: 'BOARD_UNDO_NOT_YOURS',
+    })
+    expect(state.board.pieces).toHaveLength(1)
   })
 
   it('an empty history gives NOTHING_TO_UNDO_ON_BOARD', () => {
@@ -208,7 +211,7 @@ describe('undo', () => {
     })
   })
 
-  it('repeated undo walks all the way back to an empty board', () => {
+  it('repeated undo by the same player walks all the way back to an empty board', () => {
     let state = firstCivGame()
     state = place(state, 'figures/redarmy', 100, 100)
     state = place(state, 'markers/coin1', 300, 300)
@@ -220,6 +223,90 @@ describe('undo', () => {
       state = unwrap(undoLastBoardChange(state, CASH1981))
     }
     expect(state.board.pieces).toHaveLength(0)
+  })
+
+  it('stops when another player has since put their own change on top', () => {
+    let state = place(firstCivGame(), 'figures/redarmy', 100, 100)
+    state = unwrap(placePiece(state, { playerId: KARANDRAS1, assetId: 'figures/bluearmy', x: 200, y: 200 }))
+
+    expect(unwrapErr(undoLastBoardChange(state, CASH1981))).toEqual({
+      kind: 'BOARD_UNDO_NOT_YOURS',
+    })
+    expect(state.board.pieces).toHaveLength(2)
+
+    // But its own author can still take it back
+    const undone = unwrap(undoLastBoardChange(state, KARANDRAS1))
+    expect(undone.board.pieces).toHaveLength(1)
+  })
+})
+
+describe('redo', () => {
+  it('brings back the change that undo just took away', () => {
+    const state = place(firstCivGame(), 'figures/redarmy', 200, 300)
+    const undone = unwrap(undoLastBoardChange(state, CASH1981))
+    const redone = unwrap(redoLastBoardChange(undone, CASH1981))
+
+    expect(snapshot(redone.board.pieces)).toBe(snapshot(state.board.pieces))
+    expect(redone.board.history).toHaveLength(1)
+    expect(redone.board.redo).toHaveLength(0)
+  })
+
+  it('is available to any player, not only whoever undid it', () => {
+    const state = place(firstCivGame(), 'figures/redarmy', 200, 300)
+    const undone = unwrap(undoLastBoardChange(state, CASH1981))
+    const redone = unwrap(redoLastBoardChange(undone, KARANDRAS1))
+
+    expect(redone.board.pieces).toHaveLength(1)
+  })
+
+  it('an empty redo stack gives NOTHING_TO_REDO_ON_BOARD', () => {
+    expect(unwrapErr(redoLastBoardChange(firstCivGame(), CASH1981))).toEqual({
+      kind: 'NOTHING_TO_REDO_ON_BOARD',
+    })
+  })
+
+  it('is cleared by any further change, even from another player', () => {
+    let state = place(firstCivGame(), 'figures/redarmy', 200, 300)
+    state = unwrap(undoLastBoardChange(state, CASH1981))
+    expect(state.board.redo).toHaveLength(1)
+
+    state = unwrap(
+      placePiece(state, { playerId: KARANDRAS1, assetId: 'figures/bluearmy', x: 0, y: 0 }),
+    )
+    expect(state.board.redo).toHaveLength(0)
+    expect(unwrapErr(redoLastBoardChange(state, CASH1981))).toEqual({
+      kind: 'NOTHING_TO_REDO_ON_BOARD',
+    })
+  })
+
+  it('chains several undos and redos back and forth', () => {
+    let state = firstCivGame()
+    state = place(state, 'figures/redarmy', 100, 100)
+    state = place(state, 'markers/coin1', 300, 300)
+    const afterBoth = snapshot(state.board.pieces)
+
+    state = unwrap(undoLastBoardChange(state, CASH1981))
+    state = unwrap(undoLastBoardChange(state, CASH1981))
+    expect(state.board.pieces).toHaveLength(0)
+
+    state = unwrap(redoLastBoardChange(state, CASH1981))
+    state = unwrap(redoLastBoardChange(state, CASH1981))
+    expect(snapshot(state.board.pieces)).toBe(afterBoth)
+  })
+
+  it('refreshes logLength on redo, since the log may have grown while it waited', () => {
+    let state = place(firstCivGame(), 'figures/redarmy', 200, 300)
+    const originalLogLength = state.board.history[0]?.logLength
+    expect(originalLogLength).toBe(0)
+
+    state = unwrap(undoLastBoardChange(state, CASH1981))
+    // A non-board action grows the log without touching history or redo
+    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'HUTS' }))
+    expect(state.log.length).toBeGreaterThan(0)
+
+    state = unwrap(redoLastBoardChange(state, CASH1981))
+    expect(state.board.history.at(-1)?.logLength).toBe(state.log.length)
+    expect(state.board.history.at(-1)?.logLength).not.toBe(originalLogLength)
   })
 })
 

@@ -475,6 +475,7 @@ export function GameView({
         areas={displayedView.boardAreas}
         busy={interactionBusy}
         readOnly={replaying}
+        youId={you?.playerId ?? null}
         run={run}
       />
 
