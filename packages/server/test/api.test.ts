@@ -2282,6 +2282,7 @@ describe('board', () => {
       ],
       pieces: [],
       history: [],
+      redo: [],
     })
   })
 

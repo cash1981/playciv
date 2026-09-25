@@ -431,6 +431,7 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
         areas={displayedView.boardAreas}
         busy={interactionBusy}
         readOnly={replaying}
+        youId={you?.playerId ?? null}
         run={run}
       />
 

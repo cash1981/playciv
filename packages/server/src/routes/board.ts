@@ -13,6 +13,7 @@ import {
   bringToFront,
   movePiece,
   placePiece,
+  redoLastBoardChange,
   removePiece,
   rotatePiece,
   setWonderOwner,
@@ -142,11 +143,19 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
     )
   })
 
-  /** Takes back the last board change, whoever made it. */
+  /** Takes back the current player's own last board change. */
   app.post('/api/games/:gameId/board/undo', auth, async (c) => {
     const gameId = c.req.param('gameId')
     return applyToGame(context, c, gameId, (state) =>
       undoLastBoardChange(state, currentPlayer(c).id),
+    )
+  })
+
+  /** Brings back the single most recently undone board change. */
+  app.post('/api/games/:gameId/board/redo', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    return applyToGame(context, c, gameId, (state) =>
+      redoLastBoardChange(state, currentPlayer(c).id),
     )
   })
 

@@ -359,6 +359,13 @@ export interface Board {
   readonly startSlots: readonly BoardStart[]
   readonly pieces: readonly BoardPiece[]
   readonly history: readonly BoardHistoryEntry[]
+  /**
+   * Entries taken off `history` by undo, most recently undone last. Redo pops
+   * this and puts the entry back onto `history`. Any new change to the board —
+   * by any player — clears it, the same way a text editor's redo dies once you
+   * keep typing.
+   */
+  readonly redo: readonly BoardHistoryEntry[]
 }
 
 export function createBoard(
@@ -374,6 +381,7 @@ export function createBoard(
     ...rectangleShape(columns, rows),
     pieces: [],
     history: [],
+    redo: [],
   }
 }
 

@@ -77,6 +77,10 @@ export type EngineError =
   | { readonly kind: 'UNKNOWN_WONDER_OWNER'; readonly playerId: string }
   /** The board history is empty, so there is nothing to take back */
   | { readonly kind: 'NOTHING_TO_UNDO_ON_BOARD' }
+  /** The board's last change belongs to someone else, not the caller */
+  | { readonly kind: 'BOARD_UNDO_NOT_YOURS' }
+  /** Nothing has been undone since the last board change, so there is nothing to redo */
+  | { readonly kind: 'NOTHING_TO_REDO_ON_BOARD' }
   /** `endTurn` was called but no player has the turn yet — the game has not started */
   | { readonly kind: 'GAME_NOT_STARTED' }
   /** Java has no equivalent — `setPlayerStat` (issue #43) got a key outside `PlayerStats` */
@@ -183,6 +187,10 @@ export function describeError(error: EngineError): string {
       return `No player in this game with id ${error.playerId}`
     case 'NOTHING_TO_UNDO_ON_BOARD':
       return 'There is no board change to undo'
+    case 'BOARD_UNDO_NOT_YOURS':
+      return 'The last board change was made by someone else'
+    case 'NOTHING_TO_REDO_ON_BOARD':
+      return 'There is no undone board change to redo'
     case 'GAME_NOT_STARTED':
       return 'The game has not started yet, so there is no turn to end'
     case 'UNKNOWN_STAT':
