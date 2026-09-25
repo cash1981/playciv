@@ -19,6 +19,38 @@ _Last updated: 2026-09-25_
 
 ## Done
 
+- **Issue #172: Egypt's own starting wonder no longer suppresses the
+  start-of-game wonder deal.** Egypt's private starting wonder used to set the
+  same `wondersDealt` flag the shared four-wonder deal guards itself with —
+  faithfully reproducing a real bug in old-civ-rest's `shouldDrawWonders`
+  (which checks a stale, pre-Egypt-draw copy of the game for most seating
+  orders) — so the deal never ran once Egypt was in play. Egypt's own wonder
+  now goes into Egypt's own player board area instead of the shared Wonders
+  area, owned by Egypt from the moment it is placed (`PlacePieceInput` gained
+  an `ownerId`, set inside the same board-history entry so undo/redo cannot
+  drop it), and no longer sets the flag; the shared deal now always runs once
+  every seat's civilization is revealed, dealing 3 `ANCIENT_WONDERS` + 1
+  `MEDIEVAL_WONDERS` when Egypt holds its own wonder (instead of the usual 4
+  `ANCIENT_WONDERS`) — a deliberate deviation confirmed directly with the
+  human beforehand, since no old-system reference covers a medieval wonder at
+  setup at all. Whether "Egypt holds its own wonder" is read from a board
+  piece owned by the Egyptian player, not from the civilization alone, so an
+  Egypt player who drew a unit before revealing (skipping the whole
+  starting-items draw, a faithful Java quirk) still gets the usual 4-ancient
+  deal rather than one short. Forward-only, per the human: no migration for
+  games already stuck on the old behaviour. Two read-only review rounds, both
+  with real findings fixed: round 1 (the deviation was unrecorded and
+  contradicted an existing `decisions.md` entry; the medieval-wonder rule was
+  untested; Egypt's wonder carried no owner; the civilization-only branch
+  check could short the deal by one), round 2 (the owner was patched onto the
+  state after `placeUnchecked` had already recorded the piece without it, so
+  an undo-then-redo of the placement silently dropped it — fixed by threading
+  `ownerId` through `placeUnchecked` itself, closed with a regression test;
+  approved after). 9 new/changed engine tests (556 total). Full checks pass
+  (556 engine, 208 server, 239 web). No browser session was available in this
+  environment; the visual pass is left to the human. Branch
+  `feat/issue-172-egypt-wonder-reveal`; see `decisions.md`.
+
 - **Issue #173: the Coins tab heads each player's column with their
   civilization, and draws a vertical divider between every column.** The
   human, with a screenshot: "Coin source should have civ name not nickname"

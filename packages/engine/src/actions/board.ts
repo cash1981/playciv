@@ -114,6 +114,14 @@ export interface PlacePieceInput {
   readonly x: number
   readonly y: number
   readonly rotation?: Rotation
+  /**
+   * Assigns the piece's owner at the moment it is placed — Egypt's own
+   * starting wonder, per issue #172 (`drawWonderToBoard`'s own-area
+   * destination). Every other caller places a piece unowned, exactly as
+   * before; ownership is then set later, explicitly, through
+   * {@link setWonderOwner}.
+   */
+  readonly ownerId?: string
   /** ISO timestamp for the history. The engine itself stays pure. */
   readonly at?: string
 }
@@ -196,6 +204,7 @@ export function placeUnchecked(
     height: asset.height,
     rotation: input.rotation ?? 0,
     placedBy: input.playerId,
+    ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
   }
 
   // Map tiles go under everything else, or they would cover the pieces on them

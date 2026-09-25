@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 
 import { draw, drawUnitsForBattle, revealAndDiscardBattlehand } from '../src/actions/draw.js'
 import { drawBarbarians, discardBarbarians, drawWonder, drawWonderToBoard, loot } from '../src/actions/draw.js'
-import { wondersArea } from '../src/board.js'
+import { playerAreas, wondersArea } from '../src/board.js'
 import type { Item, ItemKind } from '../src/item.js'
 import { isUnit, itemImage, itemName, itemValueEquals } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -162,6 +162,53 @@ describe('drawWonderToBoard places the wonder on the board, not in a hand', () =
     for (const piece of pieces) {
       expect(piece.x).toBeGreaterThanOrEqual(area.x)
     }
+  })
+})
+
+/**
+ * Issue #172: Egypt's own starting wonder lands in Egypt's own player area
+ * rather than the shared Wonders area, and is assigned to Egypt directly. Both
+ * defaults (`actor: 'player'`, `destination: 'wonders'`) are unchanged; every
+ * call site above this describe block, and every caller outside the engine,
+ * relies on them and is unaffected.
+ */
+describe("drawWonderToBoard places a wonder in the drawing player's own area", () => {
+  it("places the piece inside the player's own area, not the Wonders area", () => {
+    const after = unwrap(
+      drawWonderToBoard(firstCivGame(), CASH1981, 'ANCIENT_WONDERS', 'player', 'own-area'),
+    )
+    const piece = after.board.pieces.find((p) => p.category === 'wonder')
+    if (piece === undefined) throw new Error('no wonder piece')
+
+    const own = playerAreas(after.board, after.players).find((a) => a.playerId === CASH1981)
+    if (own === undefined) throw new Error("no CASH1981 area")
+    expect(piece.x).toBeGreaterThanOrEqual(own.x)
+    expect(piece.x + piece.width).toBeLessThanOrEqual(own.x + own.width + 1)
+
+    const wonders = wondersArea(after.board)
+    expect(piece.x + piece.width <= wonders.x || piece.x >= wonders.x + wonders.width).toBe(true)
+  })
+
+  it('assigns the piece to the drawing player', () => {
+    const after = unwrap(
+      drawWonderToBoard(firstCivGame(), CASH1981, 'ANCIENT_WONDERS', 'player', 'own-area'),
+    )
+    const piece = after.board.pieces.find((p) => p.category === 'wonder')
+    expect(piece?.ownerId).toBe(CASH1981)
+  })
+
+  it("logs 'placed it in <username>'s area', not 'the Wonders area'", () => {
+    const after = unwrap(
+      drawWonderToBoard(firstCivGame(), CASH1981, 'ANCIENT_WONDERS', 'player', 'own-area'),
+    )
+    const entry = after.log.at(-1)
+    expect(entry?.publicLog).toMatch(/drew .+ and placed it in cash1981's area/)
+  })
+
+  it('a shared-area wonder is left unowned, unlike an own-area one', () => {
+    const after = unwrap(drawWonderToBoard(firstCivGame(), CASH1981, 'ANCIENT_WONDERS'))
+    const piece = after.board.pieces.find((p) => p.category === 'wonder')
+    expect(piece?.ownerId).toBeUndefined()
   })
 })
 

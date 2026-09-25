@@ -2638,3 +2638,100 @@ log to what was known at each step, and since Redo re-appends the entry at
 the *end* of history, using its original value could make `logLength` go
 backwards along the history array if an unrelated non-board action (a card
 draw, say) grew the log while the change sat on the redo stack.
+
+---
+
+## 2026-09-25 — Issue #172: Egypt's own wonder no longer suppresses the deal (supersedes part of the 2026-09-17 "Wonders live on the board" entry)
+
+**Decision.** Egypt's own starting wonder — drawn alongside its starting units
+when Egypt's civilization card is revealed — is placed directly in Egypt's own
+player area on the board, not the shared Wonders area, and no longer sets the
+`wondersDealt` flag. `shouldDrawWonders`/`drawStartingWonders` (the deal that
+fires once every seat's civilization is revealed) is now gated on that flag
+alone, so it always runs. When Egypt is among the players it now deals 3
+`ANCIENT_WONDERS` + 1 `MEDIEVAL_WONDERS` into the shared Wonders area instead
+of the usual 4 `ANCIENT_WONDERS`, since Egypt's own draw already accounts for
+the first of the four. Egypt's own wonder is credited to Egypt in the public
+log ("drew *name* and placed it in *username*'s area"); the shared deal keeps
+its existing System-credited line, now reading "Drawing 3 ancient wonders and
+1 medieval wonder (Egypt already holds the first ancient wonder)" when Egypt
+is in play.
+
+**Why.** Reported directly by the human (issue #172): "The system draws a
+wonder [for Egypt], but forgets to draw 3 ancients and 1 more medieval
+wonder... Extra bonus if the first Egyptian wonder can be placed in the
+players who owns it player area." Confirmed with five clarifying questions
+before starting, since no old-system reference covers a medieval wonder at
+setup at all (see "Reference" below) — this is the human's own rule for this
+repo, not a guessed FFG rule. The human's own answer, verbatim: "total of 3
+ancient wonder plus one medieval wonder. The other goes to egypt... assign
+that wonder directly to egypt and put the tile in egypts play area instead of
+the wonder area." Forward-only by the human's choice: no migration for
+already-saved games.
+
+**Reference.** `old-civ-rest`'s `PlayerAction.drawStartingItems` gives Egypt
+one `ANCIENT_WONDERS` item into its hand (never onto a board — Java has none),
+and `shouldDrawWonders` refuses to run the bulk deal while any player's hand
+holds a wonder. The 2026-09-17 entry above ("Wonders live on the board, not in
+a hand") described this as Egypt's wonder unconditionally suppressing the bulk
+deal, "as in Java" — that is an oversimplification worth correcting here.
+Java's `revealItem` loads its `pbf` object once at the top of the request and
+passes only the id, not the object, into `drawStartingItems` and
+`deleteTheOtherCivs`, both of which reload their own fresh copy from Mongo and
+save it; `shouldDrawWonders` then runs against the *original*, now-stale `pbf`
+loaded before those saves. So in Java:
+
+- If Egypt is not the last player to reveal, the next reveal (any player's)
+  loads a fresh `pbf` that already contains Egypt's wonder, and the bulk deal
+  never runs — the bug as reported, and the common case.
+- If Egypt itself is the last to reveal, the stale `pbf` in its own request
+  does not yet reflect the wonder it just drew moments earlier in the same
+  request, so the gate reads true and the bulk deal *does* run — dealing all
+  4 ancient wonders into Egypt's own hand on top of the one it already holds,
+  five ancient wonders total for Egypt and none for anyone else.
+
+This engine's reducers are pure and operate on one continuously-threaded
+`GameState`, so there is no equivalent stale read: before this fix, Egypt's
+own draw set `wondersDealt` synchronously, and the bulk deal was suppressed
+in every seating order, not only the common one. Java's "Egypt reveals last"
+outcome (5 ancient wonders, all in Egypt's hand) was never reproduced here and
+is not being restored — the human's answer above is the port's rule now,
+independent of seating order. `MEDIEVAL_WONDERS` never appears at setup
+anywhere in Java; the old client (`old-civ-web`) only offers it as one of
+three manual draw-menu choices (`useritems.html`), with no Egypt-specific or
+setup-time logic anywhere in either old repository.
+
+**Consequences.**
+- A wonder in Egypt's own player area is not inside the shared Wonders area,
+  so `WondersPanel` (issue #145's ownership list) does not list it and it
+  cannot be assigned or cleared an owner there; it is still visibly Egypt's,
+  sitting in Egypt's own area on the board. The Internet's +2 coin-cap rule
+  (`setCoinSource` in `actions/player.ts`) also checks `isInWondersArea`, but
+  cannot be affected here: The Internet is a Modern Wonder, and neither
+  Egypt's own draw nor the 3-ancient-plus-1-medieval deal can ever produce a
+  Modern Wonder.
+- `migrate.ts` back-fills `wondersDealt` for older saves from
+  `hasWonder || setupComplete`; a game where Egypt already revealed under the
+  old behaviour keeps that flag `true` forever and will not receive the
+  now-missing shared-area wonders. Deliberately left as-is (forward-only, per
+  the human), same as issue #171's board-shape migration left the five-player
+  case unfixed for existing boards.
+- Pre-existing, unrelated to this fix: `STARTING_UNITS.Zulu` in
+  `actions/player.ts` gives four artillery units where both
+  `PlayerAction.java` and the Zulu card text in `gamedata-faf-waw.json` ("2
+  extra artillery units", i.e. the default 1 plus 2) mean three. Found while
+  checking this diff against Java; not touched here, filed as its own issue.
+- Egypt's ownership of its own wonder is set in the same `place` board-history
+  entry as the piece itself (`PlacePieceInput.ownerId`, threaded through
+  `placeUnchecked`), not patched onto the state afterwards, so an undo
+  followed by a redo of that placement keeps the ownership — proven by a
+  round-2 review finding and closed with a regression test before this
+  landed. Whether the shared deal treats Egypt as having its own wonder is
+  read the same way, from a wonder piece owned by the Egyptian player, not
+  from Egypt's civilization alone — so a rare inverse case is possible: an
+  Egypt player who drew a unit before revealing (so never got the bonus
+  wonder) and whose piece art someone had already assigned to them by hand
+  from the palette would trigger the 3-plus-1 branch without ever having
+  drawn anything. Narrow enough — it requires a moderator's manual assignment
+  to land exactly on an Egypt player who was never due a wonder — that it is
+  recorded here rather than coded around.
