@@ -383,6 +383,9 @@ describe('reveal civilization', () => {
     const piece = wonderPieces[0]
     if (piece === undefined) throw new Error('no wonder piece')
     expect(piece.placedBy).toBe(CASH1981)
+    // Assigned to Egypt directly, per the human's answer, not left unowned
+    // the way a shared-area wonder is until someone assigns it.
+    expect(piece.ownerId).toBe(CASH1981)
     expect(isInWondersArea(state.board, piece)).toBe(false)
 
     const line = state.log.find((entry) => /drew .+ and placed it in .+'s area/.test(entry.publicLog))
@@ -393,12 +396,26 @@ describe('reveal civilization', () => {
     expect(state.wondersDealt).toBe(false)
   })
 
+  const wonderDeckCounts = (state: GameState) => ({
+    ancient: state.items.filter((item) => item.sheetName === 'ANCIENT_WONDERS').length,
+    medieval: state.items.filter((item) => item.sheetName === 'MEDIEVAL_WONDERS').length,
+  })
+
   it('deals 3 ancient wonders and 1 medieval wonder to the shared Wonders area when Egypt is in play', () => {
+    const before = wonderDeckCounts(firstCivGame())
     const state = revealEveryCivWithEgypt(firstCivGame(), CASH1981)
+    const after = wonderDeckCounts(state)
 
     expect(state.wondersDealt).toBe(true)
     const egypt = findPlayer(state, CASH1981)
     expect(egypt?.civilization?.name).toBe('Egyptians')
+
+    // Egypt's own draw (1 ancient) plus the shared deal (3 ancient, 1
+    // medieval) — this is the assertion that actually pins the medieval
+    // wonder: a bulk deal of 4 ancient wonders instead would leave the
+    // medieval count unchanged and fail this.
+    expect(after.ancient).toBe(before.ancient - 4)
+    expect(after.medieval).toBe(before.medieval - 1)
 
     const wonderPieces = state.board.pieces.filter((piece) => piece.category === 'wonder')
     // Egypt's own wonder, plus the shared deal's four
@@ -409,11 +426,42 @@ describe('reveal civilization', () => {
     expect(inWondersArea).toHaveLength(4)
     expect(inOwnArea).toHaveLength(1)
     expect(inOwnArea[0]?.placedBy).toBe(CASH1981)
+    expect(inOwnArea[0]?.ownerId).toBe(CASH1981)
+    // The shared four stay unowned, exactly as a non-Egypt game's deal does.
+    expect(inWondersArea.every((piece) => piece.ownerId === undefined)).toBe(true)
+
+    const dealLine = state.log.find((entry) =>
+      entry.publicLog.includes('Drawing 3 ancient wonders and 1 medieval wonder'),
+    )
+    expect(dealLine?.publicLog.startsWith('System: ')).toBe(true)
 
     // No wonder ever sits in a hand, Egypt's included.
     for (const player of state.players) {
       expect(player.items.some((item) => item.kind === 'wonder')).toBe(false)
     }
+  })
+
+  it('falls back to the usual 4 ancient wonders when Egypt reveals without drawing its own starting wonder', () => {
+    // Java (and this port) only draws starting units and Egypt's wonder the
+    // first time a civ is revealed with no units yet. A player who manually
+    // draws a unit on their own turn before revealing Egypt never gets it.
+    let state = firstCivGame()
+    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'INFANTRY' }))
+    state = revealEveryCivWithEgypt(state, CASH1981)
+
+    const egypt = findPlayer(state, CASH1981)
+    expect(egypt?.civilization?.name).toBe('Egyptians')
+    expect(egypt?.items.some((item) => item.kind === 'wonder')).toBe(false)
+
+    const wonderPieces = state.board.pieces.filter((piece) => piece.category === 'wonder')
+    // No bonus wonder for Egypt this time, so the shared deal is the usual 4
+    // ancient wonders, not 3 + 1 medieval — Egypt never accounted for one.
+    expect(wonderPieces).toHaveLength(4)
+    expect(wonderPieces.every((piece) => isInWondersArea(state.board, piece))).toBe(true)
+    expect(state.log.some((entry) => entry.publicLog.includes('Drawing 4 ancient wonders'))).toBe(
+      true,
+    )
+    expect(state.wondersDealt).toBe(true)
   })
 })
 

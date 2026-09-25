@@ -187,7 +187,9 @@ heap. Dropping on the map leaves the piece exactly where it was let go.
 Wonders are the one card kind that never enters a hand. The wonders drawn at the
 start of a game (and any drawn later from the draw menu) are placed in the
 Wonders area and named in the public log, rather than kept secret in a hand —
-they were never giftable or hidden bookkeeping the way ordinary cards are.
+they were never giftable or hidden bookkeeping the way ordinary cards are. One
+exception: Egypt's own starting wonder is placed directly in Egypt's own
+player area rather than the shared Wonders area (issue #172).
 
 Areas are geometry, not state: the server computes them in `toPlayerView` and
 sends them along as `boardAreas`, so client and server cannot disagree about

@@ -511,18 +511,30 @@ function drawStartingItems(
  * public log line credited to "System", because the deal is the game's, not the
  * last player who revealed a civ. See {@link drawWonderToBoard}.
  *
- * Issue #172: when Egypt is among the players, Egypt has already drawn one
- * ancient wonder for itself (into its own player area, not this shared deal —
- * see {@link drawStartingItems}). This deal then draws 3 ancient wonders plus
- * 1 medieval wonder instead of the usual 4 ancient wonders, so the shared
- * Wonders area still ends up with 4 cards. There is no old-system rule behind
- * the medieval wonder; it is a deliberate deviation agreed with the human, see
- * `decisions.md`.
+ * Issue #172: when Egypt has already drawn its own starting wonder (into its
+ * own player area, not this shared deal — see {@link drawStartingItems}),
+ * this deal draws 3 ancient wonders plus 1 medieval wonder instead of the
+ * usual 4 ancient wonders, so the shared Wonders area still ends up with 4
+ * cards. There is no old-system rule behind the medieval wonder; it is a
+ * deliberate deviation agreed with the human, see `decisions.md`.
+ *
+ * Whether Egypt "has already drawn its own starting wonder" is read from the
+ * board, not from `state.players` having an Egyptian civilization: Java only
+ * draws starting units (and Egypt's wonder) the first time a player reveals a
+ * civ with no units yet, so an Egypt player who happened to draw a unit
+ * manually before revealing never gets the bonus wonder. Keying on the civ
+ * alone would then short the shared deal by one wonder with no way to get it
+ * back; keying on the piece Egypt actually received does not.
  */
 function drawStartingWonders(state: GameState, playerId: string): ActionResult {
-  const egyptInPlay = state.players.some((player) => player.civilization?.name === 'Egyptians')
+  const egyptPlayer = state.players.find((player) => player.civilization?.name === 'Egyptians')
+  const egyptHasWonder =
+    egyptPlayer !== undefined &&
+    state.board.pieces.some(
+      (piece) => piece.category === 'wonder' && piece.ownerId === egyptPlayer.playerId,
+    )
 
-  if (!egyptInPlay) {
+  if (!egyptHasWonder) {
     let next = appendInfoLog(state, 'Drawing 4 ancient wonders')
     for (let i = 0; i < 4; i++) {
       const drawn = drawWonderToBoard(next, playerId, 'ANCIENT_WONDERS', 'system')
@@ -532,10 +544,7 @@ function drawStartingWonders(state: GameState, playerId: string): ActionResult {
     return ok({ ...next, wondersDealt: true })
   }
 
-  let next = appendInfoLog(
-    state,
-    'Drawing 3 ancient wonders and 1 medieval wonder (Egypt already holds the first ancient wonder)',
-  )
+  let next = appendInfoLog(state, 'Drawing 3 ancient wonders and 1 medieval wonder')
   for (let i = 0; i < 3; i++) {
     const drawn = drawWonderToBoard(next, playerId, 'ANCIENT_WONDERS', 'system')
     if (!drawn.ok) return drawn
