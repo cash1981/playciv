@@ -9,6 +9,7 @@
 import {
   areaSlotRegion,
   firstFreeSlot,
+  playerAreas,
   tileAssetIdForNumber,
   wonderAssetId,
   wondersArea,
@@ -138,10 +139,10 @@ function placeExploredTile(state: GameState, playerId: string, tile: Item): Game
  *
  * The old system, and this engine until now, put drawn wonders in the player's
  * hidden hand. The owner asked for them to sit on the board instead: the wonder
- * is taken off the deck, placed as a piece in the shared Wonders area (where it
- * tidies into the next free slot), and named in a public log line. Wonders are
- * public information once on the board, so nothing is added to any hand and the
- * hand projection is unchanged.
+ * is taken off the deck, placed as a piece (where it tidies into the next free
+ * slot), and named in a public log line. Wonders are public information once
+ * on the board, so nothing is added to any hand and the hand projection is
+ * unchanged.
  *
  * This is the low-level placement, without a turn check — the start-of-game
  * reveal flow calls it directly, and reveal does not run on a player's turn.
@@ -153,10 +154,17 @@ export function drawWonderToBoard(
   playerId: string,
   sheetName: SheetName,
   /**
-   * Who the public log credits. The start-of-game deal is the system's, not the
-   * last player who revealed a civ; a manual draw is the drawing player's.
+   * Who the public log credits. The start-of-game bulk deal is the system's,
+   * not the last player who revealed a civ; a manual draw, and Egypt's own
+   * starting wonder, are credited to the drawing player.
    */
   actor: 'player' | 'system' = 'player',
+  /**
+   * Where the piece lands: the shared Wonders area (every wonder except one),
+   * or the drawing player's own board area — Egypt's starting wonder, per
+   * issue #172.
+   */
+  destination: 'wonders' | 'own-area' = 'wonders',
 ): DrawResult {
   const found = requirePlayer(state, playerId)
   if (!found.ok) return found
@@ -173,8 +181,16 @@ export function drawWonderToBoard(
     items: [...state.items.slice(0, index), ...state.items.slice(index + 1)],
   }
 
+  const area =
+    destination === 'own-area'
+      ? playerAreas(withDeck.board, withDeck.players).find((a) => a.playerId === playerId)
+      : wondersArea(withDeck.board)
+  if (area === undefined) {
+    return err({ kind: 'PLAYER_NOT_FOUND', playerId })
+  }
+
   const assetId = wonderAssetId(item.name)
-  const region = areaSlotRegion(wondersArea(withDeck.board))
+  const region = areaSlotRegion(area)
   const next = placeUnchecked(withDeck, { playerId, assetId, x: region.x, y: region.y })
   // The wonder is off the deck now; if its art is missing there is nowhere to
   // put it, so fail rather than silently drop it and log a placement that did
@@ -183,7 +199,10 @@ export function drawWonderToBoard(
     return err({ kind: 'BOARD_ASSET_NOT_FOUND', assetId })
   }
 
-  const message = `drew ${item.name} and placed it in the Wonders area`
+  const message =
+    destination === 'own-area'
+      ? `drew ${item.name} and placed it in ${player.username}'s area`
+      : `drew ${item.name} and placed it in the Wonders area`
   return ok(
     actor === 'system'
       ? appendInfoLog(next, message)

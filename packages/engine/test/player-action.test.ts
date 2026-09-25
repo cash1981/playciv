@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 
 import { placePiece } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
+import { isInWondersArea } from '../src/board.js'
 import {
   chooseSocialPolicy,
   chooseTech,
@@ -322,6 +323,94 @@ describe('reveal civilization', () => {
     // ... so the deal still runs when the last civilization is revealed.
     state = revealEveryCiv(state)
     expect(state.wondersDealt).toBe(true)
+    for (const player of state.players) {
+      expect(player.items.some((item) => item.kind === 'wonder')).toBe(false)
+    }
+  })
+
+  /** Hands a specific civilization to a player, bypassing the random CIV draw. */
+  const giveCiv = (state: GameState, playerId: string, name: string): GameState => {
+    const civ = state.items.find((item) => item.kind === 'civ' && item.name === name)
+    if (civ === undefined) throw new Error(`no ${name} civ in the deck`)
+    return {
+      ...state,
+      items: state.items.filter((item) => item.id !== civ.id),
+      players: state.players.map((player) =>
+        player.playerId === playerId
+          ? { ...player, items: [...player.items, { ...civ, ownerId: playerId }] }
+          : player,
+      ),
+    }
+  }
+
+  // Like revealEveryCiv, but one named player gets Egypt for certain instead
+  // of whatever the shuffled deck would have dealt them.
+  const revealEveryCivWithEgypt = (start: GameState, egyptPlayerId: string): GameState => {
+    let state = start
+    const order = [...state.players]
+      .sort((a, b) => a.playernumber - b.playernumber)
+      .map((player) => player.playerId)
+    for (const playerId of order) {
+      state = {
+        ...state,
+        players: state.players.map((p) => ({ ...p, yourTurn: p.playerId === playerId })),
+      }
+      state =
+        playerId === egyptPlayerId
+          ? giveCiv(state, playerId, 'Egyptians')
+          : unwrap(draw(state, { playerId, sheetName: 'CIV' }))
+      state = unwrap(revealCivFor(state, playerId))
+    }
+    return state
+  }
+
+  /**
+   * Issue #172: Egypt's own starting wonder used to count as the whole
+   * start-of-game deal, so the shared Wonders area never got dealt when Egypt
+   * was in play. Egypt's own wonder now lands in Egypt's own player area
+   * instead, and does not by itself mark the wonders as dealt.
+   */
+  it("places Egypt's own starting wonder in Egypt's own area, not the Wonders area", () => {
+    const state = unwrap(revealCivFor(giveCiv(firstCivGame(), CASH1981, 'Egyptians'), CASH1981))
+
+    const player = findPlayer(state, CASH1981)
+    expect(player?.civilization?.name).toBe('Egyptians')
+    // The wonder is on the board, not in Egypt's hidden hand
+    expect(player?.items.some((item) => item.kind === 'wonder')).toBe(false)
+
+    const wonderPieces = state.board.pieces.filter((piece) => piece.category === 'wonder')
+    expect(wonderPieces).toHaveLength(1)
+    const piece = wonderPieces[0]
+    if (piece === undefined) throw new Error('no wonder piece')
+    expect(piece.placedBy).toBe(CASH1981)
+    expect(isInWondersArea(state.board, piece)).toBe(false)
+
+    const line = state.log.find((entry) => /drew .+ and placed it in .+'s area/.test(entry.publicLog))
+    expect(line?.username).toBe('cash1981')
+    expect(line?.publicLog.startsWith('System: ')).toBe(false)
+
+    // Only one player has revealed so far, so the bulk deal has not run yet.
+    expect(state.wondersDealt).toBe(false)
+  })
+
+  it('deals 3 ancient wonders and 1 medieval wonder to the shared Wonders area when Egypt is in play', () => {
+    const state = revealEveryCivWithEgypt(firstCivGame(), CASH1981)
+
+    expect(state.wondersDealt).toBe(true)
+    const egypt = findPlayer(state, CASH1981)
+    expect(egypt?.civilization?.name).toBe('Egyptians')
+
+    const wonderPieces = state.board.pieces.filter((piece) => piece.category === 'wonder')
+    // Egypt's own wonder, plus the shared deal's four
+    expect(wonderPieces).toHaveLength(5)
+
+    const inWondersArea = wonderPieces.filter((piece) => isInWondersArea(state.board, piece))
+    const inOwnArea = wonderPieces.filter((piece) => !isInWondersArea(state.board, piece))
+    expect(inWondersArea).toHaveLength(4)
+    expect(inOwnArea).toHaveLength(1)
+    expect(inOwnArea[0]?.placedBy).toBe(CASH1981)
+
+    // No wonder ever sits in a hand, Egypt's included.
     for (const player of state.players) {
       expect(player.items.some((item) => item.kind === 'wonder')).toBe(false)
     }

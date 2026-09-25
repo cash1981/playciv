@@ -488,12 +488,14 @@ function drawStartingItems(
   for (const sheetName of sheets) {
     if (isWonderSheet(sheetName)) {
       // Egypt's starting list includes an ancient wonder, which — like every
-      // wonder — goes onto the board rather than into the hand. Drawing it here
-      // marks the wonders as dealt, so it suppresses the bulk four-wonder draw
-      // just as Egypt's hand wonder did in Java.
-      const drawn = drawWonderToBoard(next, playerId, sheetName)
+      // wonder — goes onto the board rather than into the hand. It goes into
+      // Egypt's own player area (issue #172), not the shared Wonders area, and
+      // does not mark the wonders as dealt: the game's own start-of-game deal
+      // still runs separately once every seat's civilization is revealed, see
+      // {@link drawStartingWonders}.
+      const drawn = drawWonderToBoard(next, playerId, sheetName, 'player', 'own-area')
       if (!drawn.ok) return drawn
-      next = { ...drawn.value, wondersDealt: true }
+      next = drawn.value
     } else {
       const drawn = draw(next, { playerId, sheetName })
       if (!drawn.ok) return drawn
@@ -508,15 +510,40 @@ function drawStartingItems(
  * the player's hand: each is placed in the shared Wonders area and named in a
  * public log line credited to "System", because the deal is the game's, not the
  * last player who revealed a civ. See {@link drawWonderToBoard}.
+ *
+ * Issue #172: when Egypt is among the players, Egypt has already drawn one
+ * ancient wonder for itself (into its own player area, not this shared deal —
+ * see {@link drawStartingItems}). This deal then draws 3 ancient wonders plus
+ * 1 medieval wonder instead of the usual 4 ancient wonders, so the shared
+ * Wonders area still ends up with 4 cards. There is no old-system rule behind
+ * the medieval wonder; it is a deliberate deviation agreed with the human, see
+ * `decisions.md`.
  */
 function drawStartingWonders(state: GameState, playerId: string): ActionResult {
-  let next = appendInfoLog(state, 'Drawing 4 ancient wonders')
-  for (let i = 0; i < 4; i++) {
+  const egyptInPlay = state.players.some((player) => player.civilization?.name === 'Egyptians')
+
+  if (!egyptInPlay) {
+    let next = appendInfoLog(state, 'Drawing 4 ancient wonders')
+    for (let i = 0; i < 4; i++) {
+      const drawn = drawWonderToBoard(next, playerId, 'ANCIENT_WONDERS', 'system')
+      if (!drawn.ok) return drawn
+      next = drawn.value
+    }
+    return ok({ ...next, wondersDealt: true })
+  }
+
+  let next = appendInfoLog(
+    state,
+    'Drawing 3 ancient wonders and 1 medieval wonder (Egypt already holds the first ancient wonder)',
+  )
+  for (let i = 0; i < 3; i++) {
     const drawn = drawWonderToBoard(next, playerId, 'ANCIENT_WONDERS', 'system')
     if (!drawn.ok) return drawn
     next = drawn.value
   }
-  return ok({ ...next, wondersDealt: true })
+  const medieval = drawWonderToBoard(next, playerId, 'MEDIEVAL_WONDERS', 'system')
+  if (!medieval.ok) return medieval
+  return ok({ ...medieval.value, wondersDealt: true })
 }
 
 /** Java: `deleteTheOtherCivs` — the civ cards the player did not pick are discarded. */
@@ -552,8 +579,9 @@ function discardTheOtherCivs(state: GameState, playerId: string, chosen: CivItem
 function shouldDrawWonders(state: GameState): boolean {
   // `wondersDealt` — not a wonder piece on the board — is the authority: a
   // moderator may place wonder art from the palette, and that must not cancel
-  // the deal. Egypt's starting wonder sets the flag too, so its presence still
-  // suppresses the bulk draw, matching Java where Egypt's hand wonder did.
+  // the deal. Only `drawStartingWonders` itself sets this flag (issue #172):
+  // Egypt's own starting wonder no longer does, so it no longer suppresses
+  // the bulk deal the way Egypt's hand wonder did in Java.
   if (state.wondersDealt) return false
   if (state.numOfPlayers !== state.players.length) return false
   return state.players.every((player) => player.civilization !== null)
