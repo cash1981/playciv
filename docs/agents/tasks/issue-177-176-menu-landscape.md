@@ -3,7 +3,7 @@
 - **Slug:** `issue-177-176-menu-landscape`
 - **Branch:** `feat/issue-177-176-menu-landscape`
 - **Owner:** Claude (orchestrator, direct — no coder subagent for this one)
-- **Status:** reopened — build fix in progress
+- **Status:** reopened — build fix in review
 
 ## Goal
 

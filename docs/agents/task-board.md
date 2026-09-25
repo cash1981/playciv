@@ -17,7 +17,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** Codex (orchestrator)
 - **Branch:** `feat/issue-177-176-menu-landscape`
 - **Brief:** `docs/agents/tasks/issue-177-176-menu-landscape.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
   - `packages/web/src/views/GameView.test.tsx`
   - `docs/agents/tasks/issue-177-176-menu-landscape.md`
