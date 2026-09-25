@@ -20,6 +20,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Status:** in review
 - **Claimed paths:**
   - `packages/web/src/views/GameView.test.tsx`
+  - `packages/web/src/styles.css`
+  - `packages/web/src/SiteMobileStyles.test.ts`
   - `docs/agents/tasks/issue-177-176-menu-landscape.md`
   - `docs/agents/state.md`
   - `docs/agents/task-board.md`
