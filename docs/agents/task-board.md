@@ -12,7 +12,18 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### issue-177-176-menu-landscape-build-fix
+
+- **Owner:** Codex (orchestrator)
+- **Branch:** `feat/issue-177-176-menu-landscape`
+- **Brief:** `docs/agents/tasks/issue-177-176-menu-landscape.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/GameView.test.tsx`
+  - `docs/agents/tasks/issue-177-176-menu-landscape.md`
+  - `docs/agents/state.md`
+  - `docs/agents/task-board.md`
+- **Notes:** Reopened after the latest merge from `main` dropped the `gameMenuGate` import while retaining its tests, breaking the web build.
 
 ---
 
