@@ -6,7 +6,7 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-24_
+_Last updated: 2026-09-25_
 
 ## Health
 

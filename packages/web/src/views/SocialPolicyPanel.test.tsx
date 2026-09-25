@@ -39,7 +39,8 @@ const policy = (
 /**
  * The real `SOCIAL_POLICY` sheet, all eight, in its four flipside pairs
  * (issue #175: `Military Tradition` used to point at `Patronage` instead of
- * back at `Pacifism`, a data typo now corrected in `gamedata-faf-waw.json`).
+ * back at `Pacifism`, a data typo corrected at parse time in `gamedata.ts`
+ * rather than in the generated `gamedata-faf-waw.json` itself).
  */
 const CATALOGUE: readonly SocialPolicyItem[] = [
   policy('Rationalism', 'Patronage'),

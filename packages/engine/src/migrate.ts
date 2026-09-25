@@ -46,10 +46,13 @@ type MaybeOlder = Omit<
     >
   >
 
-/** A hand from before the status board, governments (issue #43) or the tech
- *  pyramid placements existed. */
-type MaybeOlderPlayerhand = Omit<Playerhand, 'stats' | 'government' | 'pyramidPlacements'> &
-  Partial<Pick<Playerhand, 'stats' | 'government' | 'pyramidPlacements'>>
+/** A hand from before the status board, governments (issue #43), the tech
+ *  pyramid placements, or its own `socialPolicies` array existed. */
+type MaybeOlderPlayerhand = Omit<
+  Playerhand,
+  'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies'
+> &
+  Partial<Pick<Playerhand, 'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies'>>
 
 /**
  * Fills in the status board and, since issue #102, normalises Movement to its
@@ -89,7 +92,7 @@ const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   stats: normalizeStats(player.stats),
   government: player.government ?? DEFAULT_GOVERNMENT,
   pyramidPlacements: player.pyramidPlacements ?? [],
-  socialPolicies: correctSocialPolicyFlipsides(player.socialPolicies),
+  socialPolicies: correctSocialPolicyFlipsides(player.socialPolicies ?? []),
 })
 
 /** A board from before the player areas, the history or the shapes existed. */

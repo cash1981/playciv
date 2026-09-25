@@ -3,7 +3,7 @@
 - **Slug:** `issue-175-pacifism-military-tradition-flipside`
 - **Branch:** `feat/issue-175-pacifism-military-tradition-flipside`
 - **Owner:** Claude
-- **Status:** draft
+- **Status:** done — review-approved (round 2, nits only, addressed)
 
 ## Goal
 

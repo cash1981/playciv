@@ -56,10 +56,29 @@ describe('migrating the social policy flipside (issue #175)', () => {
       (policy) => policy.name === 'Military Tradition',
     )
     expect(held?.flipside).toBe('Pacifism')
+  })
 
-    // And the engine now rejects Pacifism, exactly like a freshly dealt game.
+  it('reproduces issue #175 on an old save, then shows migration fixes it', () => {
+    const heldPacifism = unwrap(
+      chooseSocialPolicy(firstCivGame(), { playerId: CASH1981, name: 'Pacifism' }),
+    )
+    const broken = withOldFlipside(heldPacifism)
+
+    // The bug itself: on an old save the engine still accepts Military
+    // Tradition, because its (broken) flipside is Patronage, not Pacifism.
+    const stillAccepted = unwrap(
+      chooseSocialPolicy(broken, { playerId: CASH1981, name: 'Military Tradition' }),
+    )
+    expect(
+      findPlayer(stillAccepted, CASH1981)?.socialPolicies.some(
+        (policy) => policy.name === 'Military Tradition',
+      ),
+    ).toBe(true)
+
+    // After migration, the same choice is rejected, like a freshly dealt game.
+    const migrated = migrateGameState(broken)
     const error = unwrapErr(
-      chooseSocialPolicy(migrated, { playerId: CASH1981, name: 'Pacifism' }),
+      chooseSocialPolicy(migrated, { playerId: CASH1981, name: 'Military Tradition' }),
     )
     expect(error.kind).toBe('SOCIAL_POLICY_FLIPSIDE_TAKEN')
   })
