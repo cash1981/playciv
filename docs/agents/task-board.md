@@ -12,7 +12,22 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### battle-discard-ownership
+
+- **Owner:** Claude (Sonnet 5)
+- **Branch:** `fix/battle-discard-ownership`
+- **Brief:** `docs/agents/tasks/battle-discard-ownership.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/actions/draw.ts`
+  - `packages/engine/src/actions/game.ts`
+  - `packages/engine/src/migrate.ts`
+  - `packages/engine/test/revealed-feed.test.ts`
+  - `packages/engine/test/migrate.test.ts`
+  - `packages/engine/test/draw.test.ts`
+- **Notes:** Engine-only bugfix (no server/web change needed — `RevealedRow`
+  already renders whatever `revealedFeed` gives it). Touches a projection and
+  adds a migration, so both `reviewer` and `rules-checker` run on this.
 
 ---
 
