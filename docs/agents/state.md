@@ -13,7 +13,7 @@ _Last updated: 2026-09-25_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 548 engine, 208 server, 223 web on `feat/draw-before-chat-log` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 548 engine, 208 server, 239 web on `feat/issue-177-176-menu-landscape` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -46,8 +46,9 @@ _Last updated: 2026-09-25_
   went from 426 to matching `clientWidth` after the fix). Closed with a new
   rule at the same 900px condition, plus a separate
   `@media (max-height: 500px) and (orientation: landscape)` block that
-  reclaims vertical space (tighter `.app`/`.topbar` padding, `.board-scroll`
-  max-height 80vh → 55vh) regardless of width. Two read-only review rounds:
+  reclaims vertical space and stacks the full-width board/palette (tighter
+  `.app`/`.topbar` padding, `.board-scroll` max-height 80vh → 55vh)
+  regardless of width. Two read-only review rounds:
   round 1 found a real regression (an admin viewing a game they had not
   joined lost Delete game entirely, since the gating logic bailed out
   before checking the admin role) and a real test-coverage gap (the
@@ -58,7 +59,11 @@ _Last updated: 2026-09-25_
   misattributed CSS comment). Round 2: approved with nits (a scope-wording
   fix to the brief, one more test tying the disabled flags to the rendered
   `disabled` attribute). 5 new `GameMenuActions`/`gameMenuGate` tests, 3 new
-  Navigation tests. Full checks pass (536 engine, 205 server, 232 web).
+  Navigation tests. A later merge from `main` retained the `gameMenuGate`
+  tests but dropped their named import; the reopened build fix restored it.
+  Its review also caught and closed the short-landscape 901-930px gap, with
+  a source-contract regression test for the complete height-based block.
+  Full checks pass (548 engine, 208 server, 239 web).
   Browser-verified: mobile portrait (375x812, menu open/closed/nested
   submenu, Game section for a player and separately for creator/admin, no
   Back to games anywhere), tablet (800px, hamburger right-aligned), desktop
