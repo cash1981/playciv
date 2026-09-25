@@ -13,11 +13,21 @@ _Last updated: 2026-09-25_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 513 engine, 205 server, 213 web on `feat/turn-order-phase-tracker` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 540 engine, 205 server, 218 web on `fix/styles-900px-unclosed-media-query` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Item card styles no longer inherit the 900px breakpoint.** Closed the
+  navigation/touch-target media query immediately after `.board-palette`,
+  keeping both board layout rules scoped to 900px while restoring the item
+  card rules and nested 600px query to their intended scope. Brace counts
+  remain balanced (321/321). Read-only review approved with no findings;
+  typecheck, all tests (540 engine, 205 server, 218 web) and build pass.
+  Browser-verified at 2530px: the revealed German ItemCard showed its art,
+  title, description and status badge correctly; the Metalworking card view
+  showed its art and text. Branch `fix/styles-900px-unclosed-media-query`.
 
 - **Issue #175: Military Tradition's flipside was a data typo, not a one-way
   design.** The source spreadsheet had `Military Tradition` pointing at
