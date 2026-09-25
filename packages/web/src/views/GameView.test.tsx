@@ -7,7 +7,13 @@ import type { Item } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { GameRevisionSummary, PlayerView } from '../lib/api.js'
-import { AUTO_REFRESH_MS, HandItem, loadAfterKnownRevision, reloadIfRevisionChanged } from './GameView.js'
+import {
+  AUTO_REFRESH_MS,
+  HandItem,
+  loadAfterKnownRevision,
+  PrimaryPanelOrder,
+  reloadIfRevisionChanged,
+} from './GameView.js'
 
 afterEach(() => {
   cleanup()
@@ -94,6 +100,27 @@ const base = {
 const run = async (action: () => Promise<unknown>): Promise<void> => {
   await action()
 }
+
+describe('primary game panel order', () => {
+  it('shows Draw before the responsive Log and Chat pair', () => {
+    const { container } = render(
+      <PrimaryPanelOrder
+        draw={<section aria-label="Draw" />}
+        log={<section aria-label="Log" />}
+        chat={<section aria-label="Chat" />}
+      />,
+    )
+
+    expect(
+      Array.from(container.querySelectorAll('section'), (panel) => panel.getAttribute('aria-label')),
+    ).toEqual(['Draw', 'Log', 'Chat'])
+    expect(
+      Array.from(container.querySelector('.panel-pair')?.children ?? [], (panel) =>
+        panel.getAttribute('aria-label'),
+      ),
+    ).toEqual(['Log', 'Chat'])
+  })
+})
 
 /**
  * New in this port — see the pyramid-reposition task brief. "Place in tech
