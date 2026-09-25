@@ -7,7 +7,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
 
 import { isTradable, isUnit, itemName, itemType, TURN_PHASE_LABEL } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from '@civ/engine'
@@ -437,27 +436,19 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
       />
 
       <div className="panel-stack">
-        <PrimaryPanelOrder
-          draw={(
-            <DrawPanel
-              gameId={gameId}
-              busy={interactionBusy}
-              yourTurn={yourTurn}
-              run={run}
-              view={displayedView}
-            />
-          )}
-          log={(
-            <LogPanel
-              gameId={gameId}
-              busy={busy}
-              readOnly={replaying}
-              run={run}
-              reloadCount={reloadCount}
-              historical={historical}
-            />
-          )}
-          chat={player !== null ? (
+        {/* Draw is the first panel after the board. Log and chat retain their
+            responsive side-by-side pair below it (`.panel-pair`). */}
+        <DrawPanel gameId={gameId} busy={interactionBusy} yourTurn={yourTurn} run={run} view={displayedView} />
+        <div className="panel-pair">
+          <LogPanel
+            gameId={gameId}
+            busy={busy}
+            readOnly={replaying}
+            run={run}
+            reloadCount={reloadCount}
+            historical={historical}
+          />
+          {player !== null && (
             <ChatPanel
               gameId={gameId}
               busy={busy}
@@ -466,8 +457,8 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
               reloadCount={reloadCount}
               autoRefresh={autoRefresh}
             />
-          ) : null}
-        />
+          )}
+        </div>
         <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <OpponentHandPanel opponents={displayedView.opponents} />
         <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
@@ -489,30 +480,6 @@ export function GameView({ gameId, player, onUnauthorized, onDeleted, onWithdraw
           run={run}
         />
         <RevealedPanel gameId={gameId} reloadCount={reloadCount} historical={historical} />
-      </div>
-    </>
-  )
-}
-
-/**
- * Draw is the first panel after the board. Log and chat retain their responsive
- * side-by-side pair below it (`.panel-pair`).
- */
-export function PrimaryPanelOrder({
-  draw,
-  log,
-  chat,
-}: {
-  readonly draw: ReactNode
-  readonly log: ReactNode
-  readonly chat: ReactNode
-}): React.JSX.Element {
-  return (
-    <>
-      {draw}
-      <div className="panel-pair">
-        {log}
-        {chat}
       </div>
     </>
   )
