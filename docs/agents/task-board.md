@@ -12,17 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-173-coin-source-civ-name
-
-- **Owner:** Claude (orchestrator)
-- **Branch:** `feat/issue-173-coin-source-civ-name`
-- **Brief:** `docs/agents/tasks/issue-173-coin-source-civ-name.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/StatusPanel.tsx`
-  - `packages/web/src/views/StatusPanel.test.tsx`
-  - `packages/web/src/styles.css`
-- **Notes:** GitHub issue #173, Coins tab column headers and dividers only.
+_Nothing claimed._
 
 ---
 
