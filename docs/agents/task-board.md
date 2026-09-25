@@ -12,7 +12,18 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### issue-175-pacifism-military-tradition-flipside
+
+- **Owner:** Claude (Sonnet 5)
+- **Branch:** `feat/issue-175-pacifism-military-tradition-flipside`
+- **Brief:** `docs/agents/tasks/issue-175-pacifism-military-tradition-flipside.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/data/gamedata-faf-waw.json`
+  - `packages/web/src/views/SocialPolicyPanel.test.tsx`
+  - `docs/agents/decisions.md`
+- **Notes:** one-cell data fix (Military Tradition's flipside), no engine
+  logic change; see the brief for why this reverses the 2026-09-22 decision.
 
 ---
 
@@ -44,7 +55,7 @@ at a time. Claim them by name.
 | --- | --- |
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
-| `packages/engine/data/gamedata-faf-waw.json` | free |
+| `packages/engine/data/gamedata-faf-waw.json` | issue-175-pacifism-military-tradition-flipside |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
 | `packages/web/src/lib/api.ts` | free |
 
