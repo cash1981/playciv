@@ -218,6 +218,56 @@ describe('primary game panel order', () => {
   })
 })
 
+describe('HandPanel groups items by kind (issue #190 follow-up)', () => {
+  it('renders group headings in old-civ-web bucket order, not draw order', async () => {
+    localStorage.setItem('civ.autoRefresh', 'false')
+    const village: Item = { ...base, id: 'village-1', sheetName: 'VILLAGES', kind: 'village', name: 'Village A' }
+    const hut: Item = { ...base, id: 'hut-1', sheetName: 'HUTS', kind: 'hut', name: 'Hut A' }
+    const culture: Item = { ...base, id: 'culture-1', sheetName: 'CULTURE_1', kind: 'cultureI', name: 'Culture A' }
+    // Draw order (as stored in `you.items`) is village, hut, culture; the
+    // fixed old-client bucket order (Culture Cards, Huts, Villages) reorders
+    // that into culture, hut, village.
+    const view = {
+      rev: 1,
+      name: 'Hand grouping test',
+      active: true,
+      winner: null,
+      activeTurn: null,
+      you: { items: [village, hut, culture] },
+      opponents: [],
+      board: {},
+      boardAreas: [],
+      numOfPlayers: 2,
+      battle: null,
+      battleSummary: [],
+    } as unknown as PlayerView
+    vi.spyOn(api, 'game').mockResolvedValue(view)
+    vi.spyOn(api, 'revisions').mockResolvedValue([])
+
+    render(
+      <GameView
+        gameId="game-1"
+        player={{ username: 'viewer' } as unknown as PlayerDto}
+        onUnauthorized={vi.fn()}
+        onDeleted={vi.fn()}
+        onWithdrawn={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByText('Culture A')).toBeTruthy())
+
+    const hand = screen.getByRole('heading', { name: 'Your hand (3)' }).closest('section')
+    const sequence = Array.from(
+      hand?.querySelectorAll('.item-group-heading h4, li.card strong') ?? [],
+    ).map((node) => node.textContent)
+    expect(sequence).toEqual([
+      'Culture Cards', 'Culture A',
+      'Huts', 'Hut: Hut A',
+      'Villages', 'Village: Village A',
+    ])
+  })
+})
+
 /**
  * New in this port — see the pyramid-reposition task brief. "Place in tech
  * pyramid" must appear only for Sir Isaac Newton, by exact name match, never

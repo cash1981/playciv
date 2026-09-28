@@ -163,21 +163,10 @@ describe('RevealedPanel', () => {
     expect(revealed).toHaveBeenNthCalledWith(3, 'game-1', 1, 11)
   })
 
-  it('groups items into old-civ-web\'s buckets, not by draw order, and keeps newest-first within a bucket', async () => {
+  it('renders a flat, newest-first list, not grouped by kind (issue #190 follow-up)', async () => {
     const village: Item = { ...cultureCard, kind: 'village', sheetName: 'VILLAGES', id: 'village-1', name: 'Village A' }
-    const hutB: Item = { ...cultureCard, kind: 'hut', sheetName: 'HUTS', id: 'hut-b', name: 'Hut B' }
-    const culture: Item = { ...cultureCard, id: 'culture-1', name: 'Culture A' }
     const hutA: Item = { ...cultureCard, kind: 'hut', sheetName: 'HUTS', id: 'hut-a', name: 'Hut A' }
-    // Exercises the `default` arm of `bucketFor`: a wonder (falls into the
-    // catch-all "Items" bucket, along with tech/city-state/social policy) and
-    // an infantry unit (the "Units" bucket).
-    const wonder: Item = {
-      ...cultureCard, kind: 'wonder', sheetName: 'ANCIENT_WONDERS', id: 'wonder-1', name: 'Wonder A', type: 'Ancient',
-    }
-    const infantry: Item = {
-      ...cultureCard, kind: 'infantry', sheetName: 'INFANTRY', id: 'infantry-1',
-      attack: 1, health: 3, level: 0, killed: false, inBattle: false,
-    }
+    const culture: Item = { ...cultureCard, id: 'culture-1', name: 'Culture A' }
     const toEntry = (item: Item): RevealedEntry => ({
       item,
       playerId: null,
@@ -186,28 +175,17 @@ describe('RevealedPanel', () => {
       discarded: false,
       createdAt: null,
     })
-    // Newest-first draw order from the server: village, Hut B, culture,
-    // Hut A, wonder, infantry. The old client's bucket order (Items, Units,
-    // Culture Cards, Huts, Villages) puts Items first and Villages last,
-    // despite the village being drawn most recently; within the Huts bucket,
-    // Hut B (drawn after Hut A) still renders before Hut A.
-    vi.spyOn(api, 'revealed').mockImplementation(
-      serverRevealed([village, hutB, culture, hutA, wonder, infantry].map(toEntry)),
-    )
+    // Newest-first draw order from the server: village, Hut A, culture. A
+    // grouped render would move the culture card and hut ahead of the village
+    // despite it being drawn most recently; a flat render keeps draw order.
+    vi.spyOn(api, 'revealed').mockImplementation(serverRevealed([village, hutA, culture].map(toEntry)))
 
     const { container } = render(<RevealedPanel gameId="game-1" reloadCount={0} />)
-    await waitFor(() => expect(screen.getByText('Hut: Hut A')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Culture A')).toBeTruthy())
 
-    const sequence = Array.from(
-      container.querySelectorAll('.revealed-group-heading h4, li.card strong'),
-    ).map((node) => node.textContent)
-    expect(sequence).toEqual([
-      'Items', 'Wonder A',
-      'Units', 'Infantry 1.3',
-      'Culture Cards', 'Culture A',
-      'Huts', 'Hut: Hut B', 'Hut: Hut A',
-      'Villages', 'Village: Village A',
-    ])
+    expect(container.querySelectorAll('.revealed-group-heading')).toHaveLength(0)
+    const sequence = Array.from(container.querySelectorAll('li.card strong')).map((node) => node.textContent)
+    expect(sequence).toEqual(['Village: Village A', 'Hut: Hut A', 'Culture A'])
   })
 
   it('paginates the historical (replay) feed client-side the same way', async () => {
