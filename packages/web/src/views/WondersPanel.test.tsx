@@ -13,14 +13,19 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear() })
 
 const board = createBoard(16, 8)
 const area = wondersArea(board)
+const internetPiece = {
+  id: 'internet', assetId: 'wonders/internet', label: 'The Internet', path: 'wonders/internet.png',
+  category: 'wonder', x: area.x + 20, y: area.y + 40, width: 88, height: 90, ownerId: null,
+}
+const redArmyPiece = {
+  id: 'unit', assetId: 'figures/redarmy', label: 'Red army', category: 'figure',
+  x: area.x + 20, y: area.y + 40, width: 80, height: 80,
+}
 const view = {
   you: { playerId: 'alice', username: 'Alice' },
   opponents: [{ playerId: 'bob', username: 'Bob' }],
   boardAreas: [area],
-  board: { ...board, pieces: [
-    { id: 'internet', assetId: 'wonders/internet', label: 'The Internet', path: 'wonders/internet.png', category: 'wonder', x: area.x + 20, y: area.y + 40, width: 88, height: 90, ownerId: null },
-    { id: 'unit', assetId: 'figures/redarmy', label: 'Red army', category: 'figure', x: area.x + 20, y: area.y + 40, width: 80, height: 80 },
-  ] },
+  board: { ...board, pieces: [internetPiece, redArmyPiece] },
 } as unknown as PlayerView
 
 const run: Run = async (action) => { await action() }
@@ -55,27 +60,30 @@ describe('WondersPanel', () => {
   })
 
   it('keeps listing a wonder moved out of the Wonders area, onto the map (issue #191)', () => {
+    // Left of the area's x and above its y (area sits at the board's own
+    // right edge, below the map rows), so this is comfortably outside
+    // `isInWondersArea`'s bounds rather than an accident of arithmetic.
     const movedView = {
       ...view,
-      board: { ...view.board, pieces: [
-        { ...(view.board.pieces[0] as object), x: 0, y: 0 },
-        view.board.pieces[1],
-      ] },
+      board: { ...view.board, pieces: [{ ...internetPiece, x: 0, y: 0 }, redArmyPiece] },
     } as unknown as PlayerView
     render(<WondersPanel gameId="g" view={movedView} busy={false} readOnly={false} run={run} />)
-    expect(screen.getByRole('button', { name: 'Wonders in play (1)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Wonders in play (1)' }))
+    expect(screen.getByText('The Internet')).toBeTruthy()
   })
 
   it('removes a wonder from the panel via its own Remove button (issue #191)', async () => {
     const removePiece = vi.spyOn(api, 'removePiece').mockResolvedValue(view)
     render(<WondersPanel gameId="g" view={view} busy={false} readOnly={false} run={run} />)
     fireEvent.click(screen.getByRole('button', { name: 'Wonders in play (1)' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove The Internet' }))
     await waitFor(() => expect(removePiece).toHaveBeenCalledWith('g', 'internet'))
   })
 
   it('disables the Remove button in a read-only view', () => {
     render(<WondersPanel gameId="g" view={view} busy={false} readOnly={true} run={run} />)
-    expect((screen.getByRole('button', { name: 'Remove', hidden: true }) as HTMLButtonElement).disabled).toBe(true)
+    expect(
+      (screen.getByRole('button', { name: 'Remove The Internet', hidden: true }) as HTMLButtonElement).disabled,
+    ).toBe(true)
   })
 })

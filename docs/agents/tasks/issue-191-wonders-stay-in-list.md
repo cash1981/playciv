@@ -44,6 +44,14 @@ Issue #191, filed directly by the human:
   meaningful once a wonder can be shown while off the Wonders area.
 - Reproducing the map view's other per-piece controls (rotate, to
   front/back) in this panel — only Remove is asked for.
+- Making The Internet's raised coin caps (`setCoinSource`,
+  `packages/engine/src/actions/player.ts`) or the Panama Canal coin row
+  (`StatusPanel.tsx`'s `wonderOwners`) independent of `isInWondersArea` too.
+  Round-1 review flagged that this panel showing a moved wonder's owner can
+  now visually disagree with those two effects silently dropping at the same
+  moment — a real, newly reachable inconsistency, but fixing it is an engine
+  change out of scope for this client-only fix. Recorded as an accepted,
+  documented consequence in `decisions.md` (2026-09-28), not resolved here.
 
 ## Reference
 

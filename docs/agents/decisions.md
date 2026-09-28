@@ -2874,3 +2874,51 @@ showing the controlling player as if they owned the unit).
   the pre-existing `discardBarbarians` behaviour, already declared public.
   Neither engine change adds a field to `RevealedEntry`, a server route, or
   any client-facing type.
+
+## 2026-09-28 — Issue #191: the Wonders panel lists a wonder wherever it sits, not only inside the shared Wonders area (supersedes part of the 2026-09-25 "Issue #172" entry)
+
+The human reported directly: a wonder disappeared from the Wonders panel the
+moment it was dragged out of the shared Wonders area onto the map, even
+though the piece still existed; it should stay listed, and be removed from
+the panel only when the piece itself is deleted. `WondersPanel.tsx` was
+gating its list on `isInWondersArea` (current geometric position), so moving
+a piece out of the area looked identical, to that filter, to it never having
+existed. `movePiece` and `removePiece`
+(`packages/engine/src/actions/board.ts`) are already distinct — a move only
+changes `x`/`y`, a remove deletes the piece from `state.board.pieces`
+entirely — so the panel now lists every `category === 'wonder'` piece still
+on the board, regardless of position, and only stops listing one once it is
+actually removed. A "Remove" button was also added to the panel itself
+(calling the same `api.removePiece` the map view's own Remove button already
+uses), since the human's report named that as the intended way to drop a
+wonder from the section.
+
+**This directly supersedes one bullet of the 2026-09-25 "Issue #172" entry's
+consequences**, which read: "A wonder in Egypt's own player area is not
+inside the shared Wonders area, so `WondersPanel` (issue #145's ownership
+list) does not list it and it cannot be assigned or cleared an owner there."
+As of this change, that is no longer true: Egypt's own starting wonder — and
+any other wonder moved out of the shared area for any reason — is listed and
+its owner can be assigned or cleared from the panel like any other. This is
+the human's own request, applied consistently rather than carved out for
+Egypt's case specifically.
+
+**New consequence, left unresolved and worth a human decision.** Two other
+places still derive a wonder's *effect* from the same `isInWondersArea`
+position check that the panel no longer uses for *visibility*:
+`StatusPanel.tsx`'s `wonderOwners` (gating whose Code of Laws/Pottery/
+Printing Press/Democracy caps The Internet raises, issue #145, and who gets
+the Panama Canal coin row, issue #158) and `setCoinSource`
+(`packages/engine/src/actions/player.ts`, The Internet's +2 cap check). A
+wonder moved out of the shared area now stays in the Wonders panel with its
+owner still shown, but The Internet's raised coin cap (or the Panama Canal
+row) silently stops applying for that owner at the same moment, with nothing
+in the UI explaining why — before this change, the panel entry and the
+allowance both disappeared together, so the UI was at least self-consistent
+even if opaque. Fixing this fully means either making those two effects
+independent of position too (an engine change, explicitly out of scope for
+this client-only fix per `docs/agents/tasks/issue-191-wonders-stay-in-list.md`)
+or showing the panel itself when a wonder's position no longer grants its
+bonus. Neither was done here; this is recorded as a known, accepted
+inconsistency rather than a silent one, and is a candidate for its own
+follow-up issue if it turns out to matter in practice.

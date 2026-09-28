@@ -59,6 +59,7 @@ export function WondersPanel({
                 </label>
                 <button
                   className="small danger"
+                  aria-label={`Remove ${piece.label}`}
                   disabled={busy || readOnly}
                   onClick={() => void run(() => api.removePiece(gameId, piece.id))}
                 >
