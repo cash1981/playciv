@@ -53,4 +53,29 @@ describe('WondersPanel', () => {
     render(<WondersPanel gameId="g" view={view} busy={false} readOnly={true} run={run} />)
     expect((screen.getByRole('combobox', { name: 'The Internet owner', hidden: true }) as HTMLSelectElement).disabled).toBe(true)
   })
+
+  it('keeps listing a wonder moved out of the Wonders area, onto the map (issue #191)', () => {
+    const movedView = {
+      ...view,
+      board: { ...view.board, pieces: [
+        { ...(view.board.pieces[0] as object), x: 0, y: 0 },
+        view.board.pieces[1],
+      ] },
+    } as unknown as PlayerView
+    render(<WondersPanel gameId="g" view={movedView} busy={false} readOnly={false} run={run} />)
+    expect(screen.getByRole('button', { name: 'Wonders in play (1)' })).toBeTruthy()
+  })
+
+  it('removes a wonder from the panel via its own Remove button (issue #191)', async () => {
+    const removePiece = vi.spyOn(api, 'removePiece').mockResolvedValue(view)
+    render(<WondersPanel gameId="g" view={view} busy={false} readOnly={false} run={run} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Wonders in play (1)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(removePiece).toHaveBeenCalledWith('g', 'internet'))
+  })
+
+  it('disables the Remove button in a read-only view', () => {
+    render(<WondersPanel gameId="g" view={view} busy={false} readOnly={true} run={run} />)
+    expect((screen.getByRole('button', { name: 'Remove', hidden: true }) as HTMLButtonElement).disabled).toBe(true)
+  })
 })
