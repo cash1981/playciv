@@ -3,7 +3,7 @@
 - **Slug:** `issue-193-arrow-key-nudge`
 - **Branch:** `feat/issue-193-arrow-key-nudge`
 - **Owner:** Claude
-- **Status:** in progress (review round 1 found a design gap; see "Review round 1" below)
+- **Status:** done (three review rounds; see "Review round 1"/"Review round 2" below)
 
 ## Goal
 
@@ -136,38 +136,45 @@ human rather than by precedent (see "Open questions", now answered).
 
 ## Acceptance criteria
 
-- [ ] Selecting a piece and pressing an arrow key moves it one small, visible
+- [x] Selecting a piece and pressing an arrow key moves it one small, visible
       step in the expected direction, at both a high and a low zoom level, and
-      the step looks the same size on screen at both.
-- [ ] This holds for a piece sitting inside a player area (e.g. a collected
+      the step looks the same size on screen at both. Proven by an automated
+      test (`BoardView.test.tsx`), not eyeballed in a browser — see the last
+      item.
+- [x] This holds for a piece sitting inside a player area (e.g. a collected
       hut) and for a map tile — not just a freely-placed piece: the nudge
       moves it by exactly the requested step, it is not re-tidied into a grid
       slot or re-snapped to the nearest tile position. Covered by an engine
       test on `movePiece` with `snap: false` against a piece placed inside a
-      player area.
-- [ ] Holding an arrow key down moves the piece repeatedly (OS auto-repeat).
+      player area, and a separate one for a map tile.
+- [x] Holding an arrow key down moves the piece repeatedly (OS auto-repeat).
       Each repeat that is not still waiting on a prior request in flight
       reaches the server; one arriving mid-request is dropped by the existing
       `busy` guard, same as any other board action while `run` is in flight —
       this is expected, not a bug, and does not need fixing.
-- [ ] Pressing an arrow key with no piece selected leaves the browser's
+- [x] Pressing an arrow key with no piece selected leaves the browser's
       default behaviour alone (e.g. the page may scroll) — our handler is not
       even attached in that state.
-- [ ] Pressing an arrow key while `readOnly` or `busy` does nothing.
-- [ ] Pressing an arrow key while focus is in an unrelated text input does not
+- [x] Pressing an arrow key while `readOnly` or `busy` does nothing.
+- [x] Pressing an arrow key while focus is in an unrelated text input does not
       move the board piece and does not block that input's own arrow-key
       behaviour (e.g. moving the text cursor).
-- [ ] A piece nudged toward the edge of the board is clamped there
+- [x] A piece nudged toward the edge of the board is clamped there
       (`clampToBoard`), same as any move; a nudge that would not change the
       piece's position at all (already at that edge) does not call the server,
       mirroring the drag path's own no-op-click guard.
-- [ ] A test proves the success path calls `event.preventDefault()` (not just
+- [x] A test proves the success path calls `event.preventDefault()` (not just
       that the no-op paths leave it uncancelled).
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: not applicable — this only changes where an already-
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass — engine
+      561 tests, server 209, web 259, verified independently by the
+      orchestrator after each round, not just quoted from the coder.
+- [x] Hidden information: not applicable — this only changes where an already-
       visible piece sits, the same information `movePiece` already exposes.
 - [ ] Verified in the browser: nudge a piece at two different zoom levels and
-      describe what was seen.
+      describe what was seen. **Not done** — no browser was available to any
+      agent this session (coder or orchestrator). Left to the human before or
+      shortly after merge; the automated coverage above is a strong proxy but
+      is not a substitute for actually seeing it move on screen.
 
 ## Open questions
 

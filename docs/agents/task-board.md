@@ -12,32 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-193-arrow-key-nudge
-
-- **Owner:** Claude (Sonnet 5, orchestrator; coder on a cheaper model)
-- **Branch:** `feat/issue-193-arrow-key-nudge`
-- **Brief:** `docs/agents/tasks/issue-193-arrow-key-nudge.md`
-- **Status:** in review (round 2 implemented per the updated brief; awaiting
-  reviewer)
-- **Claimed paths:**
-  - `packages/engine/src/actions/board.ts`
-  - `packages/server/src/context.ts`
-  - `packages/server/src/routes/board.ts`
-  - `packages/web/src/lib/api.ts`
-  - `packages/web/src/views/BoardView.tsx`
-  - `packages/web/src/views/BoardView.test.tsx`
-  - `packages/engine/test/board.test.ts`
-  - `packages/server/test/board-api.test.ts`
-- **Notes:** Arrow keys nudge the selected board piece. Round 1 was client-
-  only; round 2 adds a `snap: false` opt-out on `movePiece` so a nudge is not
-  re-tidied into a player-area grid slot or re-snapped to a map-tile slot.
-  Every existing caller of `movePiece`/`api.movePiece` is unaffected (the new
-  field is optional and defaults to current snapping behaviour).
-  `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (engine 561,
-  web 259, server 209 tests). Not verified in a real browser — no browser
-  available to this agent; see the handback report.
-
----
+_Nothing claimed._
 
 ## Format
 
@@ -69,7 +44,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
-| `packages/web/src/lib/api.ts` | `issue-193-arrow-key-nudge` (adding an optional 5th param to `movePiece`; every existing call site unaffected) |
+| `packages/web/src/lib/api.ts` | free |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.
