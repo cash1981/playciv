@@ -210,3 +210,37 @@ human decision needed):
 - Match the repo's `switch` body style (own line per case, not `case X: y; break`).
 - The task-board claim must list every path actually touched, including test
   files.
+
+## Review round 2
+
+Verdict: approve with nits, plus one real gap. Round 2's fix
+(`packages/engine/src/actions/board.ts`'s `snap: false` bypass, plumbed
+through the server and `api.ts`, and `BoardView.tsx`'s client-side no-op
+clamp) was verified correct: both snaps are genuinely bypassed only when
+`snap === false`, every existing caller is unaffected (confirmed by grep and
+by the pre-existing drag/tap tests' exact-arity `toHaveBeenCalledWith`
+assertions), the client/server clamp is idempotent so the two sides can never
+disagree, and the new engine/server tests are load-bearing (they fail if the
+bypass is removed, not just green by construction).
+
+**Gap to close (round 3):** no test asserts that
+`BoardView.tsx`'s nudge call site actually passes `false` as `api.movePiece`'s
+5th argument. Deleting that one argument — the single line connecting the
+whole fix to the feature — leaves the entire suite green while reintroducing
+the exact round-1 bug. Fix: in the existing direction test (piece at
+`(200, 400)`, clear of the clamp), assert the full call, e.g.
+`expect(movePiece).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number), false)`.
+
+Left as nits, to be closed by the orchestrator at finish rather than sent back
+to the coder:
+
+- `README.md`'s board section says an area drop always tidies and a map drop
+  always keeps its exact position; that is now only true of pointer
+  drops — the keyboard nudge is a deliberate exception. Needs a sentence.
+- No `decisions.md` entry yet for the snap-bypass design decision (precedent:
+  the 2026-09-17 culture-track-markers entry). To be added at finish.
+- `optionalBoolean` doesn't accept the string `"false"` the way
+  `optionalNumber` accepts numeric strings — safe today (only client sends a
+  real boolean) but an asymmetry worth knowing about if reused elsewhere.
+- The new tile test in `board.test.ts` uses bare pixel literals rather than a
+  helper — cosmetic, the test still fails loudly on a real geometry change.
