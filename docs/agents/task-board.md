@@ -12,19 +12,9 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-190-small-improvements
-
-- **Owner:** Claude (orchestrator, direct)
-- **Branch:** `feat/issue-190-small-improvements`
-- **Brief:** `docs/agents/tasks/issue-190-small-improvements.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/RevealedPanel.tsx`
-  - `packages/web/src/views/RevealedPanel.test.tsx`
-  - `packages/web/src/views/GameView.tsx`
-  - `packages/web/src/views/BattlePanel.test.tsx`
-  - `packages/web/src/styles.css`
-- **Notes:** issue #190, two small unrelated client-only fixes.
+_Nothing claimed on this branch. (`feat/issue-191-wonders-stay-in-list` holds
+its own claim on a sibling branch off the same `main`; it will appear here
+once merged.)_
 
 ---
 

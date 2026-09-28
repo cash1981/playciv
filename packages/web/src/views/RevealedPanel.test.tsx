@@ -168,6 +168,16 @@ describe('RevealedPanel', () => {
     const hutB: Item = { ...cultureCard, kind: 'hut', sheetName: 'HUTS', id: 'hut-b', name: 'Hut B' }
     const culture: Item = { ...cultureCard, id: 'culture-1', name: 'Culture A' }
     const hutA: Item = { ...cultureCard, kind: 'hut', sheetName: 'HUTS', id: 'hut-a', name: 'Hut A' }
+    // Exercises the `default` arm of `bucketFor`: a wonder (falls into the
+    // catch-all "Items" bucket, along with tech/city-state/social policy) and
+    // an infantry unit (the "Units" bucket).
+    const wonder: Item = {
+      ...cultureCard, kind: 'wonder', sheetName: 'ANCIENT_WONDERS', id: 'wonder-1', name: 'Wonder A', type: 'Ancient',
+    }
+    const infantry: Item = {
+      ...cultureCard, kind: 'infantry', sheetName: 'INFANTRY', id: 'infantry-1',
+      attack: 1, health: 3, level: 0, killed: false, inBattle: false,
+    }
     const toEntry = (item: Item): RevealedEntry => ({
       item,
       playerId: null,
@@ -176,13 +186,13 @@ describe('RevealedPanel', () => {
       discarded: false,
       createdAt: null,
     })
-    // Newest-first draw order from the server: village, Hut B, culture, Hut A.
-    // The old client's bucket order (Culture Cards, then Huts, then Villages)
-    // puts the culture heading first and the villages heading last, despite
-    // the village being drawn most recently; within the Huts bucket, Hut B
-    // (drawn after Hut A) still renders before Hut A.
+    // Newest-first draw order from the server: village, Hut B, culture,
+    // Hut A, wonder, infantry. The old client's bucket order (Items, Units,
+    // Culture Cards, Huts, Villages) puts Items first and Villages last,
+    // despite the village being drawn most recently; within the Huts bucket,
+    // Hut B (drawn after Hut A) still renders before Hut A.
     vi.spyOn(api, 'revealed').mockImplementation(
-      serverRevealed([village, hutB, culture, hutA].map(toEntry)),
+      serverRevealed([village, hutB, culture, hutA, wonder, infantry].map(toEntry)),
     )
 
     const { container } = render(<RevealedPanel gameId="game-1" reloadCount={0} />)
@@ -191,7 +201,13 @@ describe('RevealedPanel', () => {
     const sequence = Array.from(
       container.querySelectorAll('.revealed-group-heading h4, li.card strong'),
     ).map((node) => node.textContent)
-    expect(sequence).toEqual(['Culture Cards', 'Culture A', 'Huts', 'Hut: Hut B', 'Hut: Hut A', 'Villages', 'Village: Village A'])
+    expect(sequence).toEqual([
+      'Items', 'Wonder A',
+      'Units', 'Infantry 1.3',
+      'Culture Cards', 'Culture A',
+      'Huts', 'Hut: Hut B', 'Hut: Hut A',
+      'Villages', 'Village: Village A',
+    ])
   })
 
   it('paginates the historical (replay) feed client-side the same way', async () => {

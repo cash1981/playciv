@@ -3,7 +3,7 @@
 - **Slug:** `issue-190-small-improvements`
 - **Branch:** `feat/issue-190-small-improvements`
 - **Owner:** Claude (orchestrator, direct)
-- **Status:** draft
+- **Status:** done
 
 ## Goal
 
@@ -95,16 +95,18 @@ Issue #190, filed directly by the human:
 
 ## Acceptance criteria
 
-- [ ] The Revealed/Discarded panel groups loaded items into old-civ-web's
+- [x] The Revealed/Discarded panel groups loaded items into old-civ-web's
       eight buckets, in its fixed section order, each labelled and
       newest-first within itself.
-- [ ] The battle summary bar shows the combat bonus beside HP, not ATK.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: unchanged — both changes rearrange already-public
+- [x] The battle summary bar shows the combat bonus beside HP, not ATK.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (556
+      engine, 208 server, 249 web tests).
+- [x] Hidden information: unchanged — both changes rearrange already-public
       data (the revealed feed, the battle summary), no new field is read or
       shown.
-- [ ] Verified in the browser: a game with a mix of revealed item kinds shows
-      grouped headings in the Revealed panel; an active battle's summary bar
+- [ ] Verified in the browser: **not done this session** (no browser tool
+      connected) — left to the human. What to check: a game with a mix of
+      revealed item kinds shows grouped headings in the Revealed panel; an active battle's summary bar
       shows `HP <n> (+<bonus>)` and a plain `ATK <n>`.
 
 ## Open questions

@@ -763,7 +763,7 @@ label > textarea {
   margin-top: 0.2rem;
 }
 
-/* A sheet-name heading grouping the Revealed/Discarded panel's cards, spanning the full width of the surrounding `.card-grid`. */
+/* An old-client-bucket heading grouping the Revealed/Discarded panel's cards, spanning the full width of the surrounding `.card-grid`. */
 .revealed-group-heading {
   grid-column: 1 / -1;
 }

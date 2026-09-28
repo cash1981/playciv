@@ -2,16 +2,16 @@
  * The Revealed and Discarded Items panel (issue #51), replacing the old
  * Opponents panel.
  *
- * A newest-first list of every publicly known item: the card itself, who
- * revealed or owns it, and whether it was revealed, discarded, or both. The
- * currently loaded page is grouped under a heading per kind (issue #190),
- * matching old-civ-web's `RevealedController.readKeysFromItems` bucketing and
- * `revealed.html`'s fixed section order — Civilizations, Items, Great
- * Persons, Units, Tiles, Culture Cards, Huts, Villages — rather than the flat
- * interleaved-by-draw-time list this replaced; within a group the existing
- * newest-first order is unchanged. The server pages the feed (`?page=&size=`)
- * and returns one bounded page plus the total, so the browser never loads the
- * whole history; images on the page load lazily on top of that.
+ * Every publicly known item — the card itself, who revealed or owns it, and
+ * whether it was revealed, discarded, or both — grouped under a heading per
+ * kind (issue #190), matching old-civ-web's
+ * `RevealedController.readKeysFromItems` bucketing and `revealed.html`'s
+ * fixed section order — Civilizations, Items, Great Persons, Units, Tiles,
+ * Culture Cards, Huts, Villages — rather than the flat interleaved-by-draw-
+ * time list this replaced; within a group, items stay newest-first. The
+ * server pages the feed (`?page=&size=`) and returns one bounded page plus
+ * the total, so the browser never loads the whole history; images on the
+ * page load lazily on top of that.
  *
  * The panel shows an initial `INITIAL_SIZE` items; each "Load more" click
  * re-requests page 1 with a larger size and replaces the shown list wholesale

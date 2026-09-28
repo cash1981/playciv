@@ -6,14 +6,14 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-25_
+_Last updated: 2026-09-28_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 559 engine, 208 server, 245 web on `fix/battle-discard-ownership` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 559 engine, 208 server, 249 web on `feat/issue-190-small-improvements` (rebased onto `main` after PR #189; an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -43,6 +43,40 @@ _Last updated: 2026-09-25_
   `revealedFeed` had no old-system counterpart. 559 engine tests (+3). No
   server or web change needed — `RevealedRow` already renders whatever
   `revealedFeed` returns.
+
+- **Issue #190: the Revealed/Discarded panel groups items by kind, and the
+  battle summary's combat bonus sits next to HP instead of ATK.** Two small,
+  unrelated client-only fixes the human filed together. `RevealedPanel.tsx`
+  no longer gates its list on a piece's current geometric position; the
+  currently loaded page is bucketed the way old-civ-web's
+  `RevealedController.readKeysFromItems`/`revealed.html` already did —
+  Civilizations, Items (a catch-all for wonders/city-states/techs/social
+  policies), Great Persons, Units, Tiles, Culture Cards, Huts, Villages, in
+  that fixed order — with a heading per non-empty bucket and newest-first
+  order preserved within each. A first pass grouped by the port's own
+  `SheetName` ordinal (23 groups) instead and the brief wrongly claimed no
+  old-client reference existed; round-1 read-only review caught both, found
+  the real old-client bucketing, and the implementation and brief were
+  corrected to port it (see `decisions.md`, 2026-09-28). `GameView.tsx`'s
+  battle summary bar moves the `combatBonus` suffix (e.g. `(+6)`) from the
+  `ATK` span to the `HP` span — display-only, matching how the engine
+  already scores a battle (`totalHealth + combatBonus`); `combatBonus`
+  itself is untouched. Two review rounds: round 1 found the bucketing
+  mismatch (fixed) plus test-quality nits (the grouping test only proved
+  heading order, not within-bucket order or card placement; the battle test
+  covered only a positive bonus) — closed with a stronger grouping test
+  (proves full DOM order, including the previously-untested "Items"/"Units"
+  catch-all buckets) and added negative/zero combat-bonus cases. Round 2:
+  approved with nits, the cheap ones fixed directly (a stale CSS comment, a
+  module doc comment that briefly contradicted the new grouped behaviour);
+  two cosmetic nits left as-is (a function signature that could narrow from
+  `RevealedEntry` to `Item`; the new `<h4>` group headings sit one level
+  under the panel's `<h2>`, matching an existing minor inconsistency
+  elsewhere rather than a regression). 5 new/changed web tests. Full checks
+  pass (556 engine, 208 server, 249 web). No browser session was available
+  this session; the visual pass — grouped headings in a mixed-kind game, and
+  the battle bar's HP/ATK placement — is left to the human. Branch
+  `feat/issue-190-small-improvements`.
 
 - **Issue #166: the Revealed/Discarded panel loads 6 items at first, then 5
   more per "Load more" click.** Replaced the fixed-size-20 Previous/Next
