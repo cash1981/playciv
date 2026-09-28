@@ -2,10 +2,15 @@
  * The Revealed and Discarded Items panel (issue #51), replacing the old
  * Opponents panel.
  *
- * A chronological, newest-first list of every publicly known item: the card
- * itself, who revealed or owns it, and whether it was revealed, discarded, or
- * both. The server pages the feed (`?page=&size=`) and returns one bounded page
- * plus the total, so the browser never loads the whole history; images on the
+ * Every publicly known item — the card itself, who revealed or owns it, and
+ * whether it was revealed, discarded, or both — grouped under a heading per
+ * kind (issue #190), matching old-civ-web's
+ * `RevealedController.readKeysFromItems` bucketing and `revealed.html`'s
+ * fixed section order — Civilizations, Items, Great Persons, Units, Tiles,
+ * Culture Cards, Huts, Villages — rather than the flat interleaved-by-draw-
+ * time list this replaced; within a group, items stay newest-first. The
+ * server pages the feed (`?page=&size=`) and returns one bounded page plus
+ * the total, so the browser never loads the whole history; images on the
  * page load lazily on top of that.
  *
  * The panel shows an initial `INITIAL_SIZE` items; each "Load more" click
@@ -21,7 +26,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { revealAll } from '@civ/engine'
+import { isUnit, revealAll } from '@civ/engine'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { GameRevisionView, RevealedEntry, RevealedPage } from '../lib/api.js'
@@ -104,9 +109,12 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <ul className="card-grid scroll">
-        {items.map((entry) => (
-          <RevealedRow key={entry.item.id} entry={entry} />
-        ))}
+        {groupByOldClientBucket(items).flatMap((group) => [
+          <li key={group.bucket} className="revealed-group-heading">
+            <h4>{BUCKET_LABEL[group.bucket]}</h4>
+          </li>,
+          ...group.entries.map((entry) => <RevealedRow key={entry.item.id} entry={entry} />),
+        ])}
         {items.length === 0 && <li className="muted">Nothing has been revealed yet.</li>}
       </ul>
 
@@ -129,6 +137,84 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
       </div>
     </CollapsiblePanel>
   )
+}
+
+/**
+ * The old client's eight `RevealedController` buckets, in `revealed.html`'s
+ * fixed section order.
+ */
+const BUCKET_ORDER = [
+  'civs',
+  'items',
+  'greatPersons',
+  'units',
+  'tiles',
+  'cultureCards',
+  'huts',
+  'villages',
+] as const
+
+type Bucket = (typeof BUCKET_ORDER)[number]
+
+const BUCKET_LABEL: Readonly<Record<Bucket, string>> = {
+  civs: 'Civilizations',
+  items: 'Items',
+  greatPersons: 'Great Persons',
+  units: 'Units',
+  tiles: 'Tiles',
+  cultureCards: 'Culture Cards',
+  huts: 'Huts',
+  villages: 'Villages',
+}
+
+/** Port of `RevealedController.readKeysFromItems`'s if/else chain. */
+function bucketFor(entry: RevealedEntry): Bucket {
+  const { item } = entry
+  switch (item.kind) {
+    case 'cultureI':
+    case 'cultureII':
+    case 'cultureIII':
+      return 'cultureCards'
+    case 'greatperson':
+      return 'greatPersons'
+    case 'hut':
+      return 'huts'
+    case 'village':
+      return 'villages'
+    case 'tile':
+      return 'tiles'
+    case 'civ':
+      return 'civs'
+    default:
+      return isUnit(item) ? 'units' : 'items'
+  }
+}
+
+/**
+ * Groups the currently loaded page of items into the old client's eight
+ * buckets, in its fixed section order, so huts, villages, great person tiles
+ * etc. are shown together rather than interleaved by draw time. Newest-first
+ * order within a bucket is preserved unchanged from `items`.
+ */
+function groupByOldClientBucket(
+  items: readonly RevealedEntry[],
+): ReadonlyArray<{ readonly bucket: Bucket; readonly entries: readonly RevealedEntry[] }> {
+  const byBucket = new Map<Bucket, RevealedEntry[]>()
+  for (const entry of items) {
+    const bucket = bucketFor(entry)
+    const list = byBucket.get(bucket)
+    if (list === undefined) {
+      byBucket.set(bucket, [entry])
+    } else {
+      list.push(entry)
+    }
+  }
+  const groups: Array<{ readonly bucket: Bucket; readonly entries: readonly RevealedEntry[] }> = []
+  for (const bucket of BUCKET_ORDER) {
+    const entries = byBucket.get(bucket)
+    if (entries !== undefined) groups.push({ bucket, entries })
+  }
+  return groups
 }
 
 export function RevealedRow({ entry }: { readonly entry: RevealedEntry }): React.JSX.Element {
