@@ -759,6 +759,10 @@ describe('BoardView arrow-key nudge (issue #193)', () => {
       movePiece.mockClear()
       fireEvent.keyDown(document, { key })
       await waitFor(() => expect(movePiece).toHaveBeenCalledTimes(1))
+      // The 5th argument (snap: false) is what makes the nudge bypass the
+      // player-area/map-tile snapping (review round 1); assert it explicitly
+      // so deleting it cannot slip past the suite unnoticed (review round 2).
+      expect(movePiece).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number), false)
       const [, , x, y] = movePiece.mock.calls[0] as [string, string, number, number]
       return { x: x - boardPiece.x, y: y - boardPiece.y }
     }
