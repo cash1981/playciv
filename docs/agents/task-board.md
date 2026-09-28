@@ -12,9 +12,16 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed on this branch. (`feat/issue-191-wonders-stay-in-list` holds
-its own claim on a sibling branch off the same `main`; it will appear here
-once merged.)_
+### issue-193-arrow-key-nudge
+
+- **Owner:** Claude (Sonnet 5, orchestrator; coder on a cheaper model)
+- **Branch:** `feat/issue-193-arrow-key-nudge`
+- **Brief:** `docs/agents/tasks/issue-193-arrow-key-nudge.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/BoardView.tsx`
+- **Notes:** Client-only change — arrow keys nudge the selected board piece.
+  No engine/server change; `movePiece` already clamps/snaps.
 
 ---
 
