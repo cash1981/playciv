@@ -36,9 +36,13 @@ _Last updated: 2026-09-28_
   pinned the nudge call site's `snap: false` argument, so dropping it would
   have regressed silently; round 3 closed that gap. See `decisions.md`
   (2026-09-28) and README's "The board"/"Player areas" sections. 561 engine
-  tests (+2), 209 server tests (+1), 259 web tests (+7). No browser session
-  was available this session — visual verification at two zoom levels is
-  left to the human. Branch `feat/issue-193-arrow-key-nudge`.
+  tests (+2), 209 server tests (+1), 259 web tests (+7). Manually verified
+  in a real browser afterwards: the on-screen step held constant across
+  100%/65%/30% zoom (6/9/20 board units, all ≈6 screen px), and nudging a
+  piece already tidied into a player-area slot moved it by exactly the
+  requested step instead of snapping back to that slot — reproducing and
+  confirming the fix for the exact bug review round 1 found. Branch
+  `feat/issue-193-arrow-key-nudge`.
 
 - **Two Revealed/Discarded panel bugs from a live game report: a battlehand
   reveal that never actually revealed anything, and a barbarian discard

@@ -170,11 +170,25 @@ human rather than by precedent (see "Open questions", now answered).
       orchestrator after each round, not just quoted from the coder.
 - [x] Hidden information: not applicable — this only changes where an already-
       visible piece sits, the same information `movePiece` already exposes.
-- [ ] Verified in the browser: nudge a piece at two different zoom levels and
-      describe what was seen. **Not done** — no browser was available to any
-      agent this session (coder or orchestrator). Left to the human before or
-      shortly after merge; the automated coverage above is a strong proxy but
-      is not a substitute for actually seeing it move on screen.
+- [x] Verified in the browser: nudge a piece at two different zoom levels and
+      describe what was seen. **Done**, manually, via `pnpm --filter @civ/server dev`
+      + `pnpm --filter @civ/web dev` and Chrome. One ArrowRight press moved a
+      placed Academy by exactly 6 board units at 100% zoom, 9 at 65%, and 20 at
+      30% — 6 screen pixels every time (`NUDGE_STEP_PX / zoom`), matching the
+      design. Also reproduced the actual round-1 bug scenario directly: a piece
+      dropped into a player area (tidied to its first free slot, `x: 0`) was
+      nudged with ArrowRight and moved to exactly `x: 20` — before the fix this
+      would have stayed at `x: 0`, since `nextFreeSlot` would have returned the
+      same slot regardless of direction. The board history logged "nudged
+      Academy in nudgetest193's area", confirming the wording and that the area
+      label was preserved. Also confirmed: no `/move` request fires when
+      nudging into the board edge (no-op guard), and pressing arrow keys with
+      focus in an unrelated `<textarea>` moved the text cursor normally and
+      never touched the board piece. One incidental, expected observation: the
+      zoom `<select>` itself keeps keyboard focus after choosing a value, so
+      arrow keys are correctly ignored (by the same focused-form-control guard
+      that protects a text input) until focus moves elsewhere, e.g. by clicking
+      a piece — not a bug, just worth knowing.
 
 ## Open questions
 
