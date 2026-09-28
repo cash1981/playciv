@@ -17,8 +17,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** Claude (Sonnet 5, orchestrator; coder on a cheaper model)
 - **Branch:** `feat/issue-193-arrow-key-nudge`
 - **Brief:** `docs/agents/tasks/issue-193-arrow-key-nudge.md`
-- **Status:** in progress (review round 1 sent back with findings; round 2 in
-  progress)
+- **Status:** in review (round 2 implemented per the updated brief; awaiting
+  reviewer)
 - **Claimed paths:**
   - `packages/engine/src/actions/board.ts`
   - `packages/server/src/context.ts`
@@ -26,13 +26,16 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/web/src/lib/api.ts`
   - `packages/web/src/views/BoardView.tsx`
   - `packages/web/src/views/BoardView.test.tsx`
-  - `packages/engine/test/board.test.ts` (or wherever `movePiece` is tested)
-  - the server route test file covering `board.ts`'s `/move` route
+  - `packages/engine/test/board.test.ts`
+  - `packages/server/test/board-api.test.ts`
 - **Notes:** Arrow keys nudge the selected board piece. Round 1 was client-
   only; round 2 adds a `snap: false` opt-out on `movePiece` so a nudge is not
   re-tidied into a player-area grid slot or re-snapped to a map-tile slot.
   Every existing caller of `movePiece`/`api.movePiece` is unaffected (the new
   field is optional and defaults to current snapping behaviour).
+  `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (engine 561,
+  web 259, server 209 tests). Not verified in a real browser — no browser
+  available to this agent; see the handback report.
 
 ---
 

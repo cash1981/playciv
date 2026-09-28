@@ -29,6 +29,7 @@ import {
   areaBandTop,
   boardHeight,
   boardWidth,
+  clampToBoard,
   columnLabel,
   cultureCellCenter,
   cultureTrackHeight,
@@ -282,11 +283,20 @@ export function BoardView({
       let dx = 0
       let dy = 0
       switch (event.key) {
-        case 'ArrowUp': dy = -1; break
-        case 'ArrowDown': dy = 1; break
-        case 'ArrowLeft': dx = -1; break
-        case 'ArrowRight': dx = 1; break
-        default: return
+        case 'ArrowUp':
+          dy = -1
+          break
+        case 'ArrowDown':
+          dy = 1
+          break
+        case 'ArrowLeft':
+          dx = -1
+          break
+        case 'ArrowRight':
+          dx = 1
+          break
+        default:
+          return
       }
 
       const piece = pieces.find((candidate) => candidate.id === selectedId)
@@ -294,12 +304,19 @@ export function BoardView({
 
       event.preventDefault()
       const step = NUDGE_STEP_PX / zoom
-      void run(() => api.movePiece(gameId, piece.id, piece.x + dx * step, piece.y + dy * step))
+      const [x, y] = clampToBoard(board, piece.x + dx * step, piece.y + dy * step, piece.width, piece.height)
+      // A nudge already at the board's edge should not fire a request, the
+      // same as the drag path's own no-op-click guard (`onPiecePointerUp`).
+      if (x === piece.x && y === piece.y) return
+      // `snap: false` bypasses the player-area and map-tile snaps in
+      // `movePiece`: a nudge always moves the piece by exactly the requested
+      // step, not into the nearest grid slot the way a mouse drop is (issue #193).
+      void run(() => api.movePiece(gameId, piece.id, x, y, false))
     }
 
     document.addEventListener('keydown', nudgeSelectedPiece)
     return () => document.removeEventListener('keydown', nudgeSelectedPiece)
-  }, [selectedId, busy, readOnly, pieces, zoom, run, gameId])
+  }, [selectedId, busy, readOnly, pieces, zoom, run, gameId, board])
 
   useEffect(() => {
     const scroll = scrollRef.current
