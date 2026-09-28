@@ -1289,6 +1289,7 @@ _Last updated: 2026-09-28_
   page), and changed `GET /api/chat` to return ~3 months newest first with no
   50-message cap; 1 server test replaced, 5 new web tests.
 - **Issue #40.** The register form asks the old fixed question ("What is China's starting tech?") and `POST /api/auth/register` now requires a `securityAnswer` field, accepting only `writing` case-insensitive, so a direct API call can no longer skip the gate the old client enforced alone. The client refuses a wrong answer before calling the API, as `RegisterController.js` did. The question is a speed bump, not a security boundary, and server enforcement is a deliberate improvement over Java — recorded in `decisions.md` and `README.md`. Review-approved and merged as PR #94; the route is covered by the Hono tests and the form by `LoginView.test.tsx` (no browser connection was available for a manual pass).
+- **Issue #199.** An unsaved new turn (draft only, no server turn yet) vanished from the Turn dropdown once another turn was selected, so it could only be reached by pressing "New turn" again. `TurnPanel` now keeps draft and live-dirty turn numbers in the list for the signed-in player. Review-approved with nits; one regression test in `TurnPanel.test.tsx`.
 
 ## In progress
 
