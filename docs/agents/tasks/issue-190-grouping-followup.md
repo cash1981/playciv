@@ -107,9 +107,6 @@ same as before. Revert that, and grouping belongs only under "Your hand".
 - `packages/web/src/views/GameView.test.tsx`
 - `packages/web/src/views/itemBuckets.ts` (new)
 - `packages/web/src/styles.css`
-- `docs/agents/decisions.md`
-- `docs/agents/state.md`
-- `docs/agents/task-board.md`
 
 ## Acceptance criteria
 

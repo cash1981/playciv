@@ -183,7 +183,7 @@ describe('RevealedPanel', () => {
     const { container } = render(<RevealedPanel gameId="game-1" reloadCount={0} />)
     await waitFor(() => expect(screen.getByText('Culture A')).toBeTruthy())
 
-    expect(container.querySelectorAll('.revealed-group-heading')).toHaveLength(0)
+    expect(container.querySelectorAll('.item-group-heading')).toHaveLength(0)
     const sequence = Array.from(container.querySelectorAll('li.card strong')).map((node) => node.textContent)
     expect(sequence).toEqual(['Village: Village A', 'Hut: Hut A', 'Culture A'])
   })

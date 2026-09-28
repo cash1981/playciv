@@ -2959,3 +2959,42 @@ collapsible sections was judged separate, unrequested UI chrome.
 This is a straightforward port, not a deviation: nothing here overrides old
 system behaviour, it corrects an initial implementation that had drifted from
 it before merge.
+
+## 2026-09-28 — Issue #190 follow-up: grouping moves to the hand, Revealed/Discarded goes back to flat
+
+**Decision.** The entry directly above this one is now superseded for the
+Revealed/Discarded panel. After living with the grouped panel, the human
+asked for it to be reverted:
+
+> Jeg tror du har helt misforstått hva jeg mente. Det er ikke revealed og
+> discarded som skal grupperes på sheetname, men det som er i hånda di.
+> Revealed og discarded skal sorteres på det siste som ble discarded akkurat
+> som tidligere. Så dette må revertes tilbake og riktig sortering skal kun da
+> ligge under "min hånd" Your hand
+
+`RevealedPanel.tsx` is reverted to its pre-issue-#190 shape: a flat,
+newest-first list, no bucket headings. The bucketing logic itself (now in
+`packages/web/src/views/itemBuckets.ts`, extracted rather than duplicated) is
+applied instead to `GameView.tsx`'s `HandPanel`, grouping the player's own
+hand under the same eight headings, in the same fixed order.
+
+**Why.** This is a deliberate, human-directed departure from
+`old-civ-web/app/views/partials/revealed.html`, which does group the
+Revealed/Discarded feed — rule 1 requires that disagreement be written down
+rather than left implicit, since the previous entry's own bucketing was a
+correct port of that reference and a later reader must not assume it still
+holds. The new home has its own old-client precedent, just not the one issue
+#190 was checked against: `old-civ-web/app/scripts/controllers/
+UserItemController.js:53-74` and its template `useritems.html` independently
+duplicate the identical bucketing for the player's own hand view. Issue
+#190's investigation only read `RevealedController`, not `UserItemController`,
+so this precedent was missed the first time.
+
+**Consequences.** `RevealedPanel.test.tsx`'s grouping test is replaced with a
+flat-order test; `GameView.test.tsx` gains a `HandPanel` grouping test
+covering all eight buckets' branch logic (moved from the deleted
+`RevealedPanel.tsx` fixtures, including the `units`/catch-all `items` cases).
+No hidden information changes: the hand panel already only ever rendered
+`view.you.items`, and grouping is display-only. `styles.css`'s
+`.revealed-group-heading` is renamed to `.item-group-heading` to match its
+new home.

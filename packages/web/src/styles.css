@@ -763,8 +763,8 @@ label > textarea {
   margin-top: 0.2rem;
 }
 
-/* An old-client-bucket heading grouping a `.card-grid`'s cards by kind (the
-   hand panel's `HandPanel`), spanning the grid's full width. */
+/* An old-client-bucket heading grouping a `.card-grid`'s cards by kind — used
+   by `HandPanel` in `GameView.tsx` — spanning the grid's full width. */
 .item-group-heading {
   grid-column: 1 / -1;
 }
