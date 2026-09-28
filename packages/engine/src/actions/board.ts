@@ -228,6 +228,17 @@ export interface MovePieceInput {
   readonly pieceId: string
   readonly x: number
   readonly y: number
+  /**
+   * Set to `false` to move the piece to exactly `x`/`y`, bypassing both the
+   * player-area "tidy into next free slot" snap and the map-tile "snap to
+   * nearest slot" snap below. Left out (or set to anything else) keeps
+   * today's snapping behaviour, so every existing caller is unaffected.
+   *
+   * Used by the keyboard arrow-key nudge (issue #193): a nudge should move
+   * the piece by exactly the requested step, not be re-tidied into a grid
+   * slot the way a mouse drop into an area or onto the map is.
+   */
+  readonly snap?: boolean
   readonly at?: string
 }
 
@@ -253,6 +264,11 @@ export function movePiece(state: GameState, input: MovePieceInput): ActionResult
     // through to the raw-drop case below, so the player decides the exact spot
     // (see decisions.md, 2026-09-17). The step is still read off the position
     // for the log by `cultureStepOf`.
+
+    // The keyboard nudge (issue #193) opts out of snapping: it wants the piece
+    // to move by exactly the requested amount, not be re-tidied into a grid
+    // slot or re-snapped to the nearest map tile the way a mouse drop is.
+    if (input.snap === false) return { x: input.x, y: input.y }
 
     // Dropped in a player area: tidy into the next free slot
     if (area !== undefined) {

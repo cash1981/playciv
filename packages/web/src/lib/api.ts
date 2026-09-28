@@ -501,8 +501,12 @@ export const api = {
   boardAssets: () => get<BoardAsset[]>('/api/board/assets'),
   placePiece: (gameId: string, assetId: string, x: number, y: number) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces`, { assetId, x, y }),
-  movePiece: (gameId: string, pieceId: string, x: number, y: number) =>
-    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/move`, { x, y }),
+  movePiece: (gameId: string, pieceId: string, x: number, y: number, snap?: boolean) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/move`, {
+      x,
+      y,
+      ...(snap === undefined ? {} : { snap }),
+    }),
   setWonderOwner: (gameId: string, pieceId: string, ownerId: string | null) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/owner`, { ownerId }),
   rotatePiece: (gameId: string, pieceId: string, rotation?: number) =>

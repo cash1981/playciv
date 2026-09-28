@@ -668,6 +668,226 @@ describe('BoardView mobile placement', () => {
   })
 })
 
+describe('BoardView arrow-key nudge (issue #193)', () => {
+  const selectByTouchTap = (target: HTMLElement, pointerId: number) => {
+    for (const type of ['pointerdown', 'pointerup'] as const) {
+      const event = new Event(type, { bubbles: true })
+      for (const [name, value] of Object.entries({ pointerId, pointerType: 'touch', isPrimary: true, button: 0, clientX: 20, clientY: 20 })) {
+        Object.defineProperty(event, name, { value })
+      }
+      target.dispatchEvent(event)
+    }
+  }
+
+  it('does nothing and does not block scrolling when no piece is selected', () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [piece('buildings/academy', 'academy-idle')] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+
+    const notCancelled = fireEvent.keyDown(document, { key: 'ArrowRight' })
+    expect(notCancelled).toBe(true)
+    expect(movePiece).not.toHaveBeenCalled()
+    movePiece.mockRestore()
+    cleanup()
+  })
+
+  it('nudges the selected piece the same visible distance at two different zoom levels', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const boardPiece = piece('buildings/academy', 'academy-nudge')
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [boardPiece] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+    const tile = container.querySelector('.board-piece')
+    if (!(tile instanceof HTMLElement)) throw new Error('board piece missing')
+    selectByTouchTap(tile, 1)
+    await waitFor(() => expect(tile.classList.contains('selected')).toBe(true))
+
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    fireEvent.keyDown(document, { key: 'ArrowRight' })
+    await waitFor(() => expect(movePiece).toHaveBeenCalledTimes(1))
+    const stepAtFullZoom = (movePiece.mock.calls[0]?.[2] as number) - boardPiece.x
+
+    movePiece.mockClear()
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '0.5' } })
+    fireEvent.keyDown(document, { key: 'ArrowRight' })
+    await waitFor(() => expect(movePiece).toHaveBeenCalledTimes(1))
+    const stepAtHalfZoom = (movePiece.mock.calls[0]?.[2] as number) - boardPiece.x
+
+    // The on-screen distance (board step * zoom) is the same at both zoom
+    // levels, so halving zoom doubles the board-coordinate step.
+    expect(stepAtHalfZoom).toBeCloseTo(stepAtFullZoom * 2)
+    movePiece.mockRestore()
+    cleanup()
+  })
+
+  it('moves the selected piece in the direction of the pressed arrow key', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    // Well clear of every edge, so all four directions actually change the
+    // position instead of being clamped back to where the piece started.
+    const boardPiece = { ...piece('buildings/academy', 'academy-direction'), x: 200, y: 400 }
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [boardPiece] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+    const tile = container.querySelector('.board-piece')
+    if (!(tile instanceof HTMLElement)) throw new Error('board piece missing')
+    selectByTouchTap(tile, 1)
+    await waitFor(() => expect(tile.classList.contains('selected')).toBe(true))
+
+    const nudge = async (key: string) => {
+      movePiece.mockClear()
+      fireEvent.keyDown(document, { key })
+      await waitFor(() => expect(movePiece).toHaveBeenCalledTimes(1))
+      // The 5th argument (snap: false) is what makes the nudge bypass the
+      // player-area/map-tile snapping (review round 1); assert it explicitly
+      // so deleting it cannot slip past the suite unnoticed (review round 2).
+      expect(movePiece).toHaveBeenCalledWith('game', boardPiece.id, expect.any(Number), expect.any(Number), false)
+      const [, , x, y] = movePiece.mock.calls[0] as [string, string, number, number]
+      return { x: x - boardPiece.x, y: y - boardPiece.y }
+    }
+
+    expect((await nudge('ArrowRight')).x).toBeGreaterThan(0)
+    expect((await nudge('ArrowLeft')).x).toBeLessThan(0)
+    expect((await nudge('ArrowDown')).y).toBeGreaterThan(0)
+    expect((await nudge('ArrowUp')).y).toBeLessThan(0)
+    movePiece.mockRestore()
+    cleanup()
+  })
+
+  it('does not move the piece while busy or read-only', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const boardPiece = piece('buildings/academy', 'academy-guarded')
+    const board = { ...createBoard(), pieces: [boardPiece] }
+    const { container, rerender } = render(
+      <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} run={async action => { await action() }} />,
+    )
+    const tile = container.querySelector('.board-piece')
+    if (!(tile instanceof HTMLElement)) throw new Error('board piece missing')
+    selectByTouchTap(tile, 1)
+    await waitFor(() => expect(tile.classList.contains('selected')).toBe(true))
+
+    rerender(
+      <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy run={async action => { await action() }} />,
+    )
+    fireEvent.keyDown(document, { key: 'ArrowRight' })
+    expect(movePiece).not.toHaveBeenCalled()
+
+    rerender(
+      <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} readOnly run={async action => { await action() }} />,
+    )
+    fireEvent.keyDown(document, { key: 'ArrowRight' })
+    expect(movePiece).not.toHaveBeenCalled()
+    movePiece.mockRestore()
+    cleanup()
+  })
+
+  it('leaves an unrelated focused text input alone instead of nudging the piece', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const boardPiece = piece('buildings/academy', 'academy-focus')
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [boardPiece] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+    const tile = container.querySelector('.board-piece')
+    if (!(tile instanceof HTMLElement)) throw new Error('board piece missing')
+    selectByTouchTap(tile, 1)
+    await waitFor(() => expect(tile.classList.contains('selected')).toBe(true))
+
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.focus()
+
+    const notCancelled = fireEvent.keyDown(input, { key: 'ArrowRight' })
+    expect(notCancelled).toBe(true)
+    expect(movePiece).not.toHaveBeenCalled()
+
+    input.remove()
+    movePiece.mockRestore()
+    cleanup()
+  })
+
+  it('cancels the browser default on a successful nudge, unlike the no-op paths above', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    // Well clear of every edge, so the nudge actually goes through.
+    const boardPiece = { ...piece('buildings/academy', 'academy-preventdefault'), x: 200, y: 400 }
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [boardPiece] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+    const tile = container.querySelector('.board-piece')
+    if (!(tile instanceof HTMLElement)) throw new Error('board piece missing')
+    selectByTouchTap(tile, 1)
+    await waitFor(() => expect(tile.classList.contains('selected')).toBe(true))
+
+    const cancelled = fireEvent.keyDown(document, { key: 'ArrowRight' })
+    expect(cancelled).toBe(false)
+    await waitFor(() => expect(movePiece).toHaveBeenCalledTimes(1))
+    movePiece.mockRestore()
+    cleanup()
+  })
+
+  it('does not call the server when the nudge would not move an already-clamped piece', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    // Sits exactly at the board's top-left corner, so ArrowUp/ArrowLeft clamp
+    // straight back to the same spot — the same no-op guard the drag path
+    // already has for a plain click without movement.
+    const boardPiece = piece('buildings/academy', 'academy-edge')
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [boardPiece] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+    const tile = container.querySelector('.board-piece')
+    if (!(tile instanceof HTMLElement)) throw new Error('board piece missing')
+    selectByTouchTap(tile, 1)
+    await waitFor(() => expect(tile.classList.contains('selected')).toBe(true))
+
+    fireEvent.keyDown(document, { key: 'ArrowUp' })
+    fireEvent.keyDown(document, { key: 'ArrowLeft' })
+    expect(movePiece).not.toHaveBeenCalled()
+    movePiece.mockRestore()
+    cleanup()
+  })
+})
+
 describe('BoardView undo and redo', () => {
   const historyEntry = (playerId: string) => ({
     id: 'h1',

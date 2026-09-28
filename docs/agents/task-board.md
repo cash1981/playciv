@@ -12,11 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed on this branch. (`feat/issue-191-wonders-stay-in-list` holds
-its own claim on a sibling branch off the same `main`; it will appear here
-once merged.)_
-
----
+_Nothing claimed._
 
 ## Format
 

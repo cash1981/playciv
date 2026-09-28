@@ -29,6 +29,7 @@ import {
   areaBandTop,
   boardHeight,
   boardWidth,
+  clampToBoard,
   columnLabel,
   cultureCellCenter,
   cultureTrackHeight,
@@ -90,6 +91,14 @@ const assetUrl = (path: string): string =>
   `/board/${path.split('/').map(encodeURIComponent).join('/')}`
 
 const ZOOM_STEPS = [0.3, 0.4, 0.5, 0.65, 0.8, 1] as const
+
+/**
+ * Arrow-key nudge distance, in screen pixels rather than board coordinates, so
+ * a press looks the same size on screen regardless of zoom (issue #193). A
+ * handful of pixels reads as a nudge — well under one grid square even at the
+ * smallest zoom step.
+ */
+const NUDGE_STEP_PX = 6
 
 export function fittingBoardZoom(boardWidth: number, availableWidth: number): number {
   return [...ZOOM_STEPS].reverse().find((step) => boardWidth * step <= availableWidth) ?? ZOOM_STEPS[0]
@@ -256,6 +265,58 @@ export function BoardView({
 
   const width = boardWidth(board)
   const zoom = zoomChoice === 'auto' ? autoZoom : zoomChoice
+
+  useEffect(() => {
+    if (selectedId === null) return
+
+    const nudgeSelectedPiece = (event: KeyboardEvent) => {
+      if (busy || readOnly) return
+
+      const focused = document.activeElement
+      if (
+        focused instanceof HTMLInputElement ||
+        focused instanceof HTMLTextAreaElement ||
+        focused instanceof HTMLSelectElement ||
+        (focused instanceof HTMLElement && focused.isContentEditable)
+      ) return
+
+      let dx = 0
+      let dy = 0
+      switch (event.key) {
+        case 'ArrowUp':
+          dy = -1
+          break
+        case 'ArrowDown':
+          dy = 1
+          break
+        case 'ArrowLeft':
+          dx = -1
+          break
+        case 'ArrowRight':
+          dx = 1
+          break
+        default:
+          return
+      }
+
+      const piece = pieces.find((candidate) => candidate.id === selectedId)
+      if (piece === undefined) return
+
+      event.preventDefault()
+      const step = NUDGE_STEP_PX / zoom
+      const [x, y] = clampToBoard(board, piece.x + dx * step, piece.y + dy * step, piece.width, piece.height)
+      // A nudge already at the board's edge should not fire a request, the
+      // same as the drag path's own no-op-click guard (`onPiecePointerUp`).
+      if (x === piece.x && y === piece.y) return
+      // `snap: false` bypasses the player-area and map-tile snaps in
+      // `movePiece`: a nudge always moves the piece by exactly the requested
+      // step, not into the nearest grid slot the way a mouse drop is (issue #193).
+      void run(() => api.movePiece(gameId, piece.id, x, y, false))
+    }
+
+    document.addEventListener('keydown', nudgeSelectedPiece)
+    return () => document.removeEventListener('keydown', nudgeSelectedPiece)
+  }, [selectedId, busy, readOnly, pieces, zoom, run, gameId, board])
 
   useEffect(() => {
     const scroll = scrollRef.current
