@@ -980,6 +980,46 @@ describe('TurnPanel save all changes', () => {
     ).toBe('Own movement plan')
   })
 
+  it('keeps an unsaved new turn reachable and intact after visiting an earlier turn', async () => {
+    const playerView = viewFor([
+      turn('cash1981', false, 1, { ...orders, MOVEMENT: 'Turn one movement' }),
+      turn('cash1981', false, 2, { ...orders, MOVEMENT: 'Turn two movement' }),
+    ])
+    vi.spyOn(api, 'game').mockResolvedValue(playerView)
+    vi.spyOn(api, 'publicTurns').mockResolvedValue([])
+
+    render(
+      <TurnPanel
+        gameId="game-1"
+        busy={false}
+        run={runIgnoringAggregateError}
+        reloadCount={0}
+        editorComponent={FlushingEditor}
+      />,
+    )
+    await settle()
+
+    fireEvent.click(screen.getByRole('button', { name: 'New turn' }))
+    const movement = (turnNumber: number): HTMLTextAreaElement =>
+      screen.getByRole('textbox', {
+        name: new RegExp(`movement orders for cash1981, turn ${turnNumber}`, 'i'),
+      }) as HTMLTextAreaElement
+    expect(movement(3).value).toBe('')
+    fireEvent.change(movement(3), { target: { value: 'Turn three plan' } })
+
+    fireEvent.change(screen.getByLabelText('Turn for cash1981'), { target: { value: '2' } })
+    expect(movement(2).value).toBe('Turn two movement')
+
+    // The unsaved turn 3 must still be offered, not only re-creatable.
+    const options = Array.from(
+      (screen.getByLabelText('Turn for cash1981') as HTMLSelectElement).options,
+    ).map((option) => option.value)
+    expect(options).toEqual(['1', '2', '3'])
+
+    fireEvent.change(screen.getByLabelText('Turn for cash1981'), { target: { value: '3' } })
+    expect(movement(3).value).toBe('Turn three plan')
+  })
+
   it('removes successful drafts so a retry only sends the failed phase', async () => {
     const playerView = viewFor()
     let failMovement = true
