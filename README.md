@@ -445,6 +445,25 @@ parse time, plus a migration for games saved with the old value. See
 `username + " drew " + " - " + …`. The texts are comparable data and the old
 tests match on them.
 
+**A unit revealed "from their battlehand" now actually shows as public.**
+`DrawAction.revealAndDiscardBattlehand`'s `revealUnitConsumer` only built the
+log message (`" reveals " + names + " from their battlehand"`); it never
+called anything like `setHidden(false)` on the actual units. That is a bug
+Java itself had, not a design choice — visible through
+`GameAction.getAllRevealedItems`, the direct ancestor of this engine's
+`revealedFeed`/`allRevealedItems` (issue #51), whose own `!isHidden()` filter
+is correct as written but could only ever see what `revealUnitConsumer` left
+unhidden. The log line already declared those exact units public, but the
+structured "what's publicly known" view never agreed, in Java or in the first
+port of this action. Corrected here by revealing the exact battlehand item
+instances (matched by `id`) alongside emptying the battlehand, so the log and
+the panel agree. Forward-only, per the human: a game already holding a unit
+stuck in this state from before the fix keeps it hidden, because only the old
+log's free-text unit names survive for it, not a reliable item reference, and
+guessing from a name risked revealing a *different*, never-actually-named
+card of the same type — an unacceptable trade for retrofitting old data. See
+`docs/agents/decisions.md`, 2026-09-25.
+
 ## Deliberate improvements
 
 **Opponents' public hands show face-down cards.** Issue #142 adds one generic
@@ -689,6 +708,18 @@ is validated beyond ownership, and neither a move nor a placement is logged.
 A placed Great Person's identity stays private to its owner — only the row it
 occupies is public, matching the printed "facedown... blank tech card" text.
 See `docs/agents/decisions.md`.
+
+**A discarded barbarian unit shows "Barbarians" rather than no owner at all.**
+`DrawAction.discardBarbarians` deliberately nulls a barbarian unit's owner
+before adding it to `discardedItems` (it is not owned by any player), and the
+port matches. Neither Java nor the old client ever showed an owner for
+anything on this view (`old-civ-web`'s `revealed.html` renders no
+attribution at all, for any category), so leaving it blank was already
+faithful — but the new Revealed/Discarded panel (issue #51) shows a "by
+&lt;username&gt;" tag for every other row, so a barbarian's row stood out as
+looking broken rather than intentionally unowned. `revealedFeed` now labels
+it `'Barbarians'`; `playerId` itself stays `null` — no player identity is
+invented. See `docs/agents/decisions.md`, 2026-09-25.
 
 ## Deferred
 

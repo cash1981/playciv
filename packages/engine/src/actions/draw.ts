@@ -327,6 +327,19 @@ export function drawUnitsForBattle(state: GameState, input: BattlehandInput): Dr
  *
  * The name overstates it: units are not discarded to `discardedItems`, the
  * battlehand is only emptied. The units are still in the hand.
+ *
+ * Java's own `revealUnitConsumer` never flips the unit's hidden flag either —
+ * it only builds the log message — so this was ported the same way at first.
+ * That turns out to be a pre-existing Java bug, not a deliberate design: the
+ * same "public items" set this engine's `revealedFeed` ports faithfully from
+ * `GameAction.getAllRevealedItems` (issue #51) never showed these units
+ * either, in Java or here, even though the log line right next to it already
+ * declares the exact same units public. Fixed by revealing the exact
+ * battlehand item instances (matched by `id`, unambiguous) alongside emptying
+ * the battlehand, so the log and the public-items view agree. See
+ * decisions.md — deliberately not backported to games already affected, since
+ * only the log's free-text names survive for those, not a reliable item
+ * reference.
  */
 export function revealAndDiscardBattlehand(
   state: GameState,
@@ -339,7 +352,14 @@ export function revealAndDiscardBattlehand(
   if (player.battlehand.length === 0) return ok(state)
 
   const revealed = player.battlehand.map(revealAll).join(', ')
-  const next = withPlayer(state, { ...player, battlehand: [] })
+  const revealedIds = new Set(player.battlehand.map((unit) => unit.id))
+  const next = withPlayer(state, {
+    ...player,
+    battlehand: [],
+    items: player.items.map((item) =>
+      revealedIds.has(item.id) ? { ...item, hidden: false } : item,
+    ),
+  })
 
   return ok(
     appendPublicLog(
