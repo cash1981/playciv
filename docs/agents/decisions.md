@@ -2992,8 +2992,10 @@ so this precedent was missed the first time.
 
 **Consequences.** `RevealedPanel.test.tsx`'s grouping test is replaced with a
 flat-order test; `GameView.test.tsx` gains a `HandPanel` grouping test
-covering all eight buckets' branch logic (moved from the deleted
-`RevealedPanel.tsx` fixtures, including the `units`/catch-all `items` cases).
+covering the `units`/catch-all `items` branches of `bucketFor` (moved from
+the deleted `RevealedPanel.tsx` fixtures) alongside `cultureCards`, `huts`
+and `villages`; `civ`, `greatperson` and `tile` are exercised by the
+`bucketFor` `switch` itself but have no dedicated fixture.
 No hidden information changes: the hand panel already only ever rendered
 `view.you.items`, and grouping is display-only. `styles.css`'s
 `.revealed-group-heading` is renamed to `.item-group-heading` to match its

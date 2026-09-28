@@ -10,7 +10,7 @@
  * bucketing independently there, and this port briefly ported it to the
  * Revealed/Discarded panel too (issue #190) before the human asked for that to
  * be reverted: grouping belongs to the hand, and Revealed/Discarded stays a
- * flat, newest-first list. See the 2026-09-28 decisions.md entry for both
+ * flat, newest-first list. See the 2026-09-28 decisions.md entries for both
  * issue #190 and this follow-up.
  */
 

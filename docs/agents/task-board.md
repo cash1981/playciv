@@ -12,22 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-190-grouping-followup
-
-- **Owner:** Claude (orchestrator, direct)
-- **Branch:** `feat/issue-190-grouping-followup`
-- **Brief:** `docs/agents/tasks/issue-190-grouping-followup.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/RevealedPanel.tsx`
-  - `packages/web/src/views/RevealedPanel.test.tsx`
-  - `packages/web/src/views/GameView.tsx`
-  - `packages/web/src/views/GameView.test.tsx`
-  - `packages/web/src/views/itemBuckets.ts` (new)
-  - `packages/web/src/styles.css`
-- **Notes:** reverts issue #190's grouping in the Revealed/Discarded panel
-  back to a flat newest-first list, and moves kind-based grouping to the
-  "Your hand" panel instead, per the human's direct correction.
+_Nothing claimed._
 
 ---
 

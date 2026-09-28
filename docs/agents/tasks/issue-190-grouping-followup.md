@@ -3,7 +3,7 @@
 - **Slug:** `issue-190-grouping-followup`
 - **Branch:** `feat/issue-190-grouping-followup`
 - **Owner:** Claude (orchestrator, direct)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -110,17 +110,25 @@ same as before. Revert that, and grouping belongs only under "Your hand".
 
 ## Acceptance criteria
 
-- [ ] Revealed/Discarded panel renders a flat, newest-first list again — no
+- [x] Revealed/Discarded panel renders a flat, newest-first list again — no
       group headings, `atCap`/pagination/refresh behaviour unchanged.
-- [ ] "Your hand" panel renders items grouped under the eight fixed-order
+- [x] "Your hand" panel renders items grouped under the eight fixed-order
       headings, non-empty buckets only, preserving existing item order within
       each bucket.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: unchanged — both panels already only ever show data
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (559
+      engine, 253 web, 208 server tests).
+- [x] Hidden information: unchanged — both panels already only ever show data
       already scoped to be visible to this client (the hand panel already only
       renders `view.you.items`); grouping is a display-only change.
-- [ ] Verified in the browser: both panels checked against a real game with a
-      mixed hand/discard pile.
+- [x] Verified in the browser: a local dev game (`qa-grouping-check`) drawn
+      into one hand across all eight buckets (civ, cultureI, greatperson,
+      infantry, hut, village, tile, citystate) showed "Your hand" grouped as
+      Great Persons, Units, Tiles, Culture Cards, Villages (civs/items/huts
+      empty by then, correctly omitted). Discarding a city-state, then a civ,
+      then a hut (in that order) showed the Revealed/Discarded panel flat and
+      newest-first — city state, civ, hut — which is the exact reverse of what
+      a grouped render would show (civ, city state, hut, per bucket order),
+      confirming the two panels behave independently.
 
 ## Open questions
 

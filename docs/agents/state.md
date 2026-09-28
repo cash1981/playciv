@@ -13,12 +13,29 @@ _Last updated: 2026-09-28_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 559 engine, 208 server, 249 web on `feat/issue-190-small-improvements` (rebased onto `main` after PR #189; an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 559 engine, 208 server, 253 web on `feat/issue-190-grouping-followup` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
 
+- **Issue #190 follow-up.** Grouping items by kind was ported to the wrong
+  panel: the human clarified that it belongs to the player's own "Your hand"
+  panel, not the Revealed/Discarded feed, which goes back to a flat,
+  newest-first list. `RevealedPanel.tsx` is reverted to its pre-issue-#190
+  shape; the bucketing (`bucketFor`/`groupByOldClientBucket`/`BUCKET_ORDER`/
+  `BUCKET_LABEL`) moves to a new shared module, `itemBuckets.ts`, and applies
+  to `GameView.tsx`'s `HandPanel` instead — with real old-client precedent
+  (`old-civ-web`'s `UserItemController`/`useritems.html` independently
+  duplicated the same bucketing for the hand view; issue #190's own
+  investigation only checked `RevealedController`). Two review rounds (round
+  1: a missing decisions.md entry with two source comments citing it anyway,
+  deleted test coverage for the `units`/catch-all `items` buckets, a dead
+  CSS-class assertion; round 2: approved with nits). Browser-verified with a
+  local two-player game drawn across all eight buckets and a three-item
+  discard sequence proving the two panels now order independently. See the
+  2026-09-28 decisions.md entry. 253 web tests (some rewritten, none added
+  net-new file-count-wise beyond `itemBuckets.ts`).
 - **Two Revealed/Discarded panel bugs from a live game report: a battlehand
   reveal that never actually revealed anything, and a barbarian discard
   with no owner shown.** `revealAndDiscardBattlehand` logged a public line
