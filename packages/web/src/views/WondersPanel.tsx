@@ -1,4 +1,4 @@
-import { isInWondersArea, WONDER_DESCRIPTIONS, WONDERS_AREA_ID } from '@civ/engine'
+import { WONDER_DESCRIPTIONS } from '@civ/engine'
 
 import type { PlayerView } from '../lib/api.js'
 import { api } from '../lib/api.js'
@@ -18,10 +18,11 @@ export function WondersPanel({
   readonly readOnly: boolean
   readonly run: Run
 }): React.JSX.Element {
-  const area = view.boardAreas.find((candidate) => candidate.playerId === WONDERS_AREA_ID)
-  const pieces = view.board.pieces.filter((piece) =>
-    piece.category === 'wonder' && area !== undefined && isInWondersArea(view.board, piece),
-  )
+  // Every wonder piece still on the board, wherever it currently sits — a
+  // wonder moved out of the shared Wonders area (e.g. onto the map) stays
+  // listed here; only removing the piece entirely drops it, since `removePiece`
+  // is what takes it out of `board.pieces` (issue #191).
+  const pieces = view.board.pieces.filter((piece) => piece.category === 'wonder')
   const players = [
     ...(view.you === null ? [] : [{ playerId: view.you.playerId, username: view.you.username }]),
     ...view.opponents.map(({ playerId, username }) => ({ playerId, username })),
@@ -56,6 +57,14 @@ export function WondersPanel({
                     ))}
                   </select>
                 </label>
+                <button
+                  className="small danger"
+                  aria-label={`Remove ${piece.label}`}
+                  disabled={busy || readOnly}
+                  onClick={() => void run(() => api.removePiece(gameId, piece.id))}
+                >
+                  Remove
+                </button>
               </li>
             )
           })}
