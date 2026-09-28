@@ -28,6 +28,7 @@ import { WondersPanel } from './WondersPanel.js'
 import { TechPanel } from './TechPanel.js'
 import { TurnPanel } from './TurnPanel.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { BUCKET_LABEL, groupByOldClientBucket } from './itemBuckets.js'
 import './BattleMobile.css'
 
 interface Props {
@@ -628,6 +629,13 @@ function DrawPanel({
   )
 }
 
+/**
+ * Grouped under a heading per kind (Civilizations, Items, Great Persons,
+ * Units, Tiles, Culture Cards, Huts, Villages), matching old-civ-web's
+ * `UserItemController`/`useritems.html` — see `itemBuckets.ts`. Issue #190
+ * grouped the Revealed/Discarded panel instead of this one; the human asked
+ * for that to be reverted and the grouping moved here.
+ */
 function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   const items = view.you?.items ?? []
   const opponents = view.opponents
@@ -649,16 +657,21 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
       />
       {items.length === 0 && <p className="muted">Empty.</p>}
       <ul className="card-grid scroll">
-        {items.map((item) => (
-          <HandItem
-            key={item.id}
-            item={item}
-            gameId={gameId}
-            busy={busy}
-            run={run}
-            opponents={opponents}
-          />
-        ))}
+        {groupByOldClientBucket(items, (item) => item).flatMap((group) => [
+          <li key={group.bucket} className="item-group-heading">
+            <h4>{BUCKET_LABEL[group.bucket]}</h4>
+          </li>,
+          ...group.entries.map((item) => (
+            <HandItem
+              key={item.id}
+              item={item}
+              gameId={gameId}
+              busy={busy}
+              run={run}
+              opponents={opponents}
+            />
+          )),
+        ])}
       </ul>
     </CollapsiblePanel>
   )

@@ -763,16 +763,17 @@ label > textarea {
   margin-top: 0.2rem;
 }
 
-/* An old-client-bucket heading grouping the Revealed/Discarded panel's cards, spanning the full width of the surrounding `.card-grid`. */
-.revealed-group-heading {
+/* An old-client-bucket heading grouping a `.card-grid`'s cards by kind — used
+   by `HandPanel` in `GameView.tsx` — spanning the grid's full width. */
+.item-group-heading {
   grid-column: 1 / -1;
 }
 
-.revealed-group-heading h4 {
+.item-group-heading h4 {
   margin: 0.6rem 0 0.2rem;
 }
 
-.revealed-group-heading:first-child h4 {
+.item-group-heading:first-child h4 {
   margin-top: 0;
 }
 

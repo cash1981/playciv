@@ -218,6 +218,70 @@ describe('primary game panel order', () => {
   })
 })
 
+describe('HandPanel groups items by kind (issue #190 follow-up)', () => {
+  it('renders group headings in old-civ-web bucket order, not draw order', async () => {
+    localStorage.setItem('civ.autoRefresh', 'false')
+    const village: Item = { ...base, id: 'village-1', sheetName: 'VILLAGES', kind: 'village', name: 'Village A' }
+    const hut: Item = { ...base, id: 'hut-1', sheetName: 'HUTS', kind: 'hut', name: 'Hut A' }
+    const culture: Item = { ...base, id: 'culture-1', sheetName: 'CULTURE_1', kind: 'cultureI', name: 'Culture A' }
+    // Exercises the `default` arm of `bucketFor`: a wonder (falls into the
+    // catch-all "Items" bucket, along with tech/city-state/social policy) and
+    // an infantry unit (the "Units" bucket) — both deleted from
+    // RevealedPanel.test.tsx by this same change, so covered here instead.
+    const wonder: Item = {
+      ...base, id: 'wonder-1', sheetName: 'ANCIENT_WONDERS', kind: 'wonder', name: 'Wonder A', type: 'Ancient',
+    }
+    const infantry: Item = {
+      ...base, id: 'infantry-1', sheetName: 'INFANTRY', kind: 'infantry',
+      attack: 1, health: 3, level: 0, killed: false, inBattle: false,
+    }
+    // Draw order (as stored in `you.items`) is village, hut, culture, wonder,
+    // infantry; the fixed old-client bucket order (Items, Units, Culture
+    // Cards, Huts, Villages) reorders that into wonder, infantry, culture,
+    // hut, village.
+    const view = {
+      rev: 1,
+      name: 'Hand grouping test',
+      active: true,
+      winner: null,
+      activeTurn: null,
+      you: { items: [village, hut, culture, wonder, infantry] },
+      opponents: [],
+      board: {},
+      boardAreas: [],
+      numOfPlayers: 2,
+      battle: null,
+      battleSummary: [],
+    } as unknown as PlayerView
+    vi.spyOn(api, 'game').mockResolvedValue(view)
+    vi.spyOn(api, 'revisions').mockResolvedValue([])
+
+    render(
+      <GameView
+        gameId="game-1"
+        player={{ username: 'viewer' } as unknown as PlayerDto}
+        onUnauthorized={vi.fn()}
+        onDeleted={vi.fn()}
+        onWithdrawn={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByText('Culture A')).toBeTruthy())
+
+    const hand = screen.getByRole('heading', { name: 'Your hand (5)' }).closest('section')
+    const sequence = Array.from(
+      hand?.querySelectorAll('.item-group-heading h4, li.card strong') ?? [],
+    ).map((node) => node.textContent)
+    expect(sequence).toEqual([
+      'Items', 'Wonder A',
+      'Units', 'Infantry 1.3',
+      'Culture Cards', 'Culture A',
+      'Huts', 'Hut: Hut A',
+      'Villages', 'Village: Village A',
+    ])
+  })
+})
+
 /**
  * New in this port — see the pyramid-reposition task brief. "Place in tech
  * pyramid" must appear only for Sir Isaac Newton, by exact name match, never

@@ -14,6 +14,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 _Nothing claimed._
 
+---
+
 ## Format
 
 Copy this block, fill it in, put it under "Live claims".
