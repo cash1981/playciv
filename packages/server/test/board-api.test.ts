@@ -193,6 +193,33 @@ describe('history over HTTP', () => {
     expect(history).toHaveLength(2)
     expect(history[1]?.description).toMatch(/moved Red army from .+ to .+/)
   })
+
+  it('passes snap: false through to the engine, bypassing the area tidy-into-slot snap', async () => {
+    const { gameId, starter } = await startedGame('SnapFalse')
+    const view = await inject(app, {
+      method: 'GET',
+      url: `/api/games/${gameId}`,
+      headers: bearer(starter),
+    })
+    const area = (await view.json() as { boardAreas: { x: number; y: number }[] }).boardAreas[0]
+    if (area === undefined) throw new Error('no area')
+
+    const placed = await place(gameId, starter, 'resources/hut', area.x + 40, area.y + 61)
+    const piece = (await placed.json() as { board: { pieces: { id: string }[] } }).board.pieces[0]
+    if (piece === undefined) throw new Error('no piece')
+
+    const moved = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/move`,
+      headers: bearer(starter),
+      payload: { x: area.x + 46, y: area.y + 55, snap: false },
+    })
+
+    const pieces = (await moved.json() as { board: { pieces: { x: number; y: number }[] } }).board.pieces
+    // Without `snap: false` this would tidy into the area's grid; the route
+    // must forward the field rather than always snapping (issue #193).
+    expect(pieces[0]).toEqual(expect.objectContaining({ x: area.x + 46, y: area.y + 55 }))
+  })
 })
 
 describe('undo over HTTP', () => {

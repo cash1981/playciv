@@ -353,3 +353,11 @@ export function optionalNumber(
   }
   return undefined
 }
+
+export function optionalBoolean(
+  body: Record<string, unknown>,
+  key: string,
+): boolean | undefined {
+  const value = body[key]
+  return typeof value === 'boolean' ? value : undefined
+}

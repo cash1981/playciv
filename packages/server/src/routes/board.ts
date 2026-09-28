@@ -29,6 +29,7 @@ import {
   authenticateOptionallyWith,
   authenticateWith,
   currentPlayer,
+  optionalBoolean,
   optionalNumber,
   readGame,
   requireString,
@@ -82,9 +83,17 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
     if (x === undefined || y === undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'x and y are required')
     }
+    const snap = optionalBoolean(body, 'snap')
 
     return applyToGame(context, c, gameId, (state) =>
-      movePiece(state, { playerId: currentPlayer(c).id, pieceId, x, y, at: now() }),
+      movePiece(state, {
+        playerId: currentPlayer(c).id,
+        pieceId,
+        x,
+        y,
+        at: now(),
+        ...(snap !== undefined ? { snap } : {}),
+      }),
     )
   })
 

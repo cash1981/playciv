@@ -13,7 +13,7 @@ _Last updated: 2026-09-28_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 559 engine, 208 server, 253 web on `feat/issue-190-grouping-followup` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 561 engine, 209 server, 259 web on `feat/issue-193-arrow-key-nudge` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -36,6 +36,31 @@ _Last updated: 2026-09-28_
   discard sequence proving the two panels now order independently. See the
   2026-09-28 decisions.md entry. 253 web tests (some rewritten, none added
   net-new file-count-wise beyond `itemBuckets.ts`).
+- **Issue #193: arrow keys nudge the selected board piece.** With a piece
+  selected, the four arrow keys move it a small step, sized as a constant
+  number of screen pixels divided by the current zoom so it looks the same
+  size at any zoom level. Round 1 sent the nudged position straight to the
+  existing `movePiece`; review found this let the reducer's existing
+  player-area/map-tile snapping override the nudge, defeating it for exactly
+  the piece types the issue named (a collected hut, a great person). Settled
+  with the human: `movePiece` gained an opt-in `snap: false` input that
+  bypasses both snaps and just clamps to the board; every existing caller
+  (drag, tap-to-move) is unaffected. `BoardView.tsx` also clamps client-side
+  before calling the server and skips a no-op nudge at the board's edge,
+  mirroring the drag path's own no-op-click guard. Three review rounds:
+  round 1 found the snapping bug (a design decision, taken to the human)
+  plus minor gaps; round 2 approved with nits and one real gap — no test
+  pinned the nudge call site's `snap: false` argument, so dropping it would
+  have regressed silently; round 3 closed that gap. See `decisions.md`
+  (2026-09-28) and README's "The board"/"Player areas" sections. 561 engine
+  tests (+2), 209 server tests (+1), 259 web tests (+7). Manually verified
+  in a real browser afterwards: the on-screen step held constant across
+  100%/65%/30% zoom (6/9/20 board units, all ≈6 screen px), and nudging a
+  piece already tidied into a player-area slot moved it by exactly the
+  requested step instead of snapping back to that slot — reproducing and
+  confirming the fix for the exact bug review round 1 found. Branch
+  `feat/issue-193-arrow-key-nudge`.
+
 - **Two Revealed/Discarded panel bugs from a live game report: a battlehand
   reveal that never actually revealed anything, and a barbarian discard
   with no owner shown.** `revealAndDiscardBattlehand` logged a public line

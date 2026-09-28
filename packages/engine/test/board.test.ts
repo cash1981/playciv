@@ -437,6 +437,26 @@ describe('movePiece', () => {
     )
     expect(error).toEqual({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: 'no-such-piece' })
   })
+
+  it('bypasses the map-tile nearest-slot snap when snap is false (issue #193)', () => {
+    const placed = place(firstCivGame(), 'tiles/tile01', 800, 800)
+    const tile = placed.board.pieces[0]
+    if (tile === undefined) throw new Error('no piece')
+
+    const snapped = unwrap(
+      movePiece(placed, { playerId: CASH1981, pieceId: tile.id, x: 810, y: 812 }),
+    )
+    const unsnapped = unwrap(
+      movePiece(placed, { playerId: CASH1981, pieceId: tile.id, x: 810, y: 812, snap: false }),
+    )
+
+    // With snapping on (the default), the tile lands on the nearest slot's own
+    // corner rather than the raw coordinates given — proof the two calls would
+    // actually differ if `snap: false` did nothing.
+    expect([snapped.board.pieces[0]?.x, snapped.board.pieces[0]?.y]).not.toEqual([810, 812])
+    // A keyboard nudge (issue #193) keeps the exact requested spot instead.
+    expect([unsnapped.board.pieces[0]?.x, unsnapped.board.pieces[0]?.y]).toEqual([810, 812])
+  })
 })
 
 describe('removing', () => {
@@ -571,6 +591,39 @@ describe('player areas', () => {
     expect([state.board.pieces[0]?.x, state.board.pieces[0]?.y]).toEqual([
       mine.x,
       mine.y + AREA_LABEL_HEIGHT,
+    ])
+  })
+
+  it('bypasses the area tidy-into-slot snap when snap is false (issue #193)', () => {
+    const areas = playerAreas(board, firstCivGame().players)
+    const mine = areas[0]
+    if (mine === undefined) throw new Error('no area')
+
+    const placed = place(firstCivGame(), 'resources/hut', mine.x + 40, mine.y + AREA_LABEL_HEIGHT + 40)
+    const piece = placed.board.pieces[0]
+    if (piece === undefined) throw new Error('no piece')
+    const requested = { x: mine.x + 46, y: mine.y + AREA_LABEL_HEIGHT + 34 }
+
+    const snapped = unwrap(
+      movePiece(placed, { playerId: CASH1981, pieceId: piece.id, ...requested }),
+    )
+    const unsnapped = unwrap(
+      movePiece(placed, { playerId: CASH1981, pieceId: piece.id, ...requested, snap: false }),
+    )
+
+    // With snapping on (the default), a piece dropped in a player area tidies
+    // into the grid instead of keeping the requested spot — proof the two
+    // calls would actually differ if `snap: false` did nothing. A collected
+    // hut is exactly the case the reviewer flagged (see "Review round 1" in
+    // the task brief): an arrow press must not jump it sideways like this.
+    expect([snapped.board.pieces[0]?.x, snapped.board.pieces[0]?.y]).toEqual([
+      mine.x,
+      mine.y + AREA_LABEL_HEIGHT,
+    ])
+    // A keyboard nudge (issue #193) keeps the exact requested spot instead.
+    expect([unsnapped.board.pieces[0]?.x, unsnapped.board.pieces[0]?.y]).toEqual([
+      requested.x,
+      requested.y,
     ])
   })
 

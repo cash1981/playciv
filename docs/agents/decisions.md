@@ -3000,3 +3000,45 @@ No hidden information changes: the hand panel already only ever rendered
 `view.you.items`, and grouping is display-only. `styles.css`'s
 `.revealed-group-heading` is renamed to `.item-group-heading` to match its
 new home.
+## 2026-09-28 — Issue #193: the arrow-key nudge bypasses the area/tile snap that a drag still uses
+
+**Decision.** `movePiece` (`packages/engine/src/actions/board.ts`) gains an
+opt-in `snap?: boolean` input. Set to `false`, it skips both the player-area
+"tidy into next free slot" snap (`nextFreeSlot`) and the map-tile
+"snap to nearest slot" snap (`nearestSlotOrigin`), and clamps the piece to
+exactly the requested coordinates instead. Omitting the field, or any value
+other than `false`, keeps today's snapping behaviour unchanged — every
+existing caller (mouse drag, tap-to-move, `placePiece`) does not pass it and
+is unaffected. The new field is plumbed through a small `optionalBoolean`
+helper in `packages/server/src/context.ts`, the `/move` route, and
+`api.ts`'s `movePiece` (a new optional 5th parameter); only the new
+keyboard-nudge call site in `BoardView.tsx` passes `false`.
+
+**Why.** Issue #193 asked for the arrow keys to nudge a selected piece — "a
+building or great person or hut" — a small step at a time. The first
+implementation sent the nudged position straight to the existing `movePiece`,
+which already exists to snap a mouse-dropped piece into a tidy grid inside a
+player area, or onto the nearest tile slot on the map. Review found this
+silently defeated the feature for exactly the piece types the issue named,
+since a collected hut or great person typically sits inside its owner's
+player area: pressing an arrow key could jump the piece sideways to an
+unrelated free slot, or do nothing at all if the area was full, while still
+writing a "nudged" history/log entry. Settled with the human: a keyboard
+nudge should always move a piece by exactly the requested amount, the same as
+any other piece already free on the map; a mouse drag into an area or onto
+the map keeps tidying/snapping exactly as before, since that grid-tidying is
+what makes an area not turn into a heap when several pieces are dropped there
+by hand.
+
+**Consequences.** `BoardView.tsx`'s nudge handler also clamps client-side
+with `clampToBoard` (imported from `@civ/engine`) before calling
+`api.movePiece`, and skips the call entirely when the clamped result equals
+the piece's current position — mirroring the existing drag path's own
+no-op-click guard, so holding an arrow key at the board's edge does not spam
+history entries. No hidden information is affected: `snap` is a request-only
+input, never stored in `GameState`, `BoardChange` or `BoardHistoryEntry`, and
+the board's position data was already fully public. There is no old-system
+reference for this decision — `old-civ-web` has no board or map view at all,
+so nothing here overrides ported behaviour; the snapping itself is this
+rewrite's own design, introduced for the mouse-drag case, and the nudge is a
+new, deliberate carve-out from it.
