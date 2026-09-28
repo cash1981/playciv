@@ -12,7 +12,18 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### issue-191-wonders-stay-in-list
+
+- **Owner:** Claude (orchestrator, direct)
+- **Branch:** `feat/issue-191-wonders-stay-in-list`
+- **Brief:** `docs/agents/tasks/issue-191-wonders-stay-in-list.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/WondersPanel.tsx`
+  - `packages/web/src/views/WondersPanel.test.tsx`
+- **Notes:** issue #191, client-only Wonders panel fix. Concurrent with
+  `feat/issue-190-small-improvements` on a separate branch off the same
+  `main`; no path overlap.
 
 ---
 
