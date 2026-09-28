@@ -163,6 +163,30 @@ describe('RevealedPanel', () => {
     expect(revealed).toHaveBeenNthCalledWith(3, 'game-1', 1, 11)
   })
 
+  it('groups items by sheet name in SHEET_NAME_ORDER, not by draw order', async () => {
+    const hut: Item = { ...cultureCard, kind: 'hut', sheetName: 'HUTS', id: 'hut-1', name: 'Hut A' }
+    const village: Item = { ...cultureCard, kind: 'village', sheetName: 'VILLAGES', id: 'village-1', name: 'Village A' }
+    const culture: Item = { ...cultureCard, id: 'culture-1', name: 'Culture A' }
+    // Drawn in this order: hut, village, culture — but SHEET_NAME_ORDER puts
+    // CULTURE_1 before VILLAGES before HUTS, so the culture heading and card
+    // should render first despite being drawn last.
+    const drawnOrder: RevealedEntry[] = [hut, village, culture].map((item) => ({
+      item,
+      playerId: null,
+      username: null,
+      revealed: true,
+      discarded: false,
+      createdAt: null,
+    }))
+    vi.spyOn(api, 'revealed').mockImplementation(serverRevealed(drawnOrder))
+
+    render(<RevealedPanel gameId="game-1" reloadCount={0} />)
+    await waitFor(() => expect(screen.getByText('Hut: Hut A')).toBeTruthy())
+
+    const headings = screen.getAllByRole('heading', { level: 4 }).map((node) => node.textContent)
+    expect(headings).toEqual(['Culture I', 'Villages', 'Huts'])
+  })
+
   it('paginates the historical (replay) feed client-side the same way', async () => {
     const historical = { revealed: feed(20) } as unknown as GameRevisionView
 

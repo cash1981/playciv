@@ -1296,8 +1296,8 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
                 <div key={s.side} className="battle-summary-side">
                   <strong>{s.label}</strong>
                   <span>{s.unitCount} unit{s.unitCount !== 1 ? 's' : ''}</span>
-                  <span>ATK {s.totalAttack}{s.combatBonus !== 0 ? ` (${s.combatBonus > 0 ? '+' : ''}${s.combatBonus})` : ''}</span>
-                  <span>HP {s.totalHealth}</span>
+                  <span>ATK {s.totalAttack}</span>
+                  <span>HP {s.totalHealth}{s.combatBonus !== 0 ? ` (${s.combatBonus > 0 ? '+' : ''}${s.combatBonus})` : ''}</span>
                 </div>
               ))}
             </div>

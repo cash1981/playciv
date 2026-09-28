@@ -21,7 +21,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { revealAll } from '@civ/engine'
+import { revealAll, SHEET_LABEL, SHEET_NAME_ORDER } from '@civ/engine'
+import type { SheetName } from '@civ/engine'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { GameRevisionView, RevealedEntry, RevealedPage } from '../lib/api.js'
@@ -104,9 +105,12 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <ul className="card-grid scroll">
-        {items.map((entry) => (
-          <RevealedRow key={entry.item.id} entry={entry} />
-        ))}
+        {groupBySheetName(items).flatMap((group) => [
+          <li key={group.sheetName} className="revealed-group-heading">
+            <h4>{SHEET_LABEL[group.sheetName]}</h4>
+          </li>,
+          ...group.entries.map((entry) => <RevealedRow key={entry.item.id} entry={entry} />),
+        ])}
         {items.length === 0 && <li className="muted">Nothing has been revealed yet.</li>}
       </ul>
 
@@ -129,6 +133,33 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
       </div>
     </CollapsiblePanel>
   )
+}
+
+/**
+ * Groups the currently loaded page of items by `sheetName`, in
+ * `SHEET_NAME_ORDER` (the old system's `SheetName` enum ordinal), so huts,
+ * villages, great person tiles etc. are shown together rather than
+ * interleaved by draw time. Newest-first order within a group is preserved
+ * unchanged from `items`.
+ */
+function groupBySheetName(
+  items: readonly RevealedEntry[],
+): ReadonlyArray<{ readonly sheetName: SheetName; readonly entries: readonly RevealedEntry[] }> {
+  const bySheet = new Map<SheetName, RevealedEntry[]>()
+  for (const entry of items) {
+    const list = bySheet.get(entry.item.sheetName)
+    if (list === undefined) {
+      bySheet.set(entry.item.sheetName, [entry])
+    } else {
+      list.push(entry)
+    }
+  }
+  const groups: Array<{ readonly sheetName: SheetName; readonly entries: readonly RevealedEntry[] }> = []
+  for (const sheetName of SHEET_NAME_ORDER) {
+    const entries = bySheet.get(sheetName)
+    if (entries !== undefined) groups.push({ sheetName, entries })
+  }
+  return groups
 }
 
 export function RevealedRow({ entry }: { readonly entry: RevealedEntry }): React.JSX.Element {

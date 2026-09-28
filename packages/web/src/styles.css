@@ -763,6 +763,19 @@ label > textarea {
   margin-top: 0.2rem;
 }
 
+/* A sheet-name heading grouping the Revealed/Discarded panel's cards, spanning the full width of the surrounding `.card-grid`. */
+.revealed-group-heading {
+  grid-column: 1 / -1;
+}
+
+.revealed-group-heading h4 {
+  margin: 0.6rem 0 0.2rem;
+}
+
+.revealed-group-heading:first-child h4 {
+  margin-top: 0;
+}
+
 ul.list {
   list-style: none;
   margin: 0;
