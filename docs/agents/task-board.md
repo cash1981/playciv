@@ -12,7 +12,18 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### issue-190-small-improvements
+
+- **Owner:** Claude (orchestrator, direct)
+- **Branch:** `feat/issue-190-small-improvements`
+- **Brief:** `docs/agents/tasks/issue-190-small-improvements.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/RevealedPanel.tsx`
+  - `packages/web/src/views/RevealedPanel.test.tsx`
+  - `packages/web/src/views/GameView.tsx`
+  - `packages/web/src/views/BattlePanel.test.tsx`
+- **Notes:** issue #190, two small unrelated client-only fixes.
 
 ---
 
