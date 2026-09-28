@@ -2874,3 +2874,41 @@ showing the controlling player as if they owned the unit).
   the pre-existing `discardBarbarians` behaviour, already declared public.
   Neither engine change adds a field to `RevealedEntry`, a server route, or
   any client-facing type.
+
+## 2026-09-28 — Issue #190: the Revealed/Discarded panel groups by old-civ-web's buckets, not the port's own `SheetName` ordinal
+
+The human's issue text — "Group drawn items together. Meaning huts, villages,
+greatperson tiles etc. Now is sorted by when they where drawn" — described the
+Revealed/Discarded panel's flat, newest-first-by-draw-time list. The first
+pass at this fix wrote a brief claiming no old-client reference existed for
+grouping this feed, and grouped the currently loaded page by `item.sheetName`
+in `SHEET_NAME_ORDER` (`packages/engine/src/sheet-name.ts`, 23 sheet names,
+itself a direct port of Java's `SheetName` enum ordinal).
+
+Read-only review caught that this claim was false. `old-civ-web`'s
+`RevealedController.readKeysFromItems`
+(`old-civ-web/app/scripts/controllers/ReavledController.js:59-80`) already
+buckets `game.revealedItems` by item kind, and
+`old-civ-web/app/views/partials/revealed.html` already renders those buckets
+under separate collapsible headings, in this fixed order: Civilizations,
+Items (a catch-all for wonders, city-states, techs and social policies),
+Great Persons, Units (infantry/artillery/mounted/aircraft), Tiles, Culture
+Cards (cultureI/II/III), Huts, Villages. Since this grouping lived only in
+the old client (there is no backend equivalent to check it against), rule 1
+makes that client the reference for it — and the human's own wording ("huts,
+villages, greatperson tiles") reads like a list of those exact bucket names,
+not a hint toward a finer 23-way split.
+
+`RevealedPanel.tsx` was corrected to port that bucketing exactly
+(`bucketFor`/`groupByOldClientBucket`, reusing the existing `isUnit` helper
+for the Units case) rather than `SHEET_NAME_ORDER`/`SHEET_LABEL`, which were
+considered and rejected as too fine-grained: a typical small newest-first
+window in a mixed game could otherwise produce close to one heading per card,
+making the panel taller and busier than the flat list it replaced. The old
+client's per-bucket collapse toggles were deliberately not ported — the
+issue only asked for the items to be grouped, and adding eight more
+collapsible sections was judged separate, unrequested UI chrome.
+
+This is a straightforward port, not a deviation: nothing here overrides old
+system behaviour, it corrects an initial implementation that had drifted from
+it before merge.

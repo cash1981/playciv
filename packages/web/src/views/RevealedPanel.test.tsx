@@ -163,28 +163,35 @@ describe('RevealedPanel', () => {
     expect(revealed).toHaveBeenNthCalledWith(3, 'game-1', 1, 11)
   })
 
-  it('groups items by sheet name in SHEET_NAME_ORDER, not by draw order', async () => {
-    const hut: Item = { ...cultureCard, kind: 'hut', sheetName: 'HUTS', id: 'hut-1', name: 'Hut A' }
+  it('groups items into old-civ-web\'s buckets, not by draw order, and keeps newest-first within a bucket', async () => {
     const village: Item = { ...cultureCard, kind: 'village', sheetName: 'VILLAGES', id: 'village-1', name: 'Village A' }
+    const hutB: Item = { ...cultureCard, kind: 'hut', sheetName: 'HUTS', id: 'hut-b', name: 'Hut B' }
     const culture: Item = { ...cultureCard, id: 'culture-1', name: 'Culture A' }
-    // Drawn in this order: hut, village, culture — but SHEET_NAME_ORDER puts
-    // CULTURE_1 before VILLAGES before HUTS, so the culture heading and card
-    // should render first despite being drawn last.
-    const drawnOrder: RevealedEntry[] = [hut, village, culture].map((item) => ({
+    const hutA: Item = { ...cultureCard, kind: 'hut', sheetName: 'HUTS', id: 'hut-a', name: 'Hut A' }
+    const toEntry = (item: Item): RevealedEntry => ({
       item,
       playerId: null,
       username: null,
       revealed: true,
       discarded: false,
       createdAt: null,
-    }))
-    vi.spyOn(api, 'revealed').mockImplementation(serverRevealed(drawnOrder))
+    })
+    // Newest-first draw order from the server: village, Hut B, culture, Hut A.
+    // The old client's bucket order (Culture Cards, then Huts, then Villages)
+    // puts the culture heading first and the villages heading last, despite
+    // the village being drawn most recently; within the Huts bucket, Hut B
+    // (drawn after Hut A) still renders before Hut A.
+    vi.spyOn(api, 'revealed').mockImplementation(
+      serverRevealed([village, hutB, culture, hutA].map(toEntry)),
+    )
 
-    render(<RevealedPanel gameId="game-1" reloadCount={0} />)
+    const { container } = render(<RevealedPanel gameId="game-1" reloadCount={0} />)
     await waitFor(() => expect(screen.getByText('Hut: Hut A')).toBeTruthy())
 
-    const headings = screen.getAllByRole('heading', { level: 4 }).map((node) => node.textContent)
-    expect(headings).toEqual(['Culture I', 'Villages', 'Huts'])
+    const sequence = Array.from(
+      container.querySelectorAll('.revealed-group-heading h4, li.card strong'),
+    ).map((node) => node.textContent)
+    expect(sequence).toEqual(['Culture Cards', 'Culture A', 'Huts', 'Hut: Hut B', 'Hut: Hut A', 'Villages', 'Village: Village A'])
   })
 
   it('paginates the historical (replay) feed client-side the same way', async () => {

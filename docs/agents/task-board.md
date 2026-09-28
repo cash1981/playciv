@@ -23,6 +23,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/web/src/views/RevealedPanel.test.tsx`
   - `packages/web/src/views/GameView.tsx`
   - `packages/web/src/views/BattlePanel.test.tsx`
+  - `packages/web/src/styles.css`
 - **Notes:** issue #190, two small unrelated client-only fixes.
 
 ---

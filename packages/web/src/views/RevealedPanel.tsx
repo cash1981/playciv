@@ -2,11 +2,16 @@
  * The Revealed and Discarded Items panel (issue #51), replacing the old
  * Opponents panel.
  *
- * A chronological, newest-first list of every publicly known item: the card
- * itself, who revealed or owns it, and whether it was revealed, discarded, or
- * both. The server pages the feed (`?page=&size=`) and returns one bounded page
- * plus the total, so the browser never loads the whole history; images on the
- * page load lazily on top of that.
+ * A newest-first list of every publicly known item: the card itself, who
+ * revealed or owns it, and whether it was revealed, discarded, or both. The
+ * currently loaded page is grouped under a heading per kind (issue #190),
+ * matching old-civ-web's `RevealedController.readKeysFromItems` bucketing and
+ * `revealed.html`'s fixed section order — Civilizations, Items, Great
+ * Persons, Units, Tiles, Culture Cards, Huts, Villages — rather than the flat
+ * interleaved-by-draw-time list this replaced; within a group the existing
+ * newest-first order is unchanged. The server pages the feed (`?page=&size=`)
+ * and returns one bounded page plus the total, so the browser never loads the
+ * whole history; images on the page load lazily on top of that.
  *
  * The panel shows an initial `INITIAL_SIZE` items; each "Load more" click
  * re-requests page 1 with a larger size and replaces the shown list wholesale
@@ -21,8 +26,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { revealAll, SHEET_LABEL, SHEET_NAME_ORDER } from '@civ/engine'
-import type { SheetName } from '@civ/engine'
+import { isUnit, revealAll } from '@civ/engine'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { GameRevisionView, RevealedEntry, RevealedPage } from '../lib/api.js'
@@ -105,9 +109,9 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <ul className="card-grid scroll">
-        {groupBySheetName(items).flatMap((group) => [
-          <li key={group.sheetName} className="revealed-group-heading">
-            <h4>{SHEET_LABEL[group.sheetName]}</h4>
+        {groupByOldClientBucket(items).flatMap((group) => [
+          <li key={group.bucket} className="revealed-group-heading">
+            <h4>{BUCKET_LABEL[group.bucket]}</h4>
           </li>,
           ...group.entries.map((entry) => <RevealedRow key={entry.item.id} entry={entry} />),
         ])}
@@ -136,28 +140,79 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
 }
 
 /**
- * Groups the currently loaded page of items by `sheetName`, in
- * `SHEET_NAME_ORDER` (the old system's `SheetName` enum ordinal), so huts,
- * villages, great person tiles etc. are shown together rather than
- * interleaved by draw time. Newest-first order within a group is preserved
- * unchanged from `items`.
+ * The old client's eight `RevealedController` buckets, in `revealed.html`'s
+ * fixed section order.
  */
-function groupBySheetName(
+const BUCKET_ORDER = [
+  'civs',
+  'items',
+  'greatPersons',
+  'units',
+  'tiles',
+  'cultureCards',
+  'huts',
+  'villages',
+] as const
+
+type Bucket = (typeof BUCKET_ORDER)[number]
+
+const BUCKET_LABEL: Readonly<Record<Bucket, string>> = {
+  civs: 'Civilizations',
+  items: 'Items',
+  greatPersons: 'Great Persons',
+  units: 'Units',
+  tiles: 'Tiles',
+  cultureCards: 'Culture Cards',
+  huts: 'Huts',
+  villages: 'Villages',
+}
+
+/** Port of `RevealedController.readKeysFromItems`'s if/else chain. */
+function bucketFor(entry: RevealedEntry): Bucket {
+  const { item } = entry
+  switch (item.kind) {
+    case 'cultureI':
+    case 'cultureII':
+    case 'cultureIII':
+      return 'cultureCards'
+    case 'greatperson':
+      return 'greatPersons'
+    case 'hut':
+      return 'huts'
+    case 'village':
+      return 'villages'
+    case 'tile':
+      return 'tiles'
+    case 'civ':
+      return 'civs'
+    default:
+      return isUnit(item) ? 'units' : 'items'
+  }
+}
+
+/**
+ * Groups the currently loaded page of items into the old client's eight
+ * buckets, in its fixed section order, so huts, villages, great person tiles
+ * etc. are shown together rather than interleaved by draw time. Newest-first
+ * order within a bucket is preserved unchanged from `items`.
+ */
+function groupByOldClientBucket(
   items: readonly RevealedEntry[],
-): ReadonlyArray<{ readonly sheetName: SheetName; readonly entries: readonly RevealedEntry[] }> {
-  const bySheet = new Map<SheetName, RevealedEntry[]>()
+): ReadonlyArray<{ readonly bucket: Bucket; readonly entries: readonly RevealedEntry[] }> {
+  const byBucket = new Map<Bucket, RevealedEntry[]>()
   for (const entry of items) {
-    const list = bySheet.get(entry.item.sheetName)
+    const bucket = bucketFor(entry)
+    const list = byBucket.get(bucket)
     if (list === undefined) {
-      bySheet.set(entry.item.sheetName, [entry])
+      byBucket.set(bucket, [entry])
     } else {
       list.push(entry)
     }
   }
-  const groups: Array<{ readonly sheetName: SheetName; readonly entries: readonly RevealedEntry[] }> = []
-  for (const sheetName of SHEET_NAME_ORDER) {
-    const entries = bySheet.get(sheetName)
-    if (entries !== undefined) groups.push({ sheetName, entries })
+  const groups: Array<{ readonly bucket: Bucket; readonly entries: readonly RevealedEntry[] }> = []
+  for (const bucket of BUCKET_ORDER) {
+    const entries = byBucket.get(bucket)
+    if (entries !== undefined) groups.push({ bucket, entries })
   }
   return groups
 }

@@ -36,7 +36,7 @@ const run: Run = async (action) => { await action() }
 describe('BattlePanel summary bar', () => {
   afterEach(() => cleanup())
 
-  it('shows the combat bonus next to HP, not ATK', () => {
+  it('shows a positive combat bonus next to HP, not ATK', () => {
     const summaryView = {
       ...view,
       battleSummary: [
@@ -51,6 +51,40 @@ describe('BattlePanel summary bar', () => {
 
     expect(getByText('ATK 1')).toBeTruthy()
     expect(getByText('HP 3 (+6)')).toBeTruthy()
+  })
+
+  it('shows a negative combat bonus next to HP, not ATK', () => {
+    const summaryView = {
+      ...view,
+      battleSummary: [
+        {
+          side: 'attacker', kind: 'player', playerId: 'me', label: 'Me',
+          unitCount: 1, totalAttack: 1, totalHealth: 3, combatBonus: -2,
+        },
+      ],
+    } as unknown as PlayerView
+    const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
+    fireEvent.click(getByText('Battle'))
+
+    expect(getByText('ATK 1')).toBeTruthy()
+    expect(getByText('HP 3 (-2)')).toBeTruthy()
+  })
+
+  it('shows no suffix on either ATK or HP when the combat bonus is zero', () => {
+    const summaryView = {
+      ...view,
+      battleSummary: [
+        {
+          side: 'attacker', kind: 'player', playerId: 'me', label: 'Me',
+          unitCount: 1, totalAttack: 1, totalHealth: 3, combatBonus: 0,
+        },
+      ],
+    } as unknown as PlayerView
+    const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
+    fireEvent.click(getByText('Battle'))
+
+    expect(getByText('ATK 1')).toBeTruthy()
+    expect(getByText('HP 3')).toBeTruthy()
   })
 })
 
