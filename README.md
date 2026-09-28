@@ -532,7 +532,10 @@ from Democracy, a removed tech or social policy — clears its counter. The
 player assigned to *The Internet* can hold up to two extra
 coins on each of the four technology sources; the counters remain manual, so
 no coins are added automatically. Wonders in play are listed with an
-assignable owner. A game saved with the old single coin number loses it: the human
+assignable owner wherever the piece currently sits on the board, until it is
+removed entirely — not only while it sits in the shared Wonders area, which
+still governs *The Internet*'s and the Panama Canal's coin allowances above.
+A game saved with the old single coin number loses it: the human
 chose that the counters replace it. Movement is the one value written as an
 expression rather than a plain integer:
 natural religion adds one movement to an army figure, so it is recorded as

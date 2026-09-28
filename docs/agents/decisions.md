@@ -2908,11 +2908,11 @@ places still derive a wonder's *effect* from the same `isInWondersArea`
 position check that the panel no longer uses for *visibility*:
 `StatusPanel.tsx`'s `wonderOwners` (gating whose Code of Laws/Pottery/
 Printing Press/Democracy caps The Internet raises, issue #145, and who gets
-the Panama Canal coin row, issue #158) and `setCoinSource`
+a Panama Canal counter in the Coins table, issue #158) and `setCoinSource`
 (`packages/engine/src/actions/player.ts`, The Internet's +2 cap check). A
 wonder moved out of the shared area now stays in the Wonders panel with its
 owner still shown, but The Internet's raised coin cap (or the Panama Canal
-row) silently stops applying for that owner at the same moment, with nothing
+counter) silently stops applying for that owner at the same moment, with nothing
 in the UI explaining why — before this change, the panel entry and the
 allowance both disappeared together, so the UI was at least self-consistent
 even if opaque. Fixing this fully means either making those two effects

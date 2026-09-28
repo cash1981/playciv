@@ -6,14 +6,14 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-25_
+_Last updated: 2026-09-28_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 559 engine, 208 server, 245 web on `fix/battle-discard-ownership` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 559 engine, 208 server, 248 web on `feat/issue-191-wonders-stay-in-list` (rebased onto `main` after PR #189; an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -43,6 +43,38 @@ _Last updated: 2026-09-25_
   `revealedFeed` had no old-system counterpart. 559 engine tests (+3). No
   server or web change needed — `RevealedRow` already renders whatever
   `revealedFeed` returns.
+
+- **Issue #191: a wonder stays in the Wonders panel once moved onto the map,
+  and gets its own Remove button.** The human reported it directly: dragging
+  a wonder piece out of the shared Wonders area made it vanish from the
+  panel, even though the piece still existed on the board. `WondersPanel.tsx`
+  no longer gates its list on `isInWondersArea` (current geometric position);
+  it now lists every board piece with `category === 'wonder'` regardless of
+  where it sits, and only stops listing one once the piece is actually
+  removed — `movePiece` and `removePiece` were already distinct at the data
+  level, the panel was just re-deriving "removed" from position. A Remove
+  button was added to the panel itself, calling the same `api.removePiece`
+  the map view's own button already uses. Client-only; no engine or
+  projection change. This directly supersedes one bullet of the 2026-09-25
+  issue #172 decisions.md entry (Egypt's own wonder is now listed and
+  assignable in the panel like any other, not carved out). Two review
+  rounds: round 1 found two documentation gaps (the now-false #172 bullet
+  needed a superseding note; a newly reachable but unresolved inconsistency
+  where `StatusPanel.tsx`'s `wonderOwners`/`setCoinSource`'s Internet-cap
+  check still key off `isInWondersArea`, so a wonder shown as owned in this
+  now-always-visible panel can silently stop granting its coin bonus once
+  moved, with nothing in the UI explaining why) plus test-quality nits (no
+  accessible name on the Remove button; a test that only checked the count,
+  not the piece itself; an `as object` cast). All fixed; round 2 approved
+  with nits (a README clause and a decisions.md wording nit, both closed
+  directly). The coin-cap divergence itself is recorded as an accepted,
+  undecided consequence in `decisions.md` (2026-09-28) rather than resolved
+  — fixing it is an engine change, out of scope for this client-only fix. 3
+  new/changed web tests. Full checks pass (556 engine, 208 server, 248 web).
+  No browser session was available this session; the visual pass — a wonder
+  dragged onto the map staying listed, and the panel's Remove button
+  clearing it from both the panel and the map — is left to the human.
+  Branch `feat/issue-191-wonders-stay-in-list`.
 
 - **Issue #166: the Revealed/Discarded panel loads 6 items at first, then 5
   more per "Load more" click.** Replaced the fixed-size-20 Previous/Next

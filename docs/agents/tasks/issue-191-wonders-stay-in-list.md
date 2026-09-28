@@ -3,7 +3,7 @@
 - **Slug:** `issue-191-wonders-stay-in-list`
 - **Branch:** `feat/issue-191-wonders-stay-in-list`
 - **Owner:** Claude (orchestrator, direct)
-- **Status:** draft
+- **Status:** done
 
 ## Goal
 
@@ -85,17 +85,19 @@ new design to close, per the human's direct report.
 
 ## Acceptance criteria
 
-- [ ] A wonder piece moved out of the Wonders area (anywhere else on the
+- [x] A wonder piece moved out of the Wonders area (anywhere else on the
       board) still appears in the Wonders panel's list and count.
-- [ ] Removing a wonder piece (from this panel's new Remove button, or the
+- [x] Removing a wonder piece (from this panel's new Remove button, or the
       existing map-view Remove button) drops it from the Wonders panel's
       list and count.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
-- [ ] Hidden information: unchanged — the panel already reads public board
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (556
+      engine, 208 server, 248 web tests).
+- [x] Hidden information: unchanged — the panel already reads public board
       pieces; nothing new is read or shown beyond what was already public.
-- [ ] Verified in the browser: a wonder placed in the Wonders area, dragged
-      onto the map, still shows in the panel; clicking the panel's Remove
-      button removes it from both the panel and the map.
+- [ ] Verified in the browser: **not done this session** (no browser tool
+      connected) — left to the human. What to check: a wonder placed in the
+      Wonders area, dragged onto the map, still shows in the panel; clicking
+      the panel's Remove button removes it from both the panel and the map.
 
 ## Open questions
 
