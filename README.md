@@ -145,7 +145,10 @@ several pieces in one square. The order of `board.pieces` **is** the z-order, so
 of. The board still shows which square a piece stands in, worked out from its
 centre.
 
-Every player sees and can move every piece, as at a physical table.
+Every player sees and can move every piece, as at a physical table. With a
+piece selected, the arrow keys nudge it a small step in that direction — the
+step is a constant number of screen pixels, converted by the current zoom
+level, so it looks the same size at any zoom (issue #193).
 
 The palette has eleven categories, generated from the images on disk. Buildings
 and resources use finite physical supplies: the physical building counts are
@@ -182,7 +185,11 @@ and every player's area is visible to everyone. A shared **Wonders** area sits
 at the right of the band — the player areas shrink to make room — and holds the
 wonders. Dropping a piece into an area **tidies it into the next free slot**,
 filling left to right and wrapping onto a new row, so an area never turns into a
-heap. Dropping on the map leaves the piece exactly where it was let go.
+heap. Dropping on the map leaves the piece exactly where it was let go. Nudging
+a piece with the arrow keys is the one exception to both: it always moves the
+piece by exactly the requested step, whether that piece sits in an area or on a
+map tile slot, rather than being tidied or re-snapped (issue #193) — only a
+pointer drag tidies or snaps.
 
 Wonders are the one card kind that never enters a hand. The wonders drawn at the
 start of a game (and any drawn later from the draw menu) are placed in the
