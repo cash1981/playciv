@@ -160,6 +160,7 @@ export function createGame(options: CreateGameOptions): GameState {
     rng: deck.rng,
     itemCounter: counter,
     wondersDealt: false,
+    chatOrders: false,
     battle: null,
     rev: 0,
   }

@@ -37,12 +37,19 @@ const correctSocialPolicyFlipsides = (
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt'
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'chatOrders'
 > &
   Partial<
     Pick<
       GameState,
-      'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt'
+      | 'board'
+      | 'withdrawnPlayers'
+      | 'publicTurns'
+      | 'wondersDealt'
+      | 'battle'
+      | 'rev'
+      | 'createdAt'
+      | 'chatOrders'
     >
   >
 
@@ -220,5 +227,7 @@ export function migrateGameState(state: GameState): GameState {
             departedUnits: battle.departedUnits ?? [],
           },
     rev: older.rev ?? 0,
+    // Chat orders (issue #215) is opt-in, so every older save starts with it off.
+    chatOrders: older.chatOrders ?? false,
   }
 }

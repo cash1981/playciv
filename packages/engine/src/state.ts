@@ -16,7 +16,8 @@ import { combatBonusOf } from './combat-bonus.js'
 import type { CoinSources } from './coins.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
-import { currentPhaseStatus, TURN_PHASES } from './turn.js'
+import type { WaitingFor } from './turn.js'
+import { currentPhaseStatus, TURN_PHASES, turnHolder, turnStatus } from './turn.js'
 import type { Undo } from './undo.js'
 import type { Battle, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
@@ -222,6 +223,12 @@ export interface GameState {
    */
   readonly wondersDealt: boolean
   /**
+   * Chat orders (issue #215): one timeline for chat and turn orders, with
+   * players marking phases done. Off by default and switched only by an admin.
+   * Turning it off again loses nothing, because the data is the same either way.
+   */
+  readonly chatOrders: boolean
+  /**
    * The currently active battle, or null if no battle is in progress.
    * At most one battle may be active per game at a time.
    */
@@ -259,9 +266,16 @@ export interface ActiveTurnStatus {
   readonly username: string
   readonly turnNumber: number
   readonly phase: TurnPhase
+  /**
+   * Chat orders only: everybody who has not finished the current turn and the
+   * phase they are on. Absent when chat orders are off, so the classic shape is
+   * unchanged. Public, derived from the `done` flags.
+   */
+  readonly waitingFor?: readonly WaitingFor[]
 }
 
 export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
+  if (state.chatOrders) return chatOrdersActiveTurn(state)
   const current = state.players.find((player) => player.yourTurn)
   if (current === undefined) return null
 
@@ -276,6 +290,26 @@ export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
   const turnNumber = latest === undefined ? 1 : roundDone ? latest.turnNumber + 1 : latest.turnNumber
 
   return { playerId: current.playerId, username: current.username, turnNumber, phase }
+}
+
+/**
+ * With chat orders on there is no baton: the turn belongs to `turnHolder`, and
+ * the turn number and phase come from `turnStatus`.
+ */
+function chatOrdersActiveTurn(state: GameState): ActiveTurnStatus | null {
+  const holder = turnHolder(state)
+  if (holder === undefined) return null
+  const status = turnStatus(state)
+  const phase = status.players.find((player) => player.playerId === holder.playerId)?.phase
+  return {
+    playerId: holder.playerId,
+    username: holder.username,
+    turnNumber: status.currentTurn,
+    // The holder has not finished the earliest open phase, so it is their first
+    // open phase too. `SOT` only satisfies the type.
+    phase: phase ?? 'SOT',
+    waitingFor: status.waitingFor,
+  }
 }
 
 export function findPlayerByUsername(
@@ -530,6 +564,8 @@ export interface PlayerView {
   readonly winner: string | null
   readonly numberOfItemsInDeck: number
   readonly numberOfDiscardedItems: number
+  /** Chat orders (issue #215) are switched on for this game. */
+  readonly chatOrders: boolean
   readonly you: PlayerViewSelf | null
   readonly opponents: readonly OpaquePlayerhand[]
   /** Whose turn it is and which phase they should be working on. */
@@ -609,6 +645,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     winner: state.winner,
     numberOfItemsInDeck: state.items.length,
     numberOfDiscardedItems: state.discardedItems.length,
+    chatOrders: state.chatOrders,
     you,
     opponents: state.players
       .filter((player) => player.playerId !== viewerId)

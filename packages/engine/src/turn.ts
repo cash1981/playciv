@@ -11,6 +11,8 @@
  * as the key format.
  */
 
+import type { GameState, Playerhand } from './state.js'
+
 export const TURN_PHASES = ['SOT', 'TRADE', 'CM', 'MOVEMENT', 'RESEARCH'] as const
 export type TurnPhase = (typeof TURN_PHASES)[number]
 
@@ -37,6 +39,12 @@ export interface PlayerTurn {
   readonly orders: Readonly<Record<TurnPhase, string>>
   /** Each phase is published independently by the player who owns the turn. */
   readonly revealed: Readonly<Record<TurnPhase, boolean>>
+  /**
+   * Chat orders (issue #215): the player has marked the phase finished. Kept
+   * apart from `revealed` because a phase can take several messages, so
+   * sending an order does not mean the phase is done. Public, like `revealed`.
+   */
+  readonly done: Readonly<Record<TurnPhase, boolean>>
   /**
    * Every version the owner has revealed for the phase, oldest first. Java kept
    * a `Set<String>` of *saved* orders here; that save-based history is replaced
@@ -69,6 +77,8 @@ const emptyRevealed = (): Record<TurnPhase, boolean> => ({
   RESEARCH: false,
 })
 
+const emptyDone = emptyRevealed
+
 export function createPlayerTurn(username: string, turnNumber: number): PlayerTurn {
   return {
     turnNumber,
@@ -76,6 +86,7 @@ export function createPlayerTurn(username: string, turnNumber: number): PlayerTu
     disabled: false,
     orders: emptyOrders(),
     revealed: emptyRevealed(),
+    done: emptyDone(),
     history: emptyHistory(),
   }
 }
@@ -134,6 +145,9 @@ const isVersion = (entry: unknown): entry is TurnOrderVersion =>
  * becomes empty lists.
  */
 export function migratePlayerTurn(turn: PlayerTurn): PlayerTurn {
+  const revealed = Object.fromEntries(
+    TURN_PHASES.map((phase) => [phase, turn.revealed?.[phase] ?? true]),
+  ) as Record<TurnPhase, boolean>
   // Older saves carry bare strings here, which the declared type does not
   // allow; read it as unknown and filter.
   const legacyHistory = (turn as { readonly history?: Partial<Record<TurnPhase, readonly unknown[]>> })
@@ -142,8 +156,11 @@ export function migratePlayerTurn(turn: PlayerTurn): PlayerTurn {
     (legacyHistory?.[phase] ?? []).filter(isVersion)
   return {
     ...turn,
-    revealed: Object.fromEntries(
-      TURN_PHASES.map((phase) => [phase, turn.revealed?.[phase] ?? true]),
+    revealed,
+    // Turns saved before chat orders existed: a phase counts as done when it
+    // was published, the same rule that backfills `revealed` above.
+    done: Object.fromEntries(
+      TURN_PHASES.map((phase) => [phase, turn.done?.[phase] ?? revealed[phase]]),
     ) as Record<TurnPhase, boolean>,
     history: {
       SOT: versionsFor('SOT'),
@@ -202,4 +219,102 @@ export function nextTurnNumber(turn: PlayerTurn): number {
 export function currentPhaseStatus(turn: PlayerTurn | undefined): TurnPhase {
   if (turn === undefined) return 'SOT'
   return TURN_PHASES.find((phase) => turn.revealed[phase] === false) ?? 'SOT'
+}
+
+// ---------------------------------------------------------------------------
+// Chat orders (issue #215): who is waiting for whom
+// ---------------------------------------------------------------------------
+
+/** Where one active player stands in the current turn. */
+export interface PlayerTurnStatus {
+  readonly playerId: string
+  readonly username: string
+  /** The first phase not marked done, or `null` once every phase is done. */
+  readonly phase: TurnPhase | null
+}
+
+export interface WaitingFor {
+  readonly username: string
+  readonly phase: TurnPhase
+}
+
+export interface TurnStatus {
+  /** Lowest turn where some active player has not marked Research done. */
+  readonly currentTurn: number
+  /** Every active player, in playernumber order. Withdrawn players are absent. */
+  readonly players: readonly PlayerTurnStatus[]
+  /** The players whose `phase` is not `null`, in the same order. */
+  readonly waitingFor: readonly WaitingFor[]
+}
+
+const isDone = (turn: PlayerTurn | undefined, phase: TurnPhase): boolean =>
+  turn?.done?.[phase] === true
+
+const turnOf = (player: Playerhand, turnNumber: number): PlayerTurn | undefined =>
+  player.playerTurns.find((turn) => turn.turnNumber === turnNumber)
+
+const firstOpenPhase = (turn: PlayerTurn | undefined): TurnPhase | null =>
+  TURN_PHASES.find((phase) => !isDone(turn, phase)) ?? null
+
+const bySeat = (players: readonly Playerhand[]): readonly Playerhand[] =>
+  [...players].sort((a, b) => a.playernumber - b.playernumber)
+
+/**
+ * New in the port. Derived only from the public `done` flags, so it is safe to
+ * expose to every viewer. `state.players` holds the active players; a withdrawn
+ * player lives in `withdrawnPlayers` and never holds anybody up.
+ *
+ * The current turn is the lowest one that some active player has not finished
+ * (Research not marked done). It is 1 when nobody has anything yet, and it
+ * moves on by itself once the last player marks Research done.
+ */
+export function turnStatus(state: GameState): TurnStatus {
+  const players = bySeat(state.players)
+  const highest = players.reduce(
+    (best, player) =>
+      player.playerTurns.reduce((inner, turn) => Math.max(inner, turn.turnNumber), best),
+    0,
+  )
+
+  let currentTurn = 1
+  while (
+    currentTurn <= highest &&
+    players.every((player) => isDone(turnOf(player, currentTurn), 'RESEARCH'))
+  ) {
+    currentTurn += 1
+  }
+
+  const statuses = players.map((player): PlayerTurnStatus => ({
+    playerId: player.playerId,
+    username: player.username,
+    phase: firstOpenPhase(turnOf(player, currentTurn)),
+  }))
+  const waitingFor = statuses.flatMap((status): readonly WaitingFor[] =>
+    status.phase === null ? [] : [{ username: status.username, phase: status.phase }],
+  )
+  return { currentTurn, players: statuses, waitingFor }
+}
+
+/**
+ * Who "has the turn" when chat orders are on. There is no baton: it is the
+ * first player, in seat order starting from the start player, who has not
+ * marked the earliest open phase done. The earliest open phase is the first one
+ * some active player has not marked done in the current turn.
+ *
+ * `startPlayerNumber` is the seat that holds the start player marker. It is 1
+ * until the marker is tracked (slice 3 of the brief).
+ *
+ * `undefined` when there are no active players.
+ */
+export function turnHolder(state: GameState, startPlayerNumber = 1): Playerhand | undefined {
+  const seats = bySeat(state.players)
+  const { currentTurn } = turnStatus(state)
+  const earliest = TURN_PHASES.find((phase) =>
+    seats.some((player) => !isDone(turnOf(player, currentTurn), phase)),
+  )
+  if (earliest === undefined) return undefined
+
+  const start = seats.findIndex((player) => player.playernumber >= startPlayerNumber)
+  const ordered = start <= 0 ? seats : [...seats.slice(start), ...seats.slice(0, start)]
+  return ordered.find((player) => !isDone(turnOf(player, currentTurn), earliest))
 }

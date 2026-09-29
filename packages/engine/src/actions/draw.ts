@@ -34,6 +34,7 @@ import type { SheetName } from '../sheet-name.js'
 import { SHEET_LABEL, SHUFFLABLE_ITEMS, TECHS } from '../sheet-name.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, withPlayer } from '../state.js'
+import { turnHolder } from '../turn.js'
 
 type DrawResult = Result<GameState, EngineError>
 
@@ -52,9 +53,31 @@ function requireYourTurn(player: Playerhand): Result<Playerhand, EngineError> {
   return ok(player)
 }
 
+/**
+ * Chat orders (issue #215) have no baton, so "your turn" is `turnHolder`. Anyone
+ * else is refused with `NOT_YOUR_TURN` unless the caller has been warned and
+ * confirmed (`confirmedOutOfTurn`). With chat orders off this is exactly
+ * {@link requireYourTurn}.
+ */
+function requireTurn(
+  state: GameState,
+  player: Playerhand,
+  confirmedOutOfTurn: boolean | undefined,
+): Result<Playerhand, EngineError> {
+  if (!state.chatOrders) return requireYourTurn(player)
+  if (turnHolder(state)?.playerId === player.playerId) return ok(player)
+  if (confirmedOutOfTurn === true) return ok(player)
+  return err({ kind: 'NOT_YOUR_TURN', playerId: player.playerId })
+}
+
 export interface DrawInput {
   readonly playerId: string
   readonly sheetName: SheetName
+  /**
+   * Chat orders only: the player was warned that it is not their turn and
+   * chose to draw anyway. Ignored when chat orders are off.
+   */
+  readonly confirmedOutOfTurn?: boolean
 }
 
 /**
@@ -67,7 +90,7 @@ export interface DrawInput {
 export function draw(state: GameState, input: DrawInput): DrawResult {
   const found = requirePlayer(state, input.playerId)
   if (!found.ok) return found
-  const turn = requireYourTurn(found.value)
+  const turn = requireTurn(state, found.value, input.confirmedOutOfTurn)
   if (!turn.ok) return turn
   const player = turn.value
 
@@ -231,7 +254,7 @@ export function drawWonderToBoard(
 export function drawWonder(state: GameState, input: DrawInput): DrawResult {
   const found = requirePlayer(state, input.playerId)
   if (!found.ok) return found
-  const turn = requireYourTurn(found.value)
+  const turn = requireTurn(state, found.value, input.confirmedOutOfTurn)
   if (!turn.ok) return turn
   return drawWonderToBoard(state, input.playerId, input.sheetName)
 }
