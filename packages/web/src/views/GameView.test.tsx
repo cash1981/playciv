@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Item } from '@civ/engine'
 
-import { api } from '../lib/api.js'
+import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, PlayerDto, PlayerView } from '../lib/api.js'
 import type { GameMenuActions } from './Navigation.js'
 import {
@@ -26,6 +26,11 @@ vi.mock('./BoardView.js', () => ({
   ),
 }))
 vi.mock('./ChatPanel.js', () => ({ ChatPanel: () => <section><h2>Chat</h2></section> }))
+// Only the panel is replaced; the helpers GameView uses stay real
+vi.mock('./ChatOrdersPanel.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./ChatOrdersPanel.js')>()),
+  ChatOrdersPanel: () => <section><h2>Chat and orders</h2></section>,
+}))
 vi.mock('./LogPanel.js', () => ({ LogPanel: () => <section><h2>Log</h2></section> }))
 vi.mock('./OpponentHandPanel.js', () => ({ OpponentHandPanel: () => <section><h2>Other players' hands</h2></section> }))
 vi.mock('./RevealedPanel.js', () => ({ RevealedPanel: () => <section><h2>Revealed</h2></section> }))
@@ -642,5 +647,223 @@ describe('HandItem: place a Great Person in the tech pyramid (#168 follow-up)', 
     fireEvent.click(screen.getByRole('button', { name: 'Place in tech pyramid' }))
 
     expect(place).toHaveBeenCalledWith('game-1', 'gp-newton', 1)
+  })
+})
+
+describe('chat orders on the game page (issue #215)', () => {
+  const chatSeat = (username: string, playernumber: number, overrides: Record<string, unknown> = {}) =>
+    seat(username, { playernumber, ...overrides })
+
+  /** Alice (the viewer) and Bob; `upUsername` is who the timeline says is up. */
+  const chatView = (
+    upUsername: string,
+    overrides: Record<string, unknown> = {},
+    youOverrides: Record<string, unknown> = {},
+  ): PlayerView => {
+    const you = chatSeat('Alice', 1, { color: 'Red', yourTurn: false, ...youOverrides })
+    const bob = chatSeat('Bob', 2, { color: 'Blue', yourTurn: true })
+    return {
+      ...headerView(you, [bob], upUsername),
+      chatOrders: true,
+      activeTurn: {
+        playerId: `id-${upUsername}`,
+        username: upUsername,
+        turnNumber: 4,
+        phase: 'CM',
+        waitingFor: [
+          { username: 'Alice', phase: 'CM' },
+          { username: 'Bob', phase: 'SOT' },
+        ],
+      },
+      ...overrides,
+    } as unknown as PlayerView
+  }
+
+  const renderGame = async (view: PlayerView, role: 'user' | 'admin' = 'user'): Promise<void> => {
+    localStorage.setItem('civ.autoRefresh', 'false')
+    vi.spyOn(api, 'game').mockResolvedValue(view)
+    vi.spyOn(api, 'revisions').mockResolvedValue([])
+    render(
+      <GameView
+        gameId="game-1"
+        player={{ username: 'Alice', role } as unknown as PlayerDto}
+        onUnauthorized={vi.fn()}
+        onDeleted={vi.fn()}
+        onWithdrawn={vi.fn()}
+        onEnded={vi.fn()}
+      />,
+    )
+    await screen.findByRole('heading', { level: 1 })
+  }
+
+  const drawButton = (label: string): HTMLButtonElement =>
+    screen.getByRole('button', { name: label }) as HTMLButtonElement
+
+  describe('the page', () => {
+    it('swaps Turn orders and Chat for the timeline and says who the game waits for', async () => {
+      await renderGame(chatView('Bob'))
+
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+        'Turn 4: waiting for Alice (CM), Bob (SOT)',
+      )
+      expect(screen.getByRole('heading', { name: 'Chat and orders' })).toBeTruthy()
+      expect(screen.queryByRole('heading', { name: 'Turn orders' })).toBeNull()
+      expect(screen.queryByRole('heading', { name: 'Chat' })).toBeNull()
+      // The log stays
+      expect(screen.getByRole('heading', { name: 'Log' })).toBeTruthy()
+      expect(screen.getByRole('list', { name: 'Turn progress' }).textContent).toContain('BobSOT')
+    })
+
+    it('hides End turn and Take the turn, which need a baton', async () => {
+      await renderGame(chatView('Alice'))
+
+      expect(screen.queryByText('End turn')).toBeNull()
+      expect(screen.queryByText('Take the turn')).toBeNull()
+    })
+
+    it('leaves the classic page exactly as it was with chat orders off', async () => {
+      await renderGame({ ...chatView('Bob'), chatOrders: false } as unknown as PlayerView)
+
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("Bob's turn — city management phase")
+      expect(screen.getByText('End turn')).toBeTruthy()
+      expect(screen.getByText('Take the turn')).toBeTruthy()
+      expect(screen.getByRole('heading', { name: 'Turn orders' })).toBeTruthy()
+      expect(screen.getByRole('heading', { name: 'Chat' })).toBeTruthy()
+      expect(screen.queryByRole('heading', { name: 'Chat and orders' })).toBeNull()
+      expect(screen.queryByRole('list', { name: 'Turn progress' })).toBeNull()
+    })
+  })
+
+  describe('drawing out of turn', () => {
+    it('asks first, and sends the confirmation only after Yes', async () => {
+      const draw = vi.spyOn(api, 'draw').mockResolvedValue(chatView('Bob'))
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+      await renderGame(chatView('Bob'))
+
+      fireEvent.click(drawButton('Civ'))
+
+      expect(confirm).toHaveBeenCalledExactlyOnceWith('It is not your turn. Bob is up. Draw anyway?')
+      await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'CIV', true))
+    })
+
+    it('sends nothing after No', async () => {
+      const draw = vi.spyOn(api, 'draw').mockResolvedValue(chatView('Bob'))
+      vi.spyOn(window, 'confirm').mockReturnValue(false)
+      await renderGame(chatView('Bob'))
+
+      fireEvent.click(drawButton('Civ'))
+
+      expect(window.confirm).toHaveBeenCalledOnce()
+      // Let a stray call settle before asserting there was none
+      await Promise.resolve()
+      expect(draw).not.toHaveBeenCalled()
+    })
+
+    it('covers wonders too, which the server draws through the same route', async () => {
+      const draw = vi.spyOn(api, 'draw').mockResolvedValue(chatView('Bob'))
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      await renderGame(chatView('Bob'))
+
+      fireEvent.click(drawButton('Ancient wonder'))
+
+      await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'ANCIENT_WONDERS', true))
+    })
+
+    it('does not ask, or send the flag, when the viewer is the one who is up', async () => {
+      const draw = vi.spyOn(api, 'draw').mockResolvedValue(chatView('Alice'))
+      const confirm = vi.spyOn(window, 'confirm')
+      await renderGame(chatView('Alice'))
+
+      fireEvent.click(drawButton('Civ'))
+
+      await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'CIV'))
+      expect(confirm).not.toHaveBeenCalled()
+    })
+
+    it('shows the normal error when the server still says NOT_YOUR_TURN', async () => {
+      vi.spyOn(api, 'draw').mockRejectedValue(new ApiError(409, 'NOT_YOUR_TURN', 'Player is not on turn'))
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      await renderGame(chatView('Bob'))
+
+      fireEvent.click(drawButton('Civ'))
+
+      expect(await screen.findByText('Player is not on turn')).toBeTruthy()
+    })
+
+    it('leaves Draw disabled for a spectator', async () => {
+      await renderGame({ ...chatView('Bob'), you: null } as unknown as PlayerView)
+      expect(drawButton('Civ').disabled).toBe(true)
+    })
+
+    it('keeps the classic rule with chat orders off: disabled out of turn, no dialog', async () => {
+      const draw = vi.spyOn(api, 'draw').mockResolvedValue(chatView('Bob'))
+      const confirm = vi.spyOn(window, 'confirm')
+      await renderGame({ ...chatView('Bob'), chatOrders: false } as unknown as PlayerView)
+
+      expect(drawButton('Civ').disabled).toBe(true)
+      fireEvent.click(drawButton('Civ'))
+      expect(confirm).not.toHaveBeenCalled()
+      expect(draw).not.toHaveBeenCalled()
+    })
+
+    it('keeps the classic draw with chat orders off on the viewer\'s own turn', async () => {
+      const draw = vi.spyOn(api, 'draw').mockResolvedValue(chatView('Alice'))
+      await renderGame({
+        ...chatView('Alice', {}, { yourTurn: true }),
+        chatOrders: false,
+      } as unknown as PlayerView)
+
+      fireEvent.click(drawButton('Civ'))
+
+      await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'CIV'))
+    })
+  })
+
+  describe('the admin switch in the menu', () => {
+    const renderWithActions = async (
+      view: PlayerView,
+      role: 'user' | 'admin',
+    ): Promise<() => GameMenuActions | null> => {
+      localStorage.setItem('civ.autoRefresh', 'false')
+      vi.spyOn(api, 'game').mockResolvedValue(view)
+      vi.spyOn(api, 'revisions').mockResolvedValue([])
+      const latest: { current: GameMenuActions | null } = { current: null }
+      render(
+        <GameView
+          gameId="game-1"
+          player={{ username: 'Alice', role } as unknown as PlayerDto}
+          onUnauthorized={vi.fn()}
+          onDeleted={vi.fn()}
+          onWithdrawn={vi.fn()}
+          onEnded={vi.fn()}
+          onGameActions={(actions) => { latest.current = actions }}
+        />,
+      )
+      await waitFor(() => expect(latest.current).not.toBeNull())
+      return () => latest.current
+    }
+
+    it('is offered to the admin role and reports the current state', async () => {
+      const menu = await renderWithActions(chatView('Bob'), 'admin')
+      expect(menu()?.canSetChatOrders).toBe(true)
+      expect(menu()?.chatOrders).toBe(true)
+    })
+
+    it('is not offered to the game creator when they are not an admin', async () => {
+      const menu = await renderWithActions(chatView('Bob', {}, { gameCreator: true }), 'user')
+      // The creator still gets End game and Delete; only the switch is admin only
+      expect(menu()?.canEnd).toBe(true)
+      expect(menu()?.canSetChatOrders).toBe(false)
+    })
+
+    it('switches through the admin route', async () => {
+      const setChatOrders = vi.spyOn(api, 'setChatOrders').mockResolvedValue(chatView('Bob'))
+      const menu = await renderWithActions({ ...chatView('Bob'), chatOrders: false } as unknown as PlayerView, 'admin')
+      expect(menu()?.chatOrders).toBe(false)
+
+      menu()?.onSetChatOrders(true)
+
+      await waitFor(() => expect(setChatOrders).toHaveBeenCalledExactlyOnceWith('game-1', true))
+    })
   })
 })

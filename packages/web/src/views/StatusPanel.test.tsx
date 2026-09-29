@@ -543,3 +543,32 @@ describe('StatusPanel Coins section', () => {
     expect(totalCells.every((cell) => cell.classList.contains('status-group-start'))).toBe(true)
   })
 })
+
+describe('StatusPanel turn tag', () => {
+  const rowsWithTurnTag = (): string[] =>
+    Array.from(document.querySelectorAll('tr'))
+      .filter((row) => row.querySelector('.tag.turn') !== null)
+      .map((row) => row.querySelector('strong')?.textContent ?? '')
+
+  it('follows the baton without chat orders', () => {
+    render(<StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />)
+    expect(rowsWithTurnTag()).toEqual(['Alice'])
+  })
+
+  it('follows the active turn with chat orders, not the baton (issue #215)', () => {
+    // Alice still holds the baton, but the timeline says Bob is up
+    const view = {
+      ...memberView,
+      chatOrders: true,
+      activeTurn: { playerId: 'player-them', username: 'Bob', turnNumber: 2, phase: 'SOT' },
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+    expect(rowsWithTurnTag()).toEqual(['Bob'])
+  })
+
+  it('tags nobody when chat orders has no one up', () => {
+    const view = { ...memberView, chatOrders: true, activeTurn: null } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+    expect(rowsWithTurnTag()).toEqual([])
+  })
+})
