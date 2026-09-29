@@ -575,8 +575,18 @@ export function TurnPanel({
           publicTurns,
         )
   const current = selectedTurns.find((turn) => turn.turnNumber === turnNumber)
-  const turnNumbers = [...new Set([...selectedTurns.map((turn) => turn.turnNumber), turnNumber])]
-    .sort((left, right) => left - right)
+  // A turn that only exists as an unsaved draft has no server turn yet. It must
+  // stay in the list after the player looks at another turn, or it can only be
+  // reached by pressing "New turn" again.
+  const draftTurnNumbers =
+    selectedPlayer?.own === true
+      ? [...Object.keys(drafts), ...Object.keys(liveDirtyKeys)].map((key) =>
+          Number(key.slice(0, key.indexOf(':'))),
+        )
+      : []
+  const turnNumbers = [
+    ...new Set([...selectedTurns.map((turn) => turn.turnNumber), ...draftTurnNumbers, turnNumber]),
+  ].sort((left, right) => left - right)
   const values = emptyOrders()
   for (const phase of TURN_PHASES) {
     values[phase] =
