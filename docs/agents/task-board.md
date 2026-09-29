@@ -12,7 +12,17 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### issue-204-206-end-game-and-transparent-flag
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/issue-204-206-figure-limits-and-header` (same PR as #207)
+- **Brief:** `docs/agents/tasks/issue-204-206-figure-limits-and-header.md` ("Follow-up")
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/public/board/figures/whitearmy.png`
+  - `packages/web/src/views/Navigation.tsx`, `GameView.tsx`, a new end-game dialog component (+ tests and stylesheet)
+- **Notes:** `board-assets.json` is not touched.
+
 
 ---
 

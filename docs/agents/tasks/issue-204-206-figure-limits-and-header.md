@@ -3,7 +3,7 @@
 - **Slug:** `issue-204-206-figure-limits-and-header`
 - **Branch:** `feat/issue-204-206-figure-limits-and-header`
 - **Owner:** Claude (orchestrator), coder agent for the code
-- **Status:** in progress
+- **Status:** in review (extended, see "Follow-up")
 
 ## Goal
 
@@ -138,3 +138,26 @@ game rule or the deck, so `rules-checker` is not needed.
 ## Open questions
 
 None outstanding; all five were answered by the human before starting.
+
+## Follow-up (added to the same PR at the human's request)
+
+1. **Transparent white army.** The artwork was an opaque white flag on a white
+   background. The background around the flag is now transparent (flood fill
+   from the edges, so the flag itself stays white with its black outline).
+   Done by the orchestrator; size stays 36x51.
+2. **End game with a winner picker.** `endGame` exists in the engine
+   (`actions/game.ts`), the server (`POST /api/games/:id/end`, optional
+   `winner`) and `api.endGame`, but there is no UI for it. Add it. Answers
+   from the human: only the game creator and admin can end a game (the
+   existing engine rule, unchanged); the entry point is an **End game** button
+   in the menu's Game section next to Withdraw and Delete game, opening a
+   small dialog with a dropdown of the players plus "No winner", and Cancel /
+   End game buttons. Mobile first.
+
+   In: `Navigation.tsx` (`GameMenuActions` gets `canEnd`, `endDisabled`,
+   `onEnd(winner)`), `GameView.tsx` (wire it, same `canDelete` rule and the
+   same disabled rules as Delete), a dialog component (look at how the Great
+   persons dialog in `Navigation.tsx` is built and reuse that pattern),
+   styles, tests. Hidden: the button when the game is already ended.
+   Out: changing who may end a game, reopening an ended game, and any change
+   to the highscore.
