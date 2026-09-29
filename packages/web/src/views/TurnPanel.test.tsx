@@ -125,6 +125,7 @@ const turn = (
   disabled,
   orders: turnOrders,
   revealed,
+  done: revealed,
   history: turnHistory,
 })
 
