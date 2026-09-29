@@ -94,7 +94,14 @@ export function chooseTech(state: GameState, input: ChooseTechInput): ActionResu
   return ok(appendItemLog(next, 'TECH', player.username, player.playerId, chosen))
 }
 
-/** Java: `PlayerAction.removeTech`. */
+/**
+ * Java: `PlayerAction.removeTech`.
+ *
+ * Allowed at any time and for any chosen tech: hidden, revealed, or the
+ * starting tech. The player may change their mind or play a house rule; the
+ * log records it. The tech goes back into the pool of techs the player can
+ * choose, and its coin counter is reset below.
+ */
 export function removeTech(state: GameState, input: ChooseTechInput): ActionResult {
   const access = requireAccess(state, input.playerId)
   if (!access.ok) return access
@@ -246,8 +253,9 @@ export function remainingTechsForPlayer(
   if (player === undefined) return state.techs
 
   const taken = new Set(player.techsChosen.map((tech) => tech.name))
-  // Java also added the starting tech from the civilization
-  if (player.civilization !== null) taken.add(player.civilization.startingTech.name)
+  // Java also added the starting tech from the civilization. It is in
+  // `techsChosen` from the civ reveal, so it is only offered again once the
+  // player has removed it.
 
   return state.techs
     .filter((tech) => !taken.has(tech.name))

@@ -3176,3 +3176,28 @@ close it.
 - **Menu CSS moved** out of the layered overrides in `styles.css` into
   `Navigation.css`. The topbar's brand now shares a row with the hamburger on a
   phone instead of taking the whole row.
+
+## 2026-09-29 - A player can remove any of their own techs, at any time
+
+**Decision.** `removeTech` works for every tech in the player's own
+`techsChosen`: hidden, revealed, and the starting tech, in any phase of the
+game. The tech goes back into `remainingTechsForPlayer`, so it can be chosen
+again; `remainingTechsForPlayer` no longer excludes the civ's starting tech
+unconditionally, only while it is in `techsChosen`. The coin counter that the
+tech feeds is reset, as before (issue #158). Nothing else derives from techs
+(the combat bonus does not read them), so nothing more needs reversing. No
+free-text reason: the log is the record.
+
+**Log.** `REMOVED_TECH` still says "a hidden technology" in public when the
+removed tech was hidden. When the tech had been revealed, the public line names
+it. Both carry the same unique item number as the tech's `TECH` and `REVEAL`
+lines, so a removal can be tied back to the card.
+
+**UI.** The Remove button is on the detail dialog opened from the viewer's own
+pyramid (not on opponents' pyramids, not on a replayed revision). The Techs
+panel's hidden list keeps its own Remove button.
+
+**Why.** The human asked for it: players change their mind or play house rules,
+and the log makes it accountable. This deviates from the old system only in
+allowing removal of a revealed and a starting tech; hidden-tech removal is the
+old `removeTech`.

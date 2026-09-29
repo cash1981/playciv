@@ -84,10 +84,16 @@ export function createLogTexts(
         privateLog: `${username} has researched ${DELIM}${all}${uniqueText}`,
         publicLog: `${username} has researched a hidden technology${uniqueText}`,
       }
+    // A tech the player has already revealed is public, so its removal names it.
+    // The unique number is the same one the TECH and REVEAL lines carry, which
+    // is how a removal is tied back to the card.
     case 'REMOVED_TECH':
       return {
         privateLog: `${username} has removed ${DELIM}${all}${uniqueText}`,
-        publicLog: `${username} has removed a hidden technology${uniqueText}`,
+        publicLog:
+          item !== null && item.kind === 'tech' && !item.hidden
+            ? `${username} has removed ${DELIM}${all}${uniqueText}`
+            : `${username} has removed a hidden technology${uniqueText}`,
       }
     case 'REMOVED_SOCIAL_POLICY':
       return {

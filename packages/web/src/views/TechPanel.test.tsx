@@ -424,6 +424,44 @@ describe('TechPanel picker', () => {
     expect(screen.queryByRole('button', { name: 'Research' })).toBeNull()
   })
 
+  it('offers Remove on the dialog of the viewer\'s own revealed tech and calls removeTech', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    const remove = vi.spyOn(api, 'removeTech').mockResolvedValue({} as never)
+    render(
+      <TechPanel
+        gameId="game-1"
+        busy={false}
+        run={run}
+        view={view([tech('Writing', false, 1)])}
+        reloadCount={0}
+      />,
+    )
+
+    fireEvent.click(await screen.findByText('Writing'))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+
+    expect(remove).toHaveBeenCalledWith('game-1', 'Writing')
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it("offers no Remove on an opponent's tech dialog", async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    render(
+      <TechPanel
+        gameId="game-1"
+        busy={false}
+        run={run}
+        view={view([], [opponent('p2', 'Egil', { revealedTechs: [tech('Masonry', false, 1)] })])}
+        reloadCount={0}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Egil' }))
+    fireEvent.click(screen.getByText('Masonry'))
+
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull()
+  })
+
   it("opens the detail dialog for a tech read from an opponent's revealed pyramid, still with no Research button", async () => {
     // Masonry is also in `available` for the viewer, same id `chooseTech`
     // would copy verbatim — the failure case this guards against is opening
