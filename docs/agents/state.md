@@ -13,12 +13,21 @@ _Last updated: 2026-09-29_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 589 engine, 211 server, 310 web on `feat/issue-204-206-figure-limits-and-header` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 589 engine, 211 server, 325 web on `feat/issue-204-206-figure-limits-and-header` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
 
+- **Issue #209: compact mobile menu.** The hamburger menu is a full-screen
+  sheet on a phone with its own header and a close (X) button that stays put
+  while the list scrolls, and a dropdown from the hamburger on desktop. Rows
+  are flat and 44px high. "Rules and help" is now an inline **Rules** submenu
+  (Rulebooks, Help, Charts) and the game group is an inline **Actions**
+  submenu (Withdraw, End game, Delete game, same rules as before). Brand and
+  hamburger share one row on a phone. Menu styles moved to `Navigation.css`.
+  Checked in the browser at 375px, 375x480 (scrolling), and desktop, dark and
+  light. See `decisions.md`, 2026-09-29. 325 web tests.
 - **Issues #204 and #206, one PR, mobile first.** #204: each colour can place
   at most 6 army figures and 2 scouts (`figureLimit` in `board.ts`, counted per
   asset id so per colour, shown as a countdown in the palette). Russia also has

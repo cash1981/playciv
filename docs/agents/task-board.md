@@ -12,17 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-209-compact-menu
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `feat/issue-209-compact-menu`
-- **Brief:** `docs/agents/tasks/issue-209-compact-menu.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/Navigation.tsx`, `Navigation.test.tsx`, new `Navigation.css`
-  - `packages/web/src/styles.css` (menu rules only)
-- **Notes:** none
-
+_Nothing claimed._
 
 ---
 

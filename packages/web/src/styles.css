@@ -1434,8 +1434,15 @@ ul.history > li {
     gap: 0.6rem;
   }
 
+  /* Brand and hamburger share one row on a phone; the brand takes what is left. */
   .brand {
-    flex: 1 1 100%;
+    flex: 1 1 0;
+    min-width: 0;
+    align-self: center;
+  }
+
+  .brand-spacer {
+    display: none;
   }
 
   .center {
