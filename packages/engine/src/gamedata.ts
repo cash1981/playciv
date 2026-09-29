@@ -452,6 +452,30 @@ export function wonderReference(data: GameDataFile): readonly WonderReference[] 
   ]
 }
 
+/** One great person's name, type and printed text, independent of any deck. */
+export interface GreatPersonReference {
+  readonly name: string
+  readonly type: string
+  readonly description: string
+}
+
+/**
+ * Every great person once, in print order: the `Great Person` sheet rows
+ * `[name, type, description, '']` under a header row. `readDeck` compacts each
+ * column separately and shuffles, which loses the row alignment a reference
+ * needs, so this reads whole rows and skips any without a name.
+ */
+export function greatPersonReference(data: GameDataFile): readonly GreatPersonReference[] {
+  return sheetOf(data, SHEET_LABEL.GREAT_PERSON)
+    .slice(1)
+    .map((row) => ({
+      name: (row[0] ?? '').trim(),
+      type: (row[1] ?? '').trim(),
+      description: (row[2] ?? '').trim(),
+    }))
+    .filter((entry) => entry.name !== '')
+}
+
 function readWonders(
   data: GameDataFile,
   build: ItemBuilder,

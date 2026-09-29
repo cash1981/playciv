@@ -479,6 +479,18 @@ label > textarea {
   white-space: nowrap;
 }
 
+/* A menu action that is a button (Great persons) reads like the links beside
+   it. The mobile blocks below add the pill border back for the grid. */
+.site-navigation > button {
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: var(--accent);
+  font: inherit;
+  white-space: nowrap;
+}
+
 .navigation-menu {
   position: relative;
 }
@@ -1515,6 +1527,7 @@ ul.history > li {
 
   /* Keep the primary site controls usable on tablets as well as phones. */
   .site-navigation > a,
+  .site-navigation > button,
   .navigation-menu > summary,
   .topbar-actions button,
   .row > input,
@@ -1585,6 +1598,7 @@ ul.history > li {
   }
 
   .site-navigation > a,
+  .site-navigation > button,
   .navigation-menu > summary {
     min-height: 2.75rem;
     display: flex;

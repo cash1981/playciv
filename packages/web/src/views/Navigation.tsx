@@ -1,7 +1,8 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 
 import type { PlayerDto } from '../lib/api.js'
 import type { Theme } from '../theme.js'
+import { GreatPersonsDialog } from './GreatPersonsDialog.js'
 
 const helpLinks = [
   { href: '/help/Civ_Tech_FF-WW.-1.jpg', label: 'Fame and Fortune / Wisdom and Warfare overview' },
@@ -54,6 +55,11 @@ export function Navigation({
 }: NavigationProps): React.JSX.Element {
   const nextTheme = theme === 'dark' ? 'light' : 'dark'
   const menuRef = useRef<HTMLDetailsElement>(null)
+  // The dialog lives outside the dropdown so it survives the menu closing.
+  const [showGreatPersons, setShowGreatPersons] = useState(false)
+  // Focus returns to the hamburger: the opener sits in the dropdown, which is
+  // collapsed (and cannot take focus) by the time the dialog closes.
+  const menuSummaryRef = useRef<HTMLElement>(null)
 
   // Close the menu after any link or button inside it is used. Clicking the
   // nested "Rules and help" summary itself does not match `a, button`, so it
@@ -72,7 +78,7 @@ export function Navigation({
       </a>
       <span className="brand-spacer" />
       <details className="navigation-menu main-menu" ref={menuRef}>
-        <summary aria-label="Menu">
+        <summary ref={menuSummaryRef} aria-label="Menu">
           <span className="hamburger-icon" aria-hidden="true">
             <span />
             <span />
@@ -84,6 +90,9 @@ export function Navigation({
             <a href="/faq">FAQ</a>
             <a href="/about">About</a>
             <a href="/highscore" onClick={(event) => navigate(event, '/highscore', onNavigate)}>Highscore</a>
+            <button type="button" onClick={() => setShowGreatPersons(true)}>
+              Great persons
+            </button>
             <details className="navigation-menu rules-menu">
               <summary>Rules and help</summary>
               <div className="navigation-dropdown">
@@ -147,6 +156,12 @@ export function Navigation({
           </div>
         </div>
       </details>
+      {showGreatPersons && (
+        <GreatPersonsDialog
+          returnFocusTo={menuSummaryRef}
+          onClose={() => setShowGreatPersons(false)}
+        />
+      )}
     </header>
   )
 }
