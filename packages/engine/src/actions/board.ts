@@ -30,6 +30,7 @@ import {
   nextRotation,
   remainingBoardAssetCount,
   revertChange,
+  WHITE_ARMY_ID,
 } from '../board.js'
 import type { EngineError } from '../errors.js'
 import { nextId } from '../random.js'
@@ -134,6 +135,13 @@ export function placePiece(state: GameState, input: PlacePieceInput): ActionResu
   const asset = findBoardAsset(input.assetId)
   if (asset === undefined) {
     return err({ kind: 'BOARD_ASSET_NOT_FOUND', assetId: input.assetId })
+  }
+  // Checked before the limit so a non-Russian is told why, not "none left"
+  if (
+    asset.id === WHITE_ARMY_ID &&
+    findPlayer(state, input.playerId)?.civilization?.name !== 'Russians'
+  ) {
+    return err({ kind: 'BOARD_ASSET_RUSSIA_ONLY', assetId: input.assetId })
   }
   const remaining = remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)
   if (remaining !== undefined && remaining === 0) {

@@ -118,6 +118,23 @@ describe('player areas', () => {
     expect(exhausted.status).toBe(409)
     expect((await exhausted.json() as { error: string }).error).toBe('BOARD_ASSET_LIMIT_REACHED')
   })
+
+  it('rejects a third scout of one colour with 409 (issue #204)', async () => {
+    const { gameId, starter } = await startedGame('Scouts')
+    await place(gameId, starter, 'figures/redscout', 0, 0)
+    await place(gameId, starter, 'figures/redscout', 0, 0)
+
+    const third = await place(gameId, starter, 'figures/redscout', 0, 0)
+    expect(third.status).toBe(409)
+    expect((await third.json() as { error: string }).error).toBe('BOARD_ASSET_LIMIT_REACHED')
+  })
+
+  it('answers 403 when a player who is not Russia places the white army (issue #204)', async () => {
+    const { gameId, starter } = await startedGame('White')
+    const refused = await place(gameId, starter, 'figures/whitearmy', 0, 0)
+    expect(refused.status).toBe(403)
+    expect((await refused.json() as { error: string }).error).toBe('BOARD_ASSET_RUSSIA_ONLY')
+  })
 })
 
 describe('history over HTTP', () => {

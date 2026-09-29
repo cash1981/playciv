@@ -73,6 +73,8 @@ export type EngineError =
   | { readonly kind: 'BOARD_ASSET_NOT_FOUND'; readonly assetId: string }
   /** The physical supply for this board asset has been exhausted. */
   | { readonly kind: 'BOARD_ASSET_LIMIT_REACHED'; readonly assetId: string; readonly limit: number }
+  /** Only the Russian player may place the white army (issue #204) */
+  | { readonly kind: 'BOARD_ASSET_RUSSIA_ONLY'; readonly assetId: string }
   | { readonly kind: 'BOARD_PIECE_NOT_FOUND'; readonly pieceId: string }
   | { readonly kind: 'UNKNOWN_WONDER_OWNER'; readonly playerId: string }
   /** The board history is empty, so there is nothing to take back */
@@ -183,6 +185,8 @@ export function describeError(error: EngineError): string {
       return `Unknown board piece: ${error.assetId}`
     case 'BOARD_ASSET_LIMIT_REACHED':
       return `No ${error.assetId} pieces remain available`
+    case 'BOARD_ASSET_RUSSIA_ONLY':
+      return 'Only the Russian player can place the white army'
     case 'BOARD_PIECE_NOT_FOUND':
       return `No piece on the board with id ${error.pieceId}`
     case 'UNKNOWN_WONDER_OWNER':

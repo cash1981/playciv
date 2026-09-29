@@ -51,6 +51,7 @@ import {
 import { createGame } from '../src/create-game.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
+import type { CivItem } from '../src/item.js'
 import type { GameState } from '../src/state.js'
 
 import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
@@ -166,8 +167,13 @@ describe('the manifest', () => {
     }
   })
 
-  it('has no white army (removed as unused, issue #26)', () => {
-    expect(findBoardAsset('figures/whitearmy')).toBeUndefined()
+  it('has the white army back for Russia (issue #204, dropped in issue #26)', () => {
+    expect(findBoardAsset('figures/whitearmy')).toMatchObject({
+      category: 'figure',
+      label: 'White army',
+      width: 36,
+      height: 51,
+    })
   })
 
   it('has a single Coin marker and no extra coin denominations', () => {
@@ -318,6 +324,85 @@ describe('placePiece', () => {
     if (piece === undefined) throw new Error('artist was not placed')
     state = unwrap(removePiece(state, { playerId: CASH1981, pieceId: piece.id }))
     expect(remainingBoardAssetCount(artist, state.board.pieces, state.numOfPlayers)).toBe(1)
+  })
+
+  it('limits each colour to six armies and two scouts (issue #204)', () => {
+    for (const colour of ['blue', 'green', 'purple', 'red', 'yellow']) {
+      for (const [kind, limit] of [['army', 6], ['scout', 2]] as const) {
+        const assetId = `figures/${colour}${kind}`
+        let state = firstCivGame()
+        for (let index = 0; index < limit; index++) state = place(state, assetId, 0, 0)
+        expect(unwrapErr(placePiece(state, {
+          playerId: CASH1981,
+          assetId,
+          x: 0,
+          y: 0,
+        })), assetId).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId, limit })
+      }
+    }
+  })
+
+  it('counts figures per colour, so a full colour does not block another', () => {
+    let state = firstCivGame()
+    for (let index = 0; index < 6; index++) state = place(state, 'figures/redarmy', 0, 0)
+    expect(unwrap(placePiece(state, {
+      playerId: CASH1981,
+      assetId: 'figures/bluearmy',
+      x: 0,
+      y: 0,
+    })).board.pieces).toHaveLength(7)
+    // An army does not use up the scouts of its colour either
+    expect(unwrap(placePiece(state, {
+      playerId: CASH1981,
+      assetId: 'figures/redscout',
+      x: 0,
+      y: 0,
+    })).board.pieces).toHaveLength(7)
+  })
+
+  it('shows the remaining figures and frees a slot when one is removed', () => {
+    const scout = findBoardAsset('figures/greenscout')
+    if (scout === undefined) throw new Error('greenscout missing from manifest')
+    let state = place(firstCivGame(), 'figures/greenscout', 0, 0)
+    state = place(state, 'figures/greenscout', 0, 0)
+    expect(remainingBoardAssetCount(scout, state.board.pieces, state.numOfPlayers)).toBe(0)
+
+    const piece = state.board.pieces[0]
+    if (piece === undefined) throw new Error('scout was not placed')
+    state = unwrap(removePiece(state, { playerId: CASH1981, pieceId: piece.id }))
+    expect(remainingBoardAssetCount(scout, state.board.pieces, state.numOfPlayers)).toBe(1)
+    expect(placePiece(state, {
+      playerId: CASH1981,
+      assetId: 'figures/greenscout',
+      x: 0,
+      y: 0,
+    }).ok).toBe(true)
+  })
+
+  it('lets only the Russian player place the one white army (issue #204)', () => {
+    const game = firstCivGame()
+    const russians = { kind: 'civ', name: 'Russians' } as unknown as CivItem
+    const state: GameState = {
+      ...game,
+      players: game.players.map((p) =>
+        p.playerId === CASH1981 ? { ...p, civilization: russians } : p,
+      ),
+    }
+    const input = { assetId: 'figures/whitearmy', x: 0, y: 0 }
+
+    // Anyone else, with another civ or none, is refused
+    expect(unwrapErr(placePiece(state, { ...input, playerId: KARANDRAS1 }))).toEqual({
+      kind: 'BOARD_ASSET_RUSSIA_ONLY',
+      assetId: 'figures/whitearmy',
+    })
+
+    const placed = unwrap(placePiece(state, { ...input, playerId: CASH1981 }))
+    expect(placed.board.pieces).toHaveLength(1)
+    expect(unwrapErr(placePiece(placed, { ...input, playerId: CASH1981 }))).toEqual({
+      kind: 'BOARD_ASSET_LIMIT_REACHED',
+      assetId: 'figures/whitearmy',
+      limit: 1,
+    })
   })
 
   it('clamps the position to the surface', () => {

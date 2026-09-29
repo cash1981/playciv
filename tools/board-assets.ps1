@@ -94,12 +94,11 @@ $wonderLabels = @{
 }
 
 # Pieces to leave out of the manifest even though the source art exists, keyed by
-# "<folder>/<basename>". The white army (barbarians) was dropped as unused; see
-# issue #26. The extra coin denominations were dropped 2026-09-23: the palette
+# "<folder>/<basename>". The white army was once dropped as unused (issue #26);
+# it is back for Russia's extra army (issue #204). The extra coin denominations were dropped 2026-09-23: the palette
 # only needs one single-coin marker (coin1, labelled "Coin"); see
 # docs/agents/tasks/coin-marker-cleanup.md.
 $exclude = @(
-    'figures/whitearmy'
     'markers/coin'
     'markers/coin2'
     'markers/coin3'

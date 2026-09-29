@@ -67,6 +67,7 @@ export function statusFor(error: EngineError): number {
     case 'GAME_CREATOR_MUST_END_GAME':
     case 'ONLY_GAME_CREATOR_CAN_END_GAME':
     case 'BOARD_UNDO_NOT_YOURS':
+    case 'BOARD_ASSET_RUSSIA_ONLY':
       return 403
     case 'ITEM_NOT_LOOTABLE':
       return 406
