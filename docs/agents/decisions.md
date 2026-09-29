@@ -3116,3 +3116,22 @@ must not be read as an FFG rule.
   `board-assets.json` got the `figures/whitearmy` entry by hand, in the same
   shape and slot the generator produces. The art is an opaque white flag on a
   white background, used as delivered.
+
+## 2026-09-29 — End game button and winner picker (added to the #204/#206 PR)
+
+`endGame` (Java: `GameAction.endGame`), its route and `api.endGame` already
+existed, but nothing in the client called them, so a game could not be ended
+or given a winner from the browser. The old client's own end-game screen is
+not ported; this is a small dialog instead.
+
+- **Who.** Only the game creator and admin, as in the engine and the old
+  system. The button follows the same rule as Delete game, and is hidden once
+  the game is no longer active.
+- **Winner.** A dropdown of the game's players by username, with "No winner"
+  first. It is optional, as it is in the engine, and cannot be undone.
+- **Where.** The menu's Game section, next to Withdraw and Delete game, so the
+  phone layout keeps one place for game-level actions.
+- **No new hidden information.** The list is built from usernames already in
+  the projected view.
+- **White army artwork.** Made transparent around the flag by flood fill from
+  the edges, so the flag stays white with its black outline. Same 36x51 size.

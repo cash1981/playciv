@@ -13,7 +13,7 @@ _Last updated: 2026-09-29_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 589 engine, 211 server, 292 web on `feat/issue-204-206-figure-limits-and-header` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 589 engine, 211 server, 310 web on `feat/issue-204-206-figure-limits-and-header` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -28,6 +28,10 @@ _Last updated: 2026-09-29_
   before the turn title, the chat shows the civ (small) and the nickname in
   the player's colour, and Turn orders now sits directly after Draw. See
   `decisions.md`, 2026-09-29. Checked in the browser at 375px and 1200px.
+  Added to the same PR: the white army artwork is now transparent around the
+  flag, and the menu's Game section has an **End game** button (creator and
+  admin only) opening a dialog with a winner dropdown ("No winner" first).
+  It calls the existing `endGame`; no engine or server change.
 - **Issue #202: a Great persons reference in the site menu.** A "Great persons"
   button in the menu opens a modal with one tab per type (six, seven people
   each), name and printed text on each card. Public: `Navigation` renders for
