@@ -19,6 +19,10 @@ _Last updated: 2026-09-29_
 
 ## Done
 
+- **Hand: no heading per kind.** The hand keeps the old client's bucket order
+  but the cards flow in one grid without headings, so units sit beside the Civ
+  card (`decisions.md`, 2026-09-29). Branch `fix/hand-flow-grouping`.
+
 - **Issue #202: a Great persons reference in the site menu.** A "Great persons"
   button in the menu opens a modal with one tab per type (six, seven people
   each), name and printed text on each card. Public: `Navigation` renders for
