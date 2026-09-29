@@ -718,6 +718,14 @@ pieces. Huts and Villages are deliberately **not** capped: they are collected
 during play, not dealt at setup, so the player-count limit does not apply to
 them (issue #116). See `docs/agents/decisions.md`.
 
+**A player may remove any of their own techs, at any time.** The old backend's
+`removeTech` only worked on a hidden tech, and never on the starting tech. Here
+a hidden, a revealed and the starting tech can all be removed from the tech's
+detail dialog, and the tech can then be chosen again (a re-chosen tech is hidden
+until revealed). The coin counter the tech fed is reset. The log line names a
+revealed tech publicly and says only "a hidden technology" for a hidden one;
+both keep the item number. See `docs/agents/decisions.md`.
+
 **A player may freely reposition their own tech pyramid.** Neither the old
 backend nor the old client had any notion of this — it exists so a player can
 reflect what Nikola Tesla's and Sir Isaac Newton's printed cards do (move a

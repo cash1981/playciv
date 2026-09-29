@@ -95,6 +95,8 @@ export function TechPanel({
    * tech read from another player's pyramid.
    */
   const [detailCanResearch, setDetailCanResearch] = useState(false)
+  /** Set when the tech was opened from the viewer's own pyramid, hidden or revealed. */
+  const [detailCanRemove, setDetailCanRemove] = useState(false)
   const detailOpenerRef = useRef<HTMLElement | null>(null)
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
   const requestEpoch = useRef(0)
@@ -192,6 +194,7 @@ export function TechPanel({
                   detailOpenerRef.current = event.currentTarget
                   setDetailTech(tech)
                   setDetailCanResearch(true)
+                  setDetailCanRemove(false)
                 }}
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter' && event.key !== ' ') return
@@ -199,6 +202,7 @@ export function TechPanel({
                   detailOpenerRef.current = event.currentTarget
                   setDetailTech(tech)
                   setDetailCanResearch(true)
+                  setDetailCanRemove(false)
                 }}
               />
             ))}
@@ -216,6 +220,7 @@ export function TechPanel({
           onClose={() => {
             setDetailTech(null)
             setDetailCanResearch(false)
+            setDetailCanRemove(false)
           }}
         >
           <ReferenceCard
@@ -229,6 +234,21 @@ export function TechPanel({
             Card text is shown for reference only; the engine records the chosen tech but does
             not enforce its effects.
           </p>
+          {detailCanRemove && (
+            <div className="row">
+              <button
+                disabled={busy}
+                onClick={() => {
+                  const techName = detailTech.name
+                  setDetailTech(null)
+                  setDetailCanRemove(false)
+                  void run(() => api.removeTech(gameId, techName))
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          )}
           {detailCanResearch && (
             <div className="row">
               <button
@@ -279,6 +299,7 @@ export function TechPanel({
               detailOpenerRef.current = opener
               setDetailTech(item)
               setDetailCanResearch(false)
+              setDetailCanRemove(active.own && historical === null)
             }}
             {...(active.own
               ? {

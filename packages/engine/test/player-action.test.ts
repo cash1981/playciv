@@ -102,6 +102,61 @@ describe('technology', () => {
     expect(remainingTechsForPlayer(after, CASH1981).some((t) => t.name === 'Navy')).toBe(false)
   })
 
+  it('removes a revealed technology, names it in public and keeps the item number', () => {
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
+    state = unwrap(revealTech(state, { playerId: CASH1981, techName: 'Navy' }))
+    const number = state.techs.find((tech) => tech.name === 'Navy')?.itemNumber as number
+    state = unwrap(removeTech(state, { playerId: CASH1981, techName: 'Navy' }))
+
+    const entry = state.log.at(-1)
+    expect(entry?.logType).toBe('REMOVED_TECH')
+    expect(entry?.publicLog).toContain('has removed')
+    expect(entry?.publicLog).toContain('Navy')
+    expect(entry?.publicLog).toContain(uniqueItemNumber(findPlayer(state, CASH1981)?.username as string, number))
+    expect(findPlayer(state, CASH1981)?.techsChosen).toHaveLength(0)
+  })
+
+  it('a hidden removal keeps the item number but not the name', () => {
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
+    const number = state.techs.find((tech) => tech.name === 'Navy')?.itemNumber as number
+    state = unwrap(removeTech(state, { playerId: CASH1981, techName: 'Navy' }))
+
+    expect(state.log.at(-1)?.publicLog).toContain(uniqueItemNumber(findPlayer(state, CASH1981)?.username as string, number))
+  })
+
+  it('a removed technology can be chosen again', () => {
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
+    state = unwrap(removeTech(state, { playerId: CASH1981, techName: 'Navy' }))
+    expect(remainingTechsForPlayer(state, CASH1981).some((t) => t.name === 'Navy')).toBe(true)
+    state = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Navy' }))
+    expect(findPlayer(state, CASH1981)?.techsChosen.map((t) => t.name)).toEqual(['Navy'])
+  })
+
+  it('removes the starting technology, which can then be chosen again', () => {
+    let state = firstCivGame()
+    for (let i = 0; i < 3; i++) {
+      state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CIV' }))
+    }
+    const civ = handOf(state, CASH1981).find((item) => item.kind === 'civ') as CivItem
+    state = unwrap(revealItem(state, { playerId: CASH1981, sheetName: 'CIV', itemNumber: civ.itemNumber }))
+    const start = findPlayer(state, CASH1981)?.techsChosen[0]?.name as string
+    expect(remainingTechsForPlayer(state, CASH1981).some((t) => t.name === start)).toBe(false)
+
+    state = unwrap(removeTech(state, { playerId: CASH1981, techName: start }))
+    expect(findPlayer(state, CASH1981)?.techsChosen).toHaveLength(0)
+    expect(state.log.at(-1)?.publicLog).toContain(start)
+    expect(remainingTechsForPlayer(state, CASH1981).some((t) => t.name === start)).toBe(true)
+
+    state = unwrap(chooseTech(state, { playerId: CASH1981, techName: start }))
+    expect(findPlayer(state, CASH1981)?.techsChosen.map((t) => t.name)).toEqual([start])
+  })
+
+  it("another player's technology cannot be removed", () => {
+    const state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
+    const error = unwrapErr(removeTech(state, { playerId: KARANDRAS1, techName: 'Navy' }))
+    expect(error).toEqual({ kind: 'ITEM_NOT_FOUND' })
+  })
+
   it('a player without access is refused', () => {
     const error = unwrapErr(chooseTech(firstCivGame(), { playerId: 'outsider', techName: 'Navy' }))
     expect(error).toEqual({ kind: 'NO_ACCESS', playerId: 'outsider' })

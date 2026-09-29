@@ -19,6 +19,12 @@ _Last updated: 2026-09-29_
 
 ## Done
 
+- **Remove any own tech.** A player can remove a hidden, revealed or starting
+  tech at any time from the tech detail dialog; the tech becomes choosable
+  again, the coin counter resets, and the log names revealed techs and keeps the
+  item number for hidden ones (`decisions.md`, 2026-09-29). Branch
+  `feat/remove-tech`.
+
 - **Issue #209: compact mobile menu.** The hamburger menu is a full-screen
   sheet on a phone with its own header and a close (X) button that stays put
   while the list scrolls, and a dropdown from the hamburger on desktop. Rows
