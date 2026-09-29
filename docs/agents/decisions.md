@@ -3345,3 +3345,59 @@ view when the composer changes height.
 rendered for a signed-out spectator (the chat routes answer 401). The Log panel
 still shows. While a revision is on screen the Private tab says the private log is
 not part of the history instead of showing an editor.
+
+## 2026-09-29 — Chat orders, slice 3: new turn, start player marker, turn mail (issue #215)
+
+The rules are in `docs/agents/tasks/chat-orders.md`, "Slice 3". These are the
+choices that are not obvious from the code, and where it differs from the brief.
+
+**The start player is derived from the board.** `startPlayerOf` reads the owner
+of the player area holding the centre of the `markers/startplayer` piece, so a
+manual move, undo and redo can never leave it stale. Only when the marker is
+missing or in no player area does it fall back to `startPlayerId`, then to seat 1.
+`startPlayerId` is therefore only the last known start player. Undo does not
+restore it, and does not need to while the marker is on the board.
+
+**The starter of a turn follows the marker for the newest started turn.** The
+brief says the title uses `turnStarters[currentTurn]`, else the marker. Taken
+literally, dragging the marker or undoing the turn start would leave the title
+naming someone who no longer starts the turn, while the turn holder followed the
+marker. So `turnStarters[n]` is used only for a turn older than the newest started
+one (a turn returned to by unmarking Research); for the newest one the derived
+start player is shown. `turnHolder` counts from the same player. The record
+still guards against rotating twice.
+
+**A manual move also updates `startPlayerId`.** When chat orders is on and the
+start marker lands in a different player's area, the move writes
+`<player> is now the start player` to the public log and remembers that player as
+`startPlayerId`. Otherwise "marker in no area: last known" would mean the last
+player the engine chose, not the last one the table chose. With chat orders off a
+move of the marker writes nothing.
+
+**The marker moves as a normal board history entry, in the name of the player who
+finished the turn.** The rotation uses `movePieceUnchecked` (new, `movePiece` now
+calls it after its access check) and `placeUnchecked`, and drops the marker by
+its centre so it lands in the target area whatever the width of the area. The
+player who marked the last Research is the actor, so Undo (which only undoes your
+own last board change) works for them. If the board has lost the marker, a new
+one is placed instead. Switching chat orders on places the marker in the start
+player's name, since the admin may not be in the game; the route has
+`record: false`, so that placement is a board history entry without a game
+revision checkpoint.
+
+**Two log lines from one done.** A done that finishes the turn writes the done
+line and then `Turn N: X starts with the Start of turn phase` (username `System`,
+public only). The server writes a `system` row for each: the second is tagged with
+the new turn and `SOT`, which is what makes the paging boundary exact. Writing
+ahead (an order tagged with the next turn) still puts a tagged row before the
+divider; the boundary is exact for the usual case only. The web shows the row as
+a divider when it is a system row, phase `SOT`, with exactly that wording.
+
+**The mail goes to the new turn holder, even if that is the player who pressed
+done.** The brief says to notify the new holder and the battle mail skips the
+presser, but here it did not seem worth a special case. It uses the shared 30
+minute in-game limit, so a holder mailed by chat a minute ago is not mailed
+again. #217 will change that limit for every mail.
+
+**Decisions not made here.** The classic baton and its buttons are left alone
+when chat orders is off, as before. Enabling does not touch the baton.
