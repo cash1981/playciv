@@ -11,7 +11,8 @@
  * against Cloudflare D1 (production, on the Worker).
  */
 
-import type { FinishedGame, GameState, HighscoreResult } from '@civ/engine'
+import type { FinishedGame, GameState, HighscoreResult, TurnPhase } from '@civ/engine'
+import { TURN_PHASES } from '@civ/engine'
 
 export type { FinishedGame }
 
@@ -42,12 +43,49 @@ export interface PlayerUpdate {
   readonly disableEmail?: boolean
 }
 
+/** What a timeline row is: someone talking, a turn order, or a line from the system. */
+export type ChatKind = 'chat' | 'order' | 'system'
+
 export interface ChatMessage {
   readonly id: string
   readonly gameId: string | null
   readonly username: string
   readonly message: string
   readonly createdAt: string
+  /** Chat orders (issue #215). Rows from before it existed read as `chat`. */
+  readonly kind: ChatKind
+  /** The turn an order or system row belongs to; `null` for plain chat. */
+  readonly turnNumber: number | null
+  readonly phase: TurnPhase | null
+}
+
+/**
+ * A chat row as it may arrive from storage or from a caller that only knows
+ * plain chat: the timeline fields can be missing. Plain chat needs none of them.
+ */
+export type StoredChatRow = Omit<ChatMessage, 'kind' | 'turnNumber' | 'phase'> & {
+  readonly kind?: string | null | undefined
+  readonly turnNumber?: number | null | undefined
+  readonly phase?: string | null | undefined
+}
+
+/**
+ * Reads a stored chat row that may predate chat orders (issue #215): a missing
+ * or unknown `kind` is plain chat and a missing tag is `null`. Every repository
+ * passes rows through this, so the routes only ever see the full shape.
+ */
+export function normalizeChatMessage(row: StoredChatRow): ChatMessage {
+  const kind: ChatKind = row.kind === 'order' || row.kind === 'system' ? row.kind : 'chat'
+  return {
+    id: row.id,
+    gameId: row.gameId,
+    username: row.username,
+    message: row.message,
+    createdAt: row.createdAt,
+    kind,
+    turnNumber: row.turnNumber ?? null,
+    phase: TURN_PHASES.find((phase) => phase === row.phase) ?? null,
+  }
 }
 
 /** One immutable full-state checkpoint. Raw snapshots never leave the repository layer. */
@@ -115,7 +153,8 @@ export interface Repository {
   allGames(): Promise<readonly GameState[]>
   deleteGame(id: string): Promise<boolean>
 
-  appendChat(message: ChatMessage): Promise<void>
+  /** Plain chat may leave out `kind` and the tags; they are stored as `chat` and `null`. */
+  appendChat(message: StoredChatRow): Promise<void>
   chatFor(gameId: string | null): Promise<readonly ChatMessage[]>
 
   /**

@@ -17,6 +17,7 @@ import { migrateGameState } from '@civ/engine'
 
 import { ratedHighscore, resultFromGame } from './rating.js'
 
+import { normalizeChatMessage } from './types.js'
 import type {
   ChatMessage,
   FinishedGame,
@@ -24,6 +25,7 @@ import type {
   GameRevisionMetadata,
   PlayerUpdate,
   Repository,
+  StoredChatRow,
   StoredPlayer,
   UserRole,
 } from './types.js'
@@ -36,7 +38,8 @@ interface Snapshot {
   readonly version: 1
   readonly players: readonly SnapshotPlayer[]
   readonly games: readonly GameState[]
-  readonly chat: readonly ChatMessage[]
+  /** Old files hold rows without `kind` and the tags; `load` fills them in. */
+  readonly chat: readonly StoredChatRow[]
   readonly revisions?: readonly GameRevision[]
   /** Java's two `emailSent` timestamps, kept as one keyed table. */
   readonly emailSent?: Readonly<Record<string, string>>
@@ -100,7 +103,8 @@ export class JsonFileRepository implements Repository {
       const migrated = { ...revision, state: migrateGameState(revision.state) }
       this.revisions.set(this.revisionKey(revision.gameId, revision.revision), migrated)
     }
-    this.chat = [...snapshot.chat]
+    // Rows saved before chat orders (issue #215) have no kind or tags
+    this.chat = snapshot.chat.map(normalizeChatMessage)
     this.highscoreCache = snapshot.highscore
     for (const [scope, at] of Object.entries(snapshot.emailSent ?? {})) {
       this.emailSent.set(scope, at)
@@ -251,8 +255,8 @@ export class JsonFileRepository implements Repository {
     return deleted
   }
 
-  async appendChat(message: ChatMessage): Promise<void> {
-    this.chat.push(message)
+  async appendChat(message: StoredChatRow): Promise<void> {
+    this.chat.push(normalizeChatMessage(message))
     this.scheduleWrite()
   }
 
