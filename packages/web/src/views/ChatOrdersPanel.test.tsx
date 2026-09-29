@@ -113,6 +113,7 @@ function makeView(options: ViewOptions = {}): PlayerView {
             username: 'Alice',
             turnNumber: 4,
             phase: 'CM',
+            startPlayer: 'Bob',
             waitingFor: [
               { username: 'Alice', phase: 'CM' },
               { username: 'Bob', phase: 'SOT' },
@@ -272,6 +273,50 @@ describe('the timeline', () => {
     expect(rows(container)).toEqual(['text of a', 'text of bb', 'text of cc', 'text of ddd', 'text of eeee'])
     // The refresh says there is more, but the older turn is already on screen
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
+  })
+})
+
+describe('the row that starts a turn', () => {
+  const divider = message('dd', {
+    kind: 'system',
+    turnNumber: 2,
+    phase: 'SOT',
+    message: 'Turn 2: Bob starts with the Start of turn phase',
+  })
+
+  it('is a divider, not an ordinary system line', async () => {
+    chatPage.mockResolvedValue(page([
+      message('a', { kind: 'system', turnNumber: 1, phase: 'RESEARCH', message: 'Turn 1 - Bob marked all phases up to research done' }),
+      divider,
+      message('ccc', { message: 'first talk of turn 2' }),
+    ]))
+    const { container } = await renderPanel(makeView())
+
+    const dividers = container.querySelectorAll('.chat-orders-divider')
+    expect(dividers).toHaveLength(1)
+    expect(dividers[0]?.textContent).toBe('Turn 2: Bob starts with the Start of turn phase')
+    // The done line beside it stays an ordinary quiet system row
+    expect(container.querySelectorAll('.chat-orders-system')).toHaveLength(1)
+    expect(rows(container)).toHaveLength(3)
+  })
+
+  it('needs the turn tag, the phase and the exact wording, so chat cannot forge one', async () => {
+    chatPage.mockResolvedValue(page([
+      message('a', { message: 'Turn 9: Bob starts with the Start of turn phase' }),
+      message('bb', { kind: 'system', turnNumber: 3, phase: 'TRADE', message: 'Turn 3: Bob starts with the Start of turn phase' }),
+      message('ccc', { kind: 'system', turnNumber: 2, phase: 'SOT', message: 'Turn 2 - Bob marked start of turn phase done' }),
+    ]))
+    const { container } = await renderPanel(makeView())
+    expect(container.querySelector('.chat-orders-divider')).toBeNull()
+  })
+
+  it('shows under Orders and All but not under Chat', async () => {
+    chatPage.mockResolvedValue(page([divider, message('ccc', { message: 'hello' })]))
+    const { container } = await renderPanel(makeView())
+    await click(filterChip('Orders'))
+    expect(container.querySelector('.chat-orders-divider')).not.toBeNull()
+    await click(filterChip('Chat'))
+    expect(container.querySelector('.chat-orders-divider')).toBeNull()
   })
 })
 
@@ -684,12 +729,21 @@ describe('safe markdown in the timeline', () => {
 
 describe('header helpers', () => {
   it('names who the game is waiting for and where they are', () => {
-    expect(chatOrdersTitle(makeView().activeTurn)).toBe('Turn 4: waiting for Alice (CM), Bob (SOT)')
+    expect(chatOrdersTitle(makeView().activeTurn)).toBe(
+      'Turn 4 · Bob started · waiting for Alice (CM), Bob (SOT)',
+    )
+  })
+
+  it('leaves out the starter when there is none to name', () => {
+    const view = makeView({
+      activeTurn: { playerId: 'p', username: 'Alice', turnNumber: 2, phase: 'SOT', startPlayer: null, waitingFor: [{ username: 'Alice', phase: 'SOT' }] },
+    })
+    expect(chatOrdersTitle(view.activeTurn)).toBe('Turn 2 · waiting for Alice (SOT)')
   })
 
   it('says so when everyone is done, and when nobody is up', () => {
-    const finished = { playerId: 'p', username: 'Alice', turnNumber: 5, phase: 'SOT', waitingFor: [] }
-    expect(chatOrdersTitle(makeView({ activeTurn: finished }).activeTurn)).toBe('Turn 5: everyone is done')
+    const finished = { playerId: 'p', username: 'Alice', turnNumber: 5, phase: 'SOT', startPlayer: 'Cy', waitingFor: [] }
+    expect(chatOrdersTitle(makeView({ activeTurn: finished }).activeTurn)).toBe('Turn 5 · Cy started · everyone is done')
     expect(chatOrdersTitle(null)).toBe('Nobody is up')
   })
 

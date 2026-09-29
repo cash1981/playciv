@@ -670,6 +670,7 @@ describe('chat orders on the game page (issue #215)', () => {
         username: upUsername,
         turnNumber: 4,
         phase: 'CM',
+        startPlayer: 'Bob',
         waitingFor: [
           { username: 'Alice', phase: 'CM' },
           { username: 'Bob', phase: 'SOT' },
@@ -708,7 +709,7 @@ describe('chat orders on the game page (issue #215)', () => {
       await renderGame(chatView('Bob'))
 
       expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-        'Turn 4: waiting for Alice (CM), Bob (SOT)',
+        'Turn 4 · Bob started · waiting for Alice (CM), Bob (SOT)',
       )
       expect(screen.getByRole('heading', { name: 'Chat and orders' })).toBeTruthy()
       expect(screen.queryByRole('heading', { name: 'Turn orders' })).toBeNull()

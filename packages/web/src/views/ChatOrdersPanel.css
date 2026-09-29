@@ -114,6 +114,27 @@
   font-size: 0.85rem;
 }
 
+/* A turn starting: a rule with the text in the middle, so the eye finds it. */
+.chat-orders-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-left: 0;
+  padding: 0.6rem 0;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.chat-orders-divider::before,
+.chat-orders-divider::after {
+  content: '';
+  flex: 1 1 0;
+  border-top: 1px solid var(--accent);
+  opacity: 0.6;
+}
+
 .safe-markdown > :first-child {
   margin-top: 0;
 }

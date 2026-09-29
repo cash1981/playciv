@@ -123,15 +123,32 @@ export function firstOpenPhase(view: PlayerView, turnNumber: number): TurnPhase 
   return TURN_PHASES.find((phase) => turn?.done[phase] !== true) ?? 'RESEARCH'
 }
 
-/** `Turn 4: waiting for Bob (SOT), Carol (Trade)`. */
+/** `Turn 4 · Alice started · waiting for Bob (SOT), Carol (Trade)`. */
 export function chatOrdersTitle(activeTurn: ActiveTurnStatus | null): string {
   if (activeTurn === null) return 'Nobody is up'
   const waiting = activeTurn.waitingFor ?? []
-  if (waiting.length === 0) return `Turn ${activeTurn.turnNumber}: everyone is done`
-  return `Turn ${activeTurn.turnNumber}: waiting for ${waiting
-    .map((entry) => `${entry.username} (${PHASE_SHORT[entry.phase]})`)
-    .join(', ')}`
+  const parts = [
+    `Turn ${activeTurn.turnNumber}`,
+    ...(activeTurn.startPlayer == null ? [] : [`${activeTurn.startPlayer} started`]),
+    waiting.length === 0
+      ? 'everyone is done'
+      : `waiting for ${waiting
+          .map((entry) => `${entry.username} (${PHASE_SHORT[entry.phase]})`)
+          .join(', ')}`,
+  ]
+  return parts.join(' · ')
 }
+
+/**
+ * The system row the server writes when a turn starts. It is told apart by its
+ * text: "Turn 5: Bob starts with the Start of turn phase", from the engine's log
+ * line. The done rows read "Turn 5 - Bob marked ...", so they never match.
+ */
+export const isTurnDivider = (row: TimelineMessageDto): boolean =>
+  row.kind === 'system' &&
+  row.phase === 'SOT' &&
+  row.turnNumber !== null &&
+  /^Turn \d+: .+ starts with the Start of turn phase$/.test(row.message)
 
 /**
  * The question to ask before an out-of-turn draw, or `null` when the viewer may
@@ -186,6 +203,13 @@ function TimelineRow({
   readonly author: ChatAuthor | undefined
   readonly replaced: boolean
 }): React.JSX.Element {
+  if (isTurnDivider(row)) {
+    return (
+      <li className="chat-orders-message chat-orders-divider" aria-label={row.message}>
+        <span>{row.message}</span>
+      </li>
+    )
+  }
   if (row.kind === 'system') {
     return (
       <li className="chat-orders-message chat-orders-system">
