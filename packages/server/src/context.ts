@@ -214,6 +214,15 @@ export interface ApplyToGameOptions {
   readonly after?: (info: ApplyToGameInfo) => Promise<void> | void
 }
 
+/** An ended game is read-only for everyone except the admin role. */
+export function isLockedForViewer(game: GameState, viewer: { readonly role?: string }): boolean {
+  return !game.active && viewer.role !== 'admin'
+}
+
+export function gameEndedResponse(c: Context<{ Variables: Variables }>): Response {
+  return sendError(c, 409, 'GAME_ENDED', 'This game has ended and can no longer be changed')
+}
+
 export async function applyToGame(
   context: AppContext,
   c: Context<{ Variables: Variables }>,
@@ -226,6 +235,8 @@ export async function applyToGame(
   if (game === undefined) {
     return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
   }
+
+  if (isLockedForViewer(game, currentPlayer(c))) return gameEndedResponse(c)
 
   if (clientRev !== undefined && clientRev !== game.rev) {
     return sendError(

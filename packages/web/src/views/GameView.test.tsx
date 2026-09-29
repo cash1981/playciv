@@ -226,6 +226,7 @@ describe('primary game panel order', () => {
         onUnauthorized={vi.fn()}
         onDeleted={vi.fn()}
         onWithdrawn={vi.fn()}
+        onEnded={vi.fn()}
       />,
     )
 
@@ -295,6 +296,7 @@ async function renderHeader(view: PlayerView): Promise<HTMLElement> {
       onUnauthorized={vi.fn()}
       onDeleted={vi.fn()}
       onWithdrawn={vi.fn()}
+      onEnded={vi.fn()}
     />,
   )
   await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toBeTruthy())
@@ -389,6 +391,7 @@ describe('End game wiring', () => {
   const renderWithMenu = async (
     view: PlayerView,
     role: 'user' | 'admin',
+    onEnded: () => void = vi.fn(),
   ): Promise<() => GameMenuActions | null> => {
     localStorage.setItem('civ.autoRefresh', 'false')
     vi.spyOn(api, 'game').mockResolvedValue(view)
@@ -401,6 +404,7 @@ describe('End game wiring', () => {
         onUnauthorized={vi.fn()}
         onDeleted={vi.fn()}
         onWithdrawn={vi.fn()}
+        onEnded={onEnded}
         onGameActions={(actions) => { latest.current = actions }}
       />,
     )
@@ -433,17 +437,56 @@ describe('End game wiring', () => {
     expect(menu()?.canEnd).toBe(false)
   })
 
-  it('ends the game with the chosen winner and reloads the view', async () => {
+  it('ends the game with the chosen winner and leaves the game', async () => {
     const endGame = vi.spyOn(api, 'endGame').mockResolvedValue(creatorView())
-    const menu = await renderWithMenu(creatorView(), 'user')
-    const gameCalls = vi.mocked(api.game).mock.calls.length
+    const onEnded = vi.fn()
+    const menu = await renderWithMenu(creatorView(), 'user', onEnded)
 
     menu()?.onEnd('s3s3')
 
     await waitFor(() => expect(endGame).toHaveBeenCalledTimes(1))
     expect(endGame).toHaveBeenCalledWith('game-1', 's3s3')
-    // `run` reloads the live view after the action.
-    await waitFor(() => expect(vi.mocked(api.game).mock.calls.length).toBeGreaterThan(gameCalls))
+    await waitFor(() => expect(onEnded).toHaveBeenCalledTimes(1))
+  })
+
+  it('stays on the game when ending it fails', async () => {
+    vi.spyOn(api, 'endGame').mockRejectedValue(new Error('boom'))
+    const onEnded = vi.fn()
+    const menu = await renderWithMenu(creatorView(), 'user', onEnded)
+
+    menu()?.onEnd(undefined)
+
+    await screen.findByText('boom')
+    expect(onEnded).not.toHaveBeenCalled()
+  })
+
+  describe('an ended game', () => {
+    const renderEnded = async (role: 'user' | 'admin'): Promise<void> => {
+      localStorage.setItem('civ.autoRefresh', 'false')
+      vi.spyOn(api, 'game').mockResolvedValue({ ...creatorView(), active: false })
+      vi.spyOn(api, 'revisions').mockResolvedValue([])
+      render(
+        <GameView
+          gameId="game-1"
+          player={{ username: 'viewer', role } as unknown as PlayerDto}
+          onUnauthorized={vi.fn()}
+          onDeleted={vi.fn()}
+          onWithdrawn={vi.fn()}
+          onEnded={vi.fn()}
+        />,
+      )
+      await screen.findByText('Take the turn')
+    }
+
+    it('disables the actions for a player', async () => {
+      await renderEnded('user')
+      expect((screen.getByText('Take the turn') as HTMLButtonElement).disabled).toBe(true)
+    })
+
+    it('leaves the actions to the admin role', async () => {
+      await renderEnded('admin')
+      expect((screen.getByText('Take the turn') as HTMLButtonElement).disabled).toBe(false)
+    })
   })
 
   it('ends the game without a winner argument for No winner', async () => {
@@ -523,6 +566,7 @@ describe('HandPanel groups items by kind (issue #190 follow-up)', () => {
         onUnauthorized={vi.fn()}
         onDeleted={vi.fn()}
         onWithdrawn={vi.fn()}
+        onEnded={vi.fn()}
       />,
     )
 
