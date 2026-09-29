@@ -3089,3 +3089,19 @@ had no interactive board). The rules, agreed with the human:
 - **Placing a figure exactly on another figure** is done by dragging, or with
   the Move button (kept as an explicit fallback: in Move mode any tap is the
   destination). A tap on the figure itself selects it.
+
+## 2026-09-29 — Hand: ordered by kind, but no heading per kind
+
+**Decision.** `HandPanel` keeps the old client's bucket order (Civilizations,
+Items, Great Persons, Units, Tiles, Culture Cards, Huts, Villages) but renders
+no heading row per bucket. The cards flow in one continuous grid.
+
+**Why.** The human asked for it: a heading forced each kind onto its own row, so
+a single Civ card left the rest of its row empty and the hand took more
+vertical space. Without headings, the units follow the Civ card directly.
+
+**Consequences.** This departs from `old-civ-web`'s `useritems.html`, which
+rendered one heading per non-empty bucket, and supersedes the "under the same
+eight headings" half of the 2026-09-28 "Issue #190 follow-up" entry. The order
+is unchanged. `BUCKET_LABEL` and the `.item-group-heading` CSS are no longer
+used; the CSS is removed.
