@@ -2185,6 +2185,31 @@ describe('a whole round', () => {
     state = await repo.findGame(gameId)
     expect(state?.active).toBe(false)
     expect(state?.winner).toBe('Itchi')
+
+    // An ended game is read-only, chat included.
+    for (const path of ['endturn', 'chat']) {
+      const locked = await inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/${path}`,
+        headers: bearer(starter),
+        payload: { message: 'hello' },
+      })
+      expect(locked.status).toBe(409)
+      expect(JSON.parse(locked.body)).toMatchObject({ error: 'GAME_ENDED' })
+    }
+    expect((await repo.findGame(gameId))?.rev).toBe(state?.rev)
+
+    // The admin role can still act.
+    const admin = await register('admin-after-end')
+    const adminPlayer = await repo.findPlayerByUsername('admin-after-end')
+    await repo.updatePlayer(adminPlayer?.id as string, { role: 'admin' })
+    const adminChat = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/chat`,
+      headers: bearer(admin),
+      payload: { message: 'still here' },
+    })
+    expect(adminChat.status).toBe(201)
   })
 })
 

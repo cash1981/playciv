@@ -215,6 +215,7 @@ export function App(): React.JSX.Element {
           onUnauthorized={signOut}
           onDeleted={backToGames}
           onWithdrawn={backToGames}
+          onEnded={backToGames}
           onGameActions={setGameActions}
         />
         <Footer />

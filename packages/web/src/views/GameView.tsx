@@ -91,6 +91,8 @@ interface Props {
   readonly onUnauthorized: () => void
   readonly onDeleted: () => void
   readonly onWithdrawn: () => void
+  /** The game was ended by this viewer; leave the now read-only game. */
+  readonly onEnded: () => void
   /**
    * Reports Withdraw/Delete/End game for the site menu's "Game" section (issue #177);
    * `null` while there is nothing to offer yet (spectator who is not an
@@ -256,6 +258,7 @@ export function GameView({
   onUnauthorized,
   onDeleted,
   onWithdrawn,
+  onEnded,
   onGameActions,
 }: Props): React.JSX.Element {
   const [view, setView] = useState<PlayerView | null>(null)
@@ -445,11 +448,26 @@ export function GameView({
       },
       endPlayers: currentView === null ? [] : winnerCandidatesOf(currentView),
       onEnd: (winner) => {
-        void run(() => (winner === undefined ? api.endGame(gameId) : api.endGame(gameId, winner)))
+        void (async () => {
+          setBusy(true)
+          setError(null)
+          try {
+            await (winner === undefined ? api.endGame(gameId) : api.endGame(gameId, winner))
+            // Reload first: if leaving is vetoed by unsaved turn orders, the
+            // view that stays must already be the locked, ended one.
+            await reload()
+            onEnded()
+          } catch (caught) {
+            if (isUnauthorized(caught)) return onUnauthorized()
+            setError(errorMessage(caught))
+          } finally {
+            setBusy(false)
+          }
+        })()
       },
     })
     return () => onGameActions(null)
-  }, [onGameActions, view, historical, selectedRevision, busy, gameId, player, onWithdrawn, onDeleted, onUnauthorized, run])
+  }, [onGameActions, view, historical, selectedRevision, busy, gameId, player, onWithdrawn, onDeleted, onEnded, onUnauthorized, reload, run])
 
   if (view === null) {
     return (
@@ -462,7 +480,11 @@ export function GameView({
 
   const replaying = selectedRevision !== null && historical !== null
   const displayedView = replaying ? historical.view : view
-  const interactionBusy = busy || replaying
+  // An ended game is read-only for everyone except the admin role, which the
+  // server also enforces. Judged on the live game: a replayed revision of an
+  // ended game was still active when it was recorded.
+  const locked = !view.active && player?.role !== 'admin'
+  const interactionBusy = busy || replaying || locked
   const you = displayedView.you
   const yourTurn = you?.yourTurn === true
   const activePlayer = activePlayerOf(displayedView)
@@ -538,7 +560,7 @@ export function GameView({
         numOfPlayers={displayedView.numOfPlayers}
         areas={displayedView.boardAreas}
         busy={interactionBusy}
-        readOnly={replaying}
+        readOnly={replaying || locked}
         youId={you?.playerId ?? null}
         viewerIsRussia={you?.civilization?.name === 'Russians'}
         run={run}
@@ -552,8 +574,8 @@ export function GameView({
         <div className="panel-pair">
           <LogPanel
             gameId={gameId}
-            busy={busy}
-            readOnly={replaying}
+            busy={busy || locked}
+            readOnly={replaying || locked}
             run={run}
             reloadCount={reloadCount}
             historical={historical}
@@ -561,7 +583,7 @@ export function GameView({
           {player !== null && (
             <ChatPanel
               gameId={gameId}
-              busy={busy}
+              busy={busy || locked}
               run={run}
               player={player}
               reloadCount={reloadCount}
@@ -579,14 +601,14 @@ export function GameView({
           gameId={gameId}
           view={displayedView}
           busy={interactionBusy}
-          readOnly={displayedView.you === null || replaying}
+          readOnly={displayedView.you === null || replaying || locked}
           run={run}
         />
         <WondersPanel
           gameId={gameId}
           view={displayedView}
           busy={interactionBusy}
-          readOnly={displayedView.you === null || replaying}
+          readOnly={displayedView.you === null || replaying || locked}
           run={run}
         />
         <RevealedPanel gameId={gameId} reloadCount={reloadCount} historical={historical} />

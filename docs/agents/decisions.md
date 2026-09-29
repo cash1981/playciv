@@ -3151,6 +3151,22 @@ eight headings" half of the 2026-09-28 "Issue #190 follow-up" entry. The order
 is unchanged. `BUCKET_LABEL` and the `.item-group-heading` CSS are no longer
 used; the CSS is removed.
 
+## 2026-09-29 — An ended game is read-only, except for the admin role
+
+**Decision.** Once a game is ended (`active: false`), the server rejects every
+change to it with `409 GAME_ENDED`: all game actions and in-game chat. Only users with the `admin` role are exempt. The client disables every
+control to match, and the player who ends a game is sent back to the game list.
+A finished game can still be opened to read the board, the log and the history.
+
+**Why.** The human asked for it: after End game a player could still play on.
+They also said what the old system did does not matter for this.
+
+**Consequences.** The old system was deliberately not consulted for
+this, so it may differ from `old-civ-rest`. The guard sits in `applyToGame` (`packages/server/src/context.ts`), so any
+new route that mutates a game is covered by default; a route that saves a game
+or chat some other way must call `isLockedForViewer` itself. Delete game is not
+locked: a creator can still delete their own finished game.
+
 ## 2026-09-29 — Compact menu with Rules and Actions submenus (issue #209)
 
 The human asked for smaller menu items, the rules grouped in a submenu called

@@ -27,6 +27,8 @@ import {
   authenticateWith,
   createGameRevision,
   currentPlayer,
+  gameEndedResponse,
+  isLockedForViewer,
   optionalNumber,
   optionalString,
   readGame,
@@ -508,6 +510,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     }
 
     const me = currentPlayer(c)
+    if (isLockedForViewer(game, me)) return gameEndedResponse(c)
     const entry: ChatMessage = {
       id: newId(),
       gameId,
