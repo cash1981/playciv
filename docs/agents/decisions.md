@@ -3042,3 +3042,24 @@ reference for this decision — `old-civ-web` has no board or map view at all,
 so nothing here overrides ported behaviour; the snapping itself is this
 rewrite's own design, introduced for the mouse-drag case, and the nudge is a
 new, deliberate carve-out from it.
+
+## Combat bonus is derived, not typed in (issue #197)
+
+The `combat` stat on the status board is now calculated by `combatBonusOf` from
+the board and the hand, and the Combat cell in the Status panel is read-only.
+The values (Barracks and Shipyard +2, Academy +4, General +4, MIC +4 per two
+investments up to six, Fundamentalism +4, French +2, owned Statue of Zeus +6)
+were specified by the human; there is no old-system reference, since the old
+status sheet was typed by hand.
+
+- **"Navy" is the Shipyard.** The issue lists Navy among the buildings; the
+  board has no asset called Navy, and Shipyard is the naval building.
+- **Manual edits are refused, not layered on top.** The human chose this for
+  now (`STAT_NOT_EDITABLE`). Combat therefore can no longer be negative, and a
+  `combat` value stored in older saved games is ignored on read.
+- **Attribution follows `buildingCountOf`.** Buildings and generals count for
+  whoever placed the piece (`placedBy`); moving a piece does not change that.
+  The Statue of Zeus counts only for its explicit wonder owner while it is in
+  the Wonders area, as with The Internet.
+- **No new hidden information.** Every input (board, MIC, government,
+  civilization) was already public to all players.

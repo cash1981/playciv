@@ -1067,13 +1067,17 @@ export function setPlayerStat<K extends PlayerStatKey>(
     return err({ kind: 'UNKNOWN_STAT', stat: String(input.stat) })
   }
 
+  // Combat is derived from the board and the hand (issue #197), so it cannot be typed in.
+  if (input.stat === 'combat') {
+    return err({ kind: 'STAT_NOT_EDITABLE', stat: input.stat })
+  }
+
   // `input.value` is `PlayerStatValue<K>`, a type the compiler cannot narrow
   // through a generic key; the runtime checks below are what make the cast safe.
   const value = input.value as number | string
 
   // Movement (issue #102) is the one value written as an expression, `3+1`, to
-  // record a natural-religion bonus. Every other stat stays a plain integer;
-  // Combat alone may be negative.
+  // record a natural-religion bonus. Every other stat stays a plain integer.
   let storedValue: number | string
   if (input.stat === 'mvmt') {
     if (!isMovementValue(value)) {
@@ -1083,8 +1087,7 @@ export function setPlayerStat<K extends PlayerStatKey>(
     // saved before Movement was text keep working.
     storedValue = String(value)
   } else {
-    const allowsNegative = input.stat === 'combat'
-    if (typeof value !== 'number' || !Number.isInteger(value) || (!allowsNegative && value < 0)) {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
       return err({ kind: 'INVALID_STAT_VALUE', value })
     }
     storedValue = value

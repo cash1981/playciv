@@ -18,8 +18,9 @@ import {
   rotateArenaUnit,
   setArenaUnitStat,
 } from '../src/actions/arena.js'
+import { placePiece } from '../src/actions/board.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
-import { endTurn, setPlayerStat } from '../src/actions/player.js'
+import { endTurn } from '../src/actions/player.js'
 import { isUnit } from '../src/item.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -749,17 +750,13 @@ describe('endBattleAction', () => {
     expect(logEntry.publicLog).toContain('cash1981 won with 5 HP vs 2 HP')
   })
 
-  it('adds each side\'s combat bonus (issue #43 stat) to its HP before deciding the winner', () => {
+  it('adds each side\'s combat bonus (issue #197, derived) to its HP before deciding the winner', () => {
     let state = withBattlehand(CASH1981)
     state = addBattlehand(state, KARANDRAS1)
     state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    // An Academy placed by the defender is worth +4 combat bonus (issue #197).
     state = unwrap(
-      setPlayerStat(state, {
-        editorPlayerId: CASH1981,
-        targetPlayerId: KARANDRAS1,
-        stat: 'combat',
-        value: 5,
-      }),
+      placePiece(state, { playerId: KARANDRAS1, assetId: 'buildings/academy', x: 40, y: 300 }),
     )
 
     const attackerUnit = findPlayer(state, CASH1981)!.battlehand[0]!
@@ -787,9 +784,9 @@ describe('endBattleAction', () => {
 
     state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
 
-    // Defender's 2 HP + the 5-point combat bonus (7) beats the attacker's 5.
+    // Defender's 2 HP + the 4-point combat bonus (6) beats the attacker's 5.
     const logEntry = state.log[state.log.length - 1]!
-    expect(logEntry.publicLog).toContain('Karandras1 won with 7 HP vs 5 HP')
+    expect(logEntry.publicLog).toContain('Karandras1 won with 6 HP vs 5 HP')
   })
 
   it('a draw goes to the defender', () => {

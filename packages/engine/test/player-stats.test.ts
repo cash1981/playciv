@@ -148,19 +148,10 @@ describe('setPlayerStat', () => {
         value: 5,
       }),
     )
-    state = unwrap(
-      setPlayerStat(state, {
-        editorPlayerId: CASH1981,
-        targetPlayerId: CASH1981,
-        stat: 'combat',
-        value: 2,
-      }),
-    )
 
     expect(findPlayer(state, CASH1981)?.stats).toEqual({
       ...DEFAULT_PLAYER_STATS,
       culture: 5,
-      combat: 2,
     })
   })
 
@@ -228,16 +219,16 @@ describe('setPlayerStat', () => {
     expect(findPlayer(state, CASH1981)?.stats.culture).toBe(0)
   })
 
-  it('accepts a negative combat modifier', () => {
-    const state = unwrap(
+  it('refuses to set combat, which is calculated from the board (issue #197)', () => {
+    const error = unwrapErr(
       setPlayerStat(firstCivGame(), {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
         stat: 'combat',
-        value: -1,
+        value: 3,
       }),
     )
-    expect(findPlayer(state, CASH1981)?.stats.combat).toBe(-1)
+    expect(error).toEqual({ kind: 'STAT_NOT_EDITABLE', stat: 'combat' })
   })
 
   it('accepts a Movement expression with a printed natural-religion bonus', () => {
@@ -296,8 +287,8 @@ describe('setPlayerStat', () => {
       setPlayerStat(firstCivGame(), {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
-        stat: 'combat',
-        // @ts-expect-error — a Movement expression is not a valid combat value
+        stat: 'culture',
+        // @ts-expect-error — a Movement expression is not a valid culture value
         value: '3+1',
       }),
     )
