@@ -473,6 +473,12 @@ card of the same type — an unacceptable trade for retrofitting old data. See
 
 ## Deliberate improvements
 
+**The hand has no heading per kind.** The hand keeps the old client's order
+(civilizations, items, great persons, units, tiles, culture cards, huts,
+villages), but the cards flow in one grid instead of one section per kind, so
+short groups do not leave empty space. `useritems.html` rendered a heading per
+kind. See `docs/agents/decisions.md`, 2026-09-29.
+
 **Opponents' public hands show face-down cards.** Issue #142 adds one generic
 card back for each culture card, hut, village, great person and unit in another
 player's hand, grouped by player and category. Spectators see the same counts.
