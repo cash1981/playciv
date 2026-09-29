@@ -11,6 +11,7 @@
  * as the key format.
  */
 
+import type { BoardPiece } from './board.js'
 import { areaAt, playerAreas, START_PLAYER_ID } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
@@ -316,23 +317,15 @@ export const seatAfter = (seats: readonly Playerhand[], playernumber: number): P
 /**
  * Who the start player is, derived so manual moves, undo and redo cannot leave it
  * stale: the owner of the player area that holds the centre of the
- * `markers/startplayer` piece. With no marker, or one outside every player's
- * area, it is the last one the engine put in place (`startPlayerId`), and with
+ * `markers/startplayer` piece (see `startMarkerOf` when there are several). With
+ * no marker, or one outside every player's area, it is the last one the engine put in place (`startPlayerId`), and with
  * none of those seat 1. A start player who has withdrawn gives way to the next
  * seat. `undefined` when there are no active players.
  */
 export function startPlayerOf(state: GameState): Playerhand | undefined {
   const seats = bySeat(state.players)
-  const marker = state.board.pieces.find((piece) => piece.assetId === START_PLAYER_ID)
-  if (marker !== undefined) {
-    const area = areaAt(
-      playerAreas(state.board, seats),
-      marker.x + marker.width / 2,
-      marker.y + marker.height / 2,
-    )
-    const owner = seats.find((player) => player.playerId === area?.playerId)
-    if (owner !== undefined) return owner
-  }
+  const owner = startMarkerOf(state)?.owner
+  if (owner !== undefined) return owner
 
   const lastKnown = state.startPlayerId
   if (lastKnown === null) return seats[0]
@@ -340,6 +333,35 @@ export function startPlayerOf(state: GameState): Playerhand | undefined {
   if (active !== undefined) return active
   const withdrawn = state.withdrawnPlayers.find((player) => player.playerId === lastKnown)
   return withdrawn === undefined ? seats[0] : seatAfter(seats, withdrawn.playernumber)
+}
+
+/**
+ * The start player marker that counts, and who owns the area it is in. The
+ * palette does not limit the marker, so there can be more than one, and the one
+ * touched last wins: the last one in the piece list whose centre lies in a
+ * player's area. Every move re-inserts a piece at the end, so that is the marker
+ * somebody handled most recently, and it does not depend on which was placed
+ * first. A marker outside every area is ignored while another one is inside.
+ *
+ * With none inside an area, `owner` is `undefined` and `piece` is the last
+ * marker on the board, so a rule that moves the marker moves that one. Undefined
+ * when the board has no marker. `startPlayerOf`, the rotation and the manual
+ * move announcement all use this, so they cannot disagree about which marker
+ * decides.
+ */
+export function startMarkerOf(
+  state: GameState,
+): { readonly piece: BoardPiece; readonly owner: Playerhand | undefined } | undefined {
+  const seats = bySeat(state.players)
+  const markers = state.board.pieces.filter((piece) => piece.assetId === START_PLAYER_ID)
+  const areas = playerAreas(state.board, seats)
+  for (const piece of [...markers].reverse()) {
+    const area = areaAt(areas, piece.x + piece.width / 2, piece.y + piece.height / 2)
+    const owner = seats.find((player) => player.playerId === area?.playerId)
+    if (owner !== undefined) return { piece, owner }
+  }
+  const last = markers.at(-1)
+  return last === undefined ? undefined : { piece: last, owner: undefined }
 }
 
 /**

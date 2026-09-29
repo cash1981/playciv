@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   movePiece,
+  placePiece,
   placeUnchecked,
   redoLastBoardChange,
   removePiece,
@@ -288,6 +289,124 @@ describe('the marker moved by hand', () => {
     expect(state.log).toHaveLength(logLength)
     expect(state.startPlayerId).toBeNull()
     expect(toPlayerView(state, CASH1981).activeTurn).not.toHaveProperty('startPlayer')
+  })
+})
+
+describe('more than one start player marker', () => {
+  // The palette does not limit the marker, so a second one can be placed. The
+  // one touched last wins.
+  const dropMarker = (state: GameState, x: number, y: number): GameState =>
+    unwrap(placePiece(state, { playerId: CASH1981, assetId: START_PLAYER_ID, x, y }))
+
+  const centreOfArea = (state: GameState, username: string): { x: number; y: number } => {
+    const area = playerAreas(state.board, state.players).find((candidate) => candidate.username === username)
+    if (area === undefined) throw new Error(`no area for ${username}`)
+    return { x: area.x + area.width / 2 - 72, y: area.y + area.height / 2 - 72 }
+  }
+
+  /** Who owns the area each marker is in, oldest first; `undefined` for one outside every area. */
+  const owners = (state: GameState): (string | undefined)[] =>
+    state.board.pieces
+      .filter((piece) => piece.assetId === START_PLAYER_ID)
+      .map(
+        (piece) =>
+          areaAt(
+            playerAreas(state.board, state.players),
+            piece.x + piece.width / 2,
+            piece.y + piece.height / 2,
+          )?.username,
+      )
+
+  it('a second marker placed in another area makes that area\'s owner the start player', () => {
+    const start = chatGame()
+    const at = centreOfArea(start, 'Itchi')
+
+    const state = dropMarker(start, at.x, at.y)
+
+    expect(owners(state)).toEqual(['cash1981', 'Itchi'])
+    expect(startPlayerOf(state)?.username).toBe('Itchi')
+    expect(state.log.at(-1)?.publicLog).toBe('Itchi is now the start player')
+    expect(state.startPlayerId).toBe(ITCHI)
+    expect(turnHolder(state)?.username).toBe('Itchi')
+  })
+
+  it('rotation moves the marker that decides, and the title, holder and log agree', () => {
+    const start = chatGame()
+    const at = centreOfArea(start, 'Itchi')
+    const two = dropMarker(start, at.x, at.y)
+    const deciding = two.board.pieces.filter((piece) => piece.assetId === START_PLAYER_ID)[1]
+
+    const state = finishTurn(two, 1)
+
+    // From Itchi the next seat is Chul. The older marker stays where it was.
+    expect(startPlayerOf(state)?.username).toBe('Chul')
+    expect(owners(state)).toEqual(['cash1981', 'Chul'])
+    expect(state.board.pieces.filter((piece) => piece.assetId === START_PLAYER_ID)[1]?.id).toBe(deciding?.id)
+    expect(startLines(state)).toEqual(['Turn 2: Chul starts with the Start of turn phase'])
+    expect(toPlayerView(state, CASH1981).activeTurn?.startPlayer).toBe('Chul')
+    expect(turnHolder(state)?.username).toBe('Chul')
+    expect(state.turnStarters[2]).toBe('Chul')
+  })
+
+  it('keeps deciding after the first rotation, when the moved piece sits last in the list', () => {
+    const start = chatGame()
+    // The first marker is the one that rotates; a second is dropped in an area later
+    let state = finishTurn(start, 1)
+    expect(startPlayerOf(state)?.username).toBe('Karandras1')
+    expect(owners(state)).toEqual(['Karandras1'])
+
+    const at = centreOfArea(state, 'Chul')
+    state = dropMarker(state, at.x, at.y)
+    expect(startPlayerOf(state)?.username).toBe('Chul')
+
+    state = finishTurn(state, 2)
+    expect(startPlayerOf(state)?.username).toBe('cash1981')
+    expect(toPlayerView(state, ITCHI).activeTurn?.startPlayer).toBe('cash1981')
+  })
+
+  it('ignores a marker outside every player area', () => {
+    let state = chatGame()
+    const logLength = state.log.length
+    state = dropMarker(state, 200, mapTop(state.board) + 200)
+
+    expect(owners(state)).toEqual(['cash1981', undefined])
+    expect(startPlayerOf(state)?.username).toBe('cash1981')
+    expect(state.log).toHaveLength(logLength)
+
+    // It cannot take over after a rotation either: the marker in the area moves
+    state = finishTurn(state, 1)
+    expect(startPlayerOf(state)?.username).toBe('Karandras1')
+    expect(owners(state)).toEqual([undefined, 'Karandras1'])
+    expect(toPlayerView(state, CHUL).activeTurn?.startPlayer).toBe('Karandras1')
+    expect(turnHolder(state)?.username).toBe('Karandras1')
+  })
+
+  it('with every marker outside the areas, the last one is what rotation moves', () => {
+    let state = chatGame()
+    const first = marker(state)
+    if (first === undefined) throw new Error('no marker')
+    state = unwrap(movePiece(state, { playerId: CASH1981, pieceId: first.id, x: 200, y: mapTop(state.board) + 200 }))
+    state = dropMarker(state, 400, mapTop(state.board) + 200)
+    const last = state.board.pieces.filter((piece) => piece.assetId === START_PLAYER_ID)[1]
+    expect(owners(state)).toEqual([undefined, undefined])
+
+    state = finishTurn(state, 1)
+
+    // Last known start player was cash1981, so the next seat is Karandras1
+    expect(startPlayerOf(state)?.username).toBe('Karandras1')
+    expect(owners(state)).toEqual([undefined, 'Karandras1'])
+    expect(state.board.pieces.filter((piece) => piece.assetId === START_PLAYER_ID)[1]?.id).toBe(last?.id)
+  })
+
+  it('changes nothing for a classic game: a second marker is placed, nothing is announced', () => {
+    const start = firstCivGame()
+    const at = centreOfArea(start, 'Itchi')
+    const state = dropMarker(dropMarker(start, at.x, at.y), at.x, at.y)
+
+    expect(markers(state)).toBe(2)
+    expect(state.log).toHaveLength(start.log.length)
+    expect(state.startPlayerId).toBeNull()
+    expect(state.turnStarters).toEqual({})
   })
 })
 

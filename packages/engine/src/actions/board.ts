@@ -41,7 +41,7 @@ import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, hasUserAccess } from '../state.js'
-import { startPlayerOf } from '../turn.js'
+import { startMarkerOf, startPlayerOf } from '../turn.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -160,7 +160,10 @@ export function placePiece(state: GameState, input: PlacePieceInput): ActionResu
   if (placed === undefined) {
     return err({ kind: 'BOARD_ASSET_NOT_FOUND', assetId: input.assetId })
   }
-  return ok(placed)
+  // A second start player marker dropped in another area takes over
+  // An ordinary piece goes on top of the list, so the new one is the last
+  const newest = placed.board.pieces.at(-1)
+  return ok(newest === undefined ? placed : announceStartPlayer(state, placed, newest.id))
 }
 
 /**
@@ -400,7 +403,7 @@ export function placeStartMarker(
   const x = area.x + (area.width - asset.width) / 2
   const y = area.y + (area.height - asset.height) / 2
   const stamp = at === undefined ? {} : { at }
-  const marker = state.board.pieces.find((piece) => piece.assetId === START_PLAYER_ID)
+  const marker = startMarkerOf(state)?.piece
   const placed =
     marker === undefined
       ? placeUnchecked(state, { playerId: actorId, assetId: START_PLAYER_ID, x, y, ...stamp })

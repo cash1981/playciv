@@ -3401,3 +3401,17 @@ again. #217 will change that limit for every mail.
 
 **Decisions not made here.** The classic baton and its buttons are left alone
 when chat orders is off, as before. Enabling does not touch the baton.
+
+**More than one start player marker: the one touched last wins (issue #215, slice
+3 review).** The palette does not limit `markers/startplayer`, and classic games
+must not change, so a second marker can be placed. `startMarkerOf` picks the last
+marker in the piece list whose centre is inside a player's area. Every move
+re-inserts a piece at the end of the list, so that is the marker somebody handled
+most recently, and the result does not depend on which one was placed first. A
+marker outside every area is ignored while another is inside; with none inside,
+`startPlayerId` and then seat 1 decide, as before. The rotation, the manual-move
+announcement and `startPlayerOf` all use that one finder, so the marker that
+rotates is the marker that decides. Placing a marker from the palette now also
+writes `<player> is now the start player` when it changes the answer, with chat
+orders on. The alternative, capping the asset at one, would have changed classic
+games.
