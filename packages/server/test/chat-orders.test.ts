@@ -289,7 +289,9 @@ describe('an ended game', () => {
     const game = await startedGame('ended')
     await chatOn(game)
     await post(game.seat1, `/api/games/${game.gameId}/turns/done`, { phase: 'SOT' })
-    const ended = await post(game.seat1, `/api/games/${game.gameId}/end`, { winner: game.name2 })
+    // Seats are shuffled, so seat 1 is not necessarily the creator; an admin can always end a game
+    const admin = await registerAdmin('ended-admin')
+    const ended = await post(admin, `/api/games/${game.gameId}/end`, { winner: game.name2 })
     expect(ended.status).toBe(200)
     const revision = (await repo.findGame(game.gameId))?.rev
     const rowsBefore = (await repo.chatFor(game.gameId)).length
@@ -307,7 +309,6 @@ describe('an ended game', () => {
     expect(await repo.chatFor(game.gameId)).toHaveLength(rowsBefore)
 
     // The admin role can still switch the setting
-    const admin = await registerAdmin('ended-admin')
     expect((await post(admin, `/api/admin/games/${game.gameId}/chat-orders`, { enabled: false })).status).toBe(200)
   })
 })
