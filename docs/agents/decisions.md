@@ -3055,7 +3055,8 @@ were specified by the human; there is no old-system reference, since the old
 status sheet was typed by hand.
 
 - **"Navy" is the Shipyard.** The issue lists Navy among the buildings; the
-  board has no asset called Navy, and Shipyard is the naval building.
+  board has no asset called Navy, and Shipyard is the naval building. Confirmed by the
+  human (Shipyard, not Harbor).
 - **Supersedes the signed, editable Combat of issue #43.** Older entries that
   call Combat a signed manual modifier no longer hold.
 - **Manual edits are refused, not layered on top.** The human chose this for
