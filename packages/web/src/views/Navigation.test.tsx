@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { Navigation } from './Navigation.js'
+import type { GameMenuActions } from './Navigation.js'
 
 afterEach(() => {
   cleanup()
@@ -110,6 +111,9 @@ describe('Navigation hamburger menu', () => {
   })
 })
 
+/** The End game fields, for tests that are not about ending a game. */
+const noEnd = { canEnd: false, endDisabled: false, endPlayers: [] as readonly string[], onEnd: vi.fn() }
+
 describe('Navigation game menu section', () => {
   it('is absent when no game page is showing', () => {
     render(
@@ -140,7 +144,7 @@ describe('Navigation game menu section', () => {
         onNavigate={vi.fn()}
         onSignOut={vi.fn()}
         onToggleTheme={vi.fn()}
-        game={{ canWithdraw: true, withdrawDisabled: false, onWithdraw, canDelete: false, deleteDisabled: false, onDelete }}
+        game={{ canWithdraw: true, withdrawDisabled: false, onWithdraw, canDelete: false, deleteDisabled: false, onDelete, ...noEnd }}
       />,
     )
 
@@ -162,7 +166,7 @@ describe('Navigation game menu section', () => {
         onNavigate={vi.fn()}
         onSignOut={vi.fn()}
         onToggleTheme={vi.fn()}
-        game={{ canWithdraw: true, withdrawDisabled: false, onWithdraw: vi.fn(), canDelete: true, deleteDisabled: false, onDelete }}
+        game={{ canWithdraw: true, withdrawDisabled: false, onWithdraw: vi.fn(), canDelete: true, deleteDisabled: false, onDelete, ...noEnd }}
       />,
     )
 
@@ -186,6 +190,7 @@ describe('Navigation game menu section', () => {
           canDelete: true,
           deleteDisabled: false,
           onDelete: vi.fn(),
+          ...noEnd,
         }}
       />,
     )
@@ -210,6 +215,7 @@ describe('Navigation game menu section', () => {
           canDelete: true,
           deleteDisabled: false,
           onDelete: vi.fn(),
+          ...noEnd,
         }}
       />,
     )
@@ -305,5 +311,134 @@ describe('Navigation great persons reference', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     // The opener is inside the collapsed dropdown, so focus goes to the hamburger.
     expect(document.activeElement).toBe(container.querySelector('details.main-menu > summary'))
+  })
+})
+
+describe('Navigation end game dialog', () => {
+  const creator = { id: 'p1', username: 'cash1981', email: null, role: 'user' as const, disabled: false }
+
+  const gameMenu = (
+    overrides: Partial<GameMenuActions> = {},
+  ): GameMenuActions => ({
+    canWithdraw: true,
+    withdrawDisabled: false,
+    onWithdraw: vi.fn(),
+    canDelete: true,
+    deleteDisabled: false,
+    onDelete: vi.fn(),
+    canEnd: true,
+    endDisabled: false,
+    endPlayers: ['cash1981', 's3s3', 'ola'],
+    onEnd: vi.fn(),
+    ...overrides,
+  })
+
+  const menuElement = (game: GameMenuActions): React.JSX.Element => (
+    <Navigation
+      player={creator}
+      screen="game"
+      theme="dark"
+      onNavigate={vi.fn()}
+      onSignOut={vi.fn()}
+      onToggleTheme={vi.fn()}
+      game={game}
+    />
+  )
+
+  const openDialog = (): HTMLElement => {
+    fireEvent.click(screen.getByRole('button', { name: 'End game' }))
+    return screen.getByRole('dialog', { name: 'End game' })
+  }
+
+  it('has no End game button when `canEnd` is false', () => {
+    render(menuElement(gameMenu({ canEnd: false })))
+    expect(screen.queryByRole('button', { name: 'End game' })).toBeNull()
+  })
+
+  it('opens a dialog listing No winner first, then every player', () => {
+    const { container } = render(menuElement(gameMenu()))
+    const menu = container.querySelector('details.main-menu') as HTMLDetailsElement
+    menu.setAttribute('open', '')
+
+    const dialog = openDialog()
+
+    // The dialog lives outside the collapsed menu, so it stays visible.
+    expect(menu.hasAttribute('open')).toBe(false)
+    expect(dialog.closest('details')).toBeNull()
+    const options = within(dialog).getAllByRole('option').map((option) => option.textContent)
+    expect(options).toEqual(['No winner', 'cash1981', 's3s3', 'ola'])
+    expect((within(dialog).getByRole('combobox', { name: 'Winner' }) as HTMLSelectElement).value).toBe('')
+  })
+
+  it('ends the game with the chosen winner and closes the dialog', () => {
+    const onEnd = vi.fn()
+    render(menuElement(gameMenu({ onEnd })))
+    const dialog = openDialog()
+
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Winner' }), { target: { value: 's3s3' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'End game' }))
+
+    expect(onEnd).toHaveBeenCalledTimes(1)
+    expect(onEnd).toHaveBeenCalledWith('s3s3')
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('ends the game with no winner when No winner is kept', () => {
+    const onEnd = vi.fn()
+    render(menuElement(gameMenu({ onEnd })))
+    const dialog = openDialog()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'End game' }))
+
+    expect(onEnd).toHaveBeenCalledTimes(1)
+    expect(onEnd).toHaveBeenCalledWith(undefined)
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('Cancel closes the dialog without ending the game', () => {
+    const onEnd = vi.fn()
+    const { container } = render(menuElement(gameMenu({ onEnd })))
+    const dialog = openDialog()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    expect(onEnd).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(container.querySelector('details.main-menu > summary'))
+  })
+
+  it('Escape closes the dialog without ending the game', () => {
+    const onEnd = vi.fn()
+    render(menuElement(gameMenu({ onEnd })))
+    openDialog()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(onEnd).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('disables the menu button while busy', () => {
+    render(menuElement(gameMenu({ endDisabled: true })))
+    expect((screen.getByRole('button', { name: 'End game' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('disables the confirm button if a busy state starts while the dialog is open', () => {
+    const { rerender } = render(menuElement(gameMenu()))
+    openDialog()
+
+    rerender(menuElement(gameMenu({ endDisabled: true })))
+
+    const dialog = screen.getByRole('dialog', { name: 'End game' })
+    expect((within(dialog).getByRole('button', { name: 'End game' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('closes the dialog when the game can no longer be ended', () => {
+    const { rerender } = render(menuElement(gameMenu()))
+    openDialog()
+
+    rerender(menuElement(gameMenu({ canEnd: false })))
+
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })

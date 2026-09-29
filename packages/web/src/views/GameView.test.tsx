@@ -7,6 +7,7 @@ import type { Item } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { GameRevisionSummary, PlayerDto, PlayerView } from '../lib/api.js'
+import type { GameMenuActions } from './Navigation.js'
 import {
   AUTO_REFRESH_MS,
   GameView,
@@ -14,6 +15,7 @@ import {
   chatAuthorsOf,
   HandItem,
   gameMenuGate,
+  winnerCandidatesOf,
   loadAfterKnownRevision,
   reloadIfRevisionChanged,
 } from './GameView.js'
@@ -62,6 +64,8 @@ describe('gameMenuGate', () => {
       withdrawDisabled: false,
       canDelete: false,
       deleteDisabled: false,
+      canEnd: false,
+      endDisabled: false,
     })
     expect(gameMenuGate({ you: you(), active: false }, false, false)?.withdrawDisabled).toBe(true)
   })
@@ -72,7 +76,23 @@ describe('gameMenuGate', () => {
       withdrawDisabled: false,
       canDelete: true,
       deleteDisabled: false,
+      canEnd: true,
+      endDisabled: false,
     })
+  })
+
+  it('offers End game to the creator and an admin, never to another player or a spectator', () => {
+    expect(gameMenuGate({ you: you({ gameCreator: true }), active: true }, false, false)?.canEnd).toBe(true)
+    expect(gameMenuGate({ you: you(), active: true }, true, false)?.canEnd).toBe(true)
+    // An admin who never joined has `you === null` and still gets it.
+    expect(gameMenuGate({ you: null, active: true }, true, false)?.canEnd).toBe(true)
+    expect(gameMenuGate({ you: you(), active: true }, false, false)?.canEnd).toBe(false)
+    expect(gameMenuGate({ you: null, active: true }, false, false)).toBeNull()
+  })
+
+  it('hides End game once the game has ended, even for the creator and an admin', () => {
+    expect(gameMenuGate({ you: you({ gameCreator: true }), active: false }, false, false)?.canEnd).toBe(false)
+    expect(gameMenuGate({ you: null, active: false }, true, false)?.canEnd).toBe(false)
   })
 
   // The regression this pins: an admin who is not a player in the game (`you`
@@ -87,15 +107,19 @@ describe('gameMenuGate', () => {
       withdrawDisabled: false,
       canDelete: true,
       deleteDisabled: false,
+      canEnd: true,
+      endDisabled: false,
     })
   })
 
-  it('disables both while an action is already in flight', () => {
+  it('disables the actions while an action is already in flight', () => {
     expect(gameMenuGate({ you: you(), active: true }, false, true)).toEqual({
       canWithdraw: true,
       withdrawDisabled: true,
       canDelete: false,
       deleteDisabled: true,
+      canEnd: false,
+      endDisabled: true,
     })
   })
 })
@@ -340,6 +364,96 @@ describe('the white army is offered to Russia only (issue #204)', () => {
     expect(await flag({ name: 'Romans' })).toBe('false')
     cleanup()
     expect(await flag(null)).toBe('false')
+  })
+})
+
+describe('End game wiring', () => {
+  const seatNo = (username: string, playernumber: number, overrides: Record<string, unknown> = {}) =>
+    seat(username, { playernumber, ...overrides })
+
+  it('lists every seat by username in seat order, and nothing else about them', () => {
+    const view = headerView(
+      seatNo('viewer', 2, { gameCreator: true, secretHandCard: 'TOP-SECRET-CARD' }),
+      [seatNo('s3s3', 3), seatNo('ola', 1)],
+      null,
+    )
+    const names = winnerCandidatesOf(view)
+    expect(names).toEqual(['ola', 'viewer', 's3s3'])
+    expect(JSON.stringify(names)).not.toContain('TOP-SECRET-CARD')
+  })
+
+  it('is just the opponents for a spectator', () => {
+    expect(winnerCandidatesOf(headerView(null, [seatNo('s3s3', 2), seatNo('ola', 1)], null))).toEqual(['ola', 's3s3'])
+  })
+
+  const renderWithMenu = async (
+    view: PlayerView,
+    role: 'user' | 'admin',
+  ): Promise<() => GameMenuActions | null> => {
+    localStorage.setItem('civ.autoRefresh', 'false')
+    vi.spyOn(api, 'game').mockResolvedValue(view)
+    vi.spyOn(api, 'revisions').mockResolvedValue([])
+    const latest: { current: GameMenuActions | null } = { current: null }
+    render(
+      <GameView
+        gameId="game-1"
+        player={{ username: 'viewer', role } as unknown as PlayerDto}
+        onUnauthorized={vi.fn()}
+        onDeleted={vi.fn()}
+        onWithdrawn={vi.fn()}
+        onGameActions={(actions) => { latest.current = actions }}
+      />,
+    )
+    await waitFor(() => expect(latest.current).not.toBeNull())
+    return () => latest.current
+  }
+
+  const creatorView = (): PlayerView =>
+    headerView(
+      seatNo('viewer', 1, { gameCreator: true }),
+      [seatNo('s3s3', 2), seatNo('ola', 3)],
+      null,
+    )
+
+  it('hands the menu the End game gate and the winner list', async () => {
+    const menu = await renderWithMenu(creatorView(), 'user')
+    expect(menu()?.canEnd).toBe(true)
+    expect(menu()?.endDisabled).toBe(false)
+    expect(menu()?.endPlayers).toEqual(['viewer', 's3s3', 'ola'])
+  })
+
+  it('does not offer End game to a player who is not the creator', async () => {
+    const view = headerView(seatNo('viewer', 1), [seatNo('s3s3', 2, { gameCreator: true })], null)
+    const menu = await renderWithMenu(view, 'user')
+    expect(menu()?.canEnd).toBe(false)
+  })
+
+  it('does not offer End game once the game has ended', async () => {
+    const menu = await renderWithMenu({ ...creatorView(), active: false }, 'user')
+    expect(menu()?.canEnd).toBe(false)
+  })
+
+  it('ends the game with the chosen winner and reloads the view', async () => {
+    const endGame = vi.spyOn(api, 'endGame').mockResolvedValue(creatorView())
+    const menu = await renderWithMenu(creatorView(), 'user')
+    const gameCalls = vi.mocked(api.game).mock.calls.length
+
+    menu()?.onEnd('s3s3')
+
+    await waitFor(() => expect(endGame).toHaveBeenCalledTimes(1))
+    expect(endGame).toHaveBeenCalledWith('game-1', 's3s3')
+    // `run` reloads the live view after the action.
+    await waitFor(() => expect(vi.mocked(api.game).mock.calls.length).toBeGreaterThan(gameCalls))
+  })
+
+  it('ends the game without a winner argument for No winner', async () => {
+    const endGame = vi.spyOn(api, 'endGame').mockResolvedValue(creatorView())
+    const menu = await renderWithMenu(creatorView(), 'admin')
+
+    menu()?.onEnd(undefined)
+
+    await waitFor(() => expect(endGame).toHaveBeenCalledTimes(1))
+    expect(endGame).toHaveBeenCalledWith('game-1')
   })
 })
 
