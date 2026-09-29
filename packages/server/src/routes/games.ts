@@ -34,6 +34,7 @@ import {
   stampLog,
 } from '../context.js'
 import { sendEngineError, sendError } from '../errors.js'
+import { resultFromGame } from '../store/rating.js'
 import type { ChatMessage, GameRevision, GameRevisionMetadata } from '../store/types.js'
 
 /** The summary the game list shows. Java: `PbfDTO`. */
@@ -49,6 +50,8 @@ export interface GameSummary {
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
   readonly availableColors: readonly string[]
+  /** Final standings of an ended game with a winner, best first; empty otherwise. */
+  readonly placements: readonly { readonly username: string; readonly rank: number }[]
 }
 
 /** The public lobby summary. It deliberately has no viewer-specific fields. */
@@ -64,6 +67,8 @@ export interface PublicGameSummary {
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
   readonly availableColors: readonly string[]
+  /** Final standings of an ended game with a winner, best first; empty otherwise. */
+  readonly placements: readonly { readonly username: string; readonly rank: number }[]
 }
 
 function availableColors(game: GameState): readonly string[] {
@@ -71,6 +76,11 @@ function availableColors(game: GameState): readonly string[] {
   if (withdrawn !== undefined) return withdrawn.color === null ? [] : [withdrawn.color]
   const taken = new Set(game.players.map((player) => player.color))
   return PLAYER_COLORS.filter((color) => !taken.has(color))
+}
+
+/** Ranks come from the same evidence the rating system uses, so the list and the ratings agree. */
+function placementsOf(game: GameState): GameSummary['placements'] {
+  return resultFromGame(game)?.participants ?? []
 }
 
 function toSummary(game: GameState, viewerId: string): GameSummary {
@@ -89,6 +99,7 @@ function toSummary(game: GameState, viewerId: string): GameSummary {
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
     youAreIn: game.players.some((player) => player.playerId === viewerId),
     availableColors: availableColors(game),
+    placements: placementsOf(game),
   }
 }
 
@@ -108,6 +119,7 @@ export function toPublicSummary(game: GameState, viewerId?: string): PublicGameS
     nameOfUsersTurn: game.players.find((player) => player.yourTurn)?.username ?? '',
     youAreIn: viewerId !== undefined && game.players.some((player) => player.playerId === viewerId),
     availableColors: availableColors(game),
+    placements: placementsOf(game),
   }
 }
 

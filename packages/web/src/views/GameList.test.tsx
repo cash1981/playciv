@@ -35,6 +35,7 @@ function game(
     nameOfUsersTurn: '',
     youAreIn: false,
     availableColors: ['Green', 'Yellow', 'Purple', 'Red', 'Blue'],
+    placements: [],
     ...overrides,
   }
 }
@@ -226,7 +227,32 @@ describe('GameList', () => {
       'Type',
       'Number of players',
       'Players',
+      'Winner and placements',
     ])
+  })
+
+  it('lists every placement of a finished game, sharing a rank on a tie', () => {
+    const games = [
+      game({
+        id: 'done',
+        name: 'Done',
+        active: false,
+        winner: 'a',
+        placements: [
+          { username: 'a', rank: 1 },
+          { username: 'b', rank: 2 },
+          { username: 'c', rank: 2 },
+        ],
+      }),
+    ]
+
+    render(
+      <GameList games={games} player={player} busy={false} onOpenGame={noop} onJoin={noop} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Finished games' }))
+
+    const cell = Array.from(document.querySelectorAll('tbody tr td')).at(-1)
+    expect(cell?.innerHTML).toBe('<span>1. a</span><span><br>2. b</span><span><br>2. c</span>')
   })
 
   it('colours Open teal and Join green, and leaves Full plain', () => {
