@@ -23,8 +23,10 @@ import { inject, bearer } from './helpers.js'
 class FakeMailer implements Mailer {
   readonly sent: OutgoingEmail[] = []
   fail = false
+  attempts = 0
 
   async send(email: OutgoingEmail): Promise<void> {
+    this.attempts += 1
     if (this.fail) throw new Error('provider is down')
     this.sent.push(email)
   }
@@ -453,5 +455,140 @@ describe('email cooldown', () => {
     ])
 
     expect(mailer.subjects('New Chat')).toHaveLength(1)
+  })
+})
+
+describe('battle turn', () => {
+  type Reply = {
+    rev: number
+    you: { battlehand: { id: string; attack: number; health: number }[] }
+    battle: { arena: { id: string }[] }
+  }
+
+  async function post(token: string, url: string, payload: object = {}): Promise<Reply> {
+    const response = await inject(app, { method: 'POST', url, headers: bearer(token), payload })
+    expect(response.status).toBe(200)
+    return (await response.json()) as Reply
+  }
+
+  /** Starts a battle; the starter attacks. The defender holds the first turn. */
+  async function battle(name: string, opponent: 'player' | 'barbarians') {
+    const creator = await register(`${name}-a`)
+    const gameId = await createGame(creator.token, name, 2)
+    const joiner = await register(`${name}-b`)
+    await join(joiner.token, gameId)
+    // Only the player on turn may draw, so that player attacks.
+    const onTurn = (await loadGame(gameId)).players.find((player) => player.yourTurn)
+    const starter = onTurn?.playerId === creator.id ? creator : joiner
+    const waitingPlayer = starter === creator ? joiner : creator
+    const mailOf = (who: { id: string }): string =>
+      `${who.id === creator.id ? name + '-a' : name + '-b'}@example.com`
+    await post(starter.token, `/api/games/${gameId}/draw/INFANTRY`)
+    const drawn = await post(starter.token, `/api/games/${gameId}/battle/draw`, { numberOfUnits: 1 })
+    const unit = drawn.you.battlehand[0]!
+    mailer.sent.length = 0
+    const initiated = await post(starter.token, `/api/games/${gameId}/battle/arena/initiate`, {
+      opponentId: opponent === 'barbarians' ? 'barbarians' : waitingPlayer.id,
+      rev: drawn.rev,
+    })
+    // Initiating a battle must not mail anyone.
+    expect(mailer.sent).toHaveLength(0)
+    return { gameId, starter, waitingPlayer, mailOf, unit, rev: initiated.rev, base: `/api/games/${gameId}/battle/arena` }
+  }
+
+  const battleMails = (): OutgoingEmail[] => mailer.subjects('Your battle turn')
+
+  it('mails exactly the new turn holder, once, with no unit or hand data', async () => {
+    const { gameId, rev, base, unit, waitingPlayer, starter, mailOf } = await battle('bt-one', 'player')
+
+    // The defender holds the first turn and ends it, so the attacker is mailed.
+    await post(waitingPlayer.token, `${base}/turn/end`, { rev })
+
+    expect(mailer.sent).toHaveLength(1)
+    const mail = mailer.sent[0]
+    expect(mail?.to).toBe(mailOf(starter))
+    expect(mail?.subject).toBe('Your battle turn')
+    expect(mail?.text).toContain('It is your turn to play a unit in the battle arena in bt-one!')
+    expect(mail?.text).toContain(`https://playciv.app/game/${gameId}`)
+    expect(mail?.text).not.toContain(unit.id)
+    expect(mail?.text.toLowerCase()).not.toContain('infantry')
+    expect(mail?.text).not.toContain('battlehand')
+  })
+
+  it('has no cooldown: three end-turns within 30 minutes all send', async () => {
+    const { starter, waitingPlayer, mailOf, rev, base } = await battle('bt-two', 'player')
+    const first = await post(waitingPlayer.token, `${base}/turn/end`, { rev })
+    const second = await post(starter.token, `${base}/turn/end`, { rev: first.rev })
+    await post(waitingPlayer.token, `${base}/turn/end`, { rev: second.rev })
+
+    // The clock is frozen, so the starter's second mail lands inside the window.
+    expect(battleMails()).toHaveLength(3)
+    expect(battleMails().map((mail) => mail.to)).toEqual([
+      mailOf(starter),
+      mailOf(waitingPlayer),
+      mailOf(starter),
+    ])
+  })
+
+  it('does not mail the presser when the turn lands on themselves', async () => {
+    const { starter, rev, base } = await battle('bt-self', 'player')
+    await post(starter.token, `${base}/turn/end`, { rev })
+    expect(mailer.sent).toHaveLength(0)
+  })
+
+  it('sends nothing on initiate, place, move, kill, return or end', async () => {
+    const { starter, waitingPlayer, unit, rev, base } = await battle('bt-quiet', 'player')
+    const placed = await post(starter.token, `${base}/place`, {
+      unitId: unit.id, side: 'attacker', position: 0,
+      attack: unit.attack, health: unit.health, rev,
+    })
+    const arenaId = placed.battle.arena[0]!.id
+    const moved = await post(starter.token, `${base}/${arenaId}/move`, { position: 1, rev: placed.rev })
+    const killed = await post(waitingPlayer.token, `${base}/${arenaId}/kill`, { rev: moved.rev })
+    const undone = await post(waitingPlayer.token, `${base}/${arenaId}/kill`, { rev: killed.rev })
+    const returned = await post(starter.token, `${base}/${arenaId}/return`, { rev: undone.rev })
+    await post(starter.token, `${base}/end`, { rev: returned.rev })
+    expect(mailer.sent).toHaveLength(0)
+  })
+
+  it('sends nothing to an unsubscribed player', async () => {
+    const { waitingPlayer, starter, rev, base } = await battle('bt-unsub', 'player')
+    await inject(app, { method: 'GET', url: `/api/admin/email/notification/${starter.id}/stop` })
+    await post(waitingPlayer.token, `${base}/turn/end`, { rev })
+    expect(mailer.sent).toHaveLength(0)
+  })
+
+  it('sends nothing to a player without an address', async () => {
+    const { waitingPlayer, starter, rev, base } = await battle('bt-blank', 'player')
+    await repo.updatePlayer(starter.id, { email: '' })
+    await post(waitingPlayer.token, `${base}/turn/end`, { rev })
+    expect(mailer.sent).toHaveLength(0)
+  })
+
+  it('mails the player controlling the barbarians', async () => {
+    const { starter, waitingPlayer, mailOf, rev, base } = await battle('bt-barb', 'barbarians')
+    // Barbarians are the defender and hold the first turn. The attacker ends
+    // their own turn twice: first to the attacker (no mail, presser), then back
+    // to the barbarians, whose controller is the player to the left.
+    const first = await post(starter.token, `${base}/turn/end`, { rev })
+    expect(mailer.sent).toHaveLength(0)
+    await post(starter.token, `${base}/turn/end`, { rev: first.rev })
+
+    expect(battleMails()).toHaveLength(1)
+    expect(battleMails()[0]?.to).toBe(mailOf(waitingPlayer))
+  })
+
+  it('a failing mailer does not fail the request', async () => {
+    const { waitingPlayer, rev, base } = await battle('bt-fail', 'player')
+    mailer.fail = true
+    mailer.attempts = 0
+    const response = await inject(app, {
+      method: 'POST',
+      url: `${base}/turn/end`,
+      headers: bearer(waitingPlayer.token),
+      payload: { rev },
+    })
+    expect(response.status).toBe(200)
+    expect(mailer.attempts).toBe(1)
   })
 })

@@ -254,13 +254,18 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
     const gameId = c.req.param('gameId')
     const body = asRecord(await c.req.json().catch(() => ({})))
     const clientRev = optionalNumber(body, 'rev')
+    const player = currentPlayer(c)
 
     return applyToGame(
       context,
       c,
       gameId,
-      (state) => endBattleTurn(state, { playerId: currentPlayer(c).id }),
+      (state) => endBattleTurn(state, { playerId: player.id }),
       clientRev,
+      {
+        after: ({ after }) =>
+          context.notifications.battleTurnChanged(after, player.id),
+      },
     )
   })
 

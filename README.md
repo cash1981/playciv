@@ -643,6 +643,11 @@ corrected on purpose:
   join time.
 - The cooldown is claimed in one atomic step, so two simultaneous actions
   cannot both slip a mail past the 30-minute window.
+- **New: a battle turn mail.** Ending a battle turn in the arena mails whoever
+  now holds the battle turn ("It is your turn to play a unit in the battle
+  arena"), straight away. There is no cooldown, unsubscribe is respected, and
+  the player who pressed the button is never mailed. `old-civ-rest` has no
+  arena, so there is no Java counterpart.
 
 The new-game broadcast to every account is gone: creating a game sends no email
 at all. Java mailed every account ("A new game by the name X was just

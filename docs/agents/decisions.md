@@ -3224,3 +3224,14 @@ panel's hidden list keeps its own Remove button.
 and the log makes it accountable. This deviates from the old system only in
 allowing removal of a revealed and a starting tech; hidden-tech removal is the
 old `removeTech`.
+
+## Battle turn mail
+
+New mechanic, specified by the human; the old system has no battle arena and no
+such mail. Ending a battle turn mails the player who now holds it. Unlike the
+chat and phase mails there is no 30-minute cooldown, because the recipient is
+waiting on a move. The signature is `battleTurnChanged(after, endedByPlayerId)`
+because `endBattleTurn` is advisory and any participant may end a turn out of
+turn, so the recipient cannot be derived from the previous holder. The presser
+is never mailed. The initial battle turn is `defender`, so the attacker ending
+first lands the turn on themselves and produces no mail.
