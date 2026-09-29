@@ -261,6 +261,10 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
       gameId,
       (state) => endBattleTurn(state, { playerId: currentPlayer(c).id }),
       clientRev,
+      {
+        after: ({ after }) =>
+          context.notifications.battleTurnChanged(after, currentPlayer(c).id),
+      },
     )
   })
 

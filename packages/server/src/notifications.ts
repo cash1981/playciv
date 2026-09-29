@@ -35,6 +35,12 @@ export interface Notifications {
   playerJoined(game: GameState, joinerPlayerId: string): Promise<void>
   /** Java `PlayerAction.endTurn` → `sendYourTurn` — the next player. */
   turnEnded(before: GameState, after: GameState): Promise<void>
+  /**
+   * New mechanic (no Java counterpart) — the player who now holds the battle
+   * turn, straight after someone ends it. No throttle. Skipped when there is
+   * no battle or the new turn holder is the one who pressed the button.
+   */
+  battleTurnChanged(after: GameState, endedByPlayerId: string): Promise<void>
   /** Java `GameAction.endGame` — every player. */
   gameEnded(game: GameState): Promise<void>
   /** Java `GameAction.deleteGame` — every player. */
@@ -177,6 +183,20 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         'It is your turn',
         `It's your turn to play in ${after.name}!${phaseText}\n\n` +
           `Go to ${gameLink(after.id)} to start your turn`,
+      )
+    },
+
+    async battleTurnChanged(after: GameState, endedByPlayerId: string): Promise<void> {
+      const battle = after.battle
+      if (battle === null) return
+      const recipientId = battle[battle.turn].playerId
+      if (recipientId === endedByPlayerId) return
+      // No throttle: every end-turn mails, however close together.
+      await notify(
+        recipientId,
+        'Your battle turn',
+        `It is your turn to play a unit in the battle arena in ${after.name}!\n\n` +
+          `Go to ${gameLink(after.id)} to play your unit`,
       )
     },
 
