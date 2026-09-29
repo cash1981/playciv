@@ -215,7 +215,7 @@ export interface ApplyToGameOptions {
 }
 
 /** An ended game is read-only for everyone except the admin role. */
-export function isLockedForViewer(game: GameState, viewer: { readonly role?: string }): boolean {
+export function isLockedForViewer(game: GameState, viewer: Pick<StoredPlayer, 'role'>): boolean {
   return !game.active && viewer.role !== 'admin'
 }
 

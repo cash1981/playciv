@@ -453,6 +453,9 @@ export function GameView({
           setError(null)
           try {
             await (winner === undefined ? api.endGame(gameId) : api.endGame(gameId, winner))
+            // Reload first: if leaving is vetoed by unsaved turn orders, the
+            // view that stays must already be the locked, ended one.
+            await reload()
             onEnded()
           } catch (caught) {
             if (isUnauthorized(caught)) return onUnauthorized()
@@ -464,7 +467,7 @@ export function GameView({
       },
     })
     return () => onGameActions(null)
-  }, [onGameActions, view, historical, selectedRevision, busy, gameId, player, onWithdrawn, onDeleted, onEnded, onUnauthorized, run])
+  }, [onGameActions, view, historical, selectedRevision, busy, gameId, player, onWithdrawn, onDeleted, onEnded, onUnauthorized, reload, run])
 
   if (view === null) {
     return (

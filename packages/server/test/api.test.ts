@@ -2198,6 +2198,18 @@ describe('a whole round', () => {
       expect(JSON.parse(locked.body)).toMatchObject({ error: 'GAME_ENDED' })
     }
     expect((await repo.findGame(gameId))?.rev).toBe(state?.rev)
+
+    // The admin role can still act.
+    const admin = await register('admin-after-end')
+    const adminPlayer = await repo.findPlayerByUsername('admin-after-end')
+    await repo.updatePlayer(adminPlayer?.id as string, { role: 'admin' })
+    const adminChat = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/chat`,
+      headers: bearer(admin),
+      payload: { message: 'still here' },
+    })
+    expect(adminChat.status).toBe(201)
   })
 })
 
