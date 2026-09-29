@@ -633,11 +633,8 @@ export function ChatOrdersPanel({
                 onChange={setDraft}
                 readOnly={busy}
                 ariaLabel={mode === 'order' ? 'Order' : 'Chat message'}
-                placeholder={
-                  mode === 'order'
-                    ? `Write your orders for turn ${orderTurn} …`
-                    : `Write as ${view.you?.username ?? ''} …`
-                }
+                // One text for both modes: the editor reads it only when it is created
+                placeholder="Write a message …"
               />
               <div className="chat-orders-actions">
                 <button

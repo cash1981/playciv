@@ -129,6 +129,13 @@
   overflow-y: auto;
 }
 
+/* Crepe's fixed top bar wraps to three rows on a phone and would leave no room
+   to type; the toolbar that appears over a selection and Markdown shortcuts stay.
+   Crepe's own stylesheet loads later, so the selector needs the extra class. */
+.chat-orders-composer .milkdown .milkdown-top-bar {
+  display: none;
+}
+
 .chat-orders-fields {
   display: flex;
   gap: 0.5rem;
