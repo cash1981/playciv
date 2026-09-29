@@ -24,7 +24,7 @@ Constraints they gave, quoted in spirit:
 
 **In:**
 
-- New `Notifications.battleTurn(game, previousTurnPlayerId)`-style method in
+- New `Notifications.battleTurnChanged(after, endedByPlayerId)` method in
   `packages/server/src/notifications.ts`, no throttle.
 - Call it from `POST /api/games/:gameId/battle/arena/turn/end` through the
   `after` hook, as `turnEnded` is used in `play.ts`.
@@ -45,8 +45,8 @@ no arena at all. New mechanic; the human specified it.
 `endBattleTurn` flips `battle.turn` between `attacker` and `defender`. After it,
 the recipient is `after.battle[after.battle.turn].playerId`. For the barbarian
 side that is the player to the attacker's left, who controls the barbarians, so
-they get the mail. Skip when the recipient equals the player who pressed the
-button, or when `after.battle` is null. Use the existing private `notify`
+they get the mail. Skip when the recipient equals `endedByPlayerId` (the player who pressed the
+button), or when `after.battle` is null. Use the existing private `notify`
 helper without a throttle, so `disableEmail` and blank-address rules still
 apply (unsubscribe is respected). Subject `Your battle turn`, body
 `It is your turn to play a unit in the battle arena in <game name>!` plus the
@@ -61,14 +61,14 @@ game link, same style as `turnEnded`.
 
 ## Acceptance criteria
 
-- [ ] Ending the battle turn mails exactly the new turn holder, once, immediately.
-- [ ] Two end-turns in a row within 30 minutes both send (no cooldown).
-- [ ] No mail on place, move, return, kill, initiate, end battle.
-- [ ] No mail to an unsubscribed player or one without an address.
-- [ ] Barbarian side: the controlling player is mailed.
-- [ ] A failing mailer does not fail the request.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
-- [ ] Hidden information: mail carries no unit or hand data; test asserts body has none.
+- [x] Ending the battle turn mails exactly the new turn holder, once, immediately.
+- [x] Two end-turns in a row within 30 minutes both send (no cooldown).
+- [x] No mail on place, move, return, kill, initiate, end battle.
+- [x] No mail to an unsubscribed player or one without an address.
+- [x] Barbarian side: the controlling player is mailed.
+- [x] A failing mailer does not fail the request.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+- [x] Hidden information: mail carries no unit or hand data; test asserts body has none.
 
 ## Open questions
 
