@@ -2260,7 +2260,7 @@ ul.history > li {
   }
 }
 
-/* End game dialog, opened from the site menu's Game section. Stacked,
+/* End game dialog, opened from the site menu's Actions submenu. Stacked,
    full-width controls on a phone; the buttons sit side by side from 601px. */
 .reference.end-game-dialog {
   width: min(92vw, 26rem);

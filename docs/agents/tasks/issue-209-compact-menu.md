@@ -96,22 +96,23 @@ a deliberate deviation from the old layout, to be noted in decisions.md.
 ## Claimed paths
 
 - `packages/web/src/views/Navigation.tsx`, `Navigation.test.tsx`
+- `packages/web/src/views/SiteMobileStyles.test.ts` (one test pinned the deleted menu CSS)
 - `packages/web/src/views/Navigation.css` (new) and `packages/web/src/styles.css` (menu rules only)
 - `docs/agents/state.md`, `docs/agents/decisions.md`
 
 ## Acceptance criteria
 
-- [ ] At 375px: menu rows are about 44px, no horizontal scroll, the close X is
+- [x] At 375px: menu rows are about 44px, no horizontal scroll, the close X is
       visible at the top of the sheet at every scroll position.
-- [ ] Rules folds out inline, three groups, nothing floats over other content,
+- [x] Rules folds out inline, three groups, nothing floats over other content,
       no text "Rules and help" anywhere.
-- [ ] Actions submenu holds Withdraw / End game / Delete game with today's
+- [x] Actions submenu holds Withdraw / End game / Delete game with today's
       visibility rules; absent when no game page is showing.
-- [ ] Escape and the X close the menu; focus returns to the hamburger.
-- [ ] Works in dark and light theme, and at desktop width.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass
-- [ ] Hidden information: none involved.
-- [ ] Verified in the browser at 375px and desktop width.
+- [x] Escape and the X close the menu; focus returns to the hamburger.
+- [x] Works in dark and light theme, and at desktop width.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass
+- [x] Hidden information: none involved.
+- [x] Verified in the browser at 375px and desktop width.
 
 ## Open questions
 

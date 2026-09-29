@@ -327,6 +327,21 @@ describe('Navigation Rules submenu', () => {
 })
 
 describe('Navigation Actions submenu', () => {
+  it('does not come back folded out after the game page went away and returned', () => {
+    const game = gameMenu()
+    const { rerender } = render(menu({ player: user, screen: 'game', game }))
+    openMenu()
+    openSubmenu('Actions')
+    expect(screen.getByRole('button', { name: 'End game' })).toBeTruthy()
+
+    rerender(menu({ player: user, screen: 'lobby', game: null }))
+    expect(screen.queryByRole('button', { name: 'Actions' })).toBeNull()
+
+    rerender(menu({ player: user, screen: 'game', game }))
+    expect(screen.getByRole('button', { name: 'Actions' }).getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('button', { name: 'End game' })).toBeNull()
+  })
+
   it('is absent when no game page is showing', () => {
     render(menu({ player: user }))
     openMenu()

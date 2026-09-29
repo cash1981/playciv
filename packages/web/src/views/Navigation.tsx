@@ -141,6 +141,11 @@ export function Navigation({
     if (control !== null && !control.hasAttribute('aria-expanded')) closeMenu()
   }
 
+  // Actions vanishes when the game page goes away; it must not come back folded out.
+  useEffect(() => {
+    if (game === null) setSubmenu((current) => (current === 'actions' ? null : current))
+  }, [game])
+
   const toggleSubmenu = (name: Submenu): void => setSubmenu((current) => (current === name ? null : name))
 
   return (
@@ -158,7 +163,6 @@ export function Navigation({
           ref={menuButtonRef}
           aria-label="Menu"
           aria-expanded={open}
-          aria-controls="main-menu-sheet"
           onClick={() => {
             if (open) closeMenu()
             else setOpen(true)
@@ -200,7 +204,6 @@ export function Navigation({
                   type="button"
                   className="nav-row nav-toggle"
                   aria-expanded={submenu === 'rules'}
-                  aria-controls="nav-submenu-rules"
                   onClick={() => toggleSubmenu('rules')}
                 >
                   <span>Rules</span>
@@ -235,7 +238,6 @@ export function Navigation({
                     type="button"
                     className="nav-row nav-toggle"
                     aria-expanded={submenu === 'actions'}
-                    aria-controls="nav-submenu-actions"
                     onClick={() => toggleSubmenu('actions')}
                   >
                     <span>Actions</span>
