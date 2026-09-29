@@ -17,6 +17,7 @@ import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, Pl
 
 import { BoardView } from './BoardView.js'
 import { ChatPanel } from './ChatPanel.js'
+import type { ChatAuthor } from './ChatPanel.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
@@ -30,6 +31,49 @@ import { TurnPanel } from './TurnPanel.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { BUCKET_LABEL, groupByOldClientBucket } from './itemBuckets.js'
 import './BattleMobile.css'
+
+type Seat = NonNullable<PlayerView['you']> | PlayerView['opponents'][number]
+
+/**
+ * The player whose turn it is, from `you` and the opponents. Matched by the
+ * active turn's username, falling back to whoever is flagged `yourTurn`.
+ */
+export function activePlayerOf(view: PlayerView): Seat | undefined {
+  const seats: readonly Seat[] = view.you === null ? view.opponents : [view.you, ...view.opponents]
+  const username = view.activeTurn?.username
+  return seats.find((seat) => seat.username === username) ?? seats.find((seat) => seat.yourTurn)
+}
+
+/**
+ * Civilization and colour by username, for the chat. Both are already public
+ * in the view, and a civilization that has not been revealed is `null` there.
+ */
+export function chatAuthorsOf(view: PlayerView): ReadonlyMap<string, ChatAuthor> {
+  const seats: readonly Seat[] = view.you === null ? view.opponents : [view.you, ...view.opponents]
+  return new Map(
+    seats.map((seat) => [
+      seat.username,
+      { civilization: seat.civilization?.name ?? null, color: seat.color },
+    ]),
+  )
+}
+
+/** Civilization, then colour, each only when there is something to show. */
+function PlayerChips({ player }: { readonly player: Seat }): React.JSX.Element | null {
+  const civilization = player.civilization?.name
+  if (civilization === undefined && player.color == null) return null
+  return (
+    <span className="header-chips">
+      {civilization !== undefined && <span className="tag revealed">{civilization}</span>}
+      {player.color != null && (
+        <span className="tag">
+          <span className="swatch" style={{ background: player.color.toLowerCase() }} />{' '}
+          {player.color}
+        </span>
+      )}
+    </span>
+  )
+}
 
 interface Props {
   readonly gameId: string
@@ -398,11 +442,16 @@ export function GameView({
   const interactionBusy = busy || replaying
   const you = displayedView.you
   const yourTurn = you?.yourTurn === true
+  const activePlayer = activePlayerOf(displayedView)
+  const chatAuthors = chatAuthorsOf(displayedView)
 
   return (
     <>
       <div className="panel">
         <div className="row" style={{ alignItems: 'baseline' }}>
+          {/* Civ, then colour, then the name in the title: whose turn it is,
+              not who is looking. They wrap above the title on a phone. */}
+          {activePlayer !== undefined && <PlayerChips player={activePlayer} />}
           <h1 style={{ margin: 0 }}>
             {yourTurn
               ? 'Your turn'
@@ -415,15 +464,6 @@ export function GameView({
           <span className="muted" style={{ fontSize: '0.9rem' }}>{displayedView.name}</span>
           {!displayedView.active && <span className="tag">ended</span>}
           {displayedView.winner !== null && <span className="tag revealed">{displayedView.winner} won</span>}
-          {you?.civilization != null && (
-            <span className="tag revealed">{you.civilization.name}</span>
-          )}
-          {you?.color != null && (
-            <span className="tag">
-              <span className="swatch" style={{ background: you.color.toLowerCase() }} />{' '}
-              {you.color}
-            </span>
-          )}
           <span style={{ flex: 1 }} />
           <button
             className={'small' + (autoRefresh ? ' revealed' : '')}
@@ -477,13 +517,15 @@ export function GameView({
         busy={interactionBusy}
         readOnly={replaying}
         youId={you?.playerId ?? null}
+        viewerIsRussia={you?.civilization?.name === 'Russians'}
         run={run}
       />
 
       <div className="panel-stack">
-        {/* Draw is the first panel after the board. Log and chat retain their
-            responsive side-by-side pair below it (`.panel-pair`). */}
+        {/* Draw is the first panel after the board, then Turn orders. Log and
+            chat retain their responsive side-by-side pair below (`.panel-pair`). */}
         <DrawPanel gameId={gameId} busy={interactionBusy} yourTurn={yourTurn} run={run} view={displayedView} />
+        <TurnPanel gameId={gameId} busy={interactionBusy} run={run} reloadCount={reloadCount} historical={historical} />
         <div className="panel-pair">
           <LogPanel
             gameId={gameId}
@@ -501,6 +543,7 @@ export function GameView({
               player={player}
               reloadCount={reloadCount}
               autoRefresh={autoRefresh}
+              authors={chatAuthors}
             />
           )}
         </div>
@@ -509,7 +552,6 @@ export function GameView({
         <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         <SocialPolicyPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
-        <TurnPanel gameId={gameId} busy={interactionBusy} run={run} reloadCount={reloadCount} historical={historical} />
         <StatusPanel
           gameId={gameId}
           view={displayedView}

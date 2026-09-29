@@ -18,6 +18,24 @@ import { CollapsiblePanel } from './CollapsiblePanel.js'
 const PAGE_SIZE = 10
 const CHAT_REFRESH_MS = 10_000
 
+/** What the chat shows next to a nickname; both are already public in the view. */
+export interface ChatAuthor {
+  readonly civilization: string | null
+  readonly color: string | null
+}
+
+const KNOWN_COLORS = new Set(['blue', 'green', 'purple', 'red', 'yellow'])
+
+/**
+ * Classes carry tuned shades (see `.player-blue` and friends in the stylesheet)
+ * because the raw colour name is unreadable on the dark background, Blue and
+ * Purple especially. An unknown or missing colour stays in the normal text colour.
+ */
+function colorClass(color: string | null): string | undefined {
+  const name = color?.toLowerCase()
+  return name !== undefined && KNOWN_COLORS.has(name) ? `player-${name}` : undefined
+}
+
 interface Props {
   readonly gameId: string
   readonly busy: boolean
@@ -25,9 +43,22 @@ interface Props {
   readonly player: PlayerDto
   readonly reloadCount: number
   readonly autoRefresh: boolean
+  /**
+   * Civilization and colour by username. A message from someone who is no
+   * longer in the game (a withdrawn player) has no match and is shown plain.
+   */
+  readonly authors?: ReadonlyMap<string, ChatAuthor>
 }
 
-export function ChatPanel({ gameId, busy, run, player, reloadCount, autoRefresh }: Props): React.JSX.Element {
+export function ChatPanel({
+  gameId,
+  busy,
+  run,
+  player,
+  reloadCount,
+  autoRefresh,
+  authors,
+}: Props): React.JSX.Element {
   const [chat, setChat] = useState<readonly ChatMessageDto[]>([])
   const [message, setMessage] = useState('')
   const [page, setPage] = useState(1)
@@ -71,13 +102,22 @@ export function ChatPanel({ gameId, busy, run, player, reloadCount, autoRefresh 
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <ul className="list scroll">
-        {shown.map((entry) => (
-          <li key={entry.id}>
-            <ChatTimestamp createdAt={entry.createdAt} />
-            <strong>{entry.username}</strong>
-            <span>{entry.message}</span>
-          </li>
-        ))}
+        {shown.map((entry) => {
+          const author = authors?.get(entry.username)
+          return (
+            <li key={entry.id}>
+              <ChatTimestamp createdAt={entry.createdAt} />
+              {/* One box, so the civ never ends up alone at the end of a line */}
+              <span className="chat-author">
+                {author?.civilization != null && (
+                  <small className="muted">{author.civilization}</small>
+                )}
+                <strong className={colorClass(author?.color ?? null)}>{entry.username}</strong>
+              </span>
+              <span>{entry.message}</span>
+            </li>
+          )
+        })}
         {shown.length === 0 && <li className="muted">Quiet in here.</li>}
       </ul>
 

@@ -76,6 +76,12 @@
   --display: 'Cinzel', 'Marcellus', ui-serif, Georgia, serif;
   --map-ink: rgba(217, 173, 87, 0.5);
   --photo-opacity: 0.45;
+  /* Player colours as text: lighter than the swatches so they read on --panel. */
+  --player-blue: #5cb8ff;
+  --player-green: #6fdc5a;
+  --player-purple: #c48cff;
+  --player-red: #ff7d7d;
+  --player-yellow: #f2dc4a;
 }
 
 :root[data-theme='light'] {
@@ -110,6 +116,12 @@
   --success-hover-border: #398439;
   --shadow: 0 16px 34px rgba(90, 70, 30, 0.18);
   --map-ink: rgba(120, 86, 30, 0.55);
+  /* Darker on the parchment panel; the dark-theme shades would wash out. */
+  --player-blue: #0b62b0;
+  --player-green: #23761f;
+  --player-purple: #7b2cb8;
+  --player-red: #b3221f;
+  --player-yellow: #856800;
 }
 
 * {
@@ -746,6 +758,14 @@ label > textarea {
   color: var(--muted);
 }
 
+/* Civ and colour of the active player, before the game header's title. */
+.header-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
 .tag.hidden {
   border-color: var(--warn);
   color: var(--warn);
@@ -854,6 +874,18 @@ ul.list > li:last-child {
 .scroll {
   max-height: 18rem;
   overflow-y: auto;
+}
+
+/* A nickname in its player's colour, in the chat. */
+.player-blue { color: var(--player-blue); }
+.player-green { color: var(--player-green); }
+.player-purple { color: var(--player-purple); }
+.player-red { color: var(--player-red); }
+.player-yellow { color: var(--player-yellow); }
+
+/* Civ (small) then coloured nickname, kept together in one flowing box. */
+.chat-author small {
+  margin-right: 0.35rem;
 }
 
 .swatch {

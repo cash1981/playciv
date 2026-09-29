@@ -4,8 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
-import { boardWidth, createBoard, createBoardForPlayers, findBoardAsset, slotOrigin } from '@civ/engine'
-import type { BoardPiece, PlayerView } from '@civ/engine'
+import { BOARD_ASSETS, boardWidth, createBoard, createBoardForPlayers, findBoardAsset, slotOrigin } from '@civ/engine'
+import type { BoardAsset, BoardPiece, PlayerView } from '@civ/engine'
 
 import type { GameRevisionView } from '../lib/api.js'
 import { api } from '../lib/api.js'
@@ -352,6 +352,58 @@ describe('BoardPalette finite supplies', () => {
     expect(markup).not.toContain('Hut (')
     expect(markup).toContain('draggable="true"')
     expect(markup).not.toContain('unavailable')
+  })
+})
+
+describe('BoardPalette figures (issue #204)', () => {
+  const figures = (): BoardAsset[] =>
+    BOARD_ASSETS.filter((asset) => asset.category === 'figure')
+  const figurePiece = (assetId: string, id: string): BoardPiece => ({
+    ...piece(assetId, id),
+    category: 'figure',
+  })
+  const markup = (pieces: readonly BoardPiece[], viewerIsRussia?: boolean): string =>
+    renderToStaticMarkup(
+      <BoardPalette
+        assets={figures()}
+        category="figure"
+        onCategoryChange={() => undefined}
+        replaying={false}
+        pieces={pieces}
+        numOfPlayers={4}
+        {...(viewerIsRussia === undefined ? {} : { viewerIsRussia })}
+      />,
+    )
+
+  it('shows the remaining armies and scouts per colour', () => {
+    const pieces = [
+      ...Array.from({ length: 4 }, (_, index) => figurePiece('figures/redarmy', `a${index}`)),
+      figurePiece('figures/bluescout', 's'),
+    ]
+    const html = markup(pieces)
+    expect(html).toContain('Red army (2)')
+    expect(html).toContain('Blue scout (1)')
+    expect(html).toContain('Blue army (6)')
+    expect(html).toContain('Green scout (2)')
+  })
+
+  it('disables a colour at zero and leaves the others available', () => {
+    const pieces = Array.from({ length: 2 }, (_, index) => figurePiece('figures/redscout', `s${index}`))
+    const html = markup(pieces)
+    expect(html).toContain('Red scout (0)')
+    expect(html.match(/palette-item unavailable/g)).toHaveLength(1)
+  })
+
+  it('lists the white army only for a Russian viewer', () => {
+    expect(markup([])).not.toContain('White army')
+    expect(markup([], false)).not.toContain('White army')
+    expect(markup([], true)).toContain('White army (1)')
+  })
+
+  it('disables the white army once it has been placed', () => {
+    const html = markup([figurePiece('figures/whitearmy', 'w')], true)
+    expect(html).toContain('White army (0)')
+    expect(html).toContain('palette-item unavailable')
   })
 })
 

@@ -10,6 +10,8 @@ import type { GameRevisionSummary, PlayerDto, PlayerView } from '../lib/api.js'
 import {
   AUTO_REFRESH_MS,
   GameView,
+  activePlayerOf,
+  chatAuthorsOf,
   HandItem,
   gameMenuGate,
   loadAfterKnownRevision,
@@ -210,11 +212,135 @@ describe('primary game panel order', () => {
     const logChatPair = log?.parentElement
 
     expect(board.nextElementSibling).toBe(panelStack)
+    const turnOrders = screen.getByRole('heading', { name: 'Turn orders' }).closest('section')
+
+    expect(board.nextElementSibling).toBe(panelStack)
     expect(panelStack?.children[0]).toBe(draw)
-    expect(panelStack?.children[1]).toBe(logChatPair)
+    // Turn orders comes right after Draw (issue #206)
+    expect(panelStack?.children[1]).toBe(turnOrders)
+    expect(panelStack?.children[2]).toBe(logChatPair)
     expect(logChatPair?.classList.contains('panel-pair')).toBe(true)
     expect(Array.from(logChatPair?.children ?? [])).toEqual([log, chat])
-    expect(panelStack?.children[2]).toBe(hand)
+    expect(panelStack?.children[3]).toBe(hand)
+  })
+})
+
+const seat = (
+  username: string,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  playerId: `id-${username}`,
+  username,
+  color: null,
+  civilization: null,
+  yourTurn: false,
+  ...overrides,
+})
+
+const headerView = (
+  youSeat: Record<string, unknown> | null,
+  opponents: readonly Record<string, unknown>[],
+  activeUsername: string | null,
+): PlayerView =>
+  ({
+    rev: 1,
+    name: 'Header test',
+    active: true,
+    winner: null,
+    activeTurn: activeUsername === null ? null : { username: activeUsername, phase: 'SOT' },
+    you: youSeat,
+    opponents,
+    board: {},
+    boardAreas: [],
+    numOfPlayers: 2,
+    battle: null,
+    battleSummary: [],
+  }) as unknown as PlayerView
+
+async function renderHeader(view: PlayerView): Promise<HTMLElement> {
+  localStorage.setItem('civ.autoRefresh', 'false')
+  vi.spyOn(api, 'game').mockResolvedValue(view)
+  vi.spyOn(api, 'revisions').mockResolvedValue([])
+  const { container } = render(
+    <GameView
+      gameId="game-1"
+      player={{ username: 'viewer' } as unknown as PlayerDto}
+      onUnauthorized={vi.fn()}
+      onDeleted={vi.fn()}
+      onWithdrawn={vi.fn()}
+    />,
+  )
+  await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toBeTruthy())
+  return container
+}
+
+describe('game header chips (issue #206)', () => {
+  const greeks = { name: 'Greeks' }
+  const chipTexts = (container: HTMLElement): string[] =>
+    Array.from(container.querySelectorAll('.header-chips .tag')).map((tag) => tag.textContent?.trim() ?? '')
+
+  it('shows the active opponent\'s civ, then colour, before the title, not the viewer\'s', async () => {
+    const container = await renderHeader(
+      headerView(
+        seat('viewer', { civilization: { name: 'Romans' }, color: 'Red' }),
+        [seat('s3s3', { civilization: greeks, color: 'Green', yourTurn: true })],
+        's3s3',
+      ),
+    )
+
+    expect(chipTexts(container)).toEqual(['Greeks', 'Green'])
+    const chips = container.querySelector('.header-chips')
+    const title = screen.getByRole('heading', { level: 1 })
+    expect(title.textContent).toBe("s3s3's turn — start of turn phase")
+    // Chips first, title straight after them in the same row
+    expect(chips?.nextElementSibling).toBe(title)
+    expect(container.textContent).not.toContain('Romans')
+  })
+
+  it('shows the viewer\'s own chips on their turn', async () => {
+    const container = await renderHeader(
+      headerView(
+        seat('viewer', { civilization: { name: 'Romans' }, color: 'Red', yourTurn: true }),
+        [seat('s3s3', { civilization: greeks, color: 'Green' })],
+        'viewer',
+      ),
+    )
+    expect(chipTexts(container)).toEqual(['Romans', 'Red'])
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Your turn')
+  })
+
+  it('has no civ chip while the civilization is not revealed', async () => {
+    const container = await renderHeader(
+      headerView(seat('viewer'), [seat('s3s3', { color: 'Blue', yourTurn: true })], 's3s3'),
+    )
+    expect(chipTexts(container)).toEqual(['Blue'])
+    expect(container.querySelector('.tag.revealed')).toBeNull()
+  })
+
+  it('has no chips at all before anyone has a turn, colour or civ', async () => {
+    const container = await renderHeader(headerView(null, [seat('s3s3')], null))
+    expect(container.querySelector('.header-chips')).toBeNull()
+  })
+})
+
+describe('chatAuthorsOf and activePlayerOf (issue #206)', () => {
+  it('maps every seat by username and leaves an unrevealed civilization null', () => {
+    const view = headerView(
+      seat('viewer', { civilization: { name: 'Romans' }, color: 'Red' }),
+      [seat('s3s3', { color: 'Green' })],
+      null,
+    )
+    expect(chatAuthorsOf(view)).toEqual(
+      new Map([
+        ['viewer', { civilization: 'Romans', color: 'Red' }],
+        ['s3s3', { civilization: null, color: 'Green' }],
+      ]),
+    )
+  })
+
+  it('falls back to the seat flagged yourTurn when the active turn names nobody', () => {
+    const view = headerView(seat('viewer'), [seat('s3s3', { yourTurn: true })], 'someone-who-left')
+    expect(activePlayerOf(view)?.username).toBe('s3s3')
   })
 })
 

@@ -26,6 +26,7 @@ import {
   CULTURE_TRACK_CELLS,
   ROTATIONS,
   TILE_SQUARES,
+  WHITE_ARMY_ID,
   WONDERS_AREA_ID,
   areaBandTop,
   boardHeight,
@@ -56,6 +57,8 @@ interface Props {
   readonly readOnly?: boolean
   /** Whose Undo button this is — only enabled when they made the last change. */
   readonly youId?: string | null
+  /** Only the Russian player is offered the white army (issue #204). */
+  readonly viewerIsRussia?: boolean
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
 }
 
@@ -114,6 +117,8 @@ export interface BoardPaletteProps {
   readonly replaying: boolean
   readonly pieces: readonly BoardPiece[]
   readonly numOfPlayers: number
+  /** Hides the white army from everyone else; the engine enforces it too. */
+  readonly viewerIsRussia?: boolean
   readonly onSelectAsset?: (asset: BoardAsset) => void
 }
 
@@ -125,9 +130,12 @@ export function BoardPalette({
   replaying,
   pieces,
   numOfPlayers,
+  viewerIsRussia = false,
   onSelectAsset,
 }: BoardPaletteProps): React.JSX.Element {
-  const inCategory = assets.filter((asset) => asset.category === category)
+  const inCategory = assets.filter(
+    (asset) => asset.category === category && (asset.id !== WHITE_ARMY_ID || viewerIsRussia),
+  )
   const draggedAssetRef = useRef(false)
 
   return (
@@ -203,6 +211,7 @@ export function BoardView({
   busy,
   readOnly = false,
   youId = null,
+  viewerIsRussia = false,
   run,
 }: Props): React.JSX.Element {
   const [assets, setAssets] = useState<readonly BoardAsset[]>([])
@@ -834,6 +843,7 @@ export function BoardView({
             replaying={readOnly}
             pieces={pieces}
             numOfPlayers={numOfPlayers}
+            viewerIsRussia={viewerIsRussia}
             onSelectAsset={(asset) => {
               setPendingAssetId(asset.id)
               setMoveModeId(null)

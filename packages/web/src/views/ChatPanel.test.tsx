@@ -59,3 +59,70 @@ describe('ChatPanel auto-refresh', () => {
     expect(chat).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('ChatPanel authors (issue #206)', () => {
+  beforeEach(() => localStorage.setItem('civ.panel.chat', 'true'))
+  afterEach(() => {
+    cleanup()
+    localStorage.removeItem('civ.panel.chat')
+    vi.clearAllMocks()
+  })
+
+  const messages = [
+    { id: 'm1', username: 'Alice', message: 'Hello', createdAt: '2020-01-01' },
+    { id: 'm2', username: 'Ghost', message: 'Still here', createdAt: '2020-01-02' },
+  ]
+
+  async function renderChat(
+    authors: ReadonlyMap<string, { civilization: string | null; color: string | null }>,
+  ): Promise<HTMLElement> {
+    chat.mockResolvedValue(messages)
+    let container: HTMLElement | undefined
+    await act(async () => {
+      container = render(
+        <ChatPanel gameId="game" busy={false} run={async () => {}} player={player} reloadCount={0} autoRefresh={false} authors={authors} />,
+      ).container
+    })
+    if (container === undefined) throw new Error('chat did not render')
+    return container
+  }
+
+  it('shows the civ, then the coloured nickname, then the message', async () => {
+    const container = await renderChat(new Map([['Alice', { civilization: 'Greeks', color: 'Purple' }]]))
+    const line = Array.from(container.querySelectorAll('li')).find((li) => li.textContent?.includes('Alice'))
+    if (line === undefined) throw new Error('Alice line missing')
+
+    const author = line.querySelector('.chat-author')
+    expect(Array.from(author?.children ?? []).map((child) => child.textContent)).toEqual(['Greeks', 'Alice'])
+    expect(author?.querySelector('small')?.textContent).toBe('Greeks')
+    expect(author?.querySelector('strong')?.className).toBe('player-purple')
+    // The author comes before the message text
+    expect(author?.nextElementSibling?.textContent).toBe('Hello')
+  })
+
+  it('still renders a message whose username cannot be matched, as plain text', async () => {
+    const container = await renderChat(new Map([['Alice', { civilization: 'Greeks', color: 'Blue' }]]))
+    const line = Array.from(container.querySelectorAll('li')).find((li) => li.textContent?.includes('Ghost'))
+    if (line === undefined) throw new Error('Ghost line missing')
+
+    expect(line.querySelector('.chat-author small')).toBeNull()
+    expect(line.querySelector('strong')?.textContent).toBe('Ghost')
+    expect(line.querySelector('strong')?.getAttribute('class')).toBeNull()
+    expect(line.textContent).toContain('Still here')
+  })
+
+  it('shows no civ text while the civilization is not revealed, but keeps the colour', async () => {
+    const container = await renderChat(new Map([['Alice', { civilization: null, color: 'Red' }]]))
+    const line = Array.from(container.querySelectorAll('li')).find((li) => li.textContent?.includes('Alice'))
+    expect(line?.querySelector('small')).toBeNull()
+    expect(line?.querySelector('strong')?.className).toBe('player-red')
+  })
+
+  it('renders without an authors lookup at all', async () => {
+    chat.mockResolvedValue(messages)
+    await act(async () => {
+      render(<ChatPanel gameId="game" busy={false} run={async () => {}} player={player} reloadCount={0} autoRefresh={false} />)
+    })
+    expect(screen.getByText('Alice')).toBeTruthy()
+  })
+})
