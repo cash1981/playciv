@@ -209,6 +209,21 @@ export function boardAssetLimit(asset: BoardAsset, numOfPlayers: number): number
     return Math.max(0, Math.min(5, numOfPlayers))
   }
   if (asset.category === 'greatperson') return 3
+  if (asset.category === 'figure') return figureLimit(asset)
+  return undefined
+}
+
+/** The asset that only the Russian player may place. */
+export const WHITE_ARMY_ID = 'figures/whitearmy'
+
+/**
+ * Each colour has 6 armies and 2 scouts; Russia also gets one white army.
+ * The asset id includes the colour, so counting per id is counting per colour.
+ */
+function figureLimit(asset: BoardAsset): number | undefined {
+  if (asset.id === WHITE_ARMY_ID) return 1
+  if (asset.id.endsWith('army')) return 6
+  if (asset.id.endsWith('scout')) return 2
   return undefined
 }
 

@@ -3090,6 +3090,51 @@ had no interactive board). The rules, agreed with the human:
   the Move button (kept as an explicit fallback: in Move mode any tap is the
   destination). A tap on the figure itself selects it.
 
+## 2026-09-29 — Figure limits, Russia's white army, header and chat (issues #204, #206)
+
+There is no old-system reference: the old system had no board model. The
+numbers come from the human, not from the rulebook or the old code, so they
+must not be read as an FFG rule.
+
+- **Limits.** Each colour has 6 armies and 2 scouts. The limit is per asset id,
+  and the id carries the colour, so colours count separately. Removing a piece
+  frees a slot, since the count is derived from the pieces on the board.
+- **White army.** One piece, and only the player whose *revealed* civilization
+  is the Russians may place it. Someone holding the Russians card who has not
+  revealed it yet cannot, because `player.civilization` is only set on reveal.
+  The palette hides it from everyone else; the engine enforces it either way.
+- **Old games.** A saved game that already has more than 6 armies of one colour
+  keeps them. It reads `(0)` and nothing more can be placed.
+- **Header.** The civ and colour chips follow the player whose turn it is, not
+  the viewer, and come before the turn title.
+- **Chat.** Civ (small) and nickname are shown in the player's colour. The
+  colour classes use shades tuned for the dark and light themes rather than the
+  raw colour name, which is unreadable for Blue and Purple. A message from a
+  player who has withdrawn has no match and is shown as plain text.
+- **No new hidden information.** Civilization and colour were already public.
+- **Manifest edited by hand.** `pwsh` was not available, so
+  `board-assets.json` got the `figures/whitearmy` entry by hand, in the same
+  shape and slot the generator produces. The art is an opaque white flag on a
+  white background, used as delivered.
+
+## 2026-09-29 — End game button and winner picker (added to the #204/#206 PR)
+
+`endGame` (Java: `GameAction.endGame`), its route and `api.endGame` already
+existed, but nothing in the client called them, so a game could not be ended
+or given a winner from the browser. The old client's own end-game screen is
+not ported; this is a small dialog instead.
+
+- **Who.** Only the game creator and admin, as in the engine and the old
+  system. The button follows the same rule as Delete game, and is hidden once
+  the game is no longer active.
+- **Winner.** A dropdown of the game's players by username, with "No winner"
+  first. It is optional, as it is in the engine, and cannot be undone.
+- **Where.** The menu's Game section, next to Withdraw and Delete game, so the
+  phone layout keeps one place for game-level actions.
+- **No new hidden information.** The list is built from usernames already in
+  the projected view.
+- **White army artwork.** Made transparent around the flag by flood fill from
+  the edges, so the flag stays white with its black outline. Same 36x51 size.
 ## 2026-09-29 — Hand: ordered by kind, but no heading per kind
 
 **Decision.** `HandPanel` keeps the old client's bucket order (Civilizations,

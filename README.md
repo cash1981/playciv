@@ -153,14 +153,16 @@ level, so it looks the same size at any zoom (issue #193).
 The palette has eleven categories, generated from the images on disk. Buildings
 and resources use finite physical supplies: the physical building counts are
 read from the reference sheet, wheat, iron, silk and incense are each limited by
-the player count, and each Great Person type has three board pieces. Huts and
+the player count, and each Great Person type has three board pieces. Each colour
+has six armies and two scouts; Russia also has one white army, which only the
+Russian player can place (issue #204). Huts and
 Villages are **unlimited** — they are picked up during play rather than dealt
 from a setup supply, so the player-count cap does not apply to them (issue
 #116). The separate Great Person card deck remains a hand/draw mechanic.
 
 | Category | Count | From |
 | --- | --- | --- |
-| Figures | 10 | army and scout in five colours |
+| Figures | 11 | army and scout in five colours, plus Russia's white army |
 | Resources | 6 | hut, village, wheat, iron, silk, incense |
 | Markers | 7 | coin, culture, caravan, fortification, wound, first player, building program |
 | Cities | 30 | capital/city/metropolis, with and without walls, per colour |

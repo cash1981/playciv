@@ -13,12 +13,25 @@ _Last updated: 2026-09-29_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 581 engine, 209 server, 261 web on `claude/trusting-meitner-q7h0j4` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 589 engine, 211 server, 310 web on `feat/issue-204-206-figure-limits-and-header` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
 
+- **Issues #204 and #206, one PR, mobile first.** #204: each colour can place
+  at most 6 army figures and 2 scouts (`figureLimit` in `board.ts`, counted per
+  asset id so per colour, shown as a countdown in the palette). Russia also has
+  exactly one white army that only the Russian player may place
+  (`BOARD_ASSET_RUSSIA_ONLY`, 403), and the palette lists it for a Russian
+  viewer only. #206: the game header shows the active player's civ and colour
+  before the turn title, the chat shows the civ (small) and the nickname in
+  the player's colour, and Turn orders now sits directly after Draw. See
+  `decisions.md`, 2026-09-29. Checked in the browser at 375px and 1200px.
+  Added to the same PR: the white army artwork is now transparent around the
+  flag, and the menu's Game section has an **End game** button (creator and
+  admin only) opening a dialog with a winner dropdown ("No winner" first).
+  It calls the existing `endGame`; no engine or server change.
 - **Hand: no heading per kind.** The hand keeps the old client's bucket order
   but the cards flow in one grid without headings, so units sit beside the Civ
   card (`decisions.md`, 2026-09-29). Branch `fix/hand-flow-grouping`.
@@ -1256,9 +1269,8 @@ _Last updated: 2026-09-29_
   by username or email, and edits a username or email inline. The PATCH route and
   both repositories now accept a `username` change, rejected with `USERNAME_TAKEN`
   when another account already uses that name (case-insensitive).
-- **Issue #26.** The white army figure is removed from the board palette: gone
-  from the manifest and the public art, and excluded in `tools/board-assets.ps1`
-  so a regeneration keeps it out.
+- **Issue #26.** The white army figure was removed from the board palette.
+  Superseded by issue #204, which brings it back for Russia only.
 - **Issue #33.** Added the responsive navigation menu and bundled rule/help
   resources, with links to FAQ, About and Highscore.
 - **Issue #34.** Added a public FAQ with current virtual-board and join-flow

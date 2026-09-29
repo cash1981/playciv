@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 
 import type { PlayerDto } from '../lib/api.js'
 import type { Theme } from '../theme.js'
+import { EndGameDialog } from './EndGameDialog.js'
 import { GreatPersonsDialog } from './GreatPersonsDialog.js'
 
 const helpLinks = [
@@ -22,6 +23,9 @@ const helpLinks = [
  * (or the prop left out) means no game page is showing, so the section is
  * not rendered. Confirmation dialogs stay at the click site, in this
  * component; `onWithdraw`/`onDelete` are the already-confirmed actions.
+ *
+ * End game opens a dialog with a winner picker instead of a plain confirm, so
+ * `onEnd` receives the chosen username, or `undefined` for "No winner".
  */
 export interface GameMenuActions {
   /** `false` for an admin viewing a game they never joined — see `canDelete`. */
@@ -31,6 +35,12 @@ export interface GameMenuActions {
   readonly canDelete: boolean
   readonly deleteDisabled: boolean
   readonly onDelete: () => void
+  /** Creator or admin, and the game has not ended yet. */
+  readonly canEnd: boolean
+  readonly endDisabled: boolean
+  /** Usernames offered as winner, from the projected view. */
+  readonly endPlayers: readonly string[]
+  readonly onEnd: (winner: string | undefined) => void
 }
 
 interface NavigationProps {
@@ -57,6 +67,7 @@ export function Navigation({
   const menuRef = useRef<HTMLDetailsElement>(null)
   // The dialog lives outside the dropdown so it survives the menu closing.
   const [showGreatPersons, setShowGreatPersons] = useState(false)
+  const [showEndGame, setShowEndGame] = useState(false)
   // Focus returns to the hamburger: the opener sits in the dropdown, which is
   // collapsed (and cannot take focus) by the time the dialog closes.
   const menuSummaryRef = useRef<HTMLElement>(null)
@@ -124,6 +135,15 @@ export function Navigation({
                   Withdraw
                 </button>
               )}
+              {game.canEnd && (
+                <button
+                  className="danger"
+                  disabled={game.endDisabled}
+                  onClick={() => setShowEndGame(true)}
+                >
+                  End game
+                </button>
+              )}
               {game.canDelete && (
                 <button
                   className="danger"
@@ -160,6 +180,18 @@ export function Navigation({
         <GreatPersonsDialog
           returnFocusTo={menuSummaryRef}
           onClose={() => setShowGreatPersons(false)}
+        />
+      )}
+      {showEndGame && game !== null && game.canEnd && (
+        <EndGameDialog
+          players={game.endPlayers}
+          busy={game.endDisabled}
+          returnFocusTo={menuSummaryRef}
+          onClose={() => setShowEndGame(false)}
+          onConfirm={(winner) => {
+            setShowEndGame(false)
+            game.onEnd(winner)
+          }}
         />
       )}
     </header>
