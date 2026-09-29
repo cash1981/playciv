@@ -15,13 +15,14 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 ### chat-orders
 
 - **Owner:** Claude (orchestrator; coder role for slices)
-- **Branch:** `feat/chat-orders`
+- **Branch:** `feat/chat-orders` (one PR, #218, for all three slices, by the human's choice)
 - **Brief:** `docs/agents/tasks/chat-orders.md`
-- **Status:** in review (slice 1 of 3 approved after three review rounds; PR open)
-- **Claimed paths:** slice 1 paths are released when its PR merges. Slices 2 and
-  3 start on new branches from `main` and claim `packages/web/...` and
-  `packages/engine/src/board.ts` then.
-- **Notes:** the `state.ts` `PlayerView` shape stays claimed until slice 1 merges.
+- **Status:** in progress (slice 1 approved; slice 2 web underway)
+- **Claimed paths (slice 2):**
+  - `packages/web/src/lib/api.ts`, `packages/web/src/views/GameView.tsx`,
+    `Navigation.tsx`, `StatusPanel.tsx`, `TurnPanel.tsx` (export only),
+    new `ChatOrdersPanel.tsx` and its css and tests, `packages/web/package.json`
+- **Notes:** slice 3 will also claim `packages/engine/src/board.ts` and `actions/`.
 
 ---
 
@@ -55,7 +56,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | chat-orders |
-| `packages/web/src/lib/api.ts` | free |
+| `packages/web/src/lib/api.ts` | chat-orders |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.

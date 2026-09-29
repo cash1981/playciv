@@ -139,3 +139,59 @@ order).
 4. New turn state: store the start player per turn (`turnStarters`) so the title
    for an old turn stays correct after the marker moves, or derive from the
    marker only? Recommendation: store it, and let the marker update it.
+
+---
+
+## Decision 2026-09-29: one pull request
+
+The human wants slices 1, 2 and 3 in the same PR (#218) so the feature can be
+tested as a whole, and cannot test before there is UI. Work continues on
+`feat/chat-orders`. Order: slice 2 (web), so there is something to test, then
+slice 3.
+
+## Slice 2: web (the merged timeline)
+
+Shown instead of `TurnPanel` and `ChatPanel` when `view.chatOrders` is true.
+With it off, nothing changes.
+
+**In:**
+
+- API client: `ChatMessageDto` gets `kind`, `turnNumber`, `phase`; `PlayerView`
+  and `activeTurn.waitingFor`; `chatPage(gameId, before?)` (calls `GET /chat?paged=1`),
+  `postOrder`, `markDone`, `unmarkDone`; `draw` and `drawWonder` accept
+  `confirmedOutOfTurn`.
+- `ChatOrdersPanel`: one timeline, oldest at the top and the composer at the
+  bottom, scrolled to the newest; "Load more" at the top fetches the previous
+  turn (`before` = oldest loaded id) and merges by id; the auto-refresh refetches
+  the current page and merges. Filter chips All / Orders / Chat / Private.
+- A message shows civilization (small), nickname (bold, in the player's colour
+  using the existing `player-*` classes), time, and the markdown body rendered
+  safely (no raw HTML, no `javascript:` links). Orders carry a `T4 · SOT` tag and
+  a "replaced" note when the same player has posted a newer order for the same
+  turn and phase (the newest counts). `system` rows are centred and quiet.
+  Left border in the player's colour.
+- Composer: Chat / Order switch. Order shows Turn and Phase selects, defaulting
+  to the viewer's current turn and first phase not done, both changeable. The
+  text field is the existing `MarkdownEditor` (injectable like `TurnPanel` does,
+  for tests). A Send button.
+- Done control: opens a sheet ("Mark phases done"): pick a turn (default current)
+  and "done up to" phase (marks all phases up to it); phases already done are
+  shown and tapping one unmarks it. Uses `markDone` / `unmarkDone`.
+- Private tab: the private log (`gamenote`), reusing `PrivateLogWorkspace`.
+- Game header: when `chatOrders`, the title reads `Turn N: waiting for Bob (SOT),
+  Carol (Trade)` from `activeTurn.waitingFor`; a small status strip shows every
+  player with a colour dot and their current phase. End turn and Take the turn
+  buttons are hidden.
+- Out-of-turn draw: when `chatOrders` and the viewer is not `activeTurn.playerId`,
+  Draw asks in a confirm dialog ("It is not your turn. X is up. Draw anyway?")
+  and sends `confirmedOutOfTurn: true` only after Yes. The draw panel is not
+  disabled in chat mode. The Status table's "turn" tag follows `activeTurn`.
+- Admin switch: in the menu's Actions submenu, a "Chat orders: on / off" item
+  for admins only (not the creator), with a confirmation dialog, calling
+  `POST /api/admin/games/:gameId/chat-orders`.
+- Replay and ended games: the panel is read-only when the game is replaying or
+  locked, like the existing panels.
+- Mobile first (375px): sticky composer, no horizontal scroll, controls at least
+  44px high, checked in the browser.
+
+**Out:** the automatic new turn, marker rotation, turn divider rows (slice 3).
