@@ -390,6 +390,25 @@ export function postOrder(state: GameState, input: PostOrderInput): ActionResult
 }
 
 /**
+ * The turn a game has reached, read from the whole table rather than from the
+ * baton holder alone. The classic view only looks at whoever holds the baton,
+ * and a holder who never wrote turn orders would report turn 1 in a game that is
+ * on turn 20. So: the larger of the classic turn and the highest turn anyone has
+ * a record for, moved on by one when everybody who has a record for that turn
+ * has finished all its phases. Overshooting only marks old turns finished, which
+ * is what a baseline is for; undershooting would pin the game to an old turn.
+ */
+function playedTurn(state: GameState): number {
+  const classicTurn = activeTurnStatus({ ...state, chatOrders: false })?.turnNumber ?? 1
+  const recorded = state.players.flatMap((player) => player.playerTurns)
+  const highest = recorded.reduce((best, turn) => Math.max(best, turn.turnNumber), 0)
+  if (highest === 0) return classicTurn
+  const atHighest = recorded.filter((turn) => turn.turnNumber === highest)
+  const finished = atHighest.every((turn) => TURN_PHASES.every((phase) => turn.revealed[phase] !== false))
+  return Math.max(classicTurn, finished ? highest + 1 : highest)
+}
+
+/**
  * Switches chat orders on or off for a game. The engine has no notion of an
  * admin, so the server route is what restricts who may call this.
  *
@@ -400,9 +419,8 @@ export function postOrder(state: GameState, input: PostOrderInput): ActionResult
  */
 export function setChatOrders(state: GameState, enabled: boolean): ActionResult {
   if (state.chatOrders === enabled) return ok(state)
-  const classicTurn = activeTurnStatus({ ...state, chatOrders: false })?.turnNumber ?? 1
   const chatOrdersStartTurn = enabled
-    ? Math.max(state.chatOrdersStartTurn, classicTurn)
+    ? Math.max(state.chatOrdersStartTurn, playedTurn(state))
     : state.chatOrdersStartTurn
   return ok(
     appendInfoLog(

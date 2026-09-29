@@ -3292,6 +3292,11 @@ classic turns has players with no `PlayerTurn` for early turns (a player may
 never have written turn 1), and that would pin the current turn, and the turn
 holder, to turn 1. Every turn below `chatOrdersStartTurn` therefore counts as
 finished for everybody. Switching the setting on sets it to the larger of its
-current value and the turn the classic `activeTurnStatus` reports at that moment,
-computed before the flag flips; switching off leaves it alone and it never goes
-down. It is 1 by default and for old saves, and is not in `PlayerView`.
+current value and the turn the game has reached at that moment, computed before
+the flag flips. That is read from the whole table, not from the baton holder
+alone: the classic `activeTurnStatus` only looks at the holder, and a holder who
+never wrote turn orders would report turn 1 in a game on turn 20. So it is the
+larger of the classic turn and the highest turn anyone has a record for (plus one
+when everybody with a record for that turn has finished it). Overshooting only
+marks old turns finished; undershooting would pin the game. Switching off leaves
+the baseline alone and it never goes down. It is 1 by default and for old saves, and is not in `PlayerView`.

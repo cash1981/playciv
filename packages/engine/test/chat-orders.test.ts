@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { draw, drawWonder } from '../src/actions/draw.js'
+import { takeTurn } from '../src/actions/player.js'
 import {
   allPublicTurns,
   markPhasesDone,
@@ -519,6 +520,26 @@ describe('the chat orders baseline (chatOrdersStartTurn)', () => {
     }
     return state
   }
+
+  it('does not pin the turn to 1 when the baton sits on a player who never wrote turn orders', () => {
+    // Karandras1 wrote nothing at all and holds the baton, the classic view says turn 1
+    const everyoneElse = [CASH1981, ITCHI, CHUL].reduce((state, playerId) => {
+      let next = state
+      for (let turnNumber = 1; turnNumber <= 20; turnNumber += 1) {
+        for (const phase of TURN_PHASES) {
+          next = unwrap(updateTurn(next, { playerId, turnNumber, phase, order: `${phase} ${turnNumber}` }))
+          next = unwrap(revealTurnOrder(next, { playerId, turnNumber, phase, at: 't' }))
+        }
+      }
+      return next
+    }, firstCivGame())
+    const laggardHoldsBaton = unwrap(takeTurn(everyoneElse, KARANDRAS1))
+    expect(activeTurnStatus(laggardHoldsBaton)?.turnNumber).toBe(1)
+
+    const on = unwrap(setChatOrders(laggardHoldsBaton, true))
+    expect(on.chatOrdersStartTurn).toBe(21)
+    expect(turnStatus(on).currentTurn).toBe(21)
+  })
 
   it('starts at 1 in a new game and is set when the setting is switched on', () => {
     expect(firstCivGame().chatOrdersStartTurn).toBe(1)
