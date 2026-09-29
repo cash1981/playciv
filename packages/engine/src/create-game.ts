@@ -162,6 +162,8 @@ export function createGame(options: CreateGameOptions): GameState {
     wondersDealt: false,
     chatOrders: false,
     chatOrdersStartTurn: 1,
+    startPlayerId: null,
+    turnStarters: {},
     battle: null,
     rev: 0,
   }

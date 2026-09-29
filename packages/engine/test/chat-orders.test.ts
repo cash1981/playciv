@@ -396,6 +396,8 @@ describe('activeTurn in the player view', () => {
       username: 'Karandras1',
       turnNumber: 2,
       phase: 'SOT',
+      // Turn 1 finished, so turn 2 started with the next seat
+      startPlayer: 'Karandras1',
       waitingFor: [
         { username: 'cash1981', phase: 'CM' },
         { username: 'Karandras1', phase: 'SOT' },

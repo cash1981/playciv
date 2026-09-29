@@ -26,9 +26,14 @@ import {
   publicTurnKey,
   publicTurn,
   sameTurn,
+  seatAfter,
+  startPlayerOf,
   TURN_PHASE_LABEL,
+  turnStatus,
   withOrder,
 } from '../turn.js'
+import { START_PLAYER_ID } from '../board.js'
+import { placeStartMarker } from './board.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -268,6 +273,8 @@ export interface MarkPhasesDoneInput {
   readonly turnNumber: number
   /** This phase and every phase before it are marked done. */
   readonly upToPhase: TurnPhase
+  /** ISO timestamp for the board history when this starts a new turn. */
+  readonly at?: string
 }
 
 /**
@@ -299,16 +306,56 @@ export function markPhasesDone(state: GameState, input: MarkPhasesDoneInput): Ac
       ? `${TURN_PHASE_LABEL[input.upToPhase]} phase`
       : `all phases up to ${TURN_PHASE_LABEL[input.upToPhase]}`
   const message = `Turn ${input.turnNumber} - ${player.username} marked ${what} done`
-  return ok(
-    appendLog(withPlayerTurn(state, player, updated), {
-      username: player.username,
-      playerId: player.playerId,
-      logType: PHASE_LOG_TYPE[input.upToPhase],
-      privateLog: message,
-      publicLog: message,
-    }),
-  )
+  const marked = appendLog(withPlayerTurn(state, player, updated), {
+    username: player.username,
+    playerId: player.playerId,
+    logType: PHASE_LOG_TYPE[input.upToPhase],
+    privateLog: message,
+    publicLog: message,
+  })
+  return ok(startNewTurnIfReached(state, marked, player.playerId, input.at))
 }
+
+/**
+ * The turn rolled over: the last player finished Research, so `turnStatus` moved
+ * from turn N to a later one. Starts it: the start player marker moves to the
+ * next seat clockwise, counted from whoever holds it now, as a normal board
+ * history entry that Undo can take back. Records who started the turn and writes
+ * the public log line.
+ *
+ * `turnStarters` is the guard. Unmarking a Research and marking it again moves
+ * `turnStatus` back and forth, and must not rotate twice; unmarking never rolls
+ * a started turn back.
+ */
+function startNewTurnIfReached(
+  before: GameState,
+  after: GameState,
+  actorId: string,
+  at: string | undefined,
+): GameState {
+  const turnNumber = turnStatus(after).currentTurn
+  if (turnNumber <= turnStatus(before).currentTurn) return after
+  if (after.turnStarters[turnNumber] !== undefined) return after
+
+  const current = startPlayerOf(after)
+  const next = current === undefined ? undefined : seatAfter(bySeat(after.players), current.playernumber)
+  if (next === undefined) return after
+
+  // Log first, so the board history entry counts the line as known at the time
+  const logged = appendLog(after, {
+    username: 'System',
+    publicLog: `Turn ${turnNumber}: ${next.username} starts with the Start of turn phase`,
+  })
+  const moved = placeStartMarker(logged, next, actorId, at)
+  return {
+    ...moved,
+    startPlayerId: next.playerId,
+    turnStarters: { ...moved.turnStarters, [turnNumber]: next.username },
+  }
+}
+
+const bySeat = (players: readonly Playerhand[]): readonly Playerhand[] =>
+  [...players].sort((a, b) => a.playernumber - b.playernumber)
 
 export interface UnmarkPhaseDoneInput {
   readonly playerId: string
@@ -414,18 +461,36 @@ function playedTurn(state: GameState): number {
  *
  * Switching on sets the baseline `chatOrdersStartTurn` to the turn the classic
  * view reports right now (computed before the flag flips), never lowering it.
- * Switching off touches nothing else, which is why going back and forth loses
- * no data.
+ * It also settles the start player: the marker stays where it is when the board
+ * has one, and is placed in the start player's area when it has not (a board
+ * history entry, made in the start player's name since the admin may not be in
+ * the game). The starter of the baseline turn is recorded. Switching off touches
+ * nothing else, which is why going back and forth loses no data, and places no
+ * marker.
  */
-export function setChatOrders(state: GameState, enabled: boolean): ActionResult {
+export function setChatOrders(state: GameState, enabled: boolean, at?: string): ActionResult {
   if (state.chatOrders === enabled) return ok(state)
   const chatOrdersStartTurn = enabled
     ? Math.max(state.chatOrdersStartTurn, playedTurn(state))
     : state.chatOrdersStartTurn
-  return ok(
-    appendInfoLog(
-      { ...state, chatOrders: enabled, chatOrdersStartTurn },
-      `Chat orders turned ${enabled ? 'on' : 'off'}`,
-    ),
+  const flipped = appendInfoLog(
+    { ...state, chatOrders: enabled, chatOrdersStartTurn },
+    `Chat orders turned ${enabled ? 'on' : 'off'}`,
   )
+  if (!enabled) return ok(flipped)
+
+  const starter = startPlayerOf(flipped)
+  if (starter === undefined) return ok(flipped)
+  const hasMarker = flipped.board.pieces.some((piece) => piece.assetId === START_PLAYER_ID)
+  const placed = hasMarker ? flipped : placeStartMarker(flipped, starter, starter.playerId, at)
+  // A marker that was already there decides who the start player is
+  const settled = startPlayerOf(placed) ?? starter
+  return ok({
+    ...placed,
+    startPlayerId: settled.playerId,
+    turnStarters:
+      placed.turnStarters[chatOrdersStartTurn] === undefined
+        ? { ...placed.turnStarters, [chatOrdersStartTurn]: settled.username }
+        : placed.turnStarters,
+  })
 }

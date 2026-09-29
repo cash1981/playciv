@@ -11,6 +11,7 @@
  * as the key format.
  */
 
+import { areaAt, playerAreas, START_PLAYER_ID } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
 export const TURN_PHASES = ['SOT', 'TRADE', 'CM', 'MOVEMENT', 'RESEARCH'] as const
@@ -305,17 +306,67 @@ export function turnStatus(state: GameState): TurnStatus {
 }
 
 /**
+ * The seat after `playernumber`, clockwise: the next higher number, wrapping to
+ * the lowest. `seats` are the active players in seat order, so a withdrawn
+ * player is never picked and is skipped by falling through to the next seat.
+ */
+export const seatAfter = (seats: readonly Playerhand[], playernumber: number): Playerhand | undefined =>
+  seats.find((player) => player.playernumber > playernumber) ?? seats[0]
+
+/**
+ * Who the start player is, derived so manual moves, undo and redo cannot leave it
+ * stale: the owner of the player area that holds the centre of the
+ * `markers/startplayer` piece. With no marker, or one outside every player's
+ * area, it is the last one the engine put in place (`startPlayerId`), and with
+ * none of those seat 1. A start player who has withdrawn gives way to the next
+ * seat. `undefined` when there are no active players.
+ */
+export function startPlayerOf(state: GameState): Playerhand | undefined {
+  const seats = bySeat(state.players)
+  const marker = state.board.pieces.find((piece) => piece.assetId === START_PLAYER_ID)
+  if (marker !== undefined) {
+    const area = areaAt(
+      playerAreas(state.board, seats),
+      marker.x + marker.width / 2,
+      marker.y + marker.height / 2,
+    )
+    const owner = seats.find((player) => player.playerId === area?.playerId)
+    if (owner !== undefined) return owner
+  }
+
+  const lastKnown = state.startPlayerId
+  if (lastKnown === null) return seats[0]
+  const active = seats.find((player) => player.playerId === lastKnown)
+  if (active !== undefined) return active
+  const withdrawn = state.withdrawnPlayers.find((player) => player.playerId === lastKnown)
+  return withdrawn === undefined ? seats[0] : seatAfter(seats, withdrawn.playernumber)
+}
+
+/**
+ * Who started turn `turnNumber`. The marker is live, so for the newest started
+ * turn that is the derived start player: a manual move or an undo shows at once.
+ * A turn older than the newest started one was rolled back to (a Research was
+ * unmarked), and the record keeps its starter. `null` when nobody can be named.
+ */
+export function startPlayerName(state: GameState, turnNumber: number): string | null {
+  const newest = Object.keys(state.turnStarters).reduce((best, key) => Math.max(best, Number(key)), 0)
+  const recorded = state.turnStarters[turnNumber]
+  if (recorded !== undefined && turnNumber < newest) return recorded
+  return startPlayerOf(state)?.username ?? null
+}
+
+/**
  * Who "has the turn" when chat orders are on. There is no baton: it is the
  * first player, in seat order starting from the start player, who has not
  * marked the earliest open phase done. The earliest open phase is the first one
  * some active player has not marked done in the current turn.
  *
- * `startPlayerNumber` is the seat that holds the start player marker. It is 1
- * until the marker is tracked (slice 3 of the brief).
+ * The seat it starts from is the start player of the current turn (see
+ * `startPlayerName`), or `startPlayerNumber` when a caller passes one.
  *
  * `undefined` when there are no active players.
  */
-export function turnHolder(state: GameState, startPlayerNumber = 1): Playerhand | undefined {
+export function turnHolder(state: GameState, startPlayerNumber?: number): Playerhand | undefined {
   const seats = bySeat(state.players)
   const { currentTurn } = turnStatus(state)
   const earliest = TURN_PHASES.find((phase) =>
@@ -323,8 +374,10 @@ export function turnHolder(state: GameState, startPlayerNumber = 1): Playerhand 
   )
   if (earliest === undefined) return undefined
 
+  const starter = seats.find((player) => player.username === startPlayerName(state, currentTurn))
+  const startNumber = startPlayerNumber ?? starter?.playernumber ?? 1
   // No seat at or after the start number (it is above every seat): begin at seat 1.
-  const found = seats.findIndex((player) => player.playernumber >= startPlayerNumber)
+  const found = seats.findIndex((player) => player.playernumber >= startNumber)
   const from = found === -1 ? 0 : found
   const ordered = [...seats.slice(from), ...seats.slice(0, from)]
   return ordered.find((player) => !isDone(turnOf(player, currentTurn), earliest))

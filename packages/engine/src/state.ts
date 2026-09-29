@@ -17,7 +17,13 @@ import type { CoinSources } from './coins.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
 import type { WaitingFor } from './turn.js'
-import { currentPhaseStatus, TURN_PHASES, turnHolder, turnStatus } from './turn.js'
+import {
+  currentPhaseStatus,
+  startPlayerName,
+  TURN_PHASES,
+  turnHolder,
+  turnStatus,
+} from './turn.js'
 import type { Undo } from './undo.js'
 import type { Battle, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
@@ -238,6 +244,20 @@ export interface GameState {
    */
   readonly chatOrdersStartTurn: number
   /**
+   * Chat orders: the start player the engine last put in place (the marker
+   * moving to them at the start of a turn, or chat orders being switched on), by
+   * player id. It is only the fallback of `startPlayerOf`, used when the marker
+   * is missing or lies outside every player's area. Public. Null until then.
+   */
+  readonly startPlayerId: string | null
+  /**
+   * Chat orders: who started each turn, turn number to username, so the title
+   * of an old turn stays right after the marker has moved on. Also the guard
+   * that stops a turn from being started twice. Public. Empty until chat orders
+   * is switched on.
+   */
+  readonly turnStarters: Readonly<Record<number, string>>
+  /**
    * The currently active battle, or null if no battle is in progress.
    * At most one battle may be active per game at a time.
    */
@@ -281,6 +301,11 @@ export interface ActiveTurnStatus {
    * unchanged. Public, derived from the `done` flags.
    */
   readonly waitingFor?: readonly WaitingFor[]
+  /**
+   * Chat orders only: the username of whoever started this turn, `null` when
+   * there is nobody. Absent when chat orders are off. Public.
+   */
+  readonly startPlayer?: string | null
 }
 
 export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
@@ -318,6 +343,7 @@ function chatOrdersActiveTurn(state: GameState): ActiveTurnStatus | null {
     // open phase too. `SOT` only satisfies the type.
     phase: phase ?? 'SOT',
     waitingFor: status.waitingFor,
+    startPlayer: startPlayerName(state, status.currentTurn),
   }
 }
 

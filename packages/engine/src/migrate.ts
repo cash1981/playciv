@@ -37,7 +37,7 @@ const correctSocialPolicyFlipsides = (
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'chatOrders' | 'chatOrdersStartTurn'
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'chatOrders' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters'
 > &
   Partial<
     Pick<
@@ -51,6 +51,8 @@ type MaybeOlder = Omit<
       | 'createdAt'
       | 'chatOrders'
       | 'chatOrdersStartTurn'
+      | 'startPlayerId'
+      | 'turnStarters'
     >
   >
 
@@ -232,5 +234,7 @@ export function migrateGameState(state: GameState): GameState {
     chatOrders: older.chatOrders ?? false,
     // Turn 1 is the baseline of a game that has never used chat orders.
     chatOrdersStartTurn: older.chatOrdersStartTurn ?? 1,
+    startPlayerId: older.startPlayerId ?? null,
+    turnStarters: older.turnStarters ?? {},
   }
 }
