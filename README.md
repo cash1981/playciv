@@ -754,6 +754,14 @@ looking broken rather than intentionally unowned. `revealedFeed` now labels
 it `'Barbarians'`; `playerId` itself stays `null` — no player identity is
 invented. See `docs/agents/decisions.md`, 2026-09-25.
 
+**Chat orders are an admin-only switch per game (issue #215).** New, with no
+old-system counterpart. `POST /api/admin/games/:gameId/chat-orders` turns on a
+mode where chat and turn orders share one timeline, players mark phases done
+(and can unmark them), and the game says who it is waiting for. It is off by
+default, only the admin role can change it, and switching it off gives the
+classic Chat and Turn orders panels back with no lost data. This first slice
+has no UI yet. See `docs/agents/decisions.md`, 2026-09-29.
+
 ## Deferred
 
 - **Card artwork.** The hand is shown as text. `itemImage()` in the engine

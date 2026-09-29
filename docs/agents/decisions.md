@@ -3235,3 +3235,63 @@ because `endBattleTurn` is advisory and any participant may end a turn out of
 turn, so the recipient cannot be derived from the previous holder. The presser
 is never mailed. The initial battle turn is `defender`, so the attacker ending
 first lands the turn on themselves and produces no mail.
+
+## 2026-09-29 — Chat orders, slice 1 (issue #215)
+
+New feature specified by the human; the old system has no counterpart. The
+brief is `docs/agents/tasks/chat-orders.md`. Slice 1 is the engine and the
+server, with no new UI. These are the choices that are not obvious from the code.
+
+**Classic reveal also sets `done`.** `PlayerTurn.done` is separate from
+`revealed`, because a phase can take several messages and posting an order does
+not mean the phase is finished. `revealTurnOrder` sets both, so switching the
+setting off and on again agrees about what is done. Old turns migrate with
+`done = revealed`, the rule that already backfills `revealed`. Saving or editing
+a classic order does not touch `done`; only an explicit unmark does.
+
+**`GET /chat` hides order and system rows from the classic panel, and pages only
+on opt-in.** The live ChatPanel does `[...chat]` on the response, so the shape
+must not change by itself, not even for a game with chat orders on. The endpoint
+returns the plain array of `chat` rows in the old five-key shape unless the query
+has `paged=1` or `before`, and then only for a game with the setting on; it
+answers `{messages, hasMore}`. Order and `system` rows are never in the plain
+array, so turning the setting off gives the classic panel its chat back with
+nothing extra in it, and no row is deleted.
+
+**The timeline row is not written atomically with the game state.** The game
+state is authoritative. The order, done and undone routes save the state through
+`applyToGame`, and the timeline row is written in its `after` hook, which logs a
+failure and does not fail the request. A failed row write therefore leaves an
+order in `orders` and `history` (and so in the classic Turn orders panel) but not
+in the timeline; slice 2 or 3 may reconcile that from the game state. A
+repository method that stores game, revision and chat row together was not added:
+it would change the `Repository` interface, both stores and the D1 batch for a
+failure that loses nothing authoritative, and slice 1 is meant to stay small.
+
+**`turnHolder` replaces the baton for the draw gate only when chat orders is on.**
+With the setting on, "your turn" is derived, the first player in seat order from
+the start player who has not marked the earliest open phase done, and `draw` and
+`drawWonder` use it instead of `yourTurn`. With it off nothing changes, and
+`confirmedOutOfTurn` is ignored. The baton (`yourTurn`, `endTurn`, `takeTurn`)
+is left alone for now; slice 3 decides what becomes of it. The turn e-mail
+therefore names no phase when the setting is on, because `activeTurnStatus` then
+describes the turn holder and not the baton holder the mail goes to.
+
+**`confirmedOutOfTurn` is an engine input.** It is a field on `DrawInput`, not a
+check in the route, so the engine stays the one place that decides whether a draw
+is allowed. The warning dialog is the client's job (slice 2): it sends the draw,
+gets `NOT_YOUR_TURN`, asks, and sends it again with the flag.
+
+**The order, done and undone actions refuse with `CHAT_ORDERS_OFF` when the
+setting is off.** The check is in the engine actions, mapped to 409. The classic
+update and reveal are unaffected.
+
+**`chatOrdersStartTurn` is the baseline for `turnStatus`.** The current turn is
+the lowest one some active player has not finished, but a game that played 20
+classic turns has players with no `PlayerTurn` for early turns (a player may
+never have written turn 1), and that would pin the current turn, and the turn
+holder, to turn 1. Every turn below `chatOrdersStartTurn` therefore counts as
+finished for everybody. Switching the setting on sets it to the larger of its
+current value and the turn the classic `activeTurnStatus` reports at that moment,
+computed before the flag flips; switching off leaves it alone and it never goes
+down. It is 1 by default and for old saves, and is not in `PlayerView`.
