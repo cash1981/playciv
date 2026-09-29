@@ -54,8 +54,17 @@ function openSubmenu(name: 'Rules' | 'Actions'): void {
   fireEvent.click(screen.getByRole('button', { name }))
 }
 
-/** The End game fields, for tests that are not about ending a game. */
-const noEnd = { canEnd: false, endDisabled: false, endPlayers: [] as readonly string[], onEnd: vi.fn() }
+/** The End game and chat orders fields, for tests that are not about either. */
+const noEnd = {
+  canEnd: false,
+  endDisabled: false,
+  endPlayers: [] as readonly string[],
+  onEnd: vi.fn(),
+  canSetChatOrders: false,
+  setChatOrdersDisabled: false,
+  chatOrders: false,
+  onSetChatOrders: vi.fn(),
+}
 
 const gameMenu = (overrides: Partial<GameMenuActions> = {}): GameMenuActions => ({
   canWithdraw: true,
@@ -68,6 +77,10 @@ const gameMenu = (overrides: Partial<GameMenuActions> = {}): GameMenuActions => 
   endDisabled: false,
   endPlayers: ['cash1981', 's3s3', 'ola'],
   onEnd: vi.fn(),
+  canSetChatOrders: false,
+  setChatOrdersDisabled: false,
+  chatOrders: false,
+  onSetChatOrders: vi.fn(),
   ...overrides,
 })
 
@@ -453,6 +466,57 @@ describe('Navigation Actions submenu', () => {
 
     expect(screen.queryByRole('button', { name: 'Withdraw' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Delete game' })).not.toBeNull()
+  })
+})
+
+describe('Navigation chat orders switch (issue #215)', () => {
+  const openActions = (game: GameMenuActions): void => {
+    render(menu({ player: admin, screen: 'game', game }))
+    openMenu()
+    openSubmenu('Actions')
+  }
+
+  it('is not offered unless the menu says the viewer is an admin', () => {
+    openActions(gameMenu({ canSetChatOrders: false }))
+    expect(screen.queryByRole('button', { name: /^Chat orders/ })).toBeNull()
+  })
+
+  it('shows the current state and asks before switching on', () => {
+    const onSetChatOrders = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    openActions(gameMenu({ canSetChatOrders: true, chatOrders: false, onSetChatOrders }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chat orders: off' }))
+
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Switch chat orders on?'))
+    expect(onSetChatOrders).toHaveBeenCalledExactlyOnceWith(true)
+    expect(isOpen()).toBe(false)
+  })
+
+  it('switches off from the on state', () => {
+    const onSetChatOrders = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    openActions(gameMenu({ canSetChatOrders: true, chatOrders: true, onSetChatOrders }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chat orders: on' }))
+
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Switch chat orders off?'))
+    expect(onSetChatOrders).toHaveBeenCalledExactlyOnceWith(false)
+  })
+
+  it('does nothing when the confirmation is declined', () => {
+    const onSetChatOrders = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    openActions(gameMenu({ canSetChatOrders: true, onSetChatOrders }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chat orders: off' }))
+
+    expect(onSetChatOrders).not.toHaveBeenCalled()
+  })
+
+  it('is disabled while the game is busy', () => {
+    openActions(gameMenu({ canSetChatOrders: true, setChatOrdersDisabled: true }))
+    expect((screen.getByRole('button', { name: 'Chat orders: off' }) as HTMLButtonElement).disabled).toBe(true)
   })
 })
 

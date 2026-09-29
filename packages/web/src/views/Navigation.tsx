@@ -63,6 +63,12 @@ export interface GameMenuActions {
   /** Usernames offered as winner, from the projected view. */
   readonly endPlayers: readonly string[]
   readonly onEnd: (winner: string | undefined) => void
+  /** Admin role only, not the game creator: it changes how the whole game is played. */
+  readonly canSetChatOrders: boolean
+  readonly setChatOrdersDisabled: boolean
+  /** Whether chat orders (issue #215) is on for the game now. */
+  readonly chatOrders: boolean
+  readonly onSetChatOrders: (enabled: boolean) => void
 }
 
 interface NavigationProps {
@@ -267,6 +273,21 @@ export function Navigation({
                           End game
                         </button>
                       )}
+                      {game.canSetChatOrders && (
+                        <button
+                          type="button"
+                          className="nav-sub-row"
+                          disabled={game.setChatOrdersDisabled}
+                          onClick={() => {
+                            const enabled = !game.chatOrders
+                            if (window.confirm(chatOrdersConfirmation(enabled))) {
+                              game.onSetChatOrders(enabled)
+                            }
+                          }}
+                        >
+                          {`Chat orders: ${game.chatOrders ? 'on' : 'off'}`}
+                        </button>
+                      )}
                       {game.canDelete && (
                         <button
                           type="button"
@@ -328,6 +349,13 @@ export function Navigation({
       )}
     </header>
   )
+}
+
+/** Nothing is lost either way: the same data feeds the timeline and the classic panels. */
+function chatOrdersConfirmation(enabled: boolean): string {
+  return enabled
+    ? 'Switch chat orders on? Chat and turn orders become one timeline, and players mark phases done. You can switch it off again without losing anything.'
+    : 'Switch chat orders off? The game goes back to the separate Chat and Turn orders panels. Nothing is lost.'
 }
 
 function navigate(
