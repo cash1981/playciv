@@ -1,26 +1,48 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { PlayerDto } from '../lib/api.js'
 import type { Theme } from '../theme.js'
 import { EndGameDialog } from './EndGameDialog.js'
 import { GreatPersonsDialog } from './GreatPersonsDialog.js'
+import './Navigation.css'
 
-const helpLinks = [
-  { href: '/help/Civ_Tech_FF-WW.-1.jpg', label: 'Fame and Fortune / Wisdom and Warfare overview' },
-  { href: '/help/civilization-rules.pdf', label: 'Base game rulebook' },
-  { href: '/help/civ-fame-and-fortune-rules.pdf', label: 'Fame and Fortune rulebook' },
-  { href: '/help/CI03_WW_Rulebook.pdf', label: 'Wisdom and Warfare rulebook' },
-  { href: '/help/Civilization FAQ_v2.0.pdf', label: 'Official FAQ 2.0' },
-  { href: 'https://boardgamegeek.com/thread/1111649/civilization-summary-official-and-unofficial-rules', label: 'Unofficial rules summary' },
-  { href: '/help/Civ_Tech_FF-WW.-2.jpg', label: 'Fame and Fortune / Wisdom and Warfare tech overview' },
+/**
+ * The Rules submenu (issue #209). Same files as the old flat "Rules and help"
+ * list, now grouped; only the labels changed.
+ */
+const ruleGroups = [
+  {
+    label: 'Rulebooks',
+    links: [
+      { href: '/help/civilization-rules.pdf', label: 'Base game' },
+      { href: '/help/civ-fame-and-fortune-rules.pdf', label: 'Fame and Fortune' },
+      { href: '/help/CI03_WW_Rulebook.pdf', label: 'Wisdom and Warfare' },
+    ],
+  },
+  {
+    label: 'Help',
+    links: [
+      { href: '/help/Civilization FAQ_v2.0.pdf', label: 'Official FAQ 2.0' },
+      { href: 'https://boardgamegeek.com/thread/1111649/civilization-summary-official-and-unofficial-rules', label: 'Unofficial rules summary' },
+    ],
+  },
+  {
+    label: 'Charts (F&F / W&W)',
+    links: [
+      { href: '/help/Civ_Tech_FF-WW.-1.jpg', label: 'Overview' },
+      { href: '/help/Civ_Tech_FF-WW.-2.jpg', label: 'Tech overview' },
+    ],
+  },
 ] as const
+
+type Submenu = 'rules' | 'actions'
 
 /**
  * The game-scoped menu actions `GameView` exposes to this menu (issue #177):
  * Withdraw and Delete game move out of the game page's own button row and
- * into the site menu's "Game" section — the same navbar old-civ-web's
+ * into the site menu's "Actions" submenu — the same navbar old-civ-web's
  * `nav.html` used for its "Game options"/"Admin settings" dropdowns. `null`
- * (or the prop left out) means no game page is showing, so the section is
+ * (or the prop left out) means no game page is showing, so the submenu is
  * not rendered. Confirmation dialogs stay at the click site, in this
  * component; `onWithdraw`/`onDelete` are the already-confirmed actions.
  *
@@ -64,21 +86,67 @@ export function Navigation({
   game = null,
 }: NavigationProps): React.JSX.Element {
   const nextTheme = theme === 'dark' ? 'light' : 'dark'
-  const menuRef = useRef<HTMLDetailsElement>(null)
-  // The dialog lives outside the dropdown so it survives the menu closing.
+  const [open, setOpen] = useState(false)
+  // One submenu open at a time keeps the sheet short on a phone.
+  const [submenu, setSubmenu] = useState<Submenu | null>(null)
+  // The dialogs live outside the menu so they survive it closing.
   const [showGreatPersons, setShowGreatPersons] = useState(false)
   const [showEndGame, setShowEndGame] = useState(false)
-  // Focus returns to the hamburger: the opener sits in the dropdown, which is
-  // collapsed (and cannot take focus) by the time the dialog closes.
-  const menuSummaryRef = useRef<HTMLElement>(null)
+  // Focus returns to the hamburger: the opener sits in the menu, which is
+  // unmounted (and cannot take focus) by the time a dialog closes.
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
-  // Close the menu after any link or button inside it is used. Clicking the
-  // nested "Rules and help" summary itself does not match `a, button`, so it
-  // only opens that submenu without closing this one.
-  const closeMenuAfterAction = (event: React.MouseEvent<HTMLDivElement>): void => {
-    const target = event.target as HTMLElement
-    if (target.closest('a, button') !== null) menuRef.current?.removeAttribute('open')
+  const closeMenu = (): void => {
+    setOpen(false)
+    setSubmenu(null)
+    menuButtonRef.current?.focus()
   }
+
+  // Escape closes the menu, and so does a press outside it (only reachable on
+  // desktop, where the menu is a dropdown; on a phone the sheet covers the page).
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setOpen(false)
+      setSubmenu(null)
+      menuButtonRef.current?.focus()
+    }
+    const onPointerDown = (event: Event): void => {
+      if (event.target instanceof Node && menuRef.current?.contains(event.target)) return
+      setOpen(false)
+      setSubmenu(null)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('pointerdown', onPointerDown)
+    }
+  }, [open])
+
+  // Land on the close button so a keyboard or screen reader user starts inside
+  // the sheet. Programmatic focus after a tap shows no focus ring.
+  useEffect(() => {
+    if (open) closeButtonRef.current?.focus()
+  }, [open])
+
+  // Choosing a link or action closes the menu; a submenu toggle (it carries
+  // `aria-expanded`) only folds itself open or shut.
+  const closeMenuAfterAction = (event: React.MouseEvent<HTMLDivElement>): void => {
+    const control = (event.target as HTMLElement).closest('a, button')
+    if (control !== null && !control.hasAttribute('aria-expanded')) closeMenu()
+  }
+
+  // Actions vanishes when the game page goes away; it must not come back folded out.
+  useEffect(() => {
+    if (game === null) setSubmenu((current) => (current === 'actions' ? null : current))
+  }, [game])
+
+  const toggleSubmenu = (name: Submenu): void => setSubmenu((current) => (current === name ? null : name))
 
   return (
     <header className="topbar">
@@ -88,97 +156,161 @@ export function Navigation({
         <span className="muted">playciv</span>
       </a>
       <span className="brand-spacer" />
-      <details className="navigation-menu main-menu" ref={menuRef}>
-        <summary ref={menuSummaryRef} aria-label="Menu">
+      <div className="main-menu" ref={menuRef}>
+        <button
+          type="button"
+          className="nav-trigger"
+          ref={menuButtonRef}
+          aria-label="Menu"
+          aria-expanded={open}
+          onClick={() => {
+            if (open) closeMenu()
+            else setOpen(true)
+          }}
+        >
           <span className="hamburger-icon" aria-hidden="true">
             <span />
             <span />
             <span />
           </span>
-        </summary>
-        <div className="navigation-dropdown main-dropdown" onClick={closeMenuAfterAction}>
-          <nav className="site-navigation" aria-label="Main navigation">
-            <a href="/faq">FAQ</a>
-            <a href="/about">About</a>
-            <a href="/highscore" onClick={(event) => navigate(event, '/highscore', onNavigate)}>Highscore</a>
-            <button type="button" onClick={() => setShowGreatPersons(true)}>
-              Great persons
-            </button>
-            <details className="navigation-menu rules-menu">
-              <summary>Rules and help</summary>
-              <div className="navigation-dropdown">
-                {helpLinks.map((link) => (
-                  <a
-                    key={link.href}
-                    href={link.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {link.label}
-                  </a>
-                ))}
-              </div>
-            </details>
-          </nav>
-
-          {game !== null && (
-            <div className="navigation-game-actions" role="group" aria-label="Game">
-              <h3>Game</h3>
-              {game.canWithdraw && (
-                <button
-                  className="danger"
-                  disabled={game.withdrawDisabled}
-                  onClick={() => {
-                    if (window.confirm('Withdraw from this game?')) game.onWithdraw()
-                  }}
-                >
-                  Withdraw
-                </button>
-              )}
-              {game.canEnd && (
-                <button
-                  className="danger"
-                  disabled={game.endDisabled}
-                  onClick={() => setShowEndGame(true)}
-                >
-                  End game
-                </button>
-              )}
-              {game.canDelete && (
-                <button
-                  className="danger"
-                  disabled={game.deleteDisabled}
-                  onClick={() => {
-                    if (window.confirm('Delete this game permanently?')) game.onDelete()
-                  }}
-                >
-                  Delete game
-                </button>
-              )}
+        </button>
+        {open && (
+          <div className="nav-sheet" id="main-menu-sheet">
+            <div className="nav-sheet-header">
+              <span className="nav-sheet-title">Menu</span>
+              <button
+                type="button"
+                className="nav-close"
+                ref={closeButtonRef}
+                aria-label="Close menu"
+                onClick={closeMenu}
+              >
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                  <path d="M3 3l10 10M13 3L3 13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
             </div>
-          )}
+            <div className="nav-sheet-body" onClick={closeMenuAfterAction}>
+              <nav className="site-navigation" aria-label="Main navigation">
+                <a className="nav-row" href="/faq">FAQ</a>
+                <a className="nav-row" href="/about">About</a>
+                <a className="nav-row" href="/highscore" onClick={(event) => navigate(event, '/highscore', onNavigate)}>
+                  Highscore
+                </a>
+                <button type="button" className="nav-row" onClick={() => setShowGreatPersons(true)}>
+                  Great persons
+                </button>
+                <button
+                  type="button"
+                  className="nav-row nav-toggle"
+                  aria-expanded={submenu === 'rules'}
+                  onClick={() => toggleSubmenu('rules')}
+                >
+                  <span>Rules</span>
+                  <Chevron />
+                </button>
+                {submenu === 'rules' && (
+                  <div className="nav-submenu" id="nav-submenu-rules" role="group" aria-label="Rules">
+                    {ruleGroups.map((group) => (
+                      <div key={group.label} className="nav-group" role="group" aria-label={group.label}>
+                        <div className="nav-group-label" aria-hidden="true">{group.label}</div>
+                        {group.links.map((link) => (
+                          <a
+                            key={link.href}
+                            className="nav-sub-row"
+                            href={link.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <span>{link.label}</span>
+                            <ExternalIcon />
+                          </a>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </nav>
 
-          <div className="topbar-actions">
-            {player !== null && player.role === 'admin' && screen !== 'admin' && (
-              <button onClick={() => onNavigate('/admin')}>Admin</button>
-            )}
-            <button onClick={onToggleTheme} aria-label={`Switch to ${nextTheme} theme`}>
-              {theme === 'dark' ? 'Light theme' : 'Dark theme'}
-            </button>
-            {player === null ? (
-              <span className="muted">Not signed in</span>
-            ) : (
-              <>
-                <span className="muted">{player.username}</span>
-                <button onClick={onSignOut}>Sign out</button>
-              </>
-            )}
+              {game !== null && (
+                <div className="nav-actions">
+                  <button
+                    type="button"
+                    className="nav-row nav-toggle"
+                    aria-expanded={submenu === 'actions'}
+                    onClick={() => toggleSubmenu('actions')}
+                  >
+                    <span>Actions</span>
+                    <Chevron />
+                  </button>
+                  {submenu === 'actions' && (
+                    <div className="nav-submenu" id="nav-submenu-actions" role="group" aria-label="Actions">
+                      {game.canWithdraw && (
+                        <button
+                          type="button"
+                          className="nav-sub-row nav-danger"
+                          disabled={game.withdrawDisabled}
+                          onClick={() => {
+                            if (window.confirm('Withdraw from this game?')) game.onWithdraw()
+                          }}
+                        >
+                          Withdraw
+                        </button>
+                      )}
+                      {game.canEnd && (
+                        <button
+                          type="button"
+                          className="nav-sub-row nav-danger"
+                          disabled={game.endDisabled}
+                          onClick={() => setShowEndGame(true)}
+                        >
+                          End game
+                        </button>
+                      )}
+                      {game.canDelete && (
+                        <button
+                          type="button"
+                          className="nav-sub-row nav-danger"
+                          disabled={game.deleteDisabled}
+                          onClick={() => {
+                            if (window.confirm('Delete this game permanently?')) game.onDelete()
+                          }}
+                        >
+                          Delete game
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="nav-footer">
+                <button type="button" className="nav-pill" onClick={onToggleTheme} aria-label={`Switch to ${nextTheme} theme`}>
+                  {theme === 'dark' ? 'Light theme' : 'Dark theme'}
+                </button>
+                {player !== null && player.role === 'admin' && screen !== 'admin' && (
+                  <button type="button" className="nav-pill" onClick={() => onNavigate('/admin')}>
+                    Admin
+                  </button>
+                )}
+                {player === null ? (
+                  <span className="nav-user muted">Not signed in</span>
+                ) : (
+                  <>
+                    <span className="nav-user muted">{player.username}</span>
+                    <button type="button" className="nav-pill" onClick={onSignOut}>
+                      Sign out
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      </details>
+        )}
+      </div>
       {showGreatPersons && (
         <GreatPersonsDialog
-          returnFocusTo={menuSummaryRef}
+          returnFocusTo={menuButtonRef}
           onClose={() => setShowGreatPersons(false)}
         />
       )}
@@ -186,7 +318,7 @@ export function Navigation({
         <EndGameDialog
           players={game.endPlayers}
           busy={game.endDisabled}
-          returnFocusTo={menuSummaryRef}
+          returnFocusTo={menuButtonRef}
           onClose={() => setShowEndGame(false)}
           onConfirm={(winner) => {
             setShowEndGame(false)
@@ -206,4 +338,22 @@ function navigate(
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
   event.preventDefault()
   onNavigate(path)
+}
+
+/** Small chevron; the stylesheet turns it over while its submenu is open. */
+function Chevron(): React.JSX.Element {
+  return (
+    <svg className="nav-chevron" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
+      <path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** Marks the Rules entries as opening in a new tab. */
+function ExternalIcon(): React.JSX.Element {
+  return (
+    <svg className="nav-external" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
+      <path d="M5 2.5H2.5v7h7V7M7 2.5h2.5V5M9.5 2.5L5.5 6.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
 }

@@ -3166,3 +3166,29 @@ this, so it may differ from `old-civ-rest`. The guard sits in `applyToGame` (`pa
 new route that mutates a game is covered by default; a route that saves a game
 or chat some other way must call `isLockedForViewer` itself. Delete game is not
 locked: a creator can still delete their own finished game.
+
+## 2026-09-29 — Compact menu with Rules and Actions submenus (issue #209)
+
+The human asked for smaller menu items, the rules grouped in a submenu called
+**Rules**, and the game actions in a submenu called **Actions**, after two
+bugs on the live site: opening "Rules and help" laid its links over the page,
+and scrolling the open menu made the hamburger disappear, leaving no way to
+close it.
+
+- **Deviation from the old system.** old-civ-web's `nav.html` had "Game
+  options" and "Admin settings" dropdowns. The human chose a different
+  structure on purpose, so the old layout is not reproduced. What each action
+  does, and who may use it, is unchanged (Withdraw for players; End game and
+  Delete game for the creator and admin; End game hidden once the game has
+  ended).
+- **Sheet with its own header.** The phone menu is a fixed sheet whose header
+  (title and X) sits outside the scrolling list, so the close button is always
+  reachable. Escape and the X close it and return focus to the hamburger.
+  There is no focus trap yet, so Tab can still reach the page behind the sheet.
+- **Rules content.** Same seven documents as before, regrouped as Rulebooks,
+  Help, and Charts, with shorter labels. All open in a new tab.
+- **One submenu open at a time.** Simpler on a small screen; reopening the menu
+  starts folded.
+- **Menu CSS moved** out of the layered overrides in `styles.css` into
+  `Navigation.css`. The topbar's brand now shares a row with the hamburger on a
+  phone instead of taking the whole row.
