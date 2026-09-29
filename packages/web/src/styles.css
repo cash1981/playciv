@@ -884,6 +884,10 @@ ul.list > li:last-child {
 .player-yellow { color: var(--player-yellow); }
 
 /* Civ (small) then coloured nickname, kept together in one flowing box. */
+.chat-author {
+  display: inline-block;
+}
+
 .chat-author small {
   margin-right: 0.35rem;
 }

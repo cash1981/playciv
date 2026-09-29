@@ -3089,3 +3089,30 @@ had no interactive board). The rules, agreed with the human:
 - **Placing a figure exactly on another figure** is done by dragging, or with
   the Move button (kept as an explicit fallback: in Move mode any tap is the
   destination). A tap on the figure itself selects it.
+
+## 2026-09-29 — Figure limits, Russia's white army, header and chat (issues #204, #206)
+
+There is no old-system reference: the old system had no board model. The
+numbers come from the human, not from the rulebook or the old code, so they
+must not be read as an FFG rule.
+
+- **Limits.** Each colour has 6 armies and 2 scouts. The limit is per asset id,
+  and the id carries the colour, so colours count separately. Removing a piece
+  frees a slot, since the count is derived from the pieces on the board.
+- **White army.** One piece, and only the player whose *revealed* civilization
+  is the Russians may place it. Someone holding the Russians card who has not
+  revealed it yet cannot, because `player.civilization` is only set on reveal.
+  The palette hides it from everyone else; the engine enforces it either way.
+- **Old games.** A saved game that already has more than 6 armies of one colour
+  keeps them. It reads `(0)` and nothing more can be placed.
+- **Header.** The civ and colour chips follow the player whose turn it is, not
+  the viewer, and come before the turn title.
+- **Chat.** Civ (small) and nickname are shown in the player's colour. The
+  colour classes use shades tuned for the dark and light themes rather than the
+  raw colour name, which is unreadable for Blue and Purple. A message from a
+  player who has withdrawn has no match and is shown as plain text.
+- **No new hidden information.** Civilization and colour were already public.
+- **Manifest edited by hand.** `pwsh` was not available, so
+  `board-assets.json` got the `figures/whitearmy` entry by hand, in the same
+  shape and slot the generator produces. The art is an opaque white flag on a
+  white background, used as delivered.

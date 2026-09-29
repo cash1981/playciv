@@ -49,9 +49,9 @@ import {
   wondersAreaWidth,
 } from '../src/board.js'
 import { createGame } from '../src/create-game.js'
+import type { CivItem } from '../src/item.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
-import type { CivItem } from '../src/item.js'
 import type { GameState } from '../src/state.js'
 
 import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
@@ -382,16 +382,28 @@ describe('placePiece', () => {
   it('lets only the Russian player place the one white army (issue #204)', () => {
     const game = firstCivGame()
     const russians = { kind: 'civ', name: 'Russians' } as unknown as CivItem
+    const greeks = { kind: 'civ', name: 'Greeks' } as unknown as CivItem
     const state: GameState = {
       ...game,
       players: game.players.map((p) =>
-        p.playerId === CASH1981 ? { ...p, civilization: russians } : p,
+        p.playerId === CASH1981
+          ? { ...p, civilization: russians }
+          : p.playerId === KARANDRAS1
+            ? { ...p, civilization: greeks }
+            : p,
       ),
     }
     const input = { assetId: 'figures/whitearmy', x: 0, y: 0 }
 
-    // Anyone else, with another civ or none, is refused
+    // A player with another revealed civ is refused
     expect(unwrapErr(placePiece(state, { ...input, playerId: KARANDRAS1 }))).toEqual({
+      kind: 'BOARD_ASSET_RUSSIA_ONLY',
+      assetId: 'figures/whitearmy',
+    })
+    // And so is a player who has not revealed any civ yet
+    const noCiv = game.players.find((p) => p.playerId !== CASH1981 && p.playerId !== KARANDRAS1)
+    expect(noCiv).toBeDefined()
+    expect(unwrapErr(placePiece(state, { ...input, playerId: noCiv?.playerId ?? '' }))).toEqual({
       kind: 'BOARD_ASSET_RUSSIA_ONLY',
       assetId: 'figures/whitearmy',
     })

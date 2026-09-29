@@ -18,7 +18,11 @@ import {
   reloadIfRevisionChanged,
 } from './GameView.js'
 
-vi.mock('./BoardView.js', () => ({ BoardView: () => <div data-testid="board" /> }))
+vi.mock('./BoardView.js', () => ({
+  BoardView: ({ viewerIsRussia }: { viewerIsRussia?: boolean }) => (
+    <div data-testid="board" data-viewer-is-russia={String(viewerIsRussia)} />
+  ),
+}))
 vi.mock('./ChatPanel.js', () => ({ ChatPanel: () => <section><h2>Chat</h2></section> }))
 vi.mock('./LogPanel.js', () => ({ LogPanel: () => <section><h2>Log</h2></section> }))
 vi.mock('./OpponentHandPanel.js', () => ({ OpponentHandPanel: () => <section><h2>Other players' hands</h2></section> }))
@@ -211,7 +215,6 @@ describe('primary game panel order', () => {
     const hand = screen.getByRole('heading', { name: 'Your hand (0)' }).closest('section')
     const logChatPair = log?.parentElement
 
-    expect(board.nextElementSibling).toBe(panelStack)
     const turnOrders = screen.getByRole('heading', { name: 'Turn orders' }).closest('section')
 
     expect(board.nextElementSibling).toBe(panelStack)
@@ -320,6 +323,23 @@ describe('game header chips (issue #206)', () => {
   it('has no chips at all before anyone has a turn, colour or civ', async () => {
     const container = await renderHeader(headerView(null, [seat('s3s3')], null))
     expect(container.querySelector('.header-chips')).toBeNull()
+  })
+})
+
+describe('the white army is offered to Russia only (issue #204)', () => {
+  const flag = async (civilization: { name: string } | null): Promise<string | null> => {
+    await renderHeader(headerView(seat('viewer', { civilization }), [seat('s3s3')], null))
+    return screen.getByTestId('board').getAttribute('data-viewer-is-russia')
+  }
+
+  it('tells the board the viewer is Russia only when their civ is the Russians', async () => {
+    expect(await flag({ name: 'Russians' })).toBe('true')
+  })
+
+  it('does not for another civ, or before the civ is revealed', async () => {
+    expect(await flag({ name: 'Romans' })).toBe('false')
+    cleanup()
+    expect(await flag(null)).toBe('false')
   })
 })
 
