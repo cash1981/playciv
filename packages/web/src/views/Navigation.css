@@ -1,0 +1,235 @@
+/*
+ * The site menu (issue #209). Written for a phone first: opening it lays a
+ * full-screen sheet over the page with its own header row (title and close
+ * button) that stays put while the list under it scrolls, so there is always a
+ * way out. From 601px the same sheet becomes a dropdown under the hamburger.
+ *
+ * Rules and Actions fold out inline inside the list; nothing here opens an
+ * overlay of its own. Only theme variables are used, so both themes work.
+ */
+
+.main-menu {
+  position: relative;
+  min-width: 0;
+}
+
+/* The hamburger. A plain button, not a `summary`, so the sheet can cover it
+   and still be closed from its own header. */
+.nav-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.hamburger-icon {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 1.3rem;
+}
+
+.hamburger-icon span {
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+/* The sheet: header fixed at the top, body scrolls. `height: 100dvh` follows
+   the phone's collapsing address bar, which `inset: 0` alone does not. */
+.nav-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.nav-sheet-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3rem;
+  padding: env(safe-area-inset-top) 0.25rem 0 1rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.nav-sheet-title {
+  font-family: var(--display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+}
+
+.nav-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+}
+
+.nav-close:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+
+.nav-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.site-navigation,
+.nav-actions,
+.nav-submenu {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Every top-level entry, link or button, is the same flat full-width row.
+   The separator is an inset shadow so the global button hover (which recolours
+   the border) cannot touch it. */
+.nav-row,
+.nav-sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0;
+  padding: 0 1rem;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: inset 0 -1px 0 var(--line);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.2;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.nav-row {
+  min-height: 2.75rem;
+}
+
+.nav-row:hover:not(:disabled),
+.nav-sub-row:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+
+.nav-row:focus-visible,
+.nav-sub-row:focus-visible,
+.nav-pill:focus-visible,
+.nav-close:focus-visible,
+.nav-trigger:focus-visible {
+  outline-offset: -2px;
+}
+
+.nav-chevron,
+.nav-external {
+  flex: none;
+  color: var(--muted);
+}
+
+.nav-chevron {
+  transition: transform 0.15s ease;
+}
+
+.nav-toggle[aria-expanded='true'] .nav-chevron {
+  transform: rotate(180deg);
+}
+
+/* Inline fold-out: a slightly darker band, indented rows. */
+.nav-submenu {
+  background: var(--panel-2);
+}
+
+.nav-sub-row {
+  min-height: 2.5rem;
+  padding-left: 1.75rem;
+  font-size: 14px;
+}
+
+.nav-sub-row:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
+}
+
+.nav-group-label {
+  padding: 0.7rem 1rem 0.3rem 1.75rem;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nav-danger {
+  color: var(--bad);
+}
+
+.nav-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+}
+
+.nav-pill {
+  min-height: 2rem;
+  padding: 0 0.8rem;
+  font-size: 13px;
+}
+
+.nav-user {
+  margin-left: auto;
+  font-size: 13px;
+}
+
+@media (min-width: 601px) {
+  /* The hamburger sits bare in the top bar, as it always has on desktop. */
+  .nav-trigger {
+    background: none;
+    border-color: transparent;
+  }
+
+  .nav-sheet {
+    position: absolute;
+    inset: auto;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    width: min(22rem, calc(100vw - 2rem));
+    height: auto;
+    max-height: calc(100dvh - 6rem);
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 0.5rem 1.2rem rgba(0, 0, 0, 0.25);
+  }
+
+  .nav-sheet-header {
+    padding-top: 0;
+  }
+}
