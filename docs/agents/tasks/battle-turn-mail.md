@@ -3,7 +3,7 @@
 - **Slug:** `battle-turn-mail`
 - **Branch:** `feat/battle-turn-mail`
 - **Owner:** Claude (orchestrator)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -58,6 +58,8 @@ game link, same style as `turnEnded`.
 - `packages/server/src/routes/arena.ts`
 - `packages/server/test/notifications.test.ts`
 - `docs/agents/tasks/battle-turn-mail.md`
+- `README.md`
+- `docs/agents/decisions.md`
 
 ## Acceptance criteria
 

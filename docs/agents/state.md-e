@@ -19,6 +19,7 @@ _Last updated: 2026-09-29_
 
 ## Done
 
+<<<<<<< HEAD
 - **Remove any own tech.** A player can remove a hidden, revealed or starting
   tech at any time from the tech detail dialog; the tech becomes choosable
   again, the coin counter resets, and the log names revealed techs and keeps the

@@ -12,17 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### battle-turn-mail
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `feat/battle-turn-mail`
-- **Brief:** `docs/agents/tasks/battle-turn-mail.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/server/src/notifications.ts`
-  - `packages/server/src/routes/arena.ts`
-  - `packages/server/test/notifications.test.ts`
-- **Notes:** none
+_Nothing claimed._
 
 ---
 
