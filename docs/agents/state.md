@@ -13,7 +13,7 @@ _Last updated: 2026-09-28_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 561 engine, 209 server, 259 web on `feat/issue-193-arrow-key-nudge` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 580 engine, 209 server, 261 web on `claude/trusting-meitner-q7h0j4` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -26,7 +26,7 @@ _Last updated: 2026-09-28_
   It is derived on read in `toPlayerView` and `battleSummaries`, so it
   recalculates by itself. The Status panel's Combat cell is read-only and
   `setPlayerStat` refuses `combat` (`STAT_NOT_EDITABLE`). See `decisions.md`.
-  580 engine, 209 server, 260 web tests pass.
+  580 engine, 209 server, 261 web tests pass.
 
 - **Issue #190 follow-up.** Grouping items by kind was ported to the wrong
   panel: the human clarified that it belongs to the player's own "Your hand"

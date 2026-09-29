@@ -85,6 +85,7 @@ export type EngineError =
   | { readonly kind: 'GAME_NOT_STARTED' }
   /** Java has no equivalent — `setPlayerStat` (issue #43) got a key outside `PlayerStats` */
   | { readonly kind: 'UNKNOWN_STAT'; readonly stat: string }
+  /** `setPlayerStat` (issue #197) was asked to set a stat the engine calculates (Combat) */
   | { readonly kind: 'STAT_NOT_EDITABLE'; readonly stat: string }
   /**
    * `setPlayerStat` (issue #43) got a value the stat does not allow: a

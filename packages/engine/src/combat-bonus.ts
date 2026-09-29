@@ -1,7 +1,7 @@
 /**
  * The combat bonus (issue #197), derived from what a player has rather than
  * typed in. Like `cityCountOf` and `cultureMarkerLevelOf`, it is computed from
- * the board and the hand each time it is read, so it recalculates by itself
+ * the board, the MIC stat, the government and the civilization each time it is read, so it recalculates by itself
  * whenever a building, general, wonder, investment, government or civilization
  * changes and cannot drift out of step.
  *

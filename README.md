@@ -521,8 +521,10 @@ unsubscribing from game mail must not lock a user out of their own account. See
 a per-game Google Sheet that players kept by hand. That is now an in-app "Player
 status" panel: shared bookkeeping includes trade, culture, unit counts,
 movement/combat/stacking values, hand size and EftA/Infra/MIC/PE modifiers.
-Every value is editable by any member of the game, with every edit written to
-the public log; new games start with the standard unit and modifier defaults.
+Every value except Combat is editable by any member of the game, with every
+edit written to the public log. Combat is calculated automatically from
+buildings, generals, MIC investments, government, civilization and the Statue of
+Zeus; new games start with the standard unit and modifier defaults.
 The panel's **Coins** section keeps one counter per coin source per player —
 Code of Laws, Pottery, Civil Service, Democracy, Printing Press, Bureaucracy,
 Railroad, Computers, Bank, Democracy (Govt), Great People, Terrain, Panama

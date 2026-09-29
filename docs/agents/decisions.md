@@ -3043,10 +3043,12 @@ so nothing here overrides ported behaviour; the snapping itself is this
 rewrite's own design, introduced for the mouse-drag case, and the nudge is a
 new, deliberate carve-out from it.
 
-## Combat bonus is derived, not typed in (issue #197)
+---
+
+## 2026-09-29 — Issue #197: the combat bonus is derived, not typed in
 
 The `combat` stat on the status board is now calculated by `combatBonusOf` from
-the board and the hand, and the Combat cell in the Status panel is read-only.
+the board, MIC, government and civilization, and the Combat cell in the Status panel is read-only.
 The values (Barracks and Shipyard +2, Academy +4, General +4, MIC +4 per two
 investments up to six, Fundamentalism +4, French +2, owned Statue of Zeus +6)
 were specified by the human; there is no old-system reference, since the old
@@ -3054,6 +3056,8 @@ status sheet was typed by hand.
 
 - **"Navy" is the Shipyard.** The issue lists Navy among the buildings; the
   board has no asset called Navy, and Shipyard is the naval building.
+- **Supersedes the signed, editable Combat of issue #43.** Older entries that
+  call Combat a signed manual modifier no longer hold.
 - **Manual edits are refused, not layered on top.** The human chose this for
   now (`STAT_NOT_EDITABLE`). Combat therefore can no longer be negative, and a
   `combat` value stored in older saved games is ignored on read.

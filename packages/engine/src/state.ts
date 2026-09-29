@@ -51,6 +51,7 @@ export interface PlayerStats {
    * calculation. See {@link isMovementValue} for what is allowed.
    */
   readonly mvmt: string
+  /** Ignored on read: the projections replace it with `combatBonusOf` (issue #197). */
   readonly combat: number
   readonly handSize: number
   readonly efta: number
@@ -378,7 +379,7 @@ export function buildingCountOf(state: GameState, playerId: string): number {
 
 /**
  * The player with their derived stats filled in. `combat` is computed from the
- * board and the hand (issue #197), so whatever is stored is ignored on read.
+ * board, MIC, government and civilization (issue #197), so whatever is stored is ignored on read.
  */
 function withDerivedStats(state: GameState, player: Playerhand): Playerhand {
   return { ...player, stats: { ...player.stats, combat: combatBonusOf(state, player) } }
@@ -483,7 +484,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     publicTurns: Object.values(state.publicTurns).filter(
       (turn) => turn.username === player.username,
     ),
-    stats: withDerivedStats(state, player).stats,
+    stats: { ...player.stats, combat: combatBonusOf(state, player) },
     government: player.government,
     cultureMarkerLevel: cultureMarkerLevelOf(state, player.playerId),
     cityCount: cityCountOf(state, player.playerId),
