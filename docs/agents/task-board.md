@@ -14,15 +14,11 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ### chat-orders
 
-- **Owner:** Claude (orchestrator; coder role for slices)
-- **Branch:** `feat/chat-orders` (one PR, #218, for all three slices, by the human's choice)
+- **Owner:** Claude (orchestrator; coder role)
+- **Branch:** `feat/chat-orders` (PR #218, all three slices)
 - **Brief:** `docs/agents/tasks/chat-orders.md`
-- **Status:** in progress (slice 1 approved; slice 2 web underway)
-- **Claimed paths (slice 2):**
-  - `packages/web/src/lib/api.ts`, `packages/web/src/views/GameView.tsx`,
-    `Navigation.tsx`, `StatusPanel.tsx`, `TurnPanel.tsx` (export only),
-    new `ChatOrdersPanel.tsx` and its css and tests, `packages/web/package.json`
-- **Notes:** slice 3 will also claim `packages/engine/src/board.ts` and `actions/`.
+- **Status:** in review (approved by the reviewer; waiting for the human to test)
+- **Claimed paths:** everything listed in the brief, released when #218 merges.
 
 ---
 
