@@ -2519,3 +2519,42 @@ ul.history > li {
     padding-top: 4.85rem;
   }
 }
+
+/* End game dialog, opened from the site menu's Game section. Stacked,
+   full-width controls on a phone; the buttons sit side by side from 601px. */
+.reference.end-game-dialog {
+  width: min(92vw, 26rem);
+  padding: 1.1rem;
+}
+
+.end-game-content > p {
+  margin: 0.45rem 0 1rem;
+}
+
+.end-game-content select {
+  min-height: 2.75rem;
+}
+
+.end-game-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
+.end-game-actions button {
+  width: 100%;
+  min-height: 2.75rem;
+}
+
+@media (min-width: 601px) {
+  .end-game-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .end-game-actions button {
+    width: auto;
+    min-width: 5.25rem;
+  }
+}

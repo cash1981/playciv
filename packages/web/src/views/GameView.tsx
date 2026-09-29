@@ -58,6 +58,15 @@ export function chatAuthorsOf(view: PlayerView): ReadonlyMap<string, ChatAuthor>
   )
 }
 
+/**
+ * Usernames offered in the End game dialog, in seat order. Only public seat
+ * data, so it is the same list for every viewer.
+ */
+export function winnerCandidatesOf(view: Pick<PlayerView, 'you' | 'opponents'>): readonly string[] {
+  const seats: readonly Seat[] = view.you === null ? view.opponents : [view.you, ...view.opponents]
+  return [...seats].sort((a, b) => a.playernumber - b.playernumber).map((seat) => seat.username)
+}
+
 /** Civilization, then colour, each only when there is something to show. */
 function PlayerChips({ player }: { readonly player: Seat }): React.JSX.Element | null {
   const civilization = player.civilization?.name
@@ -83,7 +92,7 @@ interface Props {
   readonly onDeleted: () => void
   readonly onWithdrawn: () => void
   /**
-   * Reports Withdraw/Delete for the site menu's "Game" section (issue #177);
+   * Reports Withdraw/Delete/End game for the site menu's "Game" section (issue #177);
    * `null` while there is nothing to offer yet (spectator who is not an
    * admin, or still loading). Optional so tests that do not care about the
    * menu can omit it. Must be referentially stable (e.g. a `useState`
@@ -206,6 +215,8 @@ export interface GameMenuGate {
   readonly withdrawDisabled: boolean
   readonly canDelete: boolean
   readonly deleteDisabled: boolean
+  readonly canEnd: boolean
+  readonly endDisabled: boolean
 }
 
 /**
@@ -218,6 +229,9 @@ export interface GameMenuGate {
  * `nav.html`, whose "Admin settings" → "Delete game" was gated only on the
  * admin flag, membership-independent (`GameOption.setShowAdminValue` in
  * `GameController.js`) — `you === null` alone must not suppress it.
+ *
+ * End game follows the same rule as Delete (creator or admin; the server
+ * checks it again), but is only offered while the game is still active.
  */
 export function gameMenuGate(
   currentView: Pick<PlayerView, 'you' | 'active'> | null,
@@ -231,6 +245,8 @@ export function gameMenuGate(
     withdrawDisabled: busyNow || !currentView.active,
     canDelete: currentYou?.gameCreator === true || isAdmin,
     deleteDisabled: busyNow,
+    canEnd: (currentYou?.gameCreator === true || isAdmin) && currentView.active,
+    endDisabled: busyNow,
   }
 }
 
@@ -385,7 +401,7 @@ export function GameView({
     [gameId, reload, onUnauthorized, player],
   )
 
-  // Exposes Withdraw/Delete to the site menu's "Game" section (issue #177).
+  // Exposes Withdraw/Delete/End game to the site menu's "Game" section (issue #177).
   // Recomputed from `view`/`historical` directly, rather than the
   // `displayedView`/`you` consts below, which only exist after the loading
   // guard: hooks must run unconditionally, before any conditional return.
@@ -423,6 +439,10 @@ export function GameView({
           await api.deleteGame(gameId)
           onDeleted()
         })
+      },
+      endPlayers: currentView === null ? [] : winnerCandidatesOf(currentView),
+      onEnd: (winner) => {
+        void run(() => (winner === undefined ? api.endGame(gameId) : api.endGame(gameId, winner)))
       },
     })
     return () => onGameActions(null)
