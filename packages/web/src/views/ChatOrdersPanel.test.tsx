@@ -1,0 +1,661 @@
+// @vitest-environment jsdom
+
+import { forwardRef, useImperativeHandle } from 'react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { TurnPhase } from '@civ/engine'
+
+import { api } from '../lib/api.js'
+import type { ChatPageDto, PlayerView, TimelineMessageDto } from '../lib/api.js'
+import {
+  ChatOrdersPanel,
+  chatOrdersTitle,
+  firstOpenPhase,
+  mergeTimeline,
+  outOfTurnQuestion,
+  replacedOrderIds,
+  TurnStatusStrip,
+} from './ChatOrdersPanel.js'
+import type { MarkdownEditorHandle, MarkdownEditorProps } from './MarkdownEditor.js'
+
+// The real module stays for `ApiError`, which `errorMessage` tests with instanceof
+vi.mock('../lib/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/api.js')>()),
+  api: {
+    chatPage: vi.fn(),
+    sendChat: vi.fn(),
+    postOrder: vi.fn(),
+    markDone: vi.fn(),
+    unmarkDone: vi.fn(),
+    saveNote: vi.fn(),
+  },
+}))
+
+const chatPage = vi.mocked(api.chatPage)
+const sendChat = vi.mocked(api.sendChat)
+const postOrder = vi.mocked(api.postOrder)
+const markDone = vi.mocked(api.markDone)
+const unmarkDone = vi.mocked(api.unmarkDone)
+const saveNote = vi.mocked(api.saveNote)
+
+/** A controlled textarea standing in for the Milkdown editor. */
+const FakeEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
+  function FakeEditor({ value, onChange, readOnly, ariaLabel }, ref) {
+    useImperativeHandle(ref, () => ({ getMarkdown: () => value }))
+    return (
+      <textarea
+        aria-label={ariaLabel}
+        value={value}
+        readOnly={readOnly}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    )
+  },
+)
+
+const run = async (action: () => Promise<unknown>): Promise<void> => {
+  await action()
+}
+
+const PHASES: readonly TurnPhase[] = ['SOT', 'TRADE', 'CM', 'MOVEMENT', 'RESEARCH']
+
+const doneUpTo = (last: TurnPhase | null): Record<TurnPhase, boolean> => {
+  const count = last === null ? 0 : PHASES.indexOf(last) + 1
+  return {
+    SOT: count > 0,
+    TRADE: count > 1,
+    CM: count > 2,
+    MOVEMENT: count > 3,
+    RESEARCH: count > 4,
+  }
+}
+
+const seat = (username: string, playernumber: number, overrides: Record<string, unknown> = {}) => ({
+  playerId: `id-${username}`,
+  username,
+  color: null,
+  civilization: null,
+  playernumber,
+  yourTurn: false,
+  ...overrides,
+})
+
+interface ViewOptions {
+  readonly you?: Record<string, unknown> | null
+  readonly opponents?: readonly Record<string, unknown>[]
+  readonly activeTurn?: Record<string, unknown> | null
+}
+
+/**
+ * Only the fields the panel reads. The viewer is on turn 4 with Start of turn
+ * and Trade done, waiting on City management.
+ */
+function makeView(options: ViewOptions = {}): PlayerView {
+  const you =
+    options.you === undefined
+      ? seat('Alice', 1, {
+          gamenote: 'my private plan',
+          playerTurns: [
+            { turnNumber: 3, done: doneUpTo('RESEARCH') },
+            { turnNumber: 4, done: doneUpTo('TRADE') },
+          ],
+        })
+      : options.you
+  return {
+    chatOrders: true,
+    you,
+    opponents: options.opponents ?? [seat('Bob', 2, { color: 'Blue' })],
+    activeTurn:
+      options.activeTurn === undefined
+        ? {
+            playerId: 'id-Alice',
+            username: 'Alice',
+            turnNumber: 4,
+            phase: 'CM',
+            waitingFor: [
+              { username: 'Alice', phase: 'CM' },
+              { username: 'Bob', phase: 'SOT' },
+            ],
+          }
+        : options.activeTurn,
+  } as unknown as PlayerView
+}
+
+const message = (id: string, overrides: Partial<TimelineMessageDto> = {}): TimelineMessageDto => ({
+  id,
+  username: 'Bob',
+  message: `text of ${id}`,
+  createdAt: `2026-01-01T10:00:0${id.length}Z`,
+  kind: 'chat',
+  turnNumber: null,
+  phase: null,
+  ...overrides,
+})
+
+const page = (messages: readonly TimelineMessageDto[], hasMore = false): ChatPageDto => ({ messages, hasMore })
+
+async function renderPanel(
+  view: PlayerView,
+  props: { readOnly?: boolean; autoRefresh?: boolean; reloadCount?: number } = {},
+): Promise<ReturnType<typeof render>> {
+  let result: ReturnType<typeof render> | undefined
+  await act(async () => {
+    result = render(
+      <ChatOrdersPanel
+        gameId="game"
+        view={view}
+        busy={false}
+        readOnly={props.readOnly ?? false}
+        run={run}
+        reloadCount={props.reloadCount ?? 0}
+        autoRefresh={props.autoRefresh ?? false}
+        editorComponent={FakeEditor}
+        authors={
+          new Map([
+            ['Alice', { civilization: 'Romans', color: 'Red' }],
+            ['Bob', { civilization: 'Greeks', color: 'Blue' }],
+          ])
+        }
+      />,
+    )
+  })
+  if (result === undefined) throw new Error('panel did not render')
+  return result
+}
+
+const rows = (container: HTMLElement): string[] =>
+  Array.from(container.querySelectorAll('.chat-orders-message')).map(
+    (row) => row.querySelector('.chat-orders-body')?.textContent ?? row.textContent ?? '',
+  )
+
+/** The filter chips and the composer's mode switch both have a Chat button. */
+const filterChip = (name: string): HTMLElement =>
+  within(screen.getByRole('group', { name: 'Show' })).getByRole('button', { name })
+
+const click = async (element: HTMLElement): Promise<void> => {
+  await act(async () => { fireEvent.click(element) })
+}
+
+const type = async (label: string, text: string): Promise<void> => {
+  await act(async () => { fireEvent.change(screen.getByLabelText(label), { target: { value: text } }) })
+}
+
+beforeEach(() => {
+  localStorage.setItem('civ.panel.chat-orders', 'true')
+  chatPage.mockResolvedValue(page([]))
+  sendChat.mockResolvedValue({ id: 'sent', username: 'Alice', message: '', createdAt: '' })
+  postOrder.mockResolvedValue(makeView())
+  markDone.mockResolvedValue(makeView())
+  unmarkDone.mockResolvedValue(makeView())
+  saveNote.mockResolvedValue(makeView())
+})
+
+afterEach(() => {
+  cleanup()
+  localStorage.removeItem('civ.panel.chat-orders')
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+  vi.clearAllMocks()
+})
+
+describe('the timeline', () => {
+  it('shows the oldest message first and the composer below the messages', async () => {
+    chatPage.mockResolvedValue(page([message('a'), message('bb'), message('ccc')]))
+    const { container } = await renderPanel(makeView())
+
+    expect(rows(container)).toEqual(['text of a', 'text of bb', 'text of ccc'])
+    const log = screen.getByRole('log', { name: 'Timeline' })
+    const composer = container.querySelector('.chat-orders-composer')
+    if (composer === null) throw new Error('composer missing')
+    // The log comes before the composer in the document
+    expect(log.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(chatPage).toHaveBeenCalledWith('game')
+  })
+
+  it('shows the civ, the coloured nickname and the time on a message', async () => {
+    chatPage.mockResolvedValue(page([message('a')]))
+    const { container } = await renderPanel(makeView())
+
+    const row = container.querySelector('.chat-orders-message')
+    expect(row?.querySelector('small')?.textContent).toBe('Greeks')
+    expect(row?.querySelector('strong')?.textContent).toBe('Bob')
+    expect(row?.querySelector('strong')?.className).toBe('player-blue')
+    expect(row?.className).toContain('player-blue')
+    expect(row?.querySelector('time')).not.toBeNull()
+  })
+
+  it('tags an order with its turn and phase and shows a system row quietly', async () => {
+    chatPage.mockResolvedValue(page([
+      message('a', { kind: 'order', turnNumber: 4, phase: 'SOT', message: 'Build a city' }),
+      message('bb', { kind: 'system', username: 'Bob', message: 'Bob marked SOT done' }),
+    ]))
+    const { container } = await renderPanel(makeView())
+
+    const order = container.querySelector('[data-kind="order"]')
+    expect(order?.querySelector('.tag.turn')?.textContent).toBe('T4 · SOT')
+    const system = container.querySelector('.chat-orders-system')
+    expect(system?.textContent).toContain('Bob marked SOT done')
+    expect(system?.querySelector('strong')).toBeNull()
+  })
+
+  it('adds a refresh to what is held, by id, without duplicates', async () => {
+    vi.useFakeTimers()
+    chatPage
+      .mockResolvedValueOnce(page([message('a'), message('bb')]))
+      .mockResolvedValueOnce(page([message('a'), message('bb'), message('ccc')]))
+    const { container } = await renderPanel(makeView(), { autoRefresh: true })
+    expect(rows(container)).toEqual(['text of a', 'text of bb'])
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+
+    expect(rows(container)).toEqual(['text of a', 'text of bb', 'text of ccc'])
+  })
+
+  it('keeps older turns that were loaded when a refresh only carries the newest', async () => {
+    chatPage
+      .mockResolvedValueOnce(page([message('cc'), message('ddd')], true))
+      .mockResolvedValueOnce(page([message('a'), message('bb')], false))
+      .mockResolvedValueOnce(page([message('cc'), message('ddd'), message('eeee')], true))
+    const { container, rerender } = await renderPanel(makeView())
+    await click(screen.getByRole('button', { name: 'Load more' }))
+    expect(rows(container)).toEqual(['text of a', 'text of bb', 'text of cc', 'text of ddd'])
+
+    await act(async () => {
+      rerender(
+        <ChatOrdersPanel
+          gameId="game" view={makeView()} busy={false} readOnly={false} run={run}
+          reloadCount={1} autoRefresh={false} editorComponent={FakeEditor}
+        />,
+      )
+    })
+
+    expect(rows(container)).toEqual(['text of a', 'text of bb', 'text of cc', 'text of ddd', 'text of eeee'])
+    // The refresh says there is more, but the older turn is already on screen
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
+  })
+})
+
+describe('mergeTimeline', () => {
+  const ids = (list: readonly TimelineMessageDto[]): string[] => list.map((row) => row.id)
+
+  it('puts an older page in front and new rows at the end, whatever the timestamps say', () => {
+    const held = [message('m2'), message('m3')]
+    // Timestamps deliberately upside down: the server's order is the one kept
+    const older = [
+      message('m0', { createdAt: '2030-01-01T00:00:00Z' }),
+      message('m1', { createdAt: '2000-01-01T00:00:00Z' }),
+    ]
+    expect(ids(mergeTimeline(held, older))).toEqual(['m0', 'm1', 'm2', 'm3'])
+    expect(ids(mergeTimeline(held, [message('m3'), message('m4')]))).toEqual(['m2', 'm3', 'm4'])
+  })
+
+  it('refreshes a row it already holds and never mutates its input', () => {
+    const held = [message('m1', { message: 'old' })]
+    const merged = mergeTimeline(held, [message('m1', { message: 'new' })])
+    expect(merged.map((row) => row.message)).toEqual(['new'])
+    expect(held[0]?.message).toBe('old')
+  })
+})
+
+describe('filter chips', () => {
+  const mixed = [
+    message('a', { message: 'just talking' }),
+    message('bb', { kind: 'order', turnNumber: 4, phase: 'TRADE', message: 'trade order' }),
+    message('ccc', { kind: 'system', message: 'Bob marked Trade done' }),
+  ]
+
+  it('shows everything under All, and orders with their system lines under Orders', async () => {
+    chatPage.mockResolvedValue(page(mixed))
+    const { container } = await renderPanel(makeView())
+    expect(rows(container)).toHaveLength(3)
+
+    await click(filterChip('Orders'))
+    expect(container.textContent).not.toContain('just talking')
+    expect(container.textContent).toContain('trade order')
+    expect(container.textContent).toContain('Bob marked Trade done')
+  })
+
+  it('shows only plain chat under Chat', async () => {
+    chatPage.mockResolvedValue(page(mixed))
+    const { container } = await renderPanel(makeView())
+
+    await click(filterChip('Chat'))
+
+    expect(rows(container)).toEqual(['just talking'])
+    expect(filterChip('Chat').getAttribute('aria-pressed')).toBe('true')
+  })
+})
+
+describe('replaced orders', () => {
+  const twice = [
+    message('a', { username: 'Bob', kind: 'order', turnNumber: 4, phase: 'TRADE', message: 'first draft' }),
+    message('bb', { username: 'Bob', kind: 'order', turnNumber: 4, phase: 'SOT', message: 'other phase' }),
+    message('ccc', { username: 'Bob', kind: 'order', turnNumber: 4, phase: 'TRADE', message: 'second draft' }),
+    message('dddd', { username: 'Alice', kind: 'order', turnNumber: 4, phase: 'TRADE', message: 'alice trade' }),
+  ]
+
+  it('marks an order replaced only by a newer one from the same player, turn and phase', async () => {
+    chatPage.mockResolvedValue(page(twice))
+    const { container } = await renderPanel(makeView())
+
+    const tagOf = (text: string): string | null | undefined =>
+      Array.from(container.querySelectorAll('.chat-orders-message'))
+        .find((row) => row.textContent?.includes(text))
+        ?.querySelector('.tag:not(.turn)')?.textContent
+    expect(tagOf('first draft')).toBe('replaced')
+    expect(tagOf('second draft')).toBeUndefined()
+    expect(tagOf('other phase')).toBeUndefined()
+    expect(tagOf('alice trade')).toBeUndefined()
+  })
+
+  it('does not count a turn or a chat message as a replacement', () => {
+    const ids = replacedOrderIds([
+      message('a', { kind: 'order', turnNumber: 3, phase: 'TRADE' }),
+      message('bb', { kind: 'order', turnNumber: 4, phase: 'TRADE' }),
+      message('ccc', { kind: 'chat' }),
+    ])
+    expect(ids.size).toBe(0)
+  })
+})
+
+describe('the composer', () => {
+  it('sends chat through the chat route and clears the field', async () => {
+    await renderPanel(makeView())
+
+    await type('Chat message', '  hello there  ')
+    await click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(sendChat).toHaveBeenCalledExactlyOnceWith('game', 'hello there')
+    expect(postOrder).not.toHaveBeenCalled()
+    expect((screen.getByLabelText('Chat message') as HTMLTextAreaElement).value).toBe('')
+  })
+
+  it('does not send an empty message', async () => {
+    await renderPanel(makeView())
+    expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('defaults an order to the current turn and the first phase not done', async () => {
+    await renderPanel(makeView())
+
+    await click(screen.getByRole('button', { name: 'Order' }))
+
+    expect((screen.getByLabelText('Turn') as HTMLSelectElement).value).toBe('4')
+    // Start of turn and Trade are done in turn 4, so City management is next
+    expect((screen.getByLabelText('Phase') as HTMLSelectElement).value).toBe('CM')
+    await type('Order', 'Move the army')
+    await click(screen.getByRole('button', { name: 'Send' }))
+    expect(postOrder).toHaveBeenCalledExactlyOnceWith('game', 'CM', 'Move the army', 4)
+    expect(sendChat).not.toHaveBeenCalled()
+  })
+
+  it('lets the turn and the phase be changed before sending', async () => {
+    await renderPanel(makeView())
+    await click(screen.getByRole('button', { name: 'Order' }))
+
+    await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '5' } }) })
+    await act(async () => { fireEvent.change(screen.getByLabelText('Phase'), { target: { value: 'RESEARCH' } }) })
+    await type('Order', 'Look ahead')
+    await click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(postOrder).toHaveBeenCalledExactlyOnceWith('game', 'RESEARCH', 'Look ahead', 5)
+  })
+
+  it('follows the viewer to the next phase once one is marked done, unless they picked one', async () => {
+    const { rerender } = await renderPanel(makeView())
+    await click(screen.getByRole('button', { name: 'Order' }))
+    expect((screen.getByLabelText('Phase') as HTMLSelectElement).value).toBe('CM')
+
+    const further = makeView({
+      you: seat('Alice', 1, { playerTurns: [{ turnNumber: 4, done: doneUpTo('CM') }] }),
+    })
+    await act(async () => {
+      rerender(
+        <ChatOrdersPanel
+          gameId="game" view={further} busy={false} readOnly={false} run={run}
+          reloadCount={0} autoRefresh={false} editorComponent={FakeEditor}
+        />,
+      )
+    })
+
+    expect((screen.getByLabelText('Phase') as HTMLSelectElement).value).toBe('MOVEMENT')
+  })
+
+  it('falls back to Research when every phase is done', () => {
+    const view = makeView({
+      you: seat('Alice', 1, { playerTurns: [{ turnNumber: 4, done: doneUpTo('RESEARCH') }] }),
+    })
+    expect(firstOpenPhase(view, 4)).toBe('RESEARCH')
+    // No record for the turn yet: everything is open
+    expect(firstOpenPhase(view, 9)).toBe('SOT')
+  })
+
+  it('is absent for a spectator and while the game is read-only', async () => {
+    chatPage.mockResolvedValue(page([message('a')]))
+    const spectator = await renderPanel(makeView({ you: null }))
+    expect(spectator.container.querySelector('.chat-orders-composer')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Private' })).toBeNull()
+    cleanup()
+
+    const replay = await renderPanel(makeView(), { readOnly: true })
+    expect(replay.container.querySelector('.chat-orders-composer')).toBeNull()
+    expect(screen.getByRole('log', { name: 'Timeline' })).not.toBeNull()
+  })
+})
+
+describe('Load more', () => {
+  it('fetches the turn before the oldest loaded message and puts it above', async () => {
+    chatPage
+      .mockResolvedValueOnce(page([message('cc'), message('ddd')], true))
+      .mockResolvedValueOnce(page([message('a'), message('bb')], false))
+    const { container } = await renderPanel(makeView())
+
+    await click(screen.getByRole('button', { name: 'Load more' }))
+
+    expect(chatPage).toHaveBeenLastCalledWith('game', 'cc')
+    expect(rows(container)).toEqual(['text of a', 'text of bb', 'text of cc', 'text of ddd'])
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
+  })
+
+  it('is not offered when the server says there is nothing older', async () => {
+    chatPage.mockResolvedValue(page([message('a')], false))
+    await renderPanel(makeView())
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
+  })
+
+  it('keeps the button and shows the error when the request fails', async () => {
+    chatPage
+      .mockResolvedValueOnce(page([message('a')], true))
+      .mockRejectedValueOnce(new Error('boom'))
+    await renderPanel(makeView())
+
+    await click(screen.getByRole('button', { name: 'Load more' }))
+
+    expect(screen.getByText('boom')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Load more' })).not.toBeNull()
+  })
+})
+
+describe('the done sheet', () => {
+  const openSheet = async (): Promise<HTMLElement> => {
+    await click(screen.getByRole('button', { name: 'Done …' }))
+    return screen.getByRole('dialog', { name: 'Mark phases done' })
+  }
+
+  it('defaults to the current turn and the first phase not done, and marks up to it', async () => {
+    await renderPanel(makeView())
+    const sheet = await openSheet()
+
+    expect((within(sheet).getByLabelText('Turn') as HTMLSelectElement).value).toBe('4')
+    expect((within(sheet).getByLabelText('Done up to') as HTMLSelectElement).value).toBe('CM')
+    await click(within(sheet).getByRole('button', { name: 'Mark done up to City management' }))
+
+    expect(markDone).toHaveBeenCalledExactlyOnceWith('game', 'CM', 4)
+    // One-shot: the sheet closes after marking
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('marks up to a phase the viewer picks, in a turn the viewer picks', async () => {
+    await renderPanel(makeView())
+    const sheet = await openSheet()
+
+    await act(async () => { fireEvent.change(within(sheet).getByLabelText('Done up to'), { target: { value: 'MOVEMENT' } }) })
+    await click(within(sheet).getByRole('button', { name: 'Mark done up to Movement' }))
+
+    expect(markDone).toHaveBeenCalledExactlyOnceWith('game', 'MOVEMENT', 4)
+  })
+
+  it('shows phases already done and unmarks the one that is tapped, leaving the sheet open', async () => {
+    await renderPanel(makeView())
+    const sheet = await openSheet()
+
+    expect(within(sheet).getAllByText('Not done')).toHaveLength(3)
+    await click(within(sheet).getByRole('button', { name: 'Unmark Trade as done' }))
+
+    expect(unmarkDone).toHaveBeenCalledExactlyOnceWith('game', 'TRADE', 4)
+    expect(screen.getByRole('dialog', { name: 'Mark phases done' })).not.toBeNull()
+    // Only the phases that are done can be unmarked
+    expect(within(sheet).queryByRole('button', { name: 'Unmark City management as done' })).toBeNull()
+  })
+
+  it('reads another turn from the record of that turn', async () => {
+    await renderPanel(makeView())
+    const sheet = await openSheet()
+
+    await act(async () => { fireEvent.change(within(sheet).getByLabelText('Turn'), { target: { value: '3' } }) })
+
+    // Turn 3 was finished, so all five can be unmarked and there is nothing to mark
+    expect(within(sheet).getAllByRole('button', { name: /^Unmark/ })).toHaveLength(5)
+    expect(within(sheet).getByRole('button', { name: /^Mark done up to/ }).hasAttribute('disabled')).toBe(true)
+    await click(within(sheet).getByRole('button', { name: 'Unmark Research as done' }))
+    expect(unmarkDone).toHaveBeenCalledExactlyOnceWith('game', 'RESEARCH', 3)
+  })
+
+  it('closes without doing anything', async () => {
+    await renderPanel(makeView())
+    const sheet = await openSheet()
+
+    await click(within(sheet).getByRole('button', { name: 'Close' }))
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(markDone).not.toHaveBeenCalled()
+    expect(unmarkDone).not.toHaveBeenCalled()
+  })
+})
+
+describe('the Private tab', () => {
+  it('shows the viewer\'s own private log and saves it, and nothing of anyone else\'s', async () => {
+    // A double of a leak: an opponent record that carries a note, which the
+    // panel must never read.
+    const view = makeView({
+      opponents: [seat('Bob', 2, { gamenote: 'BOB-SECRET-PLAN', privateLog: 'BOB-PRIVATE-LOG' })],
+    })
+    const { container } = await renderPanel(view)
+
+    await click(filterChip('Private'))
+
+    expect((screen.getByLabelText('Private log') as HTMLTextAreaElement).value).toBe('my private plan')
+    expect(container.textContent).not.toContain('BOB-SECRET-PLAN')
+    expect(container.textContent).not.toContain('BOB-PRIVATE-LOG')
+    // The composer belongs to the timeline
+    expect(container.querySelector('.chat-orders-composer')).toBeNull()
+
+    expect((screen.getByRole('button', { name: 'Save private log' }) as HTMLButtonElement).disabled).toBe(true)
+    await type('Private log', 'a new plan')
+    await click(screen.getByRole('button', { name: 'Save private log' }))
+    expect(saveNote).toHaveBeenCalledExactlyOnceWith('game', 'a new plan')
+  })
+
+  it('never puts the note in the timeline, whatever the tab', async () => {
+    chatPage.mockResolvedValue(page([message('a')]))
+    const { container } = await renderPanel(makeView())
+    expect(container.textContent).not.toContain('my private plan')
+    await click(filterChip('Orders'))
+    expect(container.textContent).not.toContain('my private plan')
+  })
+
+  it('asks before leaving with an unsaved private log', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    await renderPanel(makeView())
+    await click(filterChip('Private'))
+    await type('Private log', 'unsaved words')
+
+    const detail = { allowed: true }
+    window.dispatchEvent(new CustomEvent('civ:navigation-attempt', { detail }))
+
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(detail.allowed).toBe(false)
+  })
+})
+
+describe('safe markdown in the timeline', () => {
+  it('renders formatting but keeps script, onerror and javascript: links inert', async () => {
+    chatPage.mockResolvedValue(page([
+      message('a', { message: '**strong** <script>window.hacked = 1</script>' }),
+      message('bb', { message: '<img src=x onerror="window.hacked = 2">' }),
+      message('ccc', { message: '[click](javascript:alert(1)) and [fine](https://example.com)' }),
+    ]))
+    const { container } = await renderPanel(makeView())
+
+    expect(container.querySelector('strong.player-blue')).not.toBeNull()
+    expect(Array.from(container.querySelectorAll('.chat-orders-body strong')).map((node) => node.textContent))
+      .toContain('strong')
+    expect(container.querySelector('script')).toBeNull()
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('[onerror]')).toBeNull()
+    expect(container.innerHTML).not.toContain('javascript:')
+    const links = Array.from(container.querySelectorAll('.chat-orders-body a'))
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(['https://example.com'])
+    expect(links[0]?.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(links[0]?.getAttribute('target')).toBe('_blank')
+  })
+})
+
+describe('header helpers', () => {
+  it('names who the game is waiting for and where they are', () => {
+    expect(chatOrdersTitle(makeView().activeTurn)).toBe('Turn 4: waiting for Alice (CM), Bob (SOT)')
+  })
+
+  it('says so when everyone is done, and when nobody is up', () => {
+    const finished = { playerId: 'p', username: 'Alice', turnNumber: 5, phase: 'SOT', waitingFor: [] }
+    expect(chatOrdersTitle(makeView({ activeTurn: finished }).activeTurn)).toBe('Turn 5: everyone is done')
+    expect(chatOrdersTitle(null)).toBe('Nobody is up')
+  })
+
+  it('lists every player with a colour dot and their phase, or Done', () => {
+    const view = makeView({
+      you: seat('Alice', 1, { color: 'Red' }),
+      opponents: [seat('Bob', 2, { color: 'Blue' }), seat('Cy', 3, { color: 'Green' })],
+      activeTurn: {
+        playerId: 'id-Alice', username: 'Alice', turnNumber: 4, phase: 'CM',
+        waitingFor: [{ username: 'Alice', phase: 'CM' }, { username: 'Bob', phase: 'TRADE' }],
+      },
+    })
+    const { container } = render(<TurnStatusStrip view={view} />)
+
+    expect(Array.from(container.querySelectorAll('li')).map((item) => item.textContent)).toEqual([
+      'AliceCM',
+      'BobTrade',
+      'CyDone',
+    ])
+    expect(Array.from(container.querySelectorAll('.chat-orders-dot')).map((dot) => dot.className)).toEqual([
+      'chat-orders-dot player-red',
+      'chat-orders-dot player-blue',
+      'chat-orders-dot player-green',
+    ])
+  })
+
+  it('asks before an out-of-turn draw only when chat orders is on and someone else is up', () => {
+    const others = { playerId: 'id-Bob', username: 'Bob', turnNumber: 4, phase: 'SOT', waitingFor: [] }
+    expect(outOfTurnQuestion(makeView({ activeTurn: others }))).toBe(
+      'It is not your turn. Bob is up. Draw anyway?',
+    )
+    expect(outOfTurnQuestion(makeView())).toBeNull()
+    expect(outOfTurnQuestion(makeView({ activeTurn: null }))).toBe(
+      'It is not your turn. Nobody is up. Draw anyway?',
+    )
+    expect(outOfTurnQuestion(makeView({ you: null, activeTurn: others }))).toBeNull()
+    expect(outOfTurnQuestion({ ...makeView({ activeTurn: others }), chatOrders: false })).toBeNull()
+  })
+})
