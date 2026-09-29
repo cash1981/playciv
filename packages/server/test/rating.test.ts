@@ -9,6 +9,7 @@ import type { GameState } from '@civ/engine'
 import { legacyRatedGame } from '../src/migrate/legacy-rating.js'
 import { writeRatingBackfill } from '../src/migrate/rating-backfill.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
+import { toPublicSummary } from '../src/routes/games.js'
 import { ratedHighscore, resultFromGame } from '../src/store/rating.js'
 import { readMigrations } from './migrations.js'
 
@@ -190,6 +191,14 @@ it('uses the sum of player status coin counters for fresh-game placement', () =>
     { username: 'Bob', rank: 2 },
     { username: 'Carol', rank: 3 },
   ])
+})
+
+it('shows the rating placements in the public game summary of an ended game only', () => {
+  const ended = finishedGameWithCultureMarkers(0, 5)
+  expect(toPublicSummary(ended).placements).toEqual(resultFromGame(ended)?.participants)
+  expect(toPublicSummary(ended).placements.length).toBe(3)
+  // An unfinished game must not reveal how the players stand.
+  expect(toPublicSummary({ ...ended, active: true }).placements).toEqual([])
 })
 
 it('does not cache an old JSON highscore after a concurrent game finish', async () => {

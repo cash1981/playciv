@@ -90,6 +90,7 @@ export interface GameSummary {
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
   readonly availableColors: readonly string[]
+  readonly placements: readonly { readonly username: string; readonly rank: number }[]
 }
 
 export interface PublicGameSummary {
@@ -104,6 +105,7 @@ export interface PublicGameSummary {
   readonly nameOfUsersTurn: string
   readonly youAreIn: boolean
   readonly availableColors: readonly string[]
+  readonly placements: readonly { readonly username: string; readonly rank: number }[]
 }
 
 export interface LogEntryDto {

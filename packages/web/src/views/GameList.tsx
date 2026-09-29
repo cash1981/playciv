@@ -206,6 +206,23 @@ function columnsFor(options: ColumnOptions): readonly SortableColumn<PublicGameS
     },
   )
 
+  if (!options.withAction) {
+    columns.push({
+      key: 'placements',
+      header: 'Winner and placements',
+      // Tied players share a rank, so the number is shown, not the row order.
+      render: (game) =>
+        game.placements.length === 0
+          ? (game.winner ?? '')
+          : game.placements.map((entry, index) => (
+              <span key={entry.username}>
+                {index > 0 && <br />}
+                {entry.rank}. {entry.username}
+              </span>
+            )),
+    })
+  }
+
   return columns
 }
 
