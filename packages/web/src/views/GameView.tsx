@@ -416,6 +416,9 @@ export function GameView({
     }
     onGameActions({
       ...gate,
+      // A replayed revision of an ended game was still active at that point,
+      // so End game follows the live game, not the revision on screen.
+      canEnd: gate.canEnd && view?.active === true,
       onWithdraw: () => {
         setBusy(true)
         setError(null)
