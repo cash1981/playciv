@@ -3,7 +3,7 @@
  * drawing, battle, techs, social policy, revealing, trading, turns and undo.
  */
 
-import type { Government, PlayerStatKey, SheetName } from '@civ/engine'
+import type { GameState, Government, PlayerStatKey, SheetName } from '@civ/engine'
 import {
   ALL_WONDERS,
   CULTURE_CARD,
@@ -21,7 +21,9 @@ import {
   initiateUndo,
   lockOrUnlockTurn,
   loot,
+  markPhasesDone,
   placeGreatPersonInPyramid,
+  postOrder,
   playerPutsItemBackInDeck,
   playersActiveUndos,
   remainingTechsForPlayer,
@@ -41,6 +43,8 @@ import {
   setTechSlot,
   takeTurn,
   tradeToPlayer,
+  turnStatus,
+  unmarkPhaseDone,
   updateTurn,
   vote,
 } from '@civ/engine'
@@ -49,6 +53,7 @@ import { TURN_PHASES, allPublicTurns, playersTurns } from '@civ/engine'
 import type { Context } from 'hono'
 
 import type { App } from '../app.js'
+import { newId } from '../auth.js'
 import type { AppContext, Variables } from '../context.js'
 import {
   applyToGame,
@@ -116,6 +121,33 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
   // non-member already gets.
   const optionalAuth = authenticateOptionallyWith(context)
 
+  /**
+   * The `system` timeline row for a done / not done change: the engine's own
+   * public log line, so the two never disagree. No line means nothing changed.
+   */
+  const appendSystemRow = async (
+    gameId: string,
+    username: string,
+    turnNumber: number,
+    phase: TurnPhase,
+    before: GameState,
+    after: GameState,
+  ): Promise<void> => {
+    if (after.log.length === before.log.length) return
+    const line = after.log.at(-1)
+    if (line === undefined) return
+    await context.repo.appendChat({
+      id: newId(),
+      gameId,
+      username,
+      message: line.publicLog,
+      createdAt: new Date().toISOString(),
+      kind: 'system',
+      turnNumber,
+      phase,
+    })
+  }
+
   // -------------------------------------------------------------------------
   // Drawing
   // -------------------------------------------------------------------------
@@ -132,11 +164,16 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     const sheetName = parseSheetName(c, c.req.param('sheetName'))
     if (sheetName instanceof Response) return sheetName
 
+    // Chat orders (issue #215): the client asks before drawing out of turn and
+    // sends this on the second try. Ignored by the engine when the setting is off.
+    const confirmedOutOfTurn =
+      asRecord(await c.req.json().catch(() => ({})))['confirmedOutOfTurn'] === true
+
     return applyToGame(context, c, gameId, (state) => {
       const playerId = currentPlayer(c).id
       return ALL_WONDERS.has(sheetName)
-        ? drawWonder(state, { playerId, sheetName })
-        : draw(state, { playerId, sheetName })
+        ? drawWonder(state, { playerId, sheetName, confirmedOutOfTurn })
+        : draw(state, { playerId, sheetName, confirmedOutOfTurn })
     })
   })
 
@@ -510,6 +547,125 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
         phase,
         at: new Date().toISOString(),
       }),
+    )
+  })
+
+  // -------------------------------------------------------------------------
+  // Chat orders (issue #215). The timeline row is written after the game state,
+  // in the `after` hook: the repository has no call that stores both at once, so
+  // a failure there is logged, not surfaced.
+  // -------------------------------------------------------------------------
+
+  /** A whole turn number of at least 1, or `undefined` when absent; a `Response` when malformed. */
+  const parseTurnNumber = (
+    c: Context<{ Variables: Variables }>,
+    body: Record<string, unknown>,
+  ): number | undefined | Response => {
+    if (body['turnNumber'] === undefined) return undefined
+    const turnNumber = optionalNumber(body, 'turnNumber')
+    if (turnNumber === undefined || !Number.isInteger(turnNumber) || turnNumber < 1) {
+      return sendError(c, 400, 'BAD_REQUEST', 'turnNumber must be a whole number of 1 or more')
+    }
+    return turnNumber
+  }
+
+  /**
+   * Posts an order for a phase: engine state and the `order` timeline row in one
+   * request. The turn defaults to the current one.
+   */
+  app.post('/api/games/:gameId/turns/order', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const phase = parsePhase(c, optionalString(body, 'phase'))
+    if (phase instanceof Response) return phase
+    const markdown = requireString(body, 'markdown')
+    if (markdown === undefined) return sendError(c, 400, 'BAD_REQUEST', 'markdown is required')
+    const requestedTurn = parseTurnNumber(c, body)
+    if (requestedTurn instanceof Response) return requestedTurn
+
+    const actor = currentPlayer(c)
+    const at = new Date().toISOString()
+    let turnNumber = 1
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) => {
+        turnNumber = requestedTurn ?? turnStatus(state).currentTurn
+        return postOrder(state, { playerId: actor.id, turnNumber, phase, markdown, at })
+      },
+      undefined,
+      {
+        description: `${actor.username} posted an order`,
+        after: () =>
+          context.repo.appendChat({
+            id: newId(),
+            gameId,
+            username: actor.username,
+            message: markdown,
+            createdAt: at,
+            kind: 'order',
+            turnNumber,
+            phase,
+          }),
+      },
+    )
+  })
+
+  /**
+   * Marks a phase, and every phase before it, done. A `system` row is written
+   * only when something changed.
+   */
+  app.post('/api/games/:gameId/turns/done', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const phase = parsePhase(c, optionalString(body, 'phase'))
+    if (phase instanceof Response) return phase
+    const requestedTurn = parseTurnNumber(c, body)
+    if (requestedTurn instanceof Response) return requestedTurn
+
+    const actor = currentPlayer(c)
+    let turnNumber = 1
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) => {
+        turnNumber = requestedTurn ?? turnStatus(state).currentTurn
+        return markPhasesDone(state, { playerId: actor.id, turnNumber, upToPhase: phase })
+      },
+      undefined,
+      {
+        after: ({ before, after }) =>
+          appendSystemRow(gameId, actor.username, turnNumber, phase, before, after),
+      },
+    )
+  })
+
+  /** Takes one phase back to not done. Later phases keep their marker. */
+  app.post('/api/games/:gameId/turns/undone', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const phase = parsePhase(c, optionalString(body, 'phase'))
+    if (phase instanceof Response) return phase
+    const requestedTurn = parseTurnNumber(c, body)
+    if (requestedTurn instanceof Response) return requestedTurn
+
+    const actor = currentPlayer(c)
+    let turnNumber = 1
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) => {
+        turnNumber = requestedTurn ?? turnStatus(state).currentTurn
+        return unmarkPhaseDone(state, { playerId: actor.id, turnNumber, phase })
+      },
+      undefined,
+      {
+        after: ({ before, after }) =>
+          appendSystemRow(gameId, actor.username, turnNumber, phase, before, after),
+      },
     )
   })
 

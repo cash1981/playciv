@@ -1,9 +1,11 @@
 /** Administrative account management. Roles are read from the current account
  * in storage on every request, so changing a role takes effect immediately. */
 
+import { setChatOrders } from '@civ/engine'
+
 import type { App } from '../app.js'
 import type { AppContext } from '../context.js'
-import { asRecord, currentPlayer, requireAdminWith, requireString } from '../context.js'
+import { applyToGame, asRecord, currentPlayer, requireAdminWith, requireString } from '../context.js'
 import { sendError } from '../errors.js'
 import { toPlayerDto } from './auth.js'
 import type { PlayerUpdate, StoredPlayer, UserRole } from '../store/types.js'
@@ -171,5 +173,22 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       includeUnsubscribed: includeValue === true,
     })
     return c.json(result)
+  })
+
+  /**
+   * Switches chat orders (issue #215) on or off for one game. Only the admin
+   * role may: it changes how the whole game is played, not just the caller's
+   * view. The change is a setting, not a game move, so it makes no replay
+   * checkpoint (the same choice as a private note).
+   */
+  app.post('/api/admin/games/:gameId/chat-orders', admin, async (c) => {
+    const gameId = c.req.param('gameId')
+    const enabled = asRecord(await c.req.json().catch(() => ({})))['enabled']
+    if (typeof enabled !== 'boolean') {
+      return sendError(c, 400, 'BAD_REQUEST', 'enabled must be a boolean')
+    }
+    return applyToGame(context, c, gameId, (state) => setChatOrders(state, enabled), undefined, {
+      record: false,
+    })
   })
 }
