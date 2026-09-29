@@ -19,10 +19,12 @@ _Last updated: 2026-09-29_
 
 ## Done
 
-- **Board: selecting a piece no longer arms a move.** Tapping another figure
-  used to send the previously selected one there. A tap now only selects; moving
-  is a drag or the Move button (`decisions.md`, 2026-09-29). Checked by hand in
-  Chrome with a dragged map tile and figures.
+- **Board: tapping another piece selects it; map tiles are never armed.**
+  Tapping a second figure used to send the first one there. Non-tile pieces
+  keep tap-then-tap moving; a selected map tile moves only into an empty map
+  slot and is cleared by any other tap (`decisions.md`, 2026-09-29). Checked by
+  hand in Chrome.
+
 - **Issue #197: the combat bonus is calculated automatically.** `combatBonusOf`
   (`packages/engine/src/combat-bonus.ts`) derives it from Barracks and Shipyard
   (+2), Academy (+4), Generals (+4 each), MIC (+4 per two investments, up to

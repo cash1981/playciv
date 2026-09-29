@@ -11,8 +11,8 @@
  *
  * Interaction:
  *   palette to board   tap/select/place on touch, plus HTML5 drag and drop
- *   piece on board     tap/select on touch, plus pointer dragging; the Move button
- *                      then a tap on the board moves a selected piece
+ *   piece on board     tap to select and arm (map tiles are selected only), then tap
+ *                      the board to move; or drag; or the Move button, then tap
  *
  * Global replay is owned by GameView; this component only renders the supplied
  * live or historical board. Live board undo and redo remain available.
@@ -100,6 +100,8 @@ const ZOOM_STEPS = [0.3, 0.4, 0.5, 0.65, 0.8, 1] as const
  * smallest zoom step.
  */
 const NUDGE_STEP_PX = 6
+
+const isMapTile = (piece: BoardPiece): boolean => piece.category === 'tile' || piece.category === 'civtile'
 
 export function fittingBoardZoom(boardWidth: number, availableWidth: number): number {
   return [...ZOOM_STEPS].reverse().find((step) => boardWidth * step <= availableWidth) ?? ZOOM_STEPS[0]
@@ -208,6 +210,11 @@ export function BoardView({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [pendingAssetId, setPendingAssetId] = useState<string | null>(null)
   const [moveModeId, setMoveModeId] = useState<string | null>(null)
+  /** The piece armed with the Move button. Unlike a tap-armed piece, any tap on the board is its destination. */
+  const [explicitMoveId, setExplicitMoveId] = useState<string | null>(null)
+  useEffect(() => {
+    if (explicitMoveId !== null && moveModeId !== explicitMoveId) setExplicitMoveId(null)
+  }, [explicitMoveId, moveModeId])
   const [zoomChoice, setZoomChoice] = useState<number | 'auto'>('auto')
   const [autoZoom, setAutoZoom] = useState<number>(ZOOM_STEPS[0])
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -232,6 +239,12 @@ export function BoardView({
     startClientX: number
     startClientY: number
     moved: boolean
+    /**
+     * A mouse press on a map tile while another piece was selected. If it turns
+     * out to be a click rather than a drag, it is handled as a board tap for
+     * that other piece.
+     */
+    previous?: { id: string; armed: boolean }
   } | null>(null)
   /** Mirrors dragRef, purely to trigger a render while the piece follows the mouse. */
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null)
@@ -359,7 +372,7 @@ export function BoardView({
   const fogSlots = useMemo(() => {
     const occupied = new Set<string>()
     for (const piece of pieces) {
-      if (piece.category !== 'tile' && piece.category !== 'civtile') continue
+      if (!isMapTile(piece)) continue
       const origin = nearestSlotOrigin(board, piece.x, piece.y)
       if (origin !== undefined) occupied.add(`${origin[0]},${origin[1]}`)
     }
@@ -409,7 +422,6 @@ export function BoardView({
         moved: false,
       }
     }
-    if (pendingAsset === null && moveModeId === null) setSelectedId(null)
   }
 
   function onSurfacePointerMove(event: React.PointerEvent<HTMLDivElement>): void {
@@ -443,15 +455,56 @@ export function BoardView({
     if (moving !== undefined) {
       setMoveModeId(null)
       void run(() => api.movePiece(gameId, moving.id, x - moving.width / 2, y - moving.height / 2))
+      return
     }
+
+    if (selected === null) return
+    if (!isMapTile(selected)) {
+      // Not armed (it was just dragged): a tap elsewhere only clears it.
+      setSelectedId(null)
+      return
+    }
+
+    // A selected map tile moves only into an empty map slot. A tap on another
+    // tile, or anywhere else, just clears the selection.
+    const size = TILE_SQUARES * board.squareSize
+    const tappedPiece = event.target instanceof Element && event.target.closest('[data-piece-id]') !== null
+    const slot = tappedPiece
+      ? undefined
+      : fogSlots.map((candidate) => slotOrigin(board, candidate)).find(([sx, sy]) => x >= sx && x < sx + size && y >= sy && y < sy + size)
+    if (slot === undefined) {
+      setSelectedId(null)
+      return
+    }
+    void run(() => api.movePiece(gameId, selected.id, slot[0], slot[1]))
   }
 
   // --- moving a piece on the board -----------------------------------------
 
+  /**
+   * With a piece selected, a tap on a map tile is a board tap, not a new
+   * selection: an armed figure is sent there, and a selected tile is cleared.
+   * A tap on any other piece selects that piece instead.
+   */
+  function tileTapsSurface(piece: BoardPiece): boolean {
+    return selectedId !== null && piece.id !== selectedId && isMapTile(piece)
+  }
+
+  /**
+   * Whether the board surface, not this piece, handles a press on it. A piece
+   * armed with the Move button treats every tap as its destination. A mouse
+   * press on a map tile still starts a tile drag; if it ends as a plain click
+   * it is treated as a board tap (`onPiecePointerUp`).
+   */
+  function surfaceOwnsTap(piece: BoardPiece, pointerType: string): boolean {
+    if (explicitMoveId !== null && piece.id !== explicitMoveId) return true
+    return pointerType !== 'mouse' && tileTapsSurface(piece)
+  }
+
   function onPiecePointerDown(event: React.PointerEvent, piece: BoardPiece): void {
     // While a palette asset is armed, the board surface owns the tap—even if
     // the user taps an existing piece such as a starting tile.
-    if (pendingAsset !== null || (moveModeId !== null && moveModeId !== piece.id)) return
+    if (pendingAsset !== null || surfaceOwnsTap(piece, event.pointerType)) return
     if (busy || readOnly) return
     if (!event.isPrimary) {
       // A second finger may land on a piece, whose pointerdown does not bubble
@@ -462,15 +515,20 @@ export function BoardView({
     if (event.button !== 0) return
     setSelectedId(piece.id)
     if (event.pointerType !== 'mouse' && selectedId !== piece.id) {
-      // The first touch only marks the piece. A later tap elsewhere on the
-      // board clears the mark instead of moving the piece, so choosing another
-      // piece never sends this one across the map. Moving is an explicit act:
-      // the Move button, or dragging the marked piece. Returning here, before
-      // the pointer is captured, keeps an untouched piece pannable.
-      setMoveModeId(null)
+      // The first touch marks the piece and, for anything but a map tile, arms
+      // destination mode in the same tap, so the next tap on the board moves it
+      // there (the same flow as a palette asset). A map tile is never armed by
+      // a tap: it moves only into an empty map slot, so a tap elsewhere can
+      // safely mean "deselect". Returning here, before the pointer is captured,
+      // keeps an untouched piece pannable; the next touch-drag on the marked
+      // piece still becomes a drag.
+      setMoveModeId(isMapTile(piece) ? null : piece.id)
       surfaceGestureRef.current = null
       return
     }
+    const previous = event.pointerType === 'mouse' && tileTapsSurface(piece) && selectedId !== null
+      ? { id: selectedId, armed: moveModeId === selectedId }
+      : undefined
     if (event.pointerType === 'mouse') setMoveModeId(null)
     event.preventDefault()
     event.currentTarget.setPointerCapture?.(event.pointerId)
@@ -485,6 +543,7 @@ export function BoardView({
       startClientX: event.clientX,
       startClientY: event.clientY,
       moved: false,
+      ...(previous !== undefined ? { previous } : {}),
     }
     setDragPosition({ x: piece.x, y: piece.y })
   }
@@ -516,6 +575,22 @@ export function BoardView({
     const piece = pieces.find((candidate) => candidate.id === drag.id)
     // A plain click without movement should only select, not send a request
     if (!drag.moved || (piece !== undefined && piece.x === Math.round(drag.x) && piece.y === Math.round(drag.y))) {
+      if (drag.previous !== undefined) {
+        // A click on a map tile while another piece was selected is a board
+        // tap for that piece: an armed one moves there, anything else is cleared.
+        const previous = pieces.find((candidate) => candidate.id === drag.previous?.id)
+        if (previous !== undefined && !isMapTile(previous) && drag.previous.armed) {
+          const [x, y] = toBoard(event.clientX, event.clientY)
+          setSelectedId(previous.id)
+          setMoveModeId(null)
+          void run(() => api.movePiece(gameId, previous.id, x - previous.width / 2, y - previous.height / 2))
+        } else {
+          setSelectedId(null)
+          setMoveModeId(null)
+        }
+        return
+      }
+      setMoveModeId(piece !== undefined && isMapTile(piece) ? null : drag.id)
       return
     }
     // The drag itself already moved the piece; disarm so an unrelated later
@@ -712,6 +787,7 @@ export function BoardView({
                 return (
                   <img
                     key={piece.id}
+                    data-piece-id={piece.id}
                     className={`board-piece${piece.id === selectedId ? ' selected' : ''}`}
                     src={assetUrl(piece.path)}
                     alt={piece.label}
@@ -728,7 +804,7 @@ export function BoardView({
                       ...(readOnly ? { cursor: 'default' } : {}),
                     }}
                     onPointerDown={(event) => {
-                      if (pendingAsset === null && (moveModeId === null || moveModeId === piece.id)) {
+                      if (pendingAsset === null && !surfaceOwnsTap(piece, event.pointerType)) {
                         event.stopPropagation()
                       }
                       onPiecePointerDown(event, piece)
@@ -802,6 +878,7 @@ export function BoardView({
                   disabled={busy || readOnly}
                   onClick={() => {
                     setMoveModeId(selected.id)
+                    setExplicitMoveId(selected.id)
                     setPendingAssetId(null)
                   }}
                 >

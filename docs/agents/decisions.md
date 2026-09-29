@@ -3070,22 +3070,22 @@ status sheet was typed by hand.
 - **No new hidden information.** Every input (board, MIC, government,
   civilization) was already public to all players.
 
-## 2026-09-29 — Board: selecting a piece no longer arms a move
+## 2026-09-29 — Board: tapping another piece selects it; map tiles are never armed
 
-_Supersedes the 2026-09-23 entry "Tapping a board piece on touch arms the move in the same tap"._
+A touch on a piece selects it and arms tap-to-move (the 2026-09-23 flow), so
+the next tap on the board moves it. The bug: tapping a second figure to select
+it sent the first one there. There is no old-system reference (the old system
+had no interactive board). The rules, agreed with the human:
 
-Since the first mobile board work, a touch on a piece both selected it and armed
-"destination mode", so the next tap anywhere moved it. Choosing a second figure
-therefore sent the first one across the map. This is a bug fix to our own board
-UI; there is no old-system reference (the old system had no interactive board).
-
-- **Selecting only selects.** A touch or a click on a piece marks it. A tap on
-  empty board clears the mark; a tap on another piece selects that one. Nothing
-  moves.
-- **Moving is explicit.** Either drag the piece, or press **Move** in the
-  selected-piece panel and then tap the destination. Only the Move button (and
-  a pending palette asset) arms a tap-to-move.
-- **In Move mode a tap on the board, or on another piece, is the destination**,
-  since the user asked for the move. Tapping the moving piece itself is not a
-  destination: it starts a drag.
-
+- **Figures, buildings and markers.** First tap selects and arms. A tap on the
+  board, or on a map tile, moves it there. A tap on another non-tile piece
+  selects that piece instead. After a drag it is selected but not armed; a tap
+  elsewhere clears it.
+- **Map tiles are never armed by a tap.** With a tile selected, a tap on
+  another tile or outside the map slots clears the selection, a tap on a
+  figure or building selects that piece, and a tap on an empty map slot moves
+  the tile there. This is what makes "deselect" and "move" distinguishable
+  without a button.
+- **Placing a figure exactly on another figure** is done by dragging, or with
+  the Move button (kept as an explicit fallback: in Move mode any tap is the
+  destination). A tap on the figure itself selects it.

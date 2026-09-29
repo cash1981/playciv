@@ -433,7 +433,7 @@ describe('BoardView mobile placement', () => {
     cleanup()
   })
 
-  it('a touch selects a piece; only the Move button then sends it to the next board tap', async () => {
+  it('a touch selects and arms a figure, and the next board tap moves it', async () => {
     const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
     const boardPiece = piece('buildings/academy', 'academy-1')
     const { container } = render(
@@ -463,20 +463,9 @@ describe('BoardView mobile placement', () => {
       target.dispatchEvent(event)
     }
 
-    // One touch only selects the piece; a tap elsewhere clears it, no move.
+    // One touch selects the piece and arms destination mode in the same tap.
     dispatchPointer(tile, 'pointerdown', 20, 20)
     dispatchPointer(tile, 'pointerup', 20, 20)
-    await screen.findByRole('button', { name: 'Move' })
-    expect(screen.queryByRole('status')).toBeNull()
-    dispatchPointer(surface, 'pointerdown', 120, 120)
-    dispatchPointer(surface, 'pointerup', 120, 120)
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Move' })).toBeNull())
-    expect(movePiece).not.toHaveBeenCalled()
-
-    // Select again and press Move: now the next board tap is the destination.
-    dispatchPointer(tile, 'pointerdown', 20, 20)
-    dispatchPointer(tile, 'pointerup', 20, 20)
-    fireEvent.click(await screen.findByRole('button', { name: 'Move' }))
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Academy'))
 
     dispatchPointer(surface, 'pointerdown', 120, 120)
@@ -521,68 +510,136 @@ describe('BoardView mobile placement', () => {
     cleanup()
   })
 
-  it('in Move mode a tap on another piece is the destination', async () => {
-    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
-    const first = { ...piece('resources/hut', 'hut-one'), category: 'resource' as const, label: 'Hut', path: 'resources/hut.png' }
-    const second = { ...piece('resources/incense', 'incense-one'), category: 'resource' as const, label: 'Incense', path: 'resources/incense.png', x: 100 }
-    const { container } = render(
-      <BoardView
-        gameId="game"
-        board={{ ...createBoard(), pieces: [first, second] }}
-        numOfPlayers={2}
-        areas={[]}
-        busy={false}
-        run={async action => { await action() }}
-      />,
-    )
-    const pointerTap = (target: HTMLElement, pointerId: number) => {
-      for (const type of ['pointerdown', 'pointerup'] as const) {
-        const event = new Event(type, { bubbles: true })
-        for (const [name, value] of Object.entries({ pointerId, pointerType: 'touch', isPrimary: true, button: 0, clientX: 20, clientY: 20 })) {
-          Object.defineProperty(event, name, { value })
-        }
-        target.dispatchEvent(event)
+  describe('map tiles', () => {
+    const setup = () => {
+      const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+      const board = createBoard()
+      const [sx, sy] = slotOrigin(board, board.slots[0] as { x: number; y: number })
+      const tileA = { ...piece('tiles/tile01', 'tile-a'), category: 'tile' as const, label: 'Tile A', path: 'tiles/tile01.png', x: sx, y: sy, width: 376, height: 376 }
+      const tileB = { ...piece('tiles/tile02', 'tile-b'), category: 'tile' as const, label: 'Tile B', path: 'tiles/tile02.png', x: slotOrigin(board, board.slots[2] as { x: number; y: number })[0], y: slotOrigin(board, board.slots[2] as { x: number; y: number })[1], width: 376, height: 376 }
+      const figure = { ...piece('figures/bluearmy', 'army'), category: 'figure' as const, label: 'Army', path: 'figures/bluearmy.png', x: sx + 500, y: sy + 500, width: 33, height: 51 }
+      const figure2 = { ...figure, id: 'army2', label: 'Army Two', x: figure.x + 100 }
+      const all = [tileA, tileB, figure, figure2]
+      const utils = render(
+        <BoardView
+          gameId="game"
+          board={{ ...board, pieces: all }}
+          numOfPlayers={2}
+          areas={[]}
+          busy={false}
+          run={async action => { await action() }}
+        />,
+      )
+      const el = (id: string) => {
+        const index = all.findIndex(candidate => candidate.id === id)
+        return utils.container.querySelectorAll<HTMLElement>('.board-piece')[index] as HTMLElement
       }
-    }
-    const pieces = () => Array.from(container.querySelectorAll<HTMLElement>('.board-piece'))
-
-    pointerTap(pieces()[0] as HTMLElement, 5)
-    fireEvent.click(await screen.findByRole('button', { name: 'Move' }))
-    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Hut'))
-    pointerTap(pieces()[1] as HTMLElement, 6)
-    await waitFor(() => expect(movePiece).toHaveBeenCalledWith('game', first.id, expect.any(Number), expect.any(Number)))
-    movePiece.mockRestore()
-    cleanup()
-  })
-
-  it('a second tap on the selected piece does not arm a move', async () => {
-    const boardPiece = piece('buildings/academy', 'academy-second-tap')
-    const { container } = render(
-      <BoardView
-        gameId="game"
-        board={{ ...createBoard(), pieces: [boardPiece] }}
-        numOfPlayers={2}
-        areas={[]}
-        busy={false}
-        run={async action => { await action() }}
-      />,
-    )
-    const tile = container.querySelector('.board-piece')
-    if (!(tile instanceof HTMLElement)) throw new Error('board piece missing')
-    const tap = (pointerId: number) => {
-      for (const type of ['pointerdown', 'pointerup'] as const) {
-        const event = new Event(type, { bubbles: true })
-        for (const [name, value] of Object.entries({ pointerId, pointerType: 'touch', isPrimary: true, button: 0, clientX: 20, clientY: 20 })) {
-          Object.defineProperty(event, name, { value })
+      const surface = utils.container.querySelector('.board-surface') as HTMLElement
+      let pointerId = 30
+      const tap = (target: HTMLElement, clientX = 20, clientY = 20) => {
+        pointerId += 1
+        for (const type of ['pointerdown', 'pointerup'] as const) {
+          const event = new Event(type, { bubbles: true })
+          for (const [name, value] of Object.entries({ pointerId, pointerType: 'touch', isPrimary: true, button: 0, clientX, clientY })) {
+            Object.defineProperty(event, name, { value })
+          }
+          target.dispatchEvent(event)
         }
-        tile.dispatchEvent(event)
       }
+      const zoom = parseFloat(el('tile-b').style.left) / tileB.x
+      return { movePiece, board, tileA, tileB, figure, el, surface, tap, zoom, container: utils.container }
     }
-    tap(1)
-    await screen.findByRole('button', { name: 'Move' })
-    tap(2)
-    expect(screen.queryByRole('status')).toBeNull()
-    cleanup()
+
+    it('a selected tile is cleared by a tap on another tile, without moving', async () => {
+      const { movePiece, el, tap, container } = setup()
+      tap(el('tile-a'))
+      await waitFor(() => expect(container.querySelector('.board-piece.selected')).not.toBeNull())
+      expect(screen.queryByRole('status')).toBeNull()
+      tap(el('tile-b'))
+      await waitFor(() => expect(container.querySelector('.board-piece.selected')).toBeNull())
+      expect(movePiece).not.toHaveBeenCalled()
+      movePiece.mockRestore()
+      cleanup()
+    })
+
+    it('a selected tile is replaced by a tap on a figure', async () => {
+      const { movePiece, el, tap, container } = setup()
+      tap(el('tile-a'))
+      tap(el('army'))
+      await waitFor(() => expect(container.querySelector('.board-piece.selected')?.getAttribute('data-piece-id')).toBe('army'))
+      expect(movePiece).not.toHaveBeenCalled()
+      movePiece.mockRestore()
+      cleanup()
+    })
+
+    it('a selected tile moves into an empty map slot', async () => {
+      const { movePiece, board, el, surface, tap, zoom, container } = setup()
+      const empty = board.slots[1] as { x: number; y: number }
+      const [ex, ey] = slotOrigin(board, empty)
+      tap(el('tile-a'))
+      await waitFor(() => expect(container.querySelector('.board-piece.selected')).not.toBeNull())
+      tap(surface, (ex + 20) * zoom, (ey + 20) * zoom)
+      await waitFor(() => expect(movePiece).toHaveBeenCalledWith('game', 'tile-a', ex, ey))
+      movePiece.mockRestore()
+      cleanup()
+    })
+
+    it('the Move button makes a tap on another figure the destination', async () => {
+      const { movePiece, el, tap, container } = setup()
+      tap(el('army'))
+      fireEvent.click(await screen.findByRole('button', { name: 'Move' }))
+      await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Army'))
+      tap(el('army2'))
+      await waitFor(() => expect(movePiece).toHaveBeenCalledWith('game', 'army', expect.any(Number), expect.any(Number)))
+      expect(container.querySelector('.board-piece.selected')?.getAttribute('data-piece-id')).toBe('army')
+      movePiece.mockRestore()
+      cleanup()
+    })
+
+    const mouse = (target: HTMLElement, type: 'pointerdown' | 'pointermove' | 'pointerup', clientX: number, clientY: number) => {
+      const event = new Event(type, { bubbles: true })
+      for (const [name, value] of Object.entries({ pointerId: 90, pointerType: 'mouse', isPrimary: true, button: 0, clientX, clientY })) {
+        Object.defineProperty(event, name, { value })
+      }
+      target.dispatchEvent(event)
+    }
+
+    it('a mouse drag of a tile works while a figure is selected', async () => {
+      const { movePiece, el, container } = setup()
+      mouse(el('army'), 'pointerdown', 20, 20)
+      mouse(el('army'), 'pointerup', 20, 20)
+      await waitFor(() => expect(container.querySelector('.board-piece.selected')?.getAttribute('data-piece-id')).toBe('army'))
+      mouse(el('tile-a'), 'pointerdown', 20, 20)
+      mouse(el('tile-a'), 'pointermove', 80, 80)
+      mouse(el('tile-a'), 'pointerup', 80, 80)
+      await waitFor(() => expect(movePiece).toHaveBeenCalledWith('game', 'tile-a', expect.any(Number), expect.any(Number)))
+      movePiece.mockRestore()
+      cleanup()
+    })
+
+    it('a mouse click on a tile moves the armed figure there', async () => {
+      const { movePiece, el, container } = setup()
+      mouse(el('army'), 'pointerdown', 20, 20)
+      mouse(el('army'), 'pointerup', 20, 20)
+      await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Army'))
+      mouse(el('tile-b'), 'pointerdown', 30, 30)
+      mouse(el('tile-b'), 'pointerup', 30, 30)
+      await waitFor(() => expect(movePiece).toHaveBeenCalledWith('game', 'army', expect.any(Number), expect.any(Number)))
+      expect(movePiece).toHaveBeenCalledTimes(1)
+      expect(container.querySelector('.board-piece.selected')?.getAttribute('data-piece-id')).toBe('army')
+      movePiece.mockRestore()
+      cleanup()
+    })
+
+    it('an armed figure is sent to the tapped map tile', async () => {
+      const { movePiece, el, tap } = setup()
+      tap(el('army'))
+      await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Army'))
+      tap(el('tile-b'))
+      await waitFor(() => expect(movePiece).toHaveBeenCalledWith('game', 'army', expect.any(Number), expect.any(Number)))
+      movePiece.mockRestore()
+      cleanup()
+    })
   })
 
   it('clears a touch selection when tapping outside the board without moving', async () => {
