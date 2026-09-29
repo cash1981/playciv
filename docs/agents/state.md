@@ -6,7 +6,7 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-28_
+_Last updated: 2026-09-29_
 
 ## Health
 
@@ -19,6 +19,10 @@ _Last updated: 2026-09-28_
 
 ## Done
 
+- **Board: selecting a piece no longer arms a move.** Tapping another figure
+  used to send the previously selected one there. A tap now only selects; moving
+  is a drag or the Move button (`decisions.md`, 2026-09-29). Checked by hand in
+  Chrome with a dragged map tile and figures.
 - **Issue #197: the combat bonus is calculated automatically.** `combatBonusOf`
   (`packages/engine/src/combat-bonus.ts`) derives it from Barracks and Shipyard
   (+2), Academy (+4), Generals (+4 each), MIC (+4 per two investments, up to

@@ -11,7 +11,8 @@
  *
  * Interaction:
  *   palette to board   tap/select/place on touch, plus HTML5 drag and drop
- *   piece on board     tap/select/move on touch, plus pointer dragging with a mouse
+ *   piece on board     tap/select on touch, plus pointer dragging; the Move button
+ *                      then a tap on the board moves a selected piece
  *
  * Global replay is owned by GameView; this component only renders the supplied
  * live or historical board. Live board undo and redo remain available.
@@ -461,12 +462,12 @@ export function BoardView({
     if (event.button !== 0) return
     setSelectedId(piece.id)
     if (event.pointerType !== 'mouse' && selectedId !== piece.id) {
-      // The first touch marks the piece and arms destination mode in the same
-      // tap, so the next tap on the board moves it there (the same flow as a
-      // palette asset). Returning here, before the pointer is captured, keeps
-      // an untouched piece pannable; the next touch-drag on the marked piece
-      // still becomes a drag.
-      setMoveModeId(piece.id)
+      // The first touch only marks the piece. A later tap elsewhere on the
+      // board clears the mark instead of moving the piece, so choosing another
+      // piece never sends this one across the map. Moving is an explicit act:
+      // the Move button, or dragging the marked piece. Returning here, before
+      // the pointer is captured, keeps an untouched piece pannable.
+      setMoveModeId(null)
       surfaceGestureRef.current = null
       return
     }
@@ -515,7 +516,6 @@ export function BoardView({
     const piece = pieces.find((candidate) => candidate.id === drag.id)
     // A plain click without movement should only select, not send a request
     if (!drag.moved || (piece !== undefined && piece.x === Math.round(drag.x) && piece.y === Math.round(drag.y))) {
-      setMoveModeId(drag.id)
       return
     }
     // The drag itself already moved the piece; disarm so an unrelated later

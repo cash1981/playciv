@@ -3069,3 +3069,23 @@ status sheet was typed by hand.
   Unlike The Internet's coin limits it does not require the Wonders area.
 - **No new hidden information.** Every input (board, MIC, government,
   civilization) was already public to all players.
+
+## 2026-09-29 — Board: selecting a piece no longer arms a move
+
+_Supersedes the 2026-09-23 entry "Tapping a board piece on touch arms the move in the same tap"._
+
+Since the first mobile board work, a touch on a piece both selected it and armed
+"destination mode", so the next tap anywhere moved it. Choosing a second figure
+therefore sent the first one across the map. This is a bug fix to our own board
+UI; there is no old-system reference (the old system had no interactive board).
+
+- **Selecting only selects.** A touch or a click on a piece marks it. A tap on
+  empty board clears the mark; a tap on another piece selects that one. Nothing
+  moves.
+- **Moving is explicit.** Either drag the piece, or press **Move** in the
+  selected-piece panel and then tap the destination. Only the Move button (and
+  a pending palette asset) arms a tap-to-move.
+- **In Move mode a tap on the board, or on another piece, is the destination**,
+  since the user asked for the move. Tapping the moving piece itself is not a
+  destination: it starts a drag.
+
