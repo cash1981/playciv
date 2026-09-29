@@ -13,7 +13,7 @@ _Last updated: 2026-09-29_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 581 engine, 209 server, 261 web on `claude/trusting-meitner-q7h0j4` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 589 engine, 211 server, 292 web on `feat/issue-204-206-figure-limits-and-header` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
