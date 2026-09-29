@@ -37,7 +37,7 @@ const correctSocialPolicyFlipsides = (
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'chatOrders'
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'chatOrders' | 'chatOrdersStartTurn'
 > &
   Partial<
     Pick<
@@ -50,6 +50,7 @@ type MaybeOlder = Omit<
       | 'rev'
       | 'createdAt'
       | 'chatOrders'
+      | 'chatOrdersStartTurn'
     >
   >
 
@@ -229,5 +230,7 @@ export function migrateGameState(state: GameState): GameState {
     rev: older.rev ?? 0,
     // Chat orders (issue #215) is opt-in, so every older save starts with it off.
     chatOrders: older.chatOrders ?? false,
+    // Turn 1 is the baseline of a game that has never used chat orders.
+    chatOrdersStartTurn: older.chatOrdersStartTurn ?? 1,
   }
 }

@@ -17,7 +17,7 @@ import { appendInfoLog, appendLog, appendPublicLog, createLogTexts } from '../lo
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, LogType, Playerhand } from '../state.js'
-import { findPlayer, hasUserAccess, withPlayer } from '../state.js'
+import { activeTurnStatus, findPlayer, hasUserAccess, withPlayer } from '../state.js'
 import type { PlayerTurn, TurnPhase } from '../turn.js'
 import {
   TURN_PHASES,
@@ -240,7 +240,9 @@ export function playersTurns(state: GameState, playerId: string): readonly Playe
 // Chat orders (issue #215)
 //
 // None of these require it to be the caller's turn: with chat orders on there
-// is no baton, and players work on their own turn independently.
+// is no baton, and players work on their own turn independently. They refuse
+// with `CHAT_ORDERS_OFF` while the setting is off; the classic reveal is
+// unaffected.
 // ---------------------------------------------------------------------------
 
 /** Replaces one player's turn (creating it when missing) and keeps the public copy in step. */
@@ -275,6 +277,7 @@ export interface MarkPhasesDoneInput {
  * logs nothing.
  */
 export function markPhasesDone(state: GameState, input: MarkPhasesDoneInput): ActionResult {
+  if (!state.chatOrders) return err({ kind: 'CHAT_ORDERS_OFF' })
   const access = requireAccess(state, input.playerId)
   if (!access.ok) return access
   const player = access.value
@@ -319,6 +322,7 @@ export interface UnmarkPhaseDoneInput {
  * an order.
  */
 export function unmarkPhaseDone(state: GameState, input: UnmarkPhaseDoneInput): ActionResult {
+  if (!state.chatOrders) return err({ kind: 'CHAT_ORDERS_OFF' })
   const access = requireAccess(state, input.playerId)
   if (!access.ok) return access
   const player = access.value
@@ -356,6 +360,7 @@ export interface PostOrderInput {
  * the phase done.
  */
 export function postOrder(state: GameState, input: PostOrderInput): ActionResult {
+  if (!state.chatOrders) return err({ kind: 'CHAT_ORDERS_OFF' })
   const access = requireAccess(state, input.playerId)
   if (!access.ok) return access
   const player = access.value
@@ -386,12 +391,23 @@ export function postOrder(state: GameState, input: PostOrderInput): ActionResult
 
 /**
  * Switches chat orders on or off for a game. The engine has no notion of an
- * admin, so the server route is what restricts who may call this. Nothing else
- * is touched, which is why switching back and forth loses no data.
+ * admin, so the server route is what restricts who may call this.
+ *
+ * Switching on sets the baseline `chatOrdersStartTurn` to the turn the classic
+ * view reports right now (computed before the flag flips), never lowering it.
+ * Switching off touches nothing else, which is why going back and forth loses
+ * no data.
  */
 export function setChatOrders(state: GameState, enabled: boolean): ActionResult {
   if (state.chatOrders === enabled) return ok(state)
+  const classicTurn = activeTurnStatus({ ...state, chatOrders: false })?.turnNumber ?? 1
+  const chatOrdersStartTurn = enabled
+    ? Math.max(state.chatOrdersStartTurn, classicTurn)
+    : state.chatOrdersStartTurn
   return ok(
-    appendInfoLog({ ...state, chatOrders: enabled }, `Chat orders turned ${enabled ? 'on' : 'off'}`),
+    appendInfoLog(
+      { ...state, chatOrders: enabled, chatOrdersStartTurn },
+      `Chat orders turned ${enabled ? 'on' : 'off'}`,
+    ),
   )
 }

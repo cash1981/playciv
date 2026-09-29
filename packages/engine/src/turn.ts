@@ -77,7 +77,13 @@ const emptyRevealed = (): Record<TurnPhase, boolean> => ({
   RESEARCH: false,
 })
 
-const emptyDone = emptyRevealed
+const emptyDone = (): Record<TurnPhase, boolean> => ({
+  SOT: false,
+  TRADE: false,
+  CM: false,
+  MOVEMENT: false,
+  RESEARCH: false,
+})
 
 export function createPlayerTurn(username: string, turnNumber: number): PlayerTurn {
   return {
@@ -265,8 +271,9 @@ const bySeat = (players: readonly Playerhand[]): readonly Playerhand[] =>
  * player lives in `withdrawnPlayers` and never holds anybody up.
  *
  * The current turn is the lowest one that some active player has not finished
- * (Research not marked done). It is 1 when nobody has anything yet, and it
- * moves on by itself once the last player marks Research done.
+ * (Research not marked done), counting from `chatOrdersStartTurn`. It is that
+ * baseline (1 in a game that never played classic) when nobody has anything
+ * yet, and it moves on by itself once the last player marks Research done.
  */
 export function turnStatus(state: GameState): TurnStatus {
   const players = bySeat(state.players)
@@ -276,7 +283,9 @@ export function turnStatus(state: GameState): TurnStatus {
     0,
   )
 
-  let currentTurn = 1
+  // Turns before the baseline count as finished for everybody, so a player who
+  // never wrote an early turn cannot pin the current turn to it.
+  let currentTurn = Math.max(1, state.chatOrdersStartTurn)
   while (
     currentTurn <= highest &&
     players.every((player) => isDone(turnOf(player, currentTurn), 'RESEARCH'))
@@ -314,7 +323,9 @@ export function turnHolder(state: GameState, startPlayerNumber = 1): Playerhand 
   )
   if (earliest === undefined) return undefined
 
-  const start = seats.findIndex((player) => player.playernumber >= startPlayerNumber)
-  const ordered = start <= 0 ? seats : [...seats.slice(start), ...seats.slice(0, start)]
+  // No seat at or after the start number (it is above every seat): begin at seat 1.
+  const found = seats.findIndex((player) => player.playernumber >= startPlayerNumber)
+  const from = found === -1 ? 0 : found
+  const ordered = [...seats.slice(from), ...seats.slice(0, from)]
   return ordered.find((player) => !isDone(turnOf(player, currentTurn), earliest))
 }

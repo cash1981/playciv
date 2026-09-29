@@ -229,6 +229,14 @@ export interface GameState {
    */
   readonly chatOrders: boolean
   /**
+   * Chat orders: the first turn `turnStatus` looks at. Every turn below it
+   * counts as finished for everybody. Set when chat orders is switched on to
+   * the turn the classic view reports at that moment, so a game with turns
+   * already played classically does not start over at turn 1, and a player who
+   * never wrote an early turn cannot hold the current turn back. 1 by default.
+   */
+  readonly chatOrdersStartTurn: number
+  /**
    * The currently active battle, or null if no battle is in progress.
    * At most one battle may be active per game at a time.
    */

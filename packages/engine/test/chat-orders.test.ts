@@ -78,6 +78,37 @@ describe('the chatOrders setting', () => {
     // and a game that has it switched on keeps it
     expect(migrateGameState(chatGame()).chatOrders).toBe(true)
   })
+
+  it('an old saved game gets the baseline turn 1, and a stored baseline survives', () => {
+    const old = { ...firstCivGame() } as Record<string, unknown>
+    delete old['chatOrdersStartTurn']
+    expect(migrateGameState(old as unknown as GameState).chatOrdersStartTurn).toBe(1)
+    expect(migrateGameState({ ...firstCivGame(), chatOrdersStartTurn: 7 }).chatOrdersStartTurn).toBe(7)
+  })
+})
+
+describe('the actions need chat orders switched on', () => {
+  it('markPhasesDone, unmarkPhaseDone and postOrder refuse with CHAT_ORDERS_OFF', () => {
+    const off = firstCivGame()
+    expect(unwrapErr(markPhasesDone(off, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))).toEqual({ kind: 'CHAT_ORDERS_OFF' })
+    expect(unwrapErr(unmarkPhaseDone(off, { playerId: CASH1981, turnNumber: 1, phase: 'SOT' }))).toEqual({ kind: 'CHAT_ORDERS_OFF' })
+    expect(unwrapErr(postOrder(off, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', markdown: 'x', at: 't' }))).toEqual({ kind: 'CHAT_ORDERS_OFF' })
+  })
+
+  it('they work again once it is on, and refuse again once it is off', () => {
+    const on = chatGame()
+    const marked = unwrap(markPhasesDone(on, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
+    const off = unwrap(setChatOrders(marked, false))
+    expect(unwrapErr(unmarkPhaseDone(off, { playerId: CASH1981, turnNumber: 1, phase: 'SOT' })).kind).toBe('CHAT_ORDERS_OFF')
+  })
+
+  it('the classic update and reveal still work with it off', () => {
+    let state = unwrap(updateTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'classic' }))
+    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', at: 't1' }))
+    expect(state.chatOrders).toBe(false)
+    expect(state.publicTurns['1cash1981']?.orders.SOT).toBe('classic')
+    expect(done(state, CASH1981)?.SOT).toBe(true)
+  })
 })
 
 describe('PlayerTurn.done', () => {
@@ -328,6 +359,19 @@ describe('turnHolder', () => {
     expect(activeTurnStatus(state)?.phase).toBe('TRADE')
   })
 
+  it('wraps to seat 1 when the start number is above every seat', () => {
+    // No seat is at or after 9. Treating "not found" as an index would skip or
+    // repeat seats; the order must just be seat 1 first.
+    const state = chatGame()
+    expect(turnHolder(state, 9)?.playerId).toBe(CASH1981)
+    const afterCash = unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
+    expect(turnHolder(afterCash, 9)?.playerId).toBe(KARANDRAS1)
+    // The last seat as the start player: it goes first, then wraps round
+    expect(turnHolder(state, 4)?.playerId).toBe(CHUL)
+    const afterChul = unwrap(markPhasesDone(state, { playerId: CHUL, turnNumber: 1, upToPhase: 'SOT' }))
+    expect(turnHolder(afterChul, 4)?.playerId).toBe(CASH1981)
+  })
+
   it('counts seats from the start player', () => {
     const state = chatGame()
     expect(turnHolder(state, 3)?.playerId).toBe(ITCHI)
@@ -369,7 +413,13 @@ describe('activeTurn in the player view', () => {
     )
 
     // done flags only matter in chat mode: a classic turn still follows `revealed`
-    const marked = unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'RESEARCH' }))
+    const marked = unwrap(
+      setChatOrders(
+        unwrap(markPhasesDone(chatGame(), { playerId: CASH1981, turnNumber: 1, upToPhase: 'RESEARCH' })),
+        false,
+      ),
+    )
+    expect(findPlayer(marked, CASH1981)?.playerTurns[0]?.done.RESEARCH).toBe(true)
     expect(JSON.stringify(toPlayerView(marked, CASH1981).activeTurn)).toBe(baseline)
     expect(JSON.stringify(toPlayerView(state, KARANDRAS1).activeTurn)).toBe(baseline)
   })
@@ -449,5 +499,82 @@ describe('the turn phases', () => {
   it('there are five, and done is keyed by all of them', () => {
     const state = unwrap(markPhasesDone(chatGame(), { playerId: CASH1981, turnNumber: 1, upToPhase: 'RESEARCH' }))
     expect(Object.keys(done(state, CASH1981) ?? {})).toEqual([...TURN_PHASES])
+  })
+})
+
+describe('the chat orders baseline (chatOrdersStartTurn)', () => {
+  /**
+   * `turns` classic turns for each player, every phase revealed. A player in
+   * `skipFirst` never wrote turn 1.
+   */
+  const classicGame = (turns: number, skipFirst: readonly string[]): GameState => {
+    let state = firstCivGame()
+    for (const playerId of [CASH1981, KARANDRAS1, ITCHI, CHUL]) {
+      for (let turnNumber = skipFirst.includes(playerId) ? 2 : 1; turnNumber <= turns; turnNumber += 1) {
+        for (const phase of TURN_PHASES) {
+          state = unwrap(updateTurn(state, { playerId, turnNumber, phase, order: `${phase} ${turnNumber}` }))
+          state = unwrap(revealTurnOrder(state, { playerId, turnNumber, phase, at: 't' }))
+        }
+      }
+    }
+    return state
+  }
+
+  it('starts at 1 in a new game and is set when the setting is switched on', () => {
+    expect(firstCivGame().chatOrdersStartTurn).toBe(1)
+    expect(chatGame().chatOrdersStartTurn).toBe(1)
+  })
+
+  it('a player who never wrote turn 1 does not pin the current turn to it', () => {
+    const classic = classicGame(20, [KARANDRAS1])
+    // The classic view: the baton holder finished turn 20, so it reports 21
+    expect(activeTurnStatus(classic)?.turnNumber).toBe(21)
+
+    const on = unwrap(setChatOrders(classic, true))
+    expect(on.chatOrdersStartTurn).toBe(21)
+
+    const status = turnStatus(on)
+    expect(status.currentTurn).toBe(21)
+    expect(status.waitingFor).toEqual([
+      { username: 'cash1981', phase: 'SOT' },
+      { username: 'Karandras1', phase: 'SOT' },
+      { username: 'Itchi', phase: 'SOT' },
+      { username: 'Chul', phase: 'SOT' },
+    ])
+    // Seat 1, not Karandras1 who skipped turn 1
+    expect(turnHolder(on)?.playerId).toBe(CASH1981)
+    expect(activeTurnStatus(on)).toMatchObject({ username: 'cash1981', turnNumber: 21, phase: 'SOT' })
+  })
+
+  it('without the baseline the same game would be pinned to turn 1', () => {
+    // Guards the test above: it must fail when the baseline is ignored.
+    const on = unwrap(setChatOrders(classicGame(20, [KARANDRAS1]), true))
+    const noBaseline = { ...on, chatOrdersStartTurn: 1 }
+    expect(turnStatus(noBaseline).currentTurn).toBe(1)
+    expect(turnHolder(noBaseline)?.playerId).toBe(KARANDRAS1)
+  })
+
+  it('play carries on from the baseline', () => {
+    let state = unwrap(setChatOrders(classicGame(20, [KARANDRAS1]), true))
+    state = finishTurn(state, 21)
+    expect(turnStatus(state).currentTurn).toBe(22)
+  })
+
+  it('switching on mid-turn uses the turn the classic view reports and never goes back down', () => {
+    // Turn 3 is under way for the baton holder: not all phases revealed yet
+    let state = classicGame(2, [])
+    state = unwrap(updateTurn(state, { playerId: CASH1981, turnNumber: 3, phase: 'SOT', order: 'x' }))
+    const on = unwrap(setChatOrders(state, true))
+    expect(on.chatOrdersStartTurn).toBe(3)
+
+    // Off and on again in a game that has moved on keeps the higher baseline
+    const later = { ...unwrap(setChatOrders(on, false)), chatOrdersStartTurn: 9 }
+    expect(unwrap(setChatOrders(later, true)).chatOrdersStartTurn).toBe(9)
+    // Switching off leaves the baseline alone
+    expect(unwrap(setChatOrders(on, false)).chatOrdersStartTurn).toBe(3)
+  })
+
+  it('a game that never played classic turns starts at 1', () => {
+    expect(unwrap(setChatOrders(firstCivGame(), true)).chatOrdersStartTurn).toBe(1)
   })
 })

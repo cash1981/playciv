@@ -64,6 +64,8 @@ export type EngineError =
   /** Java: 403 "Only game creator can end game" */
   | { readonly kind: 'ONLY_GAME_CREATOR_CAN_END_GAME'; readonly playerId: string }
   | { readonly kind: 'TURN_NOT_FOUND'; readonly turnNumber: number }
+  /** Chat orders (issue #215): done markers and orders need the setting switched on. */
+  | { readonly kind: 'CHAT_ORDERS_OFF' }
   /** Every colour is taken */
   | { readonly kind: 'NO_COLOR_AVAILABLE' }
   | { readonly kind: 'INVALID_PLAYER_COLOR'; readonly color: string }
@@ -173,6 +175,8 @@ export function describeError(error: EngineError): string {
       return 'Only game creator can end game'
     case 'TURN_NOT_FOUND':
       return `Could not find turn ${error.turnNumber}`
+    case 'CHAT_ORDERS_OFF':
+      return 'Chat orders are not switched on for this game'
     case 'NO_COLOR_AVAILABLE':
       return 'No colors left to assign'
     case 'INVALID_PLAYER_COLOR':
