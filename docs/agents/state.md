@@ -6,7 +6,7 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-28_
+_Last updated: 2026-09-29_
 
 ## Health
 
@@ -18,6 +18,12 @@ _Last updated: 2026-09-28_
 | `main` pushed to `origin` | yes |
 
 ## Done
+
+- **Board: tapping another piece selects it; map tiles are never armed.**
+  Tapping a second figure used to send the first one there. Non-tile pieces
+  keep tap-then-tap moving; a selected map tile moves only into an empty map
+  slot and is cleared by any other tap (`decisions.md`, 2026-09-29). Checked by
+  hand in Chrome.
 
 - **Issue #197: the combat bonus is calculated automatically.** `combatBonusOf`
   (`packages/engine/src/combat-bonus.ts`) derives it from Barracks and Shipyard

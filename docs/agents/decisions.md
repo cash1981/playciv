@@ -3069,3 +3069,23 @@ status sheet was typed by hand.
   Unlike The Internet's coin limits it does not require the Wonders area.
 - **No new hidden information.** Every input (board, MIC, government,
   civilization) was already public to all players.
+
+## 2026-09-29 — Board: tapping another piece selects it; map tiles are never armed
+
+A touch on a piece selects it and arms tap-to-move (the 2026-09-23 flow), so
+the next tap on the board moves it. The bug: tapping a second figure to select
+it sent the first one there. There is no old-system reference (the old system
+had no interactive board). The rules, agreed with the human:
+
+- **Figures, buildings and markers.** First tap selects and arms. A tap on the
+  board, or on a map tile, moves it there. A tap on another non-tile piece
+  selects that piece instead. After a drag it is selected but not armed; a tap
+  elsewhere clears it.
+- **Map tiles are never armed by a tap.** With a tile selected, a tap on
+  another tile or outside the map slots clears the selection, a tap on a
+  figure or building selects that piece, and a tap on an empty map slot moves
+  the tile there. This is what makes "deselect" and "move" distinguishable
+  without a button.
+- **Placing a figure exactly on another figure** is done by dragging, or with
+  the Move button (kept as an explicit fallback: in Move mode any tap is the
+  destination). A tap on the figure itself selects it.
