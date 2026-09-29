@@ -122,8 +122,13 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
   const optionalAuth = authenticateOptionallyWith(context)
 
   /**
-   * The `system` timeline row for a done / not done change: the engine's own
+   * The `system` timeline rows for a done / not done change: the engine's own
    * public log line, so the two never disagree. No line means nothing changed.
+   *
+   * A done that finishes the turn also starts the next one, and the engine
+   * writes a second line for that. It becomes a row of its own, tagged with the
+   * new turn and the Start of turn phase, so the timeline has a divider and the
+   * paging boundary (the first row tagged with the current turn) is exact.
    */
   const appendSystemRow = async (
     gameId: string,
@@ -133,8 +138,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     before: GameState,
     after: GameState,
   ): Promise<void> => {
-    if (after.log.length === before.log.length) return
-    const line = after.log.at(-1)
+    const [line, ...rest] = after.log.slice(before.log.length)
     if (line === undefined) return
     await context.repo.appendChat({
       id: newId(),
@@ -145,6 +149,22 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       kind: 'system',
       turnNumber,
       phase,
+    })
+
+    const started = Object.keys(after.turnStarters)
+      .map(Number)
+      .find((turn) => before.turnStarters[turn] === undefined)
+    const startLine = rest.at(-1)
+    if (started === undefined || startLine === undefined) return
+    await context.repo.appendChat({
+      id: newId(),
+      gameId,
+      username,
+      message: startLine.publicLog,
+      createdAt: new Date().toISOString(),
+      kind: 'system',
+      turnNumber: started,
+      phase: 'SOT',
     })
   }
 
@@ -625,6 +645,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     if (requestedTurn instanceof Response) return requestedTurn
 
     const actor = currentPlayer(c)
+    const at = new Date().toISOString()
     let turnNumber = 1
     return applyToGame(
       context,
@@ -632,12 +653,14 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       gameId,
       (state) => {
         turnNumber = requestedTurn ?? turnStatus(state).currentTurn
-        return markPhasesDone(state, { playerId: actor.id, turnNumber, upToPhase: phase })
+        return markPhasesDone(state, { playerId: actor.id, turnNumber, upToPhase: phase, at })
       },
       undefined,
       {
-        after: ({ before, after }) =>
-          appendSystemRow(gameId, actor.username, turnNumber, phase, before, after),
+        after: async ({ before, after }) => {
+          await appendSystemRow(gameId, actor.username, turnNumber, phase, before, after)
+          await context.notifications.turnHolderChanged(before, after)
+        },
       },
     )
   })

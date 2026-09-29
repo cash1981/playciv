@@ -460,7 +460,7 @@ describe('GET /chat with chat orders on', () => {
     for (let index = 0; index < 40; index += 1) {
       await repo.appendChat(row(`t1-${index}`, game.gameId, { kind: 'order', turnNumber: 1, phase: 'SOT' }))
     }
-    // Finish turn 1 for both, so the current turn is 2 (writes 2 system rows into turn 1)
+    // Finish turn 1 for both, so the current turn is 2 (writes 2 system rows into turn 1, then the row that starts turn 2)
     for (const token of [game.seat1, game.seat2]) {
       await post(token, `/api/games/${game.gameId}/turns/done`, { phase: 'RESEARCH', turnNumber: 1 })
     }
@@ -469,7 +469,9 @@ describe('GET /chat with chat orders on', () => {
     }
 
     const current = await timeline(game.seat1, game.gameId)
-    expect(current.messages).toHaveLength(45)
+    // 45 seeded rows plus the row that starts turn 2, which the last done wrote (slice 3)
+    expect(current.messages).toHaveLength(46)
+    expect(current.messages[0]?.message).toMatch(/^Turn 2: .* starts with the Start of turn phase$/)
     expect(current.messages.every((message) => message.turnNumber === 2)).toBe(true)
     expect(current.hasMore).toBe(true)
 

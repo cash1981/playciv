@@ -187,7 +187,9 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
     if (typeof enabled !== 'boolean') {
       return sendError(c, 400, 'BAD_REQUEST', 'enabled must be a boolean')
     }
-    return applyToGame(context, c, gameId, (state) => setChatOrders(state, enabled), undefined, {
+    // Switching on may place the start player marker, a board history entry
+    const at = new Date().toISOString()
+    return applyToGame(context, c, gameId, (state) => setChatOrders(state, enabled, at), undefined, {
       record: false,
     })
   })
