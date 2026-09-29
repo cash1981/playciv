@@ -138,7 +138,10 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     before: GameState,
     after: GameState,
   ): Promise<void> => {
-    const [line, ...rest] = after.log.slice(before.log.length)
+    // `markPhasesDone` writes the done line first and, when the turn rolled over,
+    // the line that starts the next turn straight after it. Read by position: the
+    // divider must be that line and not merely the newest one.
+    const line = after.log[before.log.length]
     if (line === undefined) return
     await context.repo.appendChat({
       id: newId(),
@@ -154,7 +157,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     const started = Object.keys(after.turnStarters)
       .map(Number)
       .find((turn) => before.turnStarters[turn] === undefined)
-    const startLine = rest.at(-1)
+    const startLine = after.log[before.log.length + 1]
     if (started === undefined || startLine === undefined) return
     await context.repo.appendChat({
       id: newId(),

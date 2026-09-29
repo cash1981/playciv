@@ -173,6 +173,22 @@ describe('the row that starts a turn', () => {
     expect(markerOwner(view)).toBe(seat2.username)
   })
 
+  it('takes the divider text from the engine line straight after the done line', async () => {
+    const table = await threePlayerGame('turn-line')
+    await switchOn(table)
+    await finishTurn(table, 1)
+
+    const lines = (await loadGame(table.gameId)).log.map((entry) => entry.publicLog)
+    const lastDone = lines.findLastIndex((line) => line.includes('marked all phases up to research done'))
+    const startLine = lines[lastDone + 1]
+    expect(startLine).toMatch(/^Turn 2: .* starts with the Start of turn phase$/)
+    // Nothing follows it, and the two rows are those two lines in that order
+    expect(lines).toHaveLength(lastDone + 2)
+    const rows = await rowsOf(table.gameId)
+    expect(rows.at(-2)?.message).toBe(lines[lastDone])
+    expect(rows.at(-1)?.message).toBe(startLine)
+  })
+
   it('splits the paged timeline exactly at that row', async () => {
     const table = await threePlayerGame('turn-page')
     await switchOn(table)
