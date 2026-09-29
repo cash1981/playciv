@@ -3193,6 +3193,13 @@ removed tech was hidden. When the tech had been revealed, the public line names
 it. Both carry the same unique item number as the tech's `TECH` and `REVEAL`
 lines, so a removal can be tied back to the card.
 
+**Re-choosing.** `chooseTech` always makes the tech hidden, so a re-chosen
+starting tech is hidden until the player reveals it again. That only ever hides
+more, so nothing leaks.
+
+**Undo.** A `REMOVED_TECH` entry cannot be undone (`putTechBack` finds nothing
+to put back); that is how it already behaved and is left alone.
+
 **UI.** The Remove button is on the detail dialog opened from the viewer's own
 pyramid (not on opponents' pyramids, not on a replayed revision). The Techs
 panel's hidden list keeps its own Remove button.

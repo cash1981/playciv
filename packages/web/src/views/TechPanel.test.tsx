@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { TechItem } from '@civ/engine'
 
 import { api } from '../lib/api.js'
-import type { PlayerView } from '../lib/api.js'
+import type { GameRevisionView, PlayerView } from '../lib/api.js'
 import { TechPanel } from './TechPanel.js'
 
 beforeEach(() => localStorage.setItem('civ.panel.techs', 'true'))
@@ -426,7 +426,7 @@ describe('TechPanel picker', () => {
 
   it('offers Remove on the dialog of the viewer\'s own revealed tech and calls removeTech', async () => {
     vi.spyOn(api, 'availableTechs').mockResolvedValue([])
-    const remove = vi.spyOn(api, 'removeTech').mockResolvedValue({} as never)
+    const remove = vi.spyOn(api, 'removeTech').mockResolvedValue({} as PlayerView)
     render(
       <TechPanel
         gameId="game-1"
@@ -459,7 +459,40 @@ describe('TechPanel picker', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Egil' }))
     fireEvent.click(screen.getByText('Masonry'))
 
+    expect(screen.getByRole('dialog').textContent).toContain('Masonry — Level 1')
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull()
+  })
+
+  it('offers Remove on an own hidden tech from the dialog, and not on a replayed revision', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    const remove = vi.spyOn(api, 'removeTech').mockResolvedValue({} as PlayerView)
+    const live = render(
+      <TechPanel
+        gameId="game-1"
+        busy={false}
+        run={run}
+        view={view([tech('Writing', true, 1)])}
+        reloadCount={0}
+      />,
+    )
+    fireEvent.click(screen.getAllByText('Writing')[0] as HTMLElement)
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove' }))
+    expect(remove).toHaveBeenCalledWith('game-1', 'Writing')
+    live.unmount()
+
+    const historical = { availableTechs: [] } as unknown as GameRevisionView
+    render(
+      <TechPanel
+        gameId="game-1"
+        busy={false}
+        run={run}
+        view={view([tech('Writing', false, 1)])}
+        reloadCount={0}
+        historical={historical}
+      />,
+    )
+    fireEvent.click(screen.getAllByText('Writing')[0] as HTMLElement)
+    expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Remove' })).toBeNull()
   })
 
   it("opens the detail dialog for a tech read from an opponent's revealed pyramid, still with no Research button", async () => {
