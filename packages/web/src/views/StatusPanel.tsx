@@ -90,7 +90,7 @@ type StatColumn = {
   readonly key: PlayerStatKey | 'coinTotal'
   readonly label: string
   /**
-   * Calculated by the engine from the board and the hand, so shown as a
+   * Calculated by the engine from the board, MIC, government and civilization, so shown as a
    * read-only number rather than an input (Combat, issue #197).
    */
   readonly derived?: boolean

@@ -26,7 +26,7 @@ has, and recalculated whenever any of it is added or removed.
 | MIC investments (`stats.mic`) | +4 per 2 investments, up to 6 investments (max +12) |
 | Fundamentalism government | +4 |
 | French civilization | +2 |
-| Statue of Zeus, owned, in the Wonders area | +6 |
+| Statue of Zeus, owned (wherever the piece sits) | +6 |
 
 ## Design
 

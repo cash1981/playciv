@@ -1067,7 +1067,7 @@ export function setPlayerStat<K extends PlayerStatKey>(
     return err({ kind: 'UNKNOWN_STAT', stat: String(input.stat) })
   }
 
-  // Combat is derived from the board and the hand (issue #197), so it cannot be typed in.
+  // Combat is derived from the board, MIC, government and civilization (issue #197), so it cannot be typed in.
   if (input.stat === 'combat') {
     return err({ kind: 'STAT_NOT_EDITABLE', stat: input.stat })
   }

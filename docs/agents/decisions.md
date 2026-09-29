@@ -3064,7 +3064,8 @@ status sheet was typed by hand.
   `combat` value stored in older saved games is ignored on read.
 - **Attribution follows `buildingCountOf`.** Buildings and generals count for
   whoever placed the piece (`placedBy`); moving a piece does not change that.
-  The Statue of Zeus counts only for its explicit wonder owner while it is in
-  the Wonders area, as with The Internet.
+  The Statue of Zeus counts only for its explicit wonder owner, wherever the
+  piece sits, so Egypt's starting wonder (owned, in Egypt's own area) counts.
+  Unlike The Internet's coin limits it does not require the Wonders area.
 - **No new hidden information.** Every input (board, MIC, government,
   civilization) was already public to all players.

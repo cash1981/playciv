@@ -106,7 +106,7 @@ describe('combatBonusOf', () => {
     expect(bonus(withCiv(firstCivGame(), CASH1981, 'Germans'))).toBe(0)
   })
 
-  it('adds 6 for the owner of the Statue of Zeus in the Wonders area only', () => {
+  it('adds 6 for the owner of the Statue of Zeus', () => {
     const state = firstCivGame()
     const area = wondersArea(state.board)
     const placed = unwrap(placePiece(state, {
@@ -122,6 +122,16 @@ describe('combatBonusOf', () => {
     }))
     expect(bonus(owned, KARANDRAS1)).toBe(6)
     expect(bonus(owned, CASH1981)).toBe(0)
+  })
+
+  it('counts an owned Statue of Zeus that sits outside the Wonders area, as Egypt\'s starting wonder does', () => {
+    const placed = unwrap(placePiece(firstCivGame(), {
+      playerId: CASH1981, assetId: 'wonders/statueofzeus', x: 40, y: 300, ownerId: CASH1981,
+    }))
+    const wonder = placed.board.pieces.at(-1)
+    if (wonder === undefined) throw new Error('the statue should be on the board')
+    expect(isInWondersArea(placed.board, wonder)).toBe(false)
+    expect(bonus(placed)).toBe(6)
   })
 
   it('adds up every source', () => {

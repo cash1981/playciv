@@ -9,7 +9,6 @@
  * system behind them, since the old status sheet was typed in by hand.
  */
 
-import { isInWondersArea } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
 /** Building asset ids that add to the combat bonus, and by how much. */
@@ -34,7 +33,8 @@ const STATUE_OF_ZEUS_BONUS = 6
 /**
  * A player's combat bonus. Buildings and generals are attributed by `placedBy`
  * (see `buildingCountOf` in `state.ts` for why); the Statue of Zeus counts only
- * for its explicit owner while it sits in the Wonders area.
+ * for its explicit owner, wherever the piece sits (Egypt's starting wonder is
+ * owned but lives in Egypt's own area, not the shared Wonders area).
  */
 export function combatBonusOf(state: GameState, player: Playerhand): number {
   let bonus = 0
@@ -44,11 +44,7 @@ export function combatBonusOf(state: GameState, player: Playerhand): number {
       bonus += BUILDING_BONUS[piece.assetId] ?? 0
       if (piece.assetId === GENERAL_ASSET_ID) bonus += GENERAL_BONUS
     }
-    if (
-      piece.assetId === STATUE_OF_ZEUS_ASSET_ID &&
-      (piece.ownerId ?? null) === player.playerId &&
-      isInWondersArea(state.board, piece)
-    ) {
+    if (piece.assetId === STATUE_OF_ZEUS_ASSET_ID && piece.ownerId === player.playerId) {
       bonus += STATUE_OF_ZEUS_BONUS
     }
   }
