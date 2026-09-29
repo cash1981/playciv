@@ -104,15 +104,16 @@ export function ChatPanel({
       <ul className="list scroll">
         {shown.map((entry) => {
           const author = authors?.get(entry.username)
+          const tone = colorClass(author?.color ?? null)
           return (
             <li key={entry.id}>
               <ChatTimestamp createdAt={entry.createdAt} />
               {/* One box, so the civ never ends up alone at the end of a line */}
               <span className="chat-author">
                 {author?.civilization != null && (
-                  <small className="muted">{author.civilization}</small>
+                  <small className={tone ?? 'muted'}>{author.civilization}</small>
                 )}
-                <strong className={colorClass(author?.color ?? null)}>{entry.username}</strong>
+                <strong className={tone}>{entry.username}</strong>
               </span>
               <span>{entry.message}</span>
             </li>

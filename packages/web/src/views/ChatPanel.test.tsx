@@ -96,6 +96,7 @@ describe('ChatPanel authors (issue #206)', () => {
     expect(Array.from(author?.children ?? []).map((child) => child.textContent)).toEqual(['Greeks', 'Alice'])
     expect(author?.querySelector('small')?.textContent).toBe('Greeks')
     expect(author?.querySelector('strong')?.className).toBe('player-purple')
+    expect(author?.querySelector('small')?.className).toBe('player-purple')
     // The author comes before the message text
     expect(author?.nextElementSibling?.textContent).toBe('Hello')
   })
