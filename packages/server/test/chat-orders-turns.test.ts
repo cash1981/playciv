@@ -179,7 +179,7 @@ describe('the row that starts a turn', () => {
     await finishTurn(table, 1)
 
     const lines = (await loadGame(table.gameId)).log.map((entry) => entry.publicLog)
-    const lastDone = lines.findLastIndex((line) => line.includes('marked all phases up to research done'))
+    const lastDone = lines.map((line) => line.includes('marked all phases up to research done')).lastIndexOf(true)
     const startLine = lines[lastDone + 1]
     expect(startLine).toMatch(/^Turn 2: .* starts with the Start of turn phase$/)
     // Nothing follows it, and the two rows are those two lines in that order
