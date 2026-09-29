@@ -195,3 +195,68 @@ With it off, nothing changes.
   44px high, checked in the browser.
 
 **Out:** the automatic new turn, marker rotation, turn divider rows (slice 3).
+
+## Slice 3: new turn, start player marker, turn mail
+
+**Model.** The start player is derived, so manual moves, undo and redo cannot
+leave it stale:
+
+- `startPlayerOf(state)`: the owner of the player area that contains the centre
+  of the `markers/startplayer` board piece; if the marker is missing or in no
+  player's area, `GameState.startPlayerId` (last known); if that is unset,
+  playernumber 1. Withdrawn players are skipped (fall through to the next seat).
+- `GameState.startPlayerId: string | null` (default null, migrated to null) is
+  written whenever the engine starts a turn, and by `setChatOrders(true)`.
+- `GameState.turnStarters: Record<number, string>` (turn number to username):
+  who started each turn, so the title of an old turn stays right after the marker
+  moves. Migrated to `{}`.
+- `turnHolder` uses the seat of `startPlayerOf(state)` instead of the fixed
+  seat 1 (the draw guard follows).
+
+**Enabling.** `setChatOrders(true)` places the marker in the start player's
+area if the board has none (`placeUnchecked`, area origin), and records
+`turnStarters[startTurn]`. It needs an `at` for the board history; the admin
+route supplies it.
+
+**New turn.** In `markPhasesDone`, after marking: if `turnStatus.currentTurn`
+went from N to N+1 and `turnStarters[N+1]` is not set, then start turn N+1:
+the next start player is the next playernumber after `startPlayerOf(state)`
+among active players, wrapping (clockwise); move the marker into that player's
+area (a board history entry, undoable); set `startPlayerId` and
+`turnStarters[N+1]`; write the public log line `Turn N+1: <player> starts with
+the Start of turn phase`. The `turnStarters[N+1]` guard matters: unmarking a
+Research and marking it again must not rotate twice. Unmarking never rolls a
+started turn back.
+
+**Manual marker moves.** Nothing to do for the rule itself (it is derived). When
+`movePiece` moves the start player marker into a different player's area while
+chat orders is on, write a public log line `<player> is now the start player`.
+
+**Status.** `ActiveTurnStatus` gains `startPlayer: string | null` (username,
+from `turnStarters[currentTurn]` else `startPlayerOf`) when chat orders is on.
+
+**Server.** When `currentTurn` increases after a `turns/done` call, also write a
+`system` chat row for the new turn (kind `system`, turnNumber N+1, phase `SOT`,
+text `Turn N+1: X starts with the Start of turn phase`). Slice 1's paging
+boundary ("first row tagged with the current turn") then becomes exact.
+Mail: in chat mode, when the turn holder changes after `turns/done`, notify the
+new holder ("It is your turn: <phase>, turn <n>") through the existing in-game
+notification path and its 30 minute throttle (#217 will change the throttle for
+every mail; do not build that here). No mail when the holder does not change.
+
+**Web.** The title reads `Turn N · <starter> started · waiting for ...`. A
+`system` row that starts a turn renders as a turn divider in the timeline.
+
+**Acceptance.**
+
+- [ ] Last player marks Research: turn N+1 starts, marker moves to the next seat
+      clockwise, log line written, `turnStarters` set, title updated
+- [ ] Unmark then mark Research again does not rotate a second time
+- [ ] Marker dragged into another player's area: that player is start player,
+      the next rotation counts from them; marker in no area: last known
+- [ ] Enabling with no marker on the board places one; with a marker leaves it
+- [ ] Withdrawn players are skipped in rotation and in the holder
+- [ ] Undo of the marker move or the turn start restores the previous start player
+- [ ] Off: no marker is placed, nothing changes
+- [ ] Hidden information: `startPlayer` and `turnStarters` are public; a test
+      shows a projection carries no private field
