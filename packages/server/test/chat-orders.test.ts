@@ -4,7 +4,12 @@
  * there is no Java counterpart.
  */
 
-import type { GameState, PlayerView } from '@civ/engine'
+import { mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import type { PlayerView } from '@civ/engine'
+import { createPlayerTurn } from '@civ/engine'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { App } from '../src/app.js'
@@ -39,7 +44,8 @@ async function register(username: string): Promise<string> {
 async function registerAdmin(username: string): Promise<string> {
   const token = await register(username)
   const account = await repo.findPlayerByUsername(username)
-  await repo.updatePlayer(account?.id as string, { role: 'admin' })
+  if (account === undefined) throw new Error(`${username} was just registered`)
+  await repo.updatePlayer(account.id, { role: 'admin' })
   return token
 }
 
@@ -77,6 +83,12 @@ async function startedGame(name: string): Promise<Started> {
   }
 }
 
+async function loadGame(gameId: string) {
+  const game = await repo.findGame(gameId)
+  if (game === undefined) throw new Error(`no game ${gameId}`)
+  return game
+}
+
 const post = (token: string, url: string, payload: unknown = {}) =>
   inject(app, { method: 'POST', url, headers: bearer(token), payload })
 
@@ -93,8 +105,9 @@ interface Timeline {
   readonly hasMore: boolean
 }
 
-const timeline = async (token: string, gameId: string, query = ''): Promise<Timeline> =>
-  (await get(token, `/api/games/${gameId}/chat${query}`)).json<Timeline>()
+/** The opt-in paged shape; `extra` is more query string, such as `&before=<id>`. */
+const timeline = async (token: string, gameId: string, extra = ''): Promise<Timeline> =>
+  (await get(token, `/api/games/${gameId}/chat?paged=1${extra}`)).json<Timeline>()
 
 const row = (id: string, gameId: string, over: Partial<ChatMessage> = {}): ChatMessage => ({
   id,
@@ -154,7 +167,7 @@ describe('posting an order', () => {
     const response = await post(game.seat2, `/api/games/${game.gameId}/turns/order`, { phase: 'movement', markdown: 'A6 to A5' })
     expect(response.status).toBe(200)
 
-    const state = await repo.findGame(game.gameId) as GameState
+    const state = await loadGame(game.gameId)
     const turn = state.players.find((player) => player.username === game.name2)?.playerTurns[0]
     expect(turn?.turnNumber).toBe(1)
     expect(turn?.orders.MOVEMENT).toBe('A6 to A5')
@@ -284,6 +297,66 @@ describe('marking phases done and not done', () => {
   })
 })
 
+describe('the routes need chat orders switched on', () => {
+  it('order, done and undone answer 409 CHAT_ORDERS_OFF and write nothing', async () => {
+    const game = await startedGame('gate')
+    const revision = (await loadGame(game.gameId)).rev
+    for (const [path, payload] of [
+      ['turns/order', { phase: 'SOT', markdown: 'x' }],
+      ['turns/done', { phase: 'SOT' }],
+      ['turns/undone', { phase: 'SOT', turnNumber: 1 }],
+    ] as const) {
+      const response = await post(game.seat1, `/api/games/${game.gameId}/${path}`, payload)
+      expect(response.status).toBe(409)
+      expect(JSON.parse(response.body)).toMatchObject({ error: 'CHAT_ORDERS_OFF' })
+    }
+    expect(await repo.chatFor(game.gameId)).toEqual([])
+    expect((await loadGame(game.gameId)).rev).toBe(revision)
+  })
+
+  it('the classic update and reveal routes still work with it off', async () => {
+    const game = await startedGame('classic-routes')
+    const update = await post(game.seat1, `/api/games/${game.gameId}/turns/update`, { turnNumber: 1, phase: 'SOT', order: 'classic' })
+    expect(update.status).toBe(200)
+    const reveal = await post(game.seat1, `/api/games/${game.gameId}/turns/reveal`, { turnNumber: 1, phase: 'SOT' })
+    expect(reveal.status).toBe(200)
+    expect((await get(game.seat2, `/api/games/${game.gameId}/turns/public`)).body).toContain('classic')
+  })
+
+  it('once it is on, the default turn comes from the baseline set when it was switched on', async () => {
+    const game = await startedGame('baseline')
+    // Turn 4 is played classically by both, then chat orders is switched on
+    const base = await loadGame(game.gameId)
+    let played = base
+    for (const player of base.players) {
+      played = {
+        ...played,
+        players: played.players.map((entry) =>
+          entry.playerId === player.playerId
+            ? {
+                ...entry,
+                playerTurns: [
+                  {
+                    ...createPlayerTurn(entry.username, 4),
+                    revealed: { SOT: true, TRADE: true, CM: true, MOVEMENT: true, RESEARCH: true },
+                    done: { SOT: true, TRADE: true, CM: true, MOVEMENT: true, RESEARCH: true },
+                  },
+                ],
+              }
+            : entry,
+        ),
+      }
+    }
+    await repo.saveGame(played)
+    await chatOn(game)
+    expect((await loadGame(game.gameId)).chatOrdersStartTurn).toBe(5)
+
+    const response = await post(game.seat1, `/api/games/${game.gameId}/turns/order`, { phase: 'SOT', markdown: 'turn five' })
+    expect(response.status).toBe(200)
+    expect((await repo.chatFor(game.gameId)).at(-1)).toMatchObject({ kind: 'order', turnNumber: 5 })
+  })
+})
+
 describe('an ended game', () => {
   it('refuses orders and done markers for players and still lets an admin act', async () => {
     const game = await startedGame('ended')
@@ -343,6 +416,31 @@ describe('GET /chat with chat orders off', () => {
 })
 
 describe('GET /chat with chat orders on', () => {
+  it('stays the plain array of chat rows unless a page is asked for, so the live ChatPanel keeps working', async () => {
+    const game = await startedGame('opt-in')
+    await chatOn(game)
+    await post(game.seat1, `/api/games/${game.gameId}/chat`, { message: 'talk' })
+    await post(game.seat1, `/api/games/${game.gameId}/turns/order`, { phase: 'SOT', markdown: 'an order' })
+    await post(game.seat1, `/api/games/${game.gameId}/turns/done`, { phase: 'SOT' })
+
+    const body = await (await get(game.seat2, `/api/games/${game.gameId}/chat`)).json<Record<string, unknown>[]>()
+    expect(Array.isArray(body)).toBe(true)
+    expect(body).toHaveLength(1)
+    expect(Object.keys(body[0] ?? {})).toEqual(['id', 'gameId', 'username', 'message', 'createdAt'])
+    // paged=0 or anything but 1 is not an opt-in
+    expect(Array.isArray(await (await get(game.seat2, `/api/games/${game.gameId}/chat?paged=0`)).json())).toBe(true)
+    // and the page has all three kinds
+    expect((await timeline(game.seat2, game.gameId)).messages.map((message) => message.kind)).toEqual(['chat', 'order', 'system'])
+  })
+
+  it('a game with chat orders off ignores paged=1 and answers the plain array', async () => {
+    const game = await startedGame('paged-off')
+    await post(game.seat1, `/api/games/${game.gameId}/chat`, { message: 'talk' })
+    const body = await (await get(game.seat2, `/api/games/${game.gameId}/chat?paged=1`)).json<unknown[]>()
+    expect(Array.isArray(body)).toBe(true)
+    expect(body).toHaveLength(1)
+  })
+
   it('answers a page with hasMore, and a chat row is kind chat with no tags', async () => {
     const game = await startedGame('page-shape')
     await chatOn(game)
@@ -375,14 +473,18 @@ describe('GET /chat with chat orders on', () => {
     expect(current.messages.every((message) => message.turnNumber === 2)).toBe(true)
     expect(current.hasMore).toBe(true)
 
-    const first = current.messages[0]?.id as string
-    const previous = await timeline(game.seat1, game.gameId, `?before=${first}`)
+    const first = current.messages[0]?.id
+    if (first === undefined) throw new Error('the current turn has no rows')
+    // `before` alone is enough to ask for the paged shape
+    const previous = await timeline(game.seat1, game.gameId, `&before=${first}`)
+    const beforeOnly = await get(game.seat1, `/api/games/${game.gameId}/chat?before=${first}`)
+    expect(JSON.parse(beforeOnly.body)).toEqual(JSON.parse(JSON.stringify(previous)))
     // 40 seeded rows plus the two done rows
     expect(previous.messages).toHaveLength(42)
     expect(previous.messages.every((message) => message.turnNumber === 1)).toBe(true)
     expect(previous.hasMore).toBe(false)
 
-    const missing = await get(game.seat1, `/api/games/${game.gameId}/chat?before=nope`)
+    const missing = await get(game.seat1, `/api/games/${game.gameId}/chat?paged=1&before=nope`)
     expect(missing.status).toBe(400)
   })
 
@@ -433,11 +535,6 @@ describe('timelinePage', () => {
 
 describe('chat row kinds in storage', () => {
   it('the JSON store reads an old file with rows that have no kind', async () => {
-    const created = await createTestApp()
-    // A repository over a file holding an old-format chat row
-    const { mkdtemp, writeFile } = await import('node:fs/promises')
-    const { tmpdir } = await import('node:os')
-    const { join } = await import('node:path')
     const directory = await mkdtemp(join(tmpdir(), 'civ-chat-'))
     const path = join(directory, 'state.json')
     await writeFile(
@@ -456,7 +553,6 @@ describe('chat row kinds in storage', () => {
       { id: 'old', gameId: 'g', username: 'a', message: 'old row', createdAt: '2020-01-01T00:00:00.000Z', kind: 'chat', turnNumber: null, phase: null },
     ])
     await legacy.flush()
-    expect(created.repo).toBeDefined()
   })
 
   it('D1 reads a row written before the migration as chat, and round-trips the new kinds', async () => {
@@ -542,12 +638,12 @@ describe('hidden information with chat orders on', () => {
 
     const state = await repo.findGame(game.gameId)
     const privateLog = state?.log.find((entry) => entry.item !== null)?.privateLog
-    expect(privateLog).toBeTruthy()
+    if (privateLog === undefined || privateLog === '') throw new Error('the draw has no private log')
 
     const seen = await get(game.seat2, `/api/games/${game.gameId}/state`)
     expect(seen.body).not.toContain('NOTE-SECRET')
     expect(seen.body).not.toContain('DRAFT-SECRET')
-    expect(seen.body).not.toContain(privateLog as string)
+    expect(seen.body).not.toContain(privateLog)
     const view = JSON.parse(seen.body) as PlayerView
     expect(view.chatOrders).toBe(true)
     expect(view.activeTurn?.waitingFor?.length).toBeGreaterThan(0)
@@ -557,6 +653,6 @@ describe('hidden information with chat orders on', () => {
     const page = await timeline(game.seat2, game.gameId)
     expect(JSON.stringify(page)).not.toContain('NOTE-SECRET')
     expect(JSON.stringify(page)).not.toContain('DRAFT-SECRET')
-    expect(JSON.stringify(page)).not.toContain(privateLog as string)
+    expect(JSON.stringify(page)).not.toContain(privateLog)
   })
 })

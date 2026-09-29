@@ -175,7 +175,9 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       const previous = before.players.find((player) => player.yourTurn)?.playerId
       const next = after.players.find((player) => player.yourTurn)
       if (next === undefined || next.playerId === previous) return
-      const status = activeTurnStatus(after)
+      // With chat orders on, `activeTurnStatus` describes the turn holder, not
+      // the player who has the baton, so its phase would be the wrong advice.
+      const status = after.chatOrders ? null : activeTurnStatus(after)
       const phaseText =
         status === null ? '' : ` Continue with the ${TURN_PHASE_LABEL[status.phase]} phase.`
       await notify(

@@ -551,18 +551,21 @@ export function registerGameRoutes(app: App, context: AppContext): void {
   // -------------------------------------------------------------------------
 
   /**
-   * With chat orders off this is the plain array it has always been, and only
-   * plain chat: order and system rows written while the setting was on stay
-   * out of the classic panel. With it on the answer is a page of the timeline.
+   * The plain array it has always been, and only plain chat: order and system
+   * rows stay out of the classic panel, whether or not chat orders is on, so the
+   * live ChatPanel keeps working. The shape changes only on request: `paged=1`
+   * or `before` on a game with chat orders on answers a page of the timeline.
    */
   app.get('/api/games/:gameId/chat', auth, async (c) => {
     const gameId = c.req.param('gameId')
     const rows = await context.repo.chatFor(gameId)
     const game = await context.repo.findGame(gameId)
-    if (game === undefined || !game.chatOrders) {
+    const before = c.req.query('before')
+    const paged = c.req.query('paged') === '1' || before !== undefined
+    if (game === undefined || !game.chatOrders || !paged) {
       return c.json(rows.filter((row) => row.kind === 'chat').map(classicChatRow))
     }
-    const page = timelinePage(rows, turnStatus(game).currentTurn, c.req.query('before'))
+    const page = timelinePage(rows, turnStatus(game).currentTurn, before)
     if (page === undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'before is not a message in this game')
     }

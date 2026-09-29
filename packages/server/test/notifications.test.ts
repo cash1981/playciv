@@ -8,6 +8,7 @@
  */
 
 import type { GameState } from '@civ/engine'
+import { setChatOrders, unwrap } from '@civ/engine'
 import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -179,6 +180,26 @@ describe('your turn', () => {
 
     expect(mailer.sent).toHaveLength(1)
     expect(mailer.sent[0]?.text).toContain('Continue with the trade phase.')
+  })
+
+  it('with chat orders on, the mail names no phase: the phase belongs to the turn holder, not the baton holder', async () => {
+    const { gameId, starter } = await startedGame('chat-phase')
+    await repo.saveGame(unwrap(setChatOrders(await loadGame(gameId), true)))
+    mailer.sent.length = 0
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/endturn`,
+      headers: bearer(starter.token),
+      payload: {},
+    })
+    expect(response.status).toBe(200)
+
+    expect(mailer.sent).toHaveLength(1)
+    const text = mailer.sent[0]?.text ?? ''
+    expect(text).toContain("It's your turn to play in chat-phase!\n\n")
+    expect(text).not.toContain('Continue with')
+    expect(text).toContain(`https://playciv.app/game/${gameId}`)
   })
 
   it('sends nothing on the take-turn button', async () => {
