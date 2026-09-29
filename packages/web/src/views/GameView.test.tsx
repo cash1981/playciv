@@ -479,7 +479,7 @@ describe('chatAuthorsOf and activePlayerOf (issue #206)', () => {
 })
 
 describe('HandPanel groups items by kind (issue #190 follow-up)', () => {
-  it('renders group headings in old-civ-web bucket order, not draw order', async () => {
+  it('orders hand cards by old-civ-web bucket, not draw order, with no headings', async () => {
     localStorage.setItem('civ.autoRefresh', 'false')
     const village: Item = { ...base, id: 'village-1', sheetName: 'VILLAGES', kind: 'village', name: 'Village A' }
     const hut: Item = { ...base, id: 'hut-1', sheetName: 'HUTS', kind: 'hut', name: 'Hut A' }
@@ -530,14 +530,16 @@ describe('HandPanel groups items by kind (issue #190 follow-up)', () => {
 
     const hand = screen.getByRole('heading', { name: 'Your hand (5)' }).closest('section')
     const sequence = Array.from(
-      hand?.querySelectorAll('.item-group-heading h4, li.card strong') ?? [],
+      hand?.querySelectorAll('li.card strong') ?? [],
     ).map((node) => node.textContent)
+    expect(hand?.querySelectorAll('.item-group-heading')).toHaveLength(0)
+    expect(hand?.querySelectorAll('ul.card-grid > li')).toHaveLength(5)
     expect(sequence).toEqual([
-      'Items', 'Wonder A',
-      'Units', 'Infantry 1.3',
-      'Culture Cards', 'Culture A',
-      'Huts', 'Hut: Hut A',
-      'Villages', 'Village: Village A',
+      'Wonder A',
+      'Infantry 1.3',
+      'Culture A',
+      'Hut: Hut A',
+      'Village: Village A',
     ])
   })
 })

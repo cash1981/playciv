@@ -12,6 +12,10 @@
  * be reverted: grouping belongs to the hand, and Revealed/Discarded stays a
  * flat, newest-first list. See the 2026-09-28 decisions.md entries for both
  * issue #190 and this follow-up.
+ *
+ * Deliberate departure: this port keeps the order but renders no heading per
+ * bucket; the hand is one continuous grid (see decisions.md, 2026-09-29).
+ * `BUCKET_LABEL` is kept for reference and has no consumer at present.
  */
 
 import { isUnit } from '@civ/engine'
