@@ -3298,5 +3298,9 @@ alone: the classic `activeTurnStatus` only looks at the holder, and a holder who
 never wrote turn orders would report turn 1 in a game on turn 20. So it is the
 larger of the classic turn and the highest turn anyone has a record for (plus one
 when everybody with a record for that turn has finished it). Overshooting only
-marks old turns finished; undershooting would pin the game. Switching off leaves
-the baseline alone and it never goes down. It is 1 by default and for old saves, and is not in `PlayerView`.
+marks old turns finished; undershooting would pin the game. One consequence:
+a player working a turn ahead of the others can carry the baseline past work the
+others have not finished. Nothing is lost, the orders and flags stay, and play
+corrects itself once everyone marks done in the newer turn. Switching off leaves
+the baseline alone and it never goes down. It is 1 by default and for old saves,
+and is not in `PlayerView`.

@@ -13,12 +13,25 @@ _Last updated: 2026-09-29_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 589 engine, 211 server, 325 web on `feat/issue-209-compact-menu` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing (645 engine, 255 server, 333 web on `feat/chat-orders`) - earlier note: 589 engine, 211 server, 325 web on `feat/issue-209-compact-menu` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
 
+- **Issue #215, slice 1 of 3: chat orders in the engine and server (no UI yet).**
+  A per-game `chatOrders` switch, off by default and settable only by an admin
+  (`POST /api/admin/games/:gameId/chat-orders`). With it on: per-phase `done`
+  markers that can be set (several phases at once) and unset, public orders that
+  keep every version (newest counts), `turnStatus` / `turnHolder`, a paged chat
+  timeline (opt-in with `paged=1`), out-of-turn draws that need
+  `confirmedOutOfTurn`, and a baseline turn (`chatOrdersStartTurn`) so a live
+  game does not restart at turn 1. Off: nothing changes. D1 migration 0004. Three
+  review rounds (paged response shape, baseline pinned to turn 1, routes not
+  gated on the flag, then the baseline read from the baton holder only). See
+  `decisions.md`, 2026-09-29. Slices 2 (web timeline, composer, done sheet, load
+  more, Private tab) and 3 (automatic new turn, start player marker, baton) are
+  next. Branch `feat/chat-orders`, brief `tasks/chat-orders.md`.
 - **Remove any own tech.** A player can remove a hidden, revealed or starting
   tech at any time from the tech detail dialog; the tech becomes choosable
   again, the coin counter resets, and the log names revealed techs and keeps the
