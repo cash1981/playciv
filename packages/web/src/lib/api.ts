@@ -7,6 +7,7 @@
  */
 
 import type {
+  ActiveTurnStatus,
   Board,
   BoardArea,
   BoardAsset,
@@ -24,10 +25,13 @@ import type {
   SheetName,
   SocialPolicyItem,
   TechItem,
+  TurnPhase,
+  WaitingFor,
   WinnerEntry,
 } from '@civ/engine'
 
 export type {
+  ActiveTurnStatus,
   Board,
   BoardArea,
   BoardAsset,
@@ -45,6 +49,8 @@ export type {
   SheetName,
   SocialPolicyItem,
   TechItem,
+  TurnPhase,
+  WaitingFor,
   WinnerEntry,
 }
 
@@ -124,6 +130,26 @@ export interface ChatMessageDto {
   readonly username: string
   readonly message: string
   readonly createdAt: string
+}
+
+/** What a timeline row is (chat orders, issue #215). */
+export type ChatKind = 'chat' | 'order' | 'system'
+
+/**
+ * A row of the chat orders timeline. Plain `ChatMessageDto` is what the classic
+ * chat and the lobby answer; the timeline adds the kind and the turn tag.
+ */
+export interface TimelineMessageDto extends ChatMessageDto {
+  readonly kind: ChatKind
+  /** The turn an order or system row belongs to; `null` for plain chat. */
+  readonly turnNumber: number | null
+  readonly phase: TurnPhase | null
+}
+
+/** `GET /chat?paged=1`: rows oldest first, and whether older ones exist. */
+export interface ChatPageDto {
+  readonly messages: readonly TimelineMessageDto[]
+  readonly hasMore: boolean
 }
 
 export interface PendingUndoDto {
@@ -357,8 +383,13 @@ export const api = {
   revealed: (gameId: string, page: number, size: number) =>
     get<RevealedPage>(`/api/games/${gameId}/revealed?page=${page}&size=${size}`),
 
-  draw: (gameId: string, sheetName: SheetName) =>
-    post<PlayerView>(`/api/games/${gameId}/draw/${sheetName}`),
+  // `confirmedOutOfTurn` is sent only after the player answered yes to the chat
+  // orders warning (issue #215); wonders go through this route as well.
+  draw: (gameId: string, sheetName: SheetName, confirmedOutOfTurn?: boolean) =>
+    post<PlayerView>(
+      `/api/games/${gameId}/draw/${sheetName}`,
+      confirmedOutOfTurn === true ? { confirmedOutOfTurn: true } : undefined,
+    ),
   loot: (gameId: string, category: LootCategory, targetPlayerId: string) =>
     post<PlayerView>(`/api/games/${gameId}/loot/${category}/${targetPlayerId}`),
   discardGreatPerson: (gameId: string, type: string) =>
@@ -464,6 +495,23 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/turns/update`, { turnNumber, phase, order }),
   revealTurnOrder: (gameId: string, turnNumber: number, phase: string) =>
     post<PlayerView>(`/api/games/${gameId}/turns/reveal`, { turnNumber, phase }),
+  // Chat orders (issue #215). The turn defaults to the current one on the server.
+  postOrder: (gameId: string, phase: TurnPhase, markdown: string, turnNumber?: number) =>
+    post<PlayerView>(`/api/games/${gameId}/turns/order`, {
+      phase,
+      markdown,
+      ...(turnNumber === undefined ? {} : { turnNumber }),
+    }),
+  markDone: (gameId: string, phase: TurnPhase, turnNumber?: number) =>
+    post<PlayerView>(`/api/games/${gameId}/turns/done`, {
+      phase,
+      ...(turnNumber === undefined ? {} : { turnNumber }),
+    }),
+  unmarkDone: (gameId: string, phase: TurnPhase, turnNumber?: number) =>
+    post<PlayerView>(`/api/games/${gameId}/turns/undone`, {
+      phase,
+      ...(turnNumber === undefined ? {} : { turnNumber }),
+    }),
   lockTurn: (gameId: string, turnNumber: number, locked: boolean) =>
     post<PlayerView>(`/api/games/${gameId}/turns/lock`, { turnNumber, locked }),
   saveNote: (gameId: string, note: string) => post<PlayerView>(`/api/games/${gameId}/note`, { note }),
@@ -526,6 +574,15 @@ export const api = {
   redoBoard: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/board/redo`),
 
   chat: (gameId: string) => get<ChatMessageDto[]>(`/api/games/${gameId}/chat`),
+  /** Chat orders: the current turn, or the turn before `before` (a message id). */
+  chatPage: (gameId: string, before?: string) =>
+    get<ChatPageDto>(
+      `/api/games/${gameId}/chat?paged=1${before === undefined ? '' : `&before=${encodeURIComponent(before)}`}`,
+    ),
   sendChat: (gameId: string, message: string) =>
     post<ChatMessageDto>(`/api/games/${gameId}/chat`, { message }),
+
+  /** Admin only (issue #215). */
+  setChatOrders: (gameId: string, enabled: boolean) =>
+    post<PlayerView>(`/api/admin/games/${gameId}/chat-orders`, { enabled }),
 }

@@ -165,3 +165,67 @@ describe('api retry on a transient gateway failure', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('api chat orders calls (issue #215)', () => {
+  /** The path and the parsed JSON body of the one call the stub received. */
+  const lastCall = (fetchMock: ReturnType<typeof vi.fn>): { path: unknown; body: unknown } => {
+    const [path, init] = fetchMock.mock.calls[0] as [unknown, { body?: string } | undefined]
+    return { path, body: init?.body === undefined ? undefined : JSON.parse(init.body) }
+  }
+
+  it('asks for the current page, then for the turn before a message', async () => {
+    const fetchMock = respondWith(200, JSON.stringify({ messages: [], hasMore: false }))
+    await api.chatPage('g1')
+    expect(lastCall(fetchMock).path).toBe('/api/games/g1/chat?paged=1')
+
+    const second = respondWith(200, JSON.stringify({ messages: [], hasMore: false }))
+    await api.chatPage('g1', 'm 1')
+    expect(lastCall(second).path).toBe('/api/games/g1/chat?paged=1&before=m%201')
+  })
+
+  it('sends the turn only when it is given', async () => {
+    const fetchMock = respondWith(200, '{}')
+    await api.postOrder('g1', 'TRADE', 'Buy iron')
+    expect(lastCall(fetchMock)).toEqual({
+      path: '/api/games/g1/turns/order',
+      body: { phase: 'TRADE', markdown: 'Buy iron' },
+    })
+
+    const second = respondWith(200, '{}')
+    await api.markDone('g1', 'CM', 4)
+    expect(lastCall(second)).toEqual({
+      path: '/api/games/g1/turns/done',
+      body: { phase: 'CM', turnNumber: 4 },
+    })
+
+    const third = respondWith(200, '{}')
+    await api.unmarkDone('g1', 'CM', 4)
+    expect(lastCall(third).path).toBe('/api/games/g1/turns/undone')
+  })
+
+  it('adds confirmedOutOfTurn to a draw only when it is true', async () => {
+    const plain = respondWith(200, '{}')
+    await api.draw('g1', 'CIV')
+    expect(lastCall(plain).body).toEqual({})
+
+    const declined = respondWith(200, '{}')
+    await api.draw('g1', 'CIV', false)
+    expect(lastCall(declined).body).toEqual({})
+
+    const confirmed = respondWith(200, '{}')
+    await api.draw('g1', 'ANCIENT_WONDERS', true)
+    expect(lastCall(confirmed)).toEqual({
+      path: '/api/games/g1/draw/ANCIENT_WONDERS',
+      body: { confirmedOutOfTurn: true },
+    })
+  })
+
+  it('switches chat orders through the admin route', async () => {
+    const fetchMock = respondWith(200, '{}')
+    await api.setChatOrders('g1', true)
+    expect(lastCall(fetchMock)).toEqual({
+      path: '/api/admin/games/g1/chat-orders',
+      body: { enabled: true },
+    })
+  })
+})
