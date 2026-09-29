@@ -85,6 +85,8 @@ export type EngineError =
   | { readonly kind: 'GAME_NOT_STARTED' }
   /** Java has no equivalent — `setPlayerStat` (issue #43) got a key outside `PlayerStats` */
   | { readonly kind: 'UNKNOWN_STAT'; readonly stat: string }
+  /** `setPlayerStat` (issue #197) was asked to set a stat the engine calculates (Combat) */
+  | { readonly kind: 'STAT_NOT_EDITABLE'; readonly stat: string }
   /**
    * `setPlayerStat` (issue #43) got a value the stat does not allow: a
    * non-integer or negative number, or — for Movement (issue #102) — a string
@@ -195,8 +197,10 @@ export function describeError(error: EngineError): string {
       return 'The game has not started yet, so there is no turn to end'
     case 'UNKNOWN_STAT':
       return `Unknown player stat: ${error.stat}`
+    case 'STAT_NOT_EDITABLE':
+      return `The ${error.stat} stat is calculated automatically and cannot be edited`
     case 'INVALID_STAT_VALUE':
-      return `Player stat must be a whole number; only Combat may be negative, got ${error.value}`
+      return `Player stat must be a whole number of zero or more, got ${error.value}`
     case 'UNKNOWN_COIN_SOURCE':
       return `Unknown coin source: ${error.source}`
     case 'INVALID_COIN_VALUE':

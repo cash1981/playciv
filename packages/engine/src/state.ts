@@ -12,6 +12,7 @@ import { isUnit } from './item.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece } from './board.js'
 import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
+import { combatBonusOf } from './combat-bonus.js'
 import type { CoinSources } from './coins.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
@@ -50,6 +51,7 @@ export interface PlayerStats {
    * calculation. See {@link isMovementValue} for what is allowed.
    */
   readonly mvmt: string
+  /** Ignored on read: the projections replace it with `combatBonusOf` (issue #197). */
   readonly combat: number
   readonly handSize: number
   readonly efta: number
@@ -375,6 +377,14 @@ export function buildingCountOf(state: GameState, playerId: string): number {
   ).length
 }
 
+/**
+ * The player with their derived stats filled in. `combat` is computed from the
+ * board, MIC, government and civilization (issue #197), so whatever is stored is ignored on read.
+ */
+function withDerivedStats(state: GameState, player: Playerhand): Playerhand {
+  return { ...player, stats: { ...player.stats, combat: combatBonusOf(state, player) } }
+}
+
 // ---------------------------------------------------------------------------
 // Projections — what a given player gets to see
 // ---------------------------------------------------------------------------
@@ -474,7 +484,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     publicTurns: Object.values(state.publicTurns).filter(
       (turn) => turn.username === player.username,
     ),
-    stats: player.stats,
+    stats: { ...player.stats, combat: combatBonusOf(state, player) },
     government: player.government,
     cultureMarkerLevel: cultureMarkerLevelOf(state, player.playerId),
     cityCount: cityCountOf(state, player.playerId),
@@ -564,7 +574,8 @@ export function battleSummaries(state: GameState): readonly BattleSideSummary[] 
       side.kind === 'barbarians'
         ? 'Barbarians'
         : (player?.username ?? side.playerId)
-    const combatBonus = side.kind === 'player' ? (player?.stats.combat ?? 0) : 0
+    const combatBonus =
+      side.kind === 'player' && player !== undefined ? combatBonusOf(state, player) : 0
     return {
       side: sideId,
       kind: side.kind,
@@ -584,7 +595,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     player === undefined
       ? null
       : {
-          ...player,
+          ...withDerivedStats(state, player),
           cultureMarkerLevel: cultureMarkerLevelOf(state, viewerId),
           cityCount: cityCountOf(state, viewerId),
           buildingCount: buildingCountOf(state, viewerId),

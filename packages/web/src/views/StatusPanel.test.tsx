@@ -466,6 +466,21 @@ describe('StatusPanel Coins section', () => {
     expect((screen.getByRole('button', { name: 'Increase Alice Civil Service (II)' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('shows Combat as a read-only calculated number (issue #197)', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({})}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    expect(screen.getByLabelText('Alice Combat').textContent).toBe('0')
+    expect(screen.queryByRole('textbox', { name: 'Alice Combat' })).toBeNull()
+  })
+
   it('shows the summed total in the status table, read-only', () => {
     render(
       <StatusPanel

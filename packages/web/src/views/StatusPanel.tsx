@@ -89,7 +89,11 @@ type StatColumn = {
    */
   readonly key: PlayerStatKey | 'coinTotal'
   readonly label: string
-  readonly signed?: boolean
+  /**
+   * Calculated by the engine from the board, MIC, government and civilization, so shown as a
+   * read-only number rather than an input (Combat, issue #197).
+   */
+  readonly derived?: boolean
   /**
    * Movement (issue #102) is written as an expression (`3+1`) rather than a
    * plain integer; the cell accepts text and validates it accordingly.
@@ -112,7 +116,7 @@ const UNIT_COLUMNS: readonly StatColumn[] = [
 const MODIFIER_COLUMNS: readonly StatColumn[] = [
   { key: 'stacking', label: 'Stacking' },
   { key: 'mvmt', label: 'Movement', text: true },
-  { key: 'combat', label: 'Combat', signed: true },
+  { key: 'combat', label: 'Combat', derived: true },
   { key: 'handSize', label: 'Hand Size' },
 ]
 
@@ -176,7 +180,8 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
   return (
     <CollapsiblePanel id="status" title="Player status">
       <p className="muted" style={{ margin: '0 0 0.5rem' }}>
-        These values are shared bookkeeping — anyone in the game can edit them.
+        These values are shared bookkeeping — anyone in the game can edit them,
+        except Combat, which is calculated automatically.
         Unit and modifier values start with the standard defaults shown below.
       </p>
       <PlayerTabs
@@ -300,11 +305,14 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
                             <span className="stat-total" aria-label={`${row.username} Coins`}>
                               {totalCoins(row.stats.coinSources)}
                             </span>
+                          ) : column.derived === true ? (
+                            <span className="stat-total" aria-label={`${row.username} ${column.label}`}>
+                              {row.stats[key]}
+                            </span>
                           ) : (
                             <StatCell
                               label={`${row.username} ${column.label}`}
                               value={row.stats[key]}
-                              signed={column.signed === true}
                               text={column.text === true}
                               disabled={busy || readOnly}
                               onCommit={(value) =>
@@ -537,7 +545,7 @@ function CoinCounter({
 }
 
 /**
- * An inline editable stat. Most are integers (Combat may be negative);
+ * An inline editable stat. Most are non-negative integers;
  * Movement (issue #102) is text, an expression like `3+1`. Commits on blur or
  * Enter, and only when the value actually changed, so concurrent edits are not
  * clobbered. Invalid input reverts rather than saving.
@@ -545,20 +553,18 @@ function CoinCounter({
 function StatCell({
   label,
   value,
-  signed = false,
   text = false,
   disabled,
   onCommit,
 }: {
   readonly label: string
   readonly value: number | string
-  readonly signed?: boolean
   readonly text?: boolean
   readonly disabled: boolean
   readonly onCommit: (value: number | string) => void
 }): React.JSX.Element {
   const displayValue =
-    typeof value === 'string' ? value : signed && value >= 0 ? `+${value}` : String(value)
+    typeof value === 'string' ? value : String(value)
   const [draft, setDraft] = useState(displayValue)
 
   useEffect(() => {
@@ -578,7 +584,7 @@ function StatCell({
     }
     const parsed = Number(trimmed)
     // Empty or partial input (e.g. "" or "-") must revert, not save 0.
-    if (trimmed === '' || !Number.isInteger(parsed) || (!signed && parsed < 0)) {
+    if (trimmed === '' || !Number.isInteger(parsed) || parsed < 0) {
       setDraft(displayValue)
       return
     }

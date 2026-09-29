@@ -41,6 +41,7 @@ export function statusFor(error: EngineError): number {
     case 'BOARD_ASSET_NOT_FOUND':
     // A player-stat update named an unknown stat or an invalid value
     case 'UNKNOWN_STAT':
+    case 'STAT_NOT_EDITABLE':
     case 'INVALID_STAT_VALUE':
     case 'UNKNOWN_COIN_SOURCE':
     case 'INVALID_COIN_VALUE':

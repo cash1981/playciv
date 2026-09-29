@@ -53,6 +53,7 @@ describe('BattlePanel summary bar', () => {
     expect(getByText('HP 3 (+6)')).toBeTruthy()
   })
 
+  // The engine no longer produces a negative bonus (issue #197); this only pins the formatting.
   it('shows a negative combat bonus next to HP, not ATK', () => {
     const summaryView = {
       ...view,

@@ -835,8 +835,8 @@ export function endBattleAction(
     nextState = returnArenaUnitCardToHand(nextState, arenaUnit, ownerSide)
   }
 
-  // Winner: whichever side's remaining HP plus its combat bonus (issue #43's
-  // status-board `combat` stat, always 0 for barbarians) is higher; a draw
+  // Winner: whichever side's remaining HP plus its combat bonus (the derived
+  // `combatBonusOf`, issue #197, always 0 for barbarians) is higher; a draw
   // goes to the defender, per the human's explicit tie-break rule.
   const [attackerSummary, defenderSummary] = battleSummaries(state)
   const outcome =

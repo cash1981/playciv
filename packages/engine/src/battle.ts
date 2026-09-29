@@ -113,8 +113,8 @@ export interface BattleSideSummary {
   readonly totalHealth: number
   readonly totalAttack: number
   /**
-   * `PlayerStats.combat` for player sides (may be negative — it is the only
-   * signed stat). Barbarians have no combat bonus; their value is always 0.
+   * The player's derived combat bonus (`combatBonusOf`, issue #197) for player
+   * sides. Barbarians have no combat bonus; their value is always 0.
    */
   readonly combatBonus: number
 }
