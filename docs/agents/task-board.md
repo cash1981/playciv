@@ -12,7 +12,19 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing claimed._
+### issue-204-206-figure-limits-and-header
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/issue-204-206-figure-limits-and-header`
+- **Brief:** `docs/agents/tasks/issue-204-206-figure-limits-and-header.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/board.ts`, `packages/engine/src/actions/board.ts`, `packages/engine/src/errors.ts`
+  - `packages/engine/data/board-assets.json`, `packages/web/public/board/figures/whitearmy.png`, `tools/board-assets.ps1`
+  - `packages/server/src/errors.ts`
+  - `packages/web/src/views/BoardView.tsx`, `GameView.tsx`, `ChatPanel.tsx` (+ tests and stylesheet)
+- **Notes:** `board-assets.json` and `public/board/` are held under Shared resources.
+
 
 ---
 
@@ -42,7 +54,7 @@ at a time. Claim them by name.
 
 | Resource | Owned by |
 | --- | --- |
-| `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
+| `packages/engine/data/board-assets.json` and `packages/web/public/board/` | issue-204-206-figure-limits-and-header |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | free |
