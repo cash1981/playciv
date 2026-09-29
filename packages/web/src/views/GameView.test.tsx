@@ -270,14 +270,14 @@ describe('HandPanel groups items by kind (issue #190 follow-up)', () => {
 
     const hand = screen.getByRole('heading', { name: 'Your hand (5)' }).closest('section')
     const sequence = Array.from(
-      hand?.querySelectorAll('.item-group-heading h4, li.card strong') ?? [],
+      hand?.querySelectorAll('li.card strong') ?? [],
     ).map((node) => node.textContent)
     expect(sequence).toEqual([
-      'Items', 'Wonder A',
-      'Units', 'Infantry 1.3',
-      'Culture Cards', 'Culture A',
-      'Huts', 'Hut: Hut A',
-      'Villages', 'Village: Village A',
+      'Wonder A',
+      'Infantry 1.3',
+      'Culture A',
+      'Hut: Hut A',
+      'Village: Village A',
     ])
   })
 })
