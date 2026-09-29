@@ -25,9 +25,7 @@ _Last updated: 2026-09-29_
   item number for hidden ones (`decisions.md`, 2026-09-29). Branch
   `feat/remove-tech`.
 
-=======
 - **Battle turn mail.** Ending the battle turn in the arena mails the player who now holds it ("It is your turn to play a unit in the battle arena"), immediately and with no cooldown. Unsubscribed players and blank addresses are skipped, the player who pressed the button is never mailed, and the barbarian side mails its controller. New mechanic with no Java counterpart, specified by the human; see `decisions.md` and `README.md`. Review-approved in two rounds; 8 new server tests (220 total).
->>>>>>> e8a4a9d (Record battle turn mail in state, release the claim)
 - **Issue #209: compact mobile menu.** The hamburger menu is a full-screen
   sheet on a phone with its own header and a close (X) button that stays put
   while the list scrolls, and a dropdown from the hamburger on desktop. Rows
