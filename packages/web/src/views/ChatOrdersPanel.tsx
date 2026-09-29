@@ -69,6 +69,12 @@ const FILTERS: readonly { readonly filter: Filter; readonly label: string }[] = 
  * after the row before it in the page, or at the very start when nothing before
  * it is known. That puts an older page in front and new rows at the end without
  * trusting timestamps to sort, so the server's order is kept.
+ *
+ * This assumes a page either overlaps what is held or is the older page fetched
+ * with `before`. A page that overlaps nothing goes to the front, which is right
+ * for Load more and would be wrong for a newer page with a gap before it, such
+ * as a refresh that arrives after the turn moved on by more than one. The server
+ * always answers the whole current turn, so that gap cannot come up today.
  */
 export function mergeTimeline(
   existing: readonly TimelineMessageDto[],
@@ -319,6 +325,8 @@ interface Props {
   readonly busy: boolean
   /** Replaying a revision or an ended game: read, but do not write. */
   readonly readOnly: boolean
+  /** A revision is on screen. The private log is not part of the history. */
+  readonly replaying?: boolean
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
   readonly reloadCount: number
   readonly autoRefresh: boolean
@@ -331,6 +339,7 @@ export function ChatOrdersPanel({
   view,
   busy,
   readOnly,
+  replaying = false,
   run,
   reloadCount,
   autoRefresh,
@@ -353,6 +362,9 @@ export function ChatOrdersPanel({
   const [privateStatus, setPrivateStatus] = useState<SaveStatus>('saved')
 
   const requestEpoch = useRef(0)
+  // Bumped when the game changes or the panel goes: an answer for the old game
+  // must land nowhere, Load more included.
+  const gameEpoch = useRef(0)
   const firstPageLoaded = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
@@ -387,6 +399,21 @@ export function ChatOrdersPanel({
     }
   }, [gameId])
 
+  // Declared before the load effect so a new game starts empty, then loads.
+  useEffect(() => {
+    setMessages([])
+    setHasMore(false)
+    setLoadingMore(false)
+    setLoadError(null)
+    firstPageLoaded.current = false
+    requestEpoch.current += 1
+    gameEpoch.current += 1
+    return () => {
+      requestEpoch.current += 1
+      gameEpoch.current += 1
+    }
+  }, [gameId])
+
   useEffect(() => {
     void load()
   }, [load, reloadCount])
@@ -400,17 +427,20 @@ export function ChatOrdersPanel({
   const loadMore = async (): Promise<void> => {
     const oldest = messages[0]
     if (oldest === undefined || loadingMore) return
+    const epoch = gameEpoch.current
     setLoadingMore(true)
     try {
       const page = await api.chatPage(gameId, oldest.id)
+      if (epoch !== gameEpoch.current) return
       prependFrom.current = scrollRef.current?.scrollHeight ?? null
       setMessages((held) => mergeTimeline(held, page.messages))
       setHasMore(page.hasMore)
       setLoadError(null)
     } catch (caught) {
+      if (epoch !== gameEpoch.current) return
       setLoadError(errorMessage(caught))
     } finally {
-      setLoadingMore(false)
+      if (epoch === gameEpoch.current) setLoadingMore(false)
     }
   }
 
@@ -430,6 +460,19 @@ export function ChatOrdersPanel({
       element.scrollTop = element.scrollHeight
     }
   }, [visible])
+
+  // The composer changes height when the editor finishes loading or the mode
+  // switches, and the timeline is what gives way. Keep the newest message in
+  // view when it was in view.
+  useEffect(() => {
+    const element = scrollRef.current
+    if (element === null || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      if (stickToBottom.current) element.scrollTop = element.scrollHeight
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [filter])
 
   // A note someone else saved from another tab arrives with the view, unless
   // the one being typed here would be lost.
@@ -486,14 +529,15 @@ export function ChatOrdersPanel({
     <CollapsiblePanel id="chat-orders" title="Chat and orders" defaultOpen className="chat-orders">
       {loadError !== null && <div className="error">{loadError}</div>}
 
-      <div className="chat-orders-filters" role="group" aria-label="Show">
+      <div className="chat-orders-filters" role="tablist" aria-label="Show">
         {showFilters.map(({ filter: name, label }) => (
           <button
             key={name}
             type="button"
+            role="tab"
             id={`chat-orders-filter-${name}`}
             className={filter === name ? 'chat-orders-chip revealed' : 'chat-orders-chip'}
-            aria-pressed={filter === name}
+            aria-selected={filter === name}
             onClick={() => {
               setFilter(name)
               stickToBottom.current = true
@@ -504,7 +548,11 @@ export function ChatOrdersPanel({
         ))}
       </div>
 
-      {filter === 'private' && view.you !== null ? (
+      {filter === 'private' && view.you !== null && replaying ? (
+        <div role="tabpanel" id="chat-orders-private-panel" aria-labelledby="chat-orders-filter-private">
+          <p className="muted">Your private log is not part of the history.</p>
+        </div>
+      ) : filter === 'private' && view.you !== null ? (
         <>
           <PrivateLogWorkspace
             note={privateNote}
@@ -538,7 +586,12 @@ export function ChatOrdersPanel({
           </button>
         </>
       ) : (
-        <>
+        <div
+          role="tabpanel"
+          id="chat-orders-timeline-panel"
+          aria-labelledby={`chat-orders-filter-${filter}`}
+          className="chat-orders-thread"
+        >
           <div
             className="chat-orders-scroll"
             ref={scrollRef}
@@ -651,7 +704,7 @@ export function ChatOrdersPanel({
               </div>
             </form>
           )}
-        </>
+        </div>
       )}
 
       {sheetOpen && canWrite && (

@@ -3304,3 +3304,44 @@ others have not finished. Nothing is lost, the orders and flags stay, and play
 corrects itself once everyone marks done in the newer turn. Switching off leaves
 the baseline alone and it never goes down. It is 1 by default and for old saves,
 and is not in `PlayerView`.
+
+## 2026-09-29 — Chat orders, slice 2 (web)
+
+**Correction to the slice 1 entry on `confirmedOutOfTurn`.** The slice 1 entry
+says the client sends the draw, gets `NOT_YOUR_TURN`, asks, and sends again. That
+is not what was built. The confirm dialog asks **before** the first request, from
+`activeTurn.playerId`, and the draw is sent with `confirmedOutOfTurn: true` only
+after Yes. A No sends nothing. The server still refuses an unconfirmed
+out-of-turn draw with `NOT_YOUR_TURN`, and the client then shows that error as it
+would any other, so a stale view cannot slip past the guard. A player whose view
+says they are up sends no flag.
+
+**Messages are rendered with `react-markdown`, a new runtime dependency of
+`@civ/web`.** The web package had no Markdown renderer (Milkdown is the editor,
+not a display path), and orders and chat are written by other players, so
+rendering them is an XSS surface. The policy, in `SafeMarkdown.tsx`:
+
+- No raw HTML. react-markdown builds React elements and, without `rehype-raw`,
+  shows `<script>` and `<img onerror>` as text. `dangerouslySetInnerHTML` is used
+  nowhere.
+- No images. A remote image would make every reader's browser fetch a URL the
+  author chose. Only the alt text is shown.
+- Links: absolute `http:`, `https:` and `mailto:` only, checked with `new URL`.
+  Anything else, `javascript:`, `data:`, `vbscript:` or a relative path, loses
+  its `href` and keeps its text.
+- Every link opens with `target="_blank" rel="noopener noreferrer"`.
+
+A library was chosen over a hand-written sanitiser because the parser is the
+part that is easy to get wrong. The tests in `SafeMarkdown.test.tsx` and
+`ChatOrdersPanel.test.tsx` pin the policy.
+
+**The composer is not sticky.** A sticky composer covered the newest messages on
+a phone once the panel was taller than the screen. The timeline and composer now
+share one box no taller than `100dvh - 4rem`; the timeline scrolls inside it and
+the composer takes what it needs. A resize observer keeps the newest message in
+view when the composer changes height.
+
+**The timeline needs a signed-in player.** Like the classic chat, it is not
+rendered for a signed-out spectator (the chat routes answer 401). The Log panel
+still shows. While a revision is on screen the Private tab says the private log is
+not part of the history instead of showing an editor.

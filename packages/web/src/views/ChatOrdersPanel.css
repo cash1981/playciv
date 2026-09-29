@@ -1,7 +1,7 @@
 /*
  * Chat orders timeline (issue #215). Mobile first: everything fits a 375 px
  * screen with no sideways scroll, controls are at least 44 px high, and the
- * composer sticks to the bottom of the screen while the panel is in view.
+ * composer stays inside the screen under the timeline.
  * Colours come from the theme variables, so the dark and light themes both work.
  */
 
@@ -40,8 +40,20 @@
   font-weight: 600;
 }
 
+/* The timeline and the composer share one box that never outgrows the screen,
+   so the composer is always reachable and never lies over the newest message.
+   The timeline takes what the composer leaves; it scrolls inside. (A sticky
+   composer did the first but covered the last messages on a phone.) */
+.chat-orders-thread {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 4rem);
+}
+
 .chat-orders-scroll {
-  max-height: min(60dvh, 32rem);
+  flex: 1 1 auto;
+  min-height: 8rem;
+  max-height: 32rem;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -115,9 +127,7 @@
 }
 
 .chat-orders-composer {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
+  flex: 0 0 auto;
   margin-top: 0.6rem;
   padding-top: 0.6rem;
   border-top: 1px solid var(--line);

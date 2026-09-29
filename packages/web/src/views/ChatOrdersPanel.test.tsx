@@ -169,9 +169,8 @@ const rows = (container: HTMLElement): string[] =>
     (row) => row.querySelector('.chat-orders-body')?.textContent ?? row.textContent ?? '',
   )
 
-/** The filter chips and the composer's mode switch both have a Chat button. */
 const filterChip = (name: string): HTMLElement =>
-  within(screen.getByRole('group', { name: 'Show' })).getByRole('button', { name })
+  within(screen.getByRole('tablist', { name: 'Show' })).getByRole('tab', { name })
 
 const click = async (element: HTMLElement): Promise<void> => {
   await act(async () => { fireEvent.click(element) })
@@ -323,7 +322,7 @@ describe('filter chips', () => {
     await click(filterChip('Chat'))
 
     expect(rows(container)).toEqual(['just talking'])
-    expect(filterChip('Chat').getAttribute('aria-pressed')).toBe('true')
+    expect(filterChip('Chat').getAttribute('aria-selected')).toBe('true')
   })
 })
 
@@ -435,7 +434,7 @@ describe('the composer', () => {
     chatPage.mockResolvedValue(page([message('a')]))
     const spectator = await renderPanel(makeView({ you: null }))
     expect(spectator.container.querySelector('.chat-orders-composer')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Private' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Private' })).toBeNull()
     cleanup()
 
     const replay = await renderPanel(makeView(), { readOnly: true })
@@ -474,6 +473,77 @@ describe('Load more', () => {
 
     expect(screen.getByText('boom')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Load more' })).not.toBeNull()
+  })
+})
+
+describe('a game change and unmounting', () => {
+  const panelFor = (gameId: string): React.JSX.Element => (
+    <ChatOrdersPanel
+      gameId={gameId} view={makeView()} busy={false} readOnly={false} run={run}
+      reloadCount={0} autoRefresh={false} editorComponent={FakeEditor}
+    />
+  )
+
+  it('starts the next game empty and drops a Load more that was still in flight', async () => {
+    let finishOlder: ((older: ChatPageDto) => void) | undefined
+    chatPage
+      .mockResolvedValueOnce(page([message('cc')], true))
+      .mockImplementationOnce(() => new Promise((resolve) => { finishOlder = resolve }))
+      .mockResolvedValueOnce(page([message('zzz', { message: 'other game' })], false))
+    const { container, rerender } = await renderPanel(makeView())
+    await click(screen.getByRole('button', { name: 'Load more' }))
+
+    await act(async () => { rerender(panelFor('other')) })
+    expect(rows(container)).toEqual(['other game'])
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
+
+    await act(async () => { finishOlder?.(page([message('old', { message: 'from the first game' })], true)) })
+
+    expect(rows(container)).toEqual(['other game'])
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
+  })
+
+  it('does nothing with a page that arrives after the panel is gone', async () => {
+    let finish: ((first: ChatPageDto) => void) | undefined
+    chatPage.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { unmount } = await renderPanel(makeView())
+    unmount()
+
+    await act(async () => { finish?.(page([message('a')])) })
+
+    expect(errors).not.toHaveBeenCalled()
+  })
+})
+
+describe('tabs and replay', () => {
+  it('labels the panel by the tab that is selected', async () => {
+    chatPage.mockResolvedValue(page([message('a')]))
+    await renderPanel(makeView())
+
+    const panel = screen.getByRole('tabpanel')
+    expect(panel.getAttribute('aria-labelledby')).toBe(filterChip('All').id)
+    await click(filterChip('Orders'))
+    expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(filterChip('Orders').id)
+    await click(filterChip('Private'))
+    expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(filterChip('Private').id)
+  })
+
+  it('says the private log is not part of the history while a revision is on screen', async () => {
+    await act(async () => {
+      render(
+        <ChatOrdersPanel
+          gameId="game" view={makeView()} busy={false} readOnly replaying run={run}
+          reloadCount={0} autoRefresh={false} editorComponent={FakeEditor}
+        />,
+      )
+    })
+
+    await click(filterChip('Private'))
+
+    expect(screen.getByText('Your private log is not part of the history.')).not.toBeNull()
+    expect(screen.queryByLabelText('Private log')).toBeNull()
+    expect(document.body.textContent).not.toContain('my private plan')
   })
 })
 

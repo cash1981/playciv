@@ -679,14 +679,18 @@ describe('chat orders on the game page (issue #215)', () => {
     } as unknown as PlayerView
   }
 
-  const renderGame = async (view: PlayerView, role: 'user' | 'admin' = 'user'): Promise<void> => {
+  const renderGame = async (
+    view: PlayerView,
+    role: 'user' | 'admin' = 'user',
+    signedIn = true,
+  ): Promise<void> => {
     localStorage.setItem('civ.autoRefresh', 'false')
     vi.spyOn(api, 'game').mockResolvedValue(view)
     vi.spyOn(api, 'revisions').mockResolvedValue([])
     render(
       <GameView
         gameId="game-1"
-        player={{ username: 'Alice', role } as unknown as PlayerDto}
+        player={signedIn ? ({ username: 'Alice', role } as unknown as PlayerDto) : null}
         onUnauthorized={vi.fn()}
         onDeleted={vi.fn()}
         onWithdrawn={vi.fn()}
@@ -719,6 +723,14 @@ describe('chat orders on the game page (issue #215)', () => {
 
       expect(screen.queryByText('End turn')).toBeNull()
       expect(screen.queryByText('Take the turn')).toBeNull()
+    })
+
+    it('shows a signed-out spectator the log but not the timeline, which needs a player', async () => {
+      await renderGame({ ...chatView('Bob'), you: null } as unknown as PlayerView, 'user', false)
+
+      expect(screen.queryByRole('heading', { name: 'Chat and orders' })).toBeNull()
+      expect(screen.getByRole('heading', { name: 'Log' })).toBeTruthy()
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Turn 4')
     })
 
     it('leaves the classic page exactly as it was with chat orders off', async () => {
@@ -790,9 +802,16 @@ describe('chat orders on the game page (issue #215)', () => {
       expect(await screen.findByText('Player is not on turn')).toBeTruthy()
     })
 
-    it('leaves Draw disabled for a spectator', async () => {
-      await renderGame({ ...chatView('Bob'), you: null } as unknown as PlayerView)
+    it('leaves Draw disabled for a spectator and does not promise a question', async () => {
+      await renderGame({ ...chatView('Bob'), you: null } as unknown as PlayerView, 'user', false)
       expect(drawButton('Civ').disabled).toBe(true)
+      expect(screen.queryByText(/You will be asked/)).toBeNull()
+      expect(screen.getByText('Only players can draw.')).toBeTruthy()
+    })
+
+    it('tells a player out of turn that they will be asked', async () => {
+      await renderGame(chatView('Bob'))
+      expect(screen.getByText('It is not your turn. You will be asked before you draw.')).toBeTruthy()
     })
 
     it('keeps the classic rule with chat orders off: disabled out of turn, no dialog', async () => {

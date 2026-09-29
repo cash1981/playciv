@@ -590,16 +590,20 @@ export function GameView({
         <DrawPanel gameId={gameId} busy={interactionBusy} yourTurn={yourTurn} run={run} view={displayedView} />
         {displayedView.chatOrders ? (
           <>
-            <ChatOrdersPanel
-              gameId={gameId}
-              view={displayedView}
-              busy={busy}
-              readOnly={replaying || locked}
-              run={run}
-              reloadCount={reloadCount}
-              autoRefresh={autoRefresh}
-              authors={chatAuthors}
-            />
+            {/* Like the classic chat: the chat routes need a signed-in player */}
+            {player !== null && (
+              <ChatOrdersPanel
+                gameId={gameId}
+                view={displayedView}
+                busy={busy}
+                readOnly={replaying || locked}
+                replaying={replaying}
+                run={run}
+                reloadCount={reloadCount}
+                autoRefresh={autoRefresh}
+                authors={chatAuthors}
+              />
+            )}
             <LogPanel
               gameId={gameId}
               busy={busy || locked}
@@ -756,9 +760,11 @@ function DrawPanel({
     <CollapsiblePanel id="draw" title="Draw" defaultOpen>
       <p className="muted" style={{ marginTop: 0 }}>
         {chatOrders
-          ? question === null
-            ? 'It is your turn.'
-            : 'It is not your turn. You will be asked before you draw.'
+          ? view.you === null
+            ? 'Only players can draw.'
+            : question === null
+              ? 'It is your turn.'
+              : 'It is not your turn. You will be asked before you draw.'
           : yourTurn
             ? 'It is your turn.'
             : 'You can only draw on your own turn.'}
