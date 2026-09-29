@@ -3,7 +3,7 @@
 - **Slug:** `great-persons-reference`
 - **Branch:** `feat/great-persons-reference`
 - **Owner:** Claude (orchestrator), coder role for the implementation
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 

@@ -1515,6 +1515,7 @@ ul.history > li {
 
   /* Keep the primary site controls usable on tablets as well as phones. */
   .site-navigation > a,
+  .site-navigation > button,
   .navigation-menu > summary,
   .topbar-actions button,
   .row > input,
@@ -1585,6 +1586,7 @@ ul.history > li {
   }
 
   .site-navigation > a,
+  .site-navigation > button,
   .navigation-menu > summary {
     min-height: 2.75rem;
     display: flex;

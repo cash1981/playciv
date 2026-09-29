@@ -19,6 +19,19 @@ _Last updated: 2026-09-29_
 
 ## Done
 
+- **Issue #202: a Great persons reference in the site menu.** A "Great persons"
+  button in the menu opens a modal with one tab per type (six, seven people
+  each), name and printed text on each card. Public: `Navigation` renders for
+  signed-out visitors too. Client-only data: `greatPersonReference(data)` in
+  `gamedata.ts` reads whole sheet rows in print order (`readDeck` compacts
+  columns and shuffles, so it cannot be reused) and `GREAT_PERSON_REFERENCE`
+  is exported from `create-game.ts`. Focus returns to the hamburger, not the
+  opener, because the opener sits in a dropdown that has collapsed by then.
+  Two review rounds (round 1: that focus bug, a tautological test, the button
+  missing from the mobile selector lists; round 2 approved). Browser-checked
+  signed out on desktop and mobile width. 585 engine, 276 web, 209 server tests.
+  Branch `feat/great-persons-reference`.
+
 - **Board: tapping another piece selects it; map tiles are never armed.**
   Tapping a second figure used to send the first one there. Non-tile pieces
   keep tap-then-tap moving; a selected map tile moves only into an empty map

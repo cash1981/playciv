@@ -12,17 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### great-persons-reference
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `feat/great-persons-reference`
-- **Brief:** `docs/agents/tasks/great-persons-reference.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/gamedata.ts`, `packages/engine/src/index.ts`, `packages/engine/test/`
-  - `packages/web/src/views/GreatPersonsDialog.tsx`, `Navigation.tsx` and their tests
-  - `packages/web/src/styles.css`
-- **Notes:** issue #202. Does not touch the data JSON.
+_Nothing claimed._
 
 ---
 

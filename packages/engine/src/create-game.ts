@@ -10,14 +10,19 @@
 import gamedataWaw from '../data/gamedata-faf-waw.json' with { type: 'json' }
 
 import { createBoardForPlayers } from './board.js'
-import type { GameDataFile, WonderReference } from './gamedata.js'
-import { readDeck, wonderReference } from './gamedata.js'
+import type { GameDataFile, GreatPersonReference, WonderReference } from './gamedata.js'
+import { greatPersonReference, readDeck, wonderReference } from './gamedata.js'
 import type { Item, SocialPolicyItem, TechItem } from './item.js'
 import type { Rng } from './random.js'
 import { nextIntBetween, nextId, seedFrom } from './random.js'
 import type { GameState, GameType, Playerhand } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
+
+/** Every great person's printed text in print order, computed once for the menu reference. */
+export const GREAT_PERSON_REFERENCE: readonly GreatPersonReference[] = greatPersonReference(
+  gamedataWaw as GameDataFile,
+)
 
 const GAMEDATA: Readonly<Record<GameType, GameDataFile>> = {
   WAW: gamedataWaw as GameDataFile,

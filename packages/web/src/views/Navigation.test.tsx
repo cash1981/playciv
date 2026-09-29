@@ -260,3 +260,50 @@ describe('Navigation brand', () => {
     expect(icon?.getAttribute('alt')).toBe('')
   })
 })
+
+describe('Navigation great persons reference', () => {
+  const signedIn = { id: 'p1', username: 'cash1981', email: null, role: 'user' as const, disabled: false }
+
+  it.each([
+    ['signed out', null],
+    ['signed in', signedIn],
+  ])('offers Great persons when %s', (_label, player) => {
+    render(
+      <Navigation
+        player={player}
+        screen="lobby"
+        theme="dark"
+        onNavigate={vi.fn()}
+        onSignOut={vi.fn()}
+        onToggleTheme={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Great persons' })).not.toBeNull()
+  })
+
+  it('opens the dialog and keeps it open after the menu closes', () => {
+    const { container } = render(
+      <Navigation
+        player={null}
+        screen="lobby"
+        theme="dark"
+        onNavigate={vi.fn()}
+        onSignOut={vi.fn()}
+        onToggleTheme={vi.fn()}
+      />,
+    )
+    const menu = container.querySelector('details.main-menu') as HTMLDetailsElement
+    menu.setAttribute('open', '')
+    const button = screen.getByRole('button', { name: 'Great persons' })
+    fireEvent.click(button)
+
+    expect(menu.hasAttribute('open')).toBe(false)
+    const dialog = screen.getByRole('dialog', { name: 'Great persons' })
+    expect(dialog.closest('details')).toBeNull()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    // The opener is inside the collapsed dropdown, so focus goes to the hamburger.
+    expect(document.activeElement).toBe(container.querySelector('details.main-menu > summary'))
+  })
+})
