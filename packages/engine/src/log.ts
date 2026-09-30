@@ -21,8 +21,72 @@ const DELIM = ' - '
  * different number for each player.
  */
 export function uniqueItemNumber(username: string, itemNumber: number): string {
+  return `. Item number #${uniqueNumber(username, itemNumber)}`
+}
+
+function uniqueNumber(username: string, itemNumber: number): number {
   const offset = Number(String(Math.abs(javaStringHashCode(username))).slice(0, 3))
-  return `. Item number #${offset + itemNumber}`
+  return offset + itemNumber
+}
+
+/** How a public line may name an item, and which number it may carry. */
+export interface PublicItemSubject {
+  readonly name: string
+  readonly itemNumber: number
+}
+
+/**
+ * The item as a line everyone can read may name it, when that line is about an
+ * earlier log entry of type `logType`: an undo request, a vote, the result of
+ * an undo. It gives away no more than the original entry's public line did.
+ * A hidden tech or social policy stays hidden and carries the per-player number
+ * (the plain one is the catalogue number, which anyone can look up). Draws show
+ * the type only. Discards and reveals are public already, and so is a
+ * tech the player has revealed.
+ *
+ * `username` is whoever the original entry belongs to. With no `logType`, the
+ * item's own `hidden` flag decides.
+ */
+export function publicItemSubject(
+  logType: LogType | null,
+  username: string,
+  item: Item,
+): PublicItemSubject {
+  const publicAlready =
+    logType === 'DISCARD' ||
+    logType === 'REVEAL' ||
+    (logType === 'REMOVED_TECH' && !item.hidden) ||
+    (logType === null && !item.hidden)
+  const itemNumber =
+    item.kind === 'tech' || item.kind === 'socialpolicy'
+      ? uniqueNumber(username, item.itemNumber)
+      : item.itemNumber
+  if (publicAlready) return { name: revealAll(item), itemNumber }
+  if (item.kind === 'tech') return { name: 'a hidden technology', itemNumber }
+  if (item.kind === 'socialpolicy') return { name: 'a hidden social policy', itemNumber }
+  return { name: revealPublic(item), itemNumber }
+}
+
+/**
+ * The undo request for an earlier entry of type `original`. The requester sees
+ * the whole item when it is theirs (`requesterIsOwner`), everyone else the
+ * subject of `publicItemSubject`. Anyone in the game may ask for an undo, so a
+ * requester who is not the owner must not learn what the item is.
+ */
+export function createUndoRequestTexts(
+  username: string,
+  original: LogType | null,
+  item: Item,
+  ownerUsername: string = username,
+  requesterIsOwner = true,
+): LogTexts {
+  const subject = publicItemSubject(original, ownerUsername, item)
+  const suffix = `. Item number #${subject.itemNumber}`
+  const privateName = requesterIsOwner ? revealAll(item) : subject.name
+  return {
+    privateLog: `${username} has requested undo of ${DELIM}${privateName}${suffix}`,
+    publicLog: `${username} has requested undo of ${DELIM}${subject.name}${suffix}`,
+  }
 }
 
 /** Java's `String.hashCode()`, as a 32-bit integer. */
@@ -114,8 +178,11 @@ export function createLogTexts(
       const text = `${username} has revealed ${DELIM}${all}${suffix}`
       return { privateLog: text, publicLog: text }
     }
+    // The undo request has its own writer, `appendUndoRequestLog`, which knows
+    // what the undone entry was. Without that, be careful.
     case 'UNDO': {
-      const text = `${username} has requested undo of ${DELIM}${all}${itemNumberText}`
+      if (item !== null) return createUndoRequestTexts(username, null, item)
+      const text = `${username} has requested undo of ${DELIM}${itemNumberText}`
       return { privateLog: text, publicLog: text }
     }
     case 'SOT':
@@ -177,19 +244,56 @@ export function appendLog(state: GameState, options: AppendOptions): GameState {
   return { ...state, rng, log: [...state.log, entry] }
 }
 
-/** Java: `GameLogAction.createUndoLog` — logged as coming from "System". */
+/**
+ * Java: `GameLogAction.createUndoLog` — logged as coming from "System".
+ *
+ * `message` is what everyone reads. When the owner of the item may read more
+ * than that, `owner` carries their id and the full wording, and only they see it.
+ */
 export function appendUndoLog(
   state: GameState,
   message: string,
   itemNumber: number,
+  owner?: { readonly playerId: string; readonly message: string },
 ): GameState {
   const text = `System: ${message}. Item number #${itemNumber}`
-  return appendLog(state, { username: 'System', privateLog: text, publicLog: text })
+  return appendLog(state, {
+    username: 'System',
+    ...(owner === undefined ? {} : { playerId: owner.playerId }),
+    privateLog: owner === undefined ? text : `System: ${owner.message}. Item number #${itemNumber}`,
+    publicLog: text,
+  })
+}
+
+/**
+ * The start of an undo vote for an earlier entry of type `original`, which
+ * belongs to `ownerUsername`. Java used the item's full text for everyone.
+ */
+export function appendUndoRequestLog(
+  state: GameState,
+  username: string,
+  playerId: string,
+  item: Item,
+  original: LogType | null,
+  ownerUsername: string,
+  requesterIsOwner: boolean,
+): GameState {
+  const texts = createUndoRequestTexts(username, original, item, ownerUsername, requesterIsOwner)
+  // The item rides along only for its owner: the requester's own entry is
+  // returned to them in full, so a non-owner must not get it.
+  return appendLog(state, {
+    username,
+    logType: 'UNDO',
+    ...(requesterIsOwner ? { item } : {}),
+    playerId,
+    ...texts,
+  })
 }
 
 /**
  * Java: `GameLogAction.createGameLog(Draw, pbfId, username, vote)` — logglinjen
- * for a cast undo vote. Note that it reveals `revealPublic` of the item.
+ * for a cast undo vote. `itemPublicName` and `itemNumber` come from
+ * `publicItemSubject`, so a hidden tech or social policy stays hidden.
  */
 export function appendVoteLog(
   state: GameState,

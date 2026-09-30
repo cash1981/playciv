@@ -19,6 +19,12 @@ _Last updated: 2026-09-29_
 
 ## Done
 
+- **Issue #220: undo leaked hidden items.** The undo request, vote and result lines
+  named a hidden tech, a social policy, a drawn card or a unit's stats for
+  everyone. They now read as the original log line did; the owner still sees the
+  full text (`decisions.md`, 2026-09-30). Open: the tech number in the
+  "researched a hidden technology" line can be decoded from the tech list.
+
 - **Issue #219: numeric fields on mobile.** ATK, HP and the battlehand draw count
   are text inputs with a numeric keypad (`DigitInput`), so typing 1 over a 0 gives
   1 and not 01. Empty or non-digit input counts as 0; the draw count is clamped to

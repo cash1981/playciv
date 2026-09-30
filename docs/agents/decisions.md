@@ -3247,3 +3247,33 @@ outside that range was not checked, because `old-civ-web` was not available in t
 environment this was written in (worth re-checking when it is on disk). Before,
 the `min`/`max` on the number field were advisory only, so typing 50 drew 50; the
 engine already caps a draw at what the deck holds.
+
+## 2026-09-30 - Undo lines no longer name hidden items (issue #220)
+
+**Decision.** The three public lines an undo writes (the request, each vote, the
+result) name an item no more than its original log line did. A hidden tech or
+social policy reads "a hidden technology" / "a hidden social policy" and carries
+the per-player number (`uniqueItemNumber`), not the catalogue number. A draw shows
+the type only (`revealPublic`), so a culture card, a great person or a unit's
+ATK.HP is not given away. Discards, reveals and an already revealed tech stay
+public. The owner still gets the full wording: the result line carries their
+`playerId` and a private text. Anyone in the game may request an undo, so a
+requester who is not the owner gets the public wording and no item on their entry. The single rule is `publicItemSubject` in `log.ts`.
+
+**Why.** The human asked whether hidden tech and drawn cards leaked. The normal
+log lines did not, but `UNDO` wrote `revealAll` for everyone, the vote line used
+`revealPublic` (which names a social policy), and the undo result used the plain
+item name, so asking to undo a hidden tech, a card or a unit published it.
+The plain item number of a tech is its catalogue number, which every client
+receives with the tech list, so it gave the tech away even where the name was
+hidden.
+
+**Consequences.** This deviates from `old-civ-rest`, which printed the full item
+for everyone. The wording of the public undo lines for a tech or social policy
+changes; draws read as before. Not changed: the number in "has researched a
+hidden technology" is the catalogue number plus the first three digits of the
+username's Java hash. Both are public, so anyone who reads the code can work out
+which tech it was. Fixing that needs a per-game secret and is left for the human
+to decide. The replay bar shows the viewer's own private description, which is
+what they see in their private log; other players get the public one.
+
