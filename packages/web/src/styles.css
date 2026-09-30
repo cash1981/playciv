@@ -2190,8 +2190,9 @@ ul.history > li {
   font-size: 0.7rem;
 }
 
-.arena-unit-card input[type='number'] {
+.arena-unit-card label input {
   width: 2.4rem;
+  min-width: 0;
   padding: 0.1rem 0.2rem;
 }
 

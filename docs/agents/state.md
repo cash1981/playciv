@@ -19,6 +19,11 @@ _Last updated: 2026-09-29_
 
 ## Done
 
+- **Issue #219: numeric fields on mobile.** ATK, HP and the battlehand draw count
+  are text inputs with a numeric keypad (`DigitInput`), so typing 1 over a 0 gives
+  1 and not 01. Empty or non-digit input counts as 0; the draw count is clamped to
+  1-20 when Draw is pressed. No engine or server change.
+
 - **Remove any own tech.** A player can remove a hidden, revealed or starting
   tech at any time from the tech detail dialog; the tech becomes choosable
   again, the coin counter resets, and the log names revealed techs and keeps the
