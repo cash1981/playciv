@@ -3235,3 +3235,13 @@ because `endBattleTurn` is advisory and any participant may end a turn out of
 turn, so the recipient cannot be derived from the previous holder. The presser
 is never mailed. The initial battle turn is `defender`, so the attacker ending
 first lands the turn on themselves and produces no mail.
+
+## Numeric fields on mobile (issue #219)
+
+ATK, HP and the battlehand draw count were `type="number"` inputs, which on a
+phone keep a typed 1 after the 0 as "01". They are now text inputs with a
+numeric keypad (`DigitInput`): only digits are kept, leading zeros are dropped,
+and empty or non-digit input counts as 0. The draw count is clamped to 1-20 on
+blur and again when Draw is pressed; the old client's behaviour for a count
+outside that range could not be checked (`old-civ-web` is not on disk here), and
+the engine already caps a draw at what the deck holds.

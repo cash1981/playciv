@@ -15,16 +15,24 @@ export function digitsToNumber(digits: string): number {
   return Number.isNaN(parsed) ? 0 : parsed
 }
 
+/**
+ * `min` and `max` are applied when the field loses focus, so the box shows the
+ * value that will be used; while typing, the value is reported as typed.
+ */
 export function DigitInput({
   value,
   onValueChange,
+  min,
+  max,
   ...rest
 }: {
   readonly value: number
   readonly onValueChange: (value: number) => void
+  readonly min?: number
+  readonly max?: number
 } & Omit<
   React.InputHTMLAttributes<HTMLInputElement>,
-  'value' | 'onChange' | 'type' | 'inputMode' | 'pattern'
+  'value' | 'onChange' | 'onFocus' | 'onBlur' | 'type' | 'inputMode' | 'pattern' | 'min' | 'max'
 >): React.JSX.Element {
   const [draft, setDraft] = useState(String(value))
 
@@ -33,6 +41,13 @@ export function DigitInput({
   useEffect(() => {
     setDraft((current) => (digitsToNumber(current) === value ? current : String(value)))
   }, [value])
+
+  function settle(): void {
+    const typed = digitsToNumber(draft)
+    const clamped = Math.min(max ?? typed, Math.max(min ?? typed, typed))
+    setDraft(String(clamped))
+    if (clamped !== typed) onValueChange(clamped)
+  }
 
   return (
     <input
@@ -47,7 +62,7 @@ export function DigitInput({
         setDraft(digits)
         onValueChange(digitsToNumber(digits))
       }}
-      onBlur={() => setDraft(String(digitsToNumber(draft)))}
+      onBlur={settle}
     />
   )
 }

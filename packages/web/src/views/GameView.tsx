@@ -1225,6 +1225,8 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
       <div className="row">
         <DigitInput
           value={count}
+          min={1}
+          max={20}
           onValueChange={setCount}
           style={{ width: '5rem' }}
         />
