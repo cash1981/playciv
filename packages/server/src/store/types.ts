@@ -62,8 +62,6 @@ export interface GameRevision {
   readonly state: GameState
 }
 
-export type GameRevisionSummary = Omit<GameRevision, 'state' | 'privateDescriptions'>
-
 /**
  * A revision without its snapshot. The history bar needs the metadata of every
  * revision but never a single `state`, and loading those snapshots was enough

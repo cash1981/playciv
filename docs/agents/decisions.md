@@ -3280,9 +3280,11 @@ to the player it belongs to, where that place is shared. Two changes follow.
 `1000000 + hash(logSecret | username | itemNumber) % 9000000`. `logSecret` is a
 new field on the game state: the server passes a random value when it creates a
 game, and `createGame` derives one from the seed otherwise. It is never in a
-projection, and it is never derived from anything the game hands out: an earlier
-version used `nextId(rng)` and the first log entry id was then the key, and the
-rng stream is published through log and item ids anyway. A game saved without a
+projection. The server's key is random and independent of the game. An earlier
+version derived it from `nextId(rng)`, and the first log entry id was then the key;
+the rng stream is published through log and item ids, so nothing derived from it
+is safe. `createGame` without a key falls back to a hash of the seed, which is
+only as strong as the seed, so the server never relies on it. A game saved without a
 key reads as an empty one (`migrate.ts`), and the server puts a random one in
 before the next action (`applyToGame`).
 (2) The history bar shows `publicDescription` only. The revision list no longer
@@ -3302,4 +3304,6 @@ numbers, so for a tech researched earlier and revealed later the two lines show
 different numbers. Until a legacy game's next action its key is empty, but nothing is logged before that.
 The hash (cyrb53) is not a MAC: the key is what protects, and a reader who learned
 it could decode every number, so it stays on the server. Revisions still store
-`privateDescriptions`; nothing reads them now.
+`privateDescriptions`; nothing reads them now. A keyed number can, rarely (about
+1 in 10,000 per game), be the same for two of one player's cards, where Java's
+offset plus catalogue number could not; the worst case is an ambiguous line.
