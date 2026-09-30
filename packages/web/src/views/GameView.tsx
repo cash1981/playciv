@@ -23,6 +23,7 @@ import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
 import { RevealedPanel } from './RevealedPanel.js'
+import { DigitInput } from './DigitInput.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
 import { WondersPanel } from './WondersPanel.js'
@@ -1222,12 +1223,15 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
 
       {/* — Hand management — */}
       <div className="row">
-        <input
-          type="number" min={1} max={20} value={count}
-          onChange={(e) => setCount(Number(e.target.value))}
+        <DigitInput
+          value={count}
+          onValueChange={setCount}
           style={{ width: '5rem' }}
         />
-        <button disabled={busy} onClick={() => void run(() => api.drawBattlehand(gameId, count))}>
+        <button
+          disabled={busy}
+          onClick={() => void run(() => api.drawBattlehand(gameId, Math.min(20, Math.max(1, count))))}
+        >
           Draw battlehand
         </button>
         <button
@@ -1656,16 +1660,16 @@ export function ArenaUnitCard({
       </button>
       <label>
         ATK
-        <input
-          type="number" min={0} value={attack}
-          onChange={(e) => { const v = Number(e.target.value); setAttack(v); commitStat('attack', v) }}
+        <DigitInput
+          value={attack}
+          onValueChange={(v) => { setAttack(v); commitStat('attack', v) }}
         />
       </label>
       <label>
         HP
-        <input
-          type="number" min={0} value={health}
-          onChange={(e) => { const v = Number(e.target.value); setHealth(v); commitStat('health', v) }}
+        <DigitInput
+          value={health}
+          onValueChange={(v) => { setHealth(v); commitStat('health', v) }}
         />
       </label>
       {canManage && (
