@@ -13,9 +13,9 @@ import { initiateUndo, playerPutsItemBackInDeck, vote } from '../src/actions/und
 import { itemName } from '../src/item.js'
 import { uniqueItemNumber } from '../src/log.js'
 import { unwrap } from '../src/result.js'
+import type { SheetName } from '../src/sheet-name.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
-import type { SheetName } from '../src/sheet-name.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -37,7 +37,7 @@ function undoWithAllVotes(state: GameState, logId: string): GameState {
 describe('undo does not reveal hidden items', () => {
   it('a researched tech stays hidden through request, votes and result', () => {
     const chosen = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
-    const tech = findPlayer(chosen, CASH1981)?.techsChosen[0]
+    const tech = findPlayer(chosen, CASH1981)?.techsChosen.find((candidate) => candidate.name === 'Navy')
     if (tech === undefined) throw new Error('no tech')
     const logId = chosen.log.at(-1)?.id as string
 
@@ -67,7 +67,21 @@ describe('undo does not reveal hidden items', () => {
       expect(readByOpponent(done, viewer)).not.toContain('Navy')
     }
     // Not even the catalogue number, which anyone can match against the tech list
-    expect(readByOpponent(done, KARANDRAS1)).not.toContain(`#${tech.itemNumber}"`)
+    expect(readByOpponent(done, KARANDRAS1)).not.toMatch(new RegExp(`#${tech.itemNumber}\\b`))
+  })
+
+  it('an opponent asking to undo a hidden tech learns nothing about it', () => {
+    const chosen = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
+    const logId = chosen.log.at(-1)?.id as string
+
+    const requested = unwrap(initiateUndo(chosen, { logId, playerId: KARANDRAS1 }))
+
+    const request = requested.log.at(-1)
+    expect(request?.playerId).toBe(KARANDRAS1)
+    expect(request?.item).toBeNull()
+    expect(request?.privateLog).not.toContain('Navy')
+    // What the requester gets back is their own entries in full
+    expect(JSON.stringify(toPlayerView(requested, KARANDRAS1).log)).not.toContain('Navy')
   })
 
   it('a chosen social policy does not show up in the vote line', () => {

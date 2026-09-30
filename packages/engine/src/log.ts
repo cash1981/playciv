@@ -69,18 +69,22 @@ export function publicItemSubject(
 
 /**
  * The undo request for an earlier entry of type `original`. The requester sees
- * the whole item, everyone else the subject of `publicItemSubject`.
+ * the whole item when it is theirs (`requesterIsOwner`), everyone else the
+ * subject of `publicItemSubject`. Anyone in the game may ask for an undo, so a
+ * requester who is not the owner must not learn what the item is.
  */
 export function createUndoRequestTexts(
   username: string,
   original: LogType | null,
   item: Item,
   ownerUsername: string = username,
+  requesterIsOwner = true,
 ): LogTexts {
   const subject = publicItemSubject(original, ownerUsername, item)
   const suffix = `. Item number #${subject.itemNumber}`
+  const privateName = requesterIsOwner ? revealAll(item) : subject.name
   return {
-    privateLog: `${username} has requested undo of ${DELIM}${revealAll(item)}${suffix}`,
+    privateLog: `${username} has requested undo of ${DELIM}${privateName}${suffix}`,
     publicLog: `${username} has requested undo of ${DELIM}${subject.name}${suffix}`,
   }
 }
@@ -272,9 +276,18 @@ export function appendUndoRequestLog(
   item: Item,
   original: LogType | null,
   ownerUsername: string,
+  requesterIsOwner: boolean,
 ): GameState {
-  const texts = createUndoRequestTexts(username, original, item, ownerUsername)
-  return appendLog(state, { username, logType: 'UNDO', item, playerId, ...texts })
+  const texts = createUndoRequestTexts(username, original, item, ownerUsername, requesterIsOwner)
+  // The item rides along only for its owner: the requester's own entry is
+  // returned to them in full, so a non-owner must not get it.
+  return appendLog(state, {
+    username,
+    logType: 'UNDO',
+    ...(requesterIsOwner ? { item } : {}),
+    playerId,
+    ...texts,
+  })
 }
 
 /**

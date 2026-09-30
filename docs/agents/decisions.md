@@ -3257,8 +3257,8 @@ the per-player number (`uniqueItemNumber`), not the catalogue number. A draw sho
 the type only (`revealPublic`), so a culture card, a great person or a unit's
 ATK.HP is not given away. Discards, reveals and an already revealed tech stay
 public. The owner still gets the full wording: the result line carries their
-`playerId` and a private text, and the requester's own request line is private
-too. The single rule is `publicItemSubject` in `log.ts`.
+`playerId` and a private text. Anyone in the game may request an undo, so a
+requester who is not the owner gets the public wording and no item on their entry. The single rule is `publicItemSubject` in `log.ts`.
 
 **Why.** The human asked whether hidden tech and drawn cards leaked. The normal
 log lines did not, but `UNDO` wrote `revealAll` for everyone, the vote line used

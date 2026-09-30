@@ -66,6 +66,7 @@ export function initiateUndo(state: GameState, input: InitiateUndoInput): Action
       entry.item,
       entry.logType,
       entry.username,
+      (entry.item.ownerId ?? entry.playerId) === input.playerId,
     ),
   )
 }
