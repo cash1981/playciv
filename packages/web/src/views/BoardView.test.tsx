@@ -106,7 +106,6 @@ describe('global replay controls', () => {
       createdAt: '2026-09-19T10:00:00.000Z',
       actor: { playerId: 'one', username: 'Alice' },
       publicDescription: 'Game created',
-      privateDescription: null,
       logIds: [],
     },
     {
@@ -115,7 +114,6 @@ describe('global replay controls', () => {
       createdAt: '2026-09-19T10:01:00.000Z',
       actor: { playerId: 'two', username: 'Bob' },
       publicDescription: 'Bob joined',
-      privateDescription: null,
       logIds: ['log-1'],
     },
   ] as const

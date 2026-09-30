@@ -216,7 +216,7 @@ describe('toPlayerView', () => {
 describe('log texts', () => {
   it('ITEM reveals everything privately and only the type publicly', () => {
     // Java: DELIM is " - ", which gives the double space after "drew"
-    const texts = createLogTexts('ITEM', 'cash1981', null, 42)
+    const texts = createLogTexts('ITEM', 'cash1981', null, 42, 'secret')
     expect(texts.privateLog).toBe('cash1981 drew  - . Item number #42')
     expect(texts.publicLog).toBe('cash1981 drew  - . Item number #42')
   })
@@ -226,10 +226,10 @@ describe('log texts', () => {
     const tech = state.techs[0]
     if (tech === undefined) throw new Error('no tech')
 
-    const texts = createLogTexts('TECH', 'cash1981', tech, tech.itemNumber)
+    const texts = createLogTexts('TECH', 'cash1981', tech, tech.itemNumber, state.logSecret)
     expect(texts.privateLog).toContain(tech.name)
     expect(texts.publicLog).toBe(
-      `cash1981 has researched a hidden technology${uniqueItemNumber('cash1981', tech.itemNumber)}`,
+      `cash1981 has researched a hidden technology${uniqueItemNumber(state.logSecret, 'cash1981', tech.itemNumber)}`,
     )
     expect(texts.publicLog).not.toContain(tech.name)
   })
@@ -239,14 +239,40 @@ describe('log texts', () => {
     const policy = state.socialPolicies[0]
     if (policy === undefined) throw new Error('no social policy')
 
-    const texts = createLogTexts('SOCIAL_POLICY', 'cash1981', policy, policy.itemNumber)
+    const texts = createLogTexts('SOCIAL_POLICY', 'cash1981', policy, policy.itemNumber, state.logSecret)
     expect(texts.privateLog).toContain(policy.name)
     expect(texts.publicLog).not.toContain(policy.name)
     expect(texts.publicLog).toContain('has chosen a hidden social policy')
   })
 
   it('uniqueItemNumber gives a different number per player for the same card', () => {
-    expect(uniqueItemNumber('cash1981', 42)).not.toBe(uniqueItemNumber('Karandras1', 42))
+    expect(uniqueItemNumber('key', 'cash1981', 42)).not.toBe(uniqueItemNumber('key', 'Karandras1', 42))
+  })
+
+  it('uniqueItemNumber is stable for one game and differs between games', () => {
+    expect(uniqueItemNumber('key', 'cash1981', 42)).toBe(uniqueItemNumber('key', 'cash1981', 42))
+    expect(uniqueItemNumber('key', 'cash1981', 42)).not.toBe(uniqueItemNumber('other', 'cash1981', 42))
+  })
+
+  it('the number on a hidden tech line cannot be matched to the tech list', () => {
+    // Java added an offset from the username to the catalogue number. Both are
+    // public, so subtracting one from the other named the tech.
+    const state = firstCivGame()
+    const tech = state.techs[0]
+    if (tech === undefined) throw new Error('no tech')
+    const texts = createLogTexts('TECH', 'cash1981', tech, tech.itemNumber, state.logSecret)
+    const shown = Number(/#(\d+)$/.exec(texts.publicLog)?.[1])
+    const offset = Number(String(Math.abs(javaStringHashCode('cash1981'))).slice(0, 3))
+
+    expect(state.techs.filter((candidate) => candidate.itemNumber + offset === shown)).toEqual([])
+    expect(shown).not.toBe(tech.itemNumber)
+  })
+
+  it('the log secret never reaches a player view', () => {
+    const state = firstCivGame()
+    for (const viewer of [CASH1981, KARANDRAS1, 'spectator']) {
+      expect(JSON.stringify(toPlayerView(state, viewer))).not.toContain(state.logSecret)
+    }
   })
 
   it('javaStringHashCode matches the Java String.hashCode', () => {

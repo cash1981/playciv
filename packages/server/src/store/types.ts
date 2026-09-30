@@ -62,9 +62,12 @@ export interface GameRevision {
   readonly state: GameState
 }
 
-export type GameRevisionSummary = Omit<GameRevision, 'state' | 'privateDescriptions'> & {
-  readonly privateDescription: string | null
-}
+/**
+ * What the history bar may show. Only the public description: nothing stays
+ * readable in the history that the public log does not show, not even to the
+ * player it belongs to.
+ */
+export type GameRevisionSummary = Omit<GameRevision, 'state' | 'privateDescriptions'>
 
 /**
  * A revision without its snapshot. The history bar needs the metadata of every

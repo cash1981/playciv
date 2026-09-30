@@ -43,21 +43,21 @@ describe('undo does not reveal hidden items', () => {
 
     const requested = unwrap(initiateUndo(chosen, { logId, playerId: CASH1981 }))
     expect(requested.log.at(-1)?.publicLog).toBe(
-      `cash1981 has requested undo of  - a hidden technology${uniqueItemNumber('cash1981', tech.itemNumber)}`,
+      `cash1981 has requested undo of  - a hidden technology${uniqueItemNumber(chosen.logSecret, 'cash1981', tech.itemNumber)}`,
     )
     expect(requested.log.at(-1)?.privateLog).toContain('Navy')
 
     const voted = unwrap(vote(requested, { logId, playerId: KARANDRAS1, vote: true }))
     expect(voted.log.at(-1)?.publicLog).toBe(
       `Karandras1 has voted yes to undo a hidden technology with item number ${
-        Number(uniqueItemNumber('cash1981', tech.itemNumber).split('#')[1])
+        Number(uniqueItemNumber(chosen.logSecret, 'cash1981', tech.itemNumber).split('#')[1])
       }`,
     )
 
     const done = undoWithAllVotes(chosen, logId)
     const result = done.log.at(-1)
     expect(result?.publicLog).toBe(
-      `System: has removed a hidden technology from cash1981${uniqueItemNumber('cash1981', tech.itemNumber)}`,
+      `System: has removed a hidden technology from cash1981${uniqueItemNumber(chosen.logSecret, 'cash1981', tech.itemNumber)}`,
     )
     // The owner still reads which tech it was
     expect(result?.playerId).toBe(CASH1981)
@@ -66,7 +66,7 @@ describe('undo does not reveal hidden items', () => {
     for (const viewer of OTHERS) {
       expect(readByOpponent(done, viewer)).not.toContain('Navy')
     }
-    // Not even the catalogue number, which anyone can match against the tech list
+    // Not the catalogue number either, which anyone can look up in the tech list
     expect(readByOpponent(done, KARANDRAS1)).not.toMatch(new RegExp(`#${tech.itemNumber}\\b`))
   })
 

@@ -146,7 +146,6 @@ export interface GameRevisionSummary {
   readonly createdAt: string
   readonly actor: { readonly playerId: string; readonly username: string }
   readonly publicDescription: string
-  readonly privateDescription: string | null
   readonly logIds: readonly string[]
 }
 

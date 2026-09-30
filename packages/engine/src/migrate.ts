@@ -14,6 +14,7 @@ import type { SocialPolicyItem } from './item.js'
 import type { GameState, Playerhand, PlayerStats } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
+import { nextId } from './random.js'
 import { migratePlayerTurn } from './turn.js'
 
 /**
@@ -37,12 +38,12 @@ const correctSocialPolicyFlipsides = (
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt'
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret'
 > &
   Partial<
     Pick<
       GameState,
-      'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt'
+      'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret'
     >
   >
 
@@ -185,6 +186,9 @@ export function migrateGameState(state: GameState): GameState {
   return {
     ...state,
     createdAt: older.createdAt ?? null,
+    // A game saved before the public item numbers were keyed gets a key from its
+    // rng, which no client sees. It is stable until the next write saves it.
+    logSecret: older.logSecret ?? nextId(older.rng)[0],
     log: state.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
     players: state.players.map(withPlayerDefaults),
     board:

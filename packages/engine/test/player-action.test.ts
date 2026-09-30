@@ -112,7 +112,7 @@ describe('technology', () => {
     expect(entry?.logType).toBe('REMOVED_TECH')
     expect(entry?.publicLog).toContain('has removed')
     expect(entry?.publicLog).toContain('Navy')
-    expect(entry?.publicLog).toContain(uniqueItemNumber(findPlayer(state, CASH1981)?.username as string, number))
+    expect(entry?.publicLog).toContain(uniqueItemNumber(state.logSecret, findPlayer(state, CASH1981)?.username as string, number))
     expect(findPlayer(state, CASH1981)?.techsChosen).toHaveLength(0)
   })
 
@@ -121,7 +121,7 @@ describe('technology', () => {
     const number = state.techs.find((tech) => tech.name === 'Navy')?.itemNumber as number
     state = unwrap(removeTech(state, { playerId: CASH1981, techName: 'Navy' }))
 
-    expect(state.log.at(-1)?.publicLog).toContain(uniqueItemNumber(findPlayer(state, CASH1981)?.username as string, number))
+    expect(state.log.at(-1)?.publicLog).toContain(uniqueItemNumber(state.logSecret, findPlayer(state, CASH1981)?.username as string, number))
   })
 
   it('a removed technology can be chosen again', () => {
@@ -621,7 +621,7 @@ describe('social policy', () => {
     let state = unwrap(chooseSocialPolicy(game, { playerId: CASH1981, name: policy.name }))
     const firstChoice = findPlayer(state, CASH1981)?.socialPolicies[0]
     if (firstChoice === undefined) throw new Error('policy was not chosen')
-    const firstNumber = uniqueItemNumber('cash1981', firstChoice.itemNumber)
+    const firstNumber = uniqueItemNumber(state.logSecret, 'cash1981', firstChoice.itemNumber)
     expect(state.log.at(-1)?.privateLog).toContain(firstNumber)
 
     state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: policy.name }))
@@ -636,7 +636,7 @@ describe('social policy', () => {
     if (secondChoice === undefined) throw new Error('policy was not chosen again')
     expect(secondChoice.itemNumber).not.toBe(firstChoice.itemNumber)
     expect(state.log.at(-1)?.privateLog).toContain(
-      uniqueItemNumber('cash1981', secondChoice.itemNumber),
+      uniqueItemNumber(state.logSecret, 'cash1981', secondChoice.itemNumber),
     )
   })
 

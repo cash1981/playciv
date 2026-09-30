@@ -211,6 +211,12 @@ export interface GameState {
   /** The board and the pieces on it. Every player sees the whole board. */
   readonly board: Board
   readonly rng: Rng
+  /**
+   * Keys the item numbers a public log line carries for a hidden tech or social
+   * policy (`uniqueItemNumber`). Server only: a projection must never carry it,
+   * or the numbers could be matched against the tech list again.
+   */
+  readonly logSecret: string
   /** The next `itemNumber`. Java: `ItemReader.itemCounter`, a global AtomicInteger. */
   readonly itemCounter: number
   /**

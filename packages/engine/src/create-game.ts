@@ -60,6 +60,12 @@ export interface CreateGameOptions {
   readonly seed: Rng | string
   readonly players?: readonly NewPlayer[]
   /**
+   * Keys the numbers in the public log for hidden techs and social policies.
+   * The server passes a random value. Without one it is derived from the seed,
+   * which is enough for tests but as guessable as the seed itself.
+   */
+  readonly secret?: string
+  /**
    * When the game was created. The engine is pure, so the caller passes the
    * timestamp; `null` when it has none (the old client never carried one).
    */
@@ -158,6 +164,8 @@ export function createGame(options: CreateGameOptions): GameState {
     socialPolicies: numberedPolicies,
     log: [],
     rng: deck.rng,
+    // `nextId` here only reads the state, so the game's own rng is not advanced
+    logSecret: options.secret ?? nextId(deck.rng)[0],
     itemCounter: counter,
     wondersDealt: false,
     battle: null,

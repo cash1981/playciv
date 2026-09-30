@@ -672,7 +672,7 @@ export function GlobalReplayBar({
       </span>
       {hasNewer && <span className="tag revealed">Newer revisions available</span>}
       <span className="muted replay-what">
-        {current?.privateDescription ?? current?.publicDescription ?? ''}
+        {current?.publicDescription ?? ''}
         {current !== undefined && ` — ${current.actor.username}`}
       </span>
     </div>

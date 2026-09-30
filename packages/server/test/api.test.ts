@@ -1335,7 +1335,11 @@ describe('global game revisions', () => {
     })
     expect(list.status).toBe(200)
     expect(list.body).not.toContain('"state"')
-    expect(list.body).not.toContain('privateDescriptions')
+    expect(list.body).not.toContain('privateDescription')
+    // The history names what was done as the public log does, even to its owner
+    const secretTechName = secretOwner?.techsChosen[0]?.name
+    expect(secretTechName).toBeDefined()
+    expect(list.body).not.toContain(secretTechName as string)
     const summaries = await list.json<{ revision: number }[]>()
     const latest = summaries.at(-1)?.revision
     expect(latest).toBeDefined()
@@ -1355,6 +1359,12 @@ describe('global game revisions', () => {
     expect(otherView.body).not.toContain(secretCard?.id as string)
     expect(otherView.body).not.toContain(secretLog as string)
     expect(otherView.body).not.toContain('private planning only')
+    // The key to the public item numbers stays on the server
+    const logSecret = withSecrets?.logSecret
+    expect(logSecret).toBeTruthy()
+    for (const body of [list.body, own.body, otherView.body]) {
+      expect(body).not.toContain(logSecret as string)
+    }
     const ownPayload = await own.json<{
       view: { you: { techsChosen: { id: string }[]; socialPolicies: { id: string }[] } }
     }>()

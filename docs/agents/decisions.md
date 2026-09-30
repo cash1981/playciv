@@ -3270,10 +3270,33 @@ hidden.
 
 **Consequences.** This deviates from `old-civ-rest`, which printed the full item
 for everyone. The wording of the public undo lines for a tech or social policy
-changes; draws read as before. Not changed: the number in "has researched a
-hidden technology" is the catalogue number plus the first three digits of the
-username's Java hash. Both are public, so anyone who reads the code can work out
-which tech it was. Fixing that needs a per-game secret and is left for the human
-to decide. The replay bar shows the viewer's own private description, which is
-what they see in their private log; other players get the public one.
+changes; draws read as before. The tech number and the history bar are handled in the next section.
 
+## 2026-09-30 - Public item numbers are keyed, and the history bar is public only (issue #220)
+
+**Decision.** Nothing stays readable in a public place until it is revealed, even
+to the player it belongs to, where that place is shared. Two changes follow.
+(1) The number in "has researched a hidden technology. Item number #N" is now
+`1000000 + hash(logSecret | username | itemNumber) % 9000000`. `logSecret` is a
+new field on the game state: the server passes a random value when it creates a
+game, and `createGame` derives one from the seed otherwise. It is never in a
+projection. A game saved without one gets a key from its rng the first time it is
+read (`migrate.ts`), which is stable until the next write saves it.
+(2) The history bar shows `publicDescription` only. The revision list no longer
+carries `privateDescription`. The player's own private log tab and their replayed
+hand still show what they did.
+
+**Why.** The human wanted everything hidden until it is revealed. Java added the
+first three digits of the username's hash to the catalogue number. Both are
+public (the tech list carries every `itemNumber`), so subtracting one from the
+other named the tech. The history bar printed the researcher's private line, for
+example the tech name, on a screen other people may look at.
+
+**Consequences.** This deviates from `old-civ-rest`. The tie between a tech's
+research, reveal, removal and undo lines is kept: they all carry the same
+number for the same player. Lines written before this change carry the old
+numbers, so for a tech researched earlier and revealed later the two lines show
+different numbers. Games made before the key existed have only the 32 bits of the
+rng as a key, so their numbers are harder to decode but not proof against a
+determined reader; new games use a random key. Revisions still store
+`privateDescriptions`; nothing reads them now.
