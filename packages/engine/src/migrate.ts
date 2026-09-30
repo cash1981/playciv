@@ -14,7 +14,6 @@ import type { SocialPolicyItem } from './item.js'
 import type { GameState, Playerhand, PlayerStats } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
-import { nextId } from './random.js'
 import { migratePlayerTurn } from './turn.js'
 
 /**
@@ -186,9 +185,11 @@ export function migrateGameState(state: GameState): GameState {
   return {
     ...state,
     createdAt: older.createdAt ?? null,
-    // A game saved before the public item numbers were keyed gets a key from its
-    // rng, which no client sees. It is stable until the next write saves it.
-    logSecret: older.logSecret ?? nextId(older.rng)[0],
+    // A game saved before the public item numbers were keyed has no key yet. It
+    // is left empty, and the server puts a random one in before the next action
+    // (`applyToGame`). Nothing in the game state is safe to derive it from: the
+    // rng stream is published through log and item ids.
+    logSecret: older.logSecret ?? '',
     log: state.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
     players: state.players.map(withPlayerDefaults),
     board:

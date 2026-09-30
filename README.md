@@ -594,7 +594,8 @@ request, the votes and the result for every player, so asking to undo a hidden
 tech, a social policy or a drawn card published it. Here those lines name an item
 no more than its original log line did; only the owner sees the full text.
 A tech or social policy carries a per-player number keyed with a secret per game,
-not the catalogue number, so it cannot be matched to the tech list. The history
+not the catalogue number, so it cannot be matched to the tech list without the
+key. The history
 bar shows the public description only.
 
 **Five turn-phase methods became one.** `updateSOT`, `updateTrade`, `updateCM`,

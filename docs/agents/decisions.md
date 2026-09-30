@@ -3280,8 +3280,11 @@ to the player it belongs to, where that place is shared. Two changes follow.
 `1000000 + hash(logSecret | username | itemNumber) % 9000000`. `logSecret` is a
 new field on the game state: the server passes a random value when it creates a
 game, and `createGame` derives one from the seed otherwise. It is never in a
-projection. A game saved without one gets a key from its rng the first time it is
-read (`migrate.ts`), which is stable until the next write saves it.
+projection, and it is never derived from anything the game hands out: an earlier
+version used `nextId(rng)` and the first log entry id was then the key, and the
+rng stream is published through log and item ids anyway. A game saved without a
+key reads as an empty one (`migrate.ts`), and the server puts a random one in
+before the next action (`applyToGame`).
 (2) The history bar shows `publicDescription` only. The revision list no longer
 carries `privateDescription`. The player's own private log tab and their replayed
 hand still show what they did.
@@ -3296,7 +3299,7 @@ example the tech name, on a screen other people may look at.
 research, reveal, removal and undo lines is kept: they all carry the same
 number for the same player. Lines written before this change carry the old
 numbers, so for a tech researched earlier and revealed later the two lines show
-different numbers. Games made before the key existed have only the 32 bits of the
-rng as a key, so their numbers are harder to decode but not proof against a
-determined reader; new games use a random key. Revisions still store
+different numbers. Until a legacy game's next action its key is empty, but nothing is logged before that.
+The hash (cyrb53) is not a MAC: the key is what protects, and a reader who learned
+it could decode every number, so it stays on the server. Revisions still store
 `privateDescriptions`; nothing reads them now.

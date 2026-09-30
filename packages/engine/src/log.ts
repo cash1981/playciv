@@ -31,6 +31,16 @@ function uniqueNumber(secret: string, username: string, itemNumber: number): num
   return 1_000_000 + (keyedHash(`${secret}|${username}|${itemNumber}`) % 9_000_000)
 }
 
+/**
+ * A fallback key for a game created without one, for tests. It is a hash of the
+ * seed under its own prefix, so it is as guessable as the seed and is never equal
+ * to an id that `nextId` hands out (an earlier version used `nextId` itself and
+ * the first log entry id was then the key). The server always passes a random key.
+ */
+export function deriveLogSecret(seed: number, gameId: string): string {
+  return `derived-${keyedHash(`logSecret|${seed}|${gameId}`).toString(16)}`
+}
+
 /** cyrb53: a 53-bit string hash. Not cryptographic; the secret is what protects. */
 function keyedHash(text: string): number {
   let h1 = 0xdeadbeef

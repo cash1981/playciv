@@ -23,8 +23,8 @@ _Last updated: 2026-09-30_
   public line for a hidden tech or social policy is now a hash keyed with a
   per-game `logSecret`, so it cannot be matched to the tech list. The history bar
   shows only the public description, for the owner too, and the API no longer
-  sends `privateDescription` (`decisions.md`, 2026-09-30). Older games get a key
-  from their rng when first read.
+  sends `privateDescription` (`decisions.md`, 2026-09-30). Older games get a random
+  key from the server on their next action.
 - **Issue #220: undo leaked hidden items.** The undo request, vote and result lines
   named a hidden tech, a social policy, a drawn card or a unit's stats for
   everyone. They now read as the original log line did; the owner still sees the

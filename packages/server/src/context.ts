@@ -9,6 +9,7 @@ import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
 
 import type { ResetTokenSigner, TokenSigner } from './auth.js'
+import { newId } from './auth.js'
 import { sendEngineError, sendError } from './errors.js'
 import type { Notifications } from './notifications.js'
 import type { GameRevision, Repository, StoredPlayer } from './store/types.js'
@@ -247,7 +248,9 @@ export async function applyToGame(
     )
   }
 
-  const result = action(game)
+  // A game saved before public item numbers were keyed has an empty key. Give
+  // it a random one before anything is logged, or the numbers stay guessable.
+  const result = action(game.logSecret === '' ? { ...game, logSecret: newId() } : game)
   if (!result.ok) return sendEngineError(c, result.error)
 
   // Private notes do not create replay checkpoints, but they still advance the

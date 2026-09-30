@@ -1268,6 +1268,42 @@ describe('global game revisions', () => {
     expect(revisions[1]?.state.players).toHaveLength(2)
   })
 
+  it('gives a game saved without a log key a random one before anything is logged', async () => {
+    const creator = await register('legacy-key-alice')
+    const gameId = await createGame(creator, 'Legacy key', 2)
+    const other = await register('legacy-key-bob')
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/join`,
+      headers: bearer(other),
+      payload: {},
+    })
+    const before = await repo.findGame(gameId)
+    if (before === undefined) throw new Error('no game')
+    // What `migrateGameState` gives a game saved before the key existed
+    expect(await repo.saveGameIfRevision({ ...before, logSecret: '', rev: before.rev + 1 }, before.rev)).toBe(true)
+    const owner = before.players.find((entry) => entry.yourTurn)
+    const token = owner?.username === 'legacy-key-alice' ? creator : other
+
+    const techs = await inject(app, { url: `/api/games/${gameId}/techs/available`, headers: bearer(token) })
+    const tech = (await techs.json<{ name: string }[]>())[0]?.name
+    expect((await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/techs/choose`,
+      headers: bearer(token),
+      payload: { name: tech },
+    })).status).toBe(200)
+
+    const after = await repo.findGame(gameId)
+    expect(after?.logSecret).toBeTruthy()
+    const ids = [
+      ...(after?.log.map((entry) => entry.id) ?? []),
+      ...(after?.items.map((item) => item.id) ?? []),
+      after?.id,
+    ]
+    expect(ids).not.toContain(after?.logSecret)
+  })
+
   it('authorizes against current membership and projects each historical viewer separately', async () => {
     const creator = await register('history-alice')
     const gameId = await createGame(creator, 'Private history', 2)

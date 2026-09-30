@@ -254,22 +254,39 @@ describe('log texts', () => {
     expect(uniqueItemNumber('key', 'cash1981', 42)).not.toBe(uniqueItemNumber('other', 'cash1981', 42))
   })
 
-  it('the number on a hidden tech line cannot be matched to the tech list', () => {
+  it('the number on a hidden tech line only matches the tech list with the game key', () => {
     // Java added an offset from the username to the catalogue number. Both are
     // public, so subtracting one from the other named the tech.
     const state = firstCivGame()
     const tech = state.techs[0]
     if (tech === undefined) throw new Error('no tech')
     const texts = createLogTexts('TECH', 'cash1981', tech, tech.itemNumber, state.logSecret)
-    const shown = Number(/#(\d+)$/.exec(texts.publicLog)?.[1])
-    const offset = Number(String(Math.abs(javaStringHashCode('cash1981'))).slice(0, 3))
+    const shown = `. Item number #${/#(\d+)$/.exec(texts.publicLog)?.[1]}`
+    const matching = (secret: string) =>
+      state.techs.filter(
+        (candidate) => uniqueItemNumber(secret, 'cash1981', candidate.itemNumber) === shown,
+      )
 
-    expect(state.techs.filter((candidate) => candidate.itemNumber + offset === shown)).toEqual([])
-    expect(shown).not.toBe(tech.itemNumber)
+    // With the key, exactly one tech fits: the tie to the card is real
+    expect(matching(state.logSecret).map((candidate) => candidate.name)).toEqual([tech.name])
+    // Without it, a reader who knows the username and the tech list finds nothing
+    const offset = Number(String(Math.abs(javaStringHashCode('cash1981'))).slice(0, 3))
+    expect(state.techs.filter((candidate) => `. Item number #${candidate.itemNumber + offset}` === shown)).toEqual([])
+    for (const guess of ['', 'secret', 'cash1981', state.id]) expect(matching(guess)).toEqual([])
   })
 
-  it('the log secret never reaches a player view', () => {
-    const state = firstCivGame()
+  it('no log entry or item id is the log secret, and it never reaches a player view', () => {
+    // The key must not be something the game hands out as an id: log ids and item
+    // ids are public.
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Navy' }))
+    state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CULTURE_1' }))
+    const ids = [
+      ...state.log.map((entry) => entry.id),
+      ...state.items.map((item) => item.id),
+      ...state.techs.map((tech) => tech.id),
+      state.id,
+    ]
+    expect(ids).not.toContain(state.logSecret)
     for (const viewer of [CASH1981, KARANDRAS1, 'spectator']) {
       expect(JSON.stringify(toPlayerView(state, viewer))).not.toContain(state.logSecret)
     }

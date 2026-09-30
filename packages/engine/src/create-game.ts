@@ -15,6 +15,7 @@ import { greatPersonReference, readDeck, wonderReference } from './gamedata.js'
 import type { Item, SocialPolicyItem, TechItem } from './item.js'
 import type { Rng } from './random.js'
 import { nextIntBetween, nextId, seedFrom } from './random.js'
+import { deriveLogSecret } from './log.js'
 import type { GameState, GameType, Playerhand } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
@@ -164,8 +165,7 @@ export function createGame(options: CreateGameOptions): GameState {
     socialPolicies: numberedPolicies,
     log: [],
     rng: deck.rng,
-    // `nextId` here only reads the state, so the game's own rng is not advanced
-    logSecret: options.secret ?? nextId(deck.rng)[0],
+    logSecret: options.secret ?? deriveLogSecret(seed, gameId),
     itemCounter: counter,
     wondersDealt: false,
     battle: null,
