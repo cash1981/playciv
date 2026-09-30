@@ -3270,10 +3270,40 @@ hidden.
 
 **Consequences.** This deviates from `old-civ-rest`, which printed the full item
 for everyone. The wording of the public undo lines for a tech or social policy
-changes; draws read as before. Not changed: the number in "has researched a
-hidden technology" is the catalogue number plus the first three digits of the
-username's Java hash. Both are public, so anyone who reads the code can work out
-which tech it was. Fixing that needs a per-game secret and is left for the human
-to decide. The replay bar shows the viewer's own private description, which is
-what they see in their private log; other players get the public one.
+changes; draws read as before. The tech number and the history bar are handled in the next section.
 
+## 2026-09-30 - Public item numbers are keyed, and the history bar is public only (issue #220)
+
+**Decision.** Nothing stays readable in a public place until it is revealed, even
+to the player it belongs to, where that place is shared. Two changes follow.
+(1) The number in "has researched a hidden technology. Item number #N" is now
+`1000000 + hash(logSecret | username | itemNumber) % 9000000`. `logSecret` is a
+new field on the game state: the server passes a random value when it creates a
+game, and `createGame` derives one from the seed otherwise. It is never in a
+projection. The server's key is random and independent of the game. An earlier
+version derived it from `nextId(rng)`, and the first log entry id was then the key;
+the rng stream is published through log and item ids, so nothing derived from it
+is safe. `createGame` without a key falls back to a hash of the seed, which is
+only as strong as the seed, so the server never relies on it. A game saved without a
+key reads as an empty one (`migrate.ts`), and the server puts a random one in
+before the next action (`applyToGame`).
+(2) The history bar shows `publicDescription` only. The revision list no longer
+carries `privateDescription`. The player's own private log tab and their replayed
+hand still show what they did.
+
+**Why.** The human wanted everything hidden until it is revealed. Java added the
+first three digits of the username's hash to the catalogue number. Both are
+public (the tech list carries every `itemNumber`), so subtracting one from the
+other named the tech. The history bar printed the researcher's private line, for
+example the tech name, on a screen other people may look at.
+
+**Consequences.** This deviates from `old-civ-rest`. The tie between a tech's
+research, reveal, removal and undo lines is kept: they all carry the same
+number for the same player. Lines written before this change carry the old
+numbers, so for a tech researched earlier and revealed later the two lines show
+different numbers. Until a legacy game's next action its key is empty, but nothing is logged before that.
+The hash (cyrb53) is not a MAC: the key is what protects, and a reader who learned
+it could decode every number, so it stays on the server. Revisions still store
+`privateDescriptions`; nothing reads them now. A keyed number can, rarely (about
+1 in 10,000 per game), be the same for two of one player's cards, where Java's
+offset plus catalogue number could not; the worst case is an ambiguous line.

@@ -6,7 +6,7 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-29_
+_Last updated: 2026-09-30_
 
 ## Health
 
@@ -19,11 +19,16 @@ _Last updated: 2026-09-29_
 
 ## Done
 
+- **Issue #220, part 2: nothing readable until revealed.** The item number in a
+  public line for a hidden tech or social policy is now a hash keyed with a
+  per-game `logSecret`, so it cannot be matched to the tech list. The history bar
+  shows only the public description, for the owner too, and the API no longer
+  sends `privateDescription` (`decisions.md`, 2026-09-30). Older games get a random
+  key from the server on their next action.
 - **Issue #220: undo leaked hidden items.** The undo request, vote and result lines
   named a hidden tech, a social policy, a drawn card or a unit's stats for
   everyone. They now read as the original log line did; the owner still sees the
-  full text (`decisions.md`, 2026-09-30). Open: the tech number in the
-  "researched a hidden technology" line can be decoded from the tech list.
+  full text (`decisions.md`, 2026-09-30).
 
 - **Issue #219: numeric fields on mobile.** ATK, HP and the battlehand draw count
   are text inputs with a numeric keypad (`DigitInput`), so typing 1 over a 0 gives

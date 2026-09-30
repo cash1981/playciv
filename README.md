@@ -574,8 +574,9 @@ change timing and card effects remain table-managed rules.
 `Infantry 1.3` were "equal" and `discardedItems.remove(item)` could remove the
 wrong instance. Every item now has an opaque id. `itemNumber` is kept for log
 compatibility, and its starting offset is still random per game so the number
-does not give the card away (techs and social policies are the exception: their
-numbers are in the public catalogue, see `decisions.md`, 2026-09-30). `itemValueEquals` is still there where the Java
+does not give the card away (techs and social policies are the exception, since
+their numbers are in the public catalogue; their log lines use a keyed number
+instead, see `decisions.md`, 2026-09-30). `itemValueEquals` is still there where the Java
 semantics are needed.
 
 **Space Flight is not a singleton.** Java had `Tech.SPACE_FLIGHT` as a static
@@ -592,7 +593,10 @@ carry no item either, so an undo could never be started for them.
 request, the votes and the result for every player, so asking to undo a hidden
 tech, a social policy or a drawn card published it. Here those lines name an item
 no more than its original log line did; only the owner sees the full text.
-A tech or social policy carries the per-player number, not the catalogue number.
+A tech or social policy carries a per-player number keyed with a secret per game,
+not the catalogue number, so it cannot be matched to the tech list without the
+key. The history
+bar shows the public description only.
 
 **Five turn-phase methods became one.** `updateSOT`, `updateTrade`, `updateCM`,
 `updateMovement` and `updateResearch` differed only in the email text and the

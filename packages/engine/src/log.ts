@@ -16,17 +16,43 @@ const DELIM = ' - '
 
 /**
  * Java: `GameLog.uniqueItemNumber` — used for techs and social policy, where
- * the item must not be cross-referenced between players. The number is offset
- * by the first three digits of `username.hashCode()`, so the same card gets a
- * different number for each player.
+ * the item must not be cross-referenced between players. Java added the first
+ * three digits of `username.hashCode()` to the item number. That offset, and the
+ * tech's catalogue number, are both public, so the number gave the tech away to
+ * anyone who subtracted. It is now a hash keyed with the game's `secret`, so
+ * the same card still gets a different number for each player, and the same
+ * number on every line about it, but it cannot be matched to the catalogue.
  */
-export function uniqueItemNumber(username: string, itemNumber: number): string {
-  return `. Item number #${uniqueNumber(username, itemNumber)}`
+export function uniqueItemNumber(secret: string, username: string, itemNumber: number): string {
+  return `. Item number #${uniqueNumber(secret, username, itemNumber)}`
 }
 
-function uniqueNumber(username: string, itemNumber: number): number {
-  const offset = Number(String(Math.abs(javaStringHashCode(username))).slice(0, 3))
-  return offset + itemNumber
+function uniqueNumber(secret: string, username: string, itemNumber: number): number {
+  return 1_000_000 + (keyedHash(`${secret}|${username}|${itemNumber}`) % 9_000_000)
+}
+
+/**
+ * A fallback key for a game created without one, for tests. It is a hash of the
+ * seed under its own prefix, so it is as guessable as the seed and is never equal
+ * to an id that `nextId` hands out (an earlier version used `nextId` itself and
+ * the first log entry id was then the key). The server always passes a random key.
+ */
+export function deriveLogSecret(seed: number, gameId: string): string {
+  return `derived-${keyedHash(`logSecret|${seed}|${gameId}`).toString(16)}`
+}
+
+/** cyrb53: a 53-bit string hash. Not cryptographic; the secret is what protects. */
+function keyedHash(text: string): number {
+  let h1 = 0xdeadbeef
+  let h2 = 0x41c6ce57
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i)
+    h1 = Math.imul(h1 ^ code, 2654435761)
+    h2 = Math.imul(h2 ^ code, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0)
 }
 
 /** How a public line may name an item, and which number it may carry. */
@@ -44,13 +70,14 @@ export interface PublicItemSubject {
  * the type only. Discards and reveals are public already, and so is a
  * tech the player has revealed.
  *
- * `username` is whoever the original entry belongs to. With no `logType`, the
- * item's own `hidden` flag decides.
+ * `username` is whoever the original entry belongs to, and `secret` is the
+ * game's `logSecret`. With no `logType`, the item's own `hidden` flag decides.
  */
 export function publicItemSubject(
   logType: LogType | null,
   username: string,
   item: Item,
+  secret: string,
 ): PublicItemSubject {
   const publicAlready =
     logType === 'DISCARD' ||
@@ -59,7 +86,7 @@ export function publicItemSubject(
     (logType === null && !item.hidden)
   const itemNumber =
     item.kind === 'tech' || item.kind === 'socialpolicy'
-      ? uniqueNumber(username, item.itemNumber)
+      ? uniqueNumber(secret, username, item.itemNumber)
       : item.itemNumber
   if (publicAlready) return { name: revealAll(item), itemNumber }
   if (item.kind === 'tech') return { name: 'a hidden technology', itemNumber }
@@ -77,10 +104,11 @@ export function createUndoRequestTexts(
   username: string,
   original: LogType | null,
   item: Item,
-  ownerUsername: string = username,
-  requesterIsOwner = true,
+  ownerUsername: string,
+  requesterIsOwner: boolean,
+  secret: string,
 ): LogTexts {
-  const subject = publicItemSubject(original, ownerUsername, item)
+  const subject = publicItemSubject(original, ownerUsername, item, secret)
   const suffix = `. Item number #${subject.itemNumber}`
   const privateName = requesterIsOwner ? revealAll(item) : subject.name
   return {
@@ -115,10 +143,11 @@ export function createLogTexts(
   username: string,
   item: Item | null,
   itemNumber: number,
+  secret: string,
   turnNumber?: number,
 ): LogTexts {
   const itemNumberText = `. Item number #${itemNumber}`
-  const uniqueText = uniqueItemNumber(username, itemNumber)
+  const uniqueText = uniqueItemNumber(secret, username, itemNumber)
   const all = item === null ? '' : revealAll(item)
   const pub = item === null ? '' : revealPublic(item)
 
@@ -181,7 +210,7 @@ export function createLogTexts(
     // The undo request has its own writer, `appendUndoRequestLog`, which knows
     // what the undone entry was. Without that, be careful.
     case 'UNDO': {
-      if (item !== null) return createUndoRequestTexts(username, null, item)
+      if (item !== null) return createUndoRequestTexts(username, null, item, username, true, secret)
       const text = `${username} has requested undo of ${DELIM}${itemNumberText}`
       return { privateLog: text, publicLog: text }
     }
@@ -278,7 +307,14 @@ export function appendUndoRequestLog(
   ownerUsername: string,
   requesterIsOwner: boolean,
 ): GameState {
-  const texts = createUndoRequestTexts(username, original, item, ownerUsername, requesterIsOwner)
+  const texts = createUndoRequestTexts(
+    username,
+    original,
+    item,
+    ownerUsername,
+    requesterIsOwner,
+    state.logSecret,
+  )
   // The item rides along only for its owner: the requester's own entry is
   // returned to them in full, so a non-owner must not get it.
   return appendLog(state, {
@@ -319,7 +355,7 @@ export function appendItemLog(
   playerId: string,
   item: Item,
 ): GameState {
-  const texts = createLogTexts(logType, username, item, item.itemNumber)
+  const texts = createLogTexts(logType, username, item, item.itemNumber, state.logSecret)
   return appendLog(state, { username, logType, item, playerId, ...texts })
 }
 

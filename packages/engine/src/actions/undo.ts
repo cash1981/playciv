@@ -99,7 +99,7 @@ export function vote(state: GameState, input: VoteInput): ActionResult {
   const accepted = result === true
 
   let next = withLogEntry(state, { ...entry, undo: { ...undo, done: accepted } })
-  const subject = publicItemSubject(entry.logType, entry.username, entry.item)
+  const subject = publicItemSubject(entry.logType, entry.username, entry.item, state.logSecret)
   next = appendVoteLog(
     next,
     voter.username,
@@ -268,7 +268,7 @@ function logUndo(
   logType: GameLogEntry['logType'],
   message: (name: string) => string,
 ): GameState {
-  const subject = publicItemSubject(logType, owner.username, item)
+  const subject = publicItemSubject(logType, owner.username, item, state.logSecret)
   return appendUndoLog(state, message(subject.name), subject.itemNumber, {
     playerId: owner.playerId,
     message: message(itemName(item)),
