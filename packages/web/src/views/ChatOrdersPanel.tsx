@@ -634,7 +634,7 @@ export function ChatOrdersPanel({
                       })
                     }}
                   >
-                    {isPhaseDone(orderPhase) ? 'Not done' : 'Done'}
+                    {isPhaseDone(orderPhase) ? 'Not done' : 'End turn'}
                   </button>
                 )}
                 <button type="submit" className="primary" disabled={busy || draft.trim() === ''}>

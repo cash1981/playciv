@@ -618,7 +618,7 @@ describe('the Done button', () => {
 
     expect(screen.queryByRole('button', { name: /as done$/ })).toBeNull()
     await click(screen.getByRole('button', { name: 'Order' }))
-    expect(screen.getByRole('button', { name: 'Mark City management as done' })).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Mark City management as done' }).textContent).toBe('End turn')
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
