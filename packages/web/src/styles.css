@@ -946,7 +946,7 @@ ul.list > li:last-child {
 .board-piece.selected {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
-  box-shadow: none;
+  box-shadow: none; /* clears the relic frame's dark ring */
   touch-action: none;
 }
 

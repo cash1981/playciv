@@ -18,6 +18,10 @@ _Last updated: 2026-10-01_
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Relic outline.** Relic markers get a white outline and a thin dark ring on the
+  board (`board-piece-relic` in `styles.css`), because the art vanished against
+  the sea. A selected relic shows the normal accent outline. CSS only; no asset
+  or size changes.
 - **Issue #227: relics on the map.** New `relic` piece category with the five
   relic markers (Ark of the Covenant, Atlantis, Attila's Village, School of
   Confucius, Seven Cities of Gold), placed like buildings from a "Relics" group in
