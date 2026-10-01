@@ -789,7 +789,9 @@ and a strip under it shows what each player is missing. The start player is
 derived from the Start player marker on the board (the player whose area holds
 it), and the turn starts by itself when the last player has finished Research: the
 marker moves one seat clockwise as a normal, undoable board change and the
-timeline gets a turn divider. The new turn holder is mailed, and an order is
+timeline gets a turn divider. The first time it is switched on for a game, the
+revealed classic turn orders are copied into the timeline once (public history
+only, no mail). The new turn holder is mailed, and an order is
 mailed like a chat message. The private log moves to a Private tab and is still
 only the owner's. See `docs/agents/decisions.md`, 2026-09-29 and 2026-10-01, and
 `docs/agents/tasks/chat-orders.md`.

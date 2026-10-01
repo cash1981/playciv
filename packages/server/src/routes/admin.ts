@@ -7,6 +7,7 @@ import type { App } from '../app.js'
 import type { AppContext } from '../context.js'
 import { applyToGame, asRecord, currentPlayer, requireAdminWith, requireString } from '../context.js'
 import { sendError } from '../errors.js'
+import { copyLegacyOrders } from '../legacy-orders.js'
 import { toPlayerDto } from './auth.js'
 import type { PlayerUpdate, StoredPlayer, UserRole } from '../store/types.js'
 
@@ -191,6 +192,16 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
     const at = new Date().toISOString()
     return applyToGame(context, c, gameId, (state) => setChatOrders(state, enabled, at), undefined, {
       record: false,
+      // The first switch-on copies the classic orders into the timeline. A
+      // failure here must not undo the switch, and nobody is mailed about it.
+      after: async ({ before, after }) => {
+        if (before.legacyOrdersCopied || !after.legacyOrdersCopied) return
+        try {
+          await copyLegacyOrders(context.repo, gameId, after)
+        } catch (error) {
+          console.error('Copying the classic orders into the timeline failed', error)
+        }
+      },
     })
   })
 }

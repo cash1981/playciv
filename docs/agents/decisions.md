@@ -3678,3 +3678,46 @@ and can undo it. With chat orders off nothing happens.
 `0004_game_mail.sql` both exist in `packages/worker/migrations`. Both are applied
 in production by name, so neither is renamed: a rename would make wrangler apply
 it again and fail with duplicate columns. New migrations take 0005 or higher.
+
+## 2026-10-01 — Chat orders: the classic orders are copied into the timeline once
+
+When chat orders is switched on for a game that has played classic turns, the
+revealed orders are copied into the timeline so the game does not look empty.
+
+**Once per game.** `GameState.legacyOrdersCopied` (default false) is set by the
+first `setChatOrders(true)` and never cleared, so switching off and on again
+copies nothing. The admin route compares `before` and `after` in its `after`
+hook and copies on the false to true change. It is not in `PlayerView`. A game
+that is already in chat mode when the field first appears migrates to true, not
+false: its orders are in the timeline already, and copying the classic ones later
+would duplicate the ones posted there. An old game that was never switched on
+migrates to false.
+
+**What is copied: the public history only.** `publicOrderVersions` reads
+`state.publicTurns`, every `history[phase]` version `{markdown, at}`, never a
+player's own `playerTurns`. A draft that was never revealed is masked there and
+has no history entry, and so is an edit made after a reveal; neither can be
+copied. Tests with a draft, an edit and a `gamenote` show none reach the rows.
+
+**How.** One `order` row per version: the owner's username, `turnNumber`, `phase`,
+the markdown, `createdAt` = the time it was revealed, so the web's "replaced"
+logic sees the newest per player, turn and phase as current. Ids are
+`legacy-<gameId>-<turn>-<username>-<phase>-<index>` and an existing id is skipped,
+so a repeat cannot duplicate. A version without a usable `at` is skipped, not given
+an invented time. No mail is sent for the copy. A failure while copying is logged
+and does not undo the switch; there is no automatic retry, because the flag is
+already set.
+
+**Caveats.**
+- Orders revealed before versions were kept (old saves where `history` is empty)
+  are not copied; there is no time to give them and the markdown is only in the
+  masked `orders`.
+- D1 lists chat by `created_at`, so the copied rows sit in true time order among
+  the game's earlier chat. The JSON dev store lists rows as written, so there they
+  come after the existing chat.
+- The paging boundary is unchanged: a page starts at the first row tagged with the
+  current turn. A game whose turns were all finished classically is on a turn that
+  has no tagged rows yet, so its first page is the newest 30 rows and Load more
+  goes back a turn at a time.
+- Only the game's text is copied. Mail, the done markers and the start player
+  history of the classic turns are not.

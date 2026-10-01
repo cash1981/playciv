@@ -401,6 +401,20 @@ describe('replaced orders', () => {
     expect(tagOf('alice trade')).toBeUndefined()
   })
 
+  it('treats copied classic orders like any others: older versions replaced, the tag reads T2 · CM', async () => {
+    chatPage.mockResolvedValue(page([
+      message('legacy-g-2-Bob-CM-0', { username: 'Bob', kind: 'order', turnNumber: 2, phase: 'CM', message: 'classic first' }),
+      message('legacy-g-2-Bob-CM-1', { username: 'Bob', kind: 'order', turnNumber: 2, phase: 'CM', message: 'classic second' }),
+    ]))
+    const { container } = await renderPanel(makeView())
+
+    const [older, newer] = Array.from(container.querySelectorAll('.chat-orders-message'))
+    expect(older?.querySelector('.tag:not(.turn)')?.textContent).toBe('replaced')
+    expect(newer?.querySelector('.tag:not(.turn)')).toBeNull()
+    expect(older?.querySelector('.tag.turn')?.textContent).toBe('T2 · CM')
+    expect(newer?.querySelector('.tag.turn')?.textContent).toBe('T2 · CM')
+  })
+
   it('does not count a turn or a chat message as a replacement', () => {
     const ids = replacedOrderIds([
       message('a', { kind: 'order', turnNumber: 3, phase: 'TRADE' }),
