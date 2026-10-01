@@ -13,11 +13,17 @@ _Last updated: 2026-10-01_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 609 engine, 233 server, 360 web on `claude/nice-faraday-9hl43h` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 611 engine, 233 server, 361 web on `claude/nice-faraday-9hl43h` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Issue #227: relics on the map.** New `relic` piece category with the five
+  relic markers (Ark of the Covenant, Atlantis, Attila's Village, School of
+  Confucius, Seven Cities of Gold), placed like buildings from a "Relics" group in
+  the Pieces palette, one of each per game. Art is in `public/board/relics/`.
+  `tools/board-assets.ps1` knows the new `relics` folder; the manifest was
+  extended by hand to match its output. See `decisions.md`.
 - **Issue #225: global spinner.** A ring over a dimmed page shows while any write
   runs, on desktop and mobile (56 px on touch), with a 200 ms delay and a 500 ms
   minimum. `request()` and `GameView`'s busy state feed `lib/activity.ts`; polls

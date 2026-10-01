@@ -325,6 +325,51 @@ describe('BoardPalette finite supplies', () => {
     expect(restored).toContain('draggable="true"')
   })
 
+  it('lists the relics in their own group and disables one once it is on the board (issue #227)', () => {
+    const relics = BOARD_ASSETS.filter((asset) => asset.category === 'relic')
+    expect(relics).toHaveLength(5)
+    const atlantis = findBoardAsset('relics/atlantis')
+    if (atlantis === undefined) throw new Error('atlantis missing from manifest')
+    const onBoard: BoardPiece = {
+      ...piece('relics/atlantis', 'atlantis-1'),
+      path: atlantis.path,
+      label: atlantis.label,
+      category: 'relic',
+    }
+
+    const markup = renderToStaticMarkup(
+      <BoardPalette
+        assets={BOARD_ASSETS}
+        category="relic"
+        onCategoryChange={() => undefined}
+        replaying={false}
+        pieces={[onBoard]}
+        numOfPlayers={4}
+      />,
+    )
+    // The group has its own tab, and every relic is shown with its supply.
+    expect(markup).toContain('Relics')
+    expect(markup).toContain('Atlantis (0)')
+    expect(markup).toContain('Ark of the Covenant (1)')
+    expect(markup).toContain("Attila&#x27;s Village (1)")
+    expect(markup).toContain('School of Confucius (1)')
+    expect(markup).toContain('Seven Cities of Gold (1)')
+    // Buildings are not in this group.
+    expect(markup).not.toContain('Academy')
+
+    const empty = renderToStaticMarkup(
+      <BoardPalette
+        assets={BOARD_ASSETS}
+        category="relic"
+        onCategoryChange={() => undefined}
+        replaying={false}
+        pieces={[]}
+        numOfPlayers={4}
+      />,
+    )
+    expect(empty).toContain('Atlantis (1)')
+  })
+
   it('shows no count and keeps a hut draggable at the cap (issue #116)', () => {
     const hut = findBoardAsset('resources/hut')
     if (hut === undefined) throw new Error('hut missing from manifest')

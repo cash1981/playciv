@@ -133,7 +133,7 @@ describe('wonder ownership', () => {
 })
 
 describe('the manifest', () => {
-  it('has pieces in all eleven categories', () => {
+  it('has pieces in all twelve categories', () => {
     const categories = new Set(BOARD_ASSETS.map((asset) => asset.category))
     expect([...categories].sort()).toEqual([
       'building',
@@ -144,6 +144,7 @@ describe('the manifest', () => {
       'greatperson',
       'leader',
       'marker',
+      'relic',
       'resource',
       'tile',
       'wonder',
@@ -158,6 +159,23 @@ describe('the manifest', () => {
     }
     // Kept within one square so a city-state sits on the map like a city.
     expect(cityStates.every((asset) => asset.width <= 94 && asset.height <= 94)).toBe(true)
+  })
+
+  it('has the five relics, each within one square (issue #227)', () => {
+    const relics = BOARD_ASSETS.filter((asset) => asset.category === 'relic')
+    expect(relics.map((asset) => asset.label).sort()).toEqual([
+      'Ark of the Covenant',
+      'Atlantis',
+      "Attila's Village",
+      'School of Confucius',
+      'Seven Cities of Gold',
+    ])
+    for (const relic of relics) {
+      expect(relic.id).toBe(relic.path.replace(/\.png$/, ''))
+      expect(relic.path.startsWith('relics/')).toBe(true)
+    }
+    // The generator caps relic art at 90 px on the longer side.
+    expect(relics.every((asset) => asset.width <= 90 && asset.height <= 90)).toBe(true)
   })
 
   it('has an army and a scout in all five player colours', () => {
@@ -280,6 +298,38 @@ describe('placePiece', () => {
       x: 0,
       y: 0,
     }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'buildings/harbor', limit: 10 })
+  })
+
+  it('allows one of each relic in the whole game, and frees it when removed (issue #227)', () => {
+    const relics = BOARD_ASSETS.filter((asset) => asset.category === 'relic')
+    expect(relics).toHaveLength(5)
+    for (const relic of relics) {
+      const state = place(firstCivGame(), relic.id, 0, 0)
+      expect(remainingBoardAssetCount(relic, state.board.pieces, state.numOfPlayers), relic.id).toBe(0)
+      // A second player cannot put down a second copy either.
+      expect(unwrapErr(placePiece(state, {
+        playerId: KARANDRAS1,
+        assetId: relic.id,
+        x: 100,
+        y: 100,
+      })), relic.id).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: relic.id, limit: 1 })
+
+      // Each relic has its own supply: placing one leaves the others available.
+      for (const other of relics.filter((asset) => asset.id !== relic.id)) {
+        expect(remainingBoardAssetCount(other, state.board.pieces, state.numOfPlayers), other.id).toBe(1)
+      }
+
+      const placed = state.board.pieces.find((piece) => piece.assetId === relic.id)
+      if (placed === undefined) throw new Error('relic was not placed')
+      const removed = unwrap(removePiece(state, { playerId: CASH1981, pieceId: placed.id }))
+      expect(remainingBoardAssetCount(relic, removed.board.pieces, removed.numOfPlayers), relic.id).toBe(1)
+      expect(unwrap(placePiece(removed, {
+        playerId: KARANDRAS1,
+        assetId: relic.id,
+        x: 100,
+        y: 100,
+      })).board.pieces.some((piece) => piece.assetId === relic.id && piece.placedBy === KARANDRAS1)).toBe(true)
+    }
   })
 
   it('limits each resource except hut and village to the number of players', () => {
