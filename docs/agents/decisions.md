@@ -3735,3 +3735,28 @@ shipped in parts: a game that had chat orders on and then off before the field
 existed would copy its classic history again on the next switch-on, and the
 orders posted in chat mode would appear twice. No such game can exist when the
 whole feature ships as one pull request.
+
+## 2026-10-01 - Issue #216: the battle summary follows typed HP and drops ATK
+
+The human, on a screenshot of the arena: "What you really only need to track is
+the combat bonus plus remaining HP. So you can remove the ATK and only have HP
+plus the combat bonus shown as (+4)". Asked what was wrong in the picture, they
+said nothing was; the right HP "just took a while" to show.
+
+- The summary bar shows the label, the unit count, and `HP n (+bonus)`. ATK is
+  gone from the bar only. The ATK field on each unit and `totalAttack` in the
+  engine summary are unchanged (the human's choice).
+- The delay was the 600 ms save debounce on the HP field plus the request, since
+  the summary is computed on the server. `BattlePanel` now keeps the HP typed in
+  each unit's field and adds the difference to the server total for the living
+  units of each side (`draftHealthDelta`). A killed unit never counts, as on the
+  server. A draft is cleared when the server's value for that unit arrives.
+- Reaching 0 HP still does not kill a unit automatically (issue #71).
+- **Known limitation.** If a save never reaches the server, the summary keeps
+  showing the typed number, as does the field. The save is dropped when another
+  write is in flight at the moment the debounce fires (`runBattleAction` returns
+  early while `busy` or another battle action is running), or when the server rejects it. Before this change the summary
+  showed the server's number and so disagreed with the field, which was the only
+  hint that the edit had not landed. The dropped save is an older behaviour and
+  was left alone.
+

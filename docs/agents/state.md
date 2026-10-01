@@ -18,6 +18,12 @@ _Last updated: 2026-10-01_
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Issue #216: the battle summary shows HP and combat bonus only, and follows
+  typed HP.** The ATK text is gone from the summary bar (the per-unit ATK field
+  and `totalAttack` stay). The HP total adds the HP typed in each living unit's
+  field to the server total, so it changes at once instead of after the 600 ms
+  debounce and the request. Client only. See `decisions.md`, 2026-10-01, which
+  also records a known limitation for saves that never arrive.
 - **Relic outline.** Relic markers get a white outline and a thin dark ring on the
   board (`board-piece-relic` in `styles.css`), because the art vanished against
   the sea. A selected relic shows the normal accent outline. CSS only; no asset

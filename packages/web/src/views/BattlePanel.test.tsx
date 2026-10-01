@@ -11,6 +11,7 @@ vi.mock('../lib/api.js', () => ({
   api: {
     placeUnitInArena: vi.fn(),
     moveArenaUnit: vi.fn(),
+    setArenaUnitStat: vi.fn(),
   },
 }))
 
@@ -36,6 +37,22 @@ const run: Run = async (action) => { await action() }
 describe('BattlePanel summary bar', () => {
   afterEach(() => cleanup())
 
+  it('does not show ATK in the summary', () => {
+    const summaryView = {
+      ...view,
+      battleSummary: [
+        { side: 'attacker', kind: 'player', playerId: 'me', label: 'Me', unitCount: 1, totalAttack: 2, totalHealth: 3, combatBonus: 0 },
+      ],
+    } as unknown as PlayerView
+    const { getByText, container } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
+    fireEvent.click(getByText('Battle'))
+
+    const bar = container.querySelector('.battle-summary')
+    expect(bar).not.toBeNull()
+    expect(bar?.textContent).toContain('HP 3')
+    expect(bar?.textContent).not.toMatch(/ATK/)
+  })
+
   it('shows a positive combat bonus next to HP, not ATK', () => {
     const summaryView = {
       ...view,
@@ -49,7 +66,6 @@ describe('BattlePanel summary bar', () => {
     const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
     fireEvent.click(getByText('Battle'))
 
-    expect(getByText('ATK 1')).toBeTruthy()
     expect(getByText('HP 3 (+6)')).toBeTruthy()
   })
 
@@ -67,11 +83,10 @@ describe('BattlePanel summary bar', () => {
     const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
     fireEvent.click(getByText('Battle'))
 
-    expect(getByText('ATK 1')).toBeTruthy()
     expect(getByText('HP 3 (-2)')).toBeTruthy()
   })
 
-  it('shows no suffix on either ATK or HP when the combat bonus is zero', () => {
+  it('shows no suffix on HP when the combat bonus is zero', () => {
     const summaryView = {
       ...view,
       battleSummary: [
@@ -84,8 +99,87 @@ describe('BattlePanel summary bar', () => {
     const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
     fireEvent.click(getByText('Battle'))
 
-    expect(getByText('ATK 1')).toBeTruthy()
     expect(getByText('HP 3')).toBeTruthy()
+  })
+})
+
+describe('BattlePanel summary follows typed HP', () => {
+  afterEach(() => cleanup())
+  beforeEach(() => vi.clearAllMocks())
+
+  function unit(id: string, side: 'attacker' | 'defender', position: number, health: number, killed = false) {
+    return {
+      id, side, position, unit: { ...infantry, inBattle: true },
+      attack: 1, health, placedBy: 'me', rotation: 0, killed,
+    }
+  }
+
+  const twoUnitView = {
+    ...view,
+    you: { ...view.you, battlehand: [] },
+    battle: { ...view.battle, arena: [unit('a1', 'attacker', 0, 3), unit('d1', 'defender', 0, 2)] },
+    battleSummary: [
+      { side: 'attacker', kind: 'player', playerId: 'me', label: 'Me', unitCount: 1, totalAttack: 1, totalHealth: 3, combatBonus: 4 },
+      { side: 'defender', kind: 'player', playerId: 'other', label: 'Other', unitCount: 1, totalAttack: 1, totalHealth: 2, combatBonus: 0 },
+    ],
+  } as unknown as PlayerView
+
+  it('updates the summary as soon as an HP field is edited, before any save', () => {
+    const { container, getByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={twoUnitView} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    expect(getByText('HP 3 (+4)')).toBeTruthy()
+
+    const hpInputs = container.querySelectorAll('.arena-unit-card label input')
+    // Each card has ATK then HP; the attacker's HP field is the second input.
+    fireEvent.change(hpInputs[1] as HTMLElement, { target: { value: '1' } })
+
+    expect(getByText('HP 1 (+4)')).toBeTruthy()
+    expect(getByText('HP 2')).toBeTruthy()
+    expect(vi.mocked(api.setArenaUnitStat)).not.toHaveBeenCalled()
+  })
+
+  it('lets the server value take over when it arrives', () => {
+    const { container, getByText, rerender } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={twoUnitView} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    fireEvent.change(container.querySelectorAll('.arena-unit-card label input')[1] as HTMLElement, { target: { value: '1' } })
+
+    // Someone else set the unit to 2 in the meantime; the server value wins.
+    const saved = {
+      ...twoUnitView,
+      battle: { ...twoUnitView.battle, arena: [unit('a1', 'attacker', 0, 2), unit('d1', 'defender', 0, 2)] },
+      battleSummary: [
+        { ...twoUnitView.battleSummary[0], totalHealth: 2 },
+        twoUnitView.battleSummary[1],
+      ],
+    } as unknown as PlayerView
+    rerender(<BattlePanel gameId="game" busy={false} run={run} view={saved} />)
+
+    expect(getByText('HP 2 (+4)')).toBeTruthy()
+  })
+
+  it('does not count a killed unit, with or without a typed HP', () => {
+    const killedView = {
+      ...twoUnitView,
+      battle: { ...twoUnitView.battle, arena: [unit('a1', 'attacker', 0, 3, true), unit('a2', 'attacker', 1, 2), unit('d1', 'defender', 0, 2)] },
+      battleSummary: [
+        { ...twoUnitView.battleSummary[0], unitCount: 1, totalHealth: 2 },
+        twoUnitView.battleSummary[1],
+      ],
+    } as unknown as PlayerView
+    const { container, getByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={killedView} />,
+    )
+    fireEvent.click(getByText('Battle'))
+    const inputs = container.querySelectorAll('.arena-unit-card label input')
+    // Cards: a1 (killed), a2, d1; HP is each card's second input. Type over the killed one, then the living one.
+    fireEvent.change(inputs[1] as HTMLElement, { target: { value: '9' } })
+    expect(getByText('HP 2 (+4)')).toBeTruthy()
+    fireEvent.change(inputs[3] as HTMLElement, { target: { value: '5' } })
+    expect(getByText('HP 5 (+4)')).toBeTruthy()
   })
 })
 
