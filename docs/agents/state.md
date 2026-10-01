@@ -6,18 +6,24 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-30_
+_Last updated: 2026-10-01_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 589 engine, 211 server, 325 web on `feat/issue-209-compact-menu` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 609 engine, 233 server, 344 web on `claude/nice-faraday-9hl43h` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Issue #217: game emails wait for the player to open the game.** Chat,
+  phase-update, your-turn and joined mail goes once per player and game until
+  they load the game; a never-opened game falls back to the 30 minute wait. Game
+  ended and deleted always send. New D1 migration `0004_game_mail.sql` (apply it
+  before deploying); `claimEmailSlot` is replaced by `recordGameOpened` and
+  `claimGameEmail`. See `decisions.md`.
 
 - **Issue #220, part 2: nothing readable until revealed.** The item number in a
   public line for a hidden tech or social policy is now a hash keyed with a

@@ -38,9 +38,15 @@ interface Snapshot {
   readonly games: readonly GameState[]
   readonly chat: readonly ChatMessage[]
   readonly revisions?: readonly GameRevision[]
-  /** Java's two `emailSent` timestamps, kept as one keyed table. */
-  readonly emailSent?: Readonly<Record<string, string>>
+  /** Per player and game: when they were last emailed and last opened it. */
+  readonly gameMail?: Readonly<Record<string, GameMailStamps>>
   readonly highscore?: HighscoreResult
+}
+
+/** ISO timestamps; either may be missing until the event first happens. */
+interface GameMailStamps {
+  readonly emailedAt?: string
+  readonly openedAt?: string
 }
 
 export interface JsonFileRepositoryOptions {
@@ -54,7 +60,7 @@ export class JsonFileRepository implements Repository {
   private readonly players = new Map<string, StoredPlayer>()
   private readonly games = new Map<string, GameState>()
   private readonly revisions = new Map<string, GameRevision>()
-  private readonly emailSent = new Map<string, string>()
+  private readonly gameMail = new Map<string, GameMailStamps>()
   private chat: ChatMessage[] = []
   private highscoreCache: HighscoreResult | undefined
   private highscoreGeneration = 0
@@ -102,8 +108,8 @@ export class JsonFileRepository implements Repository {
     }
     this.chat = [...snapshot.chat]
     this.highscoreCache = snapshot.highscore
-    for (const [scope, at] of Object.entries(snapshot.emailSent ?? {})) {
-      this.emailSent.set(scope, at)
+    for (const [key, stamps] of Object.entries(snapshot.gameMail ?? {})) {
+      this.gameMail.set(key, stamps)
     }
   }
 
@@ -241,13 +247,17 @@ export class JsonFileRepository implements Repository {
 
   async deleteGame(id: string): Promise<boolean> {
     const deleted = this.games.delete(id)
+    // Like D1, drop the mail stamps whether or not the game row existed.
+    for (const key of this.gameMail.keys()) {
+      if (key.startsWith(`${id}:`)) this.gameMail.delete(key)
+    }
     if (deleted) {
       this.invalidateHighscore()
       for (const [key, revision] of this.revisions) {
         if (revision.gameId === id) this.revisions.delete(key)
       }
-      this.scheduleWrite()
     }
+    this.scheduleWrite()
     return deleted
   }
 
@@ -260,18 +270,46 @@ export class JsonFileRepository implements Repository {
     return this.chat.filter((message) => message.gameId === gameId)
   }
 
-  async claimEmailSlot(scope: string, waitMs: number, now: Date): Promise<boolean> {
+  async recordGameOpened(gameId: string, playerId: string, now: Date): Promise<void> {
+    const key = `${gameId}:${playerId}`
+    const stamps = this.gameMail.get(key)
+    // Only a visit that changes the answer is stored: the first one, or the
+    // first since the last email.
+    if (
+      stamps !== undefined &&
+      stamps.openedAt !== undefined &&
+      (stamps.emailedAt === undefined || stamps.openedAt > stamps.emailedAt)
+    ) {
+      return
+    }
+    this.gameMail.set(key, { ...stamps, openedAt: now.toISOString() })
+    this.scheduleWrite()
+  }
+
+  async claimGameEmail(
+    gameId: string,
+    playerId: string,
+    fallbackWaitMs: number,
+    now: Date,
+  ): Promise<boolean> {
     // No `await` between the read and the write: JavaScript runs this body
     // synchronously until the first await, so two concurrent callers cannot
     // both pass the check. Do not reintroduce an await here.
-    const last = this.emailSent.get(scope)
-    if (last !== undefined) {
-      const lastMs = Date.parse(last)
-      // Java `CivUtil.shouldSend`: send only once the wait has fully elapsed;
-      // it used `Math.abs`, so a future stamp also suppresses.
-      if (!Number.isNaN(lastMs) && Math.abs(now.getTime() - lastMs) <= waitMs) return false
+    const key = `${gameId}:${playerId}`
+    const stamps = this.gameMail.get(key)
+    if (stamps?.emailedAt !== undefined) {
+      const seenSince =
+        stamps.openedAt !== undefined && stamps.openedAt > stamps.emailedAt
+      if (!seenSince) {
+        // Held until the game is opened. Without a single visit on record the
+        // 30 minute wait stands in. Only a stamp strictly older than the wait
+        // lets a mail through, so a stamp in the future suppresses, as in D1.
+        if (stamps.openedAt !== undefined) return false
+        const lastMs = Date.parse(stamps.emailedAt)
+        if (!Number.isNaN(lastMs) && !(lastMs < now.getTime() - fallbackWaitMs)) return false
+      }
     }
-    this.emailSent.set(scope, now.toISOString())
+    this.gameMail.set(key, { ...stamps, emailedAt: now.toISOString() })
     this.scheduleWrite()
     return true
   }
@@ -341,7 +379,7 @@ export class JsonFileRepository implements Repository {
       games: [...this.games.values()],
       chat: this.chat,
       revisions: [...this.revisions.values()],
-      emailSent: Object.fromEntries(this.emailSent),
+      gameMail: Object.fromEntries(this.gameMail),
       ...(this.highscoreCache === undefined ? {} : { highscore: this.highscoreCache }),
     }
 
