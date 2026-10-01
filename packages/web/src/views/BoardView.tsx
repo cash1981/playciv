@@ -799,7 +799,7 @@ export function BoardView({
                   <img
                     key={piece.id}
                     data-piece-id={piece.id}
-                    className={`board-piece${piece.id === selectedId ? ' selected' : ''}`}
+                    className={`board-piece${piece.category === 'relic' ? ' board-piece-relic' : ''}${piece.id === selectedId ? ' selected' : ''}`}
                     src={assetUrl(piece.path)}
                     alt={piece.label}
                     title={`${piece.label} · ${locationOf(board, areas, piece)}`}

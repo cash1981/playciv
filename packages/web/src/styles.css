@@ -934,9 +934,19 @@ ul.list > li:last-child {
   cursor: grabbing;
 }
 
+/* Relic art is dark and blue like the sea around it, so it gets a white frame;
+   the thin dark ring keeps the frame visible on snow and other light tiles.
+   Declared before .selected so a selected relic falls back to the accent outline. */
+.board-piece.board-piece-relic {
+  outline: 2px solid #fff;
+  outline-offset: 0;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.45);
+}
+
 .board-piece.selected {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+  box-shadow: none; /* clears the relic frame's dark ring */
   touch-action: none;
 }
 

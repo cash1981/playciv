@@ -1194,3 +1194,74 @@ describe('BoardView undo and redo', () => {
     cleanup()
   })
 })
+
+describe('relic outline', () => {
+  it('marks relic pieces, and only relic pieces, so the stylesheet can frame them', () => {
+    const atlantis = findBoardAsset('relics/atlantis')
+    if (atlantis === undefined) throw new Error('atlantis missing from manifest')
+    const relic: BoardPiece = {
+      ...piece('relics/atlantis', 'atlantis-1'),
+      path: atlantis.path,
+      label: atlantis.label,
+      category: 'relic',
+    }
+    const building = piece('buildings/academy', 'academy-1')
+
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [relic, building] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+      />,
+    )
+
+    const relicImage = container.querySelector('[data-piece-id="atlantis-1"]')
+    const buildingImage = container.querySelector('[data-piece-id="academy-1"]')
+    expect(relicImage?.classList.contains('board-piece-relic')).toBe(true)
+    expect(buildingImage?.classList.contains('board-piece-relic')).toBe(false)
+    cleanup()
+  })
+
+  it('keeps the relic class on a selected relic, where the stylesheet lets .selected win', async () => {
+    const atlantis = findBoardAsset('relics/atlantis')
+    if (atlantis === undefined) throw new Error('atlantis missing from manifest')
+    const relic: BoardPiece = {
+      ...piece('relics/atlantis', 'atlantis-1'),
+      path: atlantis.path,
+      label: atlantis.label,
+      category: 'relic',
+    }
+
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [relic] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+      />,
+    )
+    const image = container.querySelector('[data-piece-id="atlantis-1"]')
+    if (!(image instanceof HTMLElement)) throw new Error('relic missing from board')
+    for (const type of ['pointerdown', 'pointerup']) {
+      const event = new Event(type, { bubbles: true })
+      for (const [name, value] of Object.entries({
+        pointerId: 1,
+        pointerType: 'touch',
+        isPrimary: true,
+        button: 0,
+        clientX: 5,
+        clientY: 5,
+      })) Object.defineProperty(event, name, { value })
+      image.dispatchEvent(event)
+    }
+
+    await waitFor(() => expect(image.classList.contains('selected')).toBe(true))
+    expect(image.classList.contains('board-piece-relic')).toBe(true)
+    cleanup()
+  })
+})
