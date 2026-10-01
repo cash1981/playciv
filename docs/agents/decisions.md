@@ -3434,3 +3434,13 @@ scrolls sideways (its `.top-bar-inner` wraps onto three rows otherwise and leave
 no room to type). The chat title now says whose turn it is and which phase, not
 who started or who is missing what; the status strip below it keeps the full
 picture.
+
+## 2026-10-01 - Chat orders: no turn ahead in the Turn list
+
+The composer's Turn list offered one turn beyond the current one, and picking
+that turn offered the next, so Turn 3 appeared as soon as Turn 2 was picked. That
+was an addition that nobody asked for. The list now holds only the turns that
+have started (1 to the current turn); the next turn appears when every player has
+finished the current one, as in the classic panel. Orders for an earlier turn are
+unchanged. This supersedes the "one turn ahead" remark in the 2026-09-29 slice 2
+notes.

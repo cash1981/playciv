@@ -575,8 +575,9 @@ export function ChatOrdersPanel({
                       value={orderTurn}
                       onChange={(event) => setTurnPick(Number(event.target.value))}
                     >
-                      {/* One turn ahead, so an order can be written before the turn starts */}
-                      {range(1, Math.max(currentTurn, orderTurn) + 1).map((number) => (
+                      {/* Only the turns that have started: the next one appears when every
+                          player has finished the current one */}
+                      {range(1, currentTurn).map((number) => (
                         <option key={number} value={number}>{`Turn ${number}`}</option>
                       ))}
                     </select>

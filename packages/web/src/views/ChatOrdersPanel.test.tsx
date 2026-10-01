@@ -437,16 +437,30 @@ describe('the composer', () => {
     expect(sendChat).not.toHaveBeenCalled()
   })
 
+  it('offers only the turns that have started, however far back one is picked', async () => {
+    await renderPanel(makeView())
+    await click(screen.getByRole('button', { name: 'Order' }))
+    const turns = (): string[] =>
+      Array.from((screen.getByLabelText('Turn') as HTMLSelectElement).options).map((option) => option.textContent ?? '')
+
+    // The fixture is in turn 4, so there is no turn 5 yet
+    expect(turns()).toEqual(['Turn 1', 'Turn 2', 'Turn 3', 'Turn 4'])
+    await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '2' } }) })
+    expect(turns()).toEqual(['Turn 1', 'Turn 2', 'Turn 3', 'Turn 4'])
+    await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '4' } }) })
+    expect(turns()).toEqual(['Turn 1', 'Turn 2', 'Turn 3', 'Turn 4'])
+  })
+
   it('lets the turn and the phase be changed before sending', async () => {
     await renderPanel(makeView())
     await click(screen.getByRole('button', { name: 'Order' }))
 
-    await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '5' } }) })
+    await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '3' } }) })
     await act(async () => { fireEvent.change(screen.getByLabelText('Phase'), { target: { value: 'RESEARCH' } }) })
-    await type('Order', 'Look ahead')
+    await type('Order', 'Go back')
     await click(screen.getByRole('button', { name: 'Send' }))
 
-    expect(postOrder).toHaveBeenCalledExactlyOnceWith('game', 'RESEARCH', 'Look ahead', 5)
+    expect(postOrder).toHaveBeenCalledExactlyOnceWith('game', 'RESEARCH', 'Go back', 3)
   })
 
   it('follows the viewer to the next phase once one is marked done, unless they picked one', async () => {
@@ -637,8 +651,8 @@ describe('the Done button', () => {
     await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '3' } }) })
     // Turn 3 was finished
     expect(optionTexts().every((text) => text.startsWith('✓ '))).toBe(true)
-    await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '5' } }) })
-    expect(optionTexts().some((text) => text.startsWith('✓ '))).toBe(false)
+    await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '4' } }) })
+    expect(optionTexts().filter((text) => text.startsWith('✓ '))).toHaveLength(2)
   })
 
   it('on a phase that is done, offers to undo it, and an order can still be written there', async () => {
