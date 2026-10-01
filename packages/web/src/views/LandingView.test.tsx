@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { useIsBusy } from '../lib/activity.js'
 import type { PlayerDto } from '../lib/api.js'
 import { LandingView } from './LandingView.js'
 
@@ -38,5 +39,24 @@ describe('LandingView', () => {
     fireEvent.change(screen.getByLabelText('Game name'), { target: { value: 'My game' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(apiMocks.createGame).toHaveBeenCalledWith('My game', 4, 'Red'))
+  })
+
+  it('keeps the global spinner busy through the reload after a write (issue #225)', async () => {
+    render(<LandingView player={player} onOpenGame={() => {}} onSignIn={() => {}} />)
+    await waitFor(() => expect(apiMocks.publicGames).toHaveBeenCalled())
+    const busy = renderHook(() => useIsBusy())
+
+    // The write is instant; the reload that follows it is the slow part.
+    let finishReload: (games: never[]) => void = () => {}
+    apiMocks.publicGames.mockImplementationOnce(
+      () => new Promise<never[]>((resolve) => { finishReload = resolve }),
+    )
+    fireEvent.change(screen.getByLabelText('Game name'), { target: { value: 'Slow game' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    await waitFor(() => expect(apiMocks.createGame).toHaveBeenCalled())
+    await waitFor(() => expect(busy.result.current).toBe(true))
+
+    await act(async () => { finishReload([]) })
+    await waitFor(() => expect(busy.result.current).toBe(false))
   })
 })

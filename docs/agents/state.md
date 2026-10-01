@@ -13,11 +13,15 @@ _Last updated: 2026-10-01_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 609 engine, 233 server, 344 web on `claude/nice-faraday-9hl43h` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 609 engine, 233 server, 360 web on `claude/nice-faraday-9hl43h` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Issue #225: global spinner.** A ring over a dimmed page shows while any write
+  runs, on desktop and mobile (56 px on touch), with a 200 ms delay and a 500 ms
+  minimum. `request()` and `GameView`'s busy state feed `lib/activity.ts`; polls
+  are not shown. See `decisions.md`.
 - **Issue #217: game emails wait for the player to open the game.** Chat,
   phase-update, your-turn and joined mail goes once per player and game until
   they load the game; a never-opened game falls back to the 30 minute wait. Game

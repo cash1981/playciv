@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { PLAYER_COLORS } from '@civ/engine'
 import { errorMessage, isUnauthorized } from '../App.js'
+import { useActivity } from '../lib/activity.js'
 import { api } from '../lib/api.js'
 import type { ChatMessageDto, PlayerDto, PublicGameSummary } from '../lib/api.js'
 import { GameList } from './GameList.js'
@@ -24,6 +25,8 @@ export function LandingView({ player, onOpenGame, onSignIn }: Props): React.JSX.
   const [color, setColor] = useState('Green')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Covers the write and the reload after it, which `request()` alone would not.
+  useActivity(busy)
 
   const reload = useCallback(async () => {
     try {

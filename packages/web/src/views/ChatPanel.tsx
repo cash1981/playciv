@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { errorMessage } from '../App.js'
+import { trackActivity } from '../lib/activity.js'
 import { api } from '../lib/api.js'
 import type { ChatMessageDto, PlayerDto, PlayerView } from '../lib/api.js'
 import { ChatTimestamp } from './ChatTimestamp.js'
@@ -137,7 +138,7 @@ export function ChatPanel({
           Next
         </button>
         <span style={{ flex: 1 }} />
-        <button className="small" onClick={() => void load()}>
+        <button className="small" onClick={() => void trackActivity(load())}>
           Refresh
         </button>
       </div>
