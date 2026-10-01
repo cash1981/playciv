@@ -163,23 +163,6 @@
   overflow-y: auto;
 }
 
-/* Crepe's formatting bar stays, as one row that scrolls sideways on a phone
-   instead of wrapping onto three. The wrapping happens in `.top-bar-inner`, and
-   Crepe's own stylesheet loads later, so the selectors need the extra class. */
-.chat-orders-composer .milkdown .milkdown-top-bar {
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.chat-orders-composer .milkdown .milkdown-top-bar .top-bar-inner {
-  flex-wrap: nowrap;
-  width: max-content;
-}
-
-.chat-orders-composer .milkdown .milkdown-top-bar .top-bar-inner > * {
-  flex-shrink: 0;
-}
-
 .chat-orders-fields {
   display: flex;
   gap: 0.5rem;

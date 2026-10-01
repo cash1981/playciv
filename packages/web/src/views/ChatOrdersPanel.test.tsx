@@ -44,11 +44,12 @@ const saveNote = vi.mocked(api.saveNote)
 
 /** A controlled textarea standing in for the Milkdown editor. */
 const FakeEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-  function FakeEditor({ value, onChange, readOnly, ariaLabel }, ref) {
+  function FakeEditor({ value, onChange, readOnly, ariaLabel, toolbar }, ref) {
     useImperativeHandle(ref, () => ({ getMarkdown: () => value }))
     return (
       <textarea
         aria-label={ariaLabel}
+        data-toolbar={toolbar}
         value={value}
         readOnly={readOnly}
         onChange={(event) => onChange(event.target.value)}
@@ -483,6 +484,14 @@ describe('the composer', () => {
     expect(viewerTurn(researchOpen)).toBe(4)
     // A spectator, or a player with no records, stays on the game's turn
     expect(viewerTurn(makeView({ you: null }))).toBe(4)
+  })
+
+  it('gives the composer the simple formatting bar, and the private log the full one', async () => {
+    await renderPanel(makeView())
+
+    expect(screen.getByLabelText('Chat message').getAttribute('data-toolbar')).toBe('simple')
+    await click(screen.getByRole('button', { name: 'Order' }))
+    expect(screen.getByLabelText('Order').getAttribute('data-toolbar')).toBe('simple')
   })
 
   it('lets the turn and the phase be changed before sending', async () => {

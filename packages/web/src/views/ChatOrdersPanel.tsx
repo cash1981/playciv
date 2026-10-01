@@ -632,6 +632,7 @@ export function ChatOrdersPanel({
                 onChange={setDraft}
                 readOnly={busy}
                 ariaLabel={mode === 'order' ? 'Order' : 'Chat message'}
+                toolbar="simple"
                 // One text for both modes: the editor reads it only when it is created
                 placeholder="Write a message …"
               />

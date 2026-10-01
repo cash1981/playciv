@@ -3474,3 +3474,17 @@ with a combining stroke after each character (`strikeThrough` in
 it. The button already says End turn or Not done for the chosen phase. A screen
 reader may read the combining marks oddly; if that matters, the alternative is a
 custom listbox instead of a native select.
+
+## 2026-10-01 - Chat orders: a simple formatting bar
+
+The composer's Crepe bar was a full row of icons (text style, bold, italic,
+strike, code, three list types, link, code block, quote, rule). The human asked
+for Normal, Heading, bold and italic only, each with a name. `MarkdownEditor`
+takes `toolbar="simple"` for that: the bar is trimmed to the text style selector
+(Normal and Heading, a level 3 heading), bold and italic, built from Crepe's own
+items through its `buildTopBar` hook, and the buttons get a tooltip, an
+`aria-label` and `aria-pressed` (set by a small observer, because Crepe renders
+them as bare icons). The default stays the full bar, so the classic Turn orders
+and the private log are unchanged. The text style menu did nothing before
+because the earlier "one scrolling row" CSS clipped its dropdown; with three
+controls the bar needs no scrolling on a phone, so that CSS is gone.

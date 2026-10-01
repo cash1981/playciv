@@ -15,6 +15,12 @@ export interface MarkdownEditorProps {
   readonly readOnly: boolean
   readonly ariaLabel: string
   readonly placeholder?: string
+  /**
+   * `simple` trims Crepe's formatting bar to a text style (Normal or Heading),
+   * bold and italic, each with a name for screen readers and a tooltip. The
+   * default keeps the full bar the turn orders have always had.
+   */
+  readonly toolbar?: 'full' | 'simple'
 }
 
 export type MarkdownEditorComponent = ForwardRefExoticComponent<
@@ -31,6 +37,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       readOnly,
       ariaLabel,
       placeholder = 'Write in Markdown …',
+      toolbar: toolbarKind = 'full',
     },
     ref,
   ): React.JSX.Element {
@@ -64,6 +71,37 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     }
 
     useImperativeHandle(ref, () => ({ getMarkdown: readMarkdown }))
+
+    // Crepe's bar buttons are bare icons. Give each a name for screen readers and
+    // a tooltip, and keep the pressed state in step as the bar redraws.
+    useEffect(() => {
+      const root = rootRef.current
+      if (root === null || toolbarKind !== 'simple') return
+      const names: Readonly<Record<string, string>> = { bold: 'Bold', italic: 'Italic' }
+      const label = (): void => {
+        const items = Array.from(root.querySelectorAll<HTMLButtonElement>('.milkdown-top-bar .top-bar-item'))
+        const keys = ['bold', 'italic']
+        items.forEach((button, index) => {
+          const name = names[keys[index] ?? ''] ?? 'Format'
+          button.title = name
+          button.setAttribute('aria-label', name)
+          button.setAttribute('aria-pressed', String(button.classList.contains('active')))
+        })
+        const style = root.querySelector<HTMLButtonElement>('.milkdown-top-bar .top-bar-heading-button')
+        if (style !== null) {
+          style.title = 'Text style: Normal or Heading'
+          style.setAttribute('aria-label', 'Text style')
+          style.setAttribute('aria-haspopup', 'listbox')
+        }
+        root.querySelectorAll<HTMLButtonElement>('.milkdown-top-bar .top-bar-heading-option').forEach((option) => {
+          option.title = `Make this ${option.textContent?.toLowerCase() ?? 'text'}`
+        })
+      }
+      label()
+      const observer = new MutationObserver(label)
+      observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] })
+      return () => observer.disconnect()
+    }, [toolbarKind])
 
     useEffect(() => {
       const root = rootRef.current
@@ -105,7 +143,30 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             .addFeature(listItem)
             .addFeature(linkTooltip)
             .addFeature(toolbar)
-            .addFeature(topBar)
+            .addFeature(
+              topBar,
+              toolbarKind === 'simple'
+                ? {
+                    headingOptions: [
+                      { label: 'Normal', level: null },
+                      { label: 'Heading', level: 3 },
+                    ],
+                    // Crepe builds the bar from named groups. Keep the text style selector
+                    // and bold and italic, and drop the rest.
+                    buildTopBar: (builder) => {
+                      const heading = builder.getGroup('heading').group.items.slice()
+                      const wanted = builder
+                        .getGroup('formatting')
+                        .group.items.filter((item) => item.key === 'bold' || item.key === 'italic')
+                      builder.clear()
+                      const headingGroup = builder.addGroup('heading', 'Text style')
+                      heading.forEach((item) => headingGroup.addItem(item.key, item))
+                      const formattingGroup = builder.addGroup('formatting', 'Formatting')
+                      wanted.forEach((item) => formattingGroup.addItem(item.key, item))
+                    },
+                  }
+                : undefined,
+            )
             .addFeature(placeholderFeature, { text: placeholder, mode: 'block' })
             .setReadonly(readOnly)
           nextEditor.on((listener) => {
