@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { forwardRef, useImperativeHandle } from 'react'
+import { TURN_PHASE_LABEL } from '@civ/engine'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -730,22 +731,26 @@ describe('safe markdown in the timeline', () => {
 })
 
 describe('header helpers', () => {
-  it('names who the game is waiting for and where they are', () => {
-    expect(chatOrdersTitle(makeView().activeTurn)).toBe(
-      'Turn 4 · Bob started · waiting for Alice (CM), Bob (SOT)',
+  it('names whose turn it is and which phase they are on, not everyone', () => {
+    const view = makeView()
+    expect(chatOrdersTitle(view.activeTurn)).toBe(
+      `Turn 4 · ${view.activeTurn?.username}'s turn — ${TURN_PHASE_LABEL[view.activeTurn?.phase ?? 'SOT']} phase`,
     )
+    expect(chatOrdersTitle(view.activeTurn)).not.toContain('waiting for')
+    expect(chatOrdersTitle(view.activeTurn)).not.toContain('started')
   })
 
-  it('leaves out the starter when there is none to name', () => {
+  it('says Your turn when the viewer is the one up', () => {
     const view = makeView({
-      activeTurn: { playerId: 'p', username: 'Alice', turnNumber: 2, phase: 'SOT', startPlayer: null, waitingFor: [{ username: 'Alice', phase: 'SOT' }] },
+      activeTurn: { playerId: 'p1', username: 'Alice', turnNumber: 2, phase: 'CM', startPlayer: 'Bob', waitingFor: [{ username: 'Alice', phase: 'CM' }] },
     })
-    expect(chatOrdersTitle(view.activeTurn)).toBe('Turn 2 · waiting for Alice (SOT)')
+    expect(chatOrdersTitle(view.activeTurn, 'p1')).toBe('Turn 2 · Your turn — city management phase')
+    expect(chatOrdersTitle(view.activeTurn, 'someone-else')).toBe("Turn 2 · Alice's turn — city management phase")
   })
 
   it('says so when everyone is done, and when nobody is up', () => {
     const finished = { playerId: 'p', username: 'Alice', turnNumber: 5, phase: 'SOT', startPlayer: 'Cy', waitingFor: [] }
-    expect(chatOrdersTitle(makeView({ activeTurn: finished }).activeTurn)).toBe('Turn 5 · Cy started · everyone is done')
+    expect(chatOrdersTitle(makeView({ activeTurn: finished }).activeTurn)).toBe('Turn 5 · everyone is done')
     expect(chatOrdersTitle(null)).toBe('Nobody is up')
   })
 

@@ -508,7 +508,7 @@ export function GameView({
           {activePlayer !== undefined && <PlayerChips player={activePlayer} />}
           <h1 style={{ margin: 0 }}>
             {displayedView.chatOrders ? (
-              chatOrdersTitle(displayedView.activeTurn)
+              chatOrdersTitle(displayedView.activeTurn, you?.playerId)
             ) : (
               <>
                 {yourTurn

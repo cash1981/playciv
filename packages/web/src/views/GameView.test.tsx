@@ -705,11 +705,11 @@ describe('chat orders on the game page (issue #215)', () => {
     screen.getByRole('button', { name: label }) as HTMLButtonElement
 
   describe('the page', () => {
-    it('swaps Turn orders and Chat for the timeline and says who the game waits for', async () => {
+    it('swaps Turn orders and Chat for the timeline and says whose turn it is and the phase', async () => {
       await renderGame(chatView('Bob'))
 
       expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-        'Turn 4 · Bob started · waiting for Alice (CM), Bob (SOT)',
+        "Turn 4 · Bob's turn — city management phase",
       )
       expect(screen.getByRole('heading', { name: 'Chat and orders' })).toBeTruthy()
       expect(screen.queryByRole('heading', { name: 'Turn orders' })).toBeNull()

@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 
-import { TURN_PHASES } from '@civ/engine'
+import { TURN_PHASES, TURN_PHASE_LABEL } from '@civ/engine'
 import type { TurnPhase } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
@@ -123,20 +123,17 @@ export function firstOpenPhase(view: PlayerView, turnNumber: number): TurnPhase 
   return TURN_PHASES.find((phase) => turn?.done[phase] !== true) ?? 'RESEARCH'
 }
 
-/** `Turn 4 · Alice started · waiting for Bob (SOT), Carol (Trade)`. */
-export function chatOrdersTitle(activeTurn: ActiveTurnStatus | null): string {
+/**
+ * `Turn 4 · Alice's turn — city management phase`, or `Turn 4 · Your turn — ...`
+ * for the holder. Only whose turn it is and which phase they are on: the full
+ * list of who is missing what is the status strip below the title.
+ */
+export function chatOrdersTitle(activeTurn: ActiveTurnStatus | null, viewerId?: string): string {
   if (activeTurn === null) return 'Nobody is up'
-  const waiting = activeTurn.waitingFor ?? []
-  const parts = [
-    `Turn ${activeTurn.turnNumber}`,
-    ...(activeTurn.startPlayer == null ? [] : [`${activeTurn.startPlayer} started`]),
-    waiting.length === 0
-      ? 'everyone is done'
-      : `waiting for ${waiting
-          .map((entry) => `${entry.username} (${PHASE_SHORT[entry.phase]})`)
-          .join(', ')}`,
-  ]
-  return parts.join(' · ')
+  const turn = `Turn ${activeTurn.turnNumber}`
+  if ((activeTurn.waitingFor ?? []).length === 0) return `${turn} · everyone is done`
+  const who = viewerId !== undefined && activeTurn.playerId === viewerId ? 'Your turn' : `${activeTurn.username}'s turn`
+  return `${turn} · ${who} — ${TURN_PHASE_LABEL[activeTurn.phase]} phase`
 }
 
 /**
