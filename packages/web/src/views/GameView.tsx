@@ -1109,6 +1109,19 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
   const hasStandaloneInBattleUnit = (view.you?.items ?? []).some((item) => isUnit(item) && item.inBattle)
   const battle = view.battle
   const battleSummary = view.battleSummary ?? []
+  // HP typed into a unit's field but not yet confirmed by the server. The
+  // summary adds the difference so it follows the keystrokes (issue #216).
+  const [healthDrafts, setHealthDrafts] = useState<Readonly<Record<string, number>>>({})
+  const setHealthDraft = useCallback((unitId: string, value: number | null): void => {
+    setHealthDrafts((current) => {
+      if (value === null) {
+        if (!(unitId in current)) return current
+        const { [unitId]: _removed, ...rest } = current
+        return rest
+      }
+      return current[unitId] === value ? current : { ...current, [unitId]: value }
+    })
+  }, [])
   const rev = view.rev ?? 0
   const myId = view.you?.playerId ?? ''
 
@@ -1472,8 +1485,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
                 <div key={s.side} className="battle-summary-side">
                   <strong>{s.label}</strong>
                   <span>{s.unitCount} unit{s.unitCount !== 1 ? 's' : ''}</span>
-                  <span>ATK {s.totalAttack}</span>
-                  <span>HP {s.totalHealth}{s.combatBonus !== 0 ? ` (${s.combatBonus > 0 ? '+' : ''}${s.combatBonus})` : ''}</span>
+                  <span>HP {s.totalHealth + draftHealthDelta(battle?.arena ?? [], s.side, healthDrafts)}{s.combatBonus !== 0 ? ` (${s.combatBonus > 0 ? '+' : ''}${s.combatBonus})` : ''}</span>
                 </div>
               ))}
             </div>
@@ -1486,6 +1498,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               side="attacker"
               units={attackerUnits}
               maxPositions={maxPositions}
+              onHealthDraft={setHealthDraft}
               gameId={gameId}
               busy={busy}
               rev={rev}
@@ -1509,6 +1522,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               side="defender"
               units={defenderUnits}
               maxPositions={maxPositions}
+              onHealthDraft={setHealthDraft}
               gameId={gameId}
               busy={busy}
               rev={rev}
@@ -1534,11 +1548,28 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
   )
 }
 
+/**
+ * How far the HP typed into the unit fields is from what the server has, for
+ * the living units of one side. Added to the server's total so the summary
+ * follows the typing (issue #216). A killed unit never counts.
+ */
+export function draftHealthDelta(
+  arena: readonly ArenaUnit[],
+  side: BattleSideId,
+  drafts: Readonly<Record<string, number>>,
+): number {
+  return arena.reduce((sum, unit) => {
+    const draft = drafts[unit.id]
+    return unit.side === side && !unit.killed && draft !== undefined ? sum + draft - unit.health : sum
+  }, 0)
+}
+
 interface ArenaRowProps {
   readonly label: string
   readonly side: BattleSideId
   readonly units: readonly ArenaUnit[]
   readonly maxPositions: number
+  readonly onHealthDraft: (unitId: string, value: number | null) => void
   readonly gameId: string
   readonly busy: boolean
   readonly rev: number
@@ -1560,7 +1591,7 @@ interface ArenaRowProps {
 }
 
 function ArenaRow({
-  label, side, units, maxPositions, gameId, busy, rev, run,
+  label, side, units, maxPositions, onHealthDraft, gameId, busy, rev, run,
   draggingUnitId, draggingArenaUnitId, onArenaDragStart, onArenaDragEnd, onDropUnit, onSlotClick,
   onArenaPointerDown, onArenaPointerMove, onArenaPointerUp, selectedBattlePiece, onSelectPiece, canManage, isOwnSide,
 }: ArenaRowProps): React.JSX.Element {
@@ -1606,6 +1637,7 @@ function ArenaRow({
                   run={run}
                   canManage={canManage}
                   canMove={isOwnSide}
+                  onHealthDraft={onHealthDraft}
                   selected={selectedBattlePiece?.id === unit.id}
                   {...(isOwnSide ? {
                     onSelect: selectedBattlePiece !== null && unit.killed
@@ -1641,6 +1673,8 @@ interface ArenaUnitCardProps {
   readonly canManage: boolean
   /** Whether the viewer controls this unit's side — gates move/return. */
   readonly canMove: boolean
+  /** Reports the HP typed in the field, or null once the server has the value. */
+  readonly onHealthDraft?: (unitId: string, value: number | null) => void
   readonly selected?: boolean
   readonly onSelect?: () => void
   readonly onPointerDown?: React.PointerEventHandler<HTMLLIElement>
@@ -1652,7 +1686,7 @@ interface ArenaUnitCardProps {
 }
 
 export function ArenaUnitCard({
-  unit, gameId, busy, rev, run, canManage, canMove, selected = false, onSelect,
+  unit, gameId, busy, rev, run, canManage, canMove, onHealthDraft, selected = false, onSelect,
   onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onDragStart, onDragEnd,
 }: ArenaUnitCardProps): React.JSX.Element {
   const [attack, setAttack] = useState(unit.attack)
@@ -1662,7 +1696,13 @@ export function ArenaUnitCard({
 
   // Sync when the server sends a fresh value
   useEffect(() => { setAttack(unit.attack) }, [unit.attack])
-  useEffect(() => { setHealth(unit.health) }, [unit.health])
+  useEffect(() => {
+    setHealth(unit.health)
+    onHealthDraft?.(unit.id, null)
+  }, [unit.health, unit.id, onHealthDraft])
+
+  // A removed card must not leave a stale draft in the summary.
+  useEffect(() => () => onHealthDraft?.(unit.id, null), [unit.id, onHealthDraft])
 
   // Cancel pending timers on unmount
   useEffect(() => {
@@ -1743,7 +1783,7 @@ export function ArenaUnitCard({
         HP
         <DigitInput
           value={health}
-          onValueChange={(v) => { setHealth(v); commitStat('health', v) }}
+          onValueChange={(v) => { setHealth(v); onHealthDraft?.(unit.id, v); commitStat('health', v) }}
         />
       </label>
       {canManage && (
