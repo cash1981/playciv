@@ -3651,3 +3651,30 @@ written by hand from the real image sizes (84 x 85, 112 x 110, 112 x 110,
 machine with the Moderator folder should leave the manifest unchanged. The Moderator folder must use the lower
 case file names above.
 
+
+## 2026-10-01 — Chat orders: review follow-ups (PR #218)
+
+**An order is mailed like a chat message.** With chat orders on, posting an order
+calls `notifications.chatPosted` with the order text, so the other players get the
+same "New Chat" mail, held the same way (once, until they open the game, #217). The
+classic order mailed the other players too (`phaseUpdated`), so a game that
+switches the setting on would otherwise go quiet. The text is public in chat
+orders, so it may be in the body. The mail is sent even if writing the timeline row
+fails. A refused order (chat orders off) mails nobody.
+
+**A failing timeline row does not stop the mail to a new turn holder.** The `done`
+route writes its system rows and mails the new holder in the same hook; the row
+write is now caught and logged, so the mail still goes.
+
+**Turns start as a catch-up.** `currentTurn` can advance without
+`markPhasesDone`: a classic reveal sets `done` too, and a withdrawal removes the
+player who held the turn back. `startMissingTurns` runs after all three and starts
+every turn between the newest one with a starter and the current turn, one seat of
+rotation each, so a jump of two turns leaves no gap in `turnStarters`. A withdrawal
+has no actor to name in the board history, so the new start player is the actor
+and can undo it. With chat orders off nothing happens.
+
+**Two migrations share the number 0004.** `0004_chat_kind.sql` and
+`0004_game_mail.sql` both exist in `packages/worker/migrations`. Both are applied
+in production by name, so neither is renamed: a rename would make wrangler apply
+it again and fail with duplicate columns. New migrations take 0005 or higher.

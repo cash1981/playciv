@@ -566,10 +566,12 @@ export function registerGameRoutes(app: App, context: AppContext): void {
   app.get('/api/games/:gameId/chat', auth, async (c) => {
     const gameId = c.req.param('gameId')
     const rows = await context.repo.chatFor(gameId)
-    const game = await context.repo.findGame(gameId)
     const before = c.req.query('before')
     const paged = c.req.query('paged') === '1' || before !== undefined
-    if (game === undefined || !game.chatOrders || !paged) {
+    // The live panel polls this, so the game is only read (and migrated) when the
+    // timeline is asked for. An unknown game answers an empty list, as it always did.
+    const game = paged ? await context.repo.findGame(gameId) : undefined
+    if (game === undefined || !game.chatOrders) {
       return c.json(rows.filter((row) => row.kind === 'chat').map(classicChatRow))
     }
     const page = timelinePage(rows, turnStatus(game).currentTurn, before)

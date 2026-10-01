@@ -6,7 +6,7 @@
 
 import type { GameState, PlayerView } from '@civ/engine'
 import { markPhasesDone, turnHolder, unwrap } from '@civ/engine'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { App } from '../src/app.js'
 import { createTestApp } from '../src/app.js'
@@ -259,7 +259,9 @@ describe('the mail to a new turn holder', () => {
     expect(mailsTo(two.username)[0]?.text).toContain(`https://playciv.app/game/${table.gameId}`)
     expect(mailer.sent).toHaveLength(1)
 
-    // Seat 3 finishing it too leaves seat 2 the holder: no mail
+    // Seat 3 finishing it too leaves seat 2 the holder: no mail. The hold has
+    // run out by now, so only the "same holder" rule keeps this one quiet.
+    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
     await done(table, 2, 'SOT')
     expect(mailer.sent).toHaveLength(1)
 
@@ -332,18 +334,125 @@ describe('the mail to a new turn holder', () => {
     expect(mailer.sent).toHaveLength(2)
   })
 
-  it('sends nothing when the holder is the same or chat orders is off', async () => {
+  it('sends nothing when the holder is the same, even once the hold has run out', async () => {
     const table = await threePlayerGame('holder-none')
     const notifications = createNotifications({ repo, mailer, appOrigin: 'https://playciv.app', now: () => now })
-    const off = await loadGame(table.gameId)
-    mailer.sent.length = 0
-    await notifications.turnHolderChanged(off, off)
-    expect(mailer.sent).toHaveLength(0)
-
     await switchOn(table)
     const on = await loadGame(table.gameId)
     expect(turnHolder(on)?.playerId).toBe(table.seats[0]?.id)
+    // Past the hold, so a mail to the holder would not be swallowed by it
+    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    mailer.sent.length = 0
+
     await notifications.turnHolderChanged(on, on)
+
     expect(mailer.sent).toHaveLength(0)
+  })
+
+  it('sends nothing with chat orders off, even when the turn holder would differ', async () => {
+    const table = await threePlayerGame('holder-off')
+    await switchOn(table)
+    const before = await loadGame(table.gameId)
+    const after = unwrap(markPhasesDone(before, { playerId: table.seats[0]?.id ?? '', turnNumber: 1, upToPhase: 'SOT' }))
+    expect(turnHolder(after)?.playerId).not.toBe(turnHolder(before)?.playerId)
+    const notifications = createNotifications({ repo, mailer, appOrigin: 'https://playciv.app', now: () => now })
+    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    mailer.sent.length = 0
+
+    await notifications.turnHolderChanged(before, { ...after, chatOrders: false })
+
+    expect(mailer.sent).toHaveLength(0)
+  })
+})
+
+describe('the mail for an order', () => {
+  const mailsTo = (username: string): OutgoingEmail[] =>
+    mailer.sent.filter((mail) => mail.to === `${username}@example.com`)
+
+  const order = (table: Table, seat: number, markdown: string) => {
+    const who = table.seats[seat]
+    if (who === undefined) throw new Error(`no seat ${seat}`)
+    return post(who.token, `/api/games/${table.gameId}/turns/order`, { phase: 'SOT', markdown })
+  }
+
+  it('mails the other players like a chat message, with the public order in it', async () => {
+    const table = await threePlayerGame('order-mail')
+    await switchOn(table)
+    const [one, two, three] = table.seats
+    if (one === undefined || two === undefined || three === undefined) throw new Error('no seats')
+    // Joining mailed the other players; let the 30 minute wait that stands in for a visit pass
+    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    mailer.sent.length = 0
+
+    expect((await order(table, 0, 'Settle on the river')).status).toBe(200)
+
+    expect(mailsTo(one.username)).toHaveLength(0)
+    for (const other of [two, three]) {
+      expect(mailsTo(other.username)).toHaveLength(1)
+      expect(mailsTo(other.username)[0]?.subject).toBe('New Chat')
+      expect(mailsTo(other.username)[0]?.text).toContain(`${one.username} wrote in the chat: Settle on the river`)
+    }
+  })
+
+  it('is held like the chat mail: a second order mails nobody until the game is opened', async () => {
+    const table = await threePlayerGame('order-held')
+    await switchOn(table)
+    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    mailer.sent.length = 0
+
+    await order(table, 0, 'first')
+    expect(mailer.sent).toHaveLength(2)
+    now = new Date(now.getTime() + 1000)
+    await order(table, 0, 'second')
+    expect(mailer.sent).toHaveLength(2)
+  })
+
+  it('sends nothing for the refused order of a game with chat orders off', async () => {
+    const table = await threePlayerGame('order-off')
+    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    mailer.sent.length = 0
+
+    expect((await order(table, 0, 'nobody listens')).status).toBe(409)
+
+    expect(mailer.sent).toHaveLength(0)
+  })
+
+  it('still mails the new turn holder when writing the done row to the timeline fails', async () => {
+    const table = await threePlayerGame('row-fails')
+    await switchOn(table)
+    const two = table.seats[1]
+    if (two === undefined) throw new Error('no seat 2')
+    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    mailer.sent.length = 0
+    vi.spyOn(repo, 'appendChat').mockRejectedValue(new Error('timeline is down'))
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    expect((await done(table, 0, 'SOT')).status).toBe(200)
+
+    expect(mailsTo(two.username)).toHaveLength(1)
+    expect(mailsTo(two.username)[0]?.subject).toBe('It is your turn')
+    expect(logged).toHaveBeenCalled()
+  })
+})
+
+describe('polling the classic chat', () => {
+  it('does not read the game, and still answers an unknown game with an empty list', async () => {
+    const table = await threePlayerGame('poll')
+    await switchOn(table)
+    const seat1 = table.seats[0]
+    if (seat1 === undefined) throw new Error('no seat 1')
+    await post(seat1.token, `/api/games/${table.gameId}/chat`, { message: 'hello' })
+    const findGame = vi.spyOn(repo, 'findGame')
+
+    const classic = await inject(app, { method: 'GET', url: `/api/games/${table.gameId}/chat`, headers: bearer(seat1.token) })
+    expect(classic.status).toBe(200)
+    expect(JSON.parse(classic.body)).toHaveLength(1)
+    const unknown = await inject(app, { method: 'GET', url: '/api/games/nope/chat', headers: bearer(seat1.token) })
+    expect(unknown.status).toBe(200)
+    expect(JSON.parse(unknown.body)).toEqual([])
+    expect(findGame).not.toHaveBeenCalled()
+
+    await inject(app, { method: 'GET', url: `/api/games/${table.gameId}/chat?paged=1`, headers: bearer(seat1.token) })
+    expect(findGame).toHaveBeenCalledTimes(1)
   })
 })

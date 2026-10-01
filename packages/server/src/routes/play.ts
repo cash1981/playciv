@@ -620,17 +620,24 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       undefined,
       {
         description: `${actor.username} posted an order`,
-        after: () =>
-          context.repo.appendChat({
-            id: newId(),
-            gameId,
-            username: actor.username,
-            message: markdown,
-            createdAt: at,
-            kind: 'order',
-            turnNumber,
-            phase,
-          }),
+        after: async ({ after }) => {
+          try {
+            await context.repo.appendChat({
+              id: newId(),
+              gameId,
+              username: actor.username,
+              message: markdown,
+              createdAt: at,
+              kind: 'order',
+              turnNumber,
+              phase,
+            })
+          } finally {
+            // Same mail as a chat message, held the same way (#217). The order is
+            // public in chat orders, so its text may be in the body.
+            await context.notifications.chatPosted(after, actor.id, actor.username, markdown)
+          }
+        },
       },
     )
   })
@@ -661,7 +668,12 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       undefined,
       {
         after: async ({ before, after }) => {
-          await appendSystemRow(gameId, actor.username, turnNumber, phase, before, after)
+          // The timeline row must not stop the mail to the new holder
+          try {
+            await appendSystemRow(gameId, actor.username, turnNumber, phase, before, after)
+          } catch (error) {
+            console.error('Writing the done row to the timeline failed', error)
+          }
           await context.notifications.turnHolderChanged(before, after)
         },
       },
