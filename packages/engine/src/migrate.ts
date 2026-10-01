@@ -37,7 +37,7 @@ const correctSocialPolicyFlipsides = (
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'chatOrders' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters'
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret' | 'chatOrders' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters'
 > &
   Partial<
     Pick<
@@ -53,6 +53,7 @@ type MaybeOlder = Omit<
       | 'chatOrdersStartTurn'
       | 'startPlayerId'
       | 'turnStarters'
+      | 'logSecret'
     >
   >
 
@@ -195,6 +196,11 @@ export function migrateGameState(state: GameState): GameState {
   return {
     ...state,
     createdAt: older.createdAt ?? null,
+    // A game saved before the public item numbers were keyed has no key yet. It
+    // is left empty, and the server puts a random one in before the next action
+    // (`applyToGame`). Nothing in the game state is safe to derive it from: the
+    // rng stream is published through log and item ids.
+    logSecret: older.logSecret ?? '',
     log: state.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
     players: state.players.map(withPlayerDefaults),
     board:

@@ -1268,6 +1268,42 @@ describe('global game revisions', () => {
     expect(revisions[1]?.state.players).toHaveLength(2)
   })
 
+  it('gives a game saved without a log key a random one before anything is logged', async () => {
+    const creator = await register('legacy-key-alice')
+    const gameId = await createGame(creator, 'Legacy key', 2)
+    const other = await register('legacy-key-bob')
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/join`,
+      headers: bearer(other),
+      payload: {},
+    })
+    const before = await repo.findGame(gameId)
+    if (before === undefined) throw new Error('no game')
+    // What `migrateGameState` gives a game saved before the key existed
+    expect(await repo.saveGameIfRevision({ ...before, logSecret: '', rev: before.rev + 1 }, before.rev)).toBe(true)
+    const owner = before.players.find((entry) => entry.yourTurn)
+    const token = owner?.username === 'legacy-key-alice' ? creator : other
+
+    const techs = await inject(app, { url: `/api/games/${gameId}/techs/available`, headers: bearer(token) })
+    const tech = (await techs.json<{ name: string }[]>())[0]?.name
+    expect((await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/techs/choose`,
+      headers: bearer(token),
+      payload: { name: tech },
+    })).status).toBe(200)
+
+    const after = await repo.findGame(gameId)
+    expect(after?.logSecret).toBeTruthy()
+    const ids = [
+      ...(after?.log.map((entry) => entry.id) ?? []),
+      ...(after?.items.map((item) => item.id) ?? []),
+      after?.id,
+    ]
+    expect(ids).not.toContain(after?.logSecret)
+  })
+
   it('authorizes against current membership and projects each historical viewer separately', async () => {
     const creator = await register('history-alice')
     const gameId = await createGame(creator, 'Private history', 2)
@@ -1335,7 +1371,11 @@ describe('global game revisions', () => {
     })
     expect(list.status).toBe(200)
     expect(list.body).not.toContain('"state"')
-    expect(list.body).not.toContain('privateDescriptions')
+    expect(list.body).not.toContain('privateDescription')
+    // The history names what was done as the public log does, even to its owner
+    const secretTechName = secretOwner?.techsChosen[0]?.name
+    expect(secretTechName).toBeDefined()
+    expect(list.body).not.toContain(secretTechName as string)
     const summaries = await list.json<{ revision: number }[]>()
     const latest = summaries.at(-1)?.revision
     expect(latest).toBeDefined()
@@ -1355,6 +1395,12 @@ describe('global game revisions', () => {
     expect(otherView.body).not.toContain(secretCard?.id as string)
     expect(otherView.body).not.toContain(secretLog as string)
     expect(otherView.body).not.toContain('private planning only')
+    // The key to the public item numbers stays on the server
+    const logSecret = withSecrets?.logSecret
+    expect(logSecret).toBeTruthy()
+    for (const body of [list.body, own.body, otherView.body]) {
+      expect(body).not.toContain(logSecret as string)
+    }
     const ownPayload = await own.json<{
       view: { you: { techsChosen: { id: string }[]; socialPolicies: { id: string }[] } }
     }>()

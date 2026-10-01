@@ -14,8 +14,8 @@
 
 import type { EngineError } from '../errors.js'
 import type { Item, TechItem } from '../item.js'
-import { itemName, revealPublic } from '../item.js'
-import { appendItemLog, appendUndoLog, appendVoteLog } from '../log.js'
+import { itemName } from '../item.js'
+import { appendUndoLog, appendUndoRequestLog, appendVoteLog, publicItemSubject } from '../log.js'
 import { shuffle } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
@@ -58,7 +58,17 @@ export function initiateUndo(state: GameState, input: InitiateUndoInput): Action
     undo: createUndo(state.numOfPlayers, input.playerId),
   })
 
-  return ok(appendItemLog(next, 'UNDO', player.username, input.playerId, entry.item))
+  return ok(
+    appendUndoRequestLog(
+      next,
+      player.username,
+      input.playerId,
+      entry.item,
+      entry.logType,
+      entry.username,
+      (entry.item.ownerId ?? entry.playerId) === input.playerId,
+    ),
+  )
 }
 
 export interface VoteInput {
@@ -89,12 +99,13 @@ export function vote(state: GameState, input: VoteInput): ActionResult {
   const accepted = result === true
 
   let next = withLogEntry(state, { ...entry, undo: { ...undo, done: accepted } })
+  const subject = publicItemSubject(entry.logType, entry.username, entry.item, state.logSecret)
   next = appendVoteLog(
     next,
     voter.username,
     input.playerId,
-    revealPublic(entry.item),
-    entry.item.itemNumber,
+    subject.name,
+    subject.itemNumber,
     input.vote,
   )
 
@@ -121,7 +132,7 @@ function putItemBack(
   const player = findPlayer(state, playerId)
   if (player === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId })
 
-  if (item.kind === 'tech') return putTechBack(state, player, item)
+  if (item.kind === 'tech') return putTechBack(state, player, item, logType)
 
   const inHand = player.items.some((candidate) => candidate.id === item.id)
   const inDiscard = state.discardedItems.some((candidate) => candidate.id === item.id)
@@ -129,12 +140,12 @@ function putItemBack(
 
   // A discarded item goes back into the hand
   if (logType === 'DISCARD' && inDiscard) {
-    return ok(returnToHand(state, player, item))
+    return ok(returnToHand(state, player, item, logType))
   }
 
   // A drawn item goes back into the deck
   if (logType === 'ITEM' && (inHand || inDiscard)) {
-    return ok(returnToDeck(state, player, item))
+    return ok(returnToDeck(state, player, item, logType))
   }
 
   // Java had a fallback for the cases where the item was already in the deck
@@ -149,22 +160,23 @@ function putItemBack(
       items: [...player.items, hidden],
     })
     return ok(
-      appendUndoLog(
-        next,
-        `has added back ${itemName(item)} to ${player.username}`,
-        item.itemNumber,
-      ),
+      logUndo(next, player, item, logType, (name) => `has added back ${name} to ${player.username}`),
     )
   }
 
-  if (inHand) return ok(returnToDeck(state, player, item))
-  if (inDiscard) return ok(returnToHand(state, player, item))
+  if (inHand) return ok(returnToDeck(state, player, item, logType))
+  if (inDiscard) return ok(returnToHand(state, player, item, logType))
 
   return err({ kind: 'ITEM_NOT_FOUND', sheetName: item.sheetName })
 }
 
 /** Java: the tech branch in `putDrawnItemBackInPBF`. */
-function putTechBack(state: GameState, player: Playerhand, tech: TechItem): ActionResult {
+function putTechBack(
+  state: GameState,
+  player: Playerhand,
+  tech: TechItem,
+  logType: GameLogEntry['logType'],
+): ActionResult {
   const chosen = player.techsChosen.some((candidate) => candidate.name === tech.name)
   if (chosen) {
     const next = withPlayer(state, {
@@ -172,11 +184,7 @@ function putTechBack(state: GameState, player: Playerhand, tech: TechItem): Acti
       techsChosen: player.techsChosen.filter((candidate) => candidate.name !== tech.name),
     })
     return ok(
-      appendUndoLog(
-        next,
-        `has removed ${tech.name} from ${player.username}`,
-        tech.itemNumber,
-      ),
+      logUndo(next, player, tech, logType, (name) => `has removed ${name} from ${player.username}`),
     )
   }
 
@@ -192,11 +200,7 @@ function putTechBack(state: GameState, player: Playerhand, tech: TechItem): Acti
       { ...player, techsChosen: [...player.techsChosen, tech] },
     )
     return ok(
-      appendUndoLog(
-        next,
-        `has added back ${tech.name} to ${player.username}`,
-        tech.itemNumber,
-      ),
+      logUndo(next, player, tech, logType, (name) => `has added back ${name} to ${player.username}`),
     )
   }
 
@@ -204,7 +208,12 @@ function putTechBack(state: GameState, player: Playerhand, tech: TechItem): Acti
 }
 
 /** Takes the item out of the hand or discard pile and puts it in the deck. */
-function returnToDeck(state: GameState, player: Playerhand, item: Item): GameState {
+function returnToDeck(
+  state: GameState,
+  player: Playerhand,
+  item: Item,
+  logType: GameLogEntry['logType'],
+): GameState {
   const hidden: Item = { ...item, hidden: true, ownerId: null }
 
   const cleaned: GameState = {
@@ -218,15 +227,23 @@ function returnToDeck(state: GameState, player: Playerhand, item: Item): GameSta
   const withItem: GameState = { ...cleaned, items: [...cleaned.items, hidden] }
   const shuffled = shuffleDeckTwice(withItem)
 
-  return appendUndoLog(
+  return logUndo(
     shuffled,
-    `has removed ${itemName(item)} from ${player.username} and put back in the deck. Deck is reshuffled`,
-    item.itemNumber,
+    player,
+    item,
+    logType,
+    (name) =>
+      `has removed ${name} from ${player.username} and put back in the deck. Deck is reshuffled`,
   )
 }
 
 /** Moves the item from the discard pile back into the player's hand. */
-function returnToHand(state: GameState, player: Playerhand, item: Item): GameState {
+function returnToHand(
+  state: GameState,
+  player: Playerhand,
+  item: Item,
+  logType: GameLogEntry['logType'],
+): GameState {
   const hidden: Item = { ...item, hidden: true }
 
   const next = withPlayer(
@@ -237,11 +254,25 @@ function returnToHand(state: GameState, player: Playerhand, item: Item): GameSta
     { ...player, items: [...player.items, hidden] },
   )
 
-  return appendUndoLog(
-    next,
-    `has added back ${itemName(item)} to ${player.username}`,
-    item.itemNumber,
-  )
+  return logUndo(next, player, item, logType, (name) => `has added back ${name} to ${player.username}`)
+}
+
+/**
+ * The line for a carried out undo. Everyone reads the item as its original log
+ * entry showed it; the owner reads it by name. Java printed the name for all.
+ */
+function logUndo(
+  state: GameState,
+  owner: Playerhand,
+  item: Item,
+  logType: GameLogEntry['logType'],
+  message: (name: string) => string,
+): GameState {
+  const subject = publicItemSubject(logType, owner.username, item, state.logSecret)
+  return appendUndoLog(state, message(subject.name), subject.itemNumber, {
+    playerId: owner.playerId,
+    message: message(itemName(item)),
+  })
 }
 
 /**
@@ -284,8 +315,8 @@ export function playerPutsItemBackInDeck(
   )
   if (item === undefined) return err({ kind: 'ITEM_NOT_FOUND', sheetName: input.sheetName })
 
-  if (item.kind === 'tech') return putTechBack(state, player, item)
-  return ok(returnToDeck(state, player, item))
+  if (item.kind === 'tech') return putTechBack(state, player, item, null)
+  return ok(returnToDeck(state, player, item, null))
 }
 
 // ---------------------------------------------------------------------------

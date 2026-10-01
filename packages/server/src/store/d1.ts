@@ -371,9 +371,10 @@ export class D1Repository implements Repository {
   async deleteGame(id: string): Promise<boolean> {
     const results = await this.db.batch([
       this.db.prepare(`DELETE FROM game_revision WHERE game_id = ?`).bind(id),
+      this.db.prepare(`DELETE FROM game_mail WHERE game_id = ?`).bind(id),
       this.db.prepare(`DELETE FROM game WHERE id = ?`).bind(id),
     ])
-    const game = results[1]
+    const game = results[2]
     return game !== undefined && changes(game) > 0
   }
 
@@ -424,22 +425,44 @@ export class D1Repository implements Repository {
   }
 
   // ---------------------------------------------------------------------
-  // Notification throttles
+  // Game email hold
   // ---------------------------------------------------------------------
 
-  async claimEmailSlot(scope: string, waitMs: number, now: Date): Promise<boolean> {
+  async recordGameOpened(gameId: string, playerId: string, now: Date): Promise<void> {
+    // The WHERE keeps repeated loads from changing the row: only the first
+    // visit, or the first since the last email, does. The statement itself
+    // still runs on every load.
+    await this.db
+      .prepare(
+        `INSERT INTO game_mail (game_id, player_id, opened_at) VALUES (?, ?, ?)
+         ON CONFLICT(game_id, player_id) DO UPDATE SET opened_at = excluded.opened_at
+         WHERE game_mail.opened_at IS NULL
+            OR (game_mail.emailed_at IS NOT NULL AND game_mail.opened_at <= game_mail.emailed_at)`,
+      )
+      .bind(gameId, playerId, now.toISOString())
+      .run()
+  }
+
+  async claimGameEmail(
+    gameId: string,
+    playerId: string,
+    fallbackWaitMs: number,
+    now: Date,
+  ): Promise<boolean> {
     const at = now.toISOString()
-    const cutoff = new Date(now.getTime() - waitMs).toISOString()
+    const cutoff = new Date(now.getTime() - fallbackWaitMs).toISOString()
     // One statement, so only one of two concurrent callers can change the row.
-    // A future stamp is not `< cutoff`, so it suppresses — matching Mongo's
-    // `Math.abs` behaviour.
+    // A future stamp is not `< cutoff`, so it suppresses (Java's `Math.abs`
+    // did too, within the wait).
     const result = await this.db
       .prepare(
-        `INSERT INTO email_sent (scope, at) VALUES (?, ?)
-         ON CONFLICT(scope) DO UPDATE SET at = excluded.at
-         WHERE email_sent.at < ?`,
+        `INSERT INTO game_mail (game_id, player_id, emailed_at) VALUES (?, ?, ?)
+         ON CONFLICT(game_id, player_id) DO UPDATE SET emailed_at = excluded.emailed_at
+         WHERE game_mail.emailed_at IS NULL
+            OR game_mail.opened_at > game_mail.emailed_at
+            OR (game_mail.opened_at IS NULL AND game_mail.emailed_at < ?)`,
       )
-      .bind(scope, at, cutoff)
+      .bind(gameId, playerId, at, cutoff)
       .run()
     return changes(result) > 0
   }

@@ -6,18 +6,50 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-09-29_
+_Last updated: 2026-10-01_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing (674 engine, 266 server, 411 web on `feat/chat-orders`) - earlier note: 589 engine, 211 server, 325 web on `feat/issue-209-compact-menu` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 691 engine, 280 server, 444 web on `feat/chat-orders` after merging main (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Issue #227: relics on the map.** New `relic` piece category with the five
+  relic markers (Ark of the Covenant, Atlantis, Attila's Village, School of
+  Confucius, Seven Cities of Gold), placed like buildings from a "Relics" group in
+  the Pieces palette, one of each per game. Art is in `public/board/relics/`.
+  `tools/board-assets.ps1` knows the new `relics` folder; the manifest was
+  extended by hand to match its output. See `decisions.md`.
+- **Issue #225: global spinner.** A ring over a dimmed page shows while any write
+  runs, on desktop and mobile (56 px on touch), with a 200 ms delay and a 500 ms
+  minimum. `request()` and `GameView`'s busy state feed `lib/activity.ts`; polls
+  are not shown. See `decisions.md`.
+- **Issue #217: game emails wait for the player to open the game.** Chat,
+  phase-update, your-turn and joined mail goes once per player and game until
+  they load the game; a never-opened game falls back to the 30 minute wait. Game
+  ended and deleted always send. New D1 migration `0004_game_mail.sql` (apply it
+  before deploying); `claimEmailSlot` is replaced by `recordGameOpened` and
+  `claimGameEmail`. See `decisions.md`.
+
+- **Issue #220, part 2: nothing readable until revealed.** The item number in a
+  public line for a hidden tech or social policy is now a hash keyed with a
+  per-game `logSecret`, so it cannot be matched to the tech list. The history bar
+  shows only the public description, for the owner too, and the API no longer
+  sends `privateDescription` (`decisions.md`, 2026-09-30). Older games get a random
+  key from the server on their next action.
+- **Issue #220: undo leaked hidden items.** The undo request, vote and result lines
+  named a hidden tech, a social policy, a drawn card or a unit's stats for
+  everyone. They now read as the original log line did; the owner still sees the
+  full text (`decisions.md`, 2026-09-30).
+
+- **Issue #219: numeric fields on mobile.** ATK, HP and the battlehand draw count
+  are text inputs with a numeric keypad (`DigitInput`), so typing 1 over a 0 gives
+  1 and not 01. Empty or non-digit input counts as 0; the draw count is clamped to
+  1-20 when Draw is pressed. No engine or server change.
 
 - **Issue #215: chat orders (chat and turn orders merged), all three slices.**
   A per-game `chatOrders` switch, off by default and settable only by an admin
@@ -33,7 +65,7 @@ _Last updated: 2026-09-29_
   three, slice 2 and 3 two, then a final check of the marker fix. See
   `decisions.md`, 2026-09-29. One PR (#218) by the human's choice. 674 engine,
   266 server, 411 web tests. Branch `feat/chat-orders`, brief
-  `tasks/chat-orders.md`. Not yet tested by the human in a live game.
+  `tasks/chat-orders.md`. Not yet tested by the human in a live game. The turn mail uses the same hold-until-opened rule as the other game mail (#217).
 
 - **Remove any own tech.** A player can remove a hidden, revealed or starting
   tech at any time from the tech detail dialog; the tech becomes choosable

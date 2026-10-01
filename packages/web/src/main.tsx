@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { App } from './App.js'
 import './styles.css'
 import { applyTheme, storedTheme } from './theme.js'
+import { GlobalSpinner } from './views/GlobalSpinner.js'
 import { SiteBackdrop } from './views/SiteBackdrop.js'
 
 // Set the saved palette before React mounts, avoiding a dark-theme flash.
@@ -16,5 +17,6 @@ createRoot(container).render(
   <StrictMode>
     <SiteBackdrop />
     <App />
+    <GlobalSpinner />
   </StrictMode>,
 )

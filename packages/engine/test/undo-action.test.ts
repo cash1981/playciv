@@ -206,7 +206,8 @@ describe('undoing a tech', () => {
     }
 
     expect(findPlayer(state, CASH1981)?.techsChosen).toHaveLength(0)
-    expect(state.log.at(-1)?.publicLog).toContain('has removed Navy from cash1981')
+    expect(state.log.at(-1)?.publicLog).toContain('has removed a hidden technology from cash1981')
+    expect(state.log.at(-1)?.privateLog).toContain('has removed Navy from cash1981')
   })
 })
 

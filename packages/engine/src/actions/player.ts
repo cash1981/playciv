@@ -774,6 +774,7 @@ export function tradeToPlayer(state: GameState, input: TradeInput): ActionResult
     toPlayer.username,
     traded,
     traded.itemNumber,
+    state.logSecret,
   )
   next = appendLog(next, {
     username: toPlayer.username,

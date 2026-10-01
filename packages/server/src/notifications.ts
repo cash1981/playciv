@@ -17,7 +17,11 @@ import type { Repository } from './store/types.js'
 
 export const DEFAULT_APP_ORIGIN = 'https://playciv.app'
 
-/** Java `CivUtil.shouldSendEmailInGame`: 30 minutes, per player per game. */
+/**
+ * Java `CivUtil.shouldSendEmailInGame`: 30 minutes, per player per game. Since
+ * issue #217 it only applies to a player who has never opened the game; after
+ * that, a game email waits for the next visit instead of a clock.
+ */
 export const IN_GAME_COOLDOWN_MS = 30 * 60 * 1000
 
 type Player = GameState['players'][number]
@@ -31,9 +35,15 @@ export interface NotificationsConfig {
 }
 
 export interface Notifications {
-  /** Java `GameAction.joinGame` — the other players. */
+  /**
+   * Issue #217 — a signed-in viewer loaded the game. Counts as a visit only
+   * when they are a player in it, which re-arms their game emails. Spectators
+   * and admins are ignored.
+   */
+  gameOpened(game: GameState, viewerId: string): Promise<void>
+  /** Java `GameAction.joinGame` — the other players, held until they open the game. */
   playerJoined(game: GameState, joinerPlayerId: string): Promise<void>
-  /** Java `PlayerAction.endTurn` → `sendYourTurn` — the next player. */
+  /** Java `PlayerAction.endTurn` → `sendYourTurn` — the next player, held until they open the game. */
   turnEnded(before: GameState, after: GameState): Promise<void>
   /**
    * Chat orders (issue #215) — the new turn holder, when marking a phase done
@@ -43,7 +53,7 @@ export interface Notifications {
   turnHolderChanged(before: GameState, after: GameState): Promise<void>
   /**
    * New mechanic (no Java counterpart) — the player who now holds the battle
-   * turn, straight after someone ends it. No throttle. Skipped when there is
+   * turn, straight after someone ends it. Never held back. Skipped when there is
    * no battle or the new turn holder is the one who pressed the button.
    */
   battleTurnChanged(after: GameState, endedByPlayerId: string): Promise<void>
@@ -51,14 +61,14 @@ export interface Notifications {
   gameEnded(game: GameState): Promise<void>
   /** Java `GameAction.deleteGame` — every player. */
   gameDeleted(game: GameState): Promise<void>
-  /** Java `GameAction.addChat` — the other players, 30 min per game. */
+  /** Java `GameAction.addChat` — the other players, held until they open the game. */
   chatPosted(
     game: GameState,
     authorPlayerId: string,
     authorUsername: string,
     message: string,
   ): Promise<void>
-  /** Java `TurnAction.update*` — the other players, 30 min per game. */
+  /** Java `TurnAction.update*` — the other players, held until they open the game. */
   phaseUpdated(
     game: GameState,
     authorPlayerId: string,
@@ -100,9 +110,6 @@ const PHASE_MAIL: Readonly<Record<TurnPhase, { readonly subject: string; readonl
   RESEARCH: { subject: 'Research updated', noun: 'research' },
 }
 
-const inGameScope = (gameId: string, playerId: string): string =>
-  `mail:game:${gameId}:${playerId}`
-
 export function createNotifications(config: NotificationsConfig): Notifications {
   const { repo, mailer } = config
   const appOrigin = (config.appOrigin ?? DEFAULT_APP_ORIGIN).replace(/\/+$/, '')
@@ -127,24 +134,25 @@ export function createNotifications(config: NotificationsConfig): Notifications 
 
   /**
    * One recipient. Skips a missing account, a blank address and an account that
-   * has unsubscribed, applies the throttle, then sends. Never throws: a mail
-   * problem must not fail the game action that triggered it.
+   * has unsubscribed, applies the per-game hold when `gameId` is given, then
+   * sends. Never throws: a mail problem must not fail the game action that
+   * triggered it.
    */
   async function notify(
     playerId: string,
     subject: string,
     body: string,
-    throttle?: { readonly scope: string; readonly waitMs: number },
+    gameId?: string,
   ): Promise<void> {
     try {
       const player = await repo.findPlayerById(playerId)
       if (player === undefined || player.email === null || player.email === '') return
       if (player.disableEmail === true) return
 
-      if (throttle !== undefined) {
+      if (gameId !== undefined) {
         // One atomic step: the repository decides and records the slot
         // together, so two concurrent actions cannot both send.
-        const claimed = await repo.claimEmailSlot(throttle.scope, throttle.waitMs, clock())
+        const claimed = await repo.claimGameEmail(gameId, playerId, IN_GAME_COOLDOWN_MS, clock())
         if (!claimed) return
       }
 
@@ -160,21 +168,36 @@ export function createNotifications(config: NotificationsConfig): Notifications 
     include: (player: Player) => boolean,
     subject: string,
     body: string,
-    throttleFor?: (player: Player) => { readonly scope: string; readonly waitMs: number },
+    held = false,
   ): Promise<void> {
     for (const player of game.players) {
       if (!include(player)) continue
-      await notify(player.playerId, subject, body, throttleFor?.(player))
+      await notify(player.playerId, subject, body, held ? game.id : undefined)
     }
   }
 
   return {
+    async gameOpened(game: GameState, viewerId: string): Promise<void> {
+      if (!game.players.some((player) => player.playerId === viewerId)) return
+      try {
+        await repo.recordGameOpened(game.id, viewerId, clock())
+      } catch (error) {
+        console.error(`Recording that ${viewerId} opened ${game.id} failed`, error)
+      }
+    },
+
     async playerJoined(game: GameState, joinerPlayerId: string): Promise<void> {
       const joiner = game.players.find((player) => player.playerId === joinerPlayerId)
       const body =
         `${joiner?.username ?? 'A player'} joined ${game.name}. ` +
         `Go to ${appOrigin}/ to find out who!`
-      await notifyPlayers(game, (player) => player.playerId !== joinerPlayerId, 'Game update', body)
+      await notifyPlayers(
+        game,
+        (player) => player.playerId !== joinerPlayerId,
+        'Game update',
+        body,
+        true,
+      )
     },
 
     async turnEnded(before: GameState, after: GameState): Promise<void> {
@@ -191,6 +214,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         'It is your turn',
         `It's your turn to play in ${after.name}!${phaseText}\n\n` +
           `Go to ${gameLink(after.id)} to start your turn`,
+        after.id,
       )
     },
 
@@ -205,7 +229,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         'It is your turn',
         `It is your turn: ${TURN_PHASE_LABEL[status.phase]}, turn ${status.turnNumber} in ${after.name}.\n\n` +
           `Go to ${gameLink(after.id)} to play`,
-        { scope: inGameScope(after.id, holder.playerId), waitMs: IN_GAME_COOLDOWN_MS },
+        after.id,
       )
     },
 
@@ -214,7 +238,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       if (battle === null) return
       const recipientId = battle[battle.turn].playerId
       if (recipientId === endedByPlayerId) return
-      // No throttle: every end-turn mails, however close together.
+      // Battle mail is outside the hold: every end-turn mails.
       await notify(
         recipientId,
         'Your battle turn',
@@ -256,10 +280,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         (player) => player.playerId !== authorPlayerId,
         'New Chat',
         body,
-        (player) => ({
-          scope: inGameScope(game.id, player.playerId),
-          waitMs: IN_GAME_COOLDOWN_MS,
-        }),
+        true,
       )
     },
 
@@ -283,10 +304,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         (player) => player.playerId !== authorPlayerId,
         mail.subject,
         body,
-        (player) => ({
-          scope: inGameScope(game.id, player.playerId),
-          waitMs: IN_GAME_COOLDOWN_MS,
-        }),
+        true,
       )
     },
 

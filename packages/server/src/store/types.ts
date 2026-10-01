@@ -100,10 +100,6 @@ export interface GameRevision {
   readonly state: GameState
 }
 
-export type GameRevisionSummary = Omit<GameRevision, 'state' | 'privateDescriptions'> & {
-  readonly privateDescription: string | null
-}
-
 /**
  * A revision without its snapshot. The history bar needs the metadata of every
  * revision but never a single `state`, and loading those snapshots was enough
@@ -158,20 +154,36 @@ export interface Repository {
   chatFor(gameId: string | null): Promise<readonly ChatMessage[]>
 
   /**
-   * Atomically claims a throttled-notification slot. Returns true when no send
-   * has been recorded for `scope` within `waitMs` (and records `now`), false
-   * while the cooldown is still active. Java kept these timestamps on
-   * `Player.emailSent` (global, 3 h) and `Playerhand.emailSent` (per game,
-   * 30 min); the rewrite keeps only the per-game scope — the global one belonged
-   * to the removed new-game broadcast — in a small keyed table so it survives a
-   * restart without touching the engine state. Keys are built by
-   * `notifications.ts`.
+   * Notes that a member of the game has loaded it (issue #217). Callers pass
+   * members only; spectators and admins must not re-arm someone else's mail.
    *
-   * Must be atomic: two concurrent callers for the same scope must never both
-   * receive true, or a chat burst sends more than the one mail the cooldown
-   * promises.
+   * Changes the stored row only when that changes what `claimGameEmail` would
+   * answer: the first visit, or the first visit since the last email. A tab that
+   * keeps reloading the game leaves it untouched.
    */
-  claimEmailSlot(scope: string, waitMs: number, now: Date): Promise<boolean>
+  recordGameOpened(gameId: string, playerId: string, now: Date): Promise<void>
+
+  /**
+   * Atomically claims the right to email `playerId` about `gameId` (issue
+   * #217). Returns true and records `now` as the last email when
+   *
+   * - no email has been recorded for this player and game, or
+   * - the player has opened the game since the last email, or
+   * - the player has never opened the game and the last email is more than
+   *   `fallbackWaitMs` old (Java's 30 minute `shouldSendEmailInGame`).
+   *
+   * Otherwise returns false and records nothing. A last-email stamp in the
+   * future suppresses.
+   *
+   * Must be atomic: two concurrent callers for the same player and game must
+   * never both receive true, or a chat burst sends more than one mail.
+   */
+  claimGameEmail(
+    gameId: string,
+    playerId: string,
+    fallbackWaitMs: number,
+    now: Date,
+  ): Promise<boolean>
 
   /**
    * Finished, won games as a source for `highscore()`, roster included —

@@ -239,21 +239,62 @@ describe('D1Repository', () => {
     expect((await repo.chatFor('game-1')).map((entry) => entry.id)).toEqual(['g1', 'g2'])
   })
 
-  it('claims an email slot once per cooldown and lets only one caller win', async () => {
+  it('holds game email until the player opens the game, with a clock only before any visit', async () => {
+    const t = (ms: number): Date => new Date(Date.parse('2020-01-01T00:00:00.000Z') + ms)
+    const claim = (game: string, player: string, at: Date): Promise<boolean> =>
+      repo.claimGameEmail(game, player, 1000, at)
+
+    // Never opened: Java's wait applies.
+    expect(await claim('g1', 'p1', t(0))).toBe(true)
+    expect(await claim('g1', 'p1', t(500))).toBe(false)
+    expect(await claim('g1', 'p1', t(1001))).toBe(true)
+
+    // Opened once, then emailed: held however long it takes.
+    await repo.recordGameOpened('g1', 'p1', t(2000))
+    expect(await claim('g1', 'p1', t(3000))).toBe(true)
+    expect(await claim('g1', 'p1', t(900_000))).toBe(false)
+
+    // A visit re-arms exactly one more email. A visit made while the player was
+    // already armed is not stored, so it cannot re-arm after the next email.
+    await repo.recordGameOpened('g1', 'p1', t(900_001))
+    await repo.recordGameOpened('g1', 'p1', t(900_002))
+    expect(await claim('g1', 'p1', t(900_003))).toBe(true)
+    expect(await claim('g1', 'p1', t(900_004))).toBe(false)
+
+    // Per player and per game.
+    await repo.recordGameOpened('g2', 'p1', t(900_005))
+    expect(await claim('g1', 'p1', t(900_006))).toBe(false)
+    expect(await claim('g1', 'p2', t(900_006))).toBe(true)
+
+    // A visit before the very first email does not hold that email back.
+    await repo.recordGameOpened('g3', 'p1', t(0))
+    expect(await claim('g3', 'p1', t(1))).toBe(true)
+    expect(await claim('g3', 'p1', t(2))).toBe(false)
+
+    // A stamp in the future suppresses, far or near.
+    expect(await claim('g4', 'p1', t(0))).toBe(true)
+    expect(await claim('g4', 'p1', t(-5000))).toBe(false)
+  })
+
+  it('lets only one of two concurrent callers claim the game email', async () => {
     const now = new Date('2020-01-01T00:00:00.000Z')
-    expect(await repo.claimEmailSlot('scope', 1000, now)).toBe(true)
-    expect(await repo.claimEmailSlot('scope', 1000, new Date(now.getTime() + 500))).toBe(false)
-    expect(await repo.claimEmailSlot('scope', 1000, new Date(now.getTime() + 1001))).toBe(true)
-
-    // A stamp in the future is not `< cutoff`, so it suppresses (Mongo's abs).
-    expect(await repo.claimEmailSlot('future', 1000, now)).toBe(true)
-    expect(await repo.claimEmailSlot('future', 1000, new Date(now.getTime() - 5000))).toBe(false)
-
     const claims = await Promise.all([
-      repo.claimEmailSlot('race', 60_000, now),
-      repo.claimEmailSlot('race', 60_000, now),
+      repo.claimGameEmail('race', 'p', 60_000, now),
+      repo.claimGameEmail('race', 'p', 60_000, now),
     ])
     expect(claims.filter(Boolean)).toHaveLength(1)
+  })
+
+  it('forgets the visit and email stamps when the game is deleted', async () => {
+    const now = new Date('2020-01-01T00:00:00.000Z')
+    await repo.recordGameOpened('gone', 'p', now)
+    expect(await repo.claimGameEmail('gone', 'p', 1000, now)).toBe(true)
+    await repo.deleteGame('gone')
+    const rows = await adapter.db
+      .prepare(`SELECT COUNT(*) AS n FROM game_mail WHERE game_id = ?`)
+      .bind('gone')
+      .first<{ n: number }>()
+    expect(rows?.n).toBe(0)
   })
 
   it('reads highscore sources from both the old pbf table and new games', async () => {

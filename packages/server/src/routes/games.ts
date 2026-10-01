@@ -194,14 +194,13 @@ function clampInt(raw: string | undefined, fallback: number, min: number, max: n
   return Math.min(Math.max(value, min), max)
 }
 
-function revisionSummary(revision: GameRevisionMetadata, viewerId: string) {
+function revisionSummary(revision: GameRevisionMetadata) {
   return {
     gameId: revision.gameId,
     revision: revision.revision,
     createdAt: revision.createdAt,
     actor: revision.actor,
     publicDescription: revision.publicDescription,
-    privateDescription: revision.privateDescriptions[viewerId] ?? null,
     logIds: revision.logIds,
   }
 }
@@ -213,7 +212,7 @@ function projectedRevision(revision: GameRevision, viewerId: string) {
     ? projected
     : { ...projected, you: { ...projected.you, gamenote: '' } }
   return {
-    ...revisionSummary(revision, viewerId),
+    ...revisionSummary(revision),
     view,
     availableTechs: remainingTechsForPlayer(state, viewerId),
     revealedTechs: revealedTechsForAllPlayers(state),
@@ -303,6 +302,8 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       // The seed decides the shuffle and the itemNumbers. A random id per game
       // keeps two games with the same name from getting the same deck.
       seed: `${name}:${newId()}`,
+      // Keys the numbers in the public log for hidden techs. Random, and never sent out.
+      secret: newId(),
       players: [],
       createdAt: new Date().toISOString(),
     })
@@ -336,7 +337,14 @@ export function registerGameRoutes(app: App, context: AppContext): void {
 
   app.get('/api/games/:gameId', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
-    return readGame(context, c, gameId)
+    const game = await context.repo.findGame(gameId)
+    if (game === undefined) {
+      return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    }
+    // Issue #217: loading the game view is the visit that re-arms game emails.
+    const viewer = c.get('player')
+    if (viewer !== undefined) await context.notifications.gameOpened(game, viewer.id)
+    return c.json(toPlayerView(game, viewer?.id ?? ''))
   })
 
   app.get('/api/games/:gameId/rev', optionalAuth, async (c) => {
@@ -352,7 +360,6 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     if (await context.repo.findGameRevisionCounter(gameId) === undefined) {
       return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
     }
-    const viewerId = c.get('player')?.id ?? ''
     let revisions = await context.repo.listGameRevisionSummaries(gameId)
     if (revisions.length === 0) {
       const game = await context.repo.findGame(gameId)
@@ -372,7 +379,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       }
       revisions = await context.repo.listGameRevisionSummaries(gameId)
     }
-    return c.json(revisions.map((revision) => revisionSummary(revision, viewerId)))
+    return c.json(revisions.map((revision) => revisionSummary(revision)))
   })
 
   app.get('/api/games/:gameId/revisions/:revision', optionalAuth, async (c) => {
@@ -628,6 +635,8 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     if (game === undefined) {
       return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
     }
-    return c.json(toPlayerView(game, currentPlayer(c).id))
+    const viewerId = currentPlayer(c).id
+    await context.notifications.gameOpened(game, viewerId)
+    return c.json(toPlayerView(game, viewerId))
   })
 }

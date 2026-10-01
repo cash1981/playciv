@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Item } from '@civ/engine'
 
+import { useIsBusy } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, PlayerDto, PlayerView } from '../lib/api.js'
 import type { GameMenuActions } from './Navigation.js'
@@ -452,6 +453,20 @@ describe('End game wiring', () => {
     await waitFor(() => expect(endGame).toHaveBeenCalledTimes(1))
     expect(endGame).toHaveBeenCalledWith('game-1', 's3s3')
     await waitFor(() => expect(onEnded).toHaveBeenCalledTimes(1))
+  })
+
+  it('tells the global spinner the game is busy from the click until the reload is done (issue #225)', async () => {
+    let finish: (view: PlayerView) => void = () => {}
+    vi.spyOn(api, 'endGame').mockReturnValue(new Promise<PlayerView>((resolve) => { finish = resolve }))
+    const menu = await renderWithMenu(creatorView(), 'user')
+    const busy = renderHook(() => useIsBusy())
+    expect(busy.result.current).toBe(false)
+
+    act(() => menu()?.onEnd('s3s3'))
+    await waitFor(() => expect(busy.result.current).toBe(true))
+
+    await act(async () => { finish(creatorView()) })
+    await waitFor(() => expect(busy.result.current).toBe(false))
   })
 
   it('stays on the game when ending it fails', async () => {

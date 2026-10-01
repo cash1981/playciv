@@ -810,8 +810,8 @@ Cloudflare Worker (the Worker only proxies `/api/*` and never sees game state),
 so the key lives on Render with the rest of the API secrets.
 
 **Consequences.**
-- Throttle state lives in the repository (`mail:player:<id>` and
-  `mail:game:<gameId>:<playerId>`), not in `GameState`, so it never touches
+- Throttle state lives in the repository (originally `mail:player:<id>` and
+  `mail:game:<gameId>:<playerId>`; per player and game since issue #217), not in `GameState`, so it never touches
   engine purity or the revision/compare-and-set flow. Mongo uses an
   `email_sent` collection; the JSON file persists a keyed map.
 - `StoredPlayer.disableEmail` is read from the legacy `player` documents and is
@@ -856,8 +856,8 @@ behaviours were bugs that the message text itself contradicted.
 - **The address is the account's current one.** Java mailed
   `Playerhand.getEmail()`, a snapshot copied at join time. We look the account
   up so an admin's email change takes effect.
-- **The cooldown is atomic.** `Repository.claimEmailSlot(scope, waitMs, now)`
-  decides and records in one step. Java read `Player/Playerhand.emailSent` and
+- **The cooldown is atomic.** `Repository.claimGameEmail(...)` (issue #217;
+  earlier `claimEmailSlot(scope, waitMs, now)`) decides and records in one step. Java read `Player/Playerhand.emailSent` and
   wrote it back separately; two simultaneous chat messages could both pass the
   check. The JSON repository keeps the read-and-set synchronous (no `await`
   between them); Mongo claims an expired row with a conditional `updateOne` and
@@ -995,7 +995,7 @@ paths. D1 is also exportable (`wrangler d1 export`), so the move is reversible.
 - D1 has no interactive transactions between `await`s. Revisioned writes use one
   `batch()` — atomic on D1 — with the game update guarded by `rev` and the
   revision insert guarded by `EXISTS (game … rev = new)`, so a lost race writes
-  neither. `claimEmailSlot` is one conditional upsert. `MongoRepository`'s
+  neither. `claimEmailSlot` (now `claimGameEmail`, issue #217) is one conditional upsert. `MongoRepository`'s
   requirement that Mongo be a replica set or sharded cluster goes away with it.
 - Migrated data, verified by count against the restored export: 554 players
   (552 legacy SHA-1 passwords kept, 1 admin), 310 old `pbf` games (247 with a
@@ -3493,3 +3493,161 @@ Amendment, same day: Bold and Italic were there but invisible. Crepe draws the
 bar's icons in its "outline" colour, and the app maps that colour to the hairline
 colour (`--line`), which is almost the panel background. In the composer the icons
 now take the text colour, and the gold accent when they are on.
+
+## Numeric fields on mobile (issue #219)
+
+ATK, HP and the battlehand draw count were `type="number"` inputs, which on a
+phone keep a typed 1 after the 0 as "01". They are now text inputs with a
+numeric keypad (`DigitInput`): only digits are kept, leading zeros are dropped,
+and empty or non-digit input counts as 0. The draw count is clamped to 1-20 on
+blur and again when Draw is pressed; the old client's behaviour for a count
+outside that range was not checked, because `old-civ-web` was not available in the
+environment this was written in (worth re-checking when it is on disk). Before,
+the `min`/`max` on the number field were advisory only, so typing 50 drew 50; the
+engine already caps a draw at what the deck holds.
+
+## 2026-09-30 - Undo lines no longer name hidden items (issue #220)
+
+**Decision.** The three public lines an undo writes (the request, each vote, the
+result) name an item no more than its original log line did. A hidden tech or
+social policy reads "a hidden technology" / "a hidden social policy" and carries
+the per-player number (`uniqueItemNumber`), not the catalogue number. A draw shows
+the type only (`revealPublic`), so a culture card, a great person or a unit's
+ATK.HP is not given away. Discards, reveals and an already revealed tech stay
+public. The owner still gets the full wording: the result line carries their
+`playerId` and a private text. Anyone in the game may request an undo, so a
+requester who is not the owner gets the public wording and no item on their entry. The single rule is `publicItemSubject` in `log.ts`.
+
+**Why.** The human asked whether hidden tech and drawn cards leaked. The normal
+log lines did not, but `UNDO` wrote `revealAll` for everyone, the vote line used
+`revealPublic` (which names a social policy), and the undo result used the plain
+item name, so asking to undo a hidden tech, a card or a unit published it.
+The plain item number of a tech is its catalogue number, which every client
+receives with the tech list, so it gave the tech away even where the name was
+hidden.
+
+**Consequences.** This deviates from `old-civ-rest`, which printed the full item
+for everyone. The wording of the public undo lines for a tech or social policy
+changes; draws read as before. The tech number and the history bar are handled in the next section.
+
+## 2026-09-30 - Public item numbers are keyed, and the history bar is public only (issue #220)
+
+**Decision.** Nothing stays readable in a public place until it is revealed, even
+to the player it belongs to, where that place is shared. Two changes follow.
+(1) The number in "has researched a hidden technology. Item number #N" is now
+`1000000 + hash(logSecret | username | itemNumber) % 9000000`. `logSecret` is a
+new field on the game state: the server passes a random value when it creates a
+game, and `createGame` derives one from the seed otherwise. It is never in a
+projection. The server's key is random and independent of the game. An earlier
+version derived it from `nextId(rng)`, and the first log entry id was then the key;
+the rng stream is published through log and item ids, so nothing derived from it
+is safe. `createGame` without a key falls back to a hash of the seed, which is
+only as strong as the seed, so the server never relies on it. A game saved without a
+key reads as an empty one (`migrate.ts`), and the server puts a random one in
+before the next action (`applyToGame`).
+(2) The history bar shows `publicDescription` only. The revision list no longer
+carries `privateDescription`. The player's own private log tab and their replayed
+hand still show what they did.
+
+**Why.** The human wanted everything hidden until it is revealed. Java added the
+first three digits of the username's hash to the catalogue number. Both are
+public (the tech list carries every `itemNumber`), so subtracting one from the
+other named the tech. The history bar printed the researcher's private line, for
+example the tech name, on a screen other people may look at.
+
+**Consequences.** This deviates from `old-civ-rest`. The tie between a tech's
+research, reveal, removal and undo lines is kept: they all carry the same
+number for the same player. Lines written before this change carry the old
+numbers, so for a tech researched earlier and revealed later the two lines show
+different numbers. Until a legacy game's next action its key is empty, but nothing is logged before that.
+The hash (cyrb53) is not a MAC: the key is what protects, and a reader who learned
+it could decode every number, so it stays on the server. Revisions still store
+`privateDescriptions`; nothing reads them now. A keyed number can, rarely (about
+1 in 10,000 per game), be the same for two of one player's cards, where Java's
+offset plus catalogue number could not; the worst case is an ambiguous line.
+
+## Game emails wait for the player to open the game (issue #217)
+
+**Decision.** After a game email to a player, no further game email about the
+same game goes to them until they have opened that game. The held kinds are
+`chatPosted`, `phaseUpdated`, `turnEnded` and `playerJoined`. Where the player has
+never opened the game, Java's 30 minute wait (`IN_GAME_COOLDOWN_MS`) decides.
+`gameEnded` and `gameDeleted` always send (they are one-off and final), battle
+turn mail stays outside the rule, and a held "It is your turn" never breaks
+through after some hours. These follow the issue's suggested answers to its open
+questions.
+
+**How.** `Repository.recordGameOpened(gameId, playerId, now)` and
+`claimGameEmail(gameId, playerId, fallbackWaitMs, now)` replace
+`claimEmailSlot`. They keep `emailedAt` and `openedAt` per player and game (D1
+table `game_mail`, migration 0004; the JSON store keeps the same pair). An email
+is allowed when none was recorded, when `openedAt` is later than `emailedAt`, or
+when there is no `openedAt` at all and the last email is older than the wait. A
+visit is stored only when it changes that answer, so a tab that keeps reloading
+the game does not write every time.
+
+**What counts as a visit.** `GET /api/games/:id` and `/state` by a signed-in
+player in that game. Anonymous viewers, spectators and admins who are not players
+do not count. The open game page reloads the view whenever the revision moves, so
+a player with the tab open counts as having seen what happened; that is accepted.
+Reading the chat, log or revisions alone is not a visit.
+
+**Consequences.** This deviates from `old-civ-rest`, which had the 30 minute wait
+only, on chat and phase mail only. The old `email_sent` table stays in D1 because
+the Mongo import still fills it, but nothing reads it. Existing games start with
+no stamps, so each player may get one extra mail right after the deploy.
+
+## A global spinner for every write (issue #225)
+
+**Decision.** One spinner, mounted once in `main.tsx` (`GlobalSpinner`), shows
+while any write is running. `request()` in `lib/api.ts` reports every
+non-GET call to `lib/activity.ts`, and `GameView` reports its own `busy` state
+with `useActivity` (so do `LandingView` and `LobbyView`, which have the same
+write-then-reload shape), so the spinner stays up through a write and the reload that
+follows instead of blinking off between them. Reads are not reported: most are
+background polls (`/rev`, chat, lobby), and a spinner every ten seconds would be
+noise. A view that wants a read to count calls `useActivity` itself, and the three
+buttons whose only job is to fetch (Refresh in the chat, log and revealed
+panels) wrap the call in `trackActivity`. "Load more" in the revealed panel stays
+silent: it extends a list already on screen.
+
+**Look.** A ring on a solid disc over a dimmed page, in the middle of the screen, 44 px, or 56 px
+on a touch screen (`pointer: coarse`). The size is fixed rather than growing
+with the viewport: that is the usual practice, since a spinner is read from arm's
+length on any screen, and a finger covers part of one on a phone. It waits 200 ms
+before it shows, so a fast action does not flash it, and it stays at least 500 ms
+once shown. It never takes clicks (`pointer-events: none`): the buttons that
+matter are already disabled while an action runs. `prefers-reduced-motion` slows
+the turn instead of stopping it, because a frozen ring looks like a hung page. A
+`role="status"` region stays mounted, so screen readers announce "Working…".
+
+**Consequences.** Actions that bypass `request()` (none today) would need
+`beginActivity` themselves. The scrim is also shown for a revision replay load,
+because `GameView` marks that as busy.
+
+## 2026-10-01 - Issue #227: relics are a piece category with a supply of one
+
+**Decision.** The relic markers from the expansions are a new board category,
+`relic`, in the same palette as buildings. There are five: Ark of the Covenant,
+Atlantis, Attila's Village, School of Confucius and Seven Cities of Gold. Each
+has a supply of one for the whole game (`boardAssetLimit` returns 1), so placing
+one disables it in the palette, and removing it from the board brings it back.
+Anyone in the game may place or move one, as with other pieces. The human asked
+for "max 1 of each type"; a relic marker is a single unique component.
+
+**Source.** The five names come from the human's file list for the artwork; the
+Fame and Fortune rules confirm Atlantis and School of Confucius as relics. The
+images arrived without their file names, so they were matched to names by what
+they show, so check them if one seems swapped (rename the files in
+`packages/web/public/board/relics/`; the manifest ids follow the file names).
+
+**Not done.** The relic effects (a free tech, two Great People, and so on) are
+not automated. The marker is only a piece to put on the map, like a hut.
+
+**Consequences.** `tools/board-assets.ps1` reads a `relics` folder from
+`Civilization/Moderator` and caps relic art at 90 px. The manifest entries were
+written by hand from the real image sizes (84 x 85, 112 x 110, 112 x 110,
+84 x 84, 84 x 84, scaled to 90 where larger), and running the script on the
+machine with the Moderator folder should leave the manifest unchanged. The Moderator folder must use the lower
+case file names above.
+

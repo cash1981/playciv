@@ -51,4 +51,13 @@ describe('mobile site styles', () => {
   }
 }`)
   })
+
+  it('keeps the global spinner fixed, click-through and larger on touch screens (issue #225)', () => {
+    const spinner = readFileSync('src/views/GlobalSpinner.css', 'utf8').replaceAll('\r\n', '\n')
+    expect(spinner).toContain('position: fixed')
+    expect(spinner).toContain('pointer-events: none')
+    expect(spinner).toContain('@media (pointer: coarse)')
+    expect(spinner).toContain('--spinner-size: 56px')
+    expect(spinner).toContain('@media (prefers-reduced-motion: reduce)')
+  })
 })

@@ -15,6 +15,7 @@ import { greatPersonReference, readDeck, wonderReference } from './gamedata.js'
 import type { Item, SocialPolicyItem, TechItem } from './item.js'
 import type { Rng } from './random.js'
 import { nextIntBetween, nextId, seedFrom } from './random.js'
+import { deriveLogSecret } from './log.js'
 import type { GameState, GameType, Playerhand } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
@@ -59,6 +60,12 @@ export interface CreateGameOptions {
   /** Seed for shuffling and itemNumber. A string gives the same game every time. */
   readonly seed: Rng | string
   readonly players?: readonly NewPlayer[]
+  /**
+   * Keys the numbers in the public log for hidden techs and social policies.
+   * The server passes a random value. Without one it is derived from the seed,
+   * which is enough for tests but as guessable as the seed itself.
+   */
+  readonly secret?: string
   /**
    * When the game was created. The engine is pure, so the caller passes the
    * timestamp; `null` when it has none (the old client never carried one).
@@ -158,6 +165,7 @@ export function createGame(options: CreateGameOptions): GameState {
     socialPolicies: numberedPolicies,
     log: [],
     rng: deck.rng,
+    logSecret: options.secret ?? deriveLogSecret(seed, gameId),
     itemCounter: counter,
     wondersDealt: false,
     chatOrders: false,

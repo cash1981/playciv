@@ -150,7 +150,7 @@ piece selected, the arrow keys nudge it a small step in that direction — the
 step is a constant number of screen pixels, converted by the current zoom
 level, so it looks the same size at any zoom (issue #193).
 
-The palette has eleven categories, generated from the images on disk. Buildings
+The palette has twelve categories, generated from the images on disk. Buildings
 and resources use finite physical supplies: the physical building counts are
 read from the reference sheet, wheat, iron, silk and incense are each limited by
 the player count, and each Great Person type has three board pieces. Each colour
@@ -158,7 +158,10 @@ has six armies and two scouts; Russia also has one white army, which only the
 Russian player can place (issue #204). Huts and
 Villages are **unlimited** — they are picked up during play rather than dealt
 from a setup supply, so the player-count cap does not apply to them (issue
-#116). The separate Great Person card deck remains a hand/draw mechanic.
+#116). Each of the five relics (Ark of the Covenant, Atlantis, Attila's Village,
+School of Confucius, Seven Cities of Gold) exists once per game: placing it
+uses it up, and removing it from the board puts it back (issue #227). The
+separate Great Person card deck remains a hand/draw mechanic.
 
 | Category | Count | From |
 | --- | --- | --- |
@@ -168,6 +171,7 @@ from a setup supply, so the player-count cap does not apply to them (issue
 | Cities | 30 | capital/city/metropolis, with and without walls, per colour |
 | City-states | 5 | the five neutral city-states (cs1–cs5) |
 | Buildings | 15 | market, temple, library, … |
+| Relics | 5 | the five relic markers, one of each per game |
 | Great People | 6 | artist, builder, general, humanitarian, merchant, scientist |
 | Starting tiles | 16 | one per civilization |
 | Map tiles | 28 | exploration tiles 1–27, plus the back |
@@ -297,10 +301,11 @@ guarded statements or one `batch()`, which D1 runs atomically:
 - `saveGameWithRevision` updates the live game only while `rev` is unchanged
   and inserts the checkpoint guarded by `EXISTS (game … rev = new)`, so a lost
   race writes neither.
-- `claimEmailSlot` is one conditional upsert.
+- `claimGameEmail` is one conditional upsert.
 
 Tables: `player`, `game`, `game_revision`, `chat` (`game_id IS NULL` is lobby,
-live from now on), `email_sent`, and `pbf` + `pbf_doc` (the old games,
+live from now on), `game_mail` (when each player was last emailed about a
+game and last opened it), `email_sent` (imported, no longer read), and `pbf` + `pbf_doc` (the old games,
 read-only: a highscore source plus the full document, chunked because one
 document can exceed D1's ~100 KB per-statement limit, kept for future
 statistics such as the most-researched tech). The old `chat`, `gamelog` and
@@ -574,7 +579,9 @@ change timing and card effects remain table-managed rules.
 `Infantry 1.3` were "equal" and `discardedItems.remove(item)` could remove the
 wrong instance. Every item now has an opaque id. `itemNumber` is kept for log
 compatibility, and its starting offset is still random per game so the number
-does not give the card away. `itemValueEquals` is still there where the Java
+does not give the card away (techs and social policies are the exception, since
+their numbers are in the public catalogue; their log lines use a keyed number
+instead, see `decisions.md`, 2026-09-30). `itemValueEquals` is still there where the Java
 semantics are needed.
 
 **Space Flight is not a singleton.** Java had `Tech.SPACE_FLIGHT` as a static
@@ -586,6 +593,15 @@ field — mutable state shared between every game in the same JVM.
 a `logType` with the same information. The Java barbarian branch was dead code
 anyway: it required `"drew"`, but barbarian logs write `"has drawn"`, and they
 carry no item either, so an undo could never be started for them.
+
+**Undo lines do not name hidden items.** Java wrote the full item in the undo
+request, the votes and the result for every player, so asking to undo a hidden
+tech, a social policy or a drawn card published it. Here those lines name an item
+no more than its original log line did; only the owner sees the full text.
+A tech or social policy carries a per-player number keyed with a secret per game,
+not the catalogue number, so it cannot be matched to the tech list without the
+key. The history
+bar shows the public description only.
 
 **Five turn-phase methods became one.** `updateSOT`, `updateTrade`, `updateCM`,
 `updateMovement` and `updateResearch` differed only in the email text and the
@@ -625,9 +641,16 @@ the engine returns a clear error instead. See `docs/agents/decisions.md`.
 through SendGrid (`SENDGRID_USERNAME`/`SENDGRID_PASSWORD`); the rewrite uses
 Resend (`RESEND_API_KEY`, from `noreply@playciv.app`). Every trigger the old
 system had is back except the new-game broadcast — it-is-your-turn, someone
-joined, chat, game ended, game deleted and the five turn-phase updates — with
-Java's 30-minute per-player-in-game throttle. Several old behaviours were
-corrected on purpose:
+joined, chat, game ended, game deleted and the five turn-phase updates.
+Several old behaviours were corrected on purpose:
+
+- **One game email per player until they open the game** (issue #217). After a
+  chat, phase-update, it-is-your-turn or someone-joined mail, that player gets
+  no further such mail about the same game until they load the game while signed
+  in. A player who has never opened the game falls back to Java's 30-minute
+  wait. It is per player and per game. The game-ended and game-deleted mails are
+  final and always go out, battle turn mails are not held, and spectators or
+  admins opening a game do not count. D1 needs migration `0004_game_mail.sql`.
 
 - The unsubscribe link rides on **every** mail (Java's it-is-your-turn mail
   carried none), and it points at the **recipient's** id — Java passed the
@@ -641,8 +664,8 @@ corrected on purpose:
   after an admin renames the account), and the mail goes to the account's
   current email address rather than the address snapshotted into the game at
   join time.
-- The cooldown is claimed in one atomic step, so two simultaneous actions
-  cannot both slip a mail past the 30-minute window.
+- The mail slot is claimed in one atomic step, so two simultaneous actions
+  cannot both slip a mail past the hold.
 - **New: a battle turn mail.** Ending a battle turn in the arena mails whoever
   now holds the battle turn ("It is your turn to play a unit in the battle
   arena"), straight away. There is no cooldown, unsubscribe is respected, and

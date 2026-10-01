@@ -247,6 +247,8 @@ describe('the mail to a new turn holder', () => {
     await switchOn(table)
     const [one, two, three] = table.seats
     if (one === undefined || two === undefined || three === undefined) throw new Error('no seats')
+    // Joining mailed the other players; let the 30 minute wait that stands in for a visit pass
+    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
     mailer.sent.length = 0
 
     // Seat 1 holds the turn; finishing Start of turn hands it to seat 2
@@ -286,12 +288,14 @@ describe('the mail to a new turn holder', () => {
     expect(mailsTo(two.username)[0]?.text).toContain('It is your turn: start of turn, turn 2')
   })
 
-  it('shares the 30 minute limit of the other in-game mail', async () => {
+  it('is held like the other in-game mail: once, until the player opens the game or 30 minutes pass', async () => {
     const table = await threePlayerGame('holder-throttle')
     await switchOn(table)
     const before = await loadGame(table.gameId)
     const after = unwrap(markPhasesDone(before, { playerId: table.seats[0]?.id ?? '', turnNumber: 1, upToPhase: 'SOT' }))
     const notifications = createNotifications({ repo, mailer, appOrigin: 'https://playciv.app', now: () => now })
+    // Joining mailed the other players; let the 30 minute wait that stands in for a visit pass
+    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
     mailer.sent.length = 0
 
     await notifications.turnHolderChanged(before, after)
@@ -299,6 +303,31 @@ describe('the mail to a new turn holder', () => {
     expect(mailer.sent).toHaveLength(1)
 
     now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    await notifications.turnHolderChanged(before, after)
+    expect(mailer.sent).toHaveLength(2)
+  })
+
+  it('is sent again once the new holder has opened the game', async () => {
+    const table = await threePlayerGame('holder-opened')
+    await switchOn(table)
+    const before = await loadGame(table.gameId)
+    const after = unwrap(markPhasesDone(before, { playerId: table.seats[0]?.id ?? '', turnNumber: 1, upToPhase: 'SOT' }))
+    const holder = table.seats[1]
+    if (holder === undefined) throw new Error('no seat 2')
+    const notifications = createNotifications({ repo, mailer, appOrigin: 'https://playciv.app', now: () => now })
+    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    mailer.sent.length = 0
+
+    await notifications.turnHolderChanged(before, after)
+    expect(mailer.sent).toHaveLength(1)
+    // Held: nothing more, however many times the turn passes to them, until they look
+    now = new Date(now.getTime() + 1000)
+    await notifications.turnHolderChanged(before, after)
+    expect(mailer.sent).toHaveLength(1)
+
+    now = new Date(now.getTime() + 1000)
+    await notifications.gameOpened(after, holder.id)
+    now = new Date(now.getTime() + 1000)
     await notifications.turnHolderChanged(before, after)
     expect(mailer.sent).toHaveLength(2)
   })

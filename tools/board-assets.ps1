@@ -30,6 +30,7 @@ $categories = [ordered] @{
     'leaders'      = 'leader'
     'wonders'      = 'wonder'
     'city-states'  = 'citystate'
+    'relics'       = 'relic'
 }
 
 # A map tile covers 4 x 4 squares of 94 pixels. The source images are 375 x 375,
@@ -50,6 +51,22 @@ $WONDER_MAX = 90
 # art is 86–112 px; cap the longer side at 90 (keeping aspect) so a city-state
 # sits in a single square the way a city does.
 $CITYSTATE_MAX = 90
+
+# Relic markers sit on the map like buildings, which are ~85 px. The source art
+# is 84-112 px; cap the longer side at 90 (keeping aspect) so a relic fits in a
+# single square.
+$RELIC_MAX = 90
+
+# The relic art (Moderator/relics) is named lower case with underscores. The
+# proper names are written out so the palette label reads well. Keys are the
+# file base names.
+$relicLabels = @{
+    'ark_of_the_covenant'  = 'Ark of the Covenant'
+    'atlantis'             = 'Atlantis'
+    'attilas_village'      = "Attila's Village"
+    'school_of_confucius'  = 'School of Confucius'
+    'seven_cities_of_gold' = 'Seven Cities of Gold'
+}
 
 # The civilisations starting tiles. The rest of tiles/ are exploration tiles.
 $civTiles = @(
@@ -121,6 +138,11 @@ function Get-Label([string] $category, [string] $baseName) {
     if ($category -eq 'wonder') {
         $key = $baseName.ToLower()
         if ($wonderLabels.ContainsKey($key)) { return $wonderLabels[$key] }
+    }
+
+    if ($category -eq 'relic') {
+        $key = $baseName.ToLower()
+        if ($relicLabels.ContainsKey($key)) { return $relicLabels[$key] }
     }
 
     if ($category -eq 'citystate') {
@@ -213,6 +235,16 @@ foreach ($folder in $categories.Keys) {
                 $maxDim = [Math]::Max($image.Width, $image.Height)
                 if ($maxDim -gt $CITYSTATE_MAX) {
                     $scale = $CITYSTATE_MAX / $maxDim
+                    $width = [int] [Math]::Round($image.Width * $scale)
+                    $height = [int] [Math]::Round($image.Height * $scale)
+                }
+            }
+
+            if ($category -eq 'relic') {
+                # Keep a relic within one square, like a building
+                $maxDim = [Math]::Max($image.Width, $image.Height)
+                if ($maxDim -gt $RELIC_MAX) {
+                    $scale = $RELIC_MAX / $maxDim
                     $width = [int] [Math]::Round($image.Width * $scale)
                     $height = [int] [Math]::Round($image.Height * $scale)
                 }

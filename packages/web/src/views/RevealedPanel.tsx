@@ -29,6 +29,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { revealAll } from '@civ/engine'
 import { errorMessage } from '../App.js'
+import { trackActivity } from '../lib/activity.js'
 import { api } from '../lib/api.js'
 import type { GameRevisionView, RevealedEntry, RevealedPage } from '../lib/api.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
@@ -129,7 +130,7 @@ export function RevealedPanel({ gameId, reloadCount, historical = null }: Props)
           Load more
         </button>
         <span style={{ flex: 1 }} />
-        <button className="small" onClick={() => void load(visibleSize)}>
+        <button className="small" onClick={() => void trackActivity(load(visibleSize))}>
           Refresh
         </button>
       </div>

@@ -30,6 +30,8 @@ import type {
   WinnerEntry,
 } from '@civ/engine'
 
+import { beginActivity } from './activity.js'
+
 export type {
   ActiveTurnStatus,
   Board,
@@ -172,7 +174,6 @@ export interface GameRevisionSummary {
   readonly createdAt: string
   readonly actor: { readonly playerId: string; readonly username: string }
   readonly publicDescription: string
-  readonly privateDescription: string | null
   readonly logIds: readonly string[]
 }
 
@@ -267,7 +268,26 @@ function delay(ms: number): Promise<void> {
   })
 }
 
+/**
+ * Every write is reported to the global spinner (issue #225); reads are not,
+ * because most of them are background polls. A view that wants a read to count
+ * reports it itself with `useActivity`.
+ */
 async function request<T>(
+  method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT',
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  if (method === 'GET') return send<T>(method, path, body)
+  const done = beginActivity()
+  try {
+    return await send<T>(method, path, body)
+  } finally {
+    done()
+  }
+}
+
+async function send<T>(
   method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT',
   path: string,
   body?: unknown,
@@ -297,7 +317,7 @@ async function request<T>(
       method === 'GET' && RETRYABLE_STATUSES.has(response.status) && attempt < RETRY_DELAYS_MS.length
     if (retryable) {
       await delay(RETRY_DELAYS_MS[attempt] ?? 0)
-      return request<T>(method, path, body, attempt + 1)
+      return send<T>(method, path, body, attempt + 1)
     }
     const error =
       payload === NOT_JSON || payload === undefined

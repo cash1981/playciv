@@ -10,7 +10,7 @@
 import type { GameState } from '@civ/engine'
 import { setChatOrders, unwrap } from '@civ/engine'
 import type { App } from '../src/app.js'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createTestApp } from '../src/app.js'
 import type { Mailer, OutgoingEmail } from '../src/mail.js'
@@ -122,6 +122,10 @@ async function startedGame(
   const waitingPlayerState = state.players.find((player) => !player.yourTurn)
   if (waitingPlayerState === undefined) throw new Error('no waiting player')
   const waitingPlayer = waitingPlayerState.playerId === creator.id ? creator : other
+
+  // Joining mailed the creator. Neither player has opened the game, so the 30
+  // minute wait would hold back the next mail to them; let it pass.
+  now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
 
   return { gameId, starter: creator, waiting: waitingPlayerState.username, waitingPlayer }
 }
@@ -450,10 +454,17 @@ describe('email cooldown', () => {
   it('claims a slot atomically: two concurrent claims, one winner', async () => {
     const at = new Date('2026-09-19T12:00:00.000Z')
     const [first, second] = await Promise.all([
-      repo.claimEmailSlot('mail:test:atomic', IN_GAME_COOLDOWN_MS, at),
-      repo.claimEmailSlot('mail:test:atomic', IN_GAME_COOLDOWN_MS, at),
+      repo.claimGameEmail('game', 'player', IN_GAME_COOLDOWN_MS, at),
+      repo.claimGameEmail('game', 'player', IN_GAME_COOLDOWN_MS, at),
     ])
     expect([first, second].filter(Boolean)).toHaveLength(1)
+  })
+
+  it('holds on a stamp in the future in the JSON store too, like D1', async () => {
+    const at = new Date('2026-09-19T12:00:00.000Z')
+    expect(await repo.claimGameEmail('g', 'p', 1000, at)).toBe(true)
+    expect(await repo.claimGameEmail('g', 'p', 1000, new Date(at.getTime() - 5000))).toBe(false)
+    expect(await repo.claimGameEmail('g', 'p', 1000, new Date(at.getTime() + 1001))).toBe(true)
   })
 
   it('sends a single mail when two chat messages race for the same slot', async () => {
@@ -476,6 +487,200 @@ describe('email cooldown', () => {
     ])
 
     expect(mailer.subjects('New Chat')).toHaveLength(1)
+  })
+})
+
+describe('held until the game is opened (issue #217)', () => {
+  const HOUR = 60 * 60 * 1000
+
+  const chat = (token: string, gameId: string, message: string) =>
+    inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/chat`,
+      headers: bearer(token),
+      payload: { message },
+    })
+
+  const open = async (token: string | undefined, gameId: string, route = ''): Promise<void> => {
+    now = new Date(now.getTime() + 1000)
+    const response = await inject(app, {
+      method: 'GET',
+      url: `/api/games/${gameId}${route}`,
+      ...(token === undefined ? {} : { headers: bearer(token) }),
+    })
+    expect(response.status).toBe(200)
+  }
+
+  /** Two players and a chat; the reader has opened the game once. */
+  async function openedGame(name: string) {
+    const writer = await register(`${name}-w`)
+    const gameId = await createGame(writer.token, name, 3)
+    const reader = await register(`${name}-r`)
+    await join(reader.token, gameId)
+    await open(reader.token, gameId)
+    mailer.sent.length = 0
+    return { writer, reader, gameId }
+  }
+
+  it('gives ten chat messages in a row one email, however long the reader stays away', async () => {
+    const { writer, gameId } = await openedGame('burst')
+    for (let index = 0; index < 10; index += 1) {
+      now = new Date(now.getTime() + HOUR)
+      await chat(writer.token, gameId, `message ${index}`)
+    }
+    expect(mailer.subjects('New Chat')).toHaveLength(1)
+  })
+
+  it('sends one new email after the reader opens the game', async () => {
+    const { writer, reader, gameId } = await openedGame('rearm')
+    await chat(writer.token, gameId, 'one')
+    await chat(writer.token, gameId, 'two')
+    expect(mailer.subjects('New Chat')).toHaveLength(1)
+
+    await open(reader.token, gameId)
+    await chat(writer.token, gameId, 'three')
+    await chat(writer.token, gameId, 'four')
+    expect(mailer.subjects('New Chat')).toHaveLength(2)
+    expect(mailer.subjects('New Chat')[1]?.text).toContain('three')
+  })
+
+  it('counts the state endpoint as opening the game too', async () => {
+    const { writer, reader, gameId } = await openedGame('state')
+    await chat(writer.token, gameId, 'one')
+    await open(reader.token, gameId, '/state')
+    await chat(writer.token, gameId, 'two')
+    expect(mailer.subjects('New Chat')).toHaveLength(2)
+  })
+
+  it('holds chat, phase updates, your turn and joins behind the same single email', async () => {
+    const creator = await register('shared-a')
+    const gameId = await createGame(creator.token, 'shared', 2)
+    const other = await register('shared-b')
+    await join(other.token, gameId)
+    // The creator was mailed by the join; both players then open the game.
+    await open(creator.token, gameId)
+    await open(other.token, gameId)
+    mailer.sent.length = 0
+
+    const onTurn = (await loadGame(gameId)).players.find((player) => player.yourTurn)
+    const [mover, waiter] = onTurn?.playerId === creator.id ? [creator, other] : [other, creator]
+
+    await chat(mover.token, gameId, 'hello')
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/turns/update`,
+      headers: bearer(mover.token),
+      payload: { phase: 'SOT', turnNumber: 1, order: 'build' },
+    })
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/endturn`,
+      headers: bearer(mover.token),
+      payload: {},
+    })
+    const toWaiter = (): string[] =>
+      mailer.sent
+        .filter((mail) => mail.to === `${waiter === creator ? 'shared-a' : 'shared-b'}@example.com`)
+        .map((mail) => mail.subject)
+    expect(toWaiter()).toEqual(['New Chat'])
+
+    await open(waiter.token, gameId)
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/endturn`,
+      headers: bearer(waiter.token),
+      payload: {},
+    })
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/endturn`,
+      headers: bearer(mover.token),
+      payload: {},
+    })
+    // The waiter opened the game, so the turn that came back to them mails once.
+    expect(toWaiter()).toEqual(['New Chat', 'It is your turn'])
+  })
+
+  it('holds the join email until the creator opens the game', async () => {
+    const creator = await register('joinhold-a')
+    const gameId = await createGame(creator.token, 'join hold', 4)
+    await open(creator.token, gameId)
+    mailer.sent.length = 0
+
+    now = new Date(now.getTime() + 1000)
+    const second = await register('joinhold-b')
+    await join(second.token, gameId)
+    const third = await register('joinhold-c')
+    await join(third.token, gameId)
+    const toCreator = (): OutgoingEmail[] =>
+      mailer.subjects('Game update').filter((mail) => mail.to === 'joinhold-a@example.com')
+    expect(toCreator()).toHaveLength(1)
+
+    await open(creator.token, gameId)
+    const fourth = await register('joinhold-d')
+    await join(fourth.token, gameId)
+    expect(toCreator()).toHaveLength(2)
+  })
+
+  it('does not let a visit to one game re-arm the mail of another', async () => {
+    const writer = await register('twogames-w')
+    const reader = await register('twogames-r')
+    const first = await createGame(writer.token, 'game one', 3)
+    const second = await createGame(writer.token, 'game two', 3)
+    await join(reader.token, first)
+    await join(reader.token, second)
+    await open(reader.token, first)
+    await open(reader.token, second)
+    mailer.sent.length = 0
+
+    await chat(writer.token, first, 'a')
+    await chat(writer.token, second, 'b')
+    expect(mailer.subjects('New Chat')).toHaveLength(2)
+
+    await open(reader.token, first)
+    await chat(writer.token, first, 'c')
+    await chat(writer.token, second, 'd')
+    const texts = mailer.subjects('New Chat').map((mail) => mail.text)
+    expect(texts).toHaveLength(3)
+    expect(texts[2]).toContain('c')
+  })
+
+  it('ignores anonymous viewers and accounts that are not in the game', async () => {
+    const { writer, gameId } = await openedGame('outsider')
+    const outsider = await register('outsider-x')
+    await chat(writer.token, gameId, 'one')
+    const recorded = vi.spyOn(repo, 'recordGameOpened')
+
+    await open(undefined, gameId)
+    await open(outsider.token, gameId)
+    await open(outsider.token, gameId, '/state')
+    await chat(writer.token, gameId, 'two')
+    expect(mailer.subjects('New Chat')).toHaveLength(1)
+    // The mail count alone cannot tell: nothing may be stored for them at all.
+    expect(recorded).not.toHaveBeenCalled()
+  })
+
+  it('still sends the final game emails to a player who has not opened the game', async () => {
+    const { writer, gameId } = await openedGame('final')
+    await chat(writer.token, gameId, 'one')
+    mailer.sent.length = 0
+
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/delete`,
+      headers: bearer(writer.token),
+      payload: {},
+    })
+    expect(response.status).toBe(204)
+    expect(mailer.subjects('Game deleted')).toHaveLength(2)
+  })
+
+  it('stays silent for an unsubscribed player who opens the game', async () => {
+    const { writer, reader, gameId } = await openedGame('quiet')
+    await inject(app, { method: 'GET', url: `/api/admin/email/notification/${reader.id}/stop` })
+    await open(reader.token, gameId)
+    await chat(writer.token, gameId, 'hello')
+    expect(mailer.sent).toHaveLength(0)
   })
 })
 
