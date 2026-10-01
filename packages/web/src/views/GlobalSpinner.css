@@ -1,0 +1,58 @@
+/*
+ * Issue #225. One spinner size on every screen: the usual practice is a fixed
+ * size that reads from arm's length, not one that grows with the viewport. A
+ * touch screen gets a slightly larger one, because a finger covers part of it.
+ */
+.global-spinner {
+  --spinner-size: 44px;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+@media (pointer: coarse) {
+  .global-spinner {
+    --spinner-size: 56px;
+  }
+}
+
+.global-spinner[data-active='true'] {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+.global-spinner-ring {
+  box-sizing: border-box;
+  width: var(--spinner-size);
+  height: var(--spinner-size);
+  border: 5px solid color-mix(in srgb, var(--muted) 45%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  /* A solid disc, so the ring reads over the photo, the board and the panels alike. */
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  animation: global-spinner-turn 0.8s linear infinite;
+}
+
+/* Read by screen readers only; the ring is the visible part. */
+.global-spinner-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Slower, not stopped: a frozen ring would read as a hung page. */
+@media (prefers-reduced-motion: reduce) {
+  .global-spinner-ring {
+    animation-duration: 2.4s;
+  }
+}
+
+@keyframes global-spinner-turn {
+  to { transform: rotate(360deg); }
+}

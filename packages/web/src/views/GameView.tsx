@@ -13,6 +13,7 @@ import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { ApiError, api } from '../lib/api.js'
+import { useActivity } from '../lib/activity.js'
 import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
 
 import { BoardView } from './BoardView.js'
@@ -268,6 +269,8 @@ export function GameView({
   const [historical, setHistorical] = useState<GameRevisionView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Covers a write plus the reload after it, which `request()` alone would not.
+  useActivity(busy)
   const [reloadCount, setReloadCount] = useState(0)
   const [autoRefresh, setAutoRefresh] = useState<boolean>(() => {
     try { return localStorage.getItem('civ.autoRefresh') === 'true' } catch { return false }

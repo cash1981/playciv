@@ -3338,3 +3338,28 @@ Reading the chat, log or revisions alone is not a visit.
 only, on chat and phase mail only. The old `email_sent` table stays in D1 because
 the Mongo import still fills it, but nothing reads it. Existing games start with
 no stamps, so each player may get one extra mail right after the deploy.
+
+## A global spinner for every write (issue #225)
+
+**Decision.** One spinner, mounted once in `main.tsx` (`GlobalSpinner`), shows
+while any write is running. `request()` in `lib/api.ts` reports every
+non-GET call to `lib/activity.ts`, and `GameView` reports its own `busy` state
+with `useActivity`, so the spinner stays up through a write and the reload that
+follows instead of blinking off between them. Reads are not reported: most are
+background polls (`/rev`, chat, lobby), and a spinner every ten seconds would be
+noise. A view that wants a read to count calls `useActivity` itself.
+
+**Look.** A ring over a light scrim in the middle of the screen, 44 px, or 56 px
+on a touch screen (`pointer: coarse`). The size is fixed rather than growing
+with the viewport: that is the usual practice, since a spinner is read from arm's
+length on any screen, and a finger covers part of one on a phone. It waits 200 ms
+before it shows, so a fast action does not flash it, and it stays at least 500 ms
+once shown. It never takes clicks (`pointer-events: none`): the buttons that
+matter are already disabled while an action runs. `prefers-reduced-motion` slows
+the turn instead of stopping it, because a frozen ring looks like a hung page. A
+`role="status"` region stays mounted, so screen readers announce "Working…".
+
+**Consequences.** Actions that bypass `request()` (none today) would need
+`beginActivity` themselves. The scrim is also shown for a revision replay load,
+because `GameView` marks that as busy.
+

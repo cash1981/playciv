@@ -8,8 +8,10 @@
  * write does not.
  */
 
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useIsBusy } from './activity.js'
 import { ApiError, api, storeToken } from './api.js'
 
 /** A response stub with only the surface `request()` touches. */
@@ -54,6 +56,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  cleanup()
   vi.useRealTimers()
   vi.unstubAllGlobals()
   storeToken(null)
@@ -163,5 +166,62 @@ describe('api retry on a transient gateway failure', () => {
     expect(caught).toBeInstanceOf(ApiError)
     expect((caught as ApiError).code).toBe('INTERNAL_ERROR')
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('api requests and the global spinner', () => {
+  /** A fetch that answers only when the test says so. */
+  function heldFetch(): { release: (status: number, body: string) => void } {
+    let release: (response: StubResponse) => void = () => {}
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<StubResponse>((resolve) => { release = resolve })),
+    )
+    return { release: (status, body) => release(stubResponse(status, body)) }
+  }
+
+  it('reports a write as busy until it has finished', async () => {
+    const busy = renderHook(() => useIsBusy())
+    const held = heldFetch()
+
+    let pending: Promise<unknown> = Promise.resolve()
+    act(() => { pending = api.endTurn('g1') })
+    expect(busy.result.current).toBe(true)
+
+    await act(async () => {
+      held.release(200, '{}')
+      await pending
+    })
+    expect(busy.result.current).toBe(false)
+  })
+
+  it('stops reporting a write that failed', async () => {
+    const busy = renderHook(() => useIsBusy())
+    const held = heldFetch()
+
+    let pending: Promise<unknown> = Promise.resolve()
+    act(() => { pending = rejectionOf(api.endTurn('g1')) })
+    expect(busy.result.current).toBe(true)
+
+    await act(async () => {
+      held.release(409, '{"error":"CONFLICT","message":"stale"}')
+      await pending
+    })
+    expect(busy.result.current).toBe(false)
+  })
+
+  it('does not report a read, because most reads are background polls', async () => {
+    const busy = renderHook(() => useIsBusy())
+    const held = heldFetch()
+
+    let pending: Promise<unknown> = Promise.resolve()
+    act(() => { pending = api.gameRev('g1') })
+    expect(busy.result.current).toBe(false)
+
+    await act(async () => {
+      held.release(200, '{"rev":1}')
+      await pending
+    })
+    expect(busy.result.current).toBe(false)
   })
 })
