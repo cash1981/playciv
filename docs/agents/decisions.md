@@ -3766,7 +3766,7 @@ The human replaced the Military Science card with the one from the `DoC` folder
 and added the Military dock building from the same material. There is no old
 system behind either: the old client has no Military dock, so the values are the
 human's. The card unlocks the Military dock and the Academy; the Military dock
-has 5 pieces in the supply (like the Shipyard) and is worth +4 combat bonus
+has 5 pieces in the supply, shared with the Shipyard, and is worth +4 combat bonus
 (like the Academy).
 
 The new card is 752 x 490, smaller than the 1782 x 1140 photo it replaces, and it
@@ -3789,12 +3789,15 @@ The palette listed buildings in manifest order, which is alphabetical, so a
 building and its upgrade could be far apart. `BoardView.tsx` now groups them like
 the physical supply sheet the human pointed to: Library/University, Market/Bank,
 Temple/Cathedral, Barracks/Academy, Workshop/Ironmine, Shipyard/Military dock,
-Granary/Aqueduct, then Trading post and Harbor on their own. This is display
-only; the manifest and the supply counts in `board.ts` are unchanged, and a
+Granary/Aqueduct, then Trading post and Harbor on their own. The grouping
+itself is display only (the supply counts changed separately, below), and a
 building missing from the table still shows after the groups.
 
-The sheet prints one supply number per pair. That matches the shared pools
-already in `board.ts` for five pairs, but Workshop/Ironmine (6 each) and
-Shipyard/Military dock (5 each) have separate pools there. The pools were left
-as they are until the human says whether those two pairs share one.
+The sheet prints one supply number per pair. Five pairs already shared a pool in
+`board.ts`; Workshop/Ironmine (6 each) and Shipyard/Military dock (5 each) did
+not. The human confirmed that those two pairs share one pool as well, so
+`BUILDING_SUPPLY_GROUP` now has a `workshop-family` of 6 and a `shipyard-family`
+of 5. Games that already hold more than the pool allows (for example 6 Workshops
+and 3 Iron mines) keep their pieces; the palette shows 0 left and placing another
+is refused.
 

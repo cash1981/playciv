@@ -156,7 +156,10 @@ export function boardAssetsByCategory(category: BoardAssetCategory): readonly Bo
   return BOARD_ASSETS.filter((asset) => asset.category === category)
 }
 
-/** Upgrade families share one physical pool; all other buildings have their own. */
+/**
+ * Upgrade families, and the two other pairs on the supply sheet (Workshop/Ironmine,
+ * Shipyard/Military dock), share one physical pool; all other buildings have their own.
+ */
 const BUILDING_SUPPLY_GROUP: Readonly<Record<string, string>> = {
   'buildings/academy': 'barracks-family',
   'buildings/barracks': 'barracks-family',
@@ -168,6 +171,10 @@ const BUILDING_SUPPLY_GROUP: Readonly<Record<string, string>> = {
   'buildings/market': 'market-family',
   'buildings/cathedral': 'temple-family',
   'buildings/temple': 'temple-family',
+  'buildings/ironmine': 'workshop-family',
+  'buildings/workshop': 'workshop-family',
+  'buildings/militarydock': 'shipyard-family',
+  'buildings/shipyard': 'shipyard-family',
 }
 
 /** Physical building counts from the Moderator building reference sheet. */
@@ -177,12 +184,10 @@ const BUILDING_SUPPLY_LIMIT: Readonly<Record<string, number>> = {
   'temple-family': 5,
   'granary-family': 6,
   'library-family': 6,
-  'buildings/workshop': 6,
+  'workshop-family': 6,
+  'shipyard-family': 5,
   'buildings/harbor': 10,
   'buildings/tradingpost': 6,
-  'buildings/shipyard': 5,
-  'buildings/militarydock': 5,
-  'buildings/ironmine': 6,
 }
 
 const buildingSupplyGroup = (asset: BoardAsset): string | undefined =>

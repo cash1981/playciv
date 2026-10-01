@@ -13,7 +13,7 @@ _Last updated: 2026-10-01_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 707 engine, 294 server, 463 web on `feat/military-dock` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 708 engine, 294 server, 463 web on `feat/military-dock` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -24,9 +24,10 @@ _Last updated: 2026-10-01_
   field to the server total, so it changes at once instead of after the 600 ms
   debounce and the request. Client only. See `decisions.md`, 2026-10-01, which
   also records a known limitation for saves that never arrive.
-- **Military dock.** New building piece (`buildings/militarydock`, 5 in the
-  supply, +4 combat bonus) and the DoC card for Military Science, which now
-  unlocks the Military dock and the Academy. The Buildings tab in the Pieces palette is
+- **Military dock.** New building piece (`buildings/militarydock`, +4
+  combat bonus) and the DoC card for Military Science, which now unlocks the Military
+  dock and the Academy. The Military dock shares a pool of 5 with the Shipyard, and
+  Workshop and Ironmine now share a pool of 6. The Buildings tab in the Pieces palette is
   now grouped by upgrade family in the order of the supply sheet (Library/University,
   Market/Bank, ..., Trading post, Harbor) instead of alphabetically. Brief:
   `tasks/military-dock.md`.

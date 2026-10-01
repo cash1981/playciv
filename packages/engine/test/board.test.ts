@@ -290,6 +290,31 @@ describe('placePiece', () => {
     }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'buildings/barracks', limit: 5 })
   })
 
+  it('shares one pool between Workshop and Ironmine, and between Shipyard and Military dock', () => {
+    let state = firstCivGame()
+    for (let index = 0; index < 4; index++) state = place(state, 'buildings/workshop', 0, 0)
+    for (let index = 0; index < 2; index++) state = place(state, 'buildings/ironmine', 0, 0)
+    expect(unwrapErr(placePiece(state, {
+      playerId: CASH1981,
+      assetId: 'buildings/workshop',
+      x: 0,
+      y: 0,
+    }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'buildings/workshop', limit: 6 })
+
+    state = firstCivGame()
+    for (let index = 0; index < 3; index++) state = place(state, 'buildings/shipyard', 0, 0)
+    for (let index = 0; index < 2; index++) state = place(state, 'buildings/militarydock', 0, 0)
+    const dock = findBoardAsset('buildings/militarydock')
+    if (dock === undefined) throw new Error('militarydock missing from manifest')
+    expect(remainingBoardAssetCount(dock, state.board.pieces, state.numOfPlayers)).toBe(0)
+    expect(unwrapErr(placePiece(state, {
+      playerId: CASH1981,
+      assetId: 'buildings/shipyard',
+      x: 0,
+      y: 0,
+    }))).toEqual({ kind: 'BOARD_ASSET_LIMIT_REACHED', assetId: 'buildings/shipyard', limit: 5 })
+  })
+
   it('gives Harbor its physical supply of ten', () => {
     let state = firstCivGame()
     for (let index = 0; index < 10; index++) state = place(state, 'buildings/harbor', 0, 0)
