@@ -56,11 +56,17 @@ describe('combatBonusOf', () => {
     expect(bonus(state)).toBe(10)
   })
 
+  it('counts a Military dock as +4', () => {
+    const state = place(firstCivGame(), CASH1981, 'buildings/militarydock', 0)
+    expect(bonus(state)).toBe(4)
+  })
+
   it('ignores buildings that give no bonus, and buildings placed by someone else', () => {
     let state = place(firstCivGame(), CASH1981, 'buildings/library', 0)
     state = place(state, KARANDRAS1, 'buildings/barracks', 1)
+    state = place(state, KARANDRAS1, 'buildings/militarydock', 2)
     expect(bonus(state)).toBe(0)
-    expect(bonus(state, KARANDRAS1)).toBe(2)
+    expect(bonus(state, KARANDRAS1)).toBe(6)
   })
 
   it('counts each General as +4', () => {

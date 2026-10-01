@@ -3760,3 +3760,44 @@ said nothing was; the right HP "just took a while" to show.
   hint that the edit had not landed. The dropped save is an older behaviour and
   was left alone.
 
+## 2026-10-01 - Military dock and the DoC Military Science card
+
+The human replaced the Military Science card with the one from the `DoC` folder
+and added the Military dock building from the same material. There is no old
+system behind either: the old client has no Military dock, so the values are the
+human's. The card unlocks the Military dock and the Academy; the Military dock
+has 5 pieces in the supply, shared with the Shipyard, and is worth +4 combat bonus
+(like the Academy).
+
+The new card is 752 x 490, smaller than the 1782 x 1140 photo it replaces, and it
+is stored as it is rather than upscaled. The 154 x 100 thumbnail
+`MilitaryScience.png` was replaced as well.
+Regenerating assets can undo this: `tools/tech-assets.ps1` maps
+`military_science_lvl3.jpg` from the gitignored `Civilization/Moderator/techs/`
+photos, and `tools/item-assets.ps1` copies the old `MilitaryScience.png` from
+`old-civ-web`, so re-running either restores the old card. (The `.png` is not
+displayed for techs; `itemImage()` asks for the `.jpg`.) For the building,
+`tools/board-assets.ps1` now labels `building/militarydock` as "Military dock",
+but it only lists what is in `Moderator/buildings/`: copy
+`Moderator/DoC/New Markers/Military Dock2.png` there as `militarydock.png`, or the
+manifest entry disappears on the next run. The card cost of 10 production printed
+on the DoC card is not modelled, as the engine does not track building costs.
+
+## 2026-10-01 - The Buildings tab is grouped by upgrade family
+
+The palette listed buildings in manifest order, which is alphabetical, so a
+building and its upgrade could be far apart. `BoardView.tsx` now groups them like
+the physical supply sheet the human pointed to: Library/University, Market/Bank,
+Temple/Cathedral, Barracks/Academy, Workshop/Ironmine, Shipyard/Military dock,
+Granary/Aqueduct, then Trading post and Harbor on their own. The grouping
+itself is display only (the supply counts changed separately, below), and a
+building missing from the table still shows after the groups.
+
+The sheet prints one supply number per pair. Five pairs already shared a pool in
+`board.ts`; Workshop/Ironmine (6 each) and Shipyard/Military dock (5 each) did
+not. The human confirmed that those two pairs share one pool as well, so
+`BUILDING_SUPPLY_GROUP` now has a `workshop-family` of 6 and a `shipyard-family`
+of 5. Games that already hold more than the pool allows (for example 6 Workshops
+and 3 Iron mines) keep their pieces; the palette shows 0 left and placing another
+is refused.
+

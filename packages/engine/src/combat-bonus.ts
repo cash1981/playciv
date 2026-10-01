@@ -16,6 +16,7 @@ const BUILDING_BONUS: Readonly<Record<string, number>> = {
   'buildings/barracks': 2,
   // The Shipyard is the navy building on the board; there is no asset called Navy.
   'buildings/shipyard': 2,
+  'buildings/militarydock': 4,
   'buildings/academy': 4,
 }
 

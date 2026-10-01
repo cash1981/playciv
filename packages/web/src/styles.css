@@ -1141,6 +1141,25 @@ ul.list > li:last-child {
   overflow-y: auto;
 }
 
+/* One upgrade family on the Buildings tab: the pieces share a framed box, and a
+   pair takes two grid cells so it reads as one unit. */
+.palette-group {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.palette-group-pair {
+  grid-column: span 2;
+}
+
+.palette-group .palette-item {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .palette-item {
   display: flex;
   flex-direction: column;

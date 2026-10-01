@@ -14,6 +14,10 @@
  * Space Flight has no entry on that sheet (Java added it in code, not from
  * the spreadsheet — see `gamedata.ts`); its line below is the human's own
  * text, not a transcription of anything printed.
+ *
+ * Military Science is the second exception: it follows the DoC card, which
+ * unlocks the Military dock as well as the Academy, and the help sheet still
+ * shows the old card. Do not "correct" it back (decisions.md, 2026-10-01).
  */
 export const TECH_TEXT: Readonly<Record<string, string>> = {
   'Animal Husbandry':
@@ -93,7 +97,8 @@ export const TECH_TEXT: Readonly<Record<string, string>> = {
   'Metal Casting':
     'Incense — City Management: gain 7 culture. Unlocks: Level III Artillery units, Statue of Liberty.',
   'Military Science':
-    'Your cities each produce 1 extra production for every 3 coins you possess. Unlocks: the Academy building.',
+    'Your cities each produce 1 extra production for every 3 coins you possess. ' +
+    'Unlocks: the Military dock building, the Academy building.',
   Railroad: 'Unlocks: the Iron Mine building, 1 coin, Level III Mounted units.',
   'Steam Power':
     'You may cross or end your movement in water. Silk — City Management: move all of your figures in one ' +

@@ -127,6 +127,7 @@ $exclude = @(
 # number is dropped.
 $labelOverrides = @{
     'marker/coin1' = 'Coin'
+    'building/militarydock' = 'Military dock'
 }
 
 function Get-Label([string] $category, [string] $baseName) {
