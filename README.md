@@ -150,7 +150,7 @@ piece selected, the arrow keys nudge it a small step in that direction — the
 step is a constant number of screen pixels, converted by the current zoom
 level, so it looks the same size at any zoom (issue #193).
 
-The palette has eleven categories, generated from the images on disk. Buildings
+The palette has twelve categories, generated from the images on disk. Buildings
 and resources use finite physical supplies: the physical building counts are
 read from the reference sheet, wheat, iron, silk and incense are each limited by
 the player count, and each Great Person type has three board pieces. Each colour
@@ -158,7 +158,10 @@ has six armies and two scouts; Russia also has one white army, which only the
 Russian player can place (issue #204). Huts and
 Villages are **unlimited** — they are picked up during play rather than dealt
 from a setup supply, so the player-count cap does not apply to them (issue
-#116). The separate Great Person card deck remains a hand/draw mechanic.
+#116). Each of the five relics (Ark of the Covenant, Atlantis, Attila's Village,
+School of Confucius, Seven Cities of Gold) exists once per game: placing it
+uses it up, and removing it from the board puts it back (issue #227). The
+separate Great Person card deck remains a hand/draw mechanic.
 
 | Category | Count | From |
 | --- | --- | --- |
@@ -168,6 +171,7 @@ from a setup supply, so the player-count cap does not apply to them (issue
 | Cities | 30 | capital/city/metropolis, with and without walls, per colour |
 | City-states | 5 | the five neutral city-states (cs1–cs5) |
 | Buildings | 15 | market, temple, library, … |
+| Relics | 5 | the five relic markers, one of each per game |
 | Great People | 6 | artist, builder, general, humanitarian, merchant, scientist |
 | Starting tiles | 16 | one per civilization |
 | Map tiles | 28 | exploration tiles 1–27, plus the back |

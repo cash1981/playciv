@@ -97,6 +97,8 @@ export type BoardAssetCategory =
   | 'wonder'
   /** The five neutral city-states (cs1–cs5), placed on the map like cities. */
   | 'citystate'
+  /** Relic markers from the expansions; one of each exists in a game. */
+  | 'relic'
 
 /** Pieces can face four ways. Degrees, clockwise. */
 export type Rotation = 0 | 90 | 180 | 270
@@ -209,6 +211,8 @@ export function boardAssetLimit(asset: BoardAsset, numOfPlayers: number): number
     return Math.max(0, Math.min(5, numOfPlayers))
   }
   if (asset.category === 'greatperson') return 3
+  // A relic marker is unique: one physical piece per relic (issue #227).
+  if (asset.category === 'relic') return 1
   if (asset.category === 'figure') return figureLimit(asset)
   return undefined
 }

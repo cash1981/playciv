@@ -3366,3 +3366,27 @@ the turn instead of stopping it, because a frozen ring looks like a hung page. A
 **Consequences.** Actions that bypass `request()` (none today) would need
 `beginActivity` themselves. The scrim is also shown for a revision replay load,
 because `GameView` marks that as busy.
+
+## 2026-10-01 - Issue #227: relics are a piece category with a supply of one
+
+**Decision.** The relic markers from the expansions are a new board category,
+`relic`, in the same palette as buildings. There are five: Ark of the Covenant,
+Atlantis, Attila's Village, School of Confucius and Seven Cities of Gold. Each
+has a supply of one for the whole game (`boardAssetLimit` returns 1), so placing
+one disables it in the palette, and removing it from the board brings it back.
+Anyone in the game may place or move one, as with other pieces.
+
+**Source.** The five names come from the human's file list for the artwork; the
+Fame and Fortune rules confirm Atlantis and School of Confucius as relics. The
+images arrived without their file names, so they were matched to names by what
+they show, which is worth a look if one seems swapped (rename the files in
+`packages/web/public/board/relics/`; the manifest ids follow the file names).
+
+**Not done.** The relic effects (a free tech, two Great People, and so on) are
+not automated. The marker is only a piece to put on the map, like a hut.
+
+**Consequences.** `tools/board-assets.ps1` reads a `relics` folder from
+`Civilization/Moderator` and caps relic art at 90 px. The manifest entries were
+written by hand to match what it would produce, and the Moderator folder must
+use the lower case names above.
+

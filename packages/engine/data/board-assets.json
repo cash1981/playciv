@@ -1854,6 +1854,46 @@
       "label": "City-state 5",
       "width": 90,
       "height": 88
+    },
+    {
+      "id": "relics/ark_of_the_covenant",
+      "category": "relic",
+      "path": "relics/ark_of_the_covenant.png",
+      "label": "Ark of the Covenant",
+      "width": 90,
+      "height": 88
+    },
+    {
+      "id": "relics/atlantis",
+      "category": "relic",
+      "path": "relics/atlantis.png",
+      "label": "Atlantis",
+      "width": 84,
+      "height": 85
+    },
+    {
+      "id": "relics/attilas_village",
+      "category": "relic",
+      "path": "relics/attilas_village.png",
+      "label": "Attila's Village",
+      "width": 90,
+      "height": 88
+    },
+    {
+      "id": "relics/school_of_confucius",
+      "category": "relic",
+      "path": "relics/school_of_confucius.png",
+      "label": "School of Confucius",
+      "width": 84,
+      "height": 84
+    },
+    {
+      "id": "relics/seven_cities_of_gold",
+      "category": "relic",
+      "path": "relics/seven_cities_of_gold.png",
+      "label": "Seven Cities of Gold",
+      "width": 84,
+      "height": 84
     }
   ]
 }
