@@ -33,8 +33,17 @@ const TIMELINE_REFRESH_MS = 10_000
 // react-markdown and its parser are a large part of the bundle and only a game
 // with chat orders on needs them, so they load on first use. The plain text shows
 // until they have, and for as long as they fail to.
+// A rejected import (a deploy replaced the chunk, a flaky connection) would otherwise
+// reach the root and blank the page, as Suspense only catches suspending. So the
+// import resolves to the plain text component instead.
+function PlainMarkdown({ markdown }: { readonly markdown: string }): React.JSX.Element {
+  return <div className="safe-markdown chat-orders-plain">{markdown}</div>
+}
+
 const SafeMarkdown = lazy(() =>
-  import('./SafeMarkdown.js').then((module) => ({ default: module.SafeMarkdown })),
+  import('./SafeMarkdown.js')
+    .then((module) => ({ default: module.SafeMarkdown }))
+    .catch(() => ({ default: PlainMarkdown })),
 )
 
 /** Short names for the tag on an order and the waiting line in the title. */
@@ -258,7 +267,7 @@ function TimelineRow({
         {replaced && <span className="tag">replaced</span>}
       </div>
       <div className={replaced ? 'chat-orders-body chat-orders-replaced' : 'chat-orders-body'}>
-        <Suspense fallback={<div className="safe-markdown chat-orders-plain">{row.message}</div>}>
+        <Suspense fallback={<PlainMarkdown markdown={row.message} />}>
           <SafeMarkdown markdown={row.message} />
         </Suspense>
       </div>

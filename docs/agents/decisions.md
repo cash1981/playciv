@@ -3722,3 +3722,16 @@ already set.
 - Only the orders' text is copied. There is no mail, and no start player history
   for the classic turns (the done markers a classic reveal sets are in the state
   already).
+
+## 2026-10-02 - Chat orders: last review notes
+
+The Markdown chunk loads lazily and a failed load falls back to the plain text of
+the message, not to a blank page: React's `Suspense` does not catch a rejected
+import, and the app has no error boundary.
+
+`legacyOrdersCopied` migrates to true for a game that is already in chat mode when
+the field first appears, and to false otherwise. That assumes the feature never
+shipped in parts: a game that had chat orders on and then off before the field
+existed would copy its classic history again on the next switch-on, and the
+orders posted in chat mode would appear twice. No such game can exist when the
+whole feature ships as one pull request.
