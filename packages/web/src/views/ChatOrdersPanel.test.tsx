@@ -647,12 +647,12 @@ describe('the Done button', () => {
     await click(screen.getByRole('button', { name: 'Order' }))
 
     // Start of turn and Trade are done in turn 4
-    expect(optionTexts()).toEqual(['✓ Start of turn', '✓ Trade', 'City management', 'Movement', 'Research'])
+    expect(optionTexts()).toEqual(['Start of turn ✓', 'Trade ✓', 'City management', 'Movement', 'Research'])
     await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '3' } }) })
     // Turn 3 was finished
-    expect(optionTexts().every((text) => text.startsWith('✓ '))).toBe(true)
+    expect(optionTexts().every((text) => text.endsWith(' ✓'))).toBe(true)
     await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '4' } }) })
-    expect(optionTexts().filter((text) => text.startsWith('✓ '))).toHaveLength(2)
+    expect(optionTexts().filter((text) => text.endsWith(' ✓'))).toHaveLength(2)
   })
 
   it('on a phase that is done, offers to undo it, and an order can still be written there', async () => {

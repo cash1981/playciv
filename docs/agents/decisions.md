@@ -3444,3 +3444,7 @@ have started (1 to the current turn); the next turn appears when every player ha
 finished the current one, as in the classic panel. Orders for an earlier turn are
 unchanged. This supersedes the "one turn ahead" remark in the 2026-09-29 slice 2
 notes.
+
+Amendment, same day: the check mark goes after the phase name ("Trade ✓"), not
+before it. macOS draws its own tick before the selected option, so a mark in
+front showed two ticks on a selected, finished phase.

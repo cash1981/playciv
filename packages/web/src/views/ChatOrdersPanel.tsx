@@ -593,14 +593,16 @@ export function ChatOrdersPanel({
                       }}
                     >
                       {/* A native option cannot be styled everywhere, so the check mark carries
-                          the meaning; the strike-through shows where the browser allows it. */}
+                          the meaning; the strike-through shows where the browser allows it.
+                          The mark goes after the name: macOS draws its own tick before the
+                          selected option, and a second one in front would read as a double. */}
                       {TURN_PHASES.map((phase) => (
                         <option
                           key={phase}
                           value={phase}
                           style={isPhaseDone(phase) ? { textDecoration: 'line-through' } : undefined}
                         >
-                          {isPhaseDone(phase) ? `✓ ${PHASE_OPTION[phase]}` : PHASE_OPTION[phase]}
+                          {isPhaseDone(phase) ? `${PHASE_OPTION[phase]} ✓` : PHASE_OPTION[phase]}
                         </option>
                       ))}
                     </select>
