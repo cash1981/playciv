@@ -163,6 +163,20 @@
   overflow-y: auto;
 }
 
+/* Crepe draws the bar's icons in its "outline" colour, which the app maps to the
+   hairline colour: nearly invisible on the dark panel. Bold and italic need to be
+   seen, so they take the text colour, and the gold accent when they are on. */
+.chat-orders-composer .milkdown .milkdown-top-bar .top-bar-inner .top-bar-item svg,
+.chat-orders-composer .milkdown .milkdown-top-bar .top-bar-inner .top-bar-chevron svg {
+  color: var(--text);
+  fill: var(--text);
+}
+
+.chat-orders-composer .milkdown .milkdown-top-bar .top-bar-inner .top-bar-item.active svg {
+  color: var(--accent);
+  fill: var(--accent);
+}
+
 .chat-orders-fields {
   display: flex;
   gap: 0.5rem;

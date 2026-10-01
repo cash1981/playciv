@@ -3488,3 +3488,8 @@ them as bare icons). The default stays the full bar, so the classic Turn orders
 and the private log are unchanged. The text style menu did nothing before
 because the earlier "one scrolling row" CSS clipped its dropdown; with three
 controls the bar needs no scrolling on a phone, so that CSS is gone.
+
+Amendment, same day: Bold and Italic were there but invisible. Crepe draws the
+bar's icons in its "outline" colour, and the app maps that colour to the hairline
+colour (`--line`), which is almost the panel background. In the composer the icons
+now take the text colour, and the gold accent when they are on.
