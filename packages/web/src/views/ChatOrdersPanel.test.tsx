@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs'
 import { forwardRef, useImperativeHandle } from 'react'
 import { TURN_PHASE_LABEL } from '@civ/engine'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
@@ -224,7 +225,8 @@ describe('the timeline', () => {
     const row = container.querySelector('.chat-orders-message')
     // Read as "Greeks - Bob", in one box, civ and nickname both in the player's colour
     expect(row?.querySelector('.chat-orders-author')?.textContent).toBe('Greeks - Bob')
-    expect(row?.querySelector('.chat-orders-author > span')?.className).toBe('player-blue')
+    // The civ is small, as in the classic chat
+    expect(row?.querySelector('.chat-orders-author > small')?.className).toBe('player-blue')
     expect(row?.querySelector('strong')?.textContent).toBe('Bob')
     expect(row?.querySelector('strong')?.className).toBe('player-blue')
     expect(row?.className).toContain('player-blue')
@@ -486,12 +488,30 @@ describe('the composer', () => {
     expect(viewerTurn(makeView({ you: null }))).toBe(4)
   })
 
-  it('gives the composer the simple formatting bar, and the private log the full one', async () => {
+  it('gives the composer the simple formatting bar, and the private log the default one', async () => {
     await renderPanel(makeView())
 
     expect(screen.getByLabelText('Chat message').getAttribute('data-toolbar')).toBe('simple')
     await click(screen.getByRole('button', { name: 'Order' }))
     expect(screen.getByLabelText('Order').getAttribute('data-toolbar')).toBe('simple')
+
+    // The private log asks for nothing, so the editor's own default (the full bar) applies
+    await click(filterChip('Private'))
+    expect(screen.getByLabelText('Private log').hasAttribute('data-toolbar')).toBe(false)
+  })
+
+  it('never offers a turn the viewer has skipped over, or one before the game\'s own', () => {
+    // Turn 4 is the game's. The viewer finished 4, and also 6 (writing ahead)
+    const ahead = makeView({
+      you: seat('Alice', 1, {
+        playerTurns: [
+          { turnNumber: 3, done: doneUpTo('RESEARCH') },
+          { turnNumber: 4, done: doneUpTo('RESEARCH') },
+          { turnNumber: 6, done: doneUpTo('RESEARCH') },
+        ],
+      }),
+    })
+    expect(viewerTurn(ahead)).toBe(5)
   })
 
   it('lets the turn and the phase be changed before sending', async () => {
@@ -608,7 +628,10 @@ describe('a game change and unmounting', () => {
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
   })
 
-  it('does nothing with a page that arrives after the panel is gone', async () => {
+  // This cannot prove the guard: React 18 and later no longer warns about a state
+  // update on an unmounted component, so the spy would stay quiet either way. It
+  // does show that a late page after unmount does not throw.
+  it('does not throw when a page arrives after the panel is gone', async () => {
     let finish: ((first: ChatPageDto) => void) | undefined
     chatPage.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
@@ -618,6 +641,70 @@ describe('a game change and unmounting', () => {
     await act(async () => { finish?.(page([message('a')])) })
 
     expect(errors).not.toHaveBeenCalled()
+  })
+})
+
+describe('the filter tabs by keyboard', () => {
+  const press = async (element: HTMLElement, key: string): Promise<void> => {
+    await act(async () => { fireEvent.keyDown(element, { key }) })
+  }
+  const selected = (): string | undefined =>
+    within(screen.getByRole('tablist', { name: 'Show' }))
+      .getAllByRole('tab')
+      .find((tab) => tab.getAttribute('aria-selected') === 'true')?.textContent ?? undefined
+
+  it('has one tab stop, on the selected tab, and each tab names the panel it controls', async () => {
+    await renderPanel(makeView())
+
+    const tabs = within(screen.getByRole('tablist', { name: 'Show' })).getAllByRole('tab')
+    expect(tabs.map((tab) => tab.tabIndex)).toEqual([0, -1, -1, -1])
+    const panel = screen.getByRole('tabpanel')
+    expect(filterChip('All').getAttribute('aria-controls')).toBe(panel.id)
+    expect(filterChip('Chat').getAttribute('aria-controls')).toBe(panel.id)
+    // The Private tab controls the other panel, which exists once it is selected
+    await click(filterChip('Private'))
+    expect(filterChip('Private').getAttribute('aria-controls')).toBe(screen.getByRole('tabpanel').id)
+    expect(within(screen.getByRole('tablist', { name: 'Show' })).getAllByRole('tab').map((tab) => tab.tabIndex)).toEqual([-1, -1, -1, 0])
+  })
+
+  it('moves with the arrow keys, wrapping at both ends, and with Home and End', async () => {
+    await renderPanel(makeView())
+
+    await press(filterChip('All'), 'ArrowRight')
+    expect(selected()).toBe('Orders')
+    await press(filterChip('Orders'), 'End')
+    expect(selected()).toBe('Private')
+    await press(filterChip('Private'), 'ArrowRight')
+    expect(selected()).toBe('All')
+    await press(filterChip('All'), 'ArrowLeft')
+    expect(selected()).toBe('Private')
+    await press(filterChip('Private'), 'Home')
+    expect(selected()).toBe('All')
+    // Any other key does nothing
+    await press(filterChip('All'), 'a')
+    expect(selected()).toBe('All')
+  })
+})
+
+describe('the selected chip', () => {
+  it('has a style of its own, which the stylesheet gives to aria-selected as well as aria-pressed', () => {
+    const css = readFileSync('src/views/ChatOrdersPanel.css', 'utf8')
+    expect(css).toContain(".chat-orders-chip[aria-selected='true']")
+    expect(css).toContain(".chat-orders-chip[aria-pressed='true']")
+  })
+
+  it('does not rely on a class that no rule styles', async () => {
+    await renderPanel(makeView())
+    expect(filterChip('All').className).toBe('chat-orders-chip')
+    expect(screen.getByRole('button', { name: 'Chat' }).className).toBe('chat-orders-chip')
+  })
+})
+
+describe('the Markdown renderer', () => {
+  it('is loaded on demand, not imported by the panel, so a classic game does not carry it', () => {
+    const source = readFileSync('src/views/ChatOrdersPanel.tsx', 'utf8')
+    expect(source).not.toMatch(/^import .* from '\.\/SafeMarkdown\.js'/m)
+    expect(source).toContain("import('./SafeMarkdown.js')")
   })
 })
 
@@ -661,15 +748,18 @@ describe('the Done button', () => {
 
     expect(screen.queryByRole('button', { name: /as done$/ })).toBeNull()
     await click(screen.getByRole('button', { name: 'Order' }))
-    expect(screen.getByRole('button', { name: 'Mark City management as done' }).textContent).toBe('End turn')
+    const button = screen.getByRole('button', { name: 'End turn: mark City management as done' })
+    expect(button.textContent).toBe('End turn')
+    // The accessible name starts with the visible label (WCAG 2.5.3)
+    expect(button.getAttribute('aria-label')?.startsWith(button.textContent ?? '')).toBe(true)
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('marks the chosen turn and phase done, and follows the viewer to the next phase', async () => {
+  it('marks the default turn and phase done', async () => {
     await renderPanel(makeView())
     await click(screen.getByRole('button', { name: 'Order' }))
 
-    await click(screen.getByRole('button', { name: 'Mark City management as done' }))
+    await click(screen.getByRole('button', { name: 'End turn: mark City management as done' }))
 
     expect(markDone).toHaveBeenCalledExactlyOnceWith('game', 'CM', 4)
     expect(unmarkDone).not.toHaveBeenCalled()
@@ -680,7 +770,7 @@ describe('the Done button', () => {
     await click(screen.getByRole('button', { name: 'Order' }))
 
     await act(async () => { fireEvent.change(screen.getByLabelText('Phase'), { target: { value: 'MOVEMENT' } }) })
-    await click(screen.getByRole('button', { name: 'Mark Movement as done' }))
+    await click(screen.getByRole('button', { name: 'End turn: mark Movement as done' }))
 
     expect(markDone).toHaveBeenCalledExactlyOnceWith('game', 'MOVEMENT', 4)
   })
@@ -703,12 +793,14 @@ describe('the Done button', () => {
     await click(screen.getByRole('button', { name: 'Order' }))
     await act(async () => { fireEvent.change(screen.getByLabelText('Phase'), { target: { value: 'TRADE' } }) })
 
-    expect(screen.queryByRole('button', { name: 'Mark Trade as done' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^End turn/ })).toBeNull()
     await type('Order', 'Trade again')
     await click(screen.getByRole('button', { name: 'Send' }))
     expect(postOrder).toHaveBeenCalledExactlyOnceWith('game', 'TRADE', 'Trade again', 4)
 
-    await click(screen.getByRole('button', { name: 'Unmark Trade as done' }))
+    const undo = screen.getByRole('button', { name: 'Not done: unmark Trade as done' })
+    expect(undo.textContent).toBe('Not done')
+    await click(undo)
     expect(unmarkDone).toHaveBeenCalledExactlyOnceWith('game', 'TRADE', 4)
     expect(markDone).not.toHaveBeenCalled()
   })

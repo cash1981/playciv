@@ -1,14 +1,15 @@
 /**
  * Chat orders (issue #215): one timeline instead of the Chat and Turn orders
  * panels. A message is chat or an order tagged with a turn and a phase, and
- * players mark phases done from a sheet. Shown only while `view.chatOrders` is
- * on; the classic panels are untouched.
+ * a player says a turn is finished with End turn on the Order tab, which marks
+ * the chosen phase done. Shown only while `view.chatOrders` is on; the classic
+ * panels are untouched.
  *
  * The timeline is public. The Private tab is the viewer's own `gamenote`, which
  * the view already carries for them alone.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { TURN_PHASES, TURN_PHASE_LABEL } from '@civ/engine'
 import type { TurnPhase } from '@civ/engine'
@@ -23,12 +24,18 @@ import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
 import type { MarkdownEditorComponent, MarkdownEditorHandle } from './MarkdownEditor.js'
 import { colorClass } from './playerColor.js'
-import { SafeMarkdown } from './SafeMarkdown.js'
 import type { SaveStatus } from './TurnPanel.js'
-import { PrivateLogWorkspace } from './TurnPanel.js'
+import { handleTabKeyDown, PrivateLogWorkspace } from './TurnPanel.js'
 import './ChatOrdersPanel.css'
 
 const TIMELINE_REFRESH_MS = 10_000
+
+// react-markdown and its parser are a large part of the bundle and only a game
+// with chat orders on needs them, so they load on first use. The plain text shows
+// until they have, and for as long as they fail to.
+const SafeMarkdown = lazy(() =>
+  import('./SafeMarkdown.js').then((module) => ({ default: module.SafeMarkdown })),
+)
 
 /** Short names for the tag on an order and the waiting line in the title. */
 const PHASE_SHORT: Readonly<Record<TurnPhase, string>> = {
@@ -115,24 +122,30 @@ const isVisible = (row: TimelineMessageDto, filter: Filter): boolean => {
   return true
 }
 
-/** The first phase the viewer has not marked done in that turn; Research when all are. */
 /** `Trade` becomes `T̶r̶a̶d̶e̶`: a strike-through that survives in a plain-text option. */
 export const strikeThrough = (text: string): string =>
   Array.from(text, (character) => `${character}\u0336`).join('')
 
 /**
- * The turn the viewer is on. The game's current turn waits for every player,
- * but a player who has finished Research in a turn moves on to the next one
- * without waiting for the others (they still see what they are missing).
+ * The turn the viewer is on: the first turn at or after the game's current turn
+ * in which they have not marked Research done. The game's turn waits for every
+ * player, but a player who has finished Research moves on to the next turn
+ * without waiting for the others (they still see what they are missing). A turn
+ * before the game's own is never offered, and one the viewer skipped over stays
+ * where it is.
  */
 export function viewerTurn(view: PlayerView): number {
-  const gameTurn = view.activeTurn?.turnNumber ?? 1
-  const finished = (view.you?.playerTurns ?? [])
-    .filter((turn) => turn.done.RESEARCH === true)
-    .reduce((highest, turn) => Math.max(highest, turn.turnNumber), 0)
-  return Math.max(gameTurn, finished + 1)
+  const finished = new Set(
+    (view.you?.playerTurns ?? [])
+      .filter((turn) => turn.done.RESEARCH === true)
+      .map((turn) => turn.turnNumber),
+  )
+  let turn = view.activeTurn?.turnNumber ?? 1
+  while (finished.has(turn)) turn += 1
+  return turn
 }
 
+/** The first phase the viewer has not marked done in that turn; Research when all are. */
 export function firstOpenPhase(view: PlayerView, turnNumber: number): TurnPhase {
   const turn = view.you?.playerTurns.find((candidate) => candidate.turnNumber === turnNumber)
   return TURN_PHASES.find((phase) => turn?.done[phase] !== true) ?? 'RESEARCH'
@@ -235,7 +248,7 @@ function TimelineRow({
       <div className="chat-orders-meta">
         {/* "Greeks - nickname": one box, so the civ never ends up alone at the end of a line */}
         <span className="chat-orders-author">
-          {author?.civilization != null && <span className={tone}>{author.civilization} - </span>}
+          {author?.civilization != null && <small className={tone}>{author.civilization} - </small>}
           <strong className={tone}>{row.username}</strong>
         </span>
         <ChatTimestamp createdAt={row.createdAt} />
@@ -245,7 +258,9 @@ function TimelineRow({
         {replaced && <span className="tag">replaced</span>}
       </div>
       <div className={replaced ? 'chat-orders-body chat-orders-replaced' : 'chat-orders-body'}>
-        <SafeMarkdown markdown={row.message} />
+        <Suspense fallback={<div className="safe-markdown chat-orders-plain">{row.message}</div>}>
+          <SafeMarkdown markdown={row.message} />
+        </Suspense>
       </div>
     </li>
   )
@@ -472,8 +487,11 @@ export function ChatOrdersPanel({
             type="button"
             role="tab"
             id={`chat-orders-filter-${name}`}
-            className={filter === name ? 'chat-orders-chip revealed' : 'chat-orders-chip'}
+            className="chat-orders-chip"
             aria-selected={filter === name}
+            aria-controls={name === 'private' ? 'chat-orders-private-panel' : 'chat-orders-timeline-panel'}
+            tabIndex={filter === name ? 0 : -1}
+            onKeyDown={handleTabKeyDown}
             onClick={() => {
               setFilter(name)
               stickToBottom.current = true
@@ -575,7 +593,7 @@ export function ChatOrdersPanel({
                   <button
                     key={name}
                     type="button"
-                    className={mode === name ? 'chat-orders-chip revealed' : 'chat-orders-chip'}
+                    className="chat-orders-chip"
                     aria-pressed={mode === name}
                     onClick={() => setMode(name)}
                   >
@@ -641,7 +659,12 @@ export function ChatOrdersPanel({
                   <button
                     type="button"
                     disabled={busy}
-                    aria-label={`${isPhaseDone(orderPhase) ? 'Unmark' : 'Mark'} ${PHASE_OPTION[orderPhase]} as done`}
+                    aria-label={
+                      // Starts with the visible text (WCAG 2.5.3, Label in Name)
+                      isPhaseDone(orderPhase)
+                        ? `Not done: unmark ${PHASE_OPTION[orderPhase]} as done`
+                        : `End turn: mark ${PHASE_OPTION[orderPhase]} as done`
+                    }
                     onClick={() => {
                       const phase = orderPhase
                       const turn = orderTurn
