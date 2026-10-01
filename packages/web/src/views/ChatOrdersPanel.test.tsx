@@ -218,7 +218,9 @@ describe('the timeline', () => {
     const { container } = await renderPanel(makeView())
 
     const row = container.querySelector('.chat-orders-message')
-    expect(row?.querySelector('small')?.textContent).toBe('Greeks')
+    // Read as "Greeks - Bob", in one box, civ and nickname both in the player's colour
+    expect(row?.querySelector('.chat-orders-author')?.textContent).toBe('Greeks - Bob')
+    expect(row?.querySelector('.chat-orders-author > span')?.className).toBe('player-blue')
     expect(row?.querySelector('strong')?.textContent).toBe('Bob')
     expect(row?.querySelector('strong')?.className).toBe('player-blue')
     expect(row?.className).toContain('player-blue')

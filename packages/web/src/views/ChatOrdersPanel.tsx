@@ -221,8 +221,11 @@ function TimelineRow({
   return (
     <li className={`chat-orders-message ${tone ?? ''}`.trim()} data-kind={row.kind}>
       <div className="chat-orders-meta">
-        {author?.civilization != null && <small className={tone ?? 'muted'}>{author.civilization}</small>}
-        <strong className={tone}>{row.username}</strong>
+        {/* "Greeks - nickname": one box, so the civ never ends up alone at the end of a line */}
+        <span className="chat-orders-author">
+          {author?.civilization != null && <span className={tone}>{author.civilization} - </span>}
+          <strong className={tone}>{row.username}</strong>
+        </span>
         <ChatTimestamp createdAt={row.createdAt} />
         {row.kind === 'order' && row.turnNumber !== null && row.phase !== null && (
           <span className="tag turn">{`T${row.turnNumber} · ${PHASE_SHORT[row.phase]}`}</span>
