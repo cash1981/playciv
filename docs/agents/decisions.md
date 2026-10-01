@@ -856,8 +856,8 @@ behaviours were bugs that the message text itself contradicted.
 - **The address is the account's current one.** Java mailed
   `Playerhand.getEmail()`, a snapshot copied at join time. We look the account
   up so an admin's email change takes effect.
-- **The cooldown is atomic.** `Repository.claimEmailSlot(scope, waitMs, now)`
-  decides and records in one step. Java read `Player/Playerhand.emailSent` and
+- **The cooldown is atomic.** `Repository.claimGameEmail(...)` (issue #217;
+  earlier `claimEmailSlot(scope, waitMs, now)`) decides and records in one step. Java read `Player/Playerhand.emailSent` and
   wrote it back separately; two simultaneous chat messages could both pass the
   check. The JSON repository keeps the read-and-set synchronous (no `await`
   between them); Mongo claims an expired row with a conditional `updateOne` and
@@ -3307,3 +3307,34 @@ it could decode every number, so it stays on the server. Revisions still store
 `privateDescriptions`; nothing reads them now. A keyed number can, rarely (about
 1 in 10,000 per game), be the same for two of one player's cards, where Java's
 offset plus catalogue number could not; the worst case is an ambiguous line.
+
+## Game emails wait for the player to open the game (issue #217)
+
+**Decision.** After a game email to a player, no further game email about the
+same game goes to them until they have opened that game. The held kinds are
+`chatPosted`, `phaseUpdated`, `turnEnded` and `playerJoined`. Where the player has
+never opened the game, Java's 30 minute wait (`IN_GAME_COOLDOWN_MS`) decides.
+`gameEnded` and `gameDeleted` always send (they are one-off and final), battle
+turn mail stays outside the rule, and a held "It is your turn" never breaks
+through after some hours. These follow the issue's suggested answers to its open
+questions.
+
+**How.** `Repository.recordGameOpened(gameId, playerId, now)` and
+`claimGameEmail(gameId, playerId, fallbackWaitMs, now)` replace
+`claimEmailSlot`. They keep `emailedAt` and `openedAt` per player and game (D1
+table `game_mail`, migration 0004; the JSON store keeps the same pair). An email
+is allowed when none was recorded, when `openedAt` is later than `emailedAt`, or
+when there is no `openedAt` at all and the last email is older than the wait. A
+visit is stored only when it changes that answer, so a tab that keeps reloading
+the game does not write every time.
+
+**What counts as a visit.** `GET /api/games/:id` and `/state` by a signed-in
+player in that game. Anonymous viewers, spectators and admins who are not players
+do not count. The open game page reloads the view whenever the revision moves, so
+a player with the tab open counts as having seen what happened; that is accepted.
+Reading the chat, log or revisions alone is not a visit.
+
+**Consequences.** This deviates from `old-civ-rest`, which had the 30 minute wait
+only, on chat and phase mail only. The old `email_sent` table stays in D1 because
+the Mongo import still fills it, but nothing reads it. Existing games start with
+no stamps, so each player may get one extra mail right after the deploy.

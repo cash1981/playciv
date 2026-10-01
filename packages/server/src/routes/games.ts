@@ -279,7 +279,14 @@ export function registerGameRoutes(app: App, context: AppContext): void {
 
   app.get('/api/games/:gameId', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
-    return readGame(context, c, gameId)
+    const game = await context.repo.findGame(gameId)
+    if (game === undefined) {
+      return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    }
+    // Issue #217: loading the game view is the visit that re-arms game emails.
+    const viewer = c.get('player')
+    if (viewer !== undefined) await context.notifications.gameOpened(game, viewer.id)
+    return c.json(toPlayerView(game, viewer?.id ?? ''))
   })
 
   app.get('/api/games/:gameId/rev', optionalAuth, async (c) => {
@@ -547,6 +554,8 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     if (game === undefined) {
       return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
     }
-    return c.json(toPlayerView(game, currentPlayer(c).id))
+    const viewerId = currentPlayer(c).id
+    await context.notifications.gameOpened(game, viewerId)
+    return c.json(toPlayerView(game, viewerId))
   })
 }
