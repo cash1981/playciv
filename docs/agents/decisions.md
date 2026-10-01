@@ -3719,5 +3719,6 @@ already set.
   current turn. A game whose turns were all finished classically is on a turn that
   has no tagged rows yet, so its first page is the newest 30 rows and Load more
   goes back a turn at a time.
-- Only the game's text is copied. Mail, the done markers and the start player
-  history of the classic turns are not.
+- Only the orders' text is copied. There is no mail, and no start player history
+  for the classic turns (the done markers a classic reveal sets are in the state
+  already).
