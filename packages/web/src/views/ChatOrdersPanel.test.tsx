@@ -601,25 +601,28 @@ describe('the done sheet', () => {
     return screen.getByRole('dialog', { name: 'Mark phases done' })
   }
 
-  it('defaults to the current turn and the first phase not done, and marks up to it', async () => {
+  it('defaults to the current turn and has a Done button on each phase not done', async () => {
     await renderPanel(makeView())
     const sheet = await openSheet()
 
     expect((within(sheet).getByLabelText('Turn') as HTMLSelectElement).value).toBe('4')
-    expect((within(sheet).getByLabelText('Done up to') as HTMLSelectElement).value).toBe('CM')
-    await click(within(sheet).getByRole('button', { name: 'Mark done up to City management' }))
+    // SOT and Trade are done in the fixture, so Done is offered on the other three
+    expect(within(sheet).getAllByRole('button', { name: /^Mark .* as done$/ })).toHaveLength(3)
+    expect(within(sheet).queryByLabelText('Done up to')).toBeNull()
+
+    await click(within(sheet).getByRole('button', { name: 'Mark City management as done' }))
 
     expect(markDone).toHaveBeenCalledExactlyOnceWith('game', 'CM', 4)
     // One-shot: the sheet closes after marking
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('marks up to a phase the viewer picks, in a turn the viewer picks', async () => {
+  it('marks the phase that is pressed, in the turn that is picked, and says the earlier ones follow', async () => {
     await renderPanel(makeView())
     const sheet = await openSheet()
 
-    await act(async () => { fireEvent.change(within(sheet).getByLabelText('Done up to'), { target: { value: 'MOVEMENT' } }) })
-    await click(within(sheet).getByRole('button', { name: 'Mark done up to Movement' }))
+    expect(within(sheet).getByText('A phase you mark done also marks the phases before it.')).not.toBeNull()
+    await click(within(sheet).getByRole('button', { name: 'Mark Movement as done' }))
 
     expect(markDone).toHaveBeenCalledExactlyOnceWith('game', 'MOVEMENT', 4)
   })
@@ -628,7 +631,7 @@ describe('the done sheet', () => {
     await renderPanel(makeView())
     const sheet = await openSheet()
 
-    expect(within(sheet).getAllByText('Not done')).toHaveLength(3)
+    expect(within(sheet).getAllByRole('button', { name: /^Unmark/ })).toHaveLength(2)
     await click(within(sheet).getByRole('button', { name: 'Unmark Trade as done' }))
 
     expect(unmarkDone).toHaveBeenCalledExactlyOnceWith('game', 'TRADE', 4)
@@ -643,9 +646,9 @@ describe('the done sheet', () => {
 
     await act(async () => { fireEvent.change(within(sheet).getByLabelText('Turn'), { target: { value: '3' } }) })
 
-    // Turn 3 was finished, so all five can be unmarked and there is nothing to mark
+    // Turn 3 was finished, so all five can be unmarked and none can be marked
     expect(within(sheet).getAllByRole('button', { name: /^Unmark/ })).toHaveLength(5)
-    expect(within(sheet).getByRole('button', { name: /^Mark done up to/ }).hasAttribute('disabled')).toBe(true)
+    expect(within(sheet).queryAllByRole('button', { name: /^Mark .* as done$/ })).toHaveLength(0)
     await click(within(sheet).getByRole('button', { name: 'Unmark Research as done' }))
     expect(unmarkDone).toHaveBeenCalledExactlyOnceWith('game', 'RESEARCH', 3)
   })

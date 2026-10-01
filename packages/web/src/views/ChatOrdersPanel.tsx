@@ -258,13 +258,9 @@ function DoneSheet({
   readonly returnFocusTo: RefObject<HTMLElement | null>
 }): React.JSX.Element {
   const [turn, setTurn] = useState(currentTurn)
-  const [upToChoice, setUpToChoice] = useState<TurnPhase | null>(null)
 
   const done = view.you?.playerTurns.find((candidate) => candidate.turnNumber === turn)?.done
   const isDone = (phase: TurnPhase): boolean => done?.[phase] === true
-  const upTo = upToChoice ?? firstOpenPhase(view, turn)
-  // Nothing to mark when the chosen phase and every one before it are done
-  const nothingToMark = TURN_PHASES.slice(0, TURN_PHASES.indexOf(upTo) + 1).every(isDone)
 
   return (
     <ReferenceDialog
@@ -279,10 +275,7 @@ function DoneSheet({
         <select
           id="chat-orders-done-turn"
           value={turn}
-          onChange={(event) => {
-            setTurn(Number(event.target.value))
-            setUpToChoice(null)
-          }}
+          onChange={(event) => setTurn(Number(event.target.value))}
         >
           {range(1, currentTurn).map((number) => (
             <option key={number} value={number}>{`Turn ${number}`}</option>
@@ -295,46 +288,35 @@ function DoneSheet({
           <li key={phase}>
             <span>{PHASE_OPTION[phase]}</span>
             {isDone(phase) ? (
+              <span className="chat-orders-phase-done">
+                <span className="muted">Done</span>
+                <button
+                  type="button"
+                  className="small"
+                  disabled={busy}
+                  aria-label={`Unmark ${PHASE_OPTION[phase]} as done`}
+                  onClick={() => void run(() => api.unmarkDone(gameId, phase, turn))}
+                >
+                  Undo
+                </button>
+              </span>
+            ) : (
               <button
                 type="button"
-                className="small"
+                className="small primary"
                 disabled={busy}
-                aria-label={`Unmark ${PHASE_OPTION[phase]} as done`}
-                onClick={() => void run(() => api.unmarkDone(gameId, phase, turn))}
+                aria-label={`Mark ${PHASE_OPTION[phase]} as done`}
+                onClick={() => void run(() => api.markDone(gameId, phase, turn)).then(onClose)}
               >
-                Done, tap to undo
+                Done
               </button>
-            ) : (
-              <span className="muted">Not done</span>
             )}
           </li>
         ))}
       </ul>
-
-      <label htmlFor="chat-orders-done-upto">
-        Done up to
-        <select
-          id="chat-orders-done-upto"
-          value={upTo}
-          onChange={(event) => {
-            const chosen = TURN_PHASES.find((phase) => phase === event.target.value)
-            if (chosen !== undefined) setUpToChoice(chosen)
-          }}
-        >
-          {TURN_PHASES.map((phase) => (
-            <option key={phase} value={phase}>{PHASE_OPTION[phase]}</option>
-          ))}
-        </select>
-      </label>
-      <p className="muted chat-orders-hint">This marks every phase up to the one you pick.</p>
-      <button
-        type="button"
-        className="primary chat-orders-mark"
-        disabled={busy || nothingToMark}
-        onClick={() => void run(() => api.markDone(gameId, upTo, turn)).then(onClose)}
-      >
-        {`Mark done up to ${PHASE_OPTION[upTo]}`}
-      </button>
+      <p className="muted chat-orders-hint">
+        A phase you mark done also marks the phases before it.
+      </p>
     </ReferenceDialog>
   )
 }
