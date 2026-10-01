@@ -1194,3 +1194,34 @@ describe('BoardView undo and redo', () => {
     cleanup()
   })
 })
+
+describe('relic outline', () => {
+  it('marks relic pieces, and only relic pieces, so the stylesheet can frame them', () => {
+    const atlantis = findBoardAsset('relics/atlantis')
+    if (atlantis === undefined) throw new Error('atlantis missing from manifest')
+    const relic: BoardPiece = {
+      ...piece('relics/atlantis', 'atlantis-1'),
+      path: atlantis.path,
+      label: atlantis.label,
+      category: 'relic',
+    }
+    const building = piece('buildings/academy', 'academy-1')
+
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [relic, building] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+      />,
+    )
+
+    const relicImage = container.querySelector('[data-piece-id="atlantis-1"]')
+    const buildingImage = container.querySelector('[data-piece-id="academy-1"]')
+    expect(relicImage?.classList.contains('board-piece-relic')).toBe(true)
+    expect(buildingImage?.classList.contains('board-piece-relic')).toBe(false)
+    cleanup()
+  })
+})
