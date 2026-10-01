@@ -9,7 +9,6 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { RefObject } from 'react'
 
 import { TURN_PHASES, TURN_PHASE_LABEL } from '@civ/engine'
 import type { TurnPhase } from '@civ/engine'
@@ -24,7 +23,6 @@ import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
 import type { MarkdownEditorComponent, MarkdownEditorHandle } from './MarkdownEditor.js'
 import { colorClass } from './playerColor.js'
-import { ReferenceDialog } from './ReferenceDialog.js'
 import { SafeMarkdown } from './SafeMarkdown.js'
 import type { SaveStatus } from './TurnPanel.js'
 import { PrivateLogWorkspace } from './TurnPanel.js'
@@ -237,91 +235,6 @@ function TimelineRow({
 }
 
 // ---------------------------------------------------------------------------
-// The done sheet
-// ---------------------------------------------------------------------------
-
-function DoneSheet({
-  gameId,
-  view,
-  currentTurn,
-  busy,
-  run,
-  onClose,
-  returnFocusTo,
-}: {
-  readonly gameId: string
-  readonly view: PlayerView
-  readonly currentTurn: number
-  readonly busy: boolean
-  readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
-  readonly onClose: () => void
-  readonly returnFocusTo: RefObject<HTMLElement | null>
-}): React.JSX.Element {
-  const [turn, setTurn] = useState(currentTurn)
-
-  const done = view.you?.playerTurns.find((candidate) => candidate.turnNumber === turn)?.done
-  const isDone = (phase: TurnPhase): boolean => done?.[phase] === true
-
-  return (
-    <ReferenceDialog
-      titleId="chat-orders-done-title"
-      title="Mark phases done"
-      className="chat-orders-done"
-      onClose={onClose}
-      returnFocusTo={returnFocusTo}
-    >
-      <label htmlFor="chat-orders-done-turn">
-        Turn
-        <select
-          id="chat-orders-done-turn"
-          value={turn}
-          onChange={(event) => setTurn(Number(event.target.value))}
-        >
-          {range(1, currentTurn).map((number) => (
-            <option key={number} value={number}>{`Turn ${number}`}</option>
-          ))}
-        </select>
-      </label>
-
-      <ul className="chat-orders-phases" aria-label="Phases">
-        {TURN_PHASES.map((phase) => (
-          <li key={phase}>
-            <span>{PHASE_OPTION[phase]}</span>
-            {isDone(phase) ? (
-              <span className="chat-orders-phase-done">
-                <span className="muted">Done</span>
-                <button
-                  type="button"
-                  className="small"
-                  disabled={busy}
-                  aria-label={`Unmark ${PHASE_OPTION[phase]} as done`}
-                  onClick={() => void run(() => api.unmarkDone(gameId, phase, turn))}
-                >
-                  Undo
-                </button>
-              </span>
-            ) : (
-              <button
-                type="button"
-                className="small primary"
-                disabled={busy}
-                aria-label={`Mark ${PHASE_OPTION[phase]} as done`}
-                onClick={() => void run(() => api.markDone(gameId, phase, turn)).then(onClose)}
-              >
-                Done
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-      <p className="muted chat-orders-hint">
-        A phase you mark done also marks the phases before it.
-      </p>
-    </ReferenceDialog>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // The panel
 // ---------------------------------------------------------------------------
 
@@ -362,7 +275,6 @@ export function ChatOrdersPanel({
   // Null follows the viewer's own progress; a pick sticks until the panel goes.
   const [turnPick, setTurnPick] = useState<number | null>(null)
   const [phasePick, setPhasePick] = useState<TurnPhase | null>(null)
-  const [sheetOpen, setSheetOpen] = useState(false)
   const [privateNote, setPrivateNote] = useState(view.you?.gamenote ?? '')
   const [privateDirty, setPrivateDirty] = useState(false)
   const [privateStatus, setPrivateStatus] = useState<SaveStatus>('saved')
@@ -379,12 +291,13 @@ export function ChatOrdersPanel({
   const composerEditorRef = useRef<MarkdownEditorHandle | null>(null)
   const privateEditorRef = useRef<MarkdownEditorHandle | null>(null)
   const privateDirtyRef = useRef(false)
-  const doneButtonRef = useRef<HTMLButtonElement>(null)
 
   const currentTurn = view.activeTurn?.turnNumber ?? 1
   const orderTurn = turnPick ?? currentTurn
   const orderPhase = phasePick ?? firstOpenPhase(view, orderTurn)
   const canWrite = view.you !== null && !readOnly
+  const doneInTurn = view.you?.playerTurns.find((candidate) => candidate.turnNumber === orderTurn)?.done
+  const isPhaseDone = (phase: TurnPhase): boolean => doneInTurn?.[phase] === true
   const remoteNote = view.you?.gamenote ?? ''
 
   const load = useCallback(async () => {
@@ -678,8 +591,16 @@ export function ChatOrdersPanel({
                         if (chosen !== undefined) setPhasePick(chosen)
                       }}
                     >
+                      {/* A native option cannot be styled everywhere, so the check mark carries
+                          the meaning; the strike-through shows where the browser allows it. */}
                       {TURN_PHASES.map((phase) => (
-                        <option key={phase} value={phase}>{PHASE_OPTION[phase]}</option>
+                        <option
+                          key={phase}
+                          value={phase}
+                          style={isPhaseDone(phase) ? { textDecoration: 'line-through' } : undefined}
+                        >
+                          {isPhaseDone(phase) ? `✓ ${PHASE_OPTION[phase]}` : PHASE_OPTION[phase]}
+                        </option>
                       ))}
                     </select>
                   </label>
@@ -696,14 +617,25 @@ export function ChatOrdersPanel({
                 placeholder="Write a message …"
               />
               <div className="chat-orders-actions">
-                <button
-                  type="button"
-                  ref={doneButtonRef}
-                  aria-haspopup="dialog"
-                  onClick={() => setSheetOpen(true)}
-                >
-                  Done …
-                </button>
+                {mode === 'order' && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    aria-label={`${isPhaseDone(orderPhase) ? 'Unmark' : 'Mark'} ${PHASE_OPTION[orderPhase]} as done`}
+                    onClick={() => {
+                      const phase = orderPhase
+                      const turn = orderTurn
+                      const wasDone = isPhaseDone(phase)
+                      void run(async () => {
+                        await (wasDone ? api.unmarkDone(gameId, phase, turn) : api.markDone(gameId, phase, turn))
+                        // Back to following the viewer's own progress
+                        setPhasePick(null)
+                      })
+                    }}
+                  >
+                    {isPhaseDone(orderPhase) ? 'Not done' : 'Done'}
+                  </button>
+                )}
                 <button type="submit" className="primary" disabled={busy || draft.trim() === ''}>
                   Send
                 </button>
@@ -713,17 +645,6 @@ export function ChatOrdersPanel({
         </div>
       )}
 
-      {sheetOpen && canWrite && (
-        <DoneSheet
-          gameId={gameId}
-          view={view}
-          currentTurn={currentTurn}
-          busy={busy}
-          run={run}
-          onClose={() => setSheetOpen(false)}
-          returnFocusTo={doneButtonRef}
-        />
-      )}
     </CollapsiblePanel>
   )
 }

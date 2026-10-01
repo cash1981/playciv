@@ -595,73 +595,72 @@ describe('tabs and replay', () => {
   })
 })
 
-describe('the done sheet', () => {
-  const openSheet = async (): Promise<HTMLElement> => {
-    await click(screen.getByRole('button', { name: 'Done …' }))
-    return screen.getByRole('dialog', { name: 'Mark phases done' })
-  }
+describe('the Done button', () => {
+  const optionTexts = (): string[] =>
+    Array.from((screen.getByLabelText('Phase') as HTMLSelectElement).options).map((option) => option.textContent ?? '')
 
-  it('defaults to the current turn and has a Done button on each phase not done', async () => {
+  it('is only there for an order, where the turn and the phase are chosen', async () => {
     await renderPanel(makeView())
-    const sheet = await openSheet()
 
-    expect((within(sheet).getByLabelText('Turn') as HTMLSelectElement).value).toBe('4')
-    // SOT and Trade are done in the fixture, so Done is offered on the other three
-    expect(within(sheet).getAllByRole('button', { name: /^Mark .* as done$/ })).toHaveLength(3)
-    expect(within(sheet).queryByLabelText('Done up to')).toBeNull()
-
-    await click(within(sheet).getByRole('button', { name: 'Mark City management as done' }))
-
-    expect(markDone).toHaveBeenCalledExactlyOnceWith('game', 'CM', 4)
-    // One-shot: the sheet closes after marking
+    expect(screen.queryByRole('button', { name: /as done$/ })).toBeNull()
+    await click(screen.getByRole('button', { name: 'Order' }))
+    expect(screen.getByRole('button', { name: 'Mark City management as done' })).not.toBeNull()
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('marks the phase that is pressed, in the turn that is picked, and says the earlier ones follow', async () => {
+  it('marks the chosen turn and phase done, and follows the viewer to the next phase', async () => {
     await renderPanel(makeView())
-    const sheet = await openSheet()
+    await click(screen.getByRole('button', { name: 'Order' }))
 
-    expect(within(sheet).getByText('A phase you mark done also marks the phases before it.')).not.toBeNull()
-    await click(within(sheet).getByRole('button', { name: 'Mark Movement as done' }))
+    await click(screen.getByRole('button', { name: 'Mark City management as done' }))
+
+    expect(markDone).toHaveBeenCalledExactlyOnceWith('game', 'CM', 4)
+    expect(unmarkDone).not.toHaveBeenCalled()
+  })
+
+  it('marks the phase and the turn that were picked, not the defaults', async () => {
+    await renderPanel(makeView())
+    await click(screen.getByRole('button', { name: 'Order' }))
+
+    await act(async () => { fireEvent.change(screen.getByLabelText('Phase'), { target: { value: 'MOVEMENT' } }) })
+    await click(screen.getByRole('button', { name: 'Mark Movement as done' }))
 
     expect(markDone).toHaveBeenCalledExactlyOnceWith('game', 'MOVEMENT', 4)
   })
 
-  it('shows phases already done and unmarks the one that is tapped, leaving the sheet open', async () => {
+  it('puts a check mark on the phases that are done, in the turn that is chosen', async () => {
     await renderPanel(makeView())
-    const sheet = await openSheet()
+    await click(screen.getByRole('button', { name: 'Order' }))
 
-    expect(within(sheet).getAllByRole('button', { name: /^Unmark/ })).toHaveLength(2)
-    await click(within(sheet).getByRole('button', { name: 'Unmark Trade as done' }))
+    // Start of turn and Trade are done in turn 4
+    expect(optionTexts()).toEqual(['✓ Start of turn', '✓ Trade', 'City management', 'Movement', 'Research'])
+    await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '3' } }) })
+    // Turn 3 was finished
+    expect(optionTexts().every((text) => text.startsWith('✓ '))).toBe(true)
+    await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '5' } }) })
+    expect(optionTexts().some((text) => text.startsWith('✓ '))).toBe(false)
+  })
 
+  it('on a phase that is done, offers to undo it, and an order can still be written there', async () => {
+    await renderPanel(makeView())
+    await click(screen.getByRole('button', { name: 'Order' }))
+    await act(async () => { fireEvent.change(screen.getByLabelText('Phase'), { target: { value: 'TRADE' } }) })
+
+    expect(screen.queryByRole('button', { name: 'Mark Trade as done' })).toBeNull()
+    await type('Order', 'Trade again')
+    await click(screen.getByRole('button', { name: 'Send' }))
+    expect(postOrder).toHaveBeenCalledExactlyOnceWith('game', 'TRADE', 'Trade again', 4)
+
+    await click(screen.getByRole('button', { name: 'Unmark Trade as done' }))
     expect(unmarkDone).toHaveBeenCalledExactlyOnceWith('game', 'TRADE', 4)
-    expect(screen.getByRole('dialog', { name: 'Mark phases done' })).not.toBeNull()
-    // Only the phases that are done can be unmarked
-    expect(within(sheet).queryByRole('button', { name: 'Unmark City management as done' })).toBeNull()
-  })
-
-  it('reads another turn from the record of that turn', async () => {
-    await renderPanel(makeView())
-    const sheet = await openSheet()
-
-    await act(async () => { fireEvent.change(within(sheet).getByLabelText('Turn'), { target: { value: '3' } }) })
-
-    // Turn 3 was finished, so all five can be unmarked and none can be marked
-    expect(within(sheet).getAllByRole('button', { name: /^Unmark/ })).toHaveLength(5)
-    expect(within(sheet).queryAllByRole('button', { name: /^Mark .* as done$/ })).toHaveLength(0)
-    await click(within(sheet).getByRole('button', { name: 'Unmark Research as done' }))
-    expect(unmarkDone).toHaveBeenCalledExactlyOnceWith('game', 'RESEARCH', 3)
-  })
-
-  it('closes without doing anything', async () => {
-    await renderPanel(makeView())
-    const sheet = await openSheet()
-
-    await click(within(sheet).getByRole('button', { name: 'Close' }))
-
-    expect(screen.queryByRole('dialog')).toBeNull()
     expect(markDone).not.toHaveBeenCalled()
-    expect(unmarkDone).not.toHaveBeenCalled()
+  })
+
+  it('is not there when the viewer cannot write', async () => {
+    await renderPanel(makeView(), { readOnly: true })
+
+    expect(screen.queryByRole('button', { name: 'Order' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /as done$/ })).toBeNull()
   })
 })
 

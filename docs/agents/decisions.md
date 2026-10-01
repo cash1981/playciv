@@ -3415,3 +3415,22 @@ rotates is the marker that decides. Placing a marker from the palette now also
 writes `<player> is now the start player` when it changes the answer, with chat
 orders on. The alternative, capping the asset at one, would have changed classic
 games.
+
+## 2026-10-01 - Chat orders: one Done button, check marks, formatting bar
+
+The human asked for the Done sheet to go. In chat orders mode the composer's
+Order tab has one **Done** button that acts on the chosen turn and phase
+(`markDone`, which still means "done up to and including this phase"). When the
+chosen phase is already done the button reads **Not done** and unmarks it. The
+Phase list marks done phases with a check mark in the option text, plus a
+strike-through where the browser lets an option be styled (desktop Chrome and
+Firefox; iOS ignores option styles, so the check mark carries the meaning).
+Choosing a done phase still lets the player write a new order there. The button
+is only on the Order tab because that is where turn and phase are chosen; chat
+messages carry neither.
+
+Crepe's formatting bar is back in the composer. On a phone it is one row that
+scrolls sideways (its `.top-bar-inner` wraps onto three rows otherwise and leaves
+no room to type). The chat title now says whose turn it is and which phase, not
+who started or who is missing what; the status strip below it keeps the full
+picture.

@@ -14,10 +14,7 @@
 .chat-orders-more,
 .chat-orders-actions button,
 .chat-orders-save,
-.chat-orders-mark,
-.chat-orders-fields select,
-.chat-orders-done select,
-.chat-orders-done button {
+.chat-orders-fields select {
   min-height: 44px;
 }
 
@@ -166,11 +163,21 @@
   overflow-y: auto;
 }
 
-/* Crepe's fixed top bar wraps to three rows on a phone and would leave no room
-   to type; the toolbar that appears over a selection and Markdown shortcuts stay.
-   Crepe's own stylesheet loads later, so the selector needs the extra class. */
+/* Crepe's formatting bar stays, as one row that scrolls sideways on a phone
+   instead of wrapping onto three. The wrapping happens in `.top-bar-inner`, and
+   Crepe's own stylesheet loads later, so the selectors need the extra class. */
 .chat-orders-composer .milkdown .milkdown-top-bar {
-  display: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.chat-orders-composer .milkdown .milkdown-top-bar .top-bar-inner {
+  flex-wrap: nowrap;
+  width: max-content;
+}
+
+.chat-orders-composer .milkdown .milkdown-top-bar .top-bar-inner > * {
+  flex-shrink: 0;
 }
 
 .chat-orders-fields {
@@ -194,39 +201,9 @@
   flex: 1 1 0;
 }
 
-.chat-orders-save,
-.chat-orders-mark {
+.chat-orders-save {
   width: 100%;
   margin-top: 0.6rem;
-}
-
-.chat-orders-done label {
-  display: block;
-  margin-top: 0.8rem;
-}
-
-.chat-orders-hint {
-  margin: 0.4rem 0 0;
-}
-
-.chat-orders-phases {
-  list-style: none;
-  margin: 0.8rem 0 0;
-  padding: 0;
-}
-
-.chat-orders-phases li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  min-height: 44px;
-  border-bottom: 1px solid var(--line);
-}
-
-.reference.chat-orders-done {
-  width: min(92vw, 26rem);
-  padding: 1.1rem;
 }
 
 /* The status strip in the game header: a dot and a phase per player. */
