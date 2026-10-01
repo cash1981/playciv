@@ -1553,7 +1553,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
  * the living units of one side. Added to the server's total so the summary
  * follows the typing (issue #216). A killed unit never counts.
  */
-export function draftHealthDelta(
+function draftHealthDelta(
   arena: readonly ArenaUnit[],
   side: BattleSideId,
   drafts: Readonly<Record<string, number>>,

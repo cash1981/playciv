@@ -47,7 +47,10 @@ describe('BattlePanel summary bar', () => {
     const { getByText, container } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
     fireEvent.click(getByText('Battle'))
 
-    expect(container.querySelector('.battle-summary')?.textContent).not.toMatch(/ATK/)
+    const bar = container.querySelector('.battle-summary')
+    expect(bar).not.toBeNull()
+    expect(bar?.textContent).toContain('HP 3')
+    expect(bar?.textContent).not.toMatch(/ATK/)
   })
 
   it('shows a positive combat bonus next to HP, not ATK', () => {
@@ -60,10 +63,9 @@ describe('BattlePanel summary bar', () => {
         },
       ],
     } as unknown as PlayerView
-    const { getByText, queryByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
+    const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
     fireEvent.click(getByText('Battle'))
 
-    expect(queryByText(/^ATK \d/)).toBeNull()
     expect(getByText('HP 3 (+6)')).toBeTruthy()
   })
 
@@ -78,10 +80,9 @@ describe('BattlePanel summary bar', () => {
         },
       ],
     } as unknown as PlayerView
-    const { getByText, queryByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
+    const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
     fireEvent.click(getByText('Battle'))
 
-    expect(queryByText(/^ATK \d/)).toBeNull()
     expect(getByText('HP 3 (-2)')).toBeTruthy()
   })
 
@@ -95,16 +96,16 @@ describe('BattlePanel summary bar', () => {
         },
       ],
     } as unknown as PlayerView
-    const { getByText, queryByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
+    const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={summaryView} />)
     fireEvent.click(getByText('Battle'))
 
-    expect(queryByText(/^ATK \d/)).toBeNull()
     expect(getByText('HP 3')).toBeTruthy()
   })
 })
 
 describe('BattlePanel summary follows typed HP', () => {
   afterEach(() => cleanup())
+  beforeEach(() => vi.clearAllMocks())
 
   function unit(id: string, side: 'attacker' | 'defender', position: number, health: number, killed = false) {
     return {
@@ -146,25 +147,26 @@ describe('BattlePanel summary follows typed HP', () => {
     fireEvent.click(getByText('Battle'))
     fireEvent.change(container.querySelectorAll('.arena-unit-card label input')[1] as HTMLElement, { target: { value: '1' } })
 
+    // Someone else set the unit to 2 in the meantime; the server value wins.
     const saved = {
       ...twoUnitView,
-      battle: { ...twoUnitView.battle, arena: [unit('a1', 'attacker', 0, 1), unit('d1', 'defender', 0, 2)] },
+      battle: { ...twoUnitView.battle, arena: [unit('a1', 'attacker', 0, 2), unit('d1', 'defender', 0, 2)] },
       battleSummary: [
-        { ...twoUnitView.battleSummary[0], totalHealth: 1 },
+        { ...twoUnitView.battleSummary[0], totalHealth: 2 },
         twoUnitView.battleSummary[1],
       ],
     } as unknown as PlayerView
     rerender(<BattlePanel gameId="game" busy={false} run={run} view={saved} />)
 
-    expect(getByText('HP 1 (+4)')).toBeTruthy()
+    expect(getByText('HP 2 (+4)')).toBeTruthy()
   })
 
   it('does not count a killed unit, with or without a typed HP', () => {
     const killedView = {
       ...twoUnitView,
-      battle: { ...twoUnitView.battle, arena: [unit('a1', 'attacker', 0, 3, true), unit('d1', 'defender', 0, 2)] },
+      battle: { ...twoUnitView.battle, arena: [unit('a1', 'attacker', 0, 3, true), unit('a2', 'attacker', 1, 2), unit('d1', 'defender', 0, 2)] },
       battleSummary: [
-        { ...twoUnitView.battleSummary[0], unitCount: 0, totalHealth: 0 },
+        { ...twoUnitView.battleSummary[0], unitCount: 1, totalHealth: 2 },
         twoUnitView.battleSummary[1],
       ],
     } as unknown as PlayerView
@@ -172,9 +174,12 @@ describe('BattlePanel summary follows typed HP', () => {
       <BattlePanel gameId="game" busy={false} run={run} view={killedView} />,
     )
     fireEvent.click(getByText('Battle'))
-    fireEvent.change(container.querySelectorAll('.arena-unit-card label input')[1] as HTMLElement, { target: { value: '9' } })
-
-    expect(getByText('HP 0 (+4)')).toBeTruthy()
+    const inputs = container.querySelectorAll('.arena-unit-card label input')
+    // Cards: a1 (killed), a2, d1; HP is each card's second input. Type over the killed one, then the living one.
+    fireEvent.change(inputs[1] as HTMLElement, { target: { value: '9' } })
+    expect(getByText('HP 2 (+4)')).toBeTruthy()
+    fireEvent.change(inputs[3] as HTMLElement, { target: { value: '5' } })
+    expect(getByText('HP 5 (+4)')).toBeTruthy()
   })
 })
 

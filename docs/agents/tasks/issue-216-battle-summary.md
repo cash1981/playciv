@@ -3,7 +3,7 @@
 - **Slug:** `issue-216-battle-summary`
 - **Branch:** `feat/issue-216-battle-summary`
 - **Owner:** Claude (Sonnet 5.5)
-- **Status:** in progress
+- **Status:** in review
 
 ## Goal
 
@@ -56,11 +56,11 @@ effective HP of the living units per side.
 
 ## Acceptance criteria
 
-- [ ] The summary has no ATK text.
-- [ ] Typing a new HP changes the summary before any request is sent.
-- [ ] A killed unit does not count, with or without a draft.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
-- [ ] Hidden information: none involved; arena units are already public.
+- [x] The summary has no ATK text.
+- [x] Typing a new HP changes the summary before any request is sent.
+- [x] A killed unit does not count, with or without a draft.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+- [x] Hidden information: none involved; arena units are already public.
 - [ ] Verified in the browser: type HP in an arena unit and watch the summary.
 
 ## Open questions
