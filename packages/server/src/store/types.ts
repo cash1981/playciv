@@ -118,9 +118,9 @@ export interface Repository {
    * Notes that a member of the game has loaded it (issue #217). Callers pass
    * members only; spectators and admins must not re-arm someone else's mail.
    *
-   * Writes only when it changes what `claimGameEmail` would answer: the first
-   * visit, or the first visit since the last email. A tab that keeps reloading
-   * the game costs no further writes.
+   * Changes the stored row only when that changes what `claimGameEmail` would
+   * answer: the first visit, or the first visit since the last email. A tab that
+   * keeps reloading the game leaves it untouched.
    */
   recordGameOpened(gameId: string, playerId: string, now: Date): Promise<void>
 
@@ -134,7 +134,7 @@ export interface Repository {
    *   `fallbackWaitMs` old (Java's 30 minute `shouldSendEmailInGame`).
    *
    * Otherwise returns false and records nothing. A last-email stamp in the
-   * future suppresses, as Java's `Math.abs` did.
+   * future suppresses.
    *
    * Must be atomic: two concurrent callers for the same player and game must
    * never both receive true, or a chat burst sends more than one mail.

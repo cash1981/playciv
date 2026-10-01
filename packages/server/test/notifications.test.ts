@@ -9,7 +9,7 @@
 
 import type { GameState } from '@civ/engine'
 import type { App } from '../src/app.js'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createTestApp } from '../src/app.js'
 import type { Mailer, OutgoingEmail } from '../src/mail.js'
@@ -439,6 +439,13 @@ describe('email cooldown', () => {
     expect([first, second].filter(Boolean)).toHaveLength(1)
   })
 
+  it('holds on a stamp in the future in the JSON store too, like D1', async () => {
+    const at = new Date('2026-09-19T12:00:00.000Z')
+    expect(await repo.claimGameEmail('g', 'p', 1000, at)).toBe(true)
+    expect(await repo.claimGameEmail('g', 'p', 1000, new Date(at.getTime() - 5000))).toBe(false)
+    expect(await repo.claimGameEmail('g', 'p', 1000, new Date(at.getTime() + 1001))).toBe(true)
+  })
+
   it('sends a single mail when two chat messages race for the same slot', async () => {
     const creator = await register('race-a')
     const gameId = await createGame(creator.token, 'race mail', 3)
@@ -621,12 +628,15 @@ describe('held until the game is opened (issue #217)', () => {
     const { writer, gameId } = await openedGame('outsider')
     const outsider = await register('outsider-x')
     await chat(writer.token, gameId, 'one')
+    const recorded = vi.spyOn(repo, 'recordGameOpened')
 
     await open(undefined, gameId)
     await open(outsider.token, gameId)
     await open(outsider.token, gameId, '/state')
     await chat(writer.token, gameId, 'two')
     expect(mailer.subjects('New Chat')).toHaveLength(1)
+    // The mail count alone cannot tell: nothing may be stored for them at all.
+    expect(recorded).not.toHaveBeenCalled()
   })
 
   it('still sends the final game emails to a player who has not opened the game', async () => {

@@ -13,7 +13,7 @@ _Last updated: 2026-10-01_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 609 engine, 232 server, 344 web on `claude/nice-faraday-9hl43h` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 609 engine, 233 server, 344 web on `claude/nice-faraday-9hl43h` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 

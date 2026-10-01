@@ -404,12 +404,13 @@ export class D1Repository implements Repository {
   }
 
   // ---------------------------------------------------------------------
-  // Notification throttles
+  // Game email hold
   // ---------------------------------------------------------------------
 
   async recordGameOpened(gameId: string, playerId: string, now: Date): Promise<void> {
-    // The WHERE keeps repeated loads from writing: only the first visit, or
-    // the first since the last email, changes the row.
+    // The WHERE keeps repeated loads from changing the row: only the first
+    // visit, or the first since the last email, does. The statement itself
+    // still runs on every load.
     await this.db
       .prepare(
         `INSERT INTO game_mail (game_id, player_id, opened_at) VALUES (?, ?, ?)
@@ -430,8 +431,8 @@ export class D1Repository implements Repository {
     const at = now.toISOString()
     const cutoff = new Date(now.getTime() - fallbackWaitMs).toISOString()
     // One statement, so only one of two concurrent callers can change the row.
-    // A future stamp is not `< cutoff`, so it suppresses, matching Mongo's
-    // `Math.abs` behaviour.
+    // A future stamp is not `< cutoff`, so it suppresses (Java's `Math.abs`
+    // did too, within the wait).
     const result = await this.db
       .prepare(
         `INSERT INTO game_mail (game_id, player_id, emailed_at) VALUES (?, ?, ?)

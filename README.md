@@ -297,10 +297,11 @@ guarded statements or one `batch()`, which D1 runs atomically:
 - `saveGameWithRevision` updates the live game only while `rev` is unchanged
   and inserts the checkpoint guarded by `EXISTS (game … rev = new)`, so a lost
   race writes neither.
-- `claimEmailSlot` is one conditional upsert.
+- `claimGameEmail` is one conditional upsert.
 
 Tables: `player`, `game`, `game_revision`, `chat` (`game_id IS NULL` is lobby,
-live from now on), `email_sent`, and `pbf` + `pbf_doc` (the old games,
+live from now on), `game_mail` (when each player was last emailed about a
+game and last opened it), `email_sent` (imported, no longer read), and `pbf` + `pbf_doc` (the old games,
 read-only: a highscore source plus the full document, chunked because one
 document can exceed D1's ~100 KB per-statement limit, kept for future
 statistics such as the most-researched tech). The old `chat`, `gamelog` and

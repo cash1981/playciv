@@ -247,16 +247,17 @@ export class JsonFileRepository implements Repository {
 
   async deleteGame(id: string): Promise<boolean> {
     const deleted = this.games.delete(id)
+    // Like D1, drop the mail stamps whether or not the game row existed.
+    for (const key of this.gameMail.keys()) {
+      if (key.startsWith(`${id}:`)) this.gameMail.delete(key)
+    }
     if (deleted) {
       this.invalidateHighscore()
       for (const [key, revision] of this.revisions) {
         if (revision.gameId === id) this.revisions.delete(key)
       }
-      for (const key of this.gameMail.keys()) {
-        if (key.startsWith(`${id}:`)) this.gameMail.delete(key)
-      }
-      this.scheduleWrite()
     }
+    this.scheduleWrite()
     return deleted
   }
 
@@ -301,13 +302,11 @@ export class JsonFileRepository implements Repository {
         stamps.openedAt !== undefined && stamps.openedAt > stamps.emailedAt
       if (!seenSince) {
         // Held until the game is opened. Without a single visit on record the
-        // 30 minute wait stands in; Java used `Math.abs`, so a future stamp
-        // also suppresses.
+        // 30 minute wait stands in. Only a stamp strictly older than the wait
+        // lets a mail through, so a stamp in the future suppresses, as in D1.
         if (stamps.openedAt !== undefined) return false
         const lastMs = Date.parse(stamps.emailedAt)
-        if (!Number.isNaN(lastMs) && Math.abs(now.getTime() - lastMs) <= fallbackWaitMs) {
-          return false
-        }
+        if (!Number.isNaN(lastMs) && !(lastMs < now.getTime() - fallbackWaitMs)) return false
       }
     }
     this.gameMail.set(key, { ...stamps, emailedAt: now.toISOString() })

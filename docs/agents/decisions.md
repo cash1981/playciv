@@ -810,8 +810,8 @@ Cloudflare Worker (the Worker only proxies `/api/*` and never sees game state),
 so the key lives on Render with the rest of the API secrets.
 
 **Consequences.**
-- Throttle state lives in the repository (`mail:player:<id>` and
-  `mail:game:<gameId>:<playerId>`), not in `GameState`, so it never touches
+- Throttle state lives in the repository (originally `mail:player:<id>` and
+  `mail:game:<gameId>:<playerId>`; per player and game since issue #217), not in `GameState`, so it never touches
   engine purity or the revision/compare-and-set flow. Mongo uses an
   `email_sent` collection; the JSON file persists a keyed map.
 - `StoredPlayer.disableEmail` is read from the legacy `player` documents and is
@@ -995,7 +995,7 @@ paths. D1 is also exportable (`wrangler d1 export`), so the move is reversible.
 - D1 has no interactive transactions between `await`s. Revisioned writes use one
   `batch()` — atomic on D1 — with the game update guarded by `rev` and the
   revision insert guarded by `EXISTS (game … rev = new)`, so a lost race writes
-  neither. `claimEmailSlot` is one conditional upsert. `MongoRepository`'s
+  neither. `claimEmailSlot` (now `claimGameEmail`, issue #217) is one conditional upsert. `MongoRepository`'s
   requirement that Mongo be a replica set or sharded cluster goes away with it.
 - Migrated data, verified by count against the restored export: 554 players
   (552 legacy SHA-1 passwords kept, 1 admin), 310 old `pbf` games (247 with a

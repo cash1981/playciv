@@ -268,7 +268,7 @@ describe('D1Repository', () => {
     expect(await claim('g3', 'p1', t(1))).toBe(true)
     expect(await claim('g3', 'p1', t(2))).toBe(false)
 
-    // A stamp in the future suppresses (Mongo's abs).
+    // A stamp in the future suppresses, far or near.
     expect(await claim('g4', 'p1', t(0))).toBe(true)
     expect(await claim('g4', 'p1', t(-5000))).toBe(false)
   })
