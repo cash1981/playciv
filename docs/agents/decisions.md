@@ -3754,8 +3754,8 @@ said nothing was; the right HP "just took a while" to show.
 - Reaching 0 HP still does not kill a unit automatically (issue #71).
 - **Known limitation.** If a save never reaches the server, the summary keeps
   showing the typed number, as does the field. The save is dropped when another
-  battle action is in flight at the moment the debounce fires (`runBattleAction`
-  returns early), or when the server rejects it. Before this change the summary
+  write is in flight at the moment the debounce fires (`runBattleAction` returns
+  early while `busy` or another battle action is running), or when the server rejects it. Before this change the summary
   showed the server's number and so disagreed with the field, which was the only
   hint that the edit had not landed. The dropped save is an older behaviour and
   was left alone.
