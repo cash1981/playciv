@@ -13,6 +13,7 @@ import {
   ChatOrdersPanel,
   chatOrdersTitle,
   firstOpenPhase,
+  viewerTurn,
   mergeTimeline,
   outOfTurnQuestion,
   replacedOrderIds,
@@ -449,6 +450,38 @@ describe('the composer', () => {
     expect(turns()).toEqual(['Turn 1', 'Turn 2', 'Turn 3', 'Turn 4'])
     await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '4' } }) })
     expect(turns()).toEqual(['Turn 1', 'Turn 2', 'Turn 3', 'Turn 4'])
+  })
+
+  it('moves the viewer on to the next turn once Research is done, without waiting for the others', async () => {
+    const finished = makeView({
+      you: seat('Alice', 1, {
+        playerTurns: [
+          { turnNumber: 3, done: doneUpTo('RESEARCH') },
+          { turnNumber: 4, done: doneUpTo('RESEARCH') },
+        ],
+      }),
+    })
+    // The game is still on turn 4: Bob has not finished it
+    expect(finished.activeTurn?.turnNumber).toBe(4)
+    expect(viewerTurn(finished)).toBe(5)
+
+    await renderPanel(finished)
+    await click(screen.getByRole('button', { name: 'Order' }))
+
+    expect((screen.getByLabelText('Turn') as HTMLSelectElement).value).toBe('5')
+    expect((screen.getByLabelText('Phase') as HTMLSelectElement).value).toBe('SOT')
+    const turns = Array.from((screen.getByLabelText('Turn') as HTMLSelectElement).options).map((option) => option.textContent)
+    expect(turns).toEqual(['Turn 1', 'Turn 2', 'Turn 3', 'Turn 4', 'Turn 5'])
+  })
+
+  it('does not move the viewer on while a phase of the turn is still open', () => {
+    expect(viewerTurn(makeView())).toBe(4)
+    const researchOpen = makeView({
+      you: seat('Alice', 1, { playerTurns: [{ turnNumber: 4, done: doneUpTo('MOVEMENT') }] }),
+    })
+    expect(viewerTurn(researchOpen)).toBe(4)
+    // A spectator, or a player with no records, stays on the game's turn
+    expect(viewerTurn(makeView({ you: null }))).toBe(4)
   })
 
   it('lets the turn and the phase be changed before sending', async () => {

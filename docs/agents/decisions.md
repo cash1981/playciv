@@ -3448,3 +3448,17 @@ notes.
 Amendment, same day: the check mark goes after the phase name ("Trade ✓"), not
 before it. macOS draws its own tick before the selected option, so a mark in
 front showed two ticks on a selected, finished phase.
+
+## 2026-10-01 - Chat orders: a player moves on to the next turn on their own
+
+Amendment to the entry above, after the human's answer. The Turn list in the
+composer used the game's current turn, which waits for every player, so a player
+who had finished Research could not write orders for the next turn until the
+others had caught up. It now follows the viewer (`viewerTurn`): the larger of the
+game's current turn and one more than the viewer's highest turn with Research
+marked done. The list holds turns 1 to that, and the composer defaults to it. It
+does not matter that other players are still on the earlier turn; the title and
+the status strip still say who is missing what. The game's own turn, the title
+and the automatic roll-over of the start player marker still wait for every
+player, as before. The End turn button marks the chosen phase (and those before
+it), so a player finishes the turn by ending it on Research.

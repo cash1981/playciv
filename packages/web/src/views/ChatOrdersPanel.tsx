@@ -116,6 +116,19 @@ const isVisible = (row: TimelineMessageDto, filter: Filter): boolean => {
 }
 
 /** The first phase the viewer has not marked done in that turn; Research when all are. */
+/**
+ * The turn the viewer is on. The game's current turn waits for every player,
+ * but a player who has finished Research in a turn moves on to the next one
+ * without waiting for the others (they still see what they are missing).
+ */
+export function viewerTurn(view: PlayerView): number {
+  const gameTurn = view.activeTurn?.turnNumber ?? 1
+  const finished = (view.you?.playerTurns ?? [])
+    .filter((turn) => turn.done.RESEARCH === true)
+    .reduce((highest, turn) => Math.max(highest, turn.turnNumber), 0)
+  return Math.max(gameTurn, finished + 1)
+}
+
 export function firstOpenPhase(view: PlayerView, turnNumber: number): TurnPhase {
   const turn = view.you?.playerTurns.find((candidate) => candidate.turnNumber === turnNumber)
   return TURN_PHASES.find((phase) => turn?.done[phase] !== true) ?? 'RESEARCH'
@@ -292,7 +305,7 @@ export function ChatOrdersPanel({
   const privateEditorRef = useRef<MarkdownEditorHandle | null>(null)
   const privateDirtyRef = useRef(false)
 
-  const currentTurn = view.activeTurn?.turnNumber ?? 1
+  const currentTurn = viewerTurn(view)
   const orderTurn = turnPick ?? currentTurn
   const orderPhase = phasePick ?? firstOpenPhase(view, orderTurn)
   const canWrite = view.you !== null && !readOnly
@@ -575,8 +588,8 @@ export function ChatOrdersPanel({
                       value={orderTurn}
                       onChange={(event) => setTurnPick(Number(event.target.value))}
                     >
-                      {/* Only the turns that have started: the next one appears when every
-                          player has finished the current one */}
+                      {/* Only turns the viewer has reached: the next one appears when the
+                          viewer has finished Research, whether or not the others have */}
                       {range(1, currentTurn).map((number) => (
                         <option key={number} value={number}>{`Turn ${number}`}</option>
                       ))}
