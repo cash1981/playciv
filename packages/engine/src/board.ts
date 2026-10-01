@@ -97,7 +97,7 @@ export type BoardAssetCategory =
   | 'wonder'
   /** The five neutral city-states (cs1–cs5), placed on the map like cities. */
   | 'citystate'
-  /** Relic markers from the expansions; one of each exists in a game. */
+  /** Relic markers (Fame and Fortune, Wisdom and Warfare); one of each exists in a game. */
   | 'relic'
 
 /** Pieces can face four ways. Degrees, clockwise. */

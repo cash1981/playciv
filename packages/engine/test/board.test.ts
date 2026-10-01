@@ -174,7 +174,8 @@ describe('the manifest', () => {
       expect(relic.id).toBe(relic.path.replace(/\.png$/, ''))
       expect(relic.path.startsWith('relics/')).toBe(true)
     }
-    expect(relics.every((asset) => asset.width <= 94 && asset.height <= 94)).toBe(true)
+    // The generator caps relic art at 90 px on the longer side.
+    expect(relics.every((asset) => asset.width <= 90 && asset.height <= 90)).toBe(true)
   })
 
   it('has an army and a scout in all five player colours', () => {
