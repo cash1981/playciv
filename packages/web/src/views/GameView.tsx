@@ -12,8 +12,8 @@ import { isTradable, isUnit, itemName, itemType, TURN_PHASE_LABEL } from '@civ/e
 import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
-import { ApiError, api } from '../lib/api.js'
 import { useActivity } from '../lib/activity.js'
+import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
 
 import { BoardView } from './BoardView.js'

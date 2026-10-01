@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useIsBusy } from '../lib/activity.js'
 import { api } from '../lib/api.js'
 import type { GameRevisionView, Item, RevealedEntry, RevealedPage } from '../lib/api.js'
 import { RevealedPanel, RevealedRow } from './RevealedPanel.js'
@@ -136,6 +137,24 @@ describe('RevealedPanel', () => {
 
     expect(screen.getByText('Showing 100 of 105 — older items are not shown here')).toBeTruthy()
     expect(screen.getByText('Load more')).toHaveProperty('disabled', true)
+  })
+
+  it('counts the Refresh button as work for the global spinner (issue #225)', async () => {
+    vi.spyOn(api, 'revealed').mockImplementationOnce(serverRevealed(feed(20)))
+    render(<RevealedPanel gameId="game-1" reloadCount={0} />)
+    await waitFor(() => expect(screen.getByText('Item 6')).toBeTruthy())
+    const busy = renderHook(() => useIsBusy())
+    expect(busy.result.current).toBe(false)
+
+    let finish: (page: RevealedPage) => void = () => {}
+    vi.spyOn(api, 'revealed').mockImplementationOnce(
+      () => new Promise<RevealedPage>((resolve) => { finish = resolve }),
+    )
+    fireEvent.click(screen.getByText('Refresh'))
+    await waitFor(() => expect(busy.result.current).toBe(true))
+
+    await act(async () => { finish({ items: [], total: 0, page: 1, size: 6 }) })
+    await waitFor(() => expect(busy.result.current).toBe(false))
   })
 
   it('does not mistake a failed "Load more" click for hitting the cap', async () => {

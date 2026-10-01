@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
+import { useActivity } from '../lib/activity.js'
 import { api } from '../lib/api.js'
 import type { GameSummary, PlayerDto } from '../lib/api.js'
 
@@ -18,6 +19,8 @@ export function LobbyView({ player, onOpenGame, onUnauthorized }: Props): React.
   const [name, setName] = useState('')
   const [numOfPlayers, setNumOfPlayers] = useState(4)
   const [busy, setBusy] = useState(false)
+  // Covers the write and the reload after it, which `request()` alone would not.
+  useActivity(busy)
 
   const reload = useCallback(async () => {
     try {

@@ -3,7 +3,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { beginActivity, useActivity, useIsBusy } from './activity.js'
+import { beginActivity, trackActivity, useActivity, useIsBusy } from './activity.js'
 
 afterEach(cleanup)
 
@@ -54,5 +54,24 @@ describe('activity', () => {
     expect(watcher.result.current).toBe(true)
     reporter.unmount()
     expect(watcher.result.current).toBe(false)
+  })
+
+  it('trackActivity counts the time a promise takes, also when it fails', async () => {
+    const { result } = renderHook(() => useIsBusy())
+    let finish: (value: string) => void = () => {}
+    let tracked: Promise<string> = Promise.resolve('')
+    act(() => { tracked = trackActivity(new Promise<string>((resolve) => { finish = resolve })) })
+    expect(result.current).toBe(true)
+    await act(async () => { finish('done'); await tracked })
+    expect(result.current).toBe(false)
+
+    let fail: (reason: Error) => void = () => {}
+    let failing: Promise<unknown> = Promise.resolve()
+    act(() => {
+      failing = trackActivity(new Promise<string>((_, reject) => { fail = reject })).catch(() => undefined)
+    })
+    expect(result.current).toBe(true)
+    await act(async () => { fail(new Error('no')); await failing })
+    expect(result.current).toBe(false)
   })
 })

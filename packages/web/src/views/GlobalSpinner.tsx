@@ -43,7 +43,7 @@ export function GlobalSpinner(): React.JSX.Element {
   // The status region stays mounted, so a screen reader announces the text
   // when it appears instead of missing a region that was added with it.
   return (
-    <div className="global-spinner" data-active={visible} role="status" aria-live="polite">
+    <div className="global-spinner" data-active={visible} role="status">
       {visible ? (
         <>
           <span className="global-spinner-ring" aria-hidden="true" />

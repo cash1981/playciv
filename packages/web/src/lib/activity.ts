@@ -51,6 +51,19 @@ export function useIsBusy(): boolean {
   )
 }
 
+/**
+ * Counts the time `work` takes as running. For a read the user asked for with a
+ * button, such as Refresh; `request()` skips reads on purpose.
+ */
+export async function trackActivity<T>(work: Promise<T>): Promise<T> {
+  const done = beginActivity()
+  try {
+    return await work
+  } finally {
+    done()
+  }
+}
+
 /** Reports `active` as work for as long as it is true and the caller is mounted. */
 export function useActivity(active: boolean): void {
   useEffect(() => {

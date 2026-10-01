@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useIsBusy } from '../lib/activity.js'
 import { api } from '../lib/api.js'
 import type { PlayerDto } from '../lib/api.js'
 import { ChatPanel } from './ChatPanel.js'
@@ -57,6 +58,32 @@ describe('ChatPanel auto-refresh', () => {
     await act(async () => { finishOld?.([]) })
     expect(screen.getByText('New message')).toBeTruthy()
     expect(chat).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('ChatPanel refresh button (issue #225)', () => {
+  beforeEach(() => localStorage.setItem('civ.panel.chat', 'true'))
+  afterEach(() => {
+    cleanup()
+    localStorage.removeItem('civ.panel.chat')
+    vi.clearAllMocks()
+  })
+
+  it('counts a pressed Refresh as work for the global spinner', async () => {
+    chat.mockResolvedValueOnce([])
+    await act(async () => {
+      render(<ChatPanel gameId="game" busy={false} run={async () => {}} player={player} reloadCount={0} autoRefresh={false} />)
+    })
+    const busy = renderHook(() => useIsBusy())
+    expect(busy.result.current).toBe(false)
+
+    let finish: (messages: Awaited<ReturnType<typeof api.chat>>) => void = () => {}
+    chat.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    act(() => { fireEvent.click(screen.getByText('Refresh')) })
+    expect(busy.result.current).toBe(true)
+
+    await act(async () => { finish([]) })
+    expect(busy.result.current).toBe(false)
   })
 })
 

@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { errorMessage } from '../App.js'
+import { trackActivity } from '../lib/activity.js'
 import { api } from '../lib/api.js'
 import type { GameRevisionView, LogEntryDto, PendingUndoDto, PlayerView } from '../lib/api.js'
 import { formatTimestamp } from '../lib/formatTimestamp.js'
@@ -86,7 +87,7 @@ export function LogPanel({ gameId, busy, run, reloadCount, historical = null, re
           Private
         </button>
         <span style={{ flex: 1 }} />
-        <button className="small" onClick={() => void load()}>
+        <button className="small" onClick={() => void trackActivity(load())}>
           Refresh
         </button>
       </div>
