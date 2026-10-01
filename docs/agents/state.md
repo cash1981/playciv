@@ -13,7 +13,7 @@ _Last updated: 2026-10-01_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 707 engine, 294 server, 459 web on `feat/military-dock` (706/294/452 on `feat/chat-orders` before) (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 707 engine, 294 server, 463 web on `feat/military-dock` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
