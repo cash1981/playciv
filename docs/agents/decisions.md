@@ -3462,3 +3462,15 @@ the status strip still say who is missing what. The game's own turn, the title
 and the automatic roll-over of the start player marker still wait for every
 player, as before. The End turn button marks the chosen phase (and those before
 it), so a player finishes the turn by ending it on Research.
+
+## 2026-10-01 - Chat orders: done phases are struck through, not ticked
+
+Amendment to the check mark entries. On macOS the tick in the Phase list was
+confused with the native tick that marks the selected option, so the human asked
+for a strike-through instead. A native option is drawn by the system on macOS
+and iOS and ignores most styling, so the strike is written into the text itself
+with a combining stroke after each character (`strikeThrough` in
+`ChatOrdersPanel.tsx`); the CSS `line-through` stays for browsers that honour
+it. The button already says End turn or Not done for the chosen phase. A screen
+reader may read the combining marks oddly; if that matters, the alternative is a
+custom listbox instead of a native select.

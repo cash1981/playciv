@@ -116,6 +116,10 @@ const isVisible = (row: TimelineMessageDto, filter: Filter): boolean => {
 }
 
 /** The first phase the viewer has not marked done in that turn; Research when all are. */
+/** `Trade` becomes `T̶r̶a̶d̶e̶`: a strike-through that survives in a plain-text option. */
+export const strikeThrough = (text: string): string =>
+  Array.from(text, (character) => `${character}\u0336`).join('')
+
 /**
  * The turn the viewer is on. The game's current turn waits for every player,
  * but a player who has finished Research in a turn moves on to the next one
@@ -605,17 +609,16 @@ export function ChatOrdersPanel({
                         if (chosen !== undefined) setPhasePick(chosen)
                       }}
                     >
-                      {/* A native option cannot be styled everywhere, so the check mark carries
-                          the meaning; the strike-through shows where the browser allows it.
-                          The mark goes after the name: macOS draws its own tick before the
-                          selected option, and a second one in front would read as a double. */}
+                      {/* A native option cannot be styled everywhere (macOS and iOS draw it
+                          themselves), so a done phase is struck through in the text itself with
+                          combining marks; the style is there for browsers that do honour it. */}
                       {TURN_PHASES.map((phase) => (
                         <option
                           key={phase}
                           value={phase}
                           style={isPhaseDone(phase) ? { textDecoration: 'line-through' } : undefined}
                         >
-                          {isPhaseDone(phase) ? `${PHASE_OPTION[phase]} ✓` : PHASE_OPTION[phase]}
+                          {isPhaseDone(phase) ? strikeThrough(PHASE_OPTION[phase]) : PHASE_OPTION[phase]}
                         </option>
                       ))}
                     </select>

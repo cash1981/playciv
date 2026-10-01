@@ -13,6 +13,7 @@ import {
   ChatOrdersPanel,
   chatOrdersTitle,
   firstOpenPhase,
+  strikeThrough,
   viewerTurn,
   mergeTimeline,
   outOfTurnQuestion,
@@ -675,17 +676,17 @@ describe('the Done button', () => {
     expect(markDone).toHaveBeenCalledExactlyOnceWith('game', 'MOVEMENT', 4)
   })
 
-  it('puts a check mark on the phases that are done, in the turn that is chosen', async () => {
+  it('strikes through the phases that are done, in the turn that is chosen', async () => {
     await renderPanel(makeView())
     await click(screen.getByRole('button', { name: 'Order' }))
 
     // Start of turn and Trade are done in turn 4
-    expect(optionTexts()).toEqual(['Start of turn ✓', 'Trade ✓', 'City management', 'Movement', 'Research'])
+    expect(optionTexts()).toEqual([strikeThrough('Start of turn'), strikeThrough('Trade'), 'City management', 'Movement', 'Research'])
     await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '3' } }) })
     // Turn 3 was finished
-    expect(optionTexts().every((text) => text.endsWith(' ✓'))).toBe(true)
+    expect(optionTexts().every((text) => text.includes('\u0336'))).toBe(true)
     await act(async () => { fireEvent.change(screen.getByLabelText('Turn'), { target: { value: '4' } }) })
-    expect(optionTexts().filter((text) => text.endsWith(' ✓'))).toHaveLength(2)
+    expect(optionTexts().filter((text) => text.includes('\u0336'))).toHaveLength(2)
   })
 
   it('on a phase that is done, offers to undo it, and an order can still be written there', async () => {
