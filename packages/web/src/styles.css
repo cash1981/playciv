@@ -1155,6 +1155,12 @@ ul.list > li:last-child {
   grid-column: span 2;
 }
 
+/* The buildings that stand alone start on a row of their own, rather than filling
+   the free cell beside the last pair. */
+.palette-group-pair + .palette-group:not(.palette-group-pair) {
+  grid-column-start: 1;
+}
+
 .palette-group .palette-item {
   flex: 1 1 0;
   min-width: 0;
