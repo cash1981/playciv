@@ -15,6 +15,7 @@ import { api } from '../lib/api.js'
 import type { ChatMessageDto, PlayerDto, PlayerView } from '../lib/api.js'
 import { ChatTimestamp } from './ChatTimestamp.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { colorClass } from './playerColor.js'
 
 const PAGE_SIZE = 10
 const CHAT_REFRESH_MS = 10_000
@@ -23,18 +24,6 @@ const CHAT_REFRESH_MS = 10_000
 export interface ChatAuthor {
   readonly civilization: string | null
   readonly color: string | null
-}
-
-const KNOWN_COLORS = new Set(['blue', 'green', 'purple', 'red', 'yellow'])
-
-/**
- * Classes carry tuned shades (see `.player-blue` and friends in the stylesheet)
- * because the raw colour name is unreadable on the dark background, Blue and
- * Purple especially. An unknown or missing colour stays in the normal text colour.
- */
-function colorClass(color: string | null): string | undefined {
-  const name = color?.toLowerCase()
-  return name !== undefined && KNOWN_COLORS.has(name) ? `player-${name}` : undefined
 }
 
 interface Props {

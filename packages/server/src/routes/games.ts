@@ -14,6 +14,7 @@ import {
   revealedFeed,
   revealedTechsForAllPlayers,
   toPlayerView,
+  turnStatus,
   withdrawFromGame,
 } from '@civ/engine'
 
@@ -38,6 +39,63 @@ import {
 import { sendEngineError, sendError } from '../errors.js'
 import { resultFromGame } from '../store/rating.js'
 import type { ChatMessage, GameRevision, GameRevisionMetadata } from '../store/types.js'
+
+/** Chat orders: a page never has fewer newest rows than this, so a quiet turn still shows context. */
+const CHAT_MIN_PAGE = 30
+
+/** A chat row the way the classic chat panel has always received it. */
+function classicChatRow(row: ChatMessage): Omit<ChatMessage, 'kind' | 'turnNumber' | 'phase'> {
+  return {
+    id: row.id,
+    gameId: row.gameId,
+    username: row.username,
+    message: row.message,
+    createdAt: row.createdAt,
+  }
+}
+
+export interface ChatPage {
+  readonly messages: readonly ChatMessage[]
+  /** There are older rows than the ones returned. */
+  readonly hasMore: boolean
+}
+
+/**
+ * Chat orders: one page of the timeline, `rows` being every row of the game
+ * oldest first.
+ *
+ * A turn starts at the first row tagged with its number. Without `before` the
+ * page is the whole current turn, widened to the newest {@link CHAT_MIN_PAGE}
+ * rows when the turn is younger than that. With `before` (the id of the oldest
+ * row the client holds) it is the turn before that row, so every "load more"
+ * completes a turn. Returns `undefined` when `before` names no row.
+ */
+export function timelinePage(
+  rows: readonly ChatMessage[],
+  currentTurn: number,
+  before: string | undefined,
+): ChatPage | undefined {
+  let start: number
+  let end = rows.length
+  if (before === undefined) {
+    const firstOfCurrent = rows.findIndex((row) => row.turnNumber === currentTurn)
+    const turnStart = firstOfCurrent === -1 ? rows.length : firstOfCurrent
+    start = Math.min(turnStart, Math.max(0, rows.length - CHAT_MIN_PAGE))
+  } else {
+    end = rows.findIndex((row) => row.id === before)
+    if (end === -1) return undefined
+    const turnStarts = new Set<number>()
+    const firstIndexOf = new Map<number, number>()
+    rows.forEach((row, index) => {
+      if (row.turnNumber !== null && !firstIndexOf.has(row.turnNumber)) {
+        firstIndexOf.set(row.turnNumber, index)
+        turnStarts.add(index)
+      }
+    })
+    start = Math.max(0, ...[...turnStarts].filter((index) => index < end))
+  }
+  return { messages: rows.slice(start, end), hasMore: start > 0 }
+}
 
 /** The summary the game list shows. Java: `PbfDTO`. */
 export interface GameSummary {
@@ -499,9 +557,28 @@ export function registerGameRoutes(app: App, context: AppContext): void {
   // game, and it carries no game rules — so it lives here, not in the engine.
   // -------------------------------------------------------------------------
 
+  /**
+   * The plain array it has always been, and only plain chat: order and system
+   * rows stay out of the classic panel, whether or not chat orders is on, so the
+   * live ChatPanel keeps working. The shape changes only on request: `paged=1`
+   * or `before` on a game with chat orders on answers a page of the timeline.
+   */
   app.get('/api/games/:gameId/chat', auth, async (c) => {
     const gameId = c.req.param('gameId')
-    return c.json(await context.repo.chatFor(gameId))
+    const rows = await context.repo.chatFor(gameId)
+    const before = c.req.query('before')
+    const paged = c.req.query('paged') === '1' || before !== undefined
+    // The live panel polls this, so the game is only read (and migrated) when the
+    // timeline is asked for. An unknown game answers an empty list, as it always did.
+    const game = paged ? await context.repo.findGame(gameId) : undefined
+    if (game === undefined || !game.chatOrders) {
+      return c.json(rows.filter((row) => row.kind === 'chat').map(classicChatRow))
+    }
+    const page = timelinePage(rows, turnStatus(game).currentTurn, before)
+    if (page === undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'before is not a message in this game')
+    }
+    return c.json(page)
   })
 
   app.post('/api/games/:gameId/chat', auth, async (c) => {
@@ -524,6 +601,9 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       username: me.username,
       message,
       createdAt: new Date().toISOString(),
+      kind: 'chat',
+      turnNumber: null,
+      phase: null,
     }
     await context.repo.appendChat(entry)
     await context.notifications.chatPosted(game, me.id, me.username, message)
@@ -542,6 +622,9 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       username: currentPlayer(c).username,
       message,
       createdAt: new Date().toISOString(),
+      kind: 'chat',
+      turnNumber: null,
+      phase: null,
     }
     await context.repo.appendChat(entry)
     return c.json(entry, 201)

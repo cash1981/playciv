@@ -17,6 +17,7 @@ import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
 
 import { BoardView } from './BoardView.js'
+import { ChatOrdersPanel, chatOrdersTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import { ChatPanel } from './ChatPanel.js'
 import type { ChatAuthor } from './ChatPanel.js'
 import { ItemCard } from './ItemCard.js'
@@ -450,6 +451,14 @@ export function GameView({
           onDeleted()
         })
       },
+      // The role, not `gameCreator`: the server route is admin only. The switch
+      // follows the live game, like End game, not a revision being replayed.
+      canSetChatOrders: player?.role === 'admin',
+      setChatOrdersDisabled: busyNow,
+      chatOrders: view?.chatOrders === true,
+      onSetChatOrders: (enabled) => {
+        void run(() => api.setChatOrders(gameId, enabled))
+      },
       endPlayers: currentView === null ? [] : winnerCandidatesOf(currentView),
       onEnd: (winner) => {
         void (async () => {
@@ -502,13 +511,19 @@ export function GameView({
               not who is looking. They wrap above the title on a phone. */}
           {activePlayer !== undefined && <PlayerChips player={activePlayer} />}
           <h1 style={{ margin: 0 }}>
-            {yourTurn
-              ? 'Your turn'
-              : `${(displayedView.activeTurn?.username ??
-                  displayedView.opponents.find((opponent) => opponent.yourTurn)?.username ??
-                  'nobody')}'s turn`}
-            {displayedView.activeTurn !== null &&
-              ` — ${TURN_PHASE_LABEL[displayedView.activeTurn.phase]} phase`}
+            {displayedView.chatOrders ? (
+              chatOrdersTitle(displayedView.activeTurn, you?.playerId)
+            ) : (
+              <>
+                {yourTurn
+                  ? 'Your turn'
+                  : `${(displayedView.activeTurn?.username ??
+                      displayedView.opponents.find((opponent) => opponent.yourTurn)?.username ??
+                      'nobody')}'s turn`}
+                {displayedView.activeTurn !== null &&
+                  ` — ${TURN_PHASE_LABEL[displayedView.activeTurn.phase]} phase`}
+              </>
+            )}
           </h1>
           <span className="muted" style={{ fontSize: '0.9rem' }}>{displayedView.name}</span>
           {!displayedView.active && <span className="tag">ended</span>}
@@ -523,8 +538,11 @@ export function GameView({
           </button>
         </div>
 
+        {displayedView.chatOrders && <TurnStatusStrip view={displayedView} />}
+
         <div className="row" style={{ marginTop: '0.6rem' }}>
-          {you !== null && (
+          {/* With chat orders there is no baton to pass: phases are marked done instead */}
+          {you !== null && !displayedView.chatOrders && (
             <>
               <button disabled={interactionBusy || !yourTurn} onClick={() => void run(() => api.endTurn(gameId))}>
                 End turn
@@ -574,28 +592,57 @@ export function GameView({
         {/* Draw is the first panel after the board, then Turn orders. Log and
             chat retain their responsive side-by-side pair below (`.panel-pair`). */}
         <DrawPanel gameId={gameId} busy={interactionBusy} yourTurn={yourTurn} run={run} view={displayedView} />
-        <TurnPanel gameId={gameId} busy={interactionBusy} run={run} reloadCount={reloadCount} historical={historical} />
-        <div className="panel-pair">
-          <LogPanel
-            gameId={gameId}
-            busy={busy || locked}
-            readOnly={replaying || locked}
-            run={run}
-            reloadCount={reloadCount}
-            historical={historical}
-          />
-          {player !== null && (
-            <ChatPanel
+        {displayedView.chatOrders ? (
+          <>
+            {/* Like the classic chat: the chat routes need a signed-in player */}
+            {player !== null && (
+              <ChatOrdersPanel
+                gameId={gameId}
+                view={displayedView}
+                busy={busy}
+                readOnly={replaying || locked}
+                replaying={replaying}
+                run={run}
+                reloadCount={reloadCount}
+                autoRefresh={autoRefresh}
+                authors={chatAuthors}
+              />
+            )}
+            <LogPanel
               gameId={gameId}
               busy={busy || locked}
+              readOnly={replaying || locked}
               run={run}
-              player={player}
               reloadCount={reloadCount}
-              autoRefresh={autoRefresh}
-              authors={chatAuthors}
+              historical={historical}
             />
-          )}
-        </div>
+          </>
+        ) : (
+          <>
+            <TurnPanel gameId={gameId} busy={interactionBusy} run={run} reloadCount={reloadCount} historical={historical} />
+            <div className="panel-pair">
+              <LogPanel
+                gameId={gameId}
+                busy={busy || locked}
+                readOnly={replaying || locked}
+                run={run}
+                reloadCount={reloadCount}
+                historical={historical}
+              />
+              {player !== null && (
+                <ChatPanel
+                  gameId={gameId}
+                  busy={busy || locked}
+                  run={run}
+                  player={player}
+                  reloadCount={reloadCount}
+                  autoRefresh={autoRefresh}
+                  authors={chatAuthors}
+                />
+              )}
+            </div>
+          </>
+        )}
         <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <OpponentHandPanel opponents={displayedView.opponents} />
         <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
@@ -698,19 +745,41 @@ function DrawPanel({
   busy,
   yourTurn,
   run,
+  view,
 }: PanelProps & { readonly yourTurn: boolean }): React.JSX.Element {
+  // Chat orders (issue #215): no baton, so the panel is never disabled for
+  // turn reasons. Out of turn the player is asked first, and the server hears
+  // `confirmedOutOfTurn` only after a yes. It still refuses without it.
+  const chatOrders = view.chatOrders
+  const question = outOfTurnQuestion(view)
+  const canDraw = chatOrders ? view.you !== null : yourTurn
+  const draw = (sheet: SheetName): void => {
+    if (question === null) {
+      void run(() => api.draw(gameId, sheet))
+    } else if (window.confirm(question)) {
+      void run(() => api.draw(gameId, sheet, true))
+    }
+  }
   return (
     <CollapsiblePanel id="draw" title="Draw" defaultOpen>
       <p className="muted" style={{ marginTop: 0 }}>
-        {yourTurn ? 'It is your turn.' : 'You can only draw on your own turn.'}
+        {chatOrders
+          ? view.you === null
+            ? 'Only players can draw.'
+            : question === null
+              ? 'It is your turn.'
+              : 'It is not your turn. You will be asked before you draw.'
+          : yourTurn
+            ? 'It is your turn.'
+            : 'You can only draw on your own turn.'}
       </p>
       <div className="row">
         {DRAWABLE.map(({ sheet, label }) => (
           <button
             key={sheet}
             className="small"
-            disabled={busy || !yourTurn}
-            onClick={() => void run(() => api.draw(gameId, sheet))}
+            disabled={busy || !canDraw}
+            onClick={() => draw(sheet)}
           >
             {label}
           </button>

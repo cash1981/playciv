@@ -97,6 +97,29 @@ const turnsFor = (
 const latestTurnNumber = (turns: readonly PlayerTurn[]): number =>
   turns.at(-1)?.turnNumber ?? 1
 
+/**
+ * Arrow keys, Home and End move between the tabs of a tab list and select the one
+ * reached, as the ARIA authoring practice has it (automatic activation). Put on
+ * every tab; it finds its siblings by role.
+ */
+export function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>): void {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  const tabs = Array.from(
+    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [],
+  )
+  const currentIndex = tabs.indexOf(event.currentTarget)
+  if (currentIndex < 0 || tabs.length === 0) return
+  const nextIndex =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? tabs.length - 1
+        : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+  event.preventDefault()
+  tabs[nextIndex]?.focus()
+  tabs[nextIndex]?.click()
+}
+
 /** Username tabs share the players' board colours; the private space comes last. */
 export function TurnTabs({
   players,
@@ -106,23 +129,7 @@ export function TurnTabs({
   onSelectPlayer,
   onSelectPrivateLog,
 }: TurnTabsProps): React.JSX.Element {
-  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-    const tabs = Array.from(
-      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [],
-    )
-    const currentIndex = tabs.indexOf(event.currentTarget)
-    if (currentIndex < 0 || tabs.length === 0) return
-    const nextIndex =
-      event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? tabs.length - 1
-          : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
-    event.preventDefault()
-    tabs[nextIndex]?.focus()
-    tabs[nextIndex]?.click()
-  }
+  const handleKeyDown = handleTabKeyDown
 
   return (
     <div className="turn-tabs" role="tablist" aria-label="Turn orders by player">

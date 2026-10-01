@@ -168,6 +168,11 @@ export function createGame(options: CreateGameOptions): GameState {
     logSecret: options.secret ?? deriveLogSecret(seed, gameId),
     itemCounter: counter,
     wondersDealt: false,
+    chatOrders: false,
+    chatOrdersStartTurn: 1,
+    startPlayerId: null,
+    legacyOrdersCopied: false,
+    turnStarters: {},
     battle: null,
     rev: 0,
   }

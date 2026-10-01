@@ -225,6 +225,9 @@ describe('D1Repository', () => {
       username: 'Alice',
       message: id,
       createdAt: at,
+      kind: 'chat',
+      turnNumber: null,
+      phase: null,
     })
     await repo.appendChat(message('l1', null, '2020-01-01T00:00:00.000Z'))
     await repo.appendChat(message('l2', null, '2020-01-01T00:00:01.000Z'))

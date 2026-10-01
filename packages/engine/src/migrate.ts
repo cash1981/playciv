@@ -37,12 +37,24 @@ const correctSocialPolicyFlipsides = (
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret'
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret' | 'chatOrders' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters' | 'legacyOrdersCopied'
 > &
   Partial<
     Pick<
       GameState,
-      'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret'
+      | 'board'
+      | 'withdrawnPlayers'
+      | 'publicTurns'
+      | 'wondersDealt'
+      | 'battle'
+      | 'rev'
+      | 'createdAt'
+      | 'chatOrders'
+      | 'chatOrdersStartTurn'
+      | 'startPlayerId'
+      | 'legacyOrdersCopied'
+      | 'turnStarters'
+      | 'logSecret'
     >
   >
 
@@ -225,5 +237,14 @@ export function migrateGameState(state: GameState): GameState {
             departedUnits: battle.departedUnits ?? [],
           },
     rev: older.rev ?? 0,
+    // Chat orders (issue #215) is opt-in, so every older save starts with it off.
+    chatOrders: older.chatOrders ?? false,
+    // Turn 1 is the baseline of a game that has never used chat orders.
+    chatOrdersStartTurn: older.chatOrdersStartTurn ?? 1,
+    startPlayerId: older.startPlayerId ?? null,
+    // A game that is already in chat mode has its orders in the timeline, and
+    // copying the classic ones later would duplicate those posted there.
+    legacyOrdersCopied: older.legacyOrdersCopied ?? older.chatOrders === true,
+    turnStarters: older.turnStarters ?? {},
   }
 }

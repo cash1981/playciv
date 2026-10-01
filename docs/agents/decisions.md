@@ -3236,6 +3236,264 @@ turn, so the recipient cannot be derived from the previous holder. The presser
 is never mailed. The initial battle turn is `defender`, so the attacker ending
 first lands the turn on themselves and produces no mail.
 
+## 2026-09-29 — Chat orders, slice 1 (issue #215)
+
+New feature specified by the human; the old system has no counterpart. The
+brief is `docs/agents/tasks/chat-orders.md`. Slice 1 is the engine and the
+server, with no new UI. These are the choices that are not obvious from the code.
+
+**Classic reveal also sets `done`.** `PlayerTurn.done` is separate from
+`revealed`, because a phase can take several messages and posting an order does
+not mean the phase is finished. `revealTurnOrder` sets both, so switching the
+setting off and on again agrees about what is done. Old turns migrate with
+`done = revealed`, the rule that already backfills `revealed`. Saving or editing
+a classic order does not touch `done`; only an explicit unmark does.
+
+**`GET /chat` hides order and system rows from the classic panel, and pages only
+on opt-in.** The live ChatPanel does `[...chat]` on the response, so the shape
+must not change by itself, not even for a game with chat orders on. The endpoint
+returns the plain array of `chat` rows in the old five-key shape unless the query
+has `paged=1` or `before`, and then only for a game with the setting on; it
+answers `{messages, hasMore}`. Order and `system` rows are never in the plain
+array, so turning the setting off gives the classic panel its chat back with
+nothing extra in it, and no row is deleted.
+
+**The timeline row is not written atomically with the game state.** The game
+state is authoritative. The order, done and undone routes save the state through
+`applyToGame`, and the timeline row is written in its `after` hook, which logs a
+failure and does not fail the request. A failed row write therefore leaves an
+order in `orders` and `history` (and so in the classic Turn orders panel) but not
+in the timeline; slice 2 or 3 may reconcile that from the game state. A
+repository method that stores game, revision and chat row together was not added:
+it would change the `Repository` interface, both stores and the D1 batch for a
+failure that loses nothing authoritative, and slice 1 is meant to stay small.
+
+**`turnHolder` replaces the baton for the draw gate only when chat orders is on.**
+With the setting on, "your turn" is derived, the first player in seat order from
+the start player who has not marked the earliest open phase done, and `draw` and
+`drawWonder` use it instead of `yourTurn`. With it off nothing changes, and
+`confirmedOutOfTurn` is ignored. The baton (`yourTurn`, `endTurn`, `takeTurn`)
+is left alone for now; slice 3 decides what becomes of it. The turn e-mail
+therefore names no phase when the setting is on, because `activeTurnStatus` then
+describes the turn holder and not the baton holder the mail goes to.
+
+**`confirmedOutOfTurn` is an engine input.** It is a field on `DrawInput`, not a
+check in the route, so the engine stays the one place that decides whether a draw
+is allowed. The warning dialog is the client's job (slice 2): it sends the draw,
+gets `NOT_YOUR_TURN`, asks, and sends it again with the flag.
+
+**The order, done and undone actions refuse with `CHAT_ORDERS_OFF` when the
+setting is off.** The check is in the engine actions, mapped to 409. The classic
+update and reveal are unaffected.
+
+**`chatOrdersStartTurn` is the baseline for `turnStatus`.** The current turn is
+the lowest one some active player has not finished, but a game that played 20
+classic turns has players with no `PlayerTurn` for early turns (a player may
+never have written turn 1), and that would pin the current turn, and the turn
+holder, to turn 1. Every turn below `chatOrdersStartTurn` therefore counts as
+finished for everybody. Switching the setting on sets it to the larger of its
+current value and the turn the game has reached at that moment, computed before
+the flag flips. That is read from the whole table, not from the baton holder
+alone: the classic `activeTurnStatus` only looks at the holder, and a holder who
+never wrote turn orders would report turn 1 in a game on turn 20. So it is the
+larger of the classic turn and the highest turn anyone has a record for (plus one
+when everybody with a record for that turn has finished it). Overshooting only
+marks old turns finished; undershooting would pin the game. One consequence:
+a player working a turn ahead of the others can carry the baseline past work the
+others have not finished. Nothing is lost, the orders and flags stay, and play
+corrects itself once everyone marks done in the newer turn. Switching off leaves
+the baseline alone and it never goes down. It is 1 by default and for old saves,
+and is not in `PlayerView`.
+
+## 2026-09-29 — Chat orders, slice 2 (web)
+
+**Correction to the slice 1 entry on `confirmedOutOfTurn`.** The slice 1 entry
+says the client sends the draw, gets `NOT_YOUR_TURN`, asks, and sends again. That
+is not what was built. The confirm dialog asks **before** the first request, from
+`activeTurn.playerId`, and the draw is sent with `confirmedOutOfTurn: true` only
+after Yes. A No sends nothing. The server still refuses an unconfirmed
+out-of-turn draw with `NOT_YOUR_TURN`, and the client then shows that error as it
+would any other, so a stale view cannot slip past the guard. A player whose view
+says they are up sends no flag.
+
+**Messages are rendered with `react-markdown`, a new runtime dependency of
+`@civ/web`.** The web package had no Markdown renderer (Milkdown is the editor,
+not a display path), and orders and chat are written by other players, so
+rendering them is an XSS surface. The policy, in `SafeMarkdown.tsx`:
+
+- No raw HTML. react-markdown builds React elements and, without `rehype-raw`,
+  shows `<script>` and `<img onerror>` as text. `dangerouslySetInnerHTML` is used
+  nowhere.
+- No images. A remote image would make every reader's browser fetch a URL the
+  author chose. Only the alt text is shown.
+- Links: absolute `http:`, `https:` and `mailto:` only, checked with `new URL`.
+  Anything else, `javascript:`, `data:`, `vbscript:` or a relative path, loses
+  its `href` and keeps its text.
+- Every link opens with `target="_blank" rel="noopener noreferrer"`.
+
+A library was chosen over a hand-written sanitiser because the parser is the
+part that is easy to get wrong. The tests in `SafeMarkdown.test.tsx` and
+`ChatOrdersPanel.test.tsx` pin the policy.
+
+**The composer is not sticky.** A sticky composer covered the newest messages on
+a phone once the panel was taller than the screen. The timeline and composer now
+share one box no taller than `100dvh - 4rem`; the timeline scrolls inside it and
+the composer takes what it needs. A resize observer keeps the newest message in
+view when the composer changes height.
+
+**The timeline needs a signed-in player.** Like the classic chat, it is not
+rendered for a signed-out spectator (the chat routes answer 401). The Log panel
+still shows. While a revision is on screen the Private tab says the private log is
+not part of the history instead of showing an editor.
+
+## 2026-09-29 — Chat orders, slice 3: new turn, start player marker, turn mail (issue #215)
+
+The rules are in `docs/agents/tasks/chat-orders.md`, "Slice 3". These are the
+choices that are not obvious from the code, and where it differs from the brief.
+
+**The start player is derived from the board.** `startPlayerOf` reads the owner
+of the player area holding the centre of the `markers/startplayer` piece, so a
+manual move, undo and redo can never leave it stale. Only when the marker is
+missing or in no player area does it fall back to `startPlayerId`, then to seat 1.
+`startPlayerId` is therefore only the last known start player. Undo does not
+restore it, and does not need to while the marker is on the board.
+
+**The starter of a turn follows the marker for the newest started turn.** The
+brief says the title uses `turnStarters[currentTurn]`, else the marker. Taken
+literally, dragging the marker or undoing the turn start would leave the title
+naming someone who no longer starts the turn, while the turn holder followed the
+marker. So `turnStarters[n]` is used only for a turn older than the newest started
+one (a turn returned to by unmarking Research); for the newest one the derived
+start player is shown. `turnHolder` counts from the same player. The record
+still guards against rotating twice.
+
+**A manual move also updates `startPlayerId`.** When chat orders is on and the
+start marker lands in a different player's area, the move writes
+`<player> is now the start player` to the public log and remembers that player as
+`startPlayerId`. Otherwise "marker in no area: last known" would mean the last
+player the engine chose, not the last one the table chose. With chat orders off a
+move of the marker writes nothing.
+
+**The marker moves as a normal board history entry, in the name of the player who
+finished the turn.** The rotation uses `movePieceUnchecked` (new, `movePiece` now
+calls it after its access check) and `placeUnchecked`, and drops the marker by
+its centre so it lands in the target area whatever the width of the area. The
+player who marked the last Research is the actor, so Undo (which only undoes your
+own last board change) works for them. If the board has lost the marker, a new
+one is placed instead. Switching chat orders on places the marker in the start
+player's name, since the admin may not be in the game; the route has
+`record: false`, so that placement is a board history entry without a game
+revision checkpoint.
+
+**Two log lines from one done.** A done that finishes the turn writes the done
+line and then `Turn N: X starts with the Start of turn phase` (username `System`,
+public only). The server writes a `system` row for each: the second is tagged with
+the new turn and `SOT`, which is what makes the paging boundary exact. Writing
+ahead (an order tagged with the next turn) still puts a tagged row before the
+divider; the boundary is exact for the usual case only. The web shows the row as
+a divider when it is a system row, phase `SOT`, with exactly that wording.
+
+**The mail goes to the new turn holder, even if that is the player who pressed
+done.** The brief says to notify the new holder and the battle mail skips the
+presser, but here it did not seem worth a special case. It uses the shared 30
+minute in-game limit, so a holder mailed by chat a minute ago is not mailed
+again. #217 will change that limit for every mail.
+
+**Decisions not made here.** The classic baton and its buttons are left alone
+when chat orders is off, as before. Enabling does not touch the baton.
+
+**More than one start player marker: the one touched last wins (issue #215, slice
+3 review).** The palette does not limit `markers/startplayer`, and classic games
+must not change, so a second marker can be placed. `startMarkerOf` picks the last
+marker in the piece list whose centre is inside a player's area. Every move
+re-inserts a piece at the end of the list, so that is the marker somebody handled
+most recently, and the result does not depend on which one was placed first. A
+marker outside every area is ignored while another is inside; with none inside,
+`startPlayerId` and then seat 1 decide, as before. The rotation, the manual-move
+announcement and `startPlayerOf` all use that one finder, so the marker that
+rotates is the marker that decides. Placing a marker from the palette now also
+writes `<player> is now the start player` when it changes the answer, with chat
+orders on. The alternative, capping the asset at one, would have changed classic
+games.
+
+## 2026-10-01 - Chat orders: one Done button, check marks, formatting bar
+
+The human asked for the Done sheet to go. In chat orders mode the composer's
+Order tab has one **Done** button that acts on the chosen turn and phase
+(`markDone`, which still means "done up to and including this phase"). When the
+chosen phase is already done the button reads **Not done** and unmarks it. The
+Phase list marks done phases with a check mark in the option text, plus a
+strike-through where the browser lets an option be styled (desktop Chrome and
+Firefox; iOS ignores option styles, so the check mark carries the meaning).
+Choosing a done phase still lets the player write a new order there. The button
+is only on the Order tab because that is where turn and phase are chosen; chat
+messages carry neither.
+
+Crepe's formatting bar is back in the composer. On a phone it is one row that
+scrolls sideways (its `.top-bar-inner` wraps onto three rows otherwise and leaves
+no room to type). The chat title now says whose turn it is and which phase, not
+who started or who is missing what; the status strip below it keeps the full
+picture.
+
+## 2026-10-01 - Chat orders: no turn ahead in the Turn list
+
+The composer's Turn list offered one turn beyond the current one, and picking
+that turn offered the next, so Turn 3 appeared as soon as Turn 2 was picked. That
+was an addition that nobody asked for. The list now holds only the turns that
+have started (1 to the current turn); the next turn appears when every player has
+finished the current one, as in the classic panel. Orders for an earlier turn are
+unchanged. This supersedes the "one turn ahead" remark in the 2026-09-29 slice 2
+notes.
+
+Amendment, same day: the check mark goes after the phase name ("Trade ✓"), not
+before it. macOS draws its own tick before the selected option, so a mark in
+front showed two ticks on a selected, finished phase.
+
+## 2026-10-01 - Chat orders: a player moves on to the next turn on their own
+
+Amendment to the entry above, after the human's answer. The Turn list in the
+composer used the game's current turn, which waits for every player, so a player
+who had finished Research could not write orders for the next turn until the
+others had caught up. It now follows the viewer (`viewerTurn`): the larger of the
+game's current turn and one more than the viewer's highest turn with Research
+marked done. The list holds turns 1 to that, and the composer defaults to it. It
+does not matter that other players are still on the earlier turn; the title and
+the status strip still say who is missing what. The game's own turn, the title
+and the automatic roll-over of the start player marker still wait for every
+player, as before. The End turn button marks the chosen phase (and those before
+it), so a player finishes the turn by ending it on Research.
+
+## 2026-10-01 - Chat orders: done phases are struck through, not ticked
+
+Amendment to the check mark entries. On macOS the tick in the Phase list was
+confused with the native tick that marks the selected option, so the human asked
+for a strike-through instead. A native option is drawn by the system on macOS
+and iOS and ignores most styling, so the strike is written into the text itself
+with a combining stroke after each character (`strikeThrough` in
+`ChatOrdersPanel.tsx`); the CSS `line-through` stays for browsers that honour
+it. The button already says End turn or Not done for the chosen phase. A screen
+reader may read the combining marks oddly; if that matters, the alternative is a
+custom listbox instead of a native select.
+
+## 2026-10-01 - Chat orders: a simple formatting bar
+
+The composer's Crepe bar was a full row of icons (text style, bold, italic,
+strike, code, three list types, link, code block, quote, rule). The human asked
+for Normal, Heading, bold and italic only, each with a name. `MarkdownEditor`
+takes `toolbar="simple"` for that: the bar is trimmed to the text style selector
+(Normal and Heading, a level 3 heading), bold and italic, built from Crepe's own
+items through its `buildTopBar` hook, and the buttons get a tooltip, an
+`aria-label` and `aria-pressed` (set by a small observer, because Crepe renders
+them as bare icons). The default stays the full bar, so the classic Turn orders
+and the private log are unchanged. The text style menu did nothing before
+because the earlier "one scrolling row" CSS clipped its dropdown; with three
+controls the bar needs no scrolling on a phone, so that CSS is gone.
+
+Amendment, same day: Bold and Italic were there but invisible. Crepe draws the
+bar's icons in its "outline" colour, and the app maps that colour to the hairline
+colour (`--line`), which is almost the panel background. In the composer the icons
+now take the text colour, and the gold accent when they are on.
+
 ## Numeric fields on mobile (issue #219)
 
 ATK, HP and the battlehand draw count were `type="number"` inputs, which on a
@@ -3393,3 +3651,87 @@ written by hand from the real image sizes (84 x 85, 112 x 110, 112 x 110,
 machine with the Moderator folder should leave the manifest unchanged. The Moderator folder must use the lower
 case file names above.
 
+
+## 2026-10-01 — Chat orders: review follow-ups (PR #218)
+
+**An order is mailed like a chat message.** With chat orders on, posting an order
+calls `notifications.chatPosted` with the order text, so the other players get the
+same "New Chat" mail, held the same way (once, until they open the game, #217). The
+classic order mailed the other players too (`phaseUpdated`), so a game that
+switches the setting on would otherwise go quiet. The text is public in chat
+orders, so it may be in the body. The mail is sent even if writing the timeline row
+fails. A refused order (chat orders off) mails nobody.
+
+**A failing timeline row does not stop the mail to a new turn holder.** The `done`
+route writes its system rows and mails the new holder in the same hook; the row
+write is now caught and logged, so the mail still goes.
+
+**Turns start as a catch-up.** `currentTurn` can advance without
+`markPhasesDone`: a classic reveal sets `done` too, and a withdrawal removes the
+player who held the turn back. `startMissingTurns` runs after all three and starts
+every turn between the newest one with a starter and the current turn, one seat of
+rotation each, so a jump of two turns leaves no gap in `turnStarters`. A withdrawal
+has no actor to name in the board history, so the new start player is the actor
+and can undo it. With chat orders off nothing happens.
+
+**Two migrations share the number 0004.** `0004_chat_kind.sql` and
+`0004_game_mail.sql` both exist in `packages/worker/migrations`. Both are applied
+in production by name, so neither is renamed: a rename would make wrangler apply
+it again and fail with duplicate columns. New migrations take 0005 or higher.
+
+## 2026-10-01 — Chat orders: the classic orders are copied into the timeline once
+
+When chat orders is switched on for a game that has played classic turns, the
+revealed orders are copied into the timeline so the game does not look empty.
+
+**Once per game.** `GameState.legacyOrdersCopied` (default false) is set by the
+first `setChatOrders(true)` and never cleared, so switching off and on again
+copies nothing. The admin route compares `before` and `after` in its `after`
+hook and copies on the false to true change. It is not in `PlayerView`. A game
+that is already in chat mode when the field first appears migrates to true, not
+false: its orders are in the timeline already, and copying the classic ones later
+would duplicate the ones posted there. An old game that was never switched on
+migrates to false.
+
+**What is copied: the public history only.** `publicOrderVersions` reads
+`state.publicTurns`, every `history[phase]` version `{markdown, at}`, never a
+player's own `playerTurns`. A draft that was never revealed is masked there and
+has no history entry, and so is an edit made after a reveal; neither can be
+copied. Tests with a draft, an edit and a `gamenote` show none reach the rows.
+
+**How.** One `order` row per version: the owner's username, `turnNumber`, `phase`,
+the markdown, `createdAt` = the time it was revealed, so the web's "replaced"
+logic sees the newest per player, turn and phase as current. Ids are
+`legacy-<gameId>-<turn>-<username>-<phase>-<index>` and an existing id is skipped,
+so a repeat cannot duplicate. A version without a usable `at` is skipped, not given
+an invented time. No mail is sent for the copy. A failure while copying is logged
+and does not undo the switch; there is no automatic retry, because the flag is
+already set.
+
+**Caveats.**
+- Orders revealed before versions were kept (old saves where `history` is empty)
+  are not copied; there is no time to give them and the markdown is only in the
+  masked `orders`.
+- D1 lists chat by `created_at`, so the copied rows sit in true time order among
+  the game's earlier chat. The JSON dev store lists rows as written, so there they
+  come after the existing chat.
+- The paging boundary is unchanged: a page starts at the first row tagged with the
+  current turn. A game whose turns were all finished classically is on a turn that
+  has no tagged rows yet, so its first page is the newest 30 rows and Load more
+  goes back a turn at a time.
+- Only the orders' text is copied. There is no mail, and no start player history
+  for the classic turns (the done markers a classic reveal sets are in the state
+  already).
+
+## 2026-10-02 - Chat orders: last review notes
+
+The Markdown chunk loads lazily and a failed load falls back to the plain text of
+the message, not to a blank page: React's `Suspense` does not catch a rejected
+import, and the app has no error boundary.
+
+`legacyOrdersCopied` migrates to true for a game that is already in chat mode when
+the field first appears, and to false otherwise. That assumes the feature never
+shipped in parts: a game that had chat orders on and then off before the field
+existed would copy its classic history again on the next switch-on, and the
+orders posted in chat mode would appear twice. No such game can exist when the
+whole feature ships as one pull request.

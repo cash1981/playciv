@@ -13,7 +13,7 @@ _Last updated: 2026-10-01_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 611 engine, 233 server, 361 web on `claude/nice-faraday-9hl43h` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 706 engine, 294 server, 452 web on `feat/chat-orders` after merging main (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -54,6 +54,22 @@ _Last updated: 2026-10-01_
   are text inputs with a numeric keypad (`DigitInput`), so typing 1 over a 0 gives
   1 and not 01. Empty or non-digit input counts as 0; the draw count is clamped to
   1-20 when Draw is pressed. No engine or server change.
+
+- **Issue #215: chat orders (chat and turn orders merged), all three slices.**
+  A per-game `chatOrders` switch, off by default and settable only by an admin
+  (Actions menu, `POST /api/admin/games/:gameId/chat-orders`). With it on the
+  Turn orders and Chat panels are replaced by one timeline: chat and orders
+  (turn and phase tagged, markdown, newest order counts), per-phase done markers
+  that can be set and unset, a Private tab, Load more, a status strip and a title
+  that says who the game is waiting for. When every player has finished Research
+  the next turn starts by itself, the start player marker moves clockwise, and
+  the log, timeline and title say so; the start player is read from the marker,
+  so moving it by hand changes who starts. Out-of-turn draws ask for
+  confirmation. Off: nothing changes. D1 migration 0004. Review rounds: slice 1
+  three, slice 2 and 3 two, then a final check of the marker fix. See
+  `decisions.md`, 2026-09-29. One PR (#218) by the human's choice. 674 engine,
+  266 server, 411 web tests. Branch `feat/chat-orders`, brief
+  `tasks/chat-orders.md`. Not yet tested by the human in a live game. The turn mail uses the same hold-until-opened rule as the other game mail (#217).
 
 - **Remove any own tech.** A player can remove a hidden, revealed or starting
   tech at any time from the tech detail dialog; the tech becomes choosable

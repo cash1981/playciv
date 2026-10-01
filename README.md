@@ -777,6 +777,25 @@ looking broken rather than intentionally unowned. `revealedFeed` now labels
 it `'Barbarians'`; `playerId` itself stays `null` — no player identity is
 invented. See `docs/agents/decisions.md`, 2026-09-25.
 
+**Chat orders are an admin-only switch per game (issue #215).** New, with no
+old-system counterpart. It is off by default, only the admin role can change it
+(the game menu's Actions, or `POST /api/admin/games/:gameId/chat-orders`), and
+switching it off gives the classic Chat and Turn orders panels back with no lost
+data. While it is on, a game has one timeline instead of those two panels: a
+message is chat or an order tagged with a turn and a phase, orders are public, and
+a player ends a turn from the Order tab, which marks the chosen phase done (and
+can take it back). The title says whose turn it is and which phase they are on,
+and a strip under it shows what each player is missing. The start player is
+derived from the Start player marker on the board (the player whose area holds
+it), and the turn starts by itself when the last player has finished Research: the
+marker moves one seat clockwise as a normal, undoable board change and the
+timeline gets a turn divider. The first time it is switched on for a game, the
+revealed classic turn orders are copied into the timeline once (public history
+only, no mail). The new turn holder is mailed, and an order is
+mailed like a chat message. The private log moves to a Private tab and is still
+only the owner's. See `docs/agents/decisions.md`, 2026-09-29 and 2026-10-01, and
+`docs/agents/tasks/chat-orders.md`.
+
 ## Deferred
 
 - **Card artwork.** The hand is shown as text. `itemImage()` in the engine

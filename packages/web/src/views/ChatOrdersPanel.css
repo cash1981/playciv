@@ -1,0 +1,234 @@
+/*
+ * Chat orders timeline (issue #215). Mobile first: everything fits a 375 px
+ * screen with no sideways scroll, controls are at least 44 px high, and the
+ * composer stays inside the screen under the timeline.
+ * Colours come from the theme variables, so the dark and light themes both work.
+ */
+
+.chat-orders {
+  min-width: 0;
+}
+
+/* Named one by one: a blanket `button` rule would also stretch the editor's own toolbar. */
+.chat-orders-chip,
+.chat-orders-more,
+.chat-orders-actions button,
+.chat-orders-save,
+.chat-orders-fields select {
+  min-height: 44px;
+}
+
+.chat-orders-filters,
+.chat-orders-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.chat-orders-chip {
+  min-width: 44px;
+  padding: 0.35rem 0.9rem;
+}
+
+.chat-orders-chip[aria-pressed='true'],
+.chat-orders-chip[aria-selected='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 24%, var(--panel-2));
+  font-weight: 600;
+}
+
+/* The timeline and the composer share one box that never outgrows the screen,
+   so the composer is always reachable and never lies over the newest message.
+   The timeline takes what the composer leaves; it scrolls inside. (A sticky
+   composer did the first but covered the last messages on a phone.) */
+.chat-orders-thread {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 4rem);
+}
+
+.chat-orders-scroll {
+  flex: 1 1 auto;
+  min-height: 8rem;
+  max-height: 32rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chat-orders-more {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+.chat-orders-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chat-orders-message {
+  min-width: 0;
+  margin-bottom: 0.5rem;
+  padding: 0.35rem 0 0.35rem 0.6rem;
+  /* A player-* class sets `color`, so the bar takes it from there and the text
+     below is put back to the normal colour. An unknown colour keeps --line. */
+  border-left: 3px solid var(--line);
+}
+
+.chat-orders-message[class*='player-'] {
+  border-left-color: currentColor;
+}
+
+.chat-orders-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.45rem;
+}
+
+.chat-orders-author {
+  /* One box, so the civ never ends up alone at the end of a line */
+  display: inline-block;
+  overflow-wrap: anywhere;
+}
+
+.chat-orders-meta .log-time {
+  min-width: 0;
+  margin-right: 0;
+  font-size: 0.8rem;
+}
+
+.chat-orders-body {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.chat-orders-replaced {
+  opacity: 0.6;
+}
+
+.chat-orders-system {
+  border-left: 0;
+  padding-left: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* A turn starting: a rule with the text in the middle, so the eye finds it. */
+.chat-orders-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-left: 0;
+  padding: 0.6rem 0;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.chat-orders-divider::before,
+.chat-orders-divider::after {
+  content: '';
+  flex: 1 1 0;
+  border-top: 1px solid var(--accent);
+  opacity: 0.6;
+}
+
+.safe-markdown > :first-child {
+  margin-top: 0;
+}
+
+.safe-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.safe-markdown pre {
+  overflow-x: auto;
+}
+
+.chat-orders-composer {
+  flex: 0 0 auto;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.chat-orders-composer .turn-markdown {
+  max-height: 10rem;
+  overflow-y: auto;
+}
+
+/* Crepe draws the bar's icons in its "outline" colour, which the app maps to the
+   hairline colour: nearly invisible on the dark panel. Bold and italic need to be
+   seen, so they take the text colour, and the gold accent when they are on. */
+.chat-orders-composer .milkdown .milkdown-top-bar .top-bar-inner .top-bar-item svg,
+.chat-orders-composer .milkdown .milkdown-top-bar .top-bar-inner .top-bar-chevron svg {
+  color: var(--text);
+  fill: var(--text);
+}
+
+.chat-orders-composer .milkdown .milkdown-top-bar .top-bar-inner .top-bar-item.active svg {
+  color: var(--accent);
+  fill: var(--accent);
+}
+
+.chat-orders-fields {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.chat-orders-fields label {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.chat-orders-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.chat-orders-actions button {
+  flex: 1 1 0;
+}
+
+.chat-orders-save {
+  width: 100%;
+  margin-top: 0.6rem;
+}
+
+/* The status strip in the game header: a dot and a phase per player. */
+.chat-orders-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+.chat-orders-strip li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chat-orders-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* What shows while the Markdown renderer is still loading. */
+.chat-orders-plain {
+  white-space: pre-wrap;
+}

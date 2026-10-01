@@ -9,7 +9,7 @@
  */
 
 import type { GameState, TurnPhase } from '@civ/engine'
-import { activeTurnStatus, TURN_PHASE_LABEL } from '@civ/engine'
+import { activeTurnStatus, TURN_PHASE_LABEL, turnHolder } from '@civ/engine'
 
 import type { Mailer } from './mail.js'
 import { escapeHtml, renderMarkdown } from './markdown.js'
@@ -45,6 +45,12 @@ export interface Notifications {
   playerJoined(game: GameState, joinerPlayerId: string): Promise<void>
   /** Java `PlayerAction.endTurn` → `sendYourTurn` — the next player, held until they open the game. */
   turnEnded(before: GameState, after: GameState): Promise<void>
+  /**
+   * Chat orders (issue #215) — the new turn holder, when marking a phase done
+   * changed who it is. Nothing when the holder is the same. Throttled like the
+   * other in-game mail (30 minutes per player per game).
+   */
+  turnHolderChanged(before: GameState, after: GameState): Promise<void>
   /**
    * New mechanic (no Java counterpart) — the player who now holds the battle
    * turn, straight after someone ends it. Never held back. Skipped when there is
@@ -198,7 +204,9 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       const previous = before.players.find((player) => player.yourTurn)?.playerId
       const next = after.players.find((player) => player.yourTurn)
       if (next === undefined || next.playerId === previous) return
-      const status = activeTurnStatus(after)
+      // With chat orders on, `activeTurnStatus` describes the turn holder, not
+      // the player who has the baton, so its phase would be the wrong advice.
+      const status = after.chatOrders ? null : activeTurnStatus(after)
       const phaseText =
         status === null ? '' : ` Continue with the ${TURN_PHASE_LABEL[status.phase]} phase.`
       await notify(
@@ -206,6 +214,21 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         'It is your turn',
         `It's your turn to play in ${after.name}!${phaseText}\n\n` +
           `Go to ${gameLink(after.id)} to start your turn`,
+        after.id,
+      )
+    },
+
+    async turnHolderChanged(before: GameState, after: GameState): Promise<void> {
+      if (!after.chatOrders) return
+      const holder = turnHolder(after)
+      if (holder === undefined || holder.playerId === turnHolder(before)?.playerId) return
+      const status = activeTurnStatus(after)
+      if (status === null) return
+      await notify(
+        holder.playerId,
+        'It is your turn',
+        `It is your turn: ${TURN_PHASE_LABEL[status.phase]}, turn ${status.turnNumber} in ${after.name}.\n\n` +
+          `Go to ${gameLink(after.id)} to play`,
         after.id,
       )
     },

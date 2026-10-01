@@ -144,13 +144,16 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
   const [section, setSection] = useState<Section>('status')
   const governmentHelpRef = useRef<HTMLButtonElement | null>(null)
   const rows: Row[] = []
+  // Chat orders (issue #215) has no baton, so the tag follows `activeTurn`.
+  const onTurn = (playerId: string, batonHolder: boolean): boolean =>
+    view.chatOrders ? view.activeTurn?.playerId === playerId : batonHolder
 
   if (view.you !== null) {
     rows.push({
       playerId: view.you.playerId,
       username: view.you.username,
       color: view.you.color,
-      yourTurn: view.you.yourTurn,
+      yourTurn: onTurn(view.you.playerId, view.you.yourTurn),
       civilizationName: view.you.civilization?.name ?? null,
       government: view.you.government,
       stats: view.you.stats,
@@ -168,7 +171,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
       playerId: opponent.playerId,
       username: opponent.username,
       color: opponent.color,
-      yourTurn: opponent.yourTurn,
+      yourTurn: onTurn(opponent.playerId, opponent.yourTurn),
       civilizationName: opponent.civilization?.name ?? null,
       government: opponent.government,
       stats: opponent.stats,

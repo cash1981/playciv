@@ -217,6 +217,12 @@ export function boardAssetLimit(asset: BoardAsset, numOfPlayers: number): number
   return undefined
 }
 
+/**
+ * The start player marker (issue #215). With chat orders on, the player whose
+ * area holds its centre is the start player.
+ */
+export const START_PLAYER_ID = 'markers/startplayer'
+
 /** The asset that only the Russian player may place. */
 export const WHITE_ARMY_ID = 'figures/whitearmy'
 

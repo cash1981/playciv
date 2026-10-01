@@ -21,12 +21,14 @@ import { migrateGameState } from '@civ/engine'
 
 import { ratedHighscore, resultFromGame } from './rating.js'
 
+import { normalizeChatMessage } from './types.js'
 import type {
   ChatMessage,
   GameRevision,
   GameRevisionMetadata,
   PlayerUpdate,
   Repository,
+  StoredChatRow,
   StoredPlayer,
 } from './types.js'
 
@@ -87,6 +89,9 @@ interface ChatRow {
   readonly username: string
   readonly message: string
   readonly created_at: string
+  readonly kind: string
+  readonly turn_number: number | null
+  readonly phase: string | null
 }
 
 interface FinishedPbfRow {
@@ -377,10 +382,23 @@ export class D1Repository implements Repository {
   // Chat
   // ---------------------------------------------------------------------
 
-  async appendChat(message: ChatMessage): Promise<void> {
+  async appendChat(row: StoredChatRow): Promise<void> {
+    const message = normalizeChatMessage(row)
     await this.db
-      .prepare(`INSERT INTO chat (id, game_id, username, message, created_at) VALUES (?, ?, ?, ?, ?)`)
-      .bind(message.id, message.gameId, message.username, message.message, message.createdAt)
+      .prepare(
+        `INSERT INTO chat (id, game_id, username, message, created_at, kind, turn_number, phase)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        message.id,
+        message.gameId,
+        message.username,
+        message.message,
+        message.createdAt,
+        message.kind,
+        message.turnNumber,
+        message.phase,
+      )
       .run()
   }
 
@@ -389,17 +407,20 @@ export class D1Repository implements Repository {
     // matching the Mongo sort's stability for messages sharing a timestamp.
     const rows = await this.db
       .prepare(
-        `SELECT id, game_id, username, message, created_at
+        `SELECT id, game_id, username, message, created_at, kind, turn_number, phase
          FROM chat WHERE game_id IS ? ORDER BY created_at ASC, rowid ASC`,
       )
       .bind(gameId)
       .all<ChatRow>()
-    return rows.results.map((row) => ({
+    return rows.results.map((row) => normalizeChatMessage({
       id: row.id,
       gameId: row.game_id,
       username: row.username,
       message: row.message,
       createdAt: row.created_at,
+      kind: row.kind,
+      turnNumber: row.turn_number,
+      phase: row.phase,
     }))
   }
 

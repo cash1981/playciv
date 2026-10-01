@@ -30,14 +30,18 @@ import {
   nextRotation,
   remainingBoardAssetCount,
   revertChange,
+  playerAreas,
+  START_PLAYER_ID,
   WHITE_ARMY_ID,
 } from '../board.js'
 import type { EngineError } from '../errors.js'
+import { appendLog } from '../log.js'
 import { nextId } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, hasUserAccess } from '../state.js'
+import { startMarkerOf, startPlayerOf } from '../turn.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -156,7 +160,10 @@ export function placePiece(state: GameState, input: PlacePieceInput): ActionResu
   if (placed === undefined) {
     return err({ kind: 'BOARD_ASSET_NOT_FOUND', assetId: input.assetId })
   }
-  return ok(placed)
+  // A second start player marker dropped in another area takes over
+  // The id comes from the history entry, not from the position: map tiles go underneath
+  const change = placed.board.history.at(-1)?.change
+  return ok(change?.kind === 'place' ? announceStartPlayer(state, placed, change.piece.id) : placed)
 }
 
 /**
@@ -258,11 +265,27 @@ export function movePiece(state: GameState, input: MovePieceInput): ActionResult
   const denied = requireAccess(state, input.playerId)
   if (denied !== undefined) return err(denied)
 
-  const fromIndex = state.board.pieces.findIndex((piece) => piece.id === input.pieceId)
-  const piece = state.board.pieces[fromIndex]
-  if (piece === undefined) {
+  const moved = movePieceUnchecked(state, input)
+  if (moved === undefined) {
     return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
   }
+  return ok(announceStartPlayer(state, moved, input.pieceId))
+}
+
+/**
+ * The same as `movePiece`, but without the access check and without a Result.
+ * Used by the engine itself when a rule moves a piece, such as the start player
+ * marker at the start of a turn; the caller has checked access.
+ *
+ * Returns `undefined` when the piece does not exist.
+ */
+export function movePieceUnchecked(
+  state: GameState,
+  input: MovePieceInput,
+): GameState | undefined {
+  const fromIndex = state.board.pieces.findIndex((piece) => piece.id === input.pieceId)
+  const piece = state.board.pieces[fromIndex]
+  if (piece === undefined) return undefined
 
   const areas = areasFor(state)
   const others = state.board.pieces.filter((other) => other.id !== piece.id)
@@ -310,23 +333,82 @@ export function movePiece(state: GameState, input: MovePieceInput): ActionResult
   const from = locationOf(state.board, areas, piece)
   const to = locationOf(state.board, areas, moved)
 
-  return ok(
-    record(input, {
-      state,
-      pieces,
-      change: {
-        kind: 'move',
-        pieceId: piece.id,
-        from: { x: piece.x, y: piece.y },
-        to: { x, y },
-        fromIndex,
-      },
-      description:
-        from === to
-          ? `nudged ${piece.label} in ${to}`
-          : `moved ${piece.label} from ${from} to ${to}`,
-    }),
+  return record(input, {
+    state,
+    pieces,
+    change: {
+      kind: 'move',
+      pieceId: piece.id,
+      from: { x: piece.x, y: piece.y },
+      to: { x, y },
+      fromIndex,
+    },
+    description:
+      from === to
+        ? `nudged ${piece.label} in ${to}`
+        : `moved ${piece.label} from ${from} to ${to}`,
+  })
+}
+
+/**
+ * Chat orders (issue #215): the start player is whoever's area holds the marker,
+ * so a manual move can change it. Says so in the public log and remembers it as
+ * the last known start player, for when the marker is later left outside every
+ * area. Nothing at all when chat orders is off or another piece moved.
+ */
+function announceStartPlayer(before: GameState, after: GameState, pieceId: string): GameState {
+  if (!after.chatOrders) return after
+  if (after.board.pieces.find((piece) => piece.id === pieceId)?.assetId !== START_PLAYER_ID) {
+    return after
+  }
+  const now = startPlayerOf(after)
+  if (now === undefined || now.playerId === startPlayerOf(before)?.playerId) return after
+
+  const logged = appendLog(
+    { ...after, startPlayerId: now.playerId },
+    { username: 'System', publicLog: `${now.username} is now the start player` },
   )
+  // The move was recorded before this line existed: count the line in, so
+  // stepping back through the history keeps it with the move.
+  const last = logged.board.history.at(-1)
+  if (last === undefined) return logged
+  return {
+    ...logged,
+    board: {
+      ...logged.board,
+      history: [...logged.board.history.slice(0, -1), { ...last, logLength: logged.log.length }],
+    },
+  }
+}
+
+/**
+ * Puts the start player marker in a player's area: moves the one on the board,
+ * or places one when the board has none. A board history entry either way, so
+ * it can be undone, made in the name of `actorId`. The caller has checked
+ * access, so this uses the unchecked helpers.
+ */
+export function placeStartMarker(
+  state: GameState,
+  target: Playerhand,
+  actorId: string,
+  at: string | undefined,
+): GameState {
+  const area = playerAreas(state.board, state.players).find(
+    (candidate) => candidate.playerId === target.playerId,
+  )
+  const asset = findBoardAsset(START_PLAYER_ID)
+  if (area === undefined || asset === undefined) return state
+
+  // Dropped by its centre, so it lands in this area whatever the area's width
+  const x = area.x + (area.width - asset.width) / 2
+  const y = area.y + (area.height - asset.height) / 2
+  const stamp = at === undefined ? {} : { at }
+  const marker = startMarkerOf(state)?.piece
+  const placed =
+    marker === undefined
+      ? placeUnchecked(state, { playerId: actorId, assetId: START_PLAYER_ID, x, y, ...stamp })
+      : movePieceUnchecked(state, { playerId: actorId, pieceId: marker.id, x, y, ...stamp })
+  return placed ?? state
 }
 
 // ---------------------------------------------------------------------------
