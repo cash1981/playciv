@@ -264,7 +264,8 @@ const turnOf = (player: Playerhand, turnNumber: number): PlayerTurn | undefined 
 const firstOpenPhase = (turn: PlayerTurn | undefined): TurnPhase | null =>
   TURN_PHASES.find((phase) => !isDone(turn, phase)) ?? null
 
-const bySeat = (players: readonly Playerhand[]): readonly Playerhand[] =>
+/** Active players in seat (playernumber) order. */
+export const bySeat = (players: readonly Playerhand[]): readonly Playerhand[] =>
   [...players].sort((a, b) => a.playernumber - b.playernumber)
 
 /**

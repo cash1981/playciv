@@ -26,14 +26,13 @@ import {
   publicTurnKey,
   publicTurn,
   sameTurn,
-  seatAfter,
   startPlayerOf,
   TURN_PHASE_LABEL,
-  turnStatus,
   withOrder,
 } from '../turn.js'
 import { START_PLAYER_ID } from '../board.js'
 import { placeStartMarker } from './board.js'
+import { startMissingTurns } from './new-turn.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -141,15 +140,15 @@ export function revealTurnOrder(state: GameState, input: RevealTurnOrderInput): 
     },
   }
   const message = `Turn ${input.turnNumber} - ${player.username} revealed ${TURN_PHASE_LABEL[input.phase]} phase`
-  return ok(
-    appendLog(next, {
-      username: player.username,
-      playerId: player.playerId,
-      logType: PHASE_LOG_TYPE[input.phase],
-      privateLog: message,
-      publicLog: message,
-    }),
-  )
+  const revealed = appendLog(next, {
+    username: player.username,
+    playerId: player.playerId,
+    logType: PHASE_LOG_TYPE[input.phase],
+    privateLog: message,
+    publicLog: message,
+  })
+  // A reveal sets `done` too, so it can finish a turn. Nothing happens with chat orders off.
+  return ok(startMissingTurns(revealed, player.playerId, input.at))
 }
 
 export interface AddTurnInput {
@@ -313,49 +312,8 @@ export function markPhasesDone(state: GameState, input: MarkPhasesDoneInput): Ac
     privateLog: message,
     publicLog: message,
   })
-  return ok(startNewTurnIfReached(state, marked, player.playerId, input.at))
+  return ok(startMissingTurns(marked, player.playerId, input.at))
 }
-
-/**
- * The turn rolled over: the last player finished Research, so `turnStatus` moved
- * from turn N to a later one. Starts it: the start player marker moves to the
- * next seat clockwise, counted from whoever holds it now, as a normal board
- * history entry that Undo can take back. Records who started the turn and writes
- * the public log line.
- *
- * `turnStarters` is the guard. Unmarking a Research and marking it again moves
- * `turnStatus` back and forth, and must not rotate twice; unmarking never rolls
- * a started turn back.
- */
-function startNewTurnIfReached(
-  before: GameState,
-  after: GameState,
-  actorId: string,
-  at: string | undefined,
-): GameState {
-  const turnNumber = turnStatus(after).currentTurn
-  if (turnNumber <= turnStatus(before).currentTurn) return after
-  if (after.turnStarters[turnNumber] !== undefined) return after
-
-  const current = startPlayerOf(after)
-  const next = current === undefined ? undefined : seatAfter(bySeat(after.players), current.playernumber)
-  if (next === undefined) return after
-
-  // Log first, so the board history entry counts the line as known at the time
-  const logged = appendLog(after, {
-    username: 'System',
-    publicLog: `Turn ${turnNumber}: ${next.username} starts with the Start of turn phase`,
-  })
-  const moved = placeStartMarker(logged, next, actorId, at)
-  return {
-    ...moved,
-    startPlayerId: next.playerId,
-    turnStarters: { ...moved.turnStarters, [turnNumber]: next.username },
-  }
-}
-
-const bySeat = (players: readonly Playerhand[]): readonly Playerhand[] =>
-  [...players].sort((a, b) => a.playernumber - b.playernumber)
 
 export interface UnmarkPhaseDoneInput {
   readonly playerId: string

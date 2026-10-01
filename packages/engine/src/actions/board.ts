@@ -161,9 +161,9 @@ export function placePiece(state: GameState, input: PlacePieceInput): ActionResu
     return err({ kind: 'BOARD_ASSET_NOT_FOUND', assetId: input.assetId })
   }
   // A second start player marker dropped in another area takes over
-  // An ordinary piece goes on top of the list, so the new one is the last
-  const newest = placed.board.pieces.at(-1)
-  return ok(newest === undefined ? placed : announceStartPlayer(state, placed, newest.id))
+  // The id comes from the history entry, not from the position: map tiles go underneath
+  const change = placed.board.history.at(-1)?.change
+  return ok(change?.kind === 'place' ? announceStartPlayer(state, placed, change.piece.id) : placed)
 }
 
 /**

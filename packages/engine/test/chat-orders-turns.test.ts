@@ -15,14 +15,20 @@ import {
   undoLastBoardChange,
 } from '../src/actions/board.js'
 import { withdrawFromGame } from '../src/actions/game.js'
-import { markPhasesDone, setChatOrders, unmarkPhaseDone } from '../src/actions/turn.js'
-import { START_PLAYER_ID, areaAt, mapTop, playerAreas } from '../src/board.js'
+import {
+  markPhasesDone,
+  revealTurnOrder,
+  setChatOrders,
+  unmarkPhaseDone,
+  updateTurn,
+} from '../src/actions/turn.js'
+import { START_PLAYER_ID, areaAt, findBoardAsset, mapTop, playerAreas } from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
-import { startPlayerOf, turnHolder, turnStatus } from '../src/turn.js'
+import { TURN_PHASES, startPlayerOf, turnHolder, turnStatus } from '../src/turn.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -301,7 +307,9 @@ describe('more than one start player marker', () => {
   const centreOfArea = (state: GameState, username: string): { x: number; y: number } => {
     const area = playerAreas(state.board, state.players).find((candidate) => candidate.username === username)
     if (area === undefined) throw new Error(`no area for ${username}`)
-    return { x: area.x + area.width / 2 - 72, y: area.y + area.height / 2 - 72 }
+    const asset = findBoardAsset(START_PLAYER_ID)
+    if (asset === undefined) throw new Error('no marker asset')
+    return { x: area.x + (area.width - asset.width) / 2, y: area.y + (area.height - asset.height) / 2 }
   }
 
   /** Who owns the area each marker is in, oldest first; `undefined` for one outside every area. */
@@ -410,6 +418,110 @@ describe('more than one start player marker', () => {
   })
 })
 
+describe('catching up when the turn advances some other way', () => {
+  /** A classic finish: write and reveal every phase, which sets `done` too. */
+  const revealAll = (state: GameState, playerId: string, turnNumber: number): GameState =>
+    TURN_PHASES.reduce((current, phase) => {
+      const written = unwrap(updateTurn(current, { playerId, turnNumber, phase, order: `order ${phase}` }))
+      return unwrap(revealTurnOrder(written, { playerId, turnNumber, phase, at: 'reveal' }))
+    }, state)
+
+  it('starts the turn when a classic reveal finishes the last Research', () => {
+    let state = finishTurn(chatGame(), 1, [CASH1981, KARANDRAS1, ITCHI])
+    expect(turnStatus(state).currentTurn).toBe(1)
+
+    state = revealAll(state, CHUL, 1)
+
+    expect(turnStatus(state).currentTurn).toBe(2)
+    expect(markerArea(state)).toBe('Karandras1')
+    expect(state.turnStarters).toEqual({ 1: 'cash1981', 2: 'Karandras1' })
+    expect(startLines(state)).toEqual(['Turn 2: Karandras1 starts with the Start of turn phase'])
+    expect(state.board.history.at(-1)?.playerId).toBe(CHUL)
+    expect(state.board.history.at(-1)?.at).toBe('reveal')
+  })
+
+  it('does nothing when a classic reveal finishes a turn with chat orders off', () => {
+    let state = firstCivGame()
+    for (const playerId of SEATS) state = revealAll(state, playerId, 1)
+    expect(state.turnStarters).toEqual({})
+    expect(startLines(state)).toHaveLength(0)
+    expect(marker(state)).toBeUndefined()
+    expect(state.board.history).toHaveLength(0)
+  })
+
+  it('starts the turn when the withdrawal of the last unfinished player ends it', () => {
+    let state = finishTurn(chatGame(), 1, [CASH1981, KARANDRAS1, ITCHI])
+    expect(turnStatus(state).currentTurn).toBe(1)
+
+    state = unwrap(withdrawFromGame(state, CHUL))
+
+    expect(turnStatus(state).currentTurn).toBe(2)
+    expect(markerArea(state)).toBe('Karandras1')
+    expect(state.turnStarters[2]).toBe('Karandras1')
+    expect(startLines(state)).toHaveLength(1)
+    // Nobody to name as the actor, so the new start player is, and can undo it
+    expect(state.board.history.at(-1)?.playerId).toBe(KARANDRAS1)
+    state = unwrap(undoLastBoardChange(state, KARANDRAS1))
+    expect(startPlayerOf(state)?.username).toBe('cash1981')
+  })
+
+  it('a withdrawal with chat orders off starts nothing', () => {
+    let state = firstCivGame()
+    state = unwrap(withdrawFromGame(state, CHUL))
+    expect(state.turnStarters).toEqual({})
+    expect(marker(state)).toBeUndefined()
+  })
+
+  it('rotates once per turn when the current turn jumps by two, and leaves no gap', () => {
+    // Everybody finishes turn 2 first, so finishing turn 1 takes the game from 1 to 3
+    let state = finishTurn(chatGame(), 2)
+    expect(turnStatus(state).currentTurn).toBe(1)
+    expect(state.turnStarters).toEqual({ 1: 'cash1981' })
+    state = finishTurn(state, 1, [CASH1981, KARANDRAS1, ITCHI])
+    expect(state.turnStarters).toEqual({ 1: 'cash1981' })
+
+    state = unwrap(markPhasesDone(state, { playerId: CHUL, turnNumber: 1, upToPhase: 'RESEARCH', at: 'jump' }))
+
+    expect(turnStatus(state).currentTurn).toBe(3)
+    expect(state.turnStarters).toEqual({ 1: 'cash1981', 2: 'Karandras1', 3: 'Itchi' })
+    expect(markerArea(state)).toBe('Itchi')
+    expect(startLines(state)).toEqual([
+      'Turn 2: Karandras1 starts with the Start of turn phase',
+      'Turn 3: Itchi starts with the Start of turn phase',
+    ])
+    expect(toPlayerView(state, CHUL).activeTurn?.startPlayer).toBe('Itchi')
+    expect(turnHolder(state)?.username).toBe('Itchi')
+  })
+
+  it('does not rotate again when a Research is unmarked and marked after a jump', () => {
+    let state = finishTurn(chatGame(), 2)
+    state = finishTurn(state, 1)
+    expect(turnStatus(state).currentTurn).toBe(3)
+    const historyLength = state.board.history.length
+
+    state = unwrap(unmarkPhaseDone(state, { playerId: CHUL, turnNumber: 2, phase: 'RESEARCH' }))
+    expect(turnStatus(state).currentTurn).toBe(2)
+    state = unwrap(markPhasesDone(state, { playerId: CHUL, turnNumber: 2, upToPhase: 'RESEARCH' }))
+
+    expect(turnStatus(state).currentTurn).toBe(3)
+    expect(state.board.history).toHaveLength(historyLength)
+    expect(startLines(state)).toHaveLength(2)
+    expect(state.turnStarters).toEqual({ 1: 'cash1981', 2: 'Karandras1', 3: 'Itchi' })
+  })
+
+  it('undoes the board entries of a jump one turn at a time', () => {
+    let state = finishTurn(chatGame(), 2)
+    state = finishTurn(state, 1)
+    expect(markerArea(state)).toBe('Itchi')
+
+    state = unwrap(undoLastBoardChange(state, CHUL))
+    expect(markerArea(state)).toBe('Karandras1')
+    state = unwrap(undoLastBoardChange(state, CHUL))
+    expect(markerArea(state)).toBe('cash1981')
+    expect(startPlayerOf(state)?.username).toBe('cash1981')
+  })
+})
+
 describe('withdrawn players', () => {
   it('are skipped when the marker rotates', () => {
     let state = chatGame()
@@ -490,8 +602,19 @@ describe('what is public and what migrates', () => {
     expect(json).toContain('"startPlayer":"Karandras1"')
     expect(json).not.toContain('SECRET-NOTE')
     expect(json).not.toContain('SECRET-ORDER')
-    expect(json).not.toContain('turnStarters')
-    expect(json).not.toContain('startPlayerId')
+    // An allowlist, so a new field on the view or on the active turn has to be
+    // looked at: the engine's own `turnStarters` and `startPlayerId` are not on it.
+    const view = toPlayerView(state, KARANDRAS1)
+    expect(Object.keys(view).sort()).toEqual(
+      [
+        'active', 'activeTurn', 'battle', 'battleSummary', 'board', 'boardAreas', 'chatOrders',
+        'gameType', 'id', 'log', 'name', 'numOfPlayers', 'numberOfDiscardedItems',
+        'numberOfItemsInDeck', 'opponents', 'rev', 'techs', 'winner', 'you',
+      ].sort(),
+    )
+    expect(Object.keys(view.activeTurn ?? {}).sort()).toEqual(
+      ['phase', 'playerId', 'startPlayer', 'turnNumber', 'username', 'waitingFor'],
+    )
   })
 
   it('an old saved game migrates to no start player and no starters', () => {

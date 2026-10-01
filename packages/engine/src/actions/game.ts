@@ -23,6 +23,7 @@ import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
 import { DEFAULT_PLAYER_STATS } from '../state.js'
+import { startMissingTurns } from './new-turn.js'
 import {
   PLAYER_COLORS,
   findPlayer,
@@ -208,7 +209,8 @@ export function withdrawFromGame(state: GameState, playerId: string): ActionResu
     withdrawnPlayers: [...next.withdrawnPlayers, player],
   }
 
-  return ok(appendPublicLog(next, player.username, playerId, 'withdrew from game'))
+  // The player may have been the one holding the turn back; chat orders then rolls over
+  return ok(startMissingTurns(appendPublicLog(next, player.username, playerId, 'withdrew from game'), undefined, undefined))
 }
 
 export interface EndGameInput {
