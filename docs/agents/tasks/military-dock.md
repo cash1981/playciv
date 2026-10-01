@@ -27,6 +27,8 @@ Academy), 5 pieces like the Shipyard, combat bonus +4.
   replaced by the card from `Moderator/DoC/Tech Cards/Tech3 Military Sience.png`.
 - New board asset `buildings/militarydock` ("Military dock", 82 x 83).
 - Supply limit 5, combat bonus +4.
+- The Buildings tab of the palette is grouped by upgrade family (human's follow-up, with
+  a picture of the supply sheet) instead of alphabetical.
 - Military Science tech text: unlocks the Military dock and Academy buildings.
 
 **Out:**
@@ -57,6 +59,7 @@ thumbnail; the new source is smaller, so it is not upscaled).
 - `packages/web/public/board/buildings/militarydock.png`
 - `packages/web/public/items/MilitaryScience.{jpg,png}`
 - `packages/web/src/views/techText.ts`
+- `packages/web/src/views/BoardView.tsx`, `BoardView.test.tsx`, `packages/web/src/styles.css`
 
 ## Acceptance criteria
 

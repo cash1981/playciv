@@ -10,7 +10,7 @@ import type { BoardAsset, BoardPiece, PlayerView } from '@civ/engine'
 import type { GameRevisionView } from '../lib/api.js'
 import { api } from '../lib/api.js'
 
-import { BoardPalette, BoardView, fittingBoardZoom } from './BoardView.js'
+import { BoardPalette, BoardView, fittingBoardZoom, groupBuildings } from './BoardView.js'
 import {
   GlobalReplayBar,
   loadConsistentLive,
@@ -323,6 +323,76 @@ describe('BoardPalette finite supplies', () => {
     )
     expect(restored).toContain('Academy (1)')
     expect(restored).toContain('draggable="true"')
+  })
+
+  it('groups the buildings by upgrade family, in the order of the supply sheet', () => {
+    const buildings = BOARD_ASSETS.filter((asset) => asset.category === 'building')
+    const groups = groupBuildings(buildings).map((group) => group.map((asset) => asset.id))
+
+    expect(groups).toEqual([
+      ['buildings/library', 'buildings/university'],
+      ['buildings/market', 'buildings/bank'],
+      ['buildings/temple', 'buildings/cathedral'],
+      ['buildings/barracks', 'buildings/academy'],
+      ['buildings/workshop', 'buildings/ironmine'],
+      ['buildings/shipyard', 'buildings/militarydock'],
+      ['buildings/granary', 'buildings/aqueduct'],
+      ['buildings/tradingpost'],
+      ['buildings/harbor'],
+    ])
+    // Every building in the manifest is shown exactly once.
+    expect(groups.flat().sort()).toEqual(buildings.map((asset) => asset.id).sort())
+  })
+
+  it('shows a building that is not in the grouping table after the groups', () => {
+    const stranger: BoardAsset = {
+      id: 'buildings/newthing',
+      category: 'building',
+      path: 'buildings/newthing.png',
+      label: 'New thing',
+      width: 80,
+      height: 80,
+    }
+    const buildings = [stranger, ...BOARD_ASSETS.filter((asset) => asset.category === 'building')]
+    const groups = groupBuildings(buildings)
+
+    expect(groups.at(-1)?.map((asset) => asset.id)).toEqual(['buildings/newthing'])
+    expect(groups).toHaveLength(10)
+  })
+
+  it('renders each building family inside one group box', () => {
+    const buildings = BOARD_ASSETS.filter((asset) => asset.category === 'building')
+    const markup = renderToStaticMarkup(
+      <BoardPalette
+        assets={buildings}
+        category="building"
+        onCategoryChange={() => undefined}
+        replaying={false}
+        pieces={[]}
+        numOfPlayers={4}
+      />,
+    )
+
+    expect(markup.match(/class="palette-group palette-group-pair"/g)).toHaveLength(7)
+    expect(markup.match(/class="palette-group"/g)).toHaveLength(2)
+    expect(markup.indexOf('Library')).toBeLessThan(markup.indexOf('University'))
+    expect(markup.indexOf('University')).toBeLessThan(markup.indexOf('Market'))
+    expect(markup.indexOf('Shipyard')).toBeLessThan(markup.indexOf('Military dock'))
+  })
+
+  it('does not group the other categories', () => {
+    const markup = renderToStaticMarkup(
+      <BoardPalette
+        assets={BOARD_ASSETS}
+        category="relic"
+        onCategoryChange={() => undefined}
+        replaying={false}
+        pieces={[]}
+        numOfPlayers={4}
+      />,
+    )
+    expect(markup).toContain('palette-item')
+    expect(markup).not.toContain('palette-group')
   })
 
   it('lists the relics in their own group and disables one once it is on the board (issue #227)', () => {

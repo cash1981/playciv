@@ -92,6 +92,42 @@ const CATEGORY_ORDER: readonly BoardAsset['category'][] = [
   'wonder',
 ]
 
+/**
+ * How the Buildings tab is grouped and ordered: one box per group on the physical
+ * supply sheet, the base building first, then the buildings that stand alone. It follows the
+ * physical supply sheet rather than the manifest, which is alphabetical. A
+ * building missing here still shows, after these groups, so a new asset is never
+ * hidden. Only the display is grouped; supplies are counted in `board.ts`.
+ */
+const BUILDING_GROUPS: readonly (readonly string[])[] = [
+  ['buildings/library', 'buildings/university'],
+  ['buildings/market', 'buildings/bank'],
+  ['buildings/temple', 'buildings/cathedral'],
+  ['buildings/barracks', 'buildings/academy'],
+  ['buildings/workshop', 'buildings/ironmine'],
+  ['buildings/shipyard', 'buildings/militarydock'],
+  ['buildings/granary', 'buildings/aqueduct'],
+  ['buildings/tradingpost'],
+  ['buildings/harbor'],
+]
+
+/** Splits building assets into the display groups above; others follow, one each. */
+export function groupBuildings(assets: readonly BoardAsset[]): readonly (readonly BoardAsset[])[] {
+  const byId = new Map(assets.map((asset) => [asset.id, asset]))
+  const placed = new Set<string>()
+  const groups: BoardAsset[][] = []
+  for (const ids of BUILDING_GROUPS) {
+    const group = ids.flatMap((id) => byId.get(id) ?? [])
+    if (group.length === 0) continue
+    group.forEach((asset) => placed.add(asset.id))
+    groups.push(group)
+  }
+  for (const asset of assets) {
+    if (!placed.has(asset.id)) groups.push([asset])
+  }
+  return groups
+}
+
 /** File names may contain spaces, for example "Building Program.png". */
 const assetUrl = (path: string): string =>
   `/board/${path.split('/').map(encodeURIComponent).join('/')}`
@@ -140,6 +176,43 @@ export function BoardPalette({
   )
   const draggedAssetRef = useRef(false)
 
+  const renderAsset = (asset: BoardAsset): React.JSX.Element => {
+    const remaining = remainingBoardAssetCount(asset, pieces, numOfPlayers)
+    const exhausted = remaining === 0
+    return (
+      <button
+        type="button"
+        key={asset.id}
+        className={`palette-item${exhausted ? ' unavailable' : ''}`}
+        disabled={replaying || exhausted}
+        title={exhausted ? `${asset.label} (none available)` : asset.label}
+        draggable={!replaying && !exhausted}
+        onDragStart={(event) => {
+          if (exhausted) return
+          draggedAssetRef.current = true
+          event.dataTransfer.setData('text/civ-asset', asset.id)
+          event.dataTransfer.effectAllowed = 'copy'
+        }}
+        onDragEnd={() => {
+          window.setTimeout(() => { draggedAssetRef.current = false }, 0)
+        }}
+        onClick={() => {
+          if (draggedAssetRef.current) {
+            draggedAssetRef.current = false
+            return
+          }
+          if (!exhausted && !replaying) onSelectAsset?.(asset)
+        }}
+      >
+        <img src={assetUrl(asset.path)} alt={asset.label} draggable={false} />
+        <span>
+          {asset.label}
+          {remaining !== undefined && ` (${remaining})`}
+        </span>
+      </button>
+    )
+  }
+
   return (
     <>
       <h3>Pieces</h3>
@@ -163,42 +236,18 @@ export function BoardPalette({
       </p>
 
       <div className="palette-grid">
-        {inCategory.map((asset) => {
-          const remaining = remainingBoardAssetCount(asset, pieces, numOfPlayers)
-          const exhausted = remaining === 0
-          return (
-            <button
-              type="button"
-              key={asset.id}
-              className={`palette-item${exhausted ? ' unavailable' : ''}`}
-              disabled={replaying || exhausted}
-              title={exhausted ? `${asset.label} (none available)` : asset.label}
-              draggable={!replaying && !exhausted}
-              onDragStart={(event) => {
-                if (exhausted) return
-                draggedAssetRef.current = true
-                event.dataTransfer.setData('text/civ-asset', asset.id)
-                event.dataTransfer.effectAllowed = 'copy'
-              }}
-              onDragEnd={() => {
-                window.setTimeout(() => { draggedAssetRef.current = false }, 0)
-              }}
-              onClick={() => {
-                if (draggedAssetRef.current) {
-                  draggedAssetRef.current = false
-                  return
-                }
-                if (!exhausted && !replaying) onSelectAsset?.(asset)
-              }}
-            >
-              <img src={assetUrl(asset.path)} alt={asset.label} draggable={false} />
-              <span>
-                {asset.label}
-                {remaining !== undefined && ` (${remaining})`}
-              </span>
-            </button>
-          )
-        })}
+        {category === 'building'
+          ? groupBuildings(inCategory).map((group) => (
+              <div
+                key={group[0]?.id}
+                role="group"
+                aria-label={group.map((asset) => asset.label).join(' and ')}
+                className={`palette-group${group.length > 1 ? ' palette-group-pair' : ''}`}
+              >
+                {group.map(renderAsset)}
+              </div>
+            ))
+          : inCategory.map(renderAsset)}
         {inCategory.length === 0 && <p className="muted">Loading …</p>}
       </div>
     </>

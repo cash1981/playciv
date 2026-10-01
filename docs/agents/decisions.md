@@ -3783,3 +3783,18 @@ but it only lists what is in `Moderator/buildings/`: copy
 manifest entry disappears on the next run. The card cost of 10 production printed
 on the DoC card is not modelled, as the engine does not track building costs.
 
+## 2026-10-01 - The Buildings tab is grouped by upgrade family
+
+The palette listed buildings in manifest order, which is alphabetical, so a
+building and its upgrade could be far apart. `BoardView.tsx` now groups them like
+the physical supply sheet the human pointed to: Library/University, Market/Bank,
+Temple/Cathedral, Barracks/Academy, Workshop/Ironmine, Shipyard/Military dock,
+Granary/Aqueduct, then Trading post and Harbor on their own. This is display
+only; the manifest and the supply counts in `board.ts` are unchanged, and a
+building missing from the table still shows after the groups.
+
+The sheet prints one supply number per pair. That matches the shared pools
+already in `board.ts` for five pairs, but Workshop/Ironmine (6 each) and
+Shipyard/Military dock (5 each) have separate pools there. The pools were left
+as they are until the human says whether those two pairs share one.
+
