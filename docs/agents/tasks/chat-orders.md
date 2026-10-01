@@ -260,3 +260,47 @@ every mail; do not build that here). No mail when the holder does not change.
 - [ ] Off: no marker is placed, nothing changes
 - [ ] Hidden information: `startPlayer` and `turnStarters` are public; a test
       shows a projection carries no private field
+
+---
+
+## Changes since this brief
+
+The sections above are the plan. This is what the feature does now, where it
+differs. The code and `docs/agents/decisions.md` are the reference.
+
+- **No Done sheet and no "one turn ahead".** The Done button, the sheet and the
+  "Done up to" picker were removed. Marking a phase done is one **End turn**
+  button on the **Order** tab of the composer. It marks the phase chosen in the
+  Phase list, in the turn chosen in the Turn list, and reads **Not done** (which
+  unmarks it) when that phase is already done. Its accessible name starts with
+  the visible words: `End turn: mark City management as done`, `Not done: unmark
+  Trade as done`. There is no button on the Chat tab.
+- **The Turn list holds only turns the viewer has reached.** It runs from turn 1
+  to the viewer's own turn: the first turn at or after the game's current turn in
+  which the viewer has not marked Research done. A player who has finished
+  Research moves on to the next turn without waiting for the others; the game's
+  turn still waits for everyone. A later turn can not be picked, and a turn the
+  viewer skipped over does not move the default past it.
+- **Done phases are struck through in the Phase list**, in the text itself with
+  combining marks, because a native option cannot be styled everywhere. There is
+  no check mark.
+- **A simple formatting bar in the composer** (Normal, Heading, bold, italic,
+  with names on the buttons). The Private tab keeps the editor's full bar. The
+  editor's fixed top bar is not used in the composer.
+- **The title is `Turn N · <name>'s turn — <phase> phase`**, or `Your turn` for
+  the holder, and `Turn N · everyone is done` when nobody is waiting. Who is
+  missing what is the status strip under the title, not the title. (The brief said
+  `Turn N · <starter> started · waiting for ...`.)
+- **The message header reads `Greeks - nickname`**, the civ small, both in the
+  player's colour.
+- **Turns start as a catch-up.** `startMissingTurns` runs after marking a phase
+  done, after a classic reveal and after a withdrawal. It starts every turn
+  between the newest one with a starter and the current turn, one seat of
+  rotation each, so a jump of more than one turn leaves no gap in `turnStarters`.
+  `turnStarters[N]` still stops a turn from being started twice.
+- **An order is mailed like a chat message** (same method, same hold until the
+  player opens the game). The turn holder is mailed when it changes after a done.
+- **The Markdown renderer loads on demand**, so a game without chat orders does
+  not carry react-markdown.
+- **Filter tabs follow the tab pattern**: `aria-controls`, one tab stop, and
+  arrow keys, Home and End.
