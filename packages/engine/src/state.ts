@@ -264,6 +264,13 @@ export interface GameState {
    */
   readonly turnStarters: Readonly<Record<number, string>>
   /**
+   * Chat orders: the classic turn orders have been copied into the timeline.
+   * Set the first time chat orders is switched on and never cleared, so
+   * switching it off and on again copies nothing twice. The copy itself is the
+   * server's job (the timeline is its store). Public, but not in the view.
+   */
+  readonly legacyOrdersCopied: boolean
+  /**
    * The currently active battle, or null if no battle is in progress.
    * At most one battle may be active per game at a time.
    */

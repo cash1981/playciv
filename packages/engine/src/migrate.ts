@@ -37,7 +37,7 @@ const correctSocialPolicyFlipsides = (
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret' | 'chatOrders' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters'
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret' | 'chatOrders' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters' | 'legacyOrdersCopied'
 > &
   Partial<
     Pick<
@@ -52,6 +52,7 @@ type MaybeOlder = Omit<
       | 'chatOrders'
       | 'chatOrdersStartTurn'
       | 'startPlayerId'
+      | 'legacyOrdersCopied'
       | 'turnStarters'
       | 'logSecret'
     >
@@ -241,6 +242,9 @@ export function migrateGameState(state: GameState): GameState {
     // Turn 1 is the baseline of a game that has never used chat orders.
     chatOrdersStartTurn: older.chatOrdersStartTurn ?? 1,
     startPlayerId: older.startPlayerId ?? null,
+    // A game that is already in chat mode has its orders in the timeline, and
+    // copying the classic ones later would duplicate those posted there.
+    legacyOrdersCopied: older.legacyOrdersCopied ?? older.chatOrders === true,
     turnStarters: older.turnStarters ?? {},
   }
 }

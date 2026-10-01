@@ -405,3 +405,44 @@ export function turnHolder(state: GameState, startPlayerNumber?: number): Player
   const ordered = [...seats.slice(from), ...seats.slice(0, from)]
   return ordered.find((player) => !isDone(turnOf(player, currentTurn), earliest))
 }
+
+/** One published version of a phase's order, as the classic Turn orders panel showed it. */
+export interface PublicOrderVersion {
+  readonly username: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+  readonly markdown: string
+  /** When the owner published it. */
+  readonly at: string
+  /** Position among that phase's versions, oldest first. */
+  readonly index: number
+}
+
+/**
+ * Every revealed version of every order, oldest first, read from the public copy
+ * only (`publicTurns`), never from a player's own turns: a draft that was never
+ * revealed is masked there and has no history entry, so it cannot be returned by
+ * accident. Chat orders copies these into the timeline when it is first switched
+ * on. A version without a usable `at` is left out rather than given a made-up
+ * time. Orders revealed before versions were kept (old saves) have none and are
+ * not returned.
+ */
+export function publicOrderVersions(state: GameState): readonly PublicOrderVersion[] {
+  const versions = Object.values(state.publicTurns).flatMap((turn) =>
+    TURN_PHASES.flatMap((phase) =>
+      (turn.history?.[phase] ?? []).flatMap((version, index): readonly PublicOrderVersion[] =>
+        typeof version.at === 'string' && !Number.isNaN(Date.parse(version.at))
+          ? [{ username: turn.username, turnNumber: turn.turnNumber, phase, markdown: version.markdown, at: version.at, index }]
+          : [],
+      ),
+    ),
+  )
+  return [...versions].sort(
+    (a, b) =>
+      Date.parse(a.at) - Date.parse(b.at) ||
+      a.turnNumber - b.turnNumber ||
+      TURN_PHASES.indexOf(a.phase) - TURN_PHASES.indexOf(b.phase) ||
+      compareJavaStrings(a.username, b.username) ||
+      a.index - b.index,
+  )
+}

@@ -171,6 +171,7 @@ export function createGame(options: CreateGameOptions): GameState {
     chatOrders: false,
     chatOrdersStartTurn: 1,
     startPlayerId: null,
+    legacyOrdersCopied: false,
     turnStarters: {},
     battle: null,
     rev: 0,

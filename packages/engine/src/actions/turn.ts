@@ -432,7 +432,8 @@ export function setChatOrders(state: GameState, enabled: boolean, at?: string): 
     ? Math.max(state.chatOrdersStartTurn, playedTurn(state))
     : state.chatOrdersStartTurn
   const flipped = appendInfoLog(
-    { ...state, chatOrders: enabled, chatOrdersStartTurn },
+    // The first switch-on is the one time the classic orders are copied over
+    { ...state, chatOrders: enabled, chatOrdersStartTurn, legacyOrdersCopied: state.legacyOrdersCopied || enabled },
     `Chat orders turned ${enabled ? 'on' : 'off'}`,
   )
   if (!enabled) return ok(flipped)
