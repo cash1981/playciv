@@ -357,6 +357,18 @@ describe('TechPanel picker', () => {
     expect(dialog.textContent).toContain('Library building')
   })
 
+  it('shows Military Science as unlocking the Military dock and the Academy', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([tech('Military Science', false, 3)])
+    render(<TechPanel gameId="game-1" busy={false} run={run} view={view([])} reloadCount={0} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Level 3' }))
+    fireEvent.click(screen.getByText('Military Science'))
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.textContent).toContain('Military dock building')
+    expect(dialog.textContent).toContain('Academy building')
+  })
+
   it("shows Space Flight's own effect text, and never falls back to tech.description", async () => {
     vi.spyOn(api, 'availableTechs').mockResolvedValue([
       { ...tech('Space Flight', false, 5), description: 'should never be shown' },

@@ -13,7 +13,7 @@ _Last updated: 2026-10-01_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 706 engine, 294 server, 452 web on `feat/chat-orders` after merging main (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 707 engine, 294 server, 455 web on `feat/military-dock` (706/294/452 on `feat/chat-orders` before) (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -24,6 +24,9 @@ _Last updated: 2026-10-01_
   field to the server total, so it changes at once instead of after the 600 ms
   debounce and the request. Client only. See `decisions.md`, 2026-10-01, which
   also records a known limitation for saves that never arrive.
+- **Military dock.** New building piece (`buildings/militarydock`, 5 in the
+  supply, +4 combat bonus) and the DoC card for Military Science, which now
+  unlocks the Military dock and the Academy. Brief: `tasks/military-dock.md`.
 - **Relic outline.** Relic markers get a white outline and a thin dark ring on the
   board (`board-piece-relic` in `styles.css`), because the art vanished against
   the sea. A selected relic shows the normal accent outline. CSS only; no asset

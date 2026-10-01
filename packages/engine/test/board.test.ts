@@ -223,6 +223,7 @@ describe('the manifest', () => {
       'buildings/harbor': 10,
       'buildings/tradingpost': 6,
       'buildings/shipyard': 5,
+      'buildings/militarydock': 5,
       'buildings/ironmine': 6,
     }
     for (const [assetId, limit] of Object.entries(expected)) {

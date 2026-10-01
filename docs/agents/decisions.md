@@ -3760,3 +3760,26 @@ said nothing was; the right HP "just took a while" to show.
   hint that the edit had not landed. The dropped save is an older behaviour and
   was left alone.
 
+## 2026-10-01 - Military dock and the DoC Military Science card
+
+The human replaced the Military Science card with the one from the `DoC` folder
+and added the Military dock building from the same material. There is no old
+system behind either: the old client has no Military dock, so the values are the
+human's. The card unlocks the Military dock and the Academy; the Military dock
+has 5 pieces in the supply (like the Shipyard) and is worth +4 combat bonus
+(like the Academy).
+
+The new card is 752 x 490, smaller than the 1782 x 1140 photo it replaces, and it
+is stored as it is rather than upscaled. The 154 x 100 thumbnail
+`MilitaryScience.png` was replaced as well.
+Regenerating assets can undo this: `tools/tech-assets.ps1` maps
+`military_science_lvl3.jpg` from the gitignored `Civilization/Moderator/techs/`
+photos, and `tools/item-assets.ps1` copies the old `MilitaryScience.png` from
+`old-civ-web`, so re-running either restores the old card. (The `.png` is not
+displayed for techs; `itemImage()` asks for the `.jpg`.) For the building,
+`tools/board-assets.ps1` now labels `building/militarydock` as "Military dock",
+but it only lists what is in `Moderator/buildings/`: copy
+`Moderator/DoC/New Markers/Military Dock2.png` there as `militarydock.png`, or the
+manifest entry disappears on the next run. The card cost of 10 production printed
+on the DoC card is not modelled, as the engine does not track building costs.
+

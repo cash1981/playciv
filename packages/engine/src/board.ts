@@ -181,6 +181,7 @@ const BUILDING_SUPPLY_LIMIT: Readonly<Record<string, number>> = {
   'buildings/harbor': 10,
   'buildings/tradingpost': 6,
   'buildings/shipyard': 5,
+  'buildings/militarydock': 5,
   'buildings/ironmine': 6,
 }
 
