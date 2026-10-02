@@ -156,6 +156,51 @@ describe('StatusPanel Movement (issue #102)', () => {
   })
 })
 
+describe('StatusPanel hand sizes', () => {
+  it('shows Culture hand size as a read-only number in the Trade, Coins & Culture cards group', () => {
+    render(
+      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+    )
+
+    expect(screen.getByLabelText('Alice Culture hand size').textContent).toBe('2')
+    expect(screen.queryByRole('textbox', { name: 'Alice Culture hand size' })).toBeNull()
+  })
+
+  it('has no column called plain Hand Size any more', () => {
+    render(
+      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+    )
+
+    expect(screen.queryByRole('columnheader', { name: 'Hand Size' })).toBeNull()
+    expect(screen.getByRole('columnheader', { name: 'Combat hand size' })).toBeTruthy()
+  })
+
+  it('saves Combat hand size as typed, so +1 and +2 work', async () => {
+    const setStat = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(memberView)
+    render(
+      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+    )
+
+    const input = screen.getByRole('textbox', { name: 'Alice Combat hand size' })
+    fireEvent.change(input, { target: { value: '+2' } })
+    fireEvent.blur(input)
+
+    await waitFor(() =>
+      expect(setStat).toHaveBeenCalledWith('game-1', 'player-me', 'combatHandSize', '+2'),
+    )
+    expect((input as HTMLInputElement).value).toBe('+2')
+  })
+
+  it('stops Combat hand size at 20 characters', () => {
+    render(
+      <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
+    )
+
+    const input = screen.getByRole('textbox', { name: 'Alice Combat hand size' }) as HTMLInputElement
+    expect(input.maxLength).toBe(20)
+  })
+})
+
 describe('StatusPanel Coins section', () => {
   /**
    * The shared fixture with counters filled in for Alice, plus the optional

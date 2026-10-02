@@ -79,10 +79,13 @@ type MaybeOlderPlayerhand = Omit<
  */
 const normalizeStats = (stats: Partial<PlayerStats> | undefined): PlayerStats => {
   const merged = { ...DEFAULT_PLAYER_STATS, ...stats }
+  // `handSize` was a number before it became the free-text Combat hand size.
+  const legacyHandSize = (stats as { readonly handSize?: unknown } | undefined)?.handSize
   return {
     coinSources: { ...EMPTY_COIN_SOURCES, ...merged.coinSources },
     trade: merged.trade,
     culture: merged.culture,
+    cultureHandSize: merged.cultureHandSize,
     infantry: merged.infantry,
     artillery: merged.artillery,
     mounted: merged.mounted,
@@ -90,7 +93,9 @@ const normalizeStats = (stats: Partial<PlayerStats> | undefined): PlayerStats =>
     // `?? default` guards a hand-edited or older save that stored neither.
     mvmt: String(merged.mvmt ?? DEFAULT_PLAYER_STATS.mvmt),
     combat: merged.combat,
-    handSize: merged.handSize,
+    combatHandSize: String(
+      stats?.combatHandSize ?? (typeof legacyHandSize === 'number' && legacyHandSize !== 0 ? legacyHandSize : ''),
+    ),
     efta: merged.efta,
     infra: merged.infra,
     mic: merged.mic,

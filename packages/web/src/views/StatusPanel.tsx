@@ -20,7 +20,9 @@ import {
   GOVERNMENT_CARDS,
   GOVERNMENTS,
   isInWondersArea,
+  isCombatHandSizeValue,
   isMovementValue,
+  MAX_COMBAT_HAND_SIZE_LENGTH,
   socialPolicyCoinSource,
   techCoinSource,
   totalCoins,
@@ -99,12 +101,18 @@ type StatColumn = {
    * plain integer; the cell accepts text and validates it accordingly.
    */
   readonly text?: boolean
+  /**
+   * Free text with no format check beyond a length limit (Combat hand size:
+   * `+1`, `5+2`).
+   */
+  readonly freeText?: boolean
 }
 
 const ACCOUNTING_COLUMNS: readonly StatColumn[] = [
   { key: 'coinTotal', label: 'Coins' },
   { key: 'trade', label: 'Trade' },
   { key: 'culture', label: 'Culture' },
+  { key: 'cultureHandSize', label: 'Culture hand size', derived: true },
 ]
 
 const UNIT_COLUMNS: readonly StatColumn[] = [
@@ -117,7 +125,7 @@ const MODIFIER_COLUMNS: readonly StatColumn[] = [
   { key: 'stacking', label: 'Stacking' },
   { key: 'mvmt', label: 'Movement', text: true },
   { key: 'combat', label: 'Combat', derived: true },
-  { key: 'handSize', label: 'Hand Size' },
+  { key: 'combatHandSize', label: 'Combat hand size', freeText: true },
 ]
 
 const INVESTMENT_COLUMNS: readonly StatColumn[] = [
@@ -317,6 +325,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
                               label={`${row.username} ${column.label}`}
                               value={row.stats[key]}
                               text={column.text === true}
+                              freeText={column.freeText === true}
                               disabled={busy || readOnly}
                               onCommit={(value) =>
                                 void run(() => api.setPlayerStat(gameId, row.playerId, key, value))
@@ -557,12 +566,14 @@ function StatCell({
   label,
   value,
   text = false,
+  freeText = false,
   disabled,
   onCommit,
 }: {
   readonly label: string
   readonly value: number | string
   readonly text?: boolean
+  readonly freeText?: boolean
   readonly disabled: boolean
   readonly onCommit: (value: number | string) => void
 }): React.JSX.Element {
@@ -576,6 +587,15 @@ function StatCell({
 
   function commit(): void {
     const trimmed = draft.trim()
+    if (freeText) {
+      // Combat hand size: anything goes up to the engine's length limit.
+      if (!isCombatHandSizeValue(trimmed)) {
+        setDraft(displayValue)
+        return
+      }
+      if (trimmed !== value) onCommit(trimmed)
+      return
+    }
     if (text) {
       // Movement: `3`, `3+1` and `2+1+1` are allowed; a typo reverts.
       if (!isMovementValue(trimmed)) {
@@ -599,7 +619,8 @@ function StatCell({
       className="stat-input"
       type="text"
       aria-label={label}
-      inputMode={text ? 'text' : 'decimal'}
+      inputMode={text || freeText ? 'text' : 'decimal'}
+      maxLength={freeText ? MAX_COMBAT_HAND_SIZE_LENGTH : undefined}
       value={draft}
       disabled={disabled}
       onChange={(event) => setDraft(event.target.value)}

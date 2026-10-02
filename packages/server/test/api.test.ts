@@ -2566,6 +2566,34 @@ describe('player stats (#43)', () => {
     expect((await rejected.json() as { error: string }).error).toBe('INVALID_STAT_VALUE')
   })
 
+  it('stores Combat hand size as free text and refuses Culture hand size', async () => {
+    const { gameId, starter } = await startedGame('StatsHandSizes')
+    const { other } = await ids(gameId, starter)
+    const url = `/api/games/${gameId}/players/${other}/stat`
+
+    const saved = await inject(app, {
+      method: 'POST', url, headers: bearer(starter), payload: { stat: 'combatHandSize', value: '+2' },
+    })
+    expect(saved.status).toBe(200)
+    const view = await saved.json() as {
+      opponents: { playerId: string; stats: { combatHandSize: string; cultureHandSize: number } }[]
+    }
+    const stats = view.opponents.find((o) => o.playerId === other)?.stats
+    expect(stats?.combatHandSize).toBe('+2')
+    expect(stats?.cultureHandSize).toBe(2)
+
+    const tooLong = await inject(app, {
+      method: 'POST', url, headers: bearer(starter), payload: { stat: 'combatHandSize', value: 'x'.repeat(21) },
+    })
+    expect(tooLong.status).toBe(400)
+
+    const derived = await inject(app, {
+      method: 'POST', url, headers: bearer(starter), payload: { stat: 'cultureHandSize', value: 7 },
+    })
+    expect(derived.status).toBe(400)
+    expect((await derived.json() as { error: string }).error).toBe('STAT_NOT_EDITABLE')
+  })
+
   it('lets a member set another player’s coin counter (coin-tab)', async () => {
     const { gameId, starter } = await startedGame('Coins')
     const { other } = await ids(gameId, starter)
