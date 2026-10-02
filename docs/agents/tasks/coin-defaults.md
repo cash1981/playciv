@@ -21,10 +21,9 @@ the other sources: "du finner andre eksempler også ... hvis man har en tech som
 gir coin. F.eks Bureaucracy o.l". Also: "dersom noen fjerner Org. Rel så fjern
 den helt", and "Kun nye" (existing games are not migrated).
 
-The human also reported that a revealed Organized Religion did not show in the
-Coins tab of a live game. It could not be reproduced from the code (the row
-renders for a revealed policy, and the web tests cover it); the live game was
-not reachable from the session. See Open questions.
+The human also reported that Organized Religion did not show in the Coins tab of
+a live game. It turned out the policy was chosen but not revealed, so there was
+no bug. See Open questions.
 
 ## Scope
 
@@ -82,6 +81,5 @@ source. `revealTech`, `revealSocialPolicy` and `setPlayerGovernment` in
 
 ## Open questions
 
-- Live game `bcd21671a7fde335`: Organized Religion did not appear in Coins
-  after being "activated". Most likely the policy was chosen but not revealed;
-  the row follows the revealed policy by design. Asked the human to confirm.
+- Live game `bcd21671a7fde335`: Organized Religion did not appear in Coins.
+  Resolved: the human confirmed the policy was chosen but not revealed.

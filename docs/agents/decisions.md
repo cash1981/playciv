@@ -3829,8 +3829,8 @@ mentions social policies. A player can still raise the counter by hand.
 
 **Removal.** Removing the card clears its counter completely. That now also holds when a tech choice is undone by vote or put back (`putTechBack`), which the review found left a revealed coin tech's 1 behind.
 
-**Reported bug, not reproduced.** The human saw no Organized Religion row in the
-Coins tab of a live game. The row follows the *revealed* policy by design, and
-the web test for it passes. The likely cause is a policy that was chosen but not
-revealed. The session could not reach the live game to check.
-
+**Reported bug, not a bug.** The human saw no Organized Religion row in the Coins
+tab of a live game. The row follows the *revealed* policy by design, and the human
+confirmed the policy had been chosen but not revealed. Nothing needed fixing; the
+reveal now sets the counter to 1, and a policy that is still hidden in a running game
+gets its 1 when it is revealed after this change is deployed.
