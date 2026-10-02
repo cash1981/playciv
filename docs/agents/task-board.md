@@ -12,6 +12,14 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### culture-hand-size
+
+- **Owner:** Claude (orchestrator; coder role)
+- **Branch:** `feat/culture-hand-size`
+- **Brief:** `docs/agents/tasks/culture-hand-size.md`
+- **Status:** in progress
+- **Claimed paths:** everything listed in the brief.
+
 ### chat-orders
 
 - **Owner:** Claude (orchestrator; coder role)
