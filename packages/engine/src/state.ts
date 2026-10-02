@@ -13,6 +13,7 @@ import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece } from './board.js'
 import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
 import { combatBonusOf } from './combat-bonus.js'
+import { BASE_CULTURE_HAND_SIZE, cultureHandSizeOf } from './culture-hand.js'
 import type { CoinSources } from './coins.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
@@ -47,6 +48,11 @@ export interface PlayerStats {
   readonly coinSources: CoinSources
   readonly trade: number
   readonly culture: number
+  /**
+   * Ignored on read: the projections replace it with `cultureHandSizeOf`, which
+   * counts revealed cards only.
+   */
+  readonly cultureHandSize: number
   readonly infantry: number
   readonly artillery: number
   readonly mounted: number
@@ -60,7 +66,11 @@ export interface PlayerStats {
   readonly mvmt: string
   /** Ignored on read: the projections replace it with `combatBonusOf` (issue #197). */
   readonly combat: number
-  readonly handSize: number
+  /**
+   * Free text, so a player can write `+1` or `5+2`; it is never used in a
+   * calculation. See {@link isCombatHandSizeValue} for the limit.
+   */
+  readonly combatHandSize: string
   readonly efta: number
   readonly infra: number
   readonly mic: number
@@ -71,17 +81,26 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   coinSources: EMPTY_COIN_SOURCES,
   trade: 0,
   culture: 0,
+  cultureHandSize: BASE_CULTURE_HAND_SIZE,
   infantry: 1,
   artillery: 1,
   mounted: 1,
   stacking: 2,
   mvmt: '2',
   combat: 0,
-  handSize: 0,
+  combatHandSize: '',
   efta: 0,
   infra: 0,
   mic: 0,
   pe: 0,
+}
+
+/** The longest Combat hand size text accepted: room for `5+1+2`, not for an essay. */
+export const MAX_COMBAT_HAND_SIZE_LENGTH = 20
+
+/** Whether `value` is acceptable Combat hand size text: a string of at most 20 characters once trimmed (empty clears it). */
+export function isCombatHandSizeValue(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length <= MAX_COMBAT_HAND_SIZE_LENGTH
 }
 
 /**
@@ -464,7 +483,14 @@ export function buildingCountOf(state: GameState, playerId: string): number {
  * board, MIC, government and civilization (issue #197), so whatever is stored is ignored on read.
  */
 function withDerivedStats(state: GameState, player: Playerhand): Playerhand {
-  return { ...player, stats: { ...player.stats, combat: combatBonusOf(state, player) } }
+  return {
+    ...player,
+    stats: {
+      ...player.stats,
+      combat: combatBonusOf(state, player),
+      cultureHandSize: cultureHandSizeOf(state, player),
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -566,7 +592,11 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     publicTurns: Object.values(state.publicTurns).filter(
       (turn) => turn.username === player.username,
     ),
-    stats: { ...player.stats, combat: combatBonusOf(state, player) },
+    stats: {
+      ...player.stats,
+      combat: combatBonusOf(state, player),
+      cultureHandSize: cultureHandSizeOf(state, player),
+    },
     government: player.government,
     cultureMarkerLevel: cultureMarkerLevelOf(state, player.playerId),
     cityCount: cityCountOf(state, player.playerId),

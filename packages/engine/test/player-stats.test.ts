@@ -62,13 +62,14 @@ describe('setPlayerStat', () => {
       coinSources: EMPTY_COIN_SOURCES,
       trade: 0,
       culture: 0,
+      cultureHandSize: 2,
       infantry: 1,
       artillery: 1,
       mounted: 1,
       stacking: 2,
       mvmt: '2',
       combat: 0,
-      handSize: 0,
+      combatHandSize: '',
       efta: 0,
       infra: 0,
       mic: 0,
@@ -389,8 +390,8 @@ describe('projections carry the status board', () => {
       setPlayerStat(state, {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
-        stat: 'handSize',
-        value: 9,
+        stat: 'combatHandSize',
+        value: '+9',
       }),
     )
 
@@ -398,7 +399,7 @@ describe('projections carry the status board', () => {
     const cash = view.opponents.find((opponent) => opponent.playerId === CASH1981)
 
     // The stat is public...
-    expect(cash?.stats.handSize).toBe(9)
+    expect(cash?.stats.combatHandSize).toBe('+9')
     // ...but the hand it sits alongside is still a count, not the cards
     expect(cash).not.toHaveProperty('items')
     expect(cash).not.toHaveProperty('techsChosen')

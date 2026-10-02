@@ -42,7 +42,14 @@ import { shuffle } from '../random.js'
 import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
 import type { GameState, Playerhand, PlayerStats } from '../state.js'
-import { activeTurnStatus, findPlayer, hasUserAccess, isMovementValue, withPlayer } from '../state.js'
+import {
+  activeTurnStatus,
+  findPlayer,
+  hasUserAccess,
+  isCombatHandSizeValue,
+  isMovementValue,
+  withPlayer,
+} from '../state.js'
 import { TURN_PHASE_LABEL } from '../turn.js'
 
 import { placeUnchecked } from './board.js'
@@ -1027,13 +1034,14 @@ export function saveNote(state: GameState, playerId: string, note: string): Acti
 const STAT_KEYS = [
   'trade',
   'culture',
+  'cultureHandSize',
   'infantry',
   'artillery',
   'mounted',
   'stacking',
   'mvmt',
   'combat',
-  'handSize',
+  'combatHandSize',
   'efta',
   'infra',
   'mic',
@@ -1050,13 +1058,14 @@ export type PlayerStatKey = (typeof STAT_KEYS)[number]
 const STAT_LABEL: Readonly<Record<PlayerStatKey, string>> = {
   trade: 'trade',
   culture: 'culture',
+  cultureHandSize: 'culture hand size',
   infantry: 'infantry',
   artillery: 'artillery',
   mounted: 'mounted',
   stacking: 'stacking',
   mvmt: 'movement',
   combat: 'combat',
-  handSize: 'hand size',
+  combatHandSize: 'combat hand size',
   efta: 'EftA',
   infra: 'Infra',
   mic: 'MIC',
@@ -1074,7 +1083,7 @@ function isPlayerStatKey(stat: string): stat is PlayerStatKey {
  * `K` is inferred from `stat`, so passing a Movement expression to `combat` is
  * a compile error as well as a runtime one.
  */
-export type PlayerStatValue<K extends PlayerStatKey> = K extends 'mvmt'
+export type PlayerStatValue<K extends PlayerStatKey> = K extends 'mvmt' | 'combatHandSize'
   ? number | string
   : PlayerStats[K]
 
@@ -1108,8 +1117,9 @@ export function setPlayerStat<K extends PlayerStatKey>(
     return err({ kind: 'UNKNOWN_STAT', stat: String(input.stat) })
   }
 
-  // Combat is derived from the board, MIC, government and civilization (issue #197), so it cannot be typed in.
-  if (input.stat === 'combat') {
+  // Combat is derived from the board, MIC, government and civilization (issue #197), and
+  // Culture hand size from the techs, coins, Great Person, EftA and Cristo Redentor, so neither can be typed in.
+  if (input.stat === 'combat' || input.stat === 'cultureHandSize') {
     return err({ kind: 'STAT_NOT_EDITABLE', stat: input.stat })
   }
 
@@ -1127,6 +1137,14 @@ export function setPlayerStat<K extends PlayerStatKey>(
     // A bare number is accepted and normalised, so older callers and games
     // saved before Movement was text keep working.
     storedValue = String(value)
+  } else if (input.stat === 'combatHandSize') {
+    // Free text (`+1`, `5+2`), kept as typed apart from the trim. A bare number is
+    // accepted as its text, like Movement.
+    const text = typeof value === 'number' ? String(value) : value
+    if (!isCombatHandSizeValue(text)) {
+      return err({ kind: 'INVALID_STAT_VALUE', value })
+    }
+    storedValue = text.trim()
   } else {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
       return err({ kind: 'INVALID_STAT_VALUE', value })
@@ -1139,10 +1157,12 @@ export function setPlayerStat<K extends PlayerStatKey>(
     stats: { ...target.stats, [input.stat]: storedValue } as PlayerStats,
   })
 
+  // Combat hand size is the one stat that can be cleared; say so rather than end on "to ".
+  const shown = storedValue === '' ? 'empty' : storedValue
   const message =
     editor.playerId === target.playerId
-      ? `set their ${STAT_LABEL[input.stat]} to ${storedValue}`
-      : `set ${target.username}'s ${STAT_LABEL[input.stat]} to ${storedValue}`
+      ? `set their ${STAT_LABEL[input.stat]} to ${shown}`
+      : `set ${target.username}'s ${STAT_LABEL[input.stat]} to ${shown}`
 
   return ok(
     appendLog(next, {

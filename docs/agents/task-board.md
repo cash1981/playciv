@@ -12,14 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### chat-orders
-
-- **Owner:** Claude (orchestrator; coder role)
-- **Branch:** `feat/chat-orders` (PR #218, all three slices)
-- **Brief:** `docs/agents/tasks/chat-orders.md`
-- **Status:** in review (three full reviews and a final round done; waiting for the human to test and merge)
-- **Claimed paths:** everything listed in the brief, released when #218 merges.
-
 ---
 
 ## Format
