@@ -13,7 +13,7 @@ _Last updated: 2026-10-02_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 734 engine, 294 server, 463 web on `feat/coin-defaults` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 779 engine, 295 server, 467 web on `feat/culture-hand-size` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
