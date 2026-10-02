@@ -8,7 +8,7 @@
  */
 
 import { totalCoins } from './coins.js'
-import type { Playerhand } from './state.js'
+import type { GameState, Playerhand } from './state.js'
 
 /** What every player holds before any card raises it, and the floor. */
 export const BASE_CULTURE_HAND_SIZE = 2
@@ -27,6 +27,14 @@ const COINS_PER_COMPUTERS_CARD = 5
 const VALMIKI = 'Valmiki'
 const VALMIKI_BONUS = 2
 
+/**
+ * Cristo Redentor, a Modern Wonder: "Your culture hand size is increased by 4."
+ * Like the Statue of Zeus for combat, it counts only for its explicit owner,
+ * wherever the piece sits. The board is public, so this reveals nothing.
+ */
+const CRISTO_REDENTOR_ASSET_ID = 'wonders/cristoredentor'
+const CRISTO_REDENTOR_BONUS = 4
+
 /** Endowment for the Arts, Level I: from the first investment, nothing more. */
 const EFTA_BONUS = 1
 
@@ -37,9 +45,10 @@ const EFTA_BONUS = 1
  * human's rule): a hidden tech or Great Person gives nothing until it is
  * revealed, so the number can never show another player what is still hidden.
  * Valmiki's +2 goes again when the card is discarded, because it then leaves the
- * player's items. The coin total and the EftA investment are public already.
+ * player's items. The coin total, the EftA investment and the wonders on the
+ * board are public already.
  */
-export function cultureHandSizeOf(player: Playerhand): number {
+export function cultureHandSizeOf(state: GameState, player: Playerhand): number {
   let size = BASE_CULTURE_HAND_SIZE
 
   for (const tech of player.techsChosen) {
@@ -56,6 +65,11 @@ export function cultureHandSizeOf(player: Playerhand): number {
   if (valmiki) size += VALMIKI_BONUS
 
   if (player.stats.efta >= 1) size += EFTA_BONUS
+
+  const cristoRedentor = state.board.pieces.some(
+    (piece) => piece.assetId === CRISTO_REDENTOR_ASSET_ID && piece.ownerId === player.playerId,
+  )
+  if (cristoRedentor) size += CRISTO_REDENTOR_BONUS
 
   return Math.max(size, BASE_CULTURE_HAND_SIZE)
 }

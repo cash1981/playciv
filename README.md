@@ -540,7 +540,8 @@ calculated automatically from buildings, generals, MIC investments, government,
 civilization and the Statue of Zeus. Culture hand size starts at 2 and is
 calculated from revealed cards: Pottery, Civil Service and Theology (+1 each),
 Computers (+1 per 5 coins), Valmiki (+2, gone again when discarded) and the
-first Endowment for the Arts investment (+1); a hidden card counts for nobody
+first Endowment for the Arts investment (+1) and the owner of Cristo Redentor
+(+4); a hidden card counts for nobody
 until it is revealed. Combat hand size is free text, such as `+1`. New games
 start with the standard unit and modifier defaults.
 The panel's **Coins** section keeps one counter per coin source per player —

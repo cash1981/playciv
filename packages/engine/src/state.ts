@@ -488,7 +488,7 @@ function withDerivedStats(state: GameState, player: Playerhand): Playerhand {
     stats: {
       ...player.stats,
       combat: combatBonusOf(state, player),
-      cultureHandSize: cultureHandSizeOf(player),
+      cultureHandSize: cultureHandSizeOf(state, player),
     },
   }
 }
@@ -595,7 +595,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     stats: {
       ...player.stats,
       combat: combatBonusOf(state, player),
-      cultureHandSize: cultureHandSizeOf(player),
+      cultureHandSize: cultureHandSizeOf(state, player),
     },
     government: player.government,
     cultureMarkerLevel: cultureMarkerLevelOf(state, player.playerId),

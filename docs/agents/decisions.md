@@ -3857,6 +3857,8 @@ and the others see the same number. A hidden Computers does not add its coin bon
 **Valmiki.** Counts only while revealed in the player's items, and the +2 goes again
 when the card is discarded. A Great Person placed face-down in the pyramid (Isaac
 Newton) leaves the items, so it stops counting. The card's `used` flag is ignored.
-**Left out.** Cristo Redentor (Modern Wonder, "culture hand size is increased by 4")
-is not in the human's table and is not counted; Culture hand size is not editable,
-so a player who builds it cannot correct the number. Raised with the human.
+**Cristo Redentor.** The Modern Wonder ("culture hand size is increased by 4") was
+not in the human's table; the review found it in the game data and the human said
+it must count. It gives +4 to its explicit owner, wherever the piece sits, the
+same way the Statue of Zeus works for combat. The board is public, so it needs no
+reveal.

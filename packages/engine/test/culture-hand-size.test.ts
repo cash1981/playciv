@@ -6,7 +6,9 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { placePiece, setWonderOwner } from '../src/actions/board.js'
 import { chooseTech, discardItem, revealItem, revealTech, setPlayerStat } from '../src/actions/player.js'
+import { isInWondersArea, wondersArea } from '../src/board.js'
 import { cultureHandSizeOf } from '../src/culture-hand.js'
 import type { GreatPersonItem } from '../src/item.js'
 import { migrateGameState } from '../src/migrate.js'
@@ -19,7 +21,7 @@ import { CASH1981, ITCHI, firstCivGame } from './fixture.js'
 function sizeOf(state: GameState): number {
   const player = findPlayer(state, CASH1981)
   if (player === undefined) throw new Error('no such player')
-  return cultureHandSizeOf(player)
+  return cultureHandSizeOf(state, player)
 }
 
 /** Picks a tech and reveals it, so it counts for everyone. */
@@ -165,6 +167,38 @@ describe('cultureHandSizeOf', () => {
     expect(sizeOf(withEfta(firstCivGame(), efta))).toBe(expected)
   })
 
+  it('gives the owner of Cristo Redentor +4, and nobody else', () => {
+    const state = firstCivGame()
+    const area = wondersArea(state.board)
+    const placed = unwrap(placePiece(state, {
+      playerId: CASH1981, assetId: 'wonders/cristoredentor', x: area.x + 20, y: area.y + 40,
+    }))
+    const wonder = placed.board.pieces.at(-1)
+    if (wonder === undefined) throw new Error('the wonder should be on the board')
+    expect(isInWondersArea(placed.board, wonder)).toBe(true)
+    // Unowned: nobody gets it.
+    expect(sizeOf(placed)).toBe(2)
+
+    const owned = unwrap(setWonderOwner(placed, {
+      playerId: CASH1981, pieceId: wonder.id, ownerId: CASH1981,
+    }))
+    expect(sizeOf(owned)).toBe(6)
+    expect(toPlayerView(owned, ITCHI).opponents.find((o) => o.playerId === CASH1981)?.stats.cultureHandSize).toBe(6)
+
+    const other = unwrap(setWonderOwner(placed, {
+      playerId: CASH1981, pieceId: wonder.id, ownerId: ITCHI,
+    }))
+    expect(sizeOf(other)).toBe(2)
+    expect(toPlayerView(other, ITCHI).you?.stats.cultureHandSize).toBe(6)
+  })
+
+  it('counts an owned Cristo Redentor that sits outside the Wonders area', () => {
+    const placed = unwrap(placePiece(firstCivGame(), {
+      playerId: CASH1981, assetId: 'wonders/cristoredentor', x: 40, y: 300, ownerId: CASH1981,
+    }))
+    expect(sizeOf(placed)).toBe(6)
+  })
+
   it('adds every source together', () => {
     let state = withTech(firstCivGame(), 'Pottery')
     state = withTech(state, 'Civil Service')
@@ -173,8 +207,11 @@ describe('cultureHandSizeOf', () => {
     state = withCoins(state, 14)
     state = withValmiki(state, false)
     state = withEfta(state, 2)
-    // Base 2 + 3 techs + Computers (14 sheet + 1 Computers = 15 coins, 3 cards) + Valmiki 2 + EftA 1
-    expect(sizeOf(state)).toBe(2 + 3 + 3 + 2 + 1)
+    state = unwrap(placePiece(state, {
+      playerId: CASH1981, assetId: 'wonders/cristoredentor', x: 40, y: 300, ownerId: CASH1981,
+    }))
+    // Base 2 + 3 techs + Computers (14 sheet + 1 Computers = 15 coins, 3 cards) + Valmiki 2 + EftA 1 + Cristo Redentor 4
+    expect(sizeOf(state)).toBe(2 + 3 + 3 + 2 + 1 + 4)
   })
 
   it('gives Computers nothing for a negative coin total, so it cannot cancel another card', () => {

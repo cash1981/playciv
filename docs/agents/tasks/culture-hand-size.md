@@ -29,7 +29,8 @@ then for the owner too); EFTA gives +1 from the first investment, nothing more.
   never editable (`STAT_NOT_EDITABLE`).
 - Rule: base 2, +1 Pottery, +1 Civil Service, +1 Theology, Computers +1 per 5
   coins (total of the Coins column, rounded down), Valmiki (Great Person) +2,
-  EFTA investment (`stats.efta >= 1`) +1. Never below 2.
+  EFTA investment (`stats.efta >= 1`) +1, owner of Cristo Redentor +4 (added after
+  review, at the human's request). Never below 2.
 - Revealed cards only, for the owner as well as everyone else (the human's later
   answer): a hidden tech or hidden Valmiki gives nothing to anyone. Valmiki's +2
   goes when the card is discarded. The coin total and `efta` are already public.
@@ -52,7 +53,7 @@ hand size is increased by 2."
 
 ## Approach
 
-New `packages/engine/src/culture-hand.ts` with `cultureHandSizeOf(player)`. `withDerivedStats` and `opaque` in `state.ts` fill the stat.
+New `packages/engine/src/culture-hand.ts` with `cultureHandSizeOf(state, player)`. `withDerivedStats` and `opaque` in `state.ts` fill the stat.
 `setPlayerStat`, the migration, the server route and `StatusPanel` follow the
 rename.
 
@@ -79,5 +80,4 @@ rename.
 
 ## Open questions
 
-Cristo Redentor (+4 culture hand size) is in the game data but not in the human's table.
-Left out; asked.
+None. Cristo Redentor was found in review and added on the human's answer.
