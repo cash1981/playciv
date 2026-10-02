@@ -20,18 +20,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Status:** in review (three full reviews and a final round done; waiting for the human to test and merge)
 - **Claimed paths:** everything listed in the brief, released when #218 merges.
 
-### coin-defaults
-
-- **Owner:** Claude (orchestrator; coder role)
-- **Branch:** `feat/coin-defaults`
-- **Brief:** `docs/agents/tasks/coin-defaults.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/coins.ts`
-  - `packages/engine/src/actions/player.ts`
-  - `packages/engine/test/coin-sources.test.ts`
-  - `docs/agents/decisions.md`, `docs/agents/state.md`, `README.md`
-
 ---
 
 ## Format

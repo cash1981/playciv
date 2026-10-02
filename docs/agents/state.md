@@ -13,7 +13,7 @@ _Last updated: 2026-10-02_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 732 engine, 294 server, 463 web on `feat/coin-defaults` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 734 engine, 294 server, 463 web on `feat/coin-defaults` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -22,7 +22,7 @@ _Last updated: 2026-10-02_
   Bureaucracy, Railroad or Computers sets its coin counter to 1, and the Democracy
   government does the same for Democracy (Govt); the player can still lower them.
   The Anarchy government sets Organized Religion to 0 and leaving it restores 1 for
-  a revealed policy. Engine only, new games and new reveals only. See
+  a revealed policy. Engine only, new games and new reveals only; undoing a tech clears its coin too. See
   `decisions.md`, 2026-10-02. Brief: `tasks/coin-defaults.md`.
 - **Issue #216: the battle summary shows HP and combat bonus only, and follows
   typed HP.** The ATK text is gone from the summary bar (the per-unit ATK field

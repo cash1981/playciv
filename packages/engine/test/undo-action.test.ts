@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { draw } from '../src/actions/draw.js'
-import { chooseTech, discardItem } from '../src/actions/player.js'
+import { chooseTech, discardItem, revealTech } from '../src/actions/player.js'
 import {
   activeUndos,
   finishedUndos,
@@ -208,6 +208,20 @@ describe('undoing a tech', () => {
     expect(findPlayer(state, CASH1981)?.techsChosen).toHaveLength(0)
     expect(state.log.at(-1)?.publicLog).toContain('has removed a hidden technology from cash1981')
     expect(state.log.at(-1)?.privateLog).toContain('has removed Navy from cash1981')
+  })
+  it('takes the coin of a revealed coin tech with it', () => {
+    const chosen = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Railroad' }))
+    const logId = chosen.log.at(-1)?.id as string
+    const revealed = unwrap(revealTech(chosen, { playerId: CASH1981, techName: 'Railroad' }))
+    expect(findPlayer(revealed, CASH1981)?.stats.coinSources.railroad).toBe(1)
+
+    let state = unwrap(initiateUndo(revealed, { logId, playerId: CASH1981 }))
+    for (const playerId of [KARANDRAS1, ITCHI, CHUL]) {
+      state = unwrap(vote(state, { logId, playerId, vote: true }))
+    }
+
+    expect(findPlayer(state, CASH1981)?.techsChosen).toHaveLength(0)
+    expect(findPlayer(state, CASH1981)?.stats.coinSources.railroad).toBe(0)
   })
 })
 

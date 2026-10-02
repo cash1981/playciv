@@ -3827,7 +3827,7 @@ system modelled neither coin sources nor governments, so this has no counterpart
 to port. Tech coins are not touched by Anarchy, since the card text only
 mentions social policies. A player can still raise the counter by hand.
 
-**Removal.** Removing the card still clears its counter completely (unchanged).
+**Removal.** Removing the card clears its counter completely. That now also holds when a tech choice is undone by vote or put back (`putTechBack`), which the review found left a revealed coin tech's 1 behind.
 
 **Reported bug, not reproduced.** The human saw no Organized Religion row in the
 Coins tab of a live game. The row follows the *revealed* policy by design, and

@@ -3,7 +3,7 @@
 - **Slug:** `coin-defaults`
 - **Branch:** `feat/coin-defaults`
 - **Owner:** Claude (orchestrator; coder role)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -36,7 +36,7 @@ not reachable from the session. See Open questions.
 - `setPlayerGovernment`: Democracy sets `democracyGovernment` to 1 (already
   cleared when leaving Democracy). Anarchy sets `organizedReligion` to 0;
   leaving Anarchy sets it to 1 again if Organized Religion is revealed.
-- Removing the card keeps clearing its counter (unchanged).
+- Removing the card, including undoing the tech choice, clears its counter.
 - Tests, `decisions.md`, `state.md`, README line.
 
 **Out:**
@@ -64,7 +64,7 @@ source. `revealTech`, `revealSocialPolicy` and `setPlayerGovernment` in
 ## Claimed paths
 
 - `packages/engine/src/coins.ts`
-- `packages/engine/src/actions/player.ts`
+- `packages/engine/src/actions/player.ts`, `packages/engine/src/actions/undo.ts`
 - `packages/engine/test/coin-sources.test.ts`
 - `docs/agents/decisions.md`, `docs/agents/state.md`, `README.md`
 

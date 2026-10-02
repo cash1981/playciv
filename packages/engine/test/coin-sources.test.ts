@@ -580,9 +580,19 @@ describe('coins given when a card is revealed', () => {
     )
 
   it('starts the flat 1-coin sources at 1 and every other source at 0', () => {
+    const flat = [
+      'civilService',
+      'bureaucracy',
+      'railroad',
+      'computers',
+      'bank',
+      'democracyGovernment',
+      'greatPeople',
+      'terrain',
+      'organizedReligion',
+    ]
     for (const source of COIN_SOURCES) {
-      const flat = source.max === 1
-      expect(coinOnReveal(source.key)).toBe(flat ? 1 : 0)
+      expect(coinOnReveal(source.key), source.key).toBe(flat.includes(source.key) ? 1 : 0)
     }
   })
 
@@ -649,6 +659,16 @@ describe('coins given when a card is revealed', () => {
     state = setGovernment(state, 'Monarchy')
 
     expect(coinsOf(state)).toEqual(EMPTY_COIN_SOURCES)
+  })
+
+  it('sets 1 when a policy chosen under Anarchy is revealed after Anarchy ends', () => {
+    let state = setGovernment(chooseOrganizedReligion(firstCivGame()), 'Anarchy')
+    state = setGovernment(state, 'Monarchy')
+    expect(coinsOf(state)?.organizedReligion).toBe(0)
+
+    state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: 'Organized Religion' }))
+
+    expect(coinsOf(state)?.organizedReligion).toBe(1)
   })
 
   it('does not give a coin without the policy when Anarchy ends', () => {
