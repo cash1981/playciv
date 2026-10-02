@@ -3846,8 +3846,8 @@ Person) +2; Endowment for the Arts +1 from the first investment (`efta >= 1`), a
 nothing more for further investments. The old **Hand Size** column under Modifier
 is now **Combat hand size**, free text (`+1`, `5+2`) of at most 20 characters; a
 number saved under the old `handSize` key migrates to its text, and 0 to empty.
-**Why.** The human gave the values in a table (card texts for the four techs and
-Valmiki match `techText.ts` and the game data); there is no old-system equivalent,
+**Why.** The human gave the values in a table (the card texts in `techText.ts` and
+the game data say "hand size" without naming which hand, so the table decides); there is no old-system equivalent,
 since the old sheet was typed in.
 **Revealed cards only, for everyone, the owner included.** The human: "Kun når man
 revealer skal ting vises for andre. Hvis mye jobb så kan du defaulte det til å

@@ -14,11 +14,11 @@ import type { Playerhand } from './state.js'
 export const BASE_CULTURE_HAND_SIZE = 2
 
 /** Techs that add one card each, by printed tech name. */
-const TECH_BONUS: Readonly<Record<string, number>> = {
-  Pottery: 1,
-  'Civil Service': 1,
-  Theology: 1,
-}
+const TECH_BONUS: ReadonlyMap<string, number> = new Map([
+  ['Pottery', 1],
+  ['Civil Service', 1],
+  ['Theology', 1],
+])
 
 const COMPUTERS = 'Computers'
 /** Computers adds one card for every five coins the player has. */
@@ -44,7 +44,7 @@ export function cultureHandSizeOf(player: Playerhand): number {
 
   for (const tech of player.techsChosen) {
     if (tech.hidden) continue
-    size += TECH_BONUS[tech.name] ?? 0
+    size += TECH_BONUS.get(tech.name) ?? 0
     if (tech.name === COMPUTERS) {
       size += Math.floor(Math.max(totalCoins(player.stats.coinSources), 0) / COINS_PER_COMPUTERS_CARD)
     }
