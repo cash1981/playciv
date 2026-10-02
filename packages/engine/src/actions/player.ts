@@ -1157,10 +1157,12 @@ export function setPlayerStat<K extends PlayerStatKey>(
     stats: { ...target.stats, [input.stat]: storedValue } as PlayerStats,
   })
 
+  // Combat hand size is the one stat that can be cleared; say so rather than end on "to ".
+  const shown = storedValue === '' ? 'empty' : storedValue
   const message =
     editor.playerId === target.playerId
-      ? `set their ${STAT_LABEL[input.stat]} to ${storedValue}`
-      : `set ${target.username}'s ${STAT_LABEL[input.stat]} to ${storedValue}`
+      ? `set their ${STAT_LABEL[input.stat]} to ${shown}`
+      : `set ${target.username}'s ${STAT_LABEL[input.stat]} to ${shown}`
 
   return ok(
     appendLog(next, {

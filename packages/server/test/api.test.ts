@@ -2582,6 +2582,14 @@ describe('player stats (#43)', () => {
     expect(stats?.combatHandSize).toBe('+2')
     expect(stats?.cultureHandSize).toBe(2)
 
+    // The route returns the derived number, not the stored default: one EftA
+    // investment makes it 3.
+    const efta = await inject(app, {
+      method: 'POST', url, headers: bearer(starter), payload: { stat: 'efta', value: 1 },
+    })
+    const withEfta = await efta.json() as typeof view
+    expect(withEfta.opponents.find((o) => o.playerId === other)?.stats.cultureHandSize).toBe(3)
+
     const tooLong = await inject(app, {
       method: 'POST', url, headers: bearer(starter), payload: { stat: 'combatHandSize', value: 'x'.repeat(21) },
     })

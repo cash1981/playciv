@@ -177,12 +177,18 @@ describe('cultureHandSizeOf', () => {
     expect(sizeOf(state)).toBe(2 + 3 + 3 + 2 + 1)
   })
 
-  it('never goes below 2, even with a negative coin total or EftA', () => {
-    let state = withTech(firstCivGame(), 'Computers')
+  it('gives Computers nothing for a negative coin total, so it cannot cancel another card', () => {
+    let state = withTech(firstCivGame(), 'Pottery')
+    state = withTech(state, 'Computers')
     state = withCoins(state, -40)
-    state = {
-      ...state,
-      players: state.players.map((player) => ({
+    // Pottery +1; Computers would be -8 without the clamp, which would pull the sum below 3.
+    expect(sizeOf(state)).toBe(3)
+  })
+
+  it('never goes below 2, even with a negative EftA', () => {
+    const state = {
+      ...firstCivGame(),
+      players: firstCivGame().players.map((player) => ({
         ...player,
         stats: { ...player.stats, efta: -3 },
       })),
@@ -305,6 +311,12 @@ describe('combat hand size stat', () => {
   it('clears with empty text', () => {
     const set = unwrap(setCombatHand(firstCivGame(), '+1'))
     expect(findPlayer(unwrap(setCombatHand(set, '')), CASH1981)?.stats.combatHandSize).toBe('')
+  })
+
+  it('words the log line when the text is cleared', () => {
+    const set = unwrap(setCombatHand(firstCivGame(), '+1'))
+    const cleared = unwrap(setCombatHand(set, ''))
+    expect(cleared.log.at(-1)?.publicLog).toBe('cash1981 set their combat hand size to empty')
   })
 
   it('refuses text longer than 20 characters', () => {

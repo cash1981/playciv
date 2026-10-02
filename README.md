@@ -533,11 +533,16 @@ unsubscribing from game mail must not lock a user out of their own account. See
 **A player status board instead of a shared spreadsheet.** The old app embedded
 a per-game Google Sheet that players kept by hand. That is now an in-app "Player
 status" panel: shared bookkeeping includes trade, culture, unit counts,
-movement/combat/stacking values, hand size and EftA/Infra/MIC/PE modifiers.
-Every value except Combat is editable by any member of the game, with every
-edit written to the public log. Combat is calculated automatically from
-buildings, generals, MIC investments, government, civilization and the Statue of
-Zeus; new games start with the standard unit and modifier defaults.
+movement/combat/stacking values, a Combat hand size note and EftA/Infra/MIC/PE
+modifiers. Every value except Combat and Culture hand size is editable by any
+member of the game, with every edit written to the public log. Combat is
+calculated automatically from buildings, generals, MIC investments, government,
+civilization and the Statue of Zeus. Culture hand size starts at 2 and is
+calculated from revealed cards: Pottery, Civil Service and Theology (+1 each),
+Computers (+1 per 5 coins), Valmiki (+2, gone again when discarded) and the
+first Endowment for the Arts investment (+1); a hidden card counts for nobody
+until it is revealed. Combat hand size is free text, such as `+1`. New games
+start with the standard unit and modifier defaults.
 The panel's **Coins** section keeps one counter per coin source per player —
 Code of Laws, Pottery, Civil Service, Democracy, Printing Press, Bureaucracy,
 Railroad, Computers, Bank, Democracy (Govt), Great People, Terrain, Panama

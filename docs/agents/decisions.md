@@ -3834,3 +3834,29 @@ tab of a live game. The row follows the *revealed* policy by design, and the hum
 confirmed the policy had been chosen but not revealed. Nothing needed fixing; the
 reveal now sets the counter to 1, and a policy that is still hidden in a running game
 gets its 1 when it is revealed after this change is deployed.
+
+## 2026-10-02 - Culture hand size is derived, and Hand Size becomes Combat hand size
+
+**Decision.** The Status table has a read-only **Culture hand size** column in the
+Trade, Coins & Culture cards group. It is calculated by `cultureHandSizeOf`
+(`packages/engine/src/culture-hand.ts`) and never typed in (`STAT_NOT_EDITABLE`).
+Base 2, never below 2. +1 each for Pottery, Civil Service and Theology; Computers
++1 per 5 coins (the total of all coin counters, rounded down); Valmiki (Great
+Person) +2; Endowment for the Arts +1 from the first investment (`efta >= 1`), and
+nothing more for further investments. The old **Hand Size** column under Modifier
+is now **Combat hand size**, free text (`+1`, `5+2`) of at most 20 characters; a
+number saved under the old `handSize` key migrates to its text, and 0 to empty.
+**Why.** The human gave the values in a table (card texts for the four techs and
+Valmiki match `techText.ts` and the game data); there is no old-system equivalent,
+since the old sheet was typed in.
+**Revealed cards only, for everyone, the owner included.** The human: "Kun når man
+revealer skal ting vises for andre. Hvis mye jobb så kan du defaulte det til å
+gjelde for deg også." A hidden tech or hidden Valmiki gives nothing until it is
+revealed, so the number cannot show an opponent what is still hidden, and the owner
+and the others see the same number. A hidden Computers does not add its coin bonus.
+**Valmiki.** Counts only while revealed in the player's items, and the +2 goes again
+when the card is discarded. A Great Person placed face-down in the pyramid (Isaac
+Newton) leaves the items, so it stops counting. The card's `used` flag is ignored.
+**Left out.** Cristo Redentor (Modern Wonder, "culture hand size is increased by 4")
+is not in the human's table and is not counted; Culture hand size is not editable,
+so a player who builds it cannot correct the number. Raised with the human.
