@@ -552,8 +552,13 @@ row nobody can use is not drawn, and a counter that still holds coins stays
 visible until it is lowered. Removing the source — a government change away
 from Democracy, a removed tech or social policy — clears its counter. The
 player assigned to *The Internet* can hold up to two extra
-coins on each of the four technology sources; the counters remain manual, so
-no coins are added automatically. Wonders in play are listed with an
+coins on each of the four technology sources. Revealing a card that prints a
+flat "1 coin" sets its counter to 1 at once: Organized Religion, Civil Service,
+Bureaucracy, Railroad and Computers, and moving to the Democracy government does
+the same for Democracy (Govt). The player can still lower any of them to 0. The
+Anarchy government sets the Organized Religion counter to 0, as social policies
+have no effect there, and leaving Anarchy sets it back to 1 for a revealed
+policy. The "up to 4" techs and the other sources stay manual. Wonders in play are listed with an
 assignable owner wherever the piece currently sits on the board, until it is
 removed entirely — not only while it sits in the shared Wonders area, which
 still governs *The Internet*'s and the Panama Canal's coin allowances above.

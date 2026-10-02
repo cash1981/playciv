@@ -14,6 +14,8 @@ import {
   chooseTech,
   removeSocialPolicy,
   removeTech,
+  revealSocialPolicy,
+  revealTech,
   setCoinSource,
   setPlayerGovernment,
 } from '../src/actions/player.js'
@@ -21,6 +23,7 @@ import { movePiece, placePiece, setWonderOwner } from '../src/actions/board.js'
 import {
   ALWAYS_AVAILABLE_COIN_SOURCES,
   COIN_SOURCES,
+  coinOnReveal,
   EMPTY_COIN_SOURCES,
   findCoinSource,
   socialPolicyCoinSource,
@@ -30,10 +33,10 @@ import {
 import { migrateGameState } from '../src/migrate.js'
 import { isInWondersArea, wondersArea } from '../src/board.js'
 import { unwrap, unwrapErr } from '../src/result.js'
-import { findPlayer } from '../src/state.js'
+import { findPlayer, toPlayerView } from '../src/state.js'
 import type { GameState } from '../src/state.js'
 
-import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
+import { CASH1981, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 describe('COIN_SOURCES', () => {
   it('is the reference sheet’s fifteen rows, in order, with the printed limits', () => {
@@ -544,5 +547,211 @@ describe('coin sources in old saves', () => {
     expect(findPlayer(migrateGameState(older), CASH1981)?.stats.coinSources).toEqual(
       EMPTY_COIN_SOURCES,
     )
+  })
+})
+
+describe('coins given when a card is revealed', () => {
+  const coinsOf = (state: GameState, playerId = CASH1981) =>
+    findPlayer(state, playerId)?.stats.coinSources
+
+  const chooseOrganizedReligion = (state: GameState): GameState =>
+    unwrap(chooseSocialPolicy(state, { playerId: CASH1981, name: 'Organized Religion' }))
+
+  const setGovernment = (
+    state: GameState,
+    government: 'Anarchy' | 'Democracy' | 'Monarchy',
+  ): GameState =>
+    unwrap(
+      setPlayerGovernment(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        government,
+      }),
+    )
+
+  const setOrganizedReligion = (state: GameState, value: number): GameState =>
+    unwrap(
+      setCoinSource(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        source: 'organizedReligion',
+        value,
+      }),
+    )
+
+  it('starts the flat 1-coin sources at 1 and every other source at 0', () => {
+    for (const source of COIN_SOURCES) {
+      const flat = source.max === 1
+      expect(coinOnReveal(source.key)).toBe(flat ? 1 : 0)
+    }
+  })
+
+  it('sets Organized Religion to 1 when it is revealed, and not before', () => {
+    let state = chooseOrganizedReligion(firstCivGame())
+    expect(coinsOf(state)?.organizedReligion).toBe(0)
+
+    state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: 'Organized Religion' }))
+
+    expect(coinsOf(state)).toEqual({ ...EMPTY_COIN_SOURCES, organizedReligion: 1 })
+  })
+
+  it('lets the player lower it to 0 and keeps it there when the policy is revealed again', () => {
+    let state = chooseOrganizedReligion(firstCivGame())
+    state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: 'Organized Religion' }))
+    state = setOrganizedReligion(state, 0)
+
+    state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: 'Organized Religion' }))
+
+    expect(coinsOf(state)?.organizedReligion).toBe(0)
+    expect(coinsOf(setOrganizedReligion(state, 1))?.organizedReligion).toBe(1)
+  })
+
+  it('does not give a coin to Natural Religion, its flipside', () => {
+    let state = unwrap(
+      chooseSocialPolicy(firstCivGame(), { playerId: CASH1981, name: 'Natural Religion' }),
+    )
+    state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: 'Natural Religion' }))
+
+    expect(coinsOf(state)).toEqual(EMPTY_COIN_SOURCES)
+  })
+
+  it('removes the Organized Religion coin completely with the policy', () => {
+    let state = chooseOrganizedReligion(firstCivGame())
+    state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: 'Organized Religion' }))
+
+    state = unwrap(removeSocialPolicy(state, { playerId: CASH1981, name: 'Organized Religion' }))
+
+    expect(coinsOf(state)).toEqual(EMPTY_COIN_SOURCES)
+  })
+
+  it('starts a policy revealed under Anarchy at 0', () => {
+    let state = setGovernment(chooseOrganizedReligion(firstCivGame()), 'Anarchy')
+
+    state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: 'Organized Religion' }))
+
+    expect(coinsOf(state)?.organizedReligion).toBe(0)
+  })
+
+  it('sets Organized Religion to 0 under Anarchy and back to 1 when Anarchy ends', () => {
+    let state = chooseOrganizedReligion(firstCivGame())
+    state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: 'Organized Religion' }))
+
+    state = setGovernment(state, 'Anarchy')
+    expect(coinsOf(state)?.organizedReligion).toBe(0)
+
+    state = setGovernment(state, 'Monarchy')
+    expect(coinsOf(state)?.organizedReligion).toBe(1)
+  })
+
+  it('does not give a hidden policy a coin when Anarchy ends', () => {
+    let state = setGovernment(chooseOrganizedReligion(firstCivGame()), 'Anarchy')
+
+    state = setGovernment(state, 'Monarchy')
+
+    expect(coinsOf(state)).toEqual(EMPTY_COIN_SOURCES)
+  })
+
+  it('does not give a coin without the policy when Anarchy ends', () => {
+    let state = setGovernment(firstCivGame(), 'Anarchy')
+
+    state = setGovernment(state, 'Monarchy')
+
+    expect(coinsOf(state)).toEqual(EMPTY_COIN_SOURCES)
+  })
+
+  it('leaves the tech coins alone under Anarchy', () => {
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Bureaucracy' }))
+    state = unwrap(revealTech(state, { playerId: CASH1981, techName: 'Bureaucracy' }))
+
+    state = setGovernment(state, 'Anarchy')
+
+    expect(coinsOf(state)?.bureaucracy).toBe(1)
+  })
+
+  it('sets Democracy (Govt) to 1 when the government becomes Democracy', () => {
+    let state = setGovernment(firstCivGame(), 'Democracy')
+    expect(coinsOf(state)?.democracyGovernment).toBe(1)
+
+    state = unwrap(
+      setCoinSource(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        source: 'democracyGovernment',
+        value: 0,
+      }),
+    )
+    state = setGovernment(state, 'Democracy')
+    expect(coinsOf(state)?.democracyGovernment).toBe(0)
+  })
+
+  it.each(['Civil Service', 'Bureaucracy', 'Railroad', 'Computers'])(
+    'sets %s to 1 when the tech is revealed',
+    (techName) => {
+      const source = techCoinSource(techName)
+      if (source === undefined) throw new Error(`${techName} has no coin source`)
+      let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName }))
+      expect(coinsOf(state)?.[source]).toBe(0)
+
+      state = unwrap(revealTech(state, { playerId: CASH1981, techName }))
+
+      expect(coinsOf(state)).toEqual({ ...EMPTY_COIN_SOURCES, [source]: 1 })
+    },
+  )
+
+  it.each(['Code of Laws', 'Pottery', 'Democracy', 'Printing Press', 'Navy'])(
+    'leaves %s at 0 when the tech is revealed',
+    (techName) => {
+      let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName }))
+      state = unwrap(revealTech(state, { playerId: CASH1981, techName }))
+
+      expect(coinsOf(state)).toEqual(EMPTY_COIN_SOURCES)
+    },
+  )
+
+  it('removes a revealed tech coin completely with the tech', () => {
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Railroad' }))
+    state = unwrap(revealTech(state, { playerId: CASH1981, techName: 'Railroad' }))
+
+    state = unwrap(removeTech(state, { playerId: CASH1981, techName: 'Railroad' }))
+
+    expect(coinsOf(state)).toEqual(EMPTY_COIN_SOURCES)
+  })
+
+  it('keeps a lowered tech counter when the tech is revealed a second time', () => {
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Computers' }))
+    state = unwrap(revealTech(state, { playerId: CASH1981, techName: 'Computers' }))
+    state = unwrap(
+      setCoinSource(state, {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        source: 'computers',
+        value: 0,
+      }),
+    )
+
+    state = unwrap(revealTech(state, { playerId: CASH1981, techName: 'Computers' }))
+
+    expect(coinsOf(state)?.computers).toBe(0)
+  })
+
+  it('only changes the counters of the player who reveals', () => {
+    let state = chooseOrganizedReligion(firstCivGame())
+    state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: 'Organized Religion' }))
+    state = setGovernment(state, 'Anarchy')
+
+    expect(coinsOf(state, KARANDRAS1)).toEqual(EMPTY_COIN_SOURCES)
+  })
+
+  it('shows no coin for a hidden policy or tech in any other player’s view', () => {
+    let state = chooseOrganizedReligion(firstCivGame())
+    state = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Bureaucracy' }))
+
+    const cash = toPlayerView(state, ITCHI).opponents.find(
+      (opponent) => opponent.playerId === CASH1981,
+    )
+
+    expect(cash?.stats.coinSources).toEqual(EMPTY_COIN_SOURCES)
+    expect(cash?.revealedSocialPolicies).toEqual([])
+    expect(cash?.revealedTechs).toEqual([])
   })
 })

@@ -16,7 +16,13 @@ import {
   leaderAssetId,
   startingCorner,
 } from '../board.js'
-import { findCoinSource, socialPolicyCoinSource, techCoinSource, withCoinSource } from '../coins.js'
+import {
+  coinOnReveal,
+  findCoinSource,
+  socialPolicyCoinSource,
+  techCoinSource,
+  withCoinSource,
+} from '../coins.js'
 import type { EngineError } from '../errors.js'
 import type { Government } from '../government.js'
 import { isGovernment, startingGovernmentFor } from '../government.js'
@@ -142,11 +148,22 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
   if (tech === undefined) return err({ kind: 'ITEM_NOT_FOUND' })
 
   const revealed: TechItem = { ...tech, hidden: false }
+  // A flat "1 coin" tech starts at 1 when it is revealed. Only the first reveal
+  // counts, so revealing twice does not undo a counter the player has lowered,
+  // and a hidden tech gives nothing because the counters are public.
+  const source = tech.hidden ? techCoinSource(tech.name) : undefined
   const next = withPlayer(state, {
     ...player,
     techsChosen: player.techsChosen.map((candidate) =>
       candidate.name === tech.name ? revealed : candidate,
     ),
+    stats:
+      source === undefined
+        ? player.stats
+        : {
+            ...player.stats,
+            coinSources: withCoinSource(player.stats.coinSources, source, coinOnReveal(source)),
+          },
   })
 
   return ok(appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed))
@@ -709,11 +726,26 @@ export function revealSocialPolicy(
   if (policy === undefined) return err({ kind: 'ITEM_NOT_FOUND' })
 
   const revealed: SocialPolicyItem = { ...policy, hidden: false }
+  // Organized Religion starts at 1 coin when it is revealed, or 0 under
+  // Anarchy, where social policies have no effect. As for techs, only the first
+  // reveal counts.
+  const source = policy.hidden ? socialPolicyCoinSource(policy.name) : undefined
   const next = withPlayer(state, {
     ...player,
     socialPolicies: player.socialPolicies.map((candidate) =>
       candidate.name === policy.name ? revealed : candidate,
     ),
+    stats:
+      source === undefined
+        ? player.stats
+        : {
+            ...player.stats,
+            coinSources: withCoinSource(
+              player.stats.coinSources,
+              source,
+              player.government === 'Anarchy' ? 0 : coinOnReveal(source),
+            ),
+          },
   })
 
   return ok(appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed))
@@ -1152,15 +1184,36 @@ export function setPlayerGovernment(
   }
 
   // Issue #158: the government card holds its coin, so leaving Democracy clears
-  // the source instead of leaving a hidden value behind. Setting Democracy adds
-  // no coin of its own; the counter stays manual bookkeeping.
-  const stats =
-    input.government === 'Democracy'
-      ? target.stats
-      : {
-          ...target.stats,
-          coinSources: withCoinSource(target.stats.coinSources, 'democracyGovernment', 0),
-        }
+  // the source instead of leaving a hidden value behind. Moving to Democracy
+  // starts it at 1; setting Democracy again leaves a lowered counter alone.
+  let coinSources = target.stats.coinSources
+  if (input.government !== 'Democracy') {
+    coinSources = withCoinSource(coinSources, 'democracyGovernment', 0)
+  } else if (target.government !== 'Democracy') {
+    coinSources = withCoinSource(
+      coinSources,
+      'democracyGovernment',
+      coinOnReveal('democracyGovernment'),
+    )
+  }
+  // Anarchy switches every social policy off, so the Organized Religion coin
+  // goes to 0 there. Leaving Anarchy brings it back, but only for a policy the
+  // player has revealed: a hidden policy must not show up in a public counter.
+  if (input.government === 'Anarchy') {
+    coinSources = withCoinSource(coinSources, 'organizedReligion', 0)
+  } else if (target.government === 'Anarchy') {
+    const hasPolicy = target.socialPolicies.some(
+      (policy) => !policy.hidden && socialPolicyCoinSource(policy.name) === 'organizedReligion',
+    )
+    if (hasPolicy) {
+      coinSources = withCoinSource(
+        coinSources,
+        'organizedReligion',
+        coinOnReveal('organizedReligion'),
+      )
+    }
+  }
+  const stats = { ...target.stats, coinSources }
 
   const next = withPlayer(state, { ...target, government: input.government, stats })
   const message =
