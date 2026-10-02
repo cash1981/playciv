@@ -136,6 +136,17 @@ export function socialPolicyCoinSource(policyName: string): CoinSourceKey | unde
 }
 
 /**
+ * The counter value a card gives the moment it is revealed: 1 for a source that
+ * prints a flat "1 coin" (Civil Service, Bureaucracy, Railroad, Computers and
+ * Organized Religion), 0 for every other. The four techs that print "up to 4"
+ * are earned by playing, so they start empty. Hidden cards give nothing, since
+ * the counters are public and would show which card the player holds.
+ */
+export function coinOnReveal(key: CoinSourceKey): number {
+  return BY_KEY.get(key)?.max === 1 ? 1 : 0
+}
+
+/**
  * The sources the Coins table always offers, for every player. None of them is
  * tracked per player in the game state: the Bank building and the Great Person
  * draws are public events, terrain coin spots sit on the shared board, and

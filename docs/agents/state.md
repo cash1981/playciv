@@ -6,18 +6,24 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-01_
+_Last updated: 2026-10-02_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 708 engine, 294 server, 463 web on `feat/military-dock` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 734 engine, 294 server, 463 web on `feat/coin-defaults` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Coin defaults and Anarchy.** Revealing Organized Religion, Civil Service,
+  Bureaucracy, Railroad or Computers sets its coin counter to 1, and the Democracy
+  government does the same for Democracy (Govt); the player can still lower them.
+  The Anarchy government sets Organized Religion to 0 and leaving it restores 1 for
+  a revealed policy. Engine only, new games and new reveals only; undoing a tech clears its coin too. See
+  `decisions.md`, 2026-10-02. Brief: `tasks/coin-defaults.md`.
 - **Issue #216: the battle summary shows HP and combat bonus only, and follows
   typed HP.** The ATK text is gone from the summary bar (the per-unit ATK field
   and `totalAttack` stay). The HP total adds the HP typed in each living unit's

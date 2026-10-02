@@ -12,6 +12,7 @@
  * no item, so an undo of one could never be started. The branch is not ported.
  */
 
+import { techCoinSource, withCoinSource } from '../coins.js'
 import type { EngineError } from '../errors.js'
 import type { Item, TechItem } from '../item.js'
 import { itemName } from '../item.js'
@@ -179,9 +180,16 @@ function putTechBack(
 ): ActionResult {
   const chosen = player.techsChosen.some((candidate) => candidate.name === tech.name)
   if (chosen) {
+    // As in `removeTech`: a revealed coin tech starts its counter at 1, so the
+    // counter goes with the card instead of staying behind in the Coins tab.
+    const source = techCoinSource(tech.name)
     const next = withPlayer(state, {
       ...player,
       techsChosen: player.techsChosen.filter((candidate) => candidate.name !== tech.name),
+      stats:
+        source === undefined
+          ? player.stats
+          : { ...player.stats, coinSources: withCoinSource(player.stats.coinSources, source, 0) },
     })
     return ok(
       logUndo(next, player, tech, logType, (name) => `has removed ${name} from ${player.username}`),

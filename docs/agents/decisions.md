@@ -3801,3 +3801,36 @@ of 5. Games that already hold more than the pool allows (for example 6 Workshops
 and 3 Iron mines) keep their pieces; the palette shows 0 left and placing another
 is refused.
 
+## 2026-10-02 - Flat 1-coin cards start at 1 when revealed, and Anarchy zeroes Organized Religion
+
+**Decision.** Until now every coin counter was manual bookkeeping and started at
+0. The human asked for the sources that print a flat "1 coin" to start at 1:
+revealing Organized Religion, Civil Service, Bureaucracy, Railroad or Computers
+sets its counter to 1, and moving a player to the Democracy government sets
+Democracy (Govt) to 1. The rule is `coinOnReveal` in `coins.ts`: 1 for a source
+with a limit of 1, 0 for the rest, so the four "up to 4" techs, Great People,
+Terrain and Sheet stay manual. The counters can still be set to 0 by hand.
+Existing games are not migrated ("kun nye"), and only the first reveal counts, so
+a counter the player lowered is not put back by pressing Reveal again.
+
+**Why only at reveal.** `coinSources` is part of every player's public stats. A
+counter set when a hidden card is chosen would show every opponent which card it
+is. The reveal is the point where the card becomes public anyway, so the counter
+changes there. There is a projection test for it.
+
+**Anarchy.** The human: "Ingen social policies er i effekt dersom man er i
+anarchy." The Anarchy card already says "Your social policies have no effect", and
+`Anarchy` was already a government. Setting Anarchy now sets the Organized
+Religion counter to 0, a policy revealed during Anarchy starts at 0, and leaving
+Anarchy sets it back to 1, but only when Organized Religion is revealed. The old
+system modelled neither coin sources nor governments, so this has no counterpart
+to port. Tech coins are not touched by Anarchy, since the card text only
+mentions social policies. A player can still raise the counter by hand.
+
+**Removal.** Removing the card clears its counter completely. That now also holds when a tech choice is undone by vote or put back (`putTechBack`), which the review found left a revealed coin tech's 1 behind.
+
+**Reported bug, not a bug.** The human saw no Organized Religion row in the Coins
+tab of a live game. The row follows the *revealed* policy by design, and the human
+confirmed the policy had been chosen but not revealed. Nothing needed fixing; the
+reveal now sets the counter to 1, and a policy that is still hidden in a running game
+gets its 1 when it is revealed after this change is deployed.
