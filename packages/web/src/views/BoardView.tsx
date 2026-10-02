@@ -33,6 +33,7 @@ import {
   boardWidth,
   clampToBoard,
   columnLabel,
+  compareWonderNames,
   cultureCellCenter,
   cultureTrackHeight,
   locationOf,
@@ -171,9 +172,13 @@ export function BoardPalette({
   viewerIsRussia = false,
   onSelectAsset,
 }: BoardPaletteProps): React.JSX.Element {
-  const inCategory = assets.filter(
+  const available = assets.filter(
     (asset) => asset.category === category && (asset.id !== WHITE_ARMY_ID || viewerIsRussia),
   )
+  const inCategory =
+    category === 'wonder'
+      ? [...available].sort((a, b) => compareWonderNames(a.label, b.label))
+      : available
   const draggedAssetRef = useRef(false)
 
   const renderAsset = (asset: BoardAsset): React.JSX.Element => {

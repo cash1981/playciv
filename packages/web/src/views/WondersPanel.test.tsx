@@ -49,6 +49,32 @@ describe('WondersPanel', () => {
     await waitFor(() => expect(setOwner).toHaveBeenCalledWith('g', 'internet', 'bob'))
   })
 
+  it('sorts wonders by level, then alphabetically within a level', () => {
+    const wonder = (id: string, label: string) => ({ ...internetPiece, id, label })
+    const sorted = {
+      ...view,
+      board: {
+        ...view.board,
+        // Modern, Ancient (T), Medieval, Ancient (H): the order a board can end up in
+        pieces: [
+          wonder('i', 'The Internet'),
+          wonder('p', 'The Pyramids'),
+          wonder('m', "Leonardo's Workshop"),
+          wonder('h', 'The Hanging Gardens'),
+        ],
+      },
+    } as unknown as PlayerView
+    render(<WondersPanel gameId="g" view={sorted} busy={false} readOnly={false} run={run} />)
+    fireEvent.click(screen.getByRole('button', { name: /Wonders in play/ }))
+    const names = screen.getAllByRole('combobox').map((el) => el.getAttribute('aria-label'))
+    expect(names).toEqual([
+      'The Hanging Gardens owner',
+      'The Pyramids owner',
+      "Leonardo's Workshop owner",
+      'The Internet owner',
+    ])
+  })
+
   it('shows an empty state when no wonders are in play', () => {
     render(<WondersPanel gameId="g" view={({ ...view, board: { ...view.board, pieces: [] } } as PlayerView)} busy={false} readOnly={false} run={run} />)
     expect(screen.getByText('No wonders in play.')).toBeTruthy()
