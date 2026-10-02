@@ -1118,7 +1118,7 @@ export function setPlayerStat<K extends PlayerStatKey>(
   }
 
   // Combat is derived from the board, MIC, government and civilization (issue #197), and
-  // Culture hand size from the techs, coins, Great Person and EftA, so neither can be typed in.
+  // Culture hand size from the techs, coins, Great Person, EftA and Cristo Redentor, so neither can be typed in.
   if (input.stat === 'combat' || input.stat === 'cultureHandSize') {
     return err({ kind: 'STAT_NOT_EDITABLE', stat: input.stat })
   }

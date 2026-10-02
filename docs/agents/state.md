@@ -20,10 +20,10 @@ _Last updated: 2026-10-02_
 ## Done
 - **Culture hand size and Combat hand size.** A read-only Culture hand size column
   in the Trade, Coins & Culture cards group: base 2, +1 each for Pottery, Civil
-  Service and Theology, Computers +1 per 5 coins, Valmiki +2, EftA +1 from the first
-  investment, and the owner of Cristo Redentor +4. Revealed cards only, for the owner too; discarding Valmiki removes its
-  +2. The old Hand Size column is now free-text Combat hand size (old numbers
-  migrate). Brief:
+  Service and Theology, Computers +1 per 5 coins, Valmiki +2, EftA +1 from the
+  first investment, and the owner of Cristo Redentor +4. Cards count only when
+  revealed, for the owner too; discarding Valmiki removes its +2. The old Hand
+  Size column is now free-text Combat hand size (old numbers migrate). Brief:
   `tasks/culture-hand-size.md`; see `decisions.md`, 2026-10-02.
 - **Coin defaults and Anarchy.** Revealing Organized Religion, Civil Service,
   Bureaucracy, Railroad or Computers sets its coin counter to 1, and the Democracy

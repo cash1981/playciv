@@ -193,7 +193,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
       <p className="muted" style={{ margin: '0 0 0.5rem' }}>
         These values are shared bookkeeping — anyone in the game can edit them,
         except Combat and Culture hand size, which are calculated automatically.
-        Culture hand size counts revealed cards only.
+        Culture hand size counts revealed cards only, and Cristo Redentor for its owner.
         Unit and modifier values start with the standard defaults shown below.
       </p>
       <PlayerTabs

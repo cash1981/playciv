@@ -67,16 +67,17 @@ rename.
 
 ## Acceptance criteria
 
-- [ ] Each source has a test: base, Pottery, Civil Service, Theology, Computers
+- [x] Each source has a test: base, Pottery, Civil Service, Theology, Computers
       (0, 4, 5, 9, 10 coins), Valmiki, EFTA 0/1/3, and all together.
-- [ ] Never below 2, even with negative coins or EFTA.
-- [ ] Hidden information: neither the owner's nor an opponent's projection counts a
+- [x] Never below 2, even with negative coins or EFTA.
+- [x] Hidden information: neither the owner's nor an opponent's projection counts a
       hidden tech or a hidden Valmiki. Test in `culture-hand-size.test.ts`.
-- [ ] Discarding Valmiki takes its +2 away again.
-- [ ] `setPlayerStat` refuses `cultureHandSize`; `combatHandSize` accepts `+1`.
-- [ ] Old saves with `handSize` load.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
-- [ ] Verified in the browser: the new column and the renamed column.
+- [x] Discarding Valmiki takes its +2 away again.
+- [x] `setPlayerStat` refuses `cultureHandSize`; `combatHandSize` accepts `+1`.
+- [x] Old saves with `handSize` load.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass
+- [ ] Verified in the browser: the new column and the renamed column. Not done: the dev
+      server runs from the main checkout and needs a login; jsdom tests cover the rendering.
 
 ## Open questions
 
