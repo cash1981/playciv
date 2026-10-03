@@ -3902,6 +3902,10 @@ the 50 subrequest limit: 555 accounts are now 6 requests.
   second across the API and it answers 429 beyond that, so the broadcast pauses
   600 ms between provider requests (never before the first). The pause is
   injectable (`config.sleep`), so tests do not wait.
+- **A mailer without `sendBatch` is unbudgeted and unpaced.** It is driven one
+  `send` per recipient with no request budget and no pause. That is acceptable
+  only because no mailer that makes network calls lacks `sendBatch` (the no-op
+  mailer and the test doubles do not); a new network mailer must implement it.
 - **429, 5xx, a network error or a timeout stops the run.** The unsent accounts
   are `deferred`, and `stopReason` says why. A timed-out batch may in fact have
   been accepted, so its `stopReason` says to check the provider's log first.
@@ -3928,3 +3932,57 @@ the 50 subrequest limit: 555 accounts are now 6 requests.
 batching alone does not get a long list out in one day; `limit` and `exclude`
 exist for that. Game mails (`notify`) are unchanged and still one `send` per
 recipient.
+
+## 2026-10-03 - The admin broadcast queue: 50 a day from a daily cron
+
+**Decision.** An admin can queue a broadcast instead of sending it at once. The
+message and its recipients are stored in two D1 tables (`broadcast`,
+`broadcast_recipient`, migration `0005`), and a Worker cron at **17:00 UTC**
+(`0 17 * * *`) sends the next `perRun` pending recipients, 50 by default, until
+none are pending. The admin page can also send the next batch now, and cancel.
+The direct broadcast stays. Both call the same batch sender (`sendInBatches`), so
+the request budget, the pause, the time budget and the bisect are shared.
+
+**Why.** Resend's free plan allows 100 mails a day, shared with the game mails
+(your turn, chat, ...), and the owner does not want to pay for Pro. After the
+first broadcast reached 49 of 555 accounts, the other 506 go out at 50 a day, about
+11 days, with no manual step and no exclude list to paste each day. 17:00 UTC is
+the owner's choice of time. Fifty leaves half of the day's quota for game mail.
+
+**Rules.**
+- **Exactly one active queue at a time**, enforced by a partial unique index on
+  `broadcast(status) WHERE status = 'active'`, so two overlapping "queue it"
+  requests cannot both succeed. A second one answers 409.
+- **The recipients are a snapshot taken when the message is queued** (same
+  classification as the direct broadcast: no address, unsubscribed unless
+  included, on the skip list, an address that looks invalid). At send time the
+  player is read again: one who has unsubscribed meanwhile is marked `failed` with
+  "unsubscribed since queueing" (unless the queue includes unsubscribed accounts),
+  a deleted account is `failed`, and the mail gets the current username and a
+  fresh unsubscribe link. The queued address is used, because the skip list was
+  applied to it.
+- **A recipient left in `sending` is never resent automatically.** The claim sets
+  rows to `sending` in one guarded `UPDATE ... RETURNING`, so two overlapping runs
+  (the cron and a manual "send next batch now") cannot take the same row, and a
+  crash after the claim leaves the rows `sending`, not `pending`. Only a run that
+  stopped before sending its own claimed rows (a 429, a 5xx, a timeout, a budget)
+  releases them back to `pending`. A row stuck in `sending` may have been
+  delivered, so the admin page lists such rows and the owner decides.
+- A run that leaves nothing `pending` marks the queue `done`; stuck rows do not
+  hold it open. Cancelling sets `cancelled`, and a cancelled or finished queue
+  yields no claims. D1 has no interactive transactions, so every step is one
+  guarded statement or one `batch()` (the recipients go in as JSON through
+  `json_each`, a few statements for a whole list, to stay well under the Worker's
+  query allowance).
+- A daily run of 50 is one provider request, so the 600 ms pause and the 45 second
+  budget cost nothing there, but the shared sender keeps them.
+- The scheduled handler catches and logs its own errors. It builds the same
+  repository and mailer as `fetch`.
+
+**Not verified here.** There is no Cloudflare runtime in the development
+environment, so the cron trigger itself (the `scheduled` handler running at 17:00
+UTC) has not been run; the run function is tested directly, and the handler is a
+thin wrapper around it. Check the first scheduled run in the Worker's logs.
+
+**Deploy order.** Apply migration `0005` to D1, then deploy the Worker. The cron
+exists only after a deploy.

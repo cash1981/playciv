@@ -13,11 +13,20 @@ _Last updated: 2026-10-03_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 785 engine, 317 server, 475 web on `fix/broadcast-batching` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 785 engine, 373 server, 486 web on `fix/broadcast-batching` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Admin broadcast queue.** A broadcast can be queued ("Send over several days"):
+  the recipients are snapshotted into `broadcast`/`broadcast_recipient` (migration
+  `0005`), and a Worker cron at 17:00 UTC (`0 17 * * *`) sends the next 50 pending
+  through the same batch sender as the direct broadcast. One active queue at a
+  time; a row left in `sending` is never resent; the admin page shows the counts,
+  the failed and stuck rows, and has "Send next batch now" and "Cancel". Deploy
+  order: migration `0005`, then the Worker. The cron itself has not been run (no
+  Cloudflare runtime here). Brief: `tasks/broadcast-queue.md`; see `decisions.md`,
+  2026-10-03.
 - **Admin broadcast: batching and honest results.** The broadcast now sends through
   Resend's batch endpoint (100 per request, at most 40 requests per run, a failed
   batch split to find the bad address) instead of one fetch per recipient, which
