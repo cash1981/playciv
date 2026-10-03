@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { api } from '../lib/api.js'
-import type { AdminUserDto, PlayerDto } from '../lib/api.js'
+import type { AdminUserDto, BroadcastResultDto, PlayerDto } from '../lib/api.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
 import type { MarkdownEditorComponent } from './MarkdownEditor.js'
 
@@ -19,6 +19,24 @@ const PAGE_SIZE = 10
 
 /** Java's subject was "Message from cash at playciv.com"; the domain moved. */
 const DEFAULT_SUBJECT = 'Message from cash at playciv.app'
+
+/**
+ * The skip box takes addresses separated by newlines, commas or spaces, so a
+ * list copied from a spreadsheet or from the last run's result both work.
+ */
+export function parseAddressList(text: string): string[] {
+  return text
+    .split(/[\s,]+/)
+    .map((address) => address.trim())
+    .filter((address) => address !== '')
+}
+
+/** The limit field: empty means no limit, anything but a positive whole number is invalid. */
+function parseLimit(text: string): number | undefined | 'invalid' {
+  const trimmed = text.trim()
+  if (trimmed === '') return undefined
+  return /^[0-9]+$/.test(trimmed) && Number(trimmed) >= 1 ? Number(trimmed) : 'invalid'
+}
 
 export function AdminView({
   player,
@@ -37,7 +55,9 @@ export function AdminView({
   const [emailBody, setEmailBody] = useState('')
   const [includeUnsubscribed, setIncludeUnsubscribed] = useState(false)
   const [sending, setSending] = useState(false)
-  const [sentNotice, setSentNotice] = useState<string | null>(null)
+  const [skipAddresses, setSkipAddresses] = useState('')
+  const [limitText, setLimitText] = useState('')
+  const [broadcastResult, setBroadcastResult] = useState<BroadcastResultDto | null>(null)
 
   /** The user being edited, and the draft values for the free-text fields. */
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -143,27 +163,31 @@ export function AdminView({
     }
   }
 
+  const limit = parseLimit(limitText)
+
   async function sendBroadcast(): Promise<void> {
-    if (sending || emailSubject.trim() === '' || emailBody.trim() === '') return
-    if (
-      !window.confirm(
-        includeUnsubscribed
-          ? 'Send this email to every player, including those who unsubscribed?'
-          : 'Send this email to every player with an email address?',
-      )
-    ) {
+    if (sending || emailSubject.trim() === '' || emailBody.trim() === '' || limit === 'invalid') {
       return
     }
+    const exclude = parseAddressList(skipAddresses)
+    const audience = includeUnsubscribed
+      ? 'every player, including those who unsubscribed'
+      : 'every player with an email address'
+    const question =
+      `Send this email to ${audience}` +
+      (limit === undefined ? '' : `, at most ${limit} of them`) +
+      (exclude.length === 0 ? '' : `, skipping ${exclude.length} listed addresses`) +
+      '?'
+    if (!window.confirm(question)) return
     setSending(true)
     setError(null)
-    setSentNotice(null)
+    setBroadcastResult(null)
     try {
-      const { sent, skipped } = await api.broadcastEmail(
-        emailSubject.trim(),
-        emailBody,
-        includeUnsubscribed,
-      )
-      setSentNotice(`Sent to ${sent} players; ${skipped} skipped.`)
+      const result = await api.broadcastEmail(emailSubject.trim(), emailBody, includeUnsubscribed, {
+        exclude,
+        ...(limit === undefined ? {} : { limit }),
+      })
+      setBroadcastResult(result)
       setEmailBody('')
     } catch (caught) {
       if (isUnauthorized(caught)) return onUnauthorized()
@@ -318,7 +342,7 @@ export function AdminView({
           source as the plain-text fallback. Every account with an email address gets its own
           copy, greeted with its username and carrying the unsubscribe link.
         </p>
-        {sentNotice !== null && <div className="notice">{sentNotice}</div>}
+        {broadcastResult !== null && <BroadcastSummary result={broadcastResult} />}
 
         <label className="inline-label">
           Subject
@@ -348,10 +372,41 @@ export function AdminView({
           Also send to players who have unsubscribed
         </label>
 
+        <label>
+          Skip these addresses
+          <textarea
+            value={skipAddresses}
+            disabled={sending}
+            placeholder="One per line, or separated by commas or spaces"
+            onChange={(event) => setSkipAddresses(event.target.value)}
+          />
+        </label>
+
+        <label className="inline-label">
+          Send to at most
+          <input
+            type="number"
+            min={1}
+            max={5000}
+            step={1}
+            value={limitText}
+            disabled={sending}
+            placeholder="no limit"
+            onChange={(event) => setLimitText(event.target.value)}
+            style={{ width: '7rem' }}
+          />
+          accounts
+        </label>
+        {limit === 'invalid' && (
+          <div className="error">The limit must be a whole number of at least 1.</div>
+        )}
+
         <div className="row">
           <button
             className="primary"
-            disabled={sending || emailSubject.trim() === '' || emailBody.trim() === ''}
+            disabled={
+              sending || emailSubject.trim() === '' || emailBody.trim() === '' || limit === 'invalid'
+            }
             onClick={() => void sendBroadcast()}
           >
             {sending ? 'Sending …' : 'Send email'}
@@ -359,5 +414,50 @@ export function AdminView({
         </div>
       </section>
     </>
+  )
+}
+
+/** The readable outcome of one broadcast, with the addresses to skip next time. */
+function BroadcastSummary({ result }: { readonly result: BroadcastResultDto }): React.JSX.Element {
+  const { skipped } = result
+  return (
+    <div className="notice">
+      <p>
+        <strong>Sent to {result.sent} players.</strong>
+      </p>
+      <ul>
+        <li>
+          Skipped: {skipped.noAddress} without an address, {skipped.unsubscribed} unsubscribed,{' '}
+          {skipped.excluded} on the skip list
+        </li>
+        <li>Failed: {result.failed.length}</li>
+        <li>Not attempted yet: {result.deferred}</li>
+      </ul>
+      {result.failed.length > 0 && (
+        <ul aria-label="Failed addresses">
+          {result.failed.map((failure) => (
+            <li key={failure.email}>
+              {failure.email}: {failure.reason}
+            </li>
+          ))}
+        </ul>
+      )}
+      {result.stopReason !== null && (
+        <p>
+          <strong>The run stopped early.</strong> {result.stopReason}
+        </p>
+      )}
+      {result.sentTo.length > 0 && (
+        <>
+          <label>
+            Addresses sent in this run
+            <textarea readOnly value={result.sentTo.join('\n')} />
+          </label>
+          <p className="muted">
+            Paste these into the skip box on the next run so nobody gets the mail twice.
+          </p>
+        </>
+      )}
+    </div>
   )
 }

@@ -86,6 +86,22 @@ export interface AdminUserUpdate {
   readonly disabled?: boolean
 }
 
+/** What one admin email broadcast did (issue #92). */
+export interface BroadcastResultDto {
+  readonly sent: number
+  /** Addresses accepted in this run; paste them into the next run's skip list. */
+  readonly sentTo: readonly string[]
+  readonly skipped: {
+    readonly noAddress: number
+    readonly unsubscribed: number
+    readonly excluded: number
+  }
+  readonly failed: readonly { readonly email: string; readonly reason: string }[]
+  /** Eligible but not attempted: the limit, the quota, the request budget or a stop. */
+  readonly deferred: number
+  readonly stopReason: string | null
+}
+
 export interface GameSummary {
   readonly id: string
   readonly name: string
@@ -371,12 +387,23 @@ export const api = {
   updateAdminUser: (userId: string, changes: AdminUserUpdate) =>
     patch<AdminUserDto>(`/api/admin/users/${userId}`, changes),
   deleteAdminUser: (userId: string) => del<void>(`/api/admin/users/${userId}`),
-  /** Issue #92. Sends one personalised mail per eligible account. */
-  broadcastEmail: (subject: string, markdown: string, includeUnsubscribed: boolean) =>
-    post<{ readonly sent: number; readonly skipped: number }>(
-      '/api/admin/email/broadcast',
-      { subject, markdown, includeUnsubscribed },
-    ),
+  /**
+   * Issue #92. Sends one personalised mail per eligible account. `exclude`
+   * skips addresses already mailed; `limit` caps how many are attempted.
+   */
+  broadcastEmail: (
+    subject: string,
+    markdown: string,
+    includeUnsubscribed: boolean,
+    options: { readonly exclude?: readonly string[]; readonly limit?: number } = {},
+  ) =>
+    post<BroadcastResultDto>('/api/admin/email/broadcast', {
+      subject,
+      markdown,
+      includeUnsubscribed,
+      ...(options.exclude === undefined ? {} : { exclude: options.exclude }),
+      ...(options.limit === undefined ? {} : { limit: options.limit }),
+    }),
   /** Public: the server route needs no bearer token. */
   highscore: () => get<HighscoreResult>('/api/highscore'),
   publicGames: () => get<PublicGameSummary[]>('/api/public/games'),

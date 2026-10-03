@@ -61,7 +61,14 @@ const sendButton = (): HTMLButtonElement =>
 
 beforeEach(() => {
   vi.mocked(api.adminUsers).mockResolvedValue([])
-  vi.mocked(api.broadcastEmail).mockResolvedValue({ sent: 2, skipped: 1 })
+  vi.mocked(api.broadcastEmail).mockResolvedValue({
+    sent: 2,
+    sentTo: ['a@example.com', 'b@example.com'],
+    skipped: { noAddress: 1, unsubscribed: 3, excluded: 4 },
+    failed: [],
+    deferred: 0,
+    stopReason: null,
+  })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
@@ -71,7 +78,7 @@ afterEach(() => {
 })
 
 describe('admin email broadcast form (issue #92)', () => {
-  it('sends the subject, body and checkbox and shows the counts', async () => {
+  it('sends the subject, body and checkbox and shows the result', async () => {
     renderView()
 
     // Padded subject: the trim is what reaches the API.
@@ -86,14 +93,13 @@ describe('admin email broadcast form (issue #92)', () => {
           'A message',
           'Hello **everyone**',
           true,
+          { exclude: [] },
         )
       },
       // The suite runs alongside the other packages; give the async send room.
       { timeout: 5_000 },
     )
-    expect(
-      await screen.findByText('Sent to 2 players; 1 skipped.', undefined, { timeout: 5_000 }),
-    ).toBeTruthy()
+    expect(await screen.findByText('Sent to 2 players.', undefined, { timeout: 5_000 })).toBeTruthy()
     // The body is cleared on success, ready for the next message.
     expect(bodyField().value).toBe('')
   })
@@ -124,5 +130,81 @@ describe('admin email broadcast form (issue #92)', () => {
     fireEvent.click(sendButton())
 
     expect(vi.mocked(api.broadcastEmail)).not.toHaveBeenCalled()
+  })
+
+  it('sends the skip list split on newlines, commas and spaces, and the limit', async () => {
+    renderView()
+
+    fireEvent.change(bodyField(), { target: { value: 'Body' } })
+    fireEvent.change(screen.getByLabelText('Skip these addresses'), {
+      target: { value: ' a@example.com,b@example.com\n\n  c@example.com d@example.com ,\n' },
+    })
+    fireEvent.change(screen.getByLabelText(/Send to at most/), { target: { value: '50' } })
+    fireEvent.click(sendButton())
+
+    await waitFor(
+      () => {
+        expect(vi.mocked(api.broadcastEmail)).toHaveBeenCalledWith(
+          'Message from cash at playciv.app',
+          'Body',
+          false,
+          {
+            exclude: ['a@example.com', 'b@example.com', 'c@example.com', 'd@example.com'],
+            limit: 50,
+          },
+        )
+      },
+      { timeout: 5_000 },
+    )
+  })
+
+  it('mentions the limit in the confirmation', () => {
+    renderView()
+
+    fireEvent.change(bodyField(), { target: { value: 'Body' } })
+    fireEvent.change(screen.getByLabelText(/Send to at most/), { target: { value: '30' } })
+    fireEvent.click(sendButton())
+
+    expect(vi.mocked(window.confirm).mock.calls[0]?.[0]).toContain('at most 30')
+  })
+
+  it('will not send while the limit is not a whole number of at least 1', () => {
+    renderView()
+
+    fireEvent.change(bodyField(), { target: { value: 'Body' } })
+    for (const bad of ['0', '-3', '2.5']) {
+      fireEvent.change(screen.getByLabelText(/Send to at most/), { target: { value: bad } })
+      expect(sendButton().disabled).toBe(true)
+    }
+    fireEvent.change(screen.getByLabelText(/Send to at most/), { target: { value: '' } })
+    expect(sendButton().disabled).toBe(false)
+  })
+
+  it('summarises every count, each failure, the stop reason and the sent addresses', async () => {
+    vi.mocked(api.broadcastEmail).mockResolvedValue({
+      sent: 2,
+      sentTo: ['a@example.com', 'b@example.com'],
+      skipped: { noAddress: 11, unsubscribed: 12, excluded: 13 },
+      failed: [{ email: 'bad@example.com', reason: 'Invalid `to` field.' }],
+      deferred: 14,
+      stopReason: 'Daily email quota exceeded',
+    })
+    renderView()
+
+    fireEvent.change(bodyField(), { target: { value: 'Body' } })
+    fireEvent.click(sendButton())
+
+    expect(await screen.findByText('Sent to 2 players.', undefined, { timeout: 5_000 })).toBeTruthy()
+    const text = document.body.textContent ?? ''
+    expect(text).toContain('11 without an address')
+    expect(text).toContain('12 unsubscribed')
+    expect(text).toContain('13 on the skip list')
+    expect(text).toContain('Not attempted yet: 14')
+    expect(text).toContain('bad@example.com: Invalid `to` field.')
+    expect(text).toContain('Daily email quota exceeded')
+    const sentBox = screen.getByLabelText('Addresses sent in this run') as HTMLTextAreaElement
+    expect(sentBox.readOnly).toBe(true)
+    expect(sentBox.value).toBe('a@example.com\nb@example.com')
+    expect(text).toContain('Paste these into the skip box')
   })
 })
