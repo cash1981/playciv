@@ -179,12 +179,11 @@ export interface Notifications {
   gameOpened(game: GameState, viewerId: string): Promise<void>
   /** Java `GameAction.joinGame` — the other players, held until they open the game. */
   playerJoined(game: GameState, joinerPlayerId: string): Promise<void>
-  /** Java `PlayerAction.endTurn` → `sendYourTurn` — the next player, held until they open the game. */
-  turnEnded(before: GameState, after: GameState): Promise<void>
   /**
-   * Chat orders (issue #215) — the new turn holder, when marking a phase done
-   * changed who it is. Nothing when the holder is the same. Throttled like the
-   * other in-game mail (30 minutes per player per game).
+   * Java `PlayerAction.endTurn` → `sendYourTurn`, now without a baton (issue
+   * #215): the new turn holder, when marking a phase done changed who it is.
+   * Nothing when the holder is the same. Throttled like the other in-game mail
+   * (30 minutes per player per game).
    */
   turnHolderChanged(before: GameState, after: GameState): Promise<void>
   /**
@@ -508,26 +507,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       )
     },
 
-    async turnEnded(before: GameState, after: GameState): Promise<void> {
-      const previous = before.players.find((player) => player.yourTurn)?.playerId
-      const next = after.players.find((player) => player.yourTurn)
-      if (next === undefined || next.playerId === previous) return
-      // With chat orders on, `activeTurnStatus` describes the turn holder, not
-      // the player who has the baton, so its phase would be the wrong advice.
-      const status = after.chatOrders ? null : activeTurnStatus(after)
-      const phaseText =
-        status === null ? '' : ` Continue with the ${TURN_PHASE_LABEL[status.phase]} phase.`
-      await notify(
-        next.playerId,
-        'It is your turn',
-        `It's your turn to play in ${after.name}!${phaseText}\n\n` +
-          `Go to ${gameLink(after.id)} to start your turn`,
-        after.id,
-      )
-    },
-
     async turnHolderChanged(before: GameState, after: GameState): Promise<void> {
-      if (!after.chatOrders) return
       const holder = turnHolder(after)
       if (holder === undefined || holder.playerId === turnHolder(before)?.playerId) return
       const status = activeTurnStatus(after)

@@ -4,7 +4,7 @@
  */
 
 import type { EngineError, GameState, PlayerView } from '@civ/engine'
-import { hasUserAccess, toPlayerView } from '@civ/engine'
+import { toPlayerView } from '@civ/engine'
 import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
 
@@ -135,13 +135,18 @@ export function createGameRevision(
   actor: Pick<StoredPlayer, 'id' | 'username'>,
   createdAt: string,
   fallbackDescription: string,
+  /** Replaces the joined public log lines, for an action whose lines should not all show. */
+  publicDescriptionOverride?: string,
 ): GameRevision {
   const previousIds = new Set(before?.log.map((entry) => entry.id) ?? [])
   const entries = state.log.filter((entry) => !previousIds.has(entry.id))
-  const publicDescription = entries
-    .map((entry) => entry.publicLog)
-    .filter((description) => description !== '')
-    .join(' · ') || fallbackDescription
+  const publicDescription =
+    publicDescriptionOverride ??
+    (entries
+      .map((entry) => entry.publicLog)
+      .filter((description) => description !== '')
+      .join(' · ') ||
+      fallbackDescription)
   const privateDescriptions: Record<string, string> = {}
   for (const entry of entries) {
     if (entry.playerId === null || entry.privateLog === '') continue
@@ -168,27 +173,6 @@ export function createGameRevision(
 }
 
 /**
- * Requires the caller to be a player in the game before anything else runs.
- * The engine's `endTurn` deliberately lets anyone with the turn pass it on
- * (Java's authorisation lived in the resource layer), so membership is
- * enforced here, at the route.
- */
-export async function requireMembership(
-  context: AppContext,
-  c: Context<{ Variables: Variables }>,
-  gameId: string,
-): Promise<GameState | Response> {
-  const game = await context.repo.findGame(gameId)
-  if (game === undefined) {
-    return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
-  }
-  if (!hasUserAccess(game, currentPlayer(c).id)) {
-    return sendError(c, 403, 'NO_ACCESS', 'User is not player of this game')
-  }
-  return game
-}
-
-/**
  * Runs an engine action against a stored game: load, call, save, and answer
  * with the player's own view of the new state.
  *
@@ -212,6 +196,12 @@ export interface ApplyToGameInfo {
 export interface ApplyToGameOptions {
   readonly record?: boolean
   readonly description?: string
+  /**
+   * The public text of the revision when it should not be every new public log
+   * line joined (the end of a game names only the winner). `undefined` keeps the
+   * joined lines. Ignored with `record: false`, which makes no revision.
+   */
+  readonly publicDescription?: (info: ApplyToGameInfo) => string | undefined
   readonly after?: (info: ApplyToGameInfo) => Promise<void> | void
 }
 
@@ -291,6 +281,7 @@ export async function applyToGame(
         actor,
         now,
         options.description ?? 'Game state updated',
+        options.publicDescription?.({ before: game, after: stamped }),
       ),
       game.rev,
     )

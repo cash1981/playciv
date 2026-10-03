@@ -40,19 +40,8 @@ import { sendEngineError, sendError } from '../errors.js'
 import { resultFromGame } from '../store/rating.js'
 import type { ChatMessage, GameRevision, GameRevisionMetadata } from '../store/types.js'
 
-/** Chat orders: a page never has fewer newest rows than this, so a quiet turn still shows context. */
+/** A page never has fewer newest rows than this, so a quiet turn still shows context. */
 const CHAT_MIN_PAGE = 30
-
-/** A chat row the way the classic chat panel has always received it. */
-function classicChatRow(row: ChatMessage): Omit<ChatMessage, 'kind' | 'turnNumber' | 'phase'> {
-  return {
-    id: row.id,
-    gameId: row.gameId,
-    username: row.username,
-    message: row.message,
-    createdAt: row.createdAt,
-  }
-}
 
 export interface ChatPage {
   readonly messages: readonly ChatMessage[]
@@ -61,8 +50,7 @@ export interface ChatPage {
 }
 
 /**
- * Chat orders: one page of the timeline, `rows` being every row of the game
- * oldest first.
+ * One page of the timeline, `rows` being every row of the game oldest first.
  *
  * A turn starts at the first row tagged with its number. Without `before` the
  * page is the whole current turn, widened to the newest {@link CHAT_MIN_PAGE}
@@ -95,6 +83,22 @@ export function timelinePage(
     start = Math.max(0, ...[...turnStarts].filter((index) => index < end))
   }
   return { messages: rows.slice(start, end), hasMore: start > 0 }
+}
+
+/**
+ * What the revision of an ended game says when a winner was named: only the
+ * winner, from the engine's own log line without its `System: ` prefix. The
+ * "Ended this game" line stays in the log. `undefined` (the joined lines, as
+ * before) when no winner was named or the line is not found.
+ */
+function winnerDescription(before: GameState, after: GameState, winner: string | undefined): string | undefined {
+  if (winner === undefined) return undefined
+  const prefix = 'System: '
+  return after.log
+    .slice(before.log.length)
+    .map((entry) => entry.publicLog)
+    .find((line) => line.startsWith(`${prefix}${winner} won the game`))
+    ?.slice(prefix.length)
 }
 
 /** The summary the game list shows. Java: `PbfDTO`. */
@@ -456,7 +460,10 @@ export function registerGameRoutes(app: App, context: AppContext): void {
           ...(winner !== undefined ? { winner } : {}),
         }),
       undefined,
-      { after: ({ after }) => context.notifications.gameEnded(after) },
+      {
+        after: ({ after }) => context.notifications.gameEnded(after),
+        publicDescription: ({ before, after }) => winnerDescription(before, after, winner),
+      },
     )
   })
 
@@ -558,23 +565,21 @@ export function registerGameRoutes(app: App, context: AppContext): void {
   // -------------------------------------------------------------------------
 
   /**
-   * The plain array it has always been, and only plain chat: order and system
-   * rows stay out of the classic panel, whether or not chat orders is on, so the
-   * live ChatPanel keeps working. The shape changes only on request: `paged=1`
-   * or `before` on a game with chat orders on answers a page of the timeline.
+   * One page of the timeline: chat, orders and system rows together. Without
+   * `before` it is the current turn, with `before` (the id of the oldest row the
+   * client holds) the turn before it.
    */
   app.get('/api/games/:gameId/chat', auth, async (c) => {
     const gameId = c.req.param('gameId')
-    const rows = await context.repo.chatFor(gameId)
-    const before = c.req.query('before')
-    const paged = c.req.query('paged') === '1' || before !== undefined
-    // The live panel polls this, so the game is only read (and migrated) when the
-    // timeline is asked for. An unknown game answers an empty list, as it always did.
-    const game = paged ? await context.repo.findGame(gameId) : undefined
-    if (game === undefined || !game.chatOrders) {
-      return c.json(rows.filter((row) => row.kind === 'chat').map(classicChatRow))
+    const game = await context.repo.findGame(gameId)
+    if (game === undefined) {
+      return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
     }
-    const page = timelinePage(rows, turnStatus(game).currentTurn, before)
+    const page = timelinePage(
+      await context.repo.chatFor(gameId),
+      turnStatus(game).currentTurn,
+      c.req.query('before'),
+    )
     if (page === undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'before is not a message in this game')
     }

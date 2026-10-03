@@ -16,7 +16,6 @@ import {
   drawUnitsForBattle,
   drawWonder,
   endBattle,
-  endTurn,
   findSheetName,
   initiateUndo,
   lockOrUnlockTurn,
@@ -41,7 +40,6 @@ import {
   setPlayerGovernment,
   setPyramidPlacementSlot,
   setTechSlot,
-  takeTurn,
   tradeToPlayer,
   turnStatus,
   unmarkPhaseDone,
@@ -64,7 +62,6 @@ import {
   optionalNumber,
   optionalString,
   readGame,
-  requireMembership,
   requireString,
 } from '../context.js'
 import { sendError } from '../errors.js'
@@ -489,35 +486,6 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
   // Turns
   // -------------------------------------------------------------------------
 
-  /**
-   * The engine lets anyone with the turn pass it on (Java: authorisation lived
-   * in the resource layer), so a non-member is rejected here, before the
-   * engine ever sees the call.
-   */
-  app.post('/api/games/:gameId/endturn', auth, async (c) => {
-    const gameId = c.req.param('gameId')
-    const membership = await requireMembership(context, c, gameId)
-    if (membership instanceof Response) return membership
-
-    const player = currentPlayer(c)
-    return applyToGame(
-      context,
-      c,
-      gameId,
-      (state) => endTurn(state, { playerId: player.id, username: player.username }),
-      undefined,
-      { after: ({ before, after }) => context.notifications.turnEnded(before, after) },
-    )
-  })
-
-  app.post('/api/games/:gameId/taketurn', auth, async (c) => {
-    const gameId = c.req.param('gameId')
-    const membership = await requireMembership(context, c, gameId)
-    if (membership instanceof Response) return membership
-
-    return applyToGame(context, c, gameId, (state) => takeTurn(state, currentPlayer(c).id))
-  })
-
   app.get('/api/games/:gameId/turns/public', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     return readGame(context, c, gameId, (state) => allPublicTurns(state))
@@ -529,7 +497,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
   })
 
   /**
-   * Java: `PlayerResource.updateTurn` with `TurnDTO`. Unlike `endturn`, the
+   * Java: `PlayerResource.updateTurn` with `TurnDTO`. The
    * engine's `updateTurn` already calls `hasUserAccess` on the caller and
    * returns `NO_ACCESS` (403) for a non-member, so no extra gate is needed here.
    */

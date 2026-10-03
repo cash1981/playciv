@@ -1,11 +1,12 @@
 /** Administrative account management. Roles are read from the current account
  * in storage on every request, so changing a role takes effect immediately. */
 
-import { setChatOrders } from '@civ/engine'
+import type { GameState } from '@civ/engine'
+import { draftsToPrivateNote, publicOrderVersions, unpublishedDrafts } from '@civ/engine'
 
 import type { App } from '../app.js'
 import type { AppContext } from '../context.js'
-import { applyToGame, asRecord, currentPlayer, requireAdminWith, requireString } from '../context.js'
+import { asRecord, currentPlayer, requireAdminWith, requireString } from '../context.js'
 import { sendError } from '../errors.js'
 import { copyLegacyOrders } from '../legacy-orders.js'
 import { toPlayerDto } from './auth.js'
@@ -54,6 +55,15 @@ function readExclude(body: Record<string, unknown>): string[] | undefined | 'inv
  * it removed nothing, a read) plus a few, so keep this below roughly 23.
  */
 const CLEANUP_GAMES_PER_REQUEST = 20
+
+/**
+ * What one migrate-chat request may spend on the database, counted in calls: a
+ * game costs a read of its chat, a write per order row and the save, and the
+ * request has its own few calls besides. Below the 50 a Worker request may make,
+ * with room for those. A game with more order rows than fit is carried on by the
+ * next request, because the rows already written are skipped.
+ */
+const MIGRATE_CALLS_PER_REQUEST = 40
 
 function enabledAdminCount(players: readonly StoredPlayer[]): number {
   return players.filter(isAdmin).length
@@ -411,31 +421,96 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
   })
 
   /**
-   * Switches chat orders (issue #215) on or off for one game. Only the admin
-   * role may: it changes how the whole game is played, not just the caller's
-   * view. The change is a setting, not a game move, so it makes no replay
-   * checkpoint (the same choice as a private note).
+   * The dry run of the single chat migration. Lists the games that still have
+   * their old Turn orders panel data to move: how many order rows would be written
+   * into the timeline and how many unpublished drafts would be added to their
+   * owners' private notes. Counts and names only, nothing is written and no order
+   * or draft text leaves. The row count is every public version, so a game that an
+   * earlier request copied partly shows its full count.
    */
-  app.post('/api/admin/games/:gameId/chat-orders', admin, async (c) => {
-    const gameId = c.req.param('gameId')
-    const enabled = asRecord(await c.req.json().catch(() => ({})))['enabled']
-    if (typeof enabled !== 'boolean') {
-      return sendError(c, 400, 'BAD_REQUEST', 'enabled must be a boolean')
+  app.get('/api/admin/games/migrate-chat', admin, async (c) => {
+    const games = (await context.repo.allGames()).filter((game) => !game.legacyOrdersCopied)
+    const rows = games.map((game) => ({
+      id: game.id,
+      name: game.name,
+      active: game.active,
+      orderRows: publicOrderVersions(game).length,
+      drafts: unpublishedDrafts(game).length,
+    }))
+    return c.json({
+      games: rows,
+      totalOrderRows: sum(rows.map((game) => game.orderRows)),
+      totalDrafts: sum(rows.map((game) => game.drafts)),
+    })
+  })
+
+  /**
+   * Moves the old Turn orders panel data of every game that has not been moved,
+   * finished games included: the public order versions become `order` rows in the
+   * timeline and the unpublished drafts become sections of their owner's private
+   * note, and the game is saved with `legacyOrdersCopied` set in the same write,
+   * so it runs once. `gameId` names one game. A game that changed while it was
+   * being moved is skipped (its rows stay and are not written twice), and a run
+   * stops when the request's budget of database calls is spent; `remaining` says
+   * how many games are still left, so run it again.
+   */
+  app.post('/api/admin/games/migrate-chat', admin, async (c) => {
+    // A body that is not an object is refused rather than read as "every game".
+    const parsed: unknown = await c.req.json().catch(() => undefined)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'Send a JSON object, with gameId to migrate one game')
     }
-    // Switching on may place the start player marker, a board history entry
-    const at = new Date().toISOString()
-    return applyToGame(context, c, gameId, (state) => setChatOrders(state, enabled, at), undefined, {
-      record: false,
-      // The first switch-on copies the classic orders into the timeline. A
-      // failure here must not undo the switch, and nobody is mailed about it.
-      after: async ({ before, after }) => {
-        if (before.legacyOrdersCopied || !after.legacyOrdersCopied) return
-        try {
-          await copyLegacyOrders(context.repo, gameId, after)
-        } catch (error) {
-          console.error('Copying the classic orders into the timeline failed', error)
+    const gameId = asRecord(parsed)['gameId']
+    if (gameId !== undefined && (typeof gameId !== 'string' || gameId.trim() === '')) {
+      return sendError(c, 400, 'BAD_REQUEST', 'gameId must be a non-empty string')
+    }
+
+    let targets: readonly GameState[]
+    if (gameId === undefined) {
+      targets = (await context.repo.allGames()).filter((game) => !game.legacyOrdersCopied)
+    } else {
+      const game = await context.repo.findGame(gameId)
+      if (game === undefined) return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+      targets = game.legacyOrdersCopied ? [] : [game]
+    }
+
+    const games: { id: string; name: string; orderRows: number; drafts: number }[] = []
+    let skipped = 0
+    let partial: string | undefined
+    let budget = MIGRATE_CALLS_PER_REQUEST
+    for (const game of targets) {
+      // The read of the chat and the save, and room for at least one row
+      if (budget < 3) break
+      const copy = await copyLegacyOrders(context.repo, game.id, game, budget - 2)
+      budget -= 1 + copy.written
+      if (!copy.complete) {
+        // Out of budget part way: the rows written stay, the game is not marked
+        partial = game.id
+        break
+      }
+      // The same guarded save as a note: only while nobody has changed the game
+      const migrated: GameState = {
+        ...draftsToPrivateNote(game),
+        legacyOrdersCopied: true,
+        rev: game.rev + 1,
+      }
+      budget -= 1
+      if (!(await context.repo.saveGameIfRevision(migrated, game.rev))) {
+        if (gameId !== undefined) {
+          return sendError(c, 409, 'CONFLICT', 'The game changed while it was being migrated; try again')
         }
-      },
+        skipped += 1
+        continue
+      }
+      games.push({ id: game.id, name: game.name, orderRows: copy.written, drafts: unpublishedDrafts(game).length })
+    }
+    return c.json({
+      games,
+      totalOrderRows: sum(games.map((game) => game.orderRows)),
+      totalDrafts: sum(games.map((game) => game.drafts)),
+      skipped,
+      partial: partial ?? null,
+      remaining: targets.length - games.length,
     })
   })
 }

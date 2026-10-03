@@ -10,8 +10,8 @@
 import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { itemName } from '@civ/engine'
-import type { CoinSources } from '@civ/engine'
+import { activeTurnStatus, itemName } from '@civ/engine'
+import type { CoinSources, GameState } from '@civ/engine'
 import { createTestApp } from '../src/app.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
 import { inject } from './helpers.js'
@@ -1105,6 +1105,35 @@ describe('hidden information over HTTP', () => {
   })
 })
 
+describe('the revision of an ended game', () => {
+  const endedWith = async (name: string, payload: Record<string, unknown>) => {
+    const creator = await register(`${name}-a`)
+    const gameId = await createGame(creator, name, 2)
+    const other = await register(`${name}-b`)
+    await inject(app, { method: 'POST', url: `/api/games/${gameId}/join`, headers: bearer(other), payload: {} })
+    const response = await inject(app, { method: 'POST', url: `/api/games/${gameId}/end`, headers: bearer(creator), payload })
+    expect(response.status).toBe(200)
+    const state = await repo.findGame(gameId)
+    const latest = (await repo.listGameRevisions(gameId)).find((revision) => revision.revision === state?.rev)
+    return { latest, state }
+  }
+
+  it('names only the winner when one was named, and keeps both lines in the log', async () => {
+    const { latest, state } = await endedWith('endwin', { winner: 'endwin-b' })
+
+    expect(latest?.publicDescription).toBe('endwin-b won the game! Congratulations!')
+    const lines = state?.log.map((entry) => entry.publicLog) ?? []
+    expect(lines).toContain('System: endwin-b won the game! Congratulations!')
+    expect(lines.some((line) => line.endsWith('Ended this game'))).toBe(true)
+  })
+
+  it('says what it always did when there is no winner', async () => {
+    const { latest } = await endedWith('endnone', {})
+
+    expect(latest?.publicDescription).toBe('System: endnone-a Ended this game')
+  })
+})
+
 describe('global game revisions', () => {
   it('returns only a public revision counter and 404 for a missing game', async () => {
     const { gameId, starter, waiting } = await startedGame('Revision marker')
@@ -1160,15 +1189,15 @@ describe('global game revisions', () => {
     const responses = await Promise.all([
       inject(app, {
         method: 'POST',
-        url: `/api/games/${gameId}/endturn`,
+        url: `/api/games/${gameId}/turns/done`,
         headers: bearer(starter),
-        payload: {},
+        payload: { phase: 'SOT' },
       }),
       inject(app, {
         method: 'POST',
-        url: `/api/games/${gameId}/endturn`,
+        url: `/api/games/${gameId}/turns/done`,
         headers: bearer(starter),
-        payload: {},
+        payload: { phase: 'SOT' },
       }),
     ])
 
@@ -1213,9 +1242,9 @@ describe('global game revisions', () => {
       }),
       inject(app, {
         method: 'POST',
-        url: `/api/games/${gameId}/endturn`,
+        url: `/api/games/${gameId}/turns/done`,
         headers: bearer(starter),
-        payload: {},
+        payload: { phase: 'SOT' },
       }),
     ])
 
@@ -1224,8 +1253,7 @@ describe('global game revisions', () => {
     if (shared.status === 200) {
       const latest = (await repo.listGameRevisions(gameId)).at(-1)
       expect(latest?.revision).toBe(before.rev + 1)
-      expect(latest?.state.players.find((player) => player.yourTurn)?.playerId)
-        .not.toBe(before.players.find((player) => player.yourTurn)?.playerId)
+      expect(latest?.state.players.some((player) => player.playerTurns.some((turn) => turn.done.SOT))).toBe(true)
     }
   })
 
@@ -1612,62 +1640,26 @@ describe('storage', () => {
 })
 
 describe('turn membership', () => {
-  it('a non-member gets 403 from endturn, a member still succeeds', async () => {
+  it('a non-member gets 403 from marking a phase done, a member still succeeds', async () => {
     const { gameId, starter } = await startedGame('Utenforspill')
     const outsider = await register('Utenforspill-outsider')
 
     const blocked = await inject(app, {
       method: 'POST',
-      url: `/api/games/${gameId}/endturn`,
+      url: `/api/games/${gameId}/turns/done`,
       headers: bearer(outsider),
-      payload: {},
+      payload: { phase: 'SOT' },
     })
     expect(blocked.status).toBe(403)
     expect((await blocked.json() as { error: string }).error).toBe('NO_ACCESS')
 
     const allowed = await inject(app, {
       method: 'POST',
-      url: `/api/games/${gameId}/endturn`,
+      url: `/api/games/${gameId}/turns/done`,
       headers: bearer(starter),
-      payload: {},
+      payload: { phase: 'SOT' },
     })
     expect(allowed.status).toBe(200)
-  })
-
-  it('a non-member gets 403 from taketurn, a member still succeeds', async () => {
-    const { gameId, waiting } = await startedGame('Overta')
-    const outsider = await register('Overta-outsider')
-
-    const blocked = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/taketurn`,
-      headers: bearer(outsider),
-      payload: {},
-    })
-    expect(blocked.status).toBe(403)
-    expect((await blocked.json() as { error: string }).error).toBe('NO_ACCESS')
-
-    const allowed = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/taketurn`,
-      headers: bearer(waiting),
-      payload: {},
-    })
-    expect(allowed.status).toBe(200)
-  })
-
-  it('ending a turn before the game has started gives 409, not a misleading 404', async () => {
-    const creator = await register('Ikkestartet')
-    const gameId = await createGame(creator, 'Ikke startet', 2)
-
-    const response = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/endturn`,
-      headers: bearer(creator),
-      payload: {},
-    })
-    expect(response.status).toBe(409)
-    expect((await response.json() as { error: string }).error).toBe('GAME_NOT_STARTED')
   })
 })
 
@@ -2076,9 +2068,9 @@ describe('a whole round', () => {
       expect(join.status).toBe(200)
     }
 
-    // Who starts is random, so find out
+    // The turn holder is seat 1, whoever that is, so find out
     let state = await repo.findGame(gameId)
-    const starterName = state?.players.find((player) => player.yourTurn)?.username as string
+    const starterName = (state === undefined ? null : activeTurnStatus(state))?.username as string
     const starter = tokens[starterName] as string
 
     // Draw a civ card and reveal it
@@ -2177,7 +2169,7 @@ describe('a whole round', () => {
       url: `/api/games/${gameId}/chat`,
       headers: bearer(tokens['Itchi'] as string),
     })
-    expect((await chat.json() as { message: string }[])[0]?.message).toBe('good luck')
+    expect((await chat.json() as { messages: { message: string }[] }).messages.map((row) => row.message)).toContain('good luck')
 
     // Undo of the tech choice: start it and let everyone vote yes
     state = await repo.findGame(gameId)
@@ -2208,16 +2200,16 @@ describe('a whole round', () => {
     // Only the starting technology from the civilization is left
     expect(afterUndo?.techsChosen.map((tech) => tech.name)).not.toContain(firstTech)
 
-    // End the turn
+    // Finish the start of turn: the turn passes to the next seat
     const ended = await inject(app, {
       method: 'POST',
-      url: `/api/games/${gameId}/endturn`,
+      url: `/api/games/${gameId}/turns/done`,
       headers: bearer(starter),
-      payload: {},
+      payload: { phase: 'SOT' },
     })
     expect(ended.status).toBe(200)
     state = await repo.findGame(gameId)
-    expect(state?.players.find((player) => player.yourTurn)?.username).not.toBe(starterName)
+    expect(activeTurnStatus(state as GameState)?.username).not.toBe(starterName)
 
     // End the game
     const finished = await inject(app, {
@@ -2233,12 +2225,12 @@ describe('a whole round', () => {
     expect(state?.winner).toBe('Itchi')
 
     // An ended game is read-only, chat included.
-    for (const path of ['endturn', 'chat']) {
+    for (const path of ['turns/done', 'chat']) {
       const locked = await inject(app, {
         method: 'POST',
         url: `/api/games/${gameId}/${path}`,
         headers: bearer(starter),
-        payload: { message: 'hello' },
+        payload: { message: 'hello', phase: 'SOT' },
       })
       expect(locked.status).toBe(409)
       expect(JSON.parse(locked.body)).toMatchObject({ error: 'GAME_ENDED' })
