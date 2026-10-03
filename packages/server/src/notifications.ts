@@ -11,10 +11,17 @@
 import type { GameState, TurnPhase } from '@civ/engine'
 import { activeTurnStatus, TURN_PHASE_LABEL, turnHolder } from '@civ/engine'
 
+import { newId } from './auth.js'
 import type { Mailer, OutgoingEmail } from './mail.js'
 import { MailError } from './mail.js'
 import { escapeHtml, renderMarkdown } from './markdown.js'
-import type { Repository } from './store/types.js'
+import type {
+  BroadcastCounts,
+  BroadcastStatus,
+  Repository,
+  StoredBroadcast,
+  StoredPlayer,
+} from './store/types.js'
 
 export const DEFAULT_APP_ORIGIN = 'https://playciv.app'
 
@@ -93,6 +100,58 @@ export interface BroadcastResult {
   readonly stopReason: string | null
 }
 
+export interface QueueBroadcastOptions {
+  readonly subject: string
+  readonly markdown: string
+  readonly includeUnsubscribed: boolean
+  /** Recipients per daily run. */
+  readonly perRun: number
+  readonly exclude?: readonly string[]
+}
+
+/** Progress of a queued broadcast: what the admin page and the status route show. */
+export interface BroadcastQueueStatus {
+  readonly id: string
+  readonly subject: string
+  readonly status: BroadcastStatus
+  readonly perRun: number
+  readonly includeUnsubscribed: boolean
+  readonly createdAt: string
+  readonly lastRunAt: string | null
+  readonly counts: BroadcastCounts
+  readonly failed: readonly { readonly email: string; readonly reason: string }[]
+  /**
+   * Addresses left in `sending`: a run took them and never reported back, so the
+   * mail may or may not have been delivered. They are never resent by
+   * themselves; the owner checks the provider's log and decides.
+   */
+  readonly stuck: readonly string[]
+}
+
+export type QueueBroadcastResult =
+  | {
+      readonly ok: true
+      readonly queue: BroadcastQueueStatus
+      /** Accounts left out when the queue was made, by reason. */
+      readonly skipped: BroadcastResult['skipped']
+      /** Addresses that look invalid, so were not queued. */
+      readonly rejected: readonly { readonly email: string; readonly reason: string }[]
+    }
+  | { readonly ok: false; readonly reason: 'ALREADY_ACTIVE' | 'NO_RECIPIENTS' }
+
+/** What one run of the daily job did. */
+export interface BroadcastRunResult {
+  /** False when there was no active queue to run. */
+  readonly ran: boolean
+  readonly sent: number
+  readonly failed: number
+  /** Claimed but not sent (a stop), put back to pending for the next run. */
+  readonly released: number
+  readonly stopReason: string | null
+  /** True when this run left nothing pending and closed the queue. */
+  readonly finished: boolean
+}
+
 export interface Notifications {
   /**
    * Issue #217 — a signed-in viewer loaded the game. Counts as a visit only
@@ -150,6 +209,23 @@ export interface Notifications {
    * admin can resume it with the `sentTo` addresses as the next `exclude`.
    */
   broadcast(options: BroadcastOptions): Promise<BroadcastResult>
+  /**
+   * The same message, spread over several days: snapshots the eligible
+   * accounts now and leaves the sending to the daily job
+   * (`runQueuedBroadcast`). Only one queue may be active at a time.
+   */
+  queueBroadcast(options: QueueBroadcastOptions): Promise<QueueBroadcastResult>
+  /**
+   * One run of the daily job (also the admin's "send next batch now"): claims
+   * up to `perRun` pending recipients of the active queue and sends them. A
+   * quiet no-op when no queue is active. Never throws on a provider problem;
+   * a repository failure does throw, for the caller to log.
+   */
+  runQueuedBroadcast(now: Date): Promise<BroadcastRunResult>
+  /** The active queue, or failing that the latest one; `null` when none was ever made. */
+  queuedBroadcastStatus(): Promise<BroadcastQueueStatus | null>
+  /** Cancels the active queue; pending recipients are never sent. `null` when none is active. */
+  cancelQueuedBroadcast(): Promise<BroadcastQueueStatus | null>
 }
 
 /**
@@ -231,6 +307,149 @@ export function createNotifications(config: NotificationsConfig): Notifications 
     for (const player of game.players) {
       if (!include(player)) continue
       await notify(player.playerId, subject, body, held ? game.id : undefined)
+    }
+  }
+
+  /**
+   * The mail for one broadcast recipient. The Markdown is rendered once, here,
+   * because it is the same for everyone; only the greeting and the unsubscribe
+   * link differ, and the Worker's CPU time is small.
+   */
+  function broadcastMailBuilder(
+    subject: string,
+    markdown: string,
+  ): (recipient: BroadcastRecipient) => OutgoingEmail {
+    const bodyHtml = renderMarkdown(markdown)
+    return (recipient) => ({
+      to: recipient.email,
+      subject,
+      // Java: "Hello " + username + "\n" + msg, then sendMessage appended the
+      // unsubscribe footer. A single newline after the greeting, as Java had.
+      text: `Hello ${recipient.username}\n${markdown}${unsubscribe(recipient.id)}`,
+      html:
+        `<p>Hello ${escapeHtml(recipient.username)}</p>` +
+        bodyHtml +
+        unsubscribeHtml(recipient.id),
+    })
+  }
+
+  /**
+   * Sends the recipients through the provider's batch endpoint, in order, and
+   * accounts for every one of them: `sent`, `failed` (a bad address, found by
+   * splitting) or `unsent` (the run stopped first). Shared by the direct
+   * broadcast and the daily queue, so both keep the same budgets and rules.
+   * Never throws.
+   */
+  async function sendInBatches(
+    recipients: readonly BroadcastRecipient[],
+    build: (recipient: BroadcastRecipient) => OutgoingEmail,
+    startedAt: number,
+  ): Promise<BatchOutcome> {
+    // A mailer without `sendBatch` is driven one mail per call, with no
+    // request budget and no pause. That is only right because no mailer that
+    // makes network calls lacks `sendBatch` (the no-op mailer and test doubles
+    // do not): a new network mailer must implement `sendBatch`, or it will
+    // spend a subrequest per recipient again.
+    const sendBatch = mailer.sendBatch?.bind(mailer)
+    const groupSize = sendBatch === undefined ? 1 : BROADCAST_BATCH_SIZE
+    const queue: BroadcastRecipient[][] = []
+    for (let at = 0; at < recipients.length; at += groupSize) {
+      queue.push(recipients.slice(at, at + groupSize))
+    }
+
+    const sent: BroadcastRecipient[] = []
+    const failed: { recipient: BroadcastRecipient; reason: string }[] = []
+    let requests = 0
+    let stopReason: string | null = null
+
+    while (stopReason === null) {
+      const group = queue.shift()
+      if (group === undefined) break
+
+      if (sendBatch !== undefined) {
+        if (requests >= BROADCAST_REQUEST_BUDGET) {
+          queue.unshift(group)
+          stopReason =
+            `Stopped after ${BROADCAST_REQUEST_BUDGET} provider requests, the most one run ` +
+            'may make. Run again with the sent addresses in the skip list.'
+          break
+        }
+        // Spaced out, but not before the first request.
+        if (requests > 0) await sleep(BROADCAST_PAUSE_MS)
+        if (clock().getTime() - startedAt >= BROADCAST_TIME_BUDGET_MS) {
+          queue.unshift(group)
+          stopReason =
+            `Stopped after about ${BROADCAST_TIME_BUDGET_MS / 1000} seconds, the longest one ` +
+            'run may take (it can overrun by about one request), so that the result still ' +
+            'reaches you. Run again with the sent addresses in the skip list.'
+          break
+        }
+      }
+
+      requests += 1
+      try {
+        if (sendBatch !== undefined) {
+          await sendBatch(group.map(build))
+        } else {
+          const [only] = group
+          if (only !== undefined) await mailer.send(build(only))
+        }
+        sent.push(...group)
+      } catch (error) {
+        const message = describeError(error)
+        console.error(`Broadcast batch failed: ${message}`)
+        if (error instanceof MailError && PER_MESSAGE_STATUSES.has(error.status)) {
+          // One bad address makes Resend reject the whole batch (the batch
+          // endpoint is all or nothing), so nothing in it was sent. Split it
+          // until the culprit stands alone; each half costs a request. Other
+          // 4xx codes (a bad key, a forbidden domain) are about the request,
+          // not a message, and fall through to a stop.
+          const [only] = group
+          if (group.length === 1 && only !== undefined) {
+            failed.push({ recipient: only, reason: message })
+            console.error(`Broadcast to ${only.id} failed: ${message}`)
+          } else {
+            const middle = Math.ceil(group.length / 2)
+            queue.unshift(group.slice(0, middle), group.slice(middle))
+          }
+        } else {
+          queue.unshift(group)
+          if (error instanceof MailError) {
+            stopReason =
+              error.status === 429
+                ? `The mail provider is rate limiting or out of quota (429): ${message}`
+                : `The mail provider answered ${error.status}: ${message}`
+          } else {
+            // No answer arrived, so the last request may or may not have
+            // been accepted. The one case where a rerun could duplicate.
+            stopReason =
+              `Could not get an answer from the mail provider: ${message}. The last ` +
+              'request may still have been accepted; check the provider log before sending again.'
+          }
+        }
+      }
+    }
+
+    return { sent, failed, unsent: queue.flat(), stopReason }
+  }
+
+  async function queueStatusOf(broadcast: StoredBroadcast): Promise<BroadcastQueueStatus> {
+    const [counts, failedRows, stuckRows] = await Promise.all([
+      repo.broadcastCounts(broadcast.id),
+      repo.listBroadcastRecipients(broadcast.id, 'failed'),
+      repo.listBroadcastRecipients(broadcast.id, 'sending'),
+    ])
+    return {
+      id: broadcast.id,
+      subject: broadcast.subject,
+      status: broadcast.status,
+      perRun: broadcast.perRun,
+      includeUnsubscribed: broadcast.includeUnsubscribed,
+      createdAt: broadcast.createdAt,
+      lastRunAt: broadcast.lastRunAt,
+      counts,
+      failed: failedRows.map((row) => ({ email: row.email, reason: row.error ?? '' })),
+      stuck: stuckRows.map((row) => row.email),
     }
   }
 
@@ -392,143 +611,169 @@ export function createNotifications(config: NotificationsConfig): Notifications 
      */
     async broadcast(options: BroadcastOptions): Promise<BroadcastResult> {
       const startedAt = clock().getTime()
-      const excluded = new Set((options.exclude ?? []).map(normaliseAddress))
-      const skipped = { noAddress: 0, unsubscribed: 0, excluded: 0 }
+      const { eligible, skipped, rejected } = classifyRecipients(await repo.allPlayers(), options)
       const failed: { email: string; reason: string }[] = []
-      const eligible: BroadcastRecipient[] = []
-
-      for (const player of await repo.allPlayers()) {
-        // No address: nothing to send to. Same guard as `notify`.
-        if (player.email === null || player.email === '') {
-          skipped.noAddress += 1
-        } else if (player.disableEmail === true && !options.includeUnsubscribed) {
-          // Java's `!isDisableEmail()` filter, except the admin may deliberately
-          // override it for this one mail.
-          skipped.unsubscribed += 1
-        } else if (excluded.has(normaliseAddress(player.email))) {
-          skipped.excluded += 1
-        } else if (!PLAUSIBLE_EMAIL.test(player.email)) {
-          // Resend would reject the whole batch for this one address.
-          failed.push({ email: player.email, reason: 'Not a valid email address' })
-          console.error(`Broadcast to ${player.id} failed: not a valid email address`)
-        } else {
-          eligible.push({ id: player.id, username: player.username, email: player.email })
-        }
+      for (const entry of rejected) {
+        failed.push({ email: entry.email, reason: entry.reason })
+        console.error(`Broadcast to ${entry.id} failed: ${entry.reason.toLowerCase()}`)
       }
 
       const attempted = options.limit === undefined ? eligible : eligible.slice(0, options.limit)
-      let deferred = eligible.length - attempted.length
-
-      // The Markdown is the same for everyone; only the greeting and the
-      // unsubscribe link differ, and the Worker's CPU time is small.
-      const bodyHtml = renderMarkdown(options.markdown)
-      const build = (recipient: BroadcastRecipient): OutgoingEmail => ({
-        to: recipient.email,
-        subject: options.subject,
-        // Java: "Hello " + username + "\n" + msg, then sendMessage appended the
-        // unsubscribe footer. A single newline after the greeting, as Java had.
-        text: `Hello ${recipient.username}\n${options.markdown}${unsubscribe(recipient.id)}`,
-        html:
-          `<p>Hello ${escapeHtml(recipient.username)}</p>` +
-          bodyHtml +
-          unsubscribeHtml(recipient.id),
-      })
-
-      // A mailer without `sendBatch` is driven one mail per call, with no
-      // request budget and no pause. That is only right because no mailer that
-      // makes network calls lacks `sendBatch` (the no-op mailer and test doubles
-      // do not): a new network mailer must implement `sendBatch`, or it will
-      // spend a subrequest per recipient again.
-      const sendBatch = mailer.sendBatch?.bind(mailer)
-      const groupSize = sendBatch === undefined ? 1 : BROADCAST_BATCH_SIZE
-      const queue: BroadcastRecipient[][] = []
-      for (let at = 0; at < attempted.length; at += groupSize) {
-        queue.push(attempted.slice(at, at + groupSize))
+      const outcome = await sendInBatches(
+        attempted,
+        broadcastMailBuilder(options.subject, options.markdown),
+        startedAt,
+      )
+      for (const failure of outcome.failed) {
+        failed.push({ email: failure.recipient.email, reason: failure.reason })
       }
-
-      const sentTo: string[] = []
-      let requests = 0
-      let stopReason: string | null = null
-
-      while (stopReason === null) {
-        const group = queue.shift()
-        if (group === undefined) break
-
-        if (sendBatch !== undefined) {
-          if (requests >= BROADCAST_REQUEST_BUDGET) {
-            queue.unshift(group)
-            stopReason =
-              `Stopped after ${BROADCAST_REQUEST_BUDGET} provider requests, the most one run ` +
-              'may make. Run again with the sent addresses in the skip list.'
-            break
-          }
-          // Spaced out, but not before the first request.
-          if (requests > 0) await sleep(BROADCAST_PAUSE_MS)
-          if (clock().getTime() - startedAt >= BROADCAST_TIME_BUDGET_MS) {
-            queue.unshift(group)
-            stopReason =
-              `Stopped after ${BROADCAST_TIME_BUDGET_MS / 1000} seconds, the longest one run ` +
-              'may take, so that the result still reaches you. Run again with the sent ' +
-              'addresses in the skip list.'
-            break
-          }
-        }
-
-        requests += 1
-        try {
-          if (sendBatch !== undefined) {
-            await sendBatch(group.map(build))
-          } else {
-            const [only] = group
-            if (only !== undefined) await mailer.send(build(only))
-          }
-          for (const recipient of group) sentTo.push(recipient.email)
-        } catch (error) {
-          const message = describeError(error)
-          console.error(`Broadcast batch failed: ${message}`)
-          if (error instanceof MailError && PER_MESSAGE_STATUSES.has(error.status)) {
-            // One bad address makes Resend reject the whole batch (the batch
-            // endpoint is all or nothing), so nothing in it was sent. Split it
-            // until the culprit stands alone; each half costs a request. Other
-            // 4xx codes (a bad key, a forbidden domain) are about the request,
-            // not a message, and fall through to a stop.
-            const [only] = group
-            if (group.length === 1 && only !== undefined) {
-              failed.push({ email: only.email, reason: message })
-              console.error(`Broadcast to ${only.id} failed: ${message}`)
-            } else {
-              const middle = Math.ceil(group.length / 2)
-              queue.unshift(group.slice(0, middle), group.slice(middle))
-            }
-          } else {
-            queue.unshift(group)
-            if (error instanceof MailError) {
-              stopReason =
-                error.status === 429
-                  ? `The mail provider is rate limiting or out of quota (429): ${message}`
-                  : `The mail provider answered ${error.status}: ${message}`
-            } else {
-              // No answer arrived, so the last request may or may not have
-              // been accepted. The one case where a rerun could duplicate.
-              stopReason =
-                `Could not get an answer from the mail provider: ${message}. The last ` +
-                'request may still have been accepted; check the provider log before sending again.'
-            }
-          }
-        }
-      }
-
-      for (const group of queue) deferred += group.length
 
       return {
-        sent: sentTo.length,
-        sentTo,
+        sent: outcome.sent.length,
+        sentTo: outcome.sent.map((recipient) => recipient.email),
         skipped,
         failed,
-        deferred,
-        stopReason,
+        deferred: eligible.length - attempted.length + outcome.unsent.length,
+        stopReason: outcome.stopReason,
       }
     },
+
+    async queueBroadcast(options: QueueBroadcastOptions): Promise<QueueBroadcastResult> {
+      const { eligible, skipped, rejected } = classifyRecipients(await repo.allPlayers(), options)
+      if (eligible.length === 0) return { ok: false, reason: 'NO_RECIPIENTS' }
+
+      const broadcast: StoredBroadcast = {
+        id: newId(),
+        subject: options.subject,
+        markdown: options.markdown,
+        includeUnsubscribed: options.includeUnsubscribed,
+        perRun: options.perRun,
+        status: 'active',
+        createdAt: clock().toISOString(),
+        lastRunAt: null,
+      }
+      const created = await repo.createBroadcast(
+        broadcast,
+        eligible.map((recipient) => ({ playerId: recipient.id, email: recipient.email })),
+      )
+      if (!created) return { ok: false, reason: 'ALREADY_ACTIVE' }
+
+      return {
+        ok: true,
+        queue: await queueStatusOf(broadcast),
+        skipped,
+        rejected: rejected.map(({ email, reason }) => ({ email, reason })),
+      }
+    },
+
+    async runQueuedBroadcast(now: Date): Promise<BroadcastRunResult> {
+      const idle: BroadcastRunResult = {
+        ran: false,
+        sent: 0,
+        failed: 0,
+        released: 0,
+        stopReason: null,
+        finished: false,
+      }
+      const broadcast = await repo.currentBroadcast()
+      if (broadcast === undefined || broadcast.status !== 'active') return idle
+
+      const startedAt = clock().getTime()
+      // Rows go to `sending` here and are only freed again by this run's own
+      // release below, so a crash from this point on cannot cause a resend.
+      const claimed = await repo.claimBroadcastRecipients(broadcast.id, broadcast.perRun)
+      await repo.recordBroadcastRun(broadcast.id, now.toISOString())
+
+      // One read for all of them: a scheduled run has the same 50-query allowance
+      // as a request, and a lookup per recipient would use it up.
+      const players = new Map(
+        (claimed.length === 0 ? [] : await repo.allPlayers()).map((player) => [player.id, player]),
+      )
+      const failures: { playerId: string; error: string }[] = []
+      const sendable: BroadcastRecipient[] = []
+      for (const row of claimed) {
+        const player = players.get(row.playerId)
+        if (player === undefined) {
+          failures.push({ playerId: row.playerId, error: 'The account no longer exists' })
+        } else if (player.disableEmail === true && !broadcast.includeUnsubscribed) {
+          failures.push({ playerId: row.playerId, error: 'unsubscribed since queueing' })
+        } else {
+          // The current username and a fresh unsubscribe link, but the address
+          // that was queued (and checked against the skip list).
+          sendable.push({ id: row.playerId, username: player.username, email: row.email })
+        }
+      }
+
+      const outcome = await sendInBatches(
+        sendable,
+        broadcastMailBuilder(broadcast.subject, broadcast.markdown),
+        startedAt,
+      )
+      for (const failure of outcome.failed) {
+        failures.push({ playerId: failure.recipient.id, error: failure.reason })
+      }
+
+      await repo.markBroadcastRecipientsSent(
+        broadcast.id,
+        outcome.sent.map((recipient) => recipient.id),
+        now.toISOString(),
+      )
+      await repo.markBroadcastRecipientsFailed(broadcast.id, failures)
+      await repo.releaseBroadcastRecipients(
+        broadcast.id,
+        outcome.unsent.map((recipient) => recipient.id),
+      )
+
+      // Rows stuck in `sending` do not hold the queue open: nothing will ever
+      // send them, and the status keeps showing them.
+      const finished =
+        (await repo.broadcastCounts(broadcast.id)).pending === 0 &&
+        (await repo.finishBroadcast(broadcast.id, 'done'))
+
+      return {
+        ran: true,
+        sent: outcome.sent.length,
+        failed: failures.length,
+        released: outcome.unsent.length,
+        stopReason: outcome.stopReason,
+        finished,
+      }
+    },
+
+    async queuedBroadcastStatus(): Promise<BroadcastQueueStatus | null> {
+      const broadcast = await repo.currentBroadcast()
+      return broadcast === undefined ? null : queueStatusOf(broadcast)
+    },
+
+    async cancelQueuedBroadcast(): Promise<BroadcastQueueStatus | null> {
+      const broadcast = await repo.currentBroadcast()
+      if (broadcast === undefined || broadcast.status !== 'active') return null
+      await repo.finishBroadcast(broadcast.id, 'cancelled')
+      return queueStatusOf({ ...broadcast, status: 'cancelled' })
+    },
+  }
+}
+
+/**
+ * The daily job's entry point, called from the Worker's `scheduled` handler:
+ * runs one batch of the queue and logs the outcome. A scheduled run has nobody
+ * to answer to, so a failure is logged (with the message in the string, since a
+ * second argument prints only the stack on Workers) and never rethrown.
+ */
+export async function runDailyBroadcast(
+  notifications: Pick<Notifications, 'runQueuedBroadcast'>,
+  now: Date,
+): Promise<void> {
+  try {
+    const result = await notifications.runQueuedBroadcast(now)
+    if (!result.ran) return
+    console.log(
+      `Daily broadcast: sent ${result.sent}, failed ${result.failed}, ` +
+        `released ${result.released}${result.finished ? ', queue finished' : ''}` +
+        (result.stopReason === null ? '' : `, stopped: ${result.stopReason}`),
+    )
+  } catch (error) {
+    console.error(`Daily broadcast failed: ${describeError(error)}`)
   }
 }
 
@@ -536,6 +781,51 @@ interface BroadcastRecipient {
   readonly id: string
   readonly username: string
   readonly email: string
+}
+
+interface BatchOutcome {
+  readonly sent: readonly BroadcastRecipient[]
+  readonly failed: readonly { readonly recipient: BroadcastRecipient; readonly reason: string }[]
+  /** Not attempted, or in a request that was not accepted, because the run stopped. */
+  readonly unsent: readonly BroadcastRecipient[]
+  readonly stopReason: string | null
+}
+
+/**
+ * Sorts the accounts for a broadcast, direct or queued, by the same rules:
+ * no address, unsubscribed (unless included), on the skip list, an address
+ * that would make Resend reject a whole batch, or eligible.
+ */
+function classifyRecipients(
+  players: readonly StoredPlayer[],
+  options: { readonly includeUnsubscribed: boolean; readonly exclude?: readonly string[] | undefined },
+): {
+  readonly eligible: BroadcastRecipient[]
+  readonly skipped: BroadcastResult['skipped']
+  readonly rejected: { readonly id: string; readonly email: string; readonly reason: string }[]
+} {
+  const excluded = new Set((options.exclude ?? []).map(normaliseAddress))
+  const skipped = { noAddress: 0, unsubscribed: 0, excluded: 0 }
+  const rejected: { id: string; email: string; reason: string }[] = []
+  const eligible: BroadcastRecipient[] = []
+  for (const player of players) {
+    // No address: nothing to send to. Same guard as `notify`.
+    if (player.email === null || player.email === '') {
+      skipped.noAddress += 1
+    } else if (player.disableEmail === true && !options.includeUnsubscribed) {
+      // Java's `!isDisableEmail()` filter, except the admin may deliberately
+      // override it for this one mail.
+      skipped.unsubscribed += 1
+    } else if (excluded.has(normaliseAddress(player.email))) {
+      skipped.excluded += 1
+    } else if (!PLAUSIBLE_EMAIL.test(player.email)) {
+      // Resend would reject the whole batch for this one address.
+      rejected.push({ id: player.id, email: player.email, reason: 'Not a valid email address' })
+    } else {
+      eligible.push({ id: player.id, username: player.username, email: player.email })
+    }
+  }
+  return { eligible, skipped, rejected }
 }
 
 const normaliseAddress = (address: string): string => address.trim().toLowerCase()

@@ -23,6 +23,12 @@
       "migrations_dir": "packages/worker/migrations"
     }
   ],
+  // The daily admin broadcast queue: sends the next batch at 17:00 UTC. Resend's
+  // free plan allows 100 mails a day shared with the game mails, so a batch is
+  // 50. Changing a trigger needs a deploy.
+  "triggers": {
+    "crons": ["0 17 * * *"]
+  },
   "assets": {
     // Built by `pnpm run build` (packages/web). Served for every non-/api path,
     // with index.html returned for unknown client-side routes.

@@ -33,8 +33,19 @@ function hasField(body: Record<string, unknown>, field: string): boolean {
 /** Both the skip list and the per-run limit of the email broadcast stop here. */
 const MAX_BROADCAST_LIST = 5000
 
+/** Recipients per daily run of the broadcast queue: Resend's free plan allows 100 mails a day in all. */
+const DEFAULT_PER_RUN = 50
+const MAX_PER_RUN = 100
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string')
+}
+
+/** The optional `exclude` list of both broadcast routes; `'invalid'` for a wrong shape. */
+function readExclude(body: Record<string, unknown>): string[] | undefined | 'invalid' {
+  const value = body['exclude']
+  if (value === undefined) return undefined
+  return isStringArray(value) && value.length <= MAX_BROADCAST_LIST ? value : 'invalid'
 }
 
 function enabledAdminCount(players: readonly StoredPlayer[]): number {
@@ -175,11 +186,8 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       return sendError(c, 400, 'BAD_REQUEST', 'includeUnsubscribed must be a boolean')
     }
 
-    const excludeValue = body['exclude']
-    if (
-      excludeValue !== undefined &&
-      (!isStringArray(excludeValue) || excludeValue.length > MAX_BROADCAST_LIST)
-    ) {
+    const exclude = readExclude(body)
+    if (exclude === 'invalid') {
       return sendError(
         c,
         400,
@@ -207,10 +215,83 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       subject,
       markdown,
       includeUnsubscribed: includeValue === true,
-      ...(excludeValue === undefined ? {} : { exclude: excludeValue }),
+      ...(exclude === undefined ? {} : { exclude }),
       ...(limitValue === undefined ? {} : { limit: limitValue }),
     })
     return c.json(result)
+  })
+
+  /**
+   * The same broadcast spread over several days (the broadcast queue). The
+   * recipients are fixed now; the daily job, or "send next batch now", sends
+   * `perRun` of them at a time.
+   */
+  app.post('/api/admin/email/broadcast/queue', admin, async (c) => {
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const subject = requireString(body, 'subject')
+    const markdown = requireString(body, 'markdown')
+    if (subject === undefined || markdown === undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'subject and markdown are required')
+    }
+    const includeValue = body['includeUnsubscribed']
+    if (includeValue !== undefined && typeof includeValue !== 'boolean') {
+      return sendError(c, 400, 'BAD_REQUEST', 'includeUnsubscribed must be a boolean')
+    }
+    const exclude = readExclude(body)
+    if (exclude === 'invalid') {
+      return sendError(
+        c,
+        400,
+        'BAD_REQUEST',
+        `exclude must be an array of at most ${MAX_BROADCAST_LIST} strings`,
+      )
+    }
+    const perRunValue = body['perRun'] ?? DEFAULT_PER_RUN
+    if (
+      typeof perRunValue !== 'number' ||
+      !Number.isInteger(perRunValue) ||
+      perRunValue < 1 ||
+      perRunValue > MAX_PER_RUN
+    ) {
+      return sendError(c, 400, 'BAD_REQUEST', `perRun must be an integer from 1 to ${MAX_PER_RUN}`)
+    }
+
+    const result = await context.notifications.queueBroadcast({
+      subject,
+      markdown,
+      includeUnsubscribed: includeValue === true,
+      perRun: perRunValue,
+      ...(exclude === undefined ? {} : { exclude }),
+    })
+    if (!result.ok) {
+      return result.reason === 'ALREADY_ACTIVE'
+        ? sendError(c, 409, 'BROADCAST_ACTIVE', 'A broadcast is already queued; cancel it or let it finish')
+        : sendError(c, 400, 'NO_RECIPIENTS', 'No account is eligible for this message')
+    }
+    return c.json(
+      { queue: result.queue, skipped: result.skipped, rejected: result.rejected },
+      201,
+    )
+  })
+
+  app.get('/api/admin/email/broadcast/queue', admin, async (c) =>
+    c.json({ queue: await context.notifications.queuedBroadcastStatus() }),
+  )
+
+  app.post('/api/admin/email/broadcast/queue/run', admin, async (c) => {
+    const run = await context.notifications.runQueuedBroadcast(new Date())
+    if (!run.ran) {
+      return sendError(c, 409, 'NO_ACTIVE_BROADCAST', 'There is no queued broadcast to send')
+    }
+    return c.json({ run, queue: await context.notifications.queuedBroadcastStatus() })
+  })
+
+  app.post('/api/admin/email/broadcast/queue/cancel', admin, async (c) => {
+    const queue = await context.notifications.cancelQueuedBroadcast()
+    if (queue === null) {
+      return sendError(c, 409, 'NO_ACTIVE_BROADCAST', 'There is no queued broadcast to cancel')
+    }
+    return c.json({ queue })
   })
 
   /**

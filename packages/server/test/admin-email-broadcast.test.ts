@@ -420,7 +420,10 @@ describe('admin email broadcast: batching', () => {
     // Every address is bad, so every request fails and every split spends budget.
     batch.rejects = () => new MailError('Resend rejected the email batch (422)', 422, 'nope')
     const attempts = vi.spyOn(batch, 'sendBatch')
-    const notifications = await accounts(100, batch)
+    // A clock that never moves, so only the request budget can stop the run.
+    const notifications = await accounts(100, batch, () => ({}), {
+      now: () => new Date(Date.UTC(2026, 9, 3)),
+    })
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
     const result = await notifications.broadcast(message)
