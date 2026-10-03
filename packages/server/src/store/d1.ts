@@ -23,7 +23,17 @@ import type { RevisionCodec } from '../revision-delta.js'
 import { defaultRevisionCodec, sameJson } from '../revision-delta.js'
 import { ratedHighscore, resultFromGame } from './rating.js'
 import type { ChainRow, RevisionEncoding, RevisionTail } from './revision-chain.js'
-import { encodeRevision, netRemovableBytes, rebuildState } from './revision-chain.js'
+import type { CompactionRow } from './revision-chain.js'
+import {
+  compactChunk,
+  encodeRevision,
+  firstBrokenRevision,
+  netRemovableBytes,
+  planCompaction,
+  rebuildState,
+  summarizeCompaction,
+  utf8Length,
+} from './revision-chain.js'
 import { normalizeChatMessage } from './types.js'
 import type {
   BroadcastCounts,
@@ -36,6 +46,8 @@ import type {
   GameRevisionMetadata,
   PlayerUpdate,
   Repository,
+  RevisionCompaction,
+  RevisionCompactionUsage,
   SaveGameOptions,
   StoredBroadcast,
   StoredBroadcastRecipient,
@@ -130,6 +142,14 @@ interface FinishedGameRow {
   readonly num_of_players: number
   readonly winner: string
   readonly state: string
+}
+
+interface CompactionRowRecord {
+  readonly game_id: string
+  readonly revision: number
+  readonly kind: string
+  readonly base_revision: number | null
+  readonly bytes: number
 }
 
 interface RevisionUsageRow {
@@ -695,6 +715,161 @@ export class D1Repository implements Repository {
     return { status: 'cleaned', removed: changes(deleted) }
   }
 
+  async revisionCompactionUsage(gameId?: string): Promise<readonly RevisionCompactionUsage[]> {
+    // Sizes and kinds only: LENGTH(CAST(.. AS BLOB)) counts bytes without the
+    // Worker ever seeing a state. The name comes out of the live row's JSON.
+    const games = await this.db
+      .prepare(
+        `SELECT id, json_extract(state, '$.name') AS name, active
+         FROM game WHERE (? IS NULL OR id = ?) ORDER BY id`,
+      )
+      .bind(gameId ?? null, gameId ?? null)
+      .all<{ id: string; name: string | null; active: number }>()
+    const rows = await this.db
+      .prepare(
+        `SELECT game_id, revision, kind, base_revision, LENGTH(CAST(state AS BLOB)) AS bytes
+         FROM game_revision WHERE (? IS NULL OR game_id = ?) ORDER BY game_id, revision`,
+      )
+      .bind(gameId ?? null, gameId ?? null)
+      .all<CompactionRowRecord>()
+    const byGame = new Map<string, CompactionRow[]>()
+    for (const row of rows.results) {
+      const list = byGame.get(row.game_id) ?? []
+      list.push(toCompactionRow(row))
+      byGame.set(row.game_id, list)
+    }
+    return games.results.map((game) => {
+      const gameRows = byGame.get(game.id) ?? []
+      return {
+        gameId: game.id,
+        name: game.name ?? '',
+        active: game.active !== 0,
+        revisions: gameRows.length,
+        ...summarizeCompaction(gameRows),
+      }
+    })
+  }
+
+  async compactGameRevisions(
+    gameId: string,
+    maxRevisions: number,
+    maxBytes = Number.POSITIVE_INFINITY,
+  ): Promise<RevisionCompaction> {
+    const game = await this.db.prepare(`SELECT 1 AS ok FROM game WHERE id = ?`).bind(gameId).first<OkRow>()
+    if (game === null) return { status: 'not-found' }
+
+    const rows = await this.compactionRows(gameId)
+    const plan = planCompaction(rows, maxRevisions, maxBytes)
+    const first = plan.todo[0]
+    const last = plan.todo.at(-1)
+    if (first === undefined || last === undefined) {
+      return { status: 'compacted', converted: 0, keyframes: 0, freedBytes: 0, handledBytes: 0, remaining: plan.remaining }
+    }
+
+    // The state of the row before the first one to convert, rebuilt from its own
+    // chain (it may be a delta from an earlier request), then the legacy rows.
+    let previousState: GameState | undefined
+    if (plan.previous !== undefined) {
+      try {
+        previousState = (await this.readRevisionChain(gameId, plan.previous))?.state
+      } catch {
+        previousState = undefined
+      }
+      if (previousState === undefined) return { status: 'mismatch', revision: plan.previous }
+    }
+    const legacy = await this.db
+      .prepare(
+        `SELECT revision, state FROM game_revision
+         WHERE game_id = ? AND revision >= ? AND revision <= ? AND kind = 'full' AND base_revision IS NULL
+         ORDER BY revision`,
+      )
+      .bind(gameId, first, last)
+      .all<{ revision: number; state: string }>()
+    if (legacy.results.map((row) => row.revision).join() !== plan.todo.join()) {
+      // Another run (or a cleanup) changed these rows since they were listed: do nothing now.
+      return {
+        status: 'compacted',
+        converted: 0,
+        keyframes: 0,
+        freedBytes: 0,
+        handledBytes: 0,
+        remaining: plan.remaining + plan.todo.length,
+      }
+    }
+    const outcome = compactChunk({
+      plan,
+      previousState,
+      states: legacy.results.map((row) => ({
+        revision: row.revision,
+        state: parseGame(row.state),
+        bytes: utf8Length(row.state),
+      })),
+      codec: this.codec,
+    })
+    if (!outcome.ok) return { status: 'mismatch', revision: outcome.revision }
+
+    // One batch, so the chunk is written or not at all. A repeated or overlapping
+    // run finds the rows already converted and its guards change nothing.
+    const results = await this.db.batch(
+      outcome.steps.map((step) =>
+        step.kind === 'delta'
+          ? this.db
+              .prepare(
+                `UPDATE game_revision SET state = ?, kind = 'delta', base_revision = ?
+                 WHERE game_id = ? AND revision = ? AND kind = 'full' AND base_revision IS NULL
+                   AND revision < (SELECT MAX(revision) FROM game_revision WHERE game_id = ?)
+                   AND NOT EXISTS (SELECT 1 FROM game_revision WHERE game_id = ? AND base_revision = ?)`,
+              )
+              .bind(step.json, step.baseRevision, gameId, step.revision, gameId, gameId, step.revision)
+          : this.db
+              .prepare(
+                `UPDATE game_revision SET base_revision = revision
+                 WHERE game_id = ? AND revision = ? AND kind = 'full' AND base_revision IS NULL`,
+              )
+              .bind(gameId, step.revision),
+      ),
+    )
+    let converted = 0
+    let keyframes = 0
+    let freedBytes = 0
+    let unapplied = 0
+    outcome.steps.forEach((step, index) => {
+      const result = results[index]
+      if (result === undefined || changes(result) === 0) {
+        unapplied += 1
+      } else if (step.kind === 'delta') {
+        converted += 1
+        freedBytes += step.savedBytes
+      } else {
+        keyframes += 1
+      }
+    })
+    if (unapplied > 0) {
+      // Rows changed under us. Nothing is wrong unless the chain itself is now broken.
+      const broken = firstBrokenRevision(await this.compactionRows(gameId))
+      if (broken !== undefined) return { status: 'mismatch', revision: broken }
+    }
+    return {
+      status: 'compacted',
+      converted,
+      keyframes,
+      freedBytes,
+      handledBytes: plan.bytes,
+      remaining: plan.remaining + unapplied,
+    }
+  }
+
+  private async compactionRows(gameId: string): Promise<CompactionRow[]> {
+    const rows = await this.db
+      .prepare(
+        `SELECT game_id, revision, kind, base_revision, LENGTH(CAST(state AS BLOB)) AS bytes
+         FROM game_revision WHERE game_id = ? ORDER BY revision`,
+      )
+      .bind(gameId)
+      .all<CompactionRowRecord>()
+    return rows.results.map(toCompactionRow)
+  }
+
   // ---------------------------------------------------------------------
   // Chat
   // ---------------------------------------------------------------------
@@ -1160,6 +1335,15 @@ function toStoredPlayer(row: PlayerRow): StoredPlayer {
     role: row.role === 'admin' ? 'admin' : 'user',
     disabled: row.disabled !== 0,
     disableEmail: row.disable_email !== 0,
+  }
+}
+
+function toCompactionRow(row: CompactionRowRecord): CompactionRow {
+  return {
+    revision: row.revision,
+    kind: row.kind === 'delta' ? 'delta' : 'full',
+    baseRevision: row.base_revision,
+    bytes: row.bytes,
   }
 }
 

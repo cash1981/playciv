@@ -142,6 +142,43 @@ export type FinishedGameCleanup =
   | { readonly status: 'not-found' }
   | { readonly status: 'changed' }
 
+/**
+ * What compacting one game's revision history would do (issue #238, phase 2),
+ * counted from the rows without loading a state.
+ */
+export interface RevisionCompactionUsage {
+  readonly gameId: string
+  readonly name: string
+  readonly active: boolean
+  readonly revisions: number
+  /**
+   * Rows still stored as a full state from before delta storage that a
+   * compaction would look at. The newest revision is not one of them: it is never
+   * touched, so that a game being played is not disturbed.
+   */
+  readonly fullRevisions: number
+  /** An estimate, in bytes: each row that becomes a delta is counted at a typical delta size. */
+  readonly freeableBytes: number
+}
+
+/**
+ * The result of one compaction request for one game. `mismatch` names the first
+ * revision whose rebuilt state differed from the stored one: nothing of that
+ * request was written. `remaining` is what is left for another request.
+ */
+export type RevisionCompaction =
+  | {
+      readonly status: 'compacted'
+      readonly converted: number
+      readonly keyframes: number
+      readonly freedBytes: number
+      /** The size of the state text of the rows handled, for the caller's budget. */
+      readonly handledBytes: number
+      readonly remaining: number
+    }
+  | { readonly status: 'mismatch'; readonly revision: number }
+  | { readonly status: 'not-found' }
+
 export type BroadcastStatus = 'active' | 'done' | 'cancelled'
 
 /**
@@ -253,6 +290,26 @@ export interface Repository {
    * second call removes 0.
    */
   deleteOldGameRevisions(gameId: string): Promise<FinishedGameCleanup>
+  /**
+   * Every game with how many of its revisions are still full states from before
+   * delta storage and roughly what turning them into deltas frees. `gameId`
+   * narrows it to one game. Reads sizes only, never a state.
+   */
+  revisionCompactionUsage(gameId?: string): Promise<readonly RevisionCompactionUsage[]>
+  /**
+   * Converts up to `maxRevisions` of a game's oldest full-state revisions, and no
+   * more than about `maxBytes` of state text (at least one row), into a delta
+   * chain (keeping a keyframe every K rows). Each conversion is rebuilt
+   * from the new representation and compared with the original before anything
+   * is written; the first mismatch writes nothing and answers `mismatch`. The
+   * newest revision and any row a delta hangs on are left alone, so a game that
+   * is being played is safe. Repeating it changes nothing once it is done.
+   */
+  compactGameRevisions(
+    gameId: string,
+    maxRevisions: number,
+    maxBytes?: number,
+  ): Promise<RevisionCompaction>
 
   /** Plain chat may leave out `kind` and the tags; they are stored as `chat` and `null`. */
   appendChat(message: StoredChatRow): Promise<void>

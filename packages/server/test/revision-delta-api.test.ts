@@ -131,9 +131,9 @@ describe.each(backends)('revision history of a played game: %s', (_name, create)
     const live = (await harness.repo.findGame(gameId)) as GameState
     const secrets: string[] = []
     for (const player of live.players) {
-      for (const item of player.items) secrets.push(item.id, itemName(item))
+      for (const item of player.items) if (item.hidden) secrets.push(item.id, itemName(item))
     }
-    for (const entry of live.log) if (entry.privateLog !== '') secrets.push(entry.privateLog)
+    for (const entry of live.log) if (entry.privateLog !== '' && entry.privateLog !== entry.publicLog) secrets.push(entry.privateLog)
     expect(secrets.length).toBeGreaterThan(10)
 
     const list = await inject(harness.app, { url: `/api/games/${gameId}/revisions`, headers: bearer(spectator.token) })

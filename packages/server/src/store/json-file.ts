@@ -19,7 +19,18 @@ import type { RevisionCodec } from '../revision-delta.js'
 import { defaultRevisionCodec } from '../revision-delta.js'
 import { ratedHighscore, resultFromGame } from './rating.js'
 import type { RevisionEncoding, RevisionKind, RevisionTail } from './revision-chain.js'
-import { chainBase, encodeRevision, netRemovableBytes, rebuildState, utf8Length } from './revision-chain.js'
+import type { CompactionRow } from './revision-chain.js'
+import {
+  chainBase,
+  compactChunk,
+  encodeRevision,
+  firstBrokenRevision,
+  netRemovableBytes,
+  planCompaction,
+  rebuildState,
+  summarizeCompaction,
+  utf8Length,
+} from './revision-chain.js'
 import { normalizeChatMessage } from './types.js'
 import type {
   BroadcastCounts,
@@ -32,6 +43,8 @@ import type {
   GameRevisionMetadata,
   PlayerUpdate,
   Repository,
+  RevisionCompaction,
+  RevisionCompactionUsage,
   SaveGameOptions,
   StoredBroadcast,
   StoredBroadcastRecipient,
@@ -76,6 +89,15 @@ interface StoredRevision extends Omit<GameRevision, 'state'> {
 /** A file written before delta storage has plain `GameRevision` rows. */
 type StoredRevisionFile = Omit<StoredRevision, 'kind' | 'baseRevision' | 'sealed'> &
   Partial<Pick<StoredRevision, 'kind' | 'baseRevision' | 'sealed'>>
+
+function toCompactionRow(row: StoredRevision): CompactionRow {
+  return {
+    revision: row.revision,
+    kind: row.kind,
+    baseRevision: row.baseRevision,
+    bytes: utf8Length(JSON.stringify(row.state)),
+  }
+}
 
 /** ISO timestamps; either may be missing until the event first happens. */
 interface GameMailStamps {
@@ -432,6 +454,76 @@ export class JsonFileRepository implements Repository {
     }
     this.scheduleWrite()
     return { status: 'cleaned', removed }
+  }
+
+  async revisionCompactionUsage(gameId?: string): Promise<readonly RevisionCompactionUsage[]> {
+    return [...this.games.values()]
+      .filter((game) => gameId === undefined || game.id === gameId)
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((game) => {
+        const rows = this.rowsOf(game.id)
+        return {
+          gameId: game.id,
+          name: game.name,
+          active: game.active,
+          revisions: rows.length,
+          ...summarizeCompaction(rows.map(toCompactionRow)),
+        }
+      })
+  }
+
+  async compactGameRevisions(
+    gameId: string,
+    maxRevisions: number,
+    maxBytes = Number.POSITIVE_INFINITY,
+  ): Promise<RevisionCompaction> {
+    if (!this.games.has(gameId)) return { status: 'not-found' }
+    const rows = this.rowsOf(gameId)
+    const plan = planCompaction(rows.map(toCompactionRow), maxRevisions, maxBytes)
+    if (plan.todo.length === 0) {
+      return { status: 'compacted', converted: 0, keyframes: 0, freedBytes: 0, handledBytes: 0, remaining: plan.remaining }
+    }
+
+    let previousState: GameState | undefined
+    if (plan.previous !== undefined) {
+      previousState = await this.rebuildRow(gameId, plan.previous)
+      if (previousState === undefined) return { status: 'mismatch', revision: plan.previous }
+    }
+    const outcome = compactChunk({
+      plan,
+      previousState,
+      // Rows are kept migrated already (`load`), so these are the states a read gives.
+      states: plan.todo.map((revision) => {
+        const row = rows.find((entry) => entry.revision === revision) as StoredRevision
+        return { revision, state: row.state as GameState, bytes: utf8Length(JSON.stringify(row.state)) }
+      }),
+      codec: this.codec,
+    })
+    if (!outcome.ok) return { status: 'mismatch', revision: outcome.revision }
+
+    let converted = 0
+    let keyframes = 0
+    let freedBytes = 0
+    for (const step of outcome.steps) {
+      const row = rows.find((entry) => entry.revision === step.revision) as StoredRevision
+      if (step.kind === 'delta') {
+        this.revisions.set(this.revisionKey(gameId, step.revision), {
+          ...row,
+          kind: 'delta',
+          baseRevision: step.baseRevision,
+          state: JSON.parse(step.json) as unknown,
+        })
+        converted += 1
+        freedBytes += step.savedBytes
+      } else {
+        this.revisions.set(this.revisionKey(gameId, step.revision), { ...row, baseRevision: step.revision })
+        keyframes += 1
+      }
+    }
+    const broken = firstBrokenRevision(this.rowsOf(gameId).map(toCompactionRow))
+    if (broken !== undefined) return { status: 'mismatch', revision: broken }
+    this.scheduleWrite()
+    return { status: 'compacted', converted, keyframes, freedBytes, handledBytes: plan.bytes, remaining: plan.remaining }
   }
 
   async appendChat(message: StoredChatRow): Promise<void> {

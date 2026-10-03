@@ -5,7 +5,7 @@
  * which also exercises its on-disk format.
  */
 
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -32,10 +32,18 @@ export interface StoredRow {
 }
 
 export interface StoreFixture {
+  /** A getter: `makeLegacy` replaces the JSON store, so read this again afterwards. */
   readonly repo: Repository
   /** Raw SQL access; D1 only. */
   readonly db: D1Database | undefined
   rows(gameId: string): Promise<readonly StoredRow[]>
+  /**
+   * Turns every row of a game into what it was before delta storage: a full state
+   * with no base revision, and the newest row sealed (migration 0006 does that;
+   * `sealNewest: false` leaves it unsealed). Use it after saving the game
+   * without a previous state.
+   */
+  makeLegacy(gameId: string, options?: { sealNewest?: boolean }): Promise<void>
   close(): Promise<void>
 }
 
@@ -47,14 +55,41 @@ export const storeImplementations: readonly [string, StoreFactory][] = [
     async (options = {}) => {
       const directory = await mkdtemp(join(tmpdir(), 'civ-revisions-'))
       const filePath = join(directory, 'data.json')
-      const repo = new JsonFileRepository({
-        filePath,
-        debounceMs: 60_000,
-        ...(options.codec === undefined ? {} : { codec: options.codec }),
-      })
+      const open = () =>
+        new JsonFileRepository({
+          filePath,
+          debounceMs: 60_000,
+          ...(options.codec === undefined ? {} : { codec: options.codec }),
+        })
+      let repo = open()
       return {
-        repo,
+        get repo() {
+          return repo
+        },
         db: undefined,
+        async makeLegacy(gameId, legacyOptions = {}) {
+          await repo.flush()
+          const file = JSON.parse(await readFile(filePath, 'utf8')) as {
+            revisions: { gameId: string; kind?: string; baseRevision?: number | null; sealed?: boolean }[]
+          }
+          for (const row of file.revisions) {
+            if (row.gameId !== gameId) continue
+            if (legacyOptions.sealNewest === false) {
+              // A file in the new shape whose rows have no base: nothing seals them on load.
+              row.kind = 'full'
+              row.baseRevision = null
+              row.sealed = false
+            } else {
+              // The old shape has no kind, base or seal; loading seals the newest row.
+              delete row.kind
+              delete row.baseRevision
+              delete row.sealed
+            }
+          }
+          await writeFile(filePath, JSON.stringify(file), 'utf8')
+          repo = open()
+          await repo.load()
+        },
         async rows(gameId) {
           await repo.flush()
           const file = JSON.parse(await readFile(filePath, 'utf8')) as {
@@ -92,6 +127,20 @@ export const storeImplementations: readonly [string, StoreFactory][] = [
       return {
         repo,
         db: adapter.db,
+        async makeLegacy(gameId, legacyOptions = {}) {
+          await adapter.db
+            .prepare(`UPDATE game_revision SET kind = 'full', base_revision = NULL, sealed = 0 WHERE game_id = ?`)
+            .bind(gameId)
+            .run()
+          if (legacyOptions.sealNewest === false) return
+          await adapter.db
+            .prepare(
+              `UPDATE game_revision SET sealed = 1
+               WHERE game_id = ? AND revision = (SELECT MAX(revision) FROM game_revision WHERE game_id = ?)`,
+            )
+            .bind(gameId, gameId)
+            .run()
+        },
         async rows(gameId) {
           const result = await adapter.db
             .prepare(
