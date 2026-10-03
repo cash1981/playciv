@@ -77,6 +77,8 @@ export interface PlayerDto {
 
 export interface AdminUserDto extends PlayerDto {
   readonly createdAt: string
+  /** Set by the unsubscribe link. The server has always sent it; the queue's recipient estimate reads it. */
+  readonly disableEmail?: boolean
 }
 
 export interface AdminUserUpdate {
@@ -100,6 +102,45 @@ export interface BroadcastResultDto {
   /** Eligible but not attempted: the limit, the quota, the request budget or a stop. */
   readonly deferred: number
   readonly stopReason: string | null
+}
+
+/** A queued admin broadcast, sent a batch a day by the scheduled job. */
+export interface BroadcastQueueDto {
+  readonly id: string
+  readonly subject: string
+  readonly status: 'active' | 'done' | 'cancelled'
+  readonly perRun: number
+  readonly includeUnsubscribed: boolean
+  readonly createdAt: string
+  readonly lastRunAt: string | null
+  readonly counts: {
+    readonly pending: number
+    readonly sending: number
+    readonly sent: number
+    readonly failed: number
+  }
+  readonly failed: readonly { readonly email: string; readonly reason: string }[]
+  /** Addresses a run claimed and never reported on; they may have been mailed, and are not resent. */
+  readonly stuck: readonly string[]
+}
+
+export interface QueueBroadcastResponse {
+  readonly queue: BroadcastQueueDto
+  readonly skipped: {
+    readonly noAddress: number
+    readonly unsubscribed: number
+    readonly excluded: number
+  }
+  readonly rejected: readonly { readonly email: string; readonly reason: string }[]
+}
+
+export interface BroadcastRunDto {
+  readonly ran: boolean
+  readonly sent: number
+  readonly failed: number
+  readonly released: number
+  readonly stopReason: string | null
+  readonly finished: boolean
 }
 
 export interface GameSummary {
@@ -404,6 +445,30 @@ export const api = {
       ...(options.exclude === undefined ? {} : { exclude: options.exclude }),
       ...(options.limit === undefined ? {} : { limit: options.limit }),
     }),
+  /** Queues the message for the daily job instead of sending it now. */
+  queueBroadcast: (
+    subject: string,
+    markdown: string,
+    includeUnsubscribed: boolean,
+    options: { readonly perRun: number; readonly exclude: readonly string[] },
+  ) =>
+    post<QueueBroadcastResponse>('/api/admin/email/broadcast/queue', {
+      subject,
+      markdown,
+      includeUnsubscribed,
+      perRun: options.perRun,
+      exclude: options.exclude,
+    }),
+  /** The active queue, or the latest one; `null` before any was made. */
+  broadcastQueue: () =>
+    get<{ readonly queue: BroadcastQueueDto | null }>('/api/admin/email/broadcast/queue'),
+  /** Sends the next batch now, the same function as the daily job. */
+  runBroadcastQueue: () =>
+    post<{ readonly run: BroadcastRunDto; readonly queue: BroadcastQueueDto | null }>(
+      '/api/admin/email/broadcast/queue/run',
+    ),
+  cancelBroadcastQueue: () =>
+    post<{ readonly queue: BroadcastQueueDto }>('/api/admin/email/broadcast/queue/cancel'),
   /** Public: the server route needs no bearer token. */
   highscore: () => get<HighscoreResult>('/api/highscore'),
   publicGames: () => get<PublicGameSummary[]>('/api/public/games'),
