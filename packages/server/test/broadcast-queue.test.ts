@@ -10,7 +10,7 @@ import type { App } from '../src/app.js'
 import { createTestApp } from '../src/app.js'
 import type { Mailer, OutgoingEmail } from '../src/mail.js'
 import { MailError } from '../src/mail.js'
-import { createNotifications, runDailyBroadcast } from '../src/notifications.js'
+import { RELEASE_COOLDOWN_MS, createNotifications, runDailyBroadcast } from '../src/notifications.js'
 import type { Notifications } from '../src/notifications.js'
 import { D1Repository } from '../src/store/d1.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
@@ -59,12 +59,17 @@ async function seed(
   }
 }
 
-function notificationsFor(repo: Repository, mailer: Mailer): Notifications {
+function notificationsFor(
+  repo: Repository,
+  mailer: Mailer,
+  now: () => Date = () => new Date(),
+): Notifications {
   return createNotifications({
     repo,
     mailer,
     appOrigin: 'https://playciv.app',
     sleep: async () => undefined,
+    now,
   })
 }
 
@@ -168,6 +173,7 @@ describe('runQueuedBroadcast', () => {
       sent: 50,
       failed: 0,
       released: 0,
+      indeterminate: 0,
       stopReason: null,
       finished: false,
     })
@@ -351,7 +357,13 @@ describe('runQueuedBroadcast', () => {
     const run = await notifications.runQueuedBroadcast(NOW)
 
     // No answer arrived, so the mail may have been delivered: nothing is released.
-    expect(run).toMatchObject({ ran: true, sent: 0, released: 0, finished: false })
+    expect(run).toMatchObject({
+      ran: true,
+      sent: 0,
+      released: 0,
+      indeterminate: 50,
+      finished: false,
+    })
     expect(run.stopReason).toContain('may still have been accepted')
     const status = await notifications.queuedBroadcastStatus()
     expect(status?.counts).toEqual({ pending: 0, sending: 50, sent: 0, failed: 0 })
@@ -365,7 +377,7 @@ describe('runQueuedBroadcast', () => {
     expect(mailer.requests).toHaveLength(0)
   })
 
-  it('does not close the queue while this run left rows in sending, even with none pending', async () => {
+  it('keeps the queue active while any row is still sending, even with nothing pending', async () => {
     await seed(repo, 3)
     mailer.rejects = () => new TypeError('fetch failed')
     const notifications = notificationsFor(repo, mailer)
@@ -377,30 +389,74 @@ describe('runQueuedBroadcast', () => {
 
   it('releases stuck rows on request, then sends them and finishes', async () => {
     await seed(repo, 4)
-    const notifications = notificationsFor(repo, mailer)
+    let clock = NOW
+    const notifications = notificationsFor(repo, mailer, () => clock)
     await notifications.queueBroadcast(message)
     const broadcast = await repo.currentBroadcast()
     await repo.claimBroadcastRecipients(broadcast?.id ?? '', 2)
     await notifications.runQueuedBroadcast(NOW)
+    clock = new Date(NOW.getTime() + RELEASE_COOLDOWN_MS)
 
     const released = await notifications.releaseStuckQueuedRecipients()
 
-    expect(released?.released).toBe(2)
-    expect(released?.queue.counts).toEqual({ pending: 2, sending: 0, sent: 2, failed: 0 })
-    expect(released?.queue.stuck).toEqual([])
-    const run = await notifications.runQueuedBroadcast(NOW)
+    expect(released.ok && released.released).toBe(2)
+    expect(released.ok && released.queue.counts).toEqual({ pending: 2, sending: 0, sent: 2, failed: 0 })
+    expect(released.ok && released.queue.stuck).toEqual([])
+    const run = await notifications.runQueuedBroadcast(clock)
     expect(run).toMatchObject({ sent: 2, finished: true })
     expect(new Set(mailer.addresses()).size).toBe(4)
+  })
+
+  it('refuses to release while a run may still be sending, and changes nothing', async () => {
+    await seed(repo, 4)
+    let clock = NOW
+    const notifications = notificationsFor(repo, mailer, () => clock)
+    await notifications.queueBroadcast(message)
+    // A run is in flight: it has claimed its rows and recorded that it started.
+    const broadcast = await repo.currentBroadcast()
+    await repo.claimBroadcastRecipients(broadcast?.id ?? '', 4)
+    await repo.recordBroadcastRun(broadcast?.id ?? '', NOW.toISOString())
+    clock = new Date(NOW.getTime() + RELEASE_COOLDOWN_MS - 1)
+
+    expect(await notifications.releaseStuckQueuedRecipients()).toEqual({
+      ok: false,
+      reason: 'RECENT_RUN',
+    })
+    expect((await notifications.queuedBroadcastStatus())?.counts).toEqual({
+      pending: 0,
+      sending: 4,
+      sent: 0,
+      failed: 0,
+    })
+
+    // Once the cooldown has passed the same call works.
+    clock = new Date(NOW.getTime() + RELEASE_COOLDOWN_MS)
+    const released = await notifications.releaseStuckQueuedRecipients()
+    expect(released.ok && released.released).toBe(4)
+  })
+
+  it('releases at once a queue whose stuck rows were left by no recent run', async () => {
+    await seed(repo, 2)
+    const notifications = notificationsFor(repo, mailer, () => NOW)
+    await notifications.queueBroadcast(message)
+    const broadcast = await repo.currentBroadcast()
+    await repo.claimBroadcastRecipients(broadcast?.id ?? '', 2)
+
+    // `lastRunAt` is still null, so there is no run to wait for.
+    const released = await notifications.releaseStuckQueuedRecipients()
+
+    expect(released.ok && released.released).toBe(2)
   })
 
   it('has nothing to release when no queue is active', async () => {
     await seed(repo, 2)
     const notifications = notificationsFor(repo, mailer)
-    expect(await notifications.releaseStuckQueuedRecipients()).toBeNull()
+    const none = { ok: false, reason: 'NO_ACTIVE_BROADCAST' }
+    expect(await notifications.releaseStuckQueuedRecipients()).toEqual(none)
 
     await notifications.queueBroadcast(message)
     await notifications.cancelQueuedBroadcast()
-    expect(await notifications.releaseStuckQueuedRecipients()).toBeNull()
+    expect(await notifications.releaseStuckQueuedRecipients()).toEqual(none)
   })
 
   it('does not move the last run time on a day that claimed nothing', async () => {
@@ -480,6 +536,7 @@ describe('the daily cron', () => {
       sent: 3,
       failed: 0,
       released: 0,
+      indeterminate: 0,
       stopReason: null,
       finished: true,
     }))
@@ -653,7 +710,17 @@ describe('broadcast queue routes', () => {
     await call(admin.token, 'POST', QUEUE, { subject: 'Hi', markdown: 'There' })
     const queued = (await (await call(admin.token, 'GET', QUEUE)).json()) as { queue: { id: string } }
     await appRepo.claimBroadcastRecipients(queued.queue.id, 2)
+    // A run started a moment ago, so it may still be sending these rows.
+    await appRepo.recordBroadcastRun(queued.queue.id, new Date().toISOString())
+    const tooSoon = await call(admin.token, 'POST', RELEASE)
+    expect(tooSoon.status).toBe(409)
+    expect(await tooSoon.json()).toMatchObject({
+      error: 'RUN_IN_PROGRESS',
+      message: 'A run started less than five minutes ago; wait and try again',
+    })
+    expect((await appRepo.broadcastCounts(queued.queue.id)).sending).toBe(2)
 
+    await appRepo.recordBroadcastRun(queued.queue.id, '2020-01-01T00:00:00.000Z')
     const response = await call(admin.token, 'POST', RELEASE)
 
     expect(response.status).toBe(200)

@@ -293,10 +293,17 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
    */
   app.post('/api/admin/email/broadcast/queue/release-stuck', admin, async (c) => {
     const result = await context.notifications.releaseStuckQueuedRecipients()
-    if (result === null) {
-      return sendError(c, 409, 'NO_ACTIVE_BROADCAST', 'There is no queued broadcast to release rows in')
+    if (!result.ok) {
+      return result.reason === 'RECENT_RUN'
+        ? sendError(
+            c,
+            409,
+            'RUN_IN_PROGRESS',
+            'A run started less than five minutes ago; wait and try again',
+          )
+        : sendError(c, 409, 'NO_ACTIVE_BROADCAST', 'There is no queued broadcast to release rows in')
     }
-    return c.json(result)
+    return c.json({ released: result.released, queue: result.queue })
   })
 
   app.post('/api/admin/email/broadcast/queue/cancel', admin, async (c) => {

@@ -44,6 +44,15 @@ export interface NotificationsConfig {
   readonly sleep?: (ms: number) => Promise<void>
 }
 
+/**
+ * How soon after a run started the admin may release stuck rows. A run holds
+ * its claimed rows in `sending` for at most the 45 s time budget plus one 15 s
+ * batch timeout; five minutes is well past that. Releasing earlier could free
+ * the rows of a run that is still sending, and its mails would then go out
+ * again on the next run.
+ */
+export const RELEASE_COOLDOWN_MS = 5 * 60 * 1000
+
 /** Resend's limit for one `/emails/batch` request. */
 export const BROADCAST_BATCH_SIZE = 100
 
@@ -139,6 +148,10 @@ export type QueueBroadcastResult =
     }
   | { readonly ok: false; readonly reason: 'ALREADY_ACTIVE' | 'NO_RECIPIENTS' }
 
+export type ReleaseStuckResult =
+  | { readonly ok: true; readonly released: number; readonly queue: BroadcastQueueStatus }
+  | { readonly ok: false; readonly reason: 'NO_ACTIVE_BROADCAST' | 'RECENT_RUN' }
+
 /** What one run of the daily job did. */
 export interface BroadcastRunResult {
   /** False when there was no active queue to run. */
@@ -147,6 +160,11 @@ export interface BroadcastRunResult {
   readonly failed: number
   /** Claimed but not sent (a stop), put back to pending for the next run. */
   readonly released: number
+  /**
+   * Claimed, and the provider gave no answer (a timeout, a failed fetch): they
+   * may have been delivered, so they stay `sending` and show as stuck.
+   */
+  readonly indeterminate: number
   readonly stopReason: string | null
   /** True when this run left nothing pending and closed the queue. */
   readonly finished: boolean
@@ -229,12 +247,11 @@ export interface Notifications {
   /**
    * Puts the active queue's stuck (`sending`) recipients back to pending, so the
    * next run mails them. They may already have been delivered: the caller must
-   * have checked the provider's log. `null` when no queue is active.
+   * have checked the provider's log. Refused (`RECENT_RUN`) for
+   * `RELEASE_COOLDOWN_MS` after a run started, because that run may still be
+   * sending the rows it claimed.
    */
-  releaseStuckQueuedRecipients(): Promise<{
-    readonly released: number
-    readonly queue: BroadcastQueueStatus
-  } | null>
+  releaseStuckQueuedRecipients(): Promise<ReleaseStuckResult>
 }
 
 /**
@@ -692,6 +709,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         sent: 0,
         failed: 0,
         released: 0,
+        indeterminate: 0,
         stopReason: null,
         finished: false,
       }
@@ -699,8 +717,11 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       if (broadcast === undefined || broadcast.status !== 'active') return idle
 
       const startedAt = clock().getTime()
-      // Rows go to `sending` here and are only freed again by this run's own
-      // release below, so a crash from this point on cannot cause a resend.
+      // Rows go to `sending` here. Two things free them again: this run's own
+      // release below (when the provider refused or it stopped before trying),
+      // and the admin's release-stuck action, which is held back for
+      // `RELEASE_COOLDOWN_MS` so it cannot free a run that is still sending. A
+      // crash from this point on leaves them `sending`, never resent by itself.
       const claimed = await repo.claimBroadcastRecipients(broadcast.id, broadcast.perRun)
       // A day that claimed nothing is not a run worth showing.
       if (claimed.length > 0) await repo.recordBroadcastRun(broadcast.id, now.toISOString())
@@ -759,6 +780,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         sent: outcome.sent.length,
         failed: failures.length,
         released: outcome.unsent.length,
+        indeterminate: outcome.indeterminate.length,
         stopReason: outcome.stopReason,
         finished,
       }
@@ -776,11 +798,21 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       return queueStatusOf({ ...broadcast, status: 'cancelled' })
     },
 
-    async releaseStuckQueuedRecipients() {
+    async releaseStuckQueuedRecipients(): Promise<ReleaseStuckResult> {
       const broadcast = await repo.currentBroadcast()
-      if (broadcast === undefined || broadcast.status !== 'active') return null
+      if (broadcast === undefined || broadcast.status !== 'active') {
+        return { ok: false, reason: 'NO_ACTIVE_BROADCAST' }
+      }
+      // `lastRunAt` only moves on a day that claimed rows, so a queue that is
+      // purely stuck (its last run long ago) can be released at once.
+      if (
+        broadcast.lastRunAt !== null &&
+        clock().getTime() - Date.parse(broadcast.lastRunAt) < RELEASE_COOLDOWN_MS
+      ) {
+        return { ok: false, reason: 'RECENT_RUN' }
+      }
       const released = await repo.releaseStuckBroadcastRecipients(broadcast.id)
-      return { released, queue: await queueStatusOf(broadcast) }
+      return { ok: true, released, queue: await queueStatusOf(broadcast) }
     },
   }
 }
@@ -800,7 +832,7 @@ export async function runDailyBroadcast(
     if (!result.ran) return
     console.log(
       `Daily broadcast: sent ${result.sent}, failed ${result.failed}, ` +
-        `released ${result.released}${result.finished ? ', queue finished' : ''}` +
+        `released ${result.released}, unconfirmed ${result.indeterminate}${result.finished ? ', queue finished' : ''}` +
         (result.stopReason === null ? '' : `, stopped: ${result.stopReason}`),
     )
   } catch (error) {

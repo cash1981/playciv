@@ -632,6 +632,9 @@ function BroadcastQueuePanel({
       setNotice(
         `Sent ${run.sent}, failed ${run.failed}` +
           (run.released > 0 ? `, ${run.released} put back for the next run` : '') +
+          (run.indeterminate > 0
+            ? `, ${run.indeterminate} not confirmed (they may have been delivered; see the stuck rows)`
+            : '') +
           (run.finished ? '. The queue is finished.' : '.') +
           (run.stopReason === null ? '' : ` The run stopped early: ${run.stopReason}`),
       )
@@ -642,7 +645,8 @@ function BroadcastQueuePanel({
     if (
       !window.confirm(
         "Check Resend's email log first. These mails may already have been delivered, " +
-          'and releasing them can send them twice. Release the stuck rows anyway?',
+          'and releasing them can send them twice. Do not use this while a run may be in ' +
+          'progress (the 17:00 UTC run, or "Send next batch now"). Release the stuck rows anyway?',
       )
     ) {
       return

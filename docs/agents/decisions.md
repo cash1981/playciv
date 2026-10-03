@@ -3980,8 +3980,23 @@ the owner's choice of time. Fifty leaves half of the day's quota for game mail.
   (`POST .../queue/release-stuck`, guarded to `status = 'sending'` of the active
   queue) puts them back to `pending` after the owner has checked Resend's email
   log. The button's confirmation says plainly that releasing can send them twice.
-  Releasing while a run is in flight would release that run's own rows too, so it
-  is for a queue that is idle.
+- **Releasing is refused for five minutes after a run started.** Releasing frees
+  every `sending` row, including the rows of a run that is sending right now; its
+  `sent` update is guarded to `sending`, so it would then update nothing and the
+  mails already sent would be `pending` again, mailed a second time the next day.
+  So `releaseStuckQueuedRecipients` answers `RECENT_RUN` (route: 409
+  `RUN_IN_PROGRESS`, "A run started less than five minutes ago; wait and try
+  again") while `now - lastRunAt < RELEASE_COOLDOWN_MS` (5 minutes, with the
+  injected clock). A run holds its rows for at most the 45 s time budget plus one
+  15 s batch timeout, so five minutes is well past it. `lastRunAt` only moves on a
+  day that claimed rows, so a queue that is purely stuck can still be released at
+  once. This closes the in-flight window by code; the confirmation text only adds
+  a warning on top. One gap is left: a run records `lastRunAt` right after its
+  claim, a few milliseconds later, and a release landing in that gap is not
+  refused.
+- A run result reports `indeterminate` (claimed, no answer from the provider), so
+  a timed-out run reads "Sent 0, failed 0, 50 not confirmed" on the admin page
+  instead of looking like nothing happened.
 - A finished queue (`done`) or a cancelled one yields no claims. D1 has no interactive transactions, so every step is one
   guarded statement or one `batch()` (the recipients go in as JSON through
   `json_each`, a few statements for a whole list, to stay well under the Worker's

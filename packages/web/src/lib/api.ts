@@ -139,6 +139,8 @@ export interface BroadcastRunDto {
   readonly sent: number
   readonly failed: number
   readonly released: number
+  /** Claimed, and the provider gave no answer: they may have been delivered, and stay stuck. */
+  readonly indeterminate: number
   readonly stopReason: string | null
   readonly finished: boolean
 }

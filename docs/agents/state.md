@@ -13,7 +13,7 @@ _Last updated: 2026-10-03_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 785 engine, 384 server, 490 web on `fix/broadcast-batching` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 785 engine, 386 server, 492 web on `fix/broadcast-batching` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -22,7 +22,7 @@ _Last updated: 2026-10-03_
   the recipients are snapshotted into `broadcast`/`broadcast_recipient` (migration
   `0005`), and a Worker cron at 17:00 UTC (`0 17 * * *`) sends the next 50 pending
   through the same batch sender as the direct broadcast. One active queue at a
-  time; a row left in `sending` (a timeout, a crash) is never resent, keeps the queue open, and the owner can release it after checking Resend's log; the admin page shows the counts,
+  time; a row left in `sending` (a timeout, a crash) is never resent, keeps the queue open, and the owner can release it after checking Resend's log (refused for five minutes after a run started); the admin page shows the counts,
   the failed and stuck rows, and has "Send next batch now" and "Cancel". Deploy
   order: migration `0005`, then the Worker. The cron itself has not been run (no
   Cloudflare runtime here). Brief: `tasks/broadcast-queue.md`; see `decisions.md`,

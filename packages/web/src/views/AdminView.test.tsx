@@ -5,11 +5,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AdminUserDto, BroadcastQueueDto, PlayerDto } from '../lib/api.js'
-import { api } from '../lib/api.js'
+import { ApiError, api } from '../lib/api.js'
 import type { MarkdownEditorHandle, MarkdownEditorProps } from './MarkdownEditor.js'
 import { AdminView } from './AdminView.js'
 
-vi.mock('../lib/api.js', () => ({
+vi.mock('../lib/api.js', async (importOriginal) => ({
+  // Keep the real ApiError: the view's error handling checks for it.
+  ...(await importOriginal<typeof import('../lib/api.js')>()),
   api: {
     adminUsers: vi.fn(),
     updateAdminUser: vi.fn(),
@@ -411,7 +413,15 @@ describe('admin broadcast queue panel', () => {
   it('sends the next batch now and shows what it did', async () => {
     vi.mocked(api.broadcastQueue).mockResolvedValue({ queue: queueDto() })
     vi.mocked(api.runBroadcastQueue).mockResolvedValue({
-      run: { ran: true, sent: 50, failed: 0, released: 0, stopReason: null, finished: false },
+      run: {
+        ran: true,
+        sent: 50,
+        failed: 0,
+        released: 0,
+        indeterminate: 0,
+        stopReason: null,
+        finished: false,
+      },
       queue: queueDto({ counts: { pending: 50, sending: 0, sent: 50, failed: 0 } }),
     })
     renderView()
@@ -472,9 +482,52 @@ describe('admin broadcast queue panel', () => {
     const question = String(vi.mocked(window.confirm).mock.calls[0]?.[0])
     expect(question).toContain("Check Resend's email log first")
     expect(question).toContain('send them twice')
+    expect(question).toContain('Do not use this while a run may be in progress')
     expect(await screen.findByText(/Released 2 stuck rows/, undefined, { timeout: 5_000 })).toBeTruthy()
     expect(vi.mocked(api.releaseStuckBroadcastQueue)).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('button', { name: 'Release stuck rows' })).toBeNull()
+  })
+
+  it('shows the server message when a release is refused because a run just started', async () => {
+    vi.mocked(api.broadcastQueue).mockResolvedValue({
+      queue: queueDto({ counts: { pending: 0, sending: 1, sent: 99, failed: 0 }, stuck: ['a@example.com'] }),
+    })
+    vi.mocked(api.releaseStuckBroadcastQueue).mockRejectedValue(
+      new ApiError(409, 'RUN_IN_PROGRESS', 'A run started less than five minutes ago; wait and try again'),
+    )
+    renderView()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Release stuck rows' }, { timeout: 5_000 }))
+
+    expect(
+      await screen.findByText('A run started less than five minutes ago; wait and try again', undefined, {
+        timeout: 5_000,
+      }),
+    ).toBeTruthy()
+    // The stuck row is still listed.
+    expect(document.body.textContent).toContain('a@example.com')
+  })
+
+  it('says when a run could not confirm some mails instead of reading as nothing happened', async () => {
+    vi.mocked(api.broadcastQueue).mockResolvedValue({ queue: queueDto() })
+    vi.mocked(api.runBroadcastQueue).mockResolvedValue({
+      run: {
+        ran: true,
+        sent: 0,
+        failed: 0,
+        released: 0,
+        indeterminate: 50,
+        stopReason: 'Could not get an answer from the mail provider: fetch failed.',
+        finished: false,
+      },
+      queue: queueDto({ counts: { pending: 50, sending: 50, sent: 0, failed: 0 }, stuck: ['a@example.com'] }),
+    })
+    renderView()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Send next batch now' }, { timeout: 5_000 }))
+
+    expect(await screen.findByText(/50 not confirmed/, undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(document.body.textContent).toContain('Could not get an answer from the mail provider')
   })
 
   it('does not release stuck rows when the warning is declined', async () => {
