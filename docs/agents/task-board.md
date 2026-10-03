@@ -12,6 +12,18 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### broadcast-batching
+
+- **Owner:** Claude (orchestrator; coder role)
+- **Branch:** `fix/broadcast-batching`
+- **Brief:** `docs/agents/tasks/broadcast-batching.md`
+- **Status:** claimed
+- **Claimed paths:**
+  - `packages/server/src/mail.ts`, `packages/server/src/notifications.ts`, `packages/server/src/routes/admin.ts`
+  - `packages/server/test/mail.test.ts`, `packages/server/test/admin-email-broadcast.test.ts`
+  - `packages/web/src/lib/api.ts` (only `broadcastEmail`), `packages/web/src/views/AdminView.tsx` and its test
+- **Notes:** the `chat-orders` claim above and its `api.ts` row look stale (its work is on `main`); this task only touches `broadcastEmail` in `api.ts`.
+
 ---
 
 ## Format
