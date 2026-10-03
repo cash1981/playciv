@@ -4075,3 +4075,186 @@ game. Everything else in `game_revision` for that game is deleted.
 - Not verified here: a cleanup against the real D1 (no Cloudflare runtime in the
   development environment). The repository tests run the SQL on `node:sqlite` with
   every migration applied.
+
+## 2026-10-03 - Game revisions are keyframes and deltas, with an admin compaction
+
+New in the rewrite, so there is no old-system counterpart. Issue #238, phases 1 and 2;
+brief `tasks/delta-revisions.md`. Phase 3 (gzip of keyframes) is not done.
+
+**Why.** `game_revision` held a complete `GameState` per action, 200 to 420 KB each, and
+filled the 500 MB D1 limit. About 72% of each copy is two append-only lists. A revision
+is now a keyframe (the full state) or a delta against the revision before it; reading
+one still returns a full `GameState`, and no route, projection or client changed.
+
+**The codec** (`packages/server/src/revision-delta.ts`, pure, no dependency). A delta is
+JSON made of tagged arrays, so no key of the game state can be mistaken for a field of
+the delta. Objects are diffed by key (a missing key is a delete, a new key a set), and
+the final key order is stored only when it differs from "old keys, then new keys".
+Arrays: an old array that is a prefix of the new one stores only the tail (`log`,
+`board.history`); records carrying a unique `id`, `playerId` or `itemNumber` store what
+was removed, changed and added (positions of the additions, or the whole key order when
+the survivors were reordered, as after a reshuffle); other arrays of equal length are
+diffed element by element; the rest is replaced. `apply(prev, diff(prev, next))` equals
+`next`, key order included, and neither side mutates its input. Not RFC 6902: it is index
+based, so taking one card out of a 229 item deck would rewrite every card after it.
+
+**Safety on write.** After diffing, the store serialises the delta, parses it again, applies
+it to the previous state and compares with the new state (key order included). A keyframe
+is written instead when that fails, when the codec throws, or when the delta is more than
+half of a full state. A codec bug costs space. The codec is
+injectable (`D1RepositoryOptions.codec`, `JsonFileRepositoryOptions.codec`) so the tests
+hand the stores a broken one.
+
+**Keyframes.** The first revision, the baseline of `ensureGameRevision`, every revision
+after a chain has K = 25 rows (`REVISION_KEYFRAME_INTERVAL`, one place), and the revision
+after a seal (below). A chain is a keyframe and at most 24 deltas, so a read is at most 25
+rows. Counted by rows, not by revision numbers: private notes advance `rev` without a row.
+
+**Storage, and one column more than the brief.** Migration `0006_revision_delta.sql` adds
+`kind` (default `full`) and `base_revision` as specified, and `sealed INTEGER NOT NULL
+DEFAULT 0`. Old rows stay valid as they are (a keyframe with `base_revision NULL`, read as
+"its own number"); `listGameRevisionSummaries` still selects no `state`, and a test keeps
+it so. Reading revision N is one query: the nearest keyframe at or below N and every row
+up to N, then the deltas in order. A delta must name that keyframe as its base; a delta
+whose keyframe is gone (the old stop-gap `DELETE` of the oldest rows would do that now) is
+an error, never a guess.
+
+**The previous state, and why `sealed` exists.** The brief says to pass the previous state
+in from the caller, the live game before the action, to avoid a 400 KB read per write.
+That is what `applyToGame` does (`revisionSnapshot(game)`, the live game with notes
+blanked, which is exactly what the newest revision holds). It is only right while the live
+game equals the newest revision. Two paths break that: a private note (`record: false`,
+which changes `rev` and nothing a revision holds) and the admin chat orders switch
+(`record: false`, which changes `chatOrders`, `startPlayerId` and the board history, and
+that a revision does hold). A delta against the live game would then silently lose the
+switch on the next read. So: `saveGameIfRevision` takes `{ notesOnly }`, `applyToGame`
+sets it from `differOnlyInNotes(before, after)`, and anything else seals the newest
+revision row in the same transaction; the next revision is then a keyframe and clears it.
+`saveGame` (an overwrite, only the tests and tools use it) seals too. Notes do not seal,
+which matters: they are saved about once per player and turn, and a keyframe after each
+would give back most of the saving. Migration 0006 also seals the newest row of every
+existing game, because the code that wrote those rows tracked nothing; an old JSON file
+does the same on load. The cost is one extra keyframe per game on the first move after
+the deploy.
+
+Writes keep their semantics: compare-and-set on the game `rev`, and the insert plus the
+game update in one `batch()`. A delta write also guards, in the update that wins the
+compare-and-set, that the keyframe it hangs on is still a keyframe and that the revision
+before it is still the newest, so a cleanup or compaction that ran between the read of
+the newest row and the batch makes the write a clean conflict instead of a broken chain.
+The extra read is one query on the newest row's metadata (`revision`, base, `sealed`, the
+row count of its chain, and the byte size of its keyframe for the "half of a full state"
+check), never a state.
+
+**Keyframes are read through `migrateGameState`, deltas are not.** A delta is computed
+between two migrated states (the live game is migrated when it is loaded), so a read
+migrates the keyframe first and applies the deltas to that. Migration is idempotent, so
+the result needs no second pass.
+
+**Cleanup of finished games (the critical interaction).** `deleteOldGameRevisions` used to
+delete everything below the newest revision, which destroys a newest revision that is a
+delta. It now reads the game state and the newest row in one query; when the newest is a
+keyframe it deletes everything below the revision it read (not "the current newest", so a
+revision written meanwhile keeps its keyframe); when it is a delta it rebuilds it, checks
+that the text it is about to store reads back as the rebuilt state, and rewrites it as a
+keyframe (`base_revision` = its own number) and deletes the rest in one batch. Both
+statements require the game to be finished and unchanged (`rev`), and the delete requires
+the newest row to be a keyframe, so a half done cleanup cannot exist. If the game moved in
+between, the answer is the new status `changed` (route: 409 `GAME_CHANGED`, skipped in an
+all-games run) and nothing was written. The dry run subtracts the keyframe the newest
+revision becomes. The all-games cap drops from 20 to 12 games per request: a game now costs
+up to 3 subrequests (read the game, rebuild, one batch).
+`deleteGame` deletes every row of the game in one batch and needs no change. Nothing else
+in the Worker deletes or rewrites revision rows. The stop-gap SQL from the issue ("delete
+the oldest N") is no longer safe once deltas exist.
+
+**Compaction of existing rows (phase 2).** `GET /api/admin/games/revisions/compact` is the
+dry run (per game: revisions, how many are still full states, an estimate of the bytes
+freed at 3 000 bytes per delta, whether the game is running; counts and names only).
+`POST` converts, `{ gameId? }`, the same body check and error style as the cleanup.
+Per game, oldest first: each legacy row (`kind = 'full'`, `base_revision NULL`) is diffed
+against the state before it, the delta is applied to the chain's own rebuilt state (not to
+the original) and compared with the original, key order included. The first mismatch
+aborts the request for that game before anything is written and is reported with its
+revision (HTTP 200, `status: 'mismatch'`; a game that fails is left as it was). A delta that
+verifies but is more than half of the row simply starts a new keyframe. The chunk is one
+`batch()` of single row updates, each guarded by `kind = 'full' AND base_revision IS NULL`,
+so a repeat or an overlapping run changes nothing; the decisions depend only on the stored
+rows and the codec, so chunks of any size, and two runs at once, give the same chain (both
+are tested). A kept keyframe gets `base_revision = revision`, so it is not looked at again.
+The first row of a game stays a keyframe, as does every row a delta already hangs on (the
+old newest row after the first move following the deploy, for example).
+
+*Why it is safe next to live writes.* A live write only reads the newest row's metadata and
+then inserts the next row; compaction never converts the newest row of a game (the one
+seen when it listed the rows) and never a row some delta hangs on (also guarded in the
+update itself). So the row a concurrent writer builds on is never touched, and a row that
+became the base of a delta after the plan was made is skipped by its guard. The reverse
+race, a compaction batch landing between a writer's read and its batch, is covered by the
+write's chain guard above. Both are tests, on the sqlite adapter, which now runs a batch
+without yielding as D1 does.
+
+*Chunk sizing.* The free plan allows 50 subrequests and about 10 ms of CPU per request. A
+game costs at most 7 subrequests (exists, rows, the state before the first row, the old
+rows, one batch, two more only when the batch did not apply as planned), so a request
+visits at most 5 games (35 plus the listing and the admin check). The CPU is the real limit
+and grows with the size of the states, not the number of rows, so a request takes rows
+until about 1 MB of state text is reached (at least one row; the state before the first
+row counts once more), at most 40 rows (the size of the batch). Measured on Node, a
+conversion costs about 2.1 ms per revision at 421 KB states (0.7 ms parse and migrate,
+1.5 ms diff and verify), 4.4 ms per MB of text including the rebuild of the previous state.
+One MB is about 5 ms there: 1 row of the largest states, about 6 of 140 KB states. A Worker
+may be slower than this laptop, so the margin is deliberate. Production would take about
+375 presses; the admin page keeps pressing by itself.
+
+**Measured** (Node 26, Apple silicon; a three player game played through the engine,
+notes saved between moves; the JSON store and the `node:sqlite` harness give the same row
+sizes; the numbers are of an order of magnitude, not a promise for Workers):
+
+| | 500 revisions | 1 000 revisions |
+| --- | --- | --- |
+| state size, first to last | 90 to 287 KB (avg 191 KB) | 90 to 443 KB (avg 280 KB) |
+| delta median, average, 90th percentile, largest | 653, 637, 1 054, 1 248 B | 383, 545, 927, 1 289 B |
+| keyframes | 21 of 501 rows (4.2%) | 41 of 1 001 rows (4.1%) |
+| chain as full states, stored | 95.7 MB, 4.3 MB (22 times smaller) | 280 MB, 12.0 MB (23 times) |
+| read oldest / newest / worst case (24 deltas), `node:sqlite` | 0.14 / 0.43 / 0.64 ms | 0.13 / 0.64 / 0.79 ms |
+| read, JSON store | 0.01 / 0.01 / 0.11 ms | 0.02 / 0.02 / 0.09 ms |
+| for scale: parse and migrate one full state | 0.38 ms | 0.56 ms |
+
+The worst case read (a keyframe and 24 deltas on a 443 KB state) costs about 1.4 times one
+read of a full state, so K = 25 stays. The deltas here are smaller than the issue's
+measurement on the real game (median 756 B, average 2.5 KB, largest 17 KB): the
+fixture game has no coin edits, withdrawals or board churn. Take the real average as the
+planning figure, about 23 MB for the production table as the issue estimated. A write now
+diffs and verifies in about 0.02 ms because the engine's states share their untouched
+subtrees (`prev === next` prunes a subtree), and it stringifies a delta instead of a
+400 KB state. A run of the real server over HTTP on a seeded legacy file (two games, 301
+revisions): 98 compact requests, every one of the 302 history responses byte for byte
+the same before and after, the file 42.8 MB to 4.8 MB.
+
+**Rollback.** Before the first delta exists (the migration and the deploy alone, up to the
+second move of a game, since the first is a keyframe) the old Worker can simply be
+deployed again: it ignores the new columns. After that, the old code cannot read a delta
+row, so roll forward, or restore the D1 Time Travel bookmark taken before the compaction
+(which loses the moves made since). There is no "expand deltas back to full states"
+tool; if one is wanted, it is the compaction run backwards and a small task of its own.
+
+**Deviations from the brief.** (1) The `sealed` column and the `notesOnly` option, above:
+the brief assumed the live game equals the newest revision, which an admin setting breaks.
+(2) The compaction budget is bytes of state text per request (with a row cap), not a plain
+row count, because CPU follows size. (3) `routes/admin.ts` also changed in the cleanup
+route (new status, cap 12), and the sqlite test adapter changed (a batch no longer yields).
+(4) The admin page keeps pressing until the server says nothing is left, instead of asking
+the admin to press again; it stops on an error, on a game that fails its check, and when
+a request made no progress. (5) `routes/games.ts` needed no change: it never saves a
+revision with a previous state (a created game's first revision is a keyframe).
+
+**Doubts and not verified.** No Workers runtime and no real D1 here: the SQL runs on
+`node:sqlite` with every migration applied, and the CPU figures are Node's. Every compact
+request sizes all rows with `LENGTH(CAST(state AS BLOB))`, as the cleanup dry run does; on
+Node that is 12 ms for 120 MB, and SQLite 3.43 has `octet_length`, which does not read
+the value at all (0.1 ms), but I did not assume D1 has it. `kind`, `base_revision` and
+`sealed` are physically stored after the large `state` column, so a query that selects
+them reads the value's pages; a covering index would avoid it and was left out of the
+migration to keep it cheap and safe on 150 MB. D1's daily limit on rows written is not a
+concern: a compaction updates about as many rows as the table has, a few hundred.

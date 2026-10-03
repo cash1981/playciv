@@ -6,18 +6,33 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-03_
+_Last updated: 2026-10-03 (delta revisions)_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 785 engine, 408 server, 499 web on `feat/finished-game-cleanup` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 785 engine, 570 server, 507 web on `feat/delta-revisions` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Delta storage for game revisions, and an admin compaction** (issue #238, phases 1
+  and 2). A saved state is a keyframe (full) or a delta against the state before it, a
+  keyframe every 25 rows, after any unrecorded change, and for the first revision;
+  migration `0006` adds `kind`, `base_revision` and `sealed`, old rows stay valid and the
+  newest row of each game is sealed. Both repositories, the codec
+  (`server/src/revision-delta.ts`, round-trip property tests on random and recorded
+  states) and `saveGameWithRevision(game, revision, expected, previous)` are in step. The
+  finished-game cleanup rewrites a delta newest revision as a keyframe in one guarded
+  batch (cap now 12 games per request). "Compact revision history" on the admin page
+  (`GET`/`POST /api/admin/games/revisions/compact`) turns old full rows into chains, each
+  rebuilt and compared before it is written, about 1 MB of state text per request, the
+  newest row of a running game never touched. Measured about 22 times smaller. Deploy:
+  migration `0006`, Worker, Time Travel bookmark, dry run, one game, then all. Not run
+  against a real D1 or Workers; phase 3 (gzip) not done. Brief:
+  `tasks/delta-revisions.md`; see `decisions.md`, 2026-10-03.
 - **Admin cleanup of finished games.** "Clean up finished games" on the admin page
   (`GET`/`POST /api/admin/games/cleanup`) deletes every `game_revision` row of a
   finished game except the newest, behind a dry run and a confirmation, at most 20

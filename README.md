@@ -302,6 +302,11 @@ guarded statements or one `batch()`, which D1 runs atomically:
   and inserts the checkpoint guarded by `EXISTS (game … rev = new)`, so a lost
   race writes neither.
 - `claimGameEmail` is one conditional upsert.
+- A revision in `game_revision` is a keyframe or a delta (`kind`, `base_revision`,
+  migration `0006_revision_delta.sql`); `saveGameWithRevision` takes the previous
+  state from the caller, writes a delta only after checking that it gives the new
+  state back, and the update that wins the compare-and-set also checks that the
+  chain it was computed for is intact. `JsonFileRepository` keeps the same rows.
 
 Tables: `player`, `game`, `game_revision`, `chat` (`game_id IS NULL` is lobby,
 live from now on), `game_mail` (when each player was last emailed about a
@@ -760,13 +765,38 @@ Worker's logs. See `docs/agents/decisions.md`.
 state after every move, only so a game can be replayed step by step, and that is
 most of its size. "Clean up finished games" shows, as a dry run, which finished
 games have such states and how many MB would go, and removes all of them except the
-newest, one game at a time or the largest 20 at a time with "Clean up all" (press it
-again while it says games are left). The final board, the log, the chat, the
+newest, one game at a time or 12 at a time with "Clean up all" (press it
+again while it says games are left). When the newest state is itself stored as a
+difference (see below) it is written back as a full state in the same step. The final board, the log, the chat, the
 highscore and the ratings stay as they were; running games are never touched. A
 cleaned game's history bar has a single entry. D1 may not report a smaller database
 at once, because freed pages are reused, so the size in `wrangler d1 info` might not
 drop. D1's free plan also has a daily limit on rows written, so a very large backlog may need to be cleaned over several days if a press fails partway; each game's delete is independent, so nothing is left half done. There is no undo in the app: restore with D1 Time Travel
 (`wrangler d1 time-travel info playciv`). See `docs/agents/decisions.md`.
+
+**Game history is stored as differences, and the admin page can compact the old
+history.** A move used to save a complete copy of the game, 200 to 420 KB, which
+filled D1's 500 MB (issue #238). A saved state is now either a keyframe (the full
+state) or a delta, only what changed since the state before it; a keyframe comes first
+in each game, after any change that is not a move (an admin setting) and after every 24
+deltas. Reading a state still gives the full game, so replay, the history bar and every
+projection are unchanged, and no route ever returns a stored delta. Measured on a game
+played through the engine, a game's history is about 22 times smaller. "Compact revision
+history" on the admin page converts the old full copies the same way, game by game: it
+shows a dry run (how many full states each game still has and roughly what would be
+freed), then rebuilds every state from the new form and compares it with the original
+before replacing anything; a game that fails the check is left as it was and reported.
+Running games are compacted too, except their newest state. A request does a limited
+amount, so the page keeps pressing until nothing is left. **Deploy order:** apply
+migration `0006` to D1 (`wrangler d1 migrations apply playciv --remote`), deploy the
+Worker, take a D1 Time Travel bookmark (`wrangler d1 time-travel info playciv`), read the
+dry run, compact one game and look at its history, then "Compact all". Old rows stay valid
+without any conversion, so the migration and the deploy are safe on their own, and the
+first move of each game after the deploy is a keyframe. Rolling the Worker back is only
+possible before a game has written its second state after the deploy (the old code cannot
+read a delta); after that, roll forward or restore the Time Travel bookmark. The old
+stop-gap SQL that deletes the oldest states of a game would break a delta chain; use the
+admin cleanup instead. See `docs/agents/decisions.md`.
 
 **Only Tradable cards can be given away.** The hand's "Give" control was drawn
 on every card, but `tradeToPlayer` only ever accepted Java's `Tradable` set

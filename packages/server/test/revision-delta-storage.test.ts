@@ -236,6 +236,16 @@ describe.each(storeImplementations)('a broken codec costs space, not correctness
     expect(kinds.every((kind) => kind === 'full')).toBe(true)
   })
 
+  it('a codec that throws is replaced by a keyframe too', async () => {
+    const kinds = await run({
+      diff: () => {
+        throw new Error('codec bug')
+      },
+      apply: applyDelta,
+    })
+    expect(kinds.every((kind) => kind === 'full')).toBe(true)
+  })
+
   it('a codec that is fine is used', async () => {
     const kinds = await run(defaultRevisionCodec)
     expect(kinds.filter((kind) => kind === 'delta').length).toBeGreaterThan(8)

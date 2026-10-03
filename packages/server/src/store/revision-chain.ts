@@ -69,8 +69,15 @@ export function encodeRevision(input: EncodeInput): RevisionEncoding {
   if (previous === undefined || tail === undefined) return keyframe
   if (tail.sealed || tail.revision >= input.revision || chainIsFull(tail.chainRows)) return keyframe
 
-  const json = JSON.stringify(input.codec.diff(previous, input.state))
-  const applied = input.codec.apply(previous, JSON.parse(json) as unknown)
+  // A codec that throws is as wrong as one that answers wrongly: write the keyframe.
+  let json: string
+  let applied: ReturnType<RevisionCodec['apply']>
+  try {
+    json = JSON.stringify(input.codec.diff(previous, input.state))
+    applied = input.codec.apply(previous, JSON.parse(json) as unknown)
+  } catch {
+    return keyframe
+  }
   if (!applied.ok || !sameJson(applied.value, input.state, true)) return keyframe
 
   const full = input.fullBytes()
@@ -291,8 +298,14 @@ export function compactChunk(input: {
       continue
     }
 
-    const json = JSON.stringify(input.codec.diff(original, row.state))
-    const applied = input.codec.apply(rebuilt, JSON.parse(json) as unknown)
+    let json: string
+    let applied: ReturnType<RevisionCodec['apply']>
+    try {
+      json = JSON.stringify(input.codec.diff(original, row.state))
+      applied = input.codec.apply(rebuilt, JSON.parse(json) as unknown)
+    } catch {
+      return { ok: false, revision: row.revision }
+    }
     if (!applied.ok || !sameJson(applied.value, row.state, true)) return { ok: false, revision: row.revision }
     const deltaBytes = utf8Length(json)
     if (deltaBytes > row.bytes * MAX_DELTA_SHARE) {

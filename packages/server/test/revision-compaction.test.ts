@@ -189,6 +189,20 @@ describe.each(storeImplementations)('revision compaction: %s', (_name, create) =
       await expectReadsAsSaved(fixture, gameId, saved)
     })
 
+    it('a codec that throws aborts the game too, and leaves the rows as they were', async () => {
+      const { fixture, gameId } = await legacyGame(12, {
+        codec: {
+          diff: () => {
+            throw new Error('codec bug')
+          },
+          apply: applyDelta,
+        },
+      })
+      const before = await fixture.rows(gameId)
+      expect((await fixture.repo.compactGameRevisions(gameId, 1000)).status).toBe('mismatch')
+      expect(await fixture.rows(gameId)).toEqual(before)
+    })
+
     it('a delta that cannot be applied aborts the game too', async () => {
       const { fixture, gameId } = await legacyGame(20, {
         codec: { diff: diffValues, apply: () => ({ ok: false, reason: 'broken' }) },
