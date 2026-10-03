@@ -293,8 +293,8 @@ describe('chat', () => {
   })
 })
 
-describe('turn-phase updates', () => {
-  it("emails the others with Java's subject and excludes the author", async () => {
+describe('posted orders', () => {
+  it('emails the others like a chat message and excludes the author', async () => {
     const creator = await register('phase-a')
     const gameId = await createGame(creator.token, 'phase mail', 3)
     const other = await register('phase-b')
@@ -303,43 +303,20 @@ describe('turn-phase updates', () => {
 
     const response = await inject(app, {
       method: 'POST',
-      url: `/api/games/${gameId}/turns/update`,
+      url: `/api/games/${gameId}/turns/order`,
       headers: bearer(creator.token),
-      payload: { phase: 'SOT', turnNumber: 1, order: 'build a temple' },
+      payload: { phase: 'SOT', turnNumber: 1, markdown: 'build a temple' },
     })
     expect(response.status).toBe(200)
 
-    const mails = mailer.subjects('Start of turn updated')
+    const mails = mailer.subjects('New Chat')
     expect(mails).toHaveLength(1)
     expect(mails[0]?.to).toBe('phase-b@example.com')
-    // Java's start-of-turn body put the newline before the colon.
-    expect(mails[0]?.text).toContain(
-      'phase-a has updated start of turn with the following order\n:build a temple.',
-    )
-    // The unsubscribe link must be the recipient's, not the author's: Java
-    // passed the author's id here, so the recipient's link was useless.
+    expect(mails[0]?.text).toContain('phase-a wrote in the chat: build a temple.')
+    // The unsubscribe link is the recipient's, not the author's
     expect(mails[0]?.text).toContain(`/api/admin/email/notification/${other.id}/stop`)
-  })
-
-  it('uses the trade subject and body for the trade phase', async () => {
-    const creator = await register('trade-a')
-    const gameId = await createGame(creator.token, 'trade mail', 3)
-    const other = await register('trade-b')
-    await join(other.token, gameId)
-    mailer.sent.length = 0
-
-    await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/turns/update`,
-      headers: bearer(creator.token),
-      payload: { phase: 'TRADE', turnNumber: 1, order: 'trade silk' },
-    })
-
-    const mails = mailer.subjects('Trade updated')
-    expect(mails).toHaveLength(1)
-    expect(mails[0]?.text).toContain(
-      'trade-a has updated trade with the following order:\ntrade silk.',
-    )
+    // The old per-phase mails are gone with the old Turn orders panel
+    expect(mailer.sent.map((mail) => mail.subject).filter((subject) => subject.endsWith(' updated'))).toEqual([])
   })
 })
 
@@ -492,7 +469,7 @@ describe('held until the game is opened (issue #217)', () => {
     expect(mailer.subjects('New Chat')).toHaveLength(2)
   })
 
-  it('holds chat, phase updates, your turn and joins behind the same single email', async () => {
+  it('holds chat, orders, your turn and joins behind the same single email', async () => {
     const creator = await register('shared-a')
     const gameId = await createGame(creator.token, 'shared', 2)
     const other = await register('shared-b')
@@ -508,9 +485,9 @@ describe('held until the game is opened (issue #217)', () => {
     await chat(mover.token, gameId, 'hello')
     await inject(app, {
       method: 'POST',
-      url: `/api/games/${gameId}/turns/update`,
+      url: `/api/games/${gameId}/turns/order`,
       headers: bearer(mover.token),
-      payload: { phase: 'SOT', turnNumber: 1, order: 'build' },
+      payload: { phase: 'SOT', turnNumber: 1, markdown: 'build' },
     })
     await finishStartOfTurn(gameId, mover.token)
     const toWaiter = (): string[] =>

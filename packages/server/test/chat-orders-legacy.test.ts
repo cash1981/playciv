@@ -5,7 +5,7 @@
  * the port; the rules are in `docs/agents/decisions.md`.
  */
 
-import { revealTurnOrder, toPlayerView, unwrap, updateTurn } from '@civ/engine'
+import { toPlayerView } from '@civ/engine'
 import type { GameState } from '@civ/engine'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -19,6 +19,7 @@ import type { ChatMessage } from '../src/store/types.js'
 import { createD1Adapter } from './d1-sqlite-adapter.js'
 import { bearer, inject } from './helpers.js'
 import { readMigrations } from './migrations.js'
+import { savedOrder } from './saved-orders.js'
 
 class FakeMailer implements Mailer {
   readonly sent: OutgoingEmail[] = []
@@ -81,8 +82,9 @@ async function loadGame(gameId: string): Promise<GameState> {
 }
 
 /**
- * Writes and reveals orders the classic way, with times of our choosing, and
- * saves the game as the old code left it: orders not yet copied to the timeline.
+ * Writes drafts and published orders as the old Turn orders panel stored them, with
+ * times of our choosing, and saves the game as the old code left it: orders not yet
+ * copied to the timeline.
  */
 async function classicOrders(
   gameId: string,
@@ -90,10 +92,7 @@ async function classicOrders(
 ): Promise<void> {
   let state = await loadGame(gameId)
   for (const order of orders) {
-    state = unwrap(updateTurn(state, { playerId: order.playerId, turnNumber: order.turn, phase: order.phase, order: order.text }))
-    if (order.at !== undefined) {
-      state = unwrap(revealTurnOrder(state, { playerId: order.playerId, turnNumber: order.turn, phase: order.phase, at: order.at }))
-    }
+    state = savedOrder(state, order.playerId, order.turn, order.phase, order.text, order.at)
   }
   await repo.saveGame({ ...state, legacyOrdersCopied: false })
 }

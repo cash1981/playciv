@@ -8,7 +8,7 @@
  * mail provider and what "now" is.
  */
 
-import type { GameState, TurnPhase } from '@civ/engine'
+import type { GameState } from '@civ/engine'
 import { activeTurnStatus, TURN_PHASE_LABEL, turnHolder } from '@civ/engine'
 
 import { newId } from './auth.js'
@@ -203,14 +203,6 @@ export interface Notifications {
     authorUsername: string,
     message: string,
   ): Promise<void>
-  /** Java `TurnAction.update*` — the other players, held until they open the game. */
-  phaseUpdated(
-    game: GameState,
-    authorPlayerId: string,
-    authorUsername: string,
-    phase: TurnPhase,
-    order: string,
-  ): Promise<void>
   /**
    * Java `PlayerAction.newPassword(ForgotpassDTO)` — the reset verification
    * link. Transactional: it ignores `disableEmail` and carries no unsubscribe
@@ -251,20 +243,6 @@ export interface Notifications {
    * sending the rows it claimed.
    */
   releaseStuckQueuedRecipients(): Promise<ReleaseStuckResult>
-}
-
-/**
- * Subject and noun for each phase. Java built the subject from the method name
- * (`updateSOT` → "Start of turn updated") and the body from a fixed phrase.
- * The wording is pinned here exactly, including the start-of-turn body's odd
- * `order\n:<order>` (Java line 44 concatenates the newline before the colon).
- */
-const PHASE_MAIL: Readonly<Record<TurnPhase, { readonly subject: string; readonly noun: string }>> = {
-  SOT: { subject: 'Start of turn updated', noun: 'start of turn' },
-  TRADE: { subject: 'Trade updated', noun: 'trade' },
-  CM: { subject: 'City management updated', noun: 'city management' },
-  MOVEMENT: { subject: 'Movement updated', noun: 'movement' },
-  RESEARCH: { subject: 'Research updated', noun: 'research' },
 }
 
 export function createNotifications(config: NotificationsConfig): Notifications {
@@ -567,30 +545,6 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         // mail the author their own message.
         (player) => player.playerId !== authorPlayerId,
         'New Chat',
-        body,
-        true,
-      )
-    },
-
-    async phaseUpdated(
-      game: GameState,
-      authorPlayerId: string,
-      authorUsername: string,
-      phase: TurnPhase,
-      order: string,
-    ): Promise<void> {
-      const mail = PHASE_MAIL[phase]
-      // Java: only the start-of-turn body put the newline before the colon.
-      const orderText =
-        phase === 'SOT'
-          ? `${authorUsername} has updated start of turn with the following order\n:${order}`
-          : `${authorUsername} has updated ${mail.noun} with the following order:\n${order}`
-      const body = `${orderText}.\n\nLogin to ${gameLink(game.id)} to see the order`
-      await notifyPlayers(
-        game,
-        // Stable id, not username — see `chatPosted`.
-        (player) => player.playerId !== authorPlayerId,
-        mail.subject,
         body,
         true,
       )

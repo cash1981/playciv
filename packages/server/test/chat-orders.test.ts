@@ -21,6 +21,7 @@ import type { ChatMessage } from '../src/store/types.js'
 import { createD1Adapter } from './d1-sqlite-adapter.js'
 import { bearer, inject } from './helpers.js'
 import { readMigrations } from './migrations.js'
+import { savedOrder } from './saved-orders.js'
 
 let app: App
 let repo: JsonFileRepository
@@ -147,10 +148,6 @@ describe('posting an order', () => {
 
     const page = await timeline(game.seat2, game.gameId)
     expect(page.messages.map((message) => message.message)).toEqual(['first plan', 'second plan'])
-    // The classic Turn orders panel reads the same data
-    const publicTurns = await get(game.seat2, `/api/games/${game.gameId}/turns/public`)
-    expect(publicTurns.body).toContain('second plan')
-    expect(publicTurns.body).toContain('first plan')
   })
 
   it('defaults to the current turn and validates its input', async () => {
@@ -244,14 +241,28 @@ describe('marking phases done and not done', () => {
   })
 })
 
-describe('the classic update and reveal routes', () => {
-  it('still work', async () => {
-    const game = await startedGame('classic-routes')
-    const update = await post(game.seat1, `/api/games/${game.gameId}/turns/update`, { turnNumber: 1, phase: 'SOT', order: 'classic' })
-    expect(update.status).toBe(200)
-    const reveal = await post(game.seat1, `/api/games/${game.gameId}/turns/reveal`, { turnNumber: 1, phase: 'SOT' })
-    expect(reveal.status).toBe(200)
-    expect((await get(game.seat2, `/api/games/${game.gameId}/turns/public`)).body).toContain('classic')
+describe('a game adopted from the old view', () => {
+  it('has no route left for the old Turn orders panel', async () => {
+    const game = await startedGame('no-classic-routes')
+    for (const [method, route] of [
+      ['POST', 'turns/update'],
+      ['POST', 'turns/reveal'],
+      ['POST', 'turns/lock'],
+      ['GET', 'turns/public'],
+      ['GET', 'turns/mine'],
+      ['POST', 'endturn'],
+      ['POST', 'taketurn'],
+    ] as const) {
+      const response = await inject(app, {
+        method,
+        url: `/api/games/${game.gameId}/${route}`,
+        headers: bearer(game.seat1),
+        ...(method === 'POST' ? { payload: { turnNumber: 1, phase: 'SOT', order: 'x' } } : {}),
+      })
+      expect(response.status, `${method} ${route}`).toBe(404)
+    }
+    // Nothing was written by any of them
+    expect((await loadGame(game.gameId)).players.flatMap((player) => player.playerTurns)).toEqual([])
   })
 
   it('a game adopted from the old view uses its baseline as the default turn', async () => {
@@ -506,7 +517,10 @@ describe('hidden information', () => {
     const game = await startedGame('leak')
     await post(game.seat1, `/api/games/${game.gameId}/draw/CULTURE_1`)
     await post(game.seat1, `/api/games/${game.gameId}/note`, { note: 'NOTE-SECRET' })
-    await post(game.seat1, `/api/games/${game.gameId}/turns/update`, { turnNumber: 1, phase: 'CM', order: 'DRAFT-SECRET' })
+    // An unpublished draft of the old Turn orders panel, as a game saved before the single chat holds it
+    const seat1Id = (await loadGame(game.gameId)).players.find((player) => player.username === game.name1)?.playerId
+    if (seat1Id === undefined) throw new Error('seat 1 missing')
+    await repo.saveGame(savedOrder(await loadGame(game.gameId), seat1Id, 1, 'CM', 'DRAFT-SECRET'))
     await post(game.seat1, `/api/games/${game.gameId}/turns/order`, { phase: 'SOT', markdown: 'public order' })
     await post(game.seat1, `/api/games/${game.gameId}/turns/done`, { phase: 'SOT' })
 
@@ -520,10 +534,12 @@ describe('hidden information', () => {
     expect(seen.body).not.toContain(privateLog)
     const view = JSON.parse(seen.body) as PlayerView
     expect(view.activeTurn?.waitingFor?.length).toBeGreaterThan(0)
-    expect(seen.body).toContain('public order')
+    // A posted order reaches the others through the timeline, not through the view
+    expect(seen.body).not.toContain('public order')
 
     // Neither does the timeline carry them
     const page = await timeline(game.seat2, game.gameId)
+    expect(page.messages.map((message) => message.message)).toContain('public order')
     expect(JSON.stringify(page)).not.toContain('NOTE-SECRET')
     expect(JSON.stringify(page)).not.toContain('DRAFT-SECRET')
     expect(JSON.stringify(page)).not.toContain(privateLog)

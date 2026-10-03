@@ -19,7 +19,6 @@ import type {
   Item,
   PlayerStatKey,
   PlayerStats,
-  PlayerTurn,
   PlayerView,
   RevealedEntry,
   SheetName,
@@ -45,7 +44,6 @@ export type {
   Item,
   PlayerStatKey,
   PlayerStats,
-  PlayerTurn,
   PlayerView,
   RevealedEntry,
   SheetName,
@@ -298,7 +296,6 @@ export interface GameRevisionView extends GameRevisionSummary {
   readonly availableTechs: readonly TechItem[]
   readonly revealedTechs: readonly RevealedTechsDto[]
   readonly socialPolicies: readonly SocialPolicyItem[]
-  readonly publicTurns: readonly PlayerTurn[]
   readonly revealed: readonly RevealedEntry[]
   readonly publicLog: readonly LogEntryDto[]
   readonly privateLog: readonly LogEntryDto[]

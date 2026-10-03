@@ -18,7 +18,6 @@ import {
   endBattle,
   findSheetName,
   initiateUndo,
-  lockOrUnlockTurn,
   loot,
   markPhasesDone,
   placeGreatPersonInPyramid,
@@ -32,7 +31,6 @@ import {
   revealItem,
   revealSocialPolicy,
   revealTech,
-  revealTurnOrder,
   revealedTechsForAllPlayers,
   saveNote,
   setCoinSource,
@@ -43,11 +41,10 @@ import {
   tradeToPlayer,
   turnStatus,
   unmarkPhaseDone,
-  updateTurn,
   vote,
 } from '@civ/engine'
 import type { TurnPhase } from '@civ/engine'
-import { TURN_PHASES, allPublicTurns, playersTurns } from '@civ/engine'
+import { TURN_PHASES } from '@civ/engine'
 import type { Context } from 'hono'
 
 import type { App } from '../app.js'
@@ -483,68 +480,9 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
   })
 
   // -------------------------------------------------------------------------
-  // Turns
-  // -------------------------------------------------------------------------
-
-  app.get('/api/games/:gameId/turns/public', optionalAuth, async (c) => {
-    const gameId = c.req.param('gameId')
-    return readGame(context, c, gameId, (state) => allPublicTurns(state))
-  })
-
-  app.get('/api/games/:gameId/turns/mine', optionalAuth, async (c) => {
-    const gameId = c.req.param('gameId')
-    return readGame(context, c, gameId, (state, viewerId) => playersTurns(state, viewerId))
-  })
-
-  /**
-   * Java: `PlayerResource.updateTurn` with `TurnDTO`. The
-   * engine's `updateTurn` already calls `hasUserAccess` on the caller and
-   * returns `NO_ACCESS` (403) for a non-member, so no extra gate is needed here.
-   */
-  app.post('/api/games/:gameId/turns/update', auth, async (c) => {
-    const gameId = c.req.param('gameId')
-    const body = asRecord(await c.req.json().catch(() => ({})))
-    const phase = parsePhase(c, optionalString(body, 'phase'))
-    if (phase instanceof Response) return phase
-
-    const turnNumber = optionalNumber(body, 'turnNumber') ?? 1
-    const order = optionalString(body, 'order') ?? ''
-    const actor = currentPlayer(c)
-
-    return applyToGame(
-      context,
-      c,
-      gameId,
-      (state) => updateTurn(state, { playerId: actor.id, turnNumber, phase, order }),
-      undefined,
-      {
-        after: ({ after }) =>
-          context.notifications.phaseUpdated(after, actor.id, actor.username, phase, order),
-      },
-    )
-  })
-
-  app.post('/api/games/:gameId/turns/reveal', auth, async (c) => {
-    const gameId = c.req.param('gameId')
-    const body = asRecord(await c.req.json().catch(() => ({})))
-    const phase = parsePhase(c, optionalString(body, 'phase'))
-    if (phase instanceof Response) return phase
-    const turnNumber = optionalNumber(body, 'turnNumber') ?? 1
-
-    return applyToGame(context, c, gameId, (state) =>
-      revealTurnOrder(state, {
-        playerId: currentPlayer(c).id,
-        turnNumber,
-        phase,
-        at: new Date().toISOString(),
-      }),
-    )
-  })
-
-  // -------------------------------------------------------------------------
-  // Chat orders (issue #215). The timeline row is written after the game state,
-  // in the `after` hook: the repository has no call that stores both at once, so
-  // a failure there is logged, not surfaced.
+  // Turns (issue #215): orders and done marks. The timeline row is written after
+  // the game state, in the `after` hook: the repository has no call that stores
+  // both at once, so a failure there is logged, not surfaced.
   // -------------------------------------------------------------------------
 
   /** A whole turn number of at least 1, or `undefined` when absent; a `Response` when malformed. */
@@ -602,7 +540,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
             })
           } finally {
             // Same mail as a chat message, held the same way (#217). The order is
-            // public in chat orders, so its text may be in the body.
+            // public, so its text may be in the body.
             await context.notifications.chatPosted(after, actor.id, actor.username, markdown)
           }
         },
@@ -672,18 +610,6 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
         after: ({ before, after }) =>
           appendSystemRow(gameId, actor.username, turnNumber, phase, before, after),
       },
-    )
-  })
-
-  /** `lockOrUnlockTurn` also gates on `hasUserAccess` in the engine, same as `updateTurn`. */
-  app.post('/api/games/:gameId/turns/lock', auth, async (c) => {
-    const gameId = c.req.param('gameId')
-    const body = asRecord(await c.req.json().catch(() => ({})))
-    const turnNumber = optionalNumber(body, 'turnNumber') ?? 1
-    const locked = body['locked'] === true
-
-    return applyToGame(context, c, gameId, (state) =>
-      lockOrUnlockTurn(state, { playerId: currentPlayer(c).id, turnNumber, locked }),
     )
   })
 

@@ -2118,44 +2118,29 @@ describe('a whole round', () => {
     })
     expect(chosen.status).toBe(200)
 
-    // Write a turn order
+    // Post a turn order: it is public at once, in the timeline
     const turn = await inject(app, {
       method: 'POST',
-      url: `/api/games/${gameId}/turns/update`,
+      url: `/api/games/${gameId}/turns/order`,
       headers: bearer(starter),
-      payload: { turnNumber: 1, phase: 'SOT', order: 'Build city at L4' },
+      payload: { turnNumber: 1, phase: 'SOT', markdown: 'Build city at L4' },
     })
     expect(turn.status).toBe(200)
 
-    const privatePublicTurns = await inject(app, {
+    const timelineAfterOrder = await inject(app, {
       method: 'GET',
-      url: `/api/games/${gameId}/turns/public`,
+      url: `/api/games/${gameId}/chat`,
       headers: bearer(tokens['Chul'] as string),
     })
-    expect(privatePublicTurns.status).toBe(200)
-    expect(privatePublicTurns.body).not.toContain('Build city at L4')
-
-    const reveal = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/turns/reveal`,
-      headers: bearer(starter),
-      payload: { turnNumber: 1, phase: 'SOT' },
-    })
-    expect(reveal.status).toBe(200)
-
-    const publicTurns = await inject(app, {
-      method: 'GET',
-      url: `/api/games/${gameId}/turns/public`,
-      headers: bearer(tokens['Chul'] as string),
-    })
-    expect(publicTurns.body).toContain('Build city at L4')
-    const revealedTurns = await publicTurns.json() as {
-      readonly history: Readonly<Record<string, readonly { readonly markdown: string; readonly at: string }[]>>
-    }[]
-    const version = revealedTurns[0]?.history['SOT']?.[0]
-    expect(version?.markdown).toBe('Build city at L4')
-    // The reveal carries the moment it happened, an ISO timestamp.
-    expect(Number.isNaN(Date.parse(version?.at ?? ''))).toBe(false)
+    expect(timelineAfterOrder.status).toBe(200)
+    const orderRow = (
+      await timelineAfterOrder.json() as {
+        messages: { kind: string; message: string; turnNumber: number | null; phase: string | null; createdAt: string }[]
+      }
+    ).messages.find((row) => row.kind === 'order')
+    expect(orderRow).toMatchObject({ message: 'Build city at L4', turnNumber: 1, phase: 'SOT' })
+    // The row carries the moment it was posted, an ISO timestamp.
+    expect(Number.isNaN(Date.parse(orderRow?.createdAt ?? ''))).toBe(false)
 
     // Chat
     await inject(app, {

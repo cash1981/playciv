@@ -5,7 +5,6 @@
 
 import type { GameState } from '@civ/engine'
 import {
-  allPublicTurns,
   createGame,
   endGame,
   joinGame,
@@ -221,7 +220,6 @@ function projectedRevision(revision: GameRevision, viewerId: string) {
     availableTechs: remainingTechsForPlayer(state, viewerId),
     revealedTechs: revealedTechsForAllPlayers(state),
     socialPolicies: state.socialPolicies,
-    publicTurns: allPublicTurns(state),
     revealed: revealedFeed(state),
     publicLog: newestFirst(
       state.log.filter((entry) => entry.publicLog !== '').map((entry) => ({
