@@ -543,23 +543,6 @@ label > textarea {
   gap: 1rem;
 }
 
-/* Log and chat, directly under the board. `auto-fit` gives them two columns
-   when the viewport has room and one when it does not, without a media query.
-   The `min()` caps the 20rem floor at the container's own width, so the single
-   column cannot overflow a very narrow phone (a 320 px viewport leaves 296 px
-   after the app's padding). The panels already carry a bottom margin; inside the
-   pair it would double up with the gap. */
-.panel-pair {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
-  gap: 1rem;
-  align-items: start;
-}
-
-.panel-pair > .panel {
-  margin-bottom: 0;
-}
-
 .row {
   display: flex;
   gap: 0.4rem;
@@ -702,21 +685,12 @@ ul.list > li:last-child {
   overflow-y: auto;
 }
 
-/* A nickname in its player's colour, in the chat. */
+/* A nickname in its player's colour, in the chat and orders timeline. */
 .player-blue { color: var(--player-blue); }
 .player-green { color: var(--player-green); }
 .player-purple { color: var(--player-purple); }
 .player-red { color: var(--player-red); }
 .player-yellow { color: var(--player-yellow); }
-
-/* Civ (small) then coloured nickname, kept together in one flowing box. */
-.chat-author {
-  display: inline-block;
-}
-
-.chat-author small {
-  margin-right: 0.35rem;
-}
 
 .swatch {
   width: 0.8rem;

@@ -26,7 +26,6 @@ vi.mock('./BoardView.js', () => ({
     <div data-testid="board" data-viewer-is-russia={String(viewerIsRussia)} />
   ),
 }))
-vi.mock('./ChatPanel.js', () => ({ ChatPanel: () => <section><h2>Chat</h2></section> }))
 // Only the panel is replaced; the helpers GameView uses stay real
 vi.mock('./ChatOrdersPanel.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./ChatOrdersPanel.js')>()),
@@ -38,7 +37,6 @@ vi.mock('./RevealedPanel.js', () => ({ RevealedPanel: () => <section><h2>Reveale
 vi.mock('./SocialPolicyPanel.js', () => ({ SocialPolicyPanel: () => <section><h2>Social policy</h2></section> }))
 vi.mock('./StatusPanel.js', () => ({ StatusPanel: () => <section><h2>Player status</h2></section> }))
 vi.mock('./TechPanel.js', () => ({ TechPanel: () => <section><h2>Techs</h2></section> }))
-vi.mock('./TurnPanel.js', () => ({ TurnPanel: () => <section><h2>Turn orders</h2></section> }))
 vi.mock('./WondersPanel.js', () => ({ WondersPanel: () => <section><h2>Wonders</h2></section> }))
 
 afterEach(() => {
@@ -206,7 +204,7 @@ const run = async (action: () => Promise<unknown>): Promise<void> => {
 }
 
 describe('primary game panel order', () => {
-  it('shows Draw immediately after the board and before the responsive Log and Chat pair', async () => {
+  it('shows Draw immediately after the board, then the chat and orders timeline, then the Log', async () => {
     localStorage.setItem('civ.autoRefresh', 'false')
     const view = {
       rev: 1,
@@ -242,19 +240,14 @@ describe('primary game panel order', () => {
     const panelStack = container.querySelector('.panel-stack')
     const draw = screen.getByRole('heading', { name: 'Draw' }).closest('section')
     const log = screen.getByRole('heading', { name: 'Log' }).closest('section')
-    const chat = screen.getByRole('heading', { name: 'Chat' }).closest('section')
+    const timeline = screen.getByRole('heading', { name: 'Chat and orders' }).closest('section')
     const hand = screen.getByRole('heading', { name: 'Your hand (0)' }).closest('section')
-    const logChatPair = log?.parentElement
-
-    const turnOrders = screen.getByRole('heading', { name: 'Turn orders' }).closest('section')
 
     expect(board.nextElementSibling).toBe(panelStack)
     expect(panelStack?.children[0]).toBe(draw)
-    // Turn orders comes right after Draw (issue #206)
-    expect(panelStack?.children[1]).toBe(turnOrders)
-    expect(panelStack?.children[2]).toBe(logChatPair)
-    expect(logChatPair?.classList.contains('panel-pair')).toBe(true)
-    expect(Array.from(logChatPair?.children ?? [])).toEqual([log, chat])
+    // The timeline comes right after Draw (issue #206), then the log
+    expect(panelStack?.children[1]).toBe(timeline)
+    expect(panelStack?.children[2]).toBe(log)
     expect(panelStack?.children[3]).toBe(hand)
   })
 })
@@ -267,7 +260,6 @@ const seat = (
   username,
   color: null,
   civilization: null,
-  yourTurn: false,
   ...overrides,
 })
 
@@ -281,7 +273,10 @@ const headerView = (
     name: 'Header test',
     active: true,
     winner: null,
-    activeTurn: activeUsername === null ? null : { username: activeUsername, phase: 'SOT' },
+    activeTurn:
+      activeUsername === null
+        ? null
+        : { playerId: `id-${activeUsername}`, username: activeUsername, turnNumber: 1, phase: 'SOT', waitingFor: [{ username: activeUsername, phase: 'SOT' }] },
     you: youSeat,
     opponents,
     board: {},
@@ -318,7 +313,7 @@ describe('game header chips (issue #206)', () => {
     const container = await renderHeader(
       headerView(
         seat('viewer', { civilization: { name: 'Romans' }, color: 'Red' }),
-        [seat('s3s3', { civilization: greeks, color: 'Green', yourTurn: true })],
+        [seat('s3s3', { civilization: greeks, color: 'Green' })],
         's3s3',
       ),
     )
@@ -326,7 +321,7 @@ describe('game header chips (issue #206)', () => {
     expect(chipTexts(container)).toEqual(['Greeks', 'Green'])
     const chips = container.querySelector('.header-chips')
     const title = screen.getByRole('heading', { level: 1 })
-    expect(title.textContent).toBe("s3s3's turn — start of turn phase")
+    expect(title.textContent).toBe("Turn 1 · s3s3's turn — start of turn phase")
     // Chips first, title straight after them in the same row
     expect(chips?.nextElementSibling).toBe(title)
     expect(container.textContent).not.toContain('Romans')
@@ -335,7 +330,7 @@ describe('game header chips (issue #206)', () => {
   it('shows the viewer\'s own chips on their turn', async () => {
     const container = await renderHeader(
       headerView(
-        seat('viewer', { civilization: { name: 'Romans' }, color: 'Red', yourTurn: true }),
+        seat('viewer', { civilization: { name: 'Romans' }, color: 'Red' }),
         [seat('s3s3', { civilization: greeks, color: 'Green' })],
         'viewer',
       ),
@@ -346,7 +341,7 @@ describe('game header chips (issue #206)', () => {
 
   it('has no civ chip while the civilization is not revealed', async () => {
     const container = await renderHeader(
-      headerView(seat('viewer'), [seat('s3s3', { color: 'Blue', yourTurn: true })], 's3s3'),
+      headerView(seat('viewer'), [seat('s3s3', { color: 'Blue' })], 's3s3'),
     )
     expect(chipTexts(container)).toEqual(['Blue'])
     expect(container.querySelector('.tag.revealed')).toBeNull()
@@ -480,35 +475,6 @@ describe('End game wiring', () => {
     expect(onEnded).not.toHaveBeenCalled()
   })
 
-  describe('an ended game', () => {
-    const renderEnded = async (role: 'user' | 'admin'): Promise<void> => {
-      localStorage.setItem('civ.autoRefresh', 'false')
-      vi.spyOn(api, 'game').mockResolvedValue({ ...creatorView(), active: false })
-      vi.spyOn(api, 'revisions').mockResolvedValue([])
-      render(
-        <GameView
-          gameId="game-1"
-          player={{ username: 'viewer', role } as unknown as PlayerDto}
-          onUnauthorized={vi.fn()}
-          onDeleted={vi.fn()}
-          onWithdrawn={vi.fn()}
-          onEnded={vi.fn()}
-        />,
-      )
-      await screen.findByText('Take the turn')
-    }
-
-    it('disables the actions for a player', async () => {
-      await renderEnded('user')
-      expect((screen.getByText('Take the turn') as HTMLButtonElement).disabled).toBe(true)
-    })
-
-    it('leaves the actions to the admin role', async () => {
-      await renderEnded('admin')
-      expect((screen.getByText('Take the turn') as HTMLButtonElement).disabled).toBe(false)
-    })
-  })
-
   it('ends the game without a winner argument for No winner', async () => {
     const endGame = vi.spyOn(api, 'endGame').mockResolvedValue(creatorView())
     const menu = await renderWithMenu(creatorView(), 'admin')
@@ -535,9 +501,15 @@ describe('chatAuthorsOf and activePlayerOf (issue #206)', () => {
     )
   })
 
-  it('falls back to the seat flagged yourTurn when the active turn names nobody', () => {
-    const view = headerView(seat('viewer'), [seat('s3s3', { yourTurn: true })], 'someone-who-left')
+  it('finds the holder of the active turn among the seats, the viewer included', () => {
+    const view = headerView(seat('viewer'), [seat('s3s3')], 's3s3')
     expect(activePlayerOf(view)?.username).toBe('s3s3')
+    expect(activePlayerOf(headerView(seat('viewer'), [seat('s3s3')], 'viewer'))?.username).toBe('viewer')
+  })
+
+  it('names nobody when the active turn belongs to someone who left, or there is none', () => {
+    expect(activePlayerOf(headerView(seat('viewer'), [seat('s3s3')], 'someone-who-left'))).toBeUndefined()
+    expect(activePlayerOf(headerView(seat('viewer'), [seat('s3s3')], null))).toBeUndefined()
   })
 })
 
@@ -665,7 +637,7 @@ describe('HandItem: place a Great Person in the tech pyramid (#168 follow-up)', 
   })
 })
 
-describe('chat orders on the game page (issue #215)', () => {
+describe('the game page (issue #215)', () => {
   const chatSeat = (username: string, playernumber: number, overrides: Record<string, unknown> = {}) =>
     seat(username, { playernumber, ...overrides })
 
@@ -675,11 +647,10 @@ describe('chat orders on the game page (issue #215)', () => {
     overrides: Record<string, unknown> = {},
     youOverrides: Record<string, unknown> = {},
   ): PlayerView => {
-    const you = chatSeat('Alice', 1, { color: 'Red', yourTurn: false, ...youOverrides })
-    const bob = chatSeat('Bob', 2, { color: 'Blue', yourTurn: true })
+    const you = chatSeat('Alice', 1, { color: 'Red', ...youOverrides })
+    const bob = chatSeat('Bob', 2, { color: 'Blue' })
     return {
       ...headerView(you, [bob], upUsername),
-      chatOrders: true,
       activeTurn: {
         playerId: `id-${upUsername}`,
         username: upUsername,
@@ -720,21 +691,19 @@ describe('chat orders on the game page (issue #215)', () => {
     screen.getByRole('button', { name: label }) as HTMLButtonElement
 
   describe('the page', () => {
-    it('swaps Turn orders and Chat for the timeline and says whose turn it is and the phase', async () => {
+    it('shows the timeline and says whose turn it is and the phase', async () => {
       await renderGame(chatView('Bob'))
 
       expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
         "Turn 4 · Bob's turn — city management phase",
       )
       expect(screen.getByRole('heading', { name: 'Chat and orders' })).toBeTruthy()
-      expect(screen.queryByRole('heading', { name: 'Turn orders' })).toBeNull()
-      expect(screen.queryByRole('heading', { name: 'Chat' })).toBeNull()
       // The log stays
       expect(screen.getByRole('heading', { name: 'Log' })).toBeTruthy()
       expect(screen.getByRole('list', { name: 'Turn progress' }).textContent).toContain('BobSOT')
     })
 
-    it('hides End turn and Take the turn, which need a baton', async () => {
+    it('has no End turn or Take the turn buttons, because there is no baton', async () => {
       await renderGame(chatView('Alice'))
 
       expect(screen.queryByText('End turn')).toBeNull()
@@ -749,16 +718,40 @@ describe('chat orders on the game page (issue #215)', () => {
       expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Turn 4')
     })
 
-    it('leaves the classic page exactly as it was with chat orders off', async () => {
-      await renderGame({ ...chatView('Bob'), chatOrders: false } as unknown as PlayerView)
+    describe('an ended game', () => {
+      const ended = (winner: string | null): PlayerView =>
+        ({ ...chatView('Bob'), active: false, winner }) as unknown as PlayerView
 
-      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("Bob's turn — city management phase")
-      expect(screen.getByText('End turn')).toBeTruthy()
-      expect(screen.getByText('Take the turn')).toBeTruthy()
-      expect(screen.getByRole('heading', { name: 'Turn orders' })).toBeTruthy()
-      expect(screen.getByRole('heading', { name: 'Chat' })).toBeTruthy()
-      expect(screen.queryByRole('heading', { name: 'Chat and orders' })).toBeNull()
-      expect(screen.queryByRole('list', { name: 'Turn progress' })).toBeNull()
+      it('names the winner in the title, and claims nobody is up or waiting', async () => {
+        await renderGame(ended('Alice'))
+
+        const title = screen.getByRole('heading', { level: 1 }).textContent
+        expect(title).toBe('Alice won the game')
+        expect(title).not.toContain('Nobody is up')
+        expect(title).not.toContain("Bob's turn")
+        // The winner is not repeated in a second tag
+        expect(screen.queryByText('Alice won')).toBeNull()
+        expect(screen.getByText('ended')).toBeTruthy()
+        expect(screen.queryByRole('list', { name: 'Turn progress' })).toBeNull()
+      })
+
+      it('says the game ended when nobody won, with no second tag saying the same', async () => {
+        await renderGame(ended(null))
+
+        expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Game ended')
+        expect(screen.queryByText('ended')).toBeNull()
+        expect(screen.queryByRole('list', { name: 'Turn progress' })).toBeNull()
+      })
+
+      it('shows no civ or colour chips for whoever was up when it ended', async () => {
+        await renderGame(ended('Alice'))
+        expect(document.querySelector('.header-chips')).toBeNull()
+      })
+
+      it('still draws the title of a running game from the active turn', async () => {
+        await renderGame({ ...chatView('Bob'), active: true } as unknown as PlayerView)
+        expect(screen.getByRole('heading', { level: 1 }).textContent).toContain("Bob's turn")
+      })
     })
   })
 
@@ -828,77 +821,6 @@ describe('chat orders on the game page (issue #215)', () => {
     it('tells a player out of turn that they will be asked', async () => {
       await renderGame(chatView('Bob'))
       expect(screen.getByText('It is not your turn. You will be asked before you draw.')).toBeTruthy()
-    })
-
-    it('keeps the classic rule with chat orders off: disabled out of turn, no dialog', async () => {
-      const draw = vi.spyOn(api, 'draw').mockResolvedValue(chatView('Bob'))
-      const confirm = vi.spyOn(window, 'confirm')
-      await renderGame({ ...chatView('Bob'), chatOrders: false } as unknown as PlayerView)
-
-      expect(drawButton('Civ').disabled).toBe(true)
-      fireEvent.click(drawButton('Civ'))
-      expect(confirm).not.toHaveBeenCalled()
-      expect(draw).not.toHaveBeenCalled()
-    })
-
-    it('keeps the classic draw with chat orders off on the viewer\'s own turn', async () => {
-      const draw = vi.spyOn(api, 'draw').mockResolvedValue(chatView('Alice'))
-      await renderGame({
-        ...chatView('Alice', {}, { yourTurn: true }),
-        chatOrders: false,
-      } as unknown as PlayerView)
-
-      fireEvent.click(drawButton('Civ'))
-
-      await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'CIV'))
-    })
-  })
-
-  describe('the admin switch in the menu', () => {
-    const renderWithActions = async (
-      view: PlayerView,
-      role: 'user' | 'admin',
-    ): Promise<() => GameMenuActions | null> => {
-      localStorage.setItem('civ.autoRefresh', 'false')
-      vi.spyOn(api, 'game').mockResolvedValue(view)
-      vi.spyOn(api, 'revisions').mockResolvedValue([])
-      const latest: { current: GameMenuActions | null } = { current: null }
-      render(
-        <GameView
-          gameId="game-1"
-          player={{ username: 'Alice', role } as unknown as PlayerDto}
-          onUnauthorized={vi.fn()}
-          onDeleted={vi.fn()}
-          onWithdrawn={vi.fn()}
-          onEnded={vi.fn()}
-          onGameActions={(actions) => { latest.current = actions }}
-        />,
-      )
-      await waitFor(() => expect(latest.current).not.toBeNull())
-      return () => latest.current
-    }
-
-    it('is offered to the admin role and reports the current state', async () => {
-      const menu = await renderWithActions(chatView('Bob'), 'admin')
-      expect(menu()?.canSetChatOrders).toBe(true)
-      expect(menu()?.chatOrders).toBe(true)
-    })
-
-    it('is not offered to the game creator when they are not an admin', async () => {
-      const menu = await renderWithActions(chatView('Bob', {}, { gameCreator: true }), 'user')
-      // The creator still gets End game and Delete; only the switch is admin only
-      expect(menu()?.canEnd).toBe(true)
-      expect(menu()?.canSetChatOrders).toBe(false)
-    })
-
-    it('switches through the admin route', async () => {
-      const setChatOrders = vi.spyOn(api, 'setChatOrders').mockResolvedValue(chatView('Bob'))
-      const menu = await renderWithActions({ ...chatView('Bob'), chatOrders: false } as unknown as PlayerView, 'admin')
-      expect(menu()?.chatOrders).toBe(false)
-
-      menu()?.onSetChatOrders(true)
-
-      await waitFor(() => expect(setChatOrders).toHaveBeenCalledExactlyOnceWith('game-1', true))
     })
   })
 })

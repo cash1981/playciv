@@ -50,7 +50,7 @@ interface Row {
   readonly playerId: string
   readonly username: string
   readonly color: string | null
-  readonly yourTurn: boolean
+  readonly onTurn: boolean
   readonly civilizationName: string | null
   readonly government: Government
   readonly stats: PlayerStats
@@ -152,16 +152,15 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
   const [section, setSection] = useState<Section>('status')
   const governmentHelpRef = useRef<HTMLButtonElement | null>(null)
   const rows: Row[] = []
-  // Chat orders (issue #215) has no baton, so the tag follows `activeTurn`.
-  const onTurn = (playerId: string, batonHolder: boolean): boolean =>
-    view.chatOrders ? view.activeTurn?.playerId === playerId : batonHolder
+  // There is no baton: the tag follows whoever holds the active turn.
+  const onTurn = (playerId: string): boolean => view.activeTurn?.playerId === playerId
 
   if (view.you !== null) {
     rows.push({
       playerId: view.you.playerId,
       username: view.you.username,
       color: view.you.color,
-      yourTurn: onTurn(view.you.playerId, view.you.yourTurn),
+      onTurn: onTurn(view.you.playerId),
       civilizationName: view.you.civilization?.name ?? null,
       government: view.you.government,
       stats: view.you.stats,
@@ -179,7 +178,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
       playerId: opponent.playerId,
       username: opponent.username,
       color: opponent.color,
-      yourTurn: onTurn(opponent.playerId, opponent.yourTurn),
+      onTurn: onTurn(opponent.playerId),
       civilizationName: opponent.civilization?.name ?? null,
       government: opponent.government,
       stats: opponent.stats,
@@ -263,7 +262,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
                           <span className="swatch" style={{ background: row.color.toLowerCase() }} />
                         )}
                         <strong>{row.username}</strong>
-                        {row.yourTurn && <span className="tag turn">turn</span>}
+                        {row.onTurn && <span className="tag turn">turn</span>}
                       </span>
                     </td>
                     <td>

@@ -3,6 +3,8 @@ import type { ForwardRefExoticComponent, RefAttributes } from 'react'
 
 import type { CrepeBuilder } from '@milkdown/crepe/builder'
 
+import './MarkdownEditor.css'
+
 export interface MarkdownEditorHandle {
   /** Returns the editor document immediately, without waiting for markdownUpdated. */
   readonly getMarkdown: () => string
@@ -18,7 +20,7 @@ export interface MarkdownEditorProps {
   /**
    * `simple` trims Crepe's formatting bar to a text style (Normal or Heading),
    * bold and italic, each with a name for screen readers and a tooltip. The
-   * default keeps the full bar the turn orders have always had.
+   * default keeps the full bar, which the private log uses.
    */
   readonly toolbar?: 'full' | 'simple'
 }
@@ -225,7 +227,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 
     return (
       <div
-        className="turn-markdown"
+        className="markdown-editor"
         data-readonly={readOnly ? 'true' : 'false'}
         aria-label={ariaLabel}
         onInputCapture={() => onDirtyRef.current?.()}
@@ -233,7 +235,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         <div ref={rootRef} hidden={!ready} />
         {!ready && (
           <textarea
-            className="turn-markdown-fallback"
+            className="markdown-editor-fallback"
             aria-label={ariaLabel}
             value={latestMarkdownRef.current}
             readOnly={readOnly}

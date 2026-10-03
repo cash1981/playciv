@@ -12,7 +12,7 @@ import { api } from '../lib/api.js'
 import type { ChatPageDto, PlayerView, TimelineMessageDto } from '../lib/api.js'
 import {
   ChatOrdersPanel,
-  chatOrdersTitle,
+  turnTitle,
   firstOpenPhase,
   strikeThrough,
   viewerTurn,
@@ -108,7 +108,6 @@ function makeView(options: ViewOptions = {}): PlayerView {
         })
       : options.you
   return {
-    chatOrders: true,
     you,
     opponents: options.opponents ?? [seat('Bob', 2, { color: 'Blue' })],
     activeTurn:
@@ -225,7 +224,7 @@ describe('the timeline', () => {
     const row = container.querySelector('.chat-orders-message')
     // Read as "Greeks - Bob", in one box, civ and nickname both in the player's colour
     expect(row?.querySelector('.chat-orders-author')?.textContent).toBe('Greeks - Bob')
-    // The civ is small, as in the classic chat
+    // The civ is small, beside the coloured nickname
     expect(row?.querySelector('.chat-orders-author > small')?.className).toBe('player-blue')
     expect(row?.querySelector('strong')?.textContent).toBe('Bob')
     expect(row?.querySelector('strong')?.className).toBe('player-blue')
@@ -258,6 +257,40 @@ describe('the timeline', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
 
     expect(rows(container)).toEqual(['text of a', 'text of bb', 'text of ccc'])
+  })
+
+  it('stops polling when auto-refresh is off', async () => {
+    vi.useFakeTimers()
+    chatPage.mockResolvedValue(page([message('a')]))
+    await renderPanel(makeView(), { autoRefresh: false })
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+
+    expect(chatPage).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops the answer of an older request that completes after a newer one', async () => {
+    let finishOld: ((first: ChatPageDto) => void) | undefined
+    chatPage
+      .mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve }))
+      .mockResolvedValueOnce(page([message('new', { message: 'new row' })]))
+    const { container, rerender } = await renderPanel(makeView())
+
+    await act(async () => {
+      rerender(
+        <ChatOrdersPanel
+          gameId="game" view={makeView()} busy={false} readOnly={false} run={run}
+          reloadCount={1} autoRefresh={false} editorComponent={FakeEditor}
+        />,
+      )
+    })
+    expect(rows(container)).toEqual(['new row'])
+
+    await act(async () => { finishOld?.(page([message('old', { message: 'old row' })], true)) })
+
+    expect(rows(container)).toEqual(['new row'])
+    expect(chatPage).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
   })
 
   it('keeps older turns that were loaded when a refresh only carries the newest', async () => {
@@ -401,10 +434,10 @@ describe('replaced orders', () => {
     expect(tagOf('alice trade')).toBeUndefined()
   })
 
-  it('treats copied classic orders like any others: older versions replaced, the tag reads T2 · CM', async () => {
+  it('treats migrated orders like any others: older versions replaced, the tag reads T2 · CM', async () => {
     chatPage.mockResolvedValue(page([
-      message('legacy-g-2-Bob-CM-0', { username: 'Bob', kind: 'order', turnNumber: 2, phase: 'CM', message: 'classic first' }),
-      message('legacy-g-2-Bob-CM-1', { username: 'Bob', kind: 'order', turnNumber: 2, phase: 'CM', message: 'classic second' }),
+      message('legacy-g-2-Bob-CM-0', { username: 'Bob', kind: 'order', turnNumber: 2, phase: 'CM', message: 'migrated first' }),
+      message('legacy-g-2-Bob-CM-1', { username: 'Bob', kind: 'order', turnNumber: 2, phase: 'CM', message: 'migrated second' }),
     ]))
     const { container } = await renderPanel(makeView())
 
@@ -715,7 +748,7 @@ describe('the selected chip', () => {
 })
 
 describe('the Markdown renderer', () => {
-  it('is loaded on demand, not imported by the panel, so a classic game does not carry it', () => {
+  it('is loaded on demand, not imported by the panel, so the page does not carry it up front', () => {
     const source = readFileSync('src/views/ChatOrdersPanel.tsx', 'utf8')
     expect(source).not.toMatch(/^import .* from '\.\/SafeMarkdown\.js'/m)
     expect(source).toContain("import('./SafeMarkdown.js')")
@@ -898,25 +931,25 @@ describe('safe markdown in the timeline', () => {
 describe('header helpers', () => {
   it('names whose turn it is and which phase they are on, not everyone', () => {
     const view = makeView()
-    expect(chatOrdersTitle(view.activeTurn)).toBe(
+    expect(turnTitle(view.activeTurn)).toBe(
       `Turn 4 · ${view.activeTurn?.username}'s turn — ${TURN_PHASE_LABEL[view.activeTurn?.phase ?? 'SOT']} phase`,
     )
-    expect(chatOrdersTitle(view.activeTurn)).not.toContain('waiting for')
-    expect(chatOrdersTitle(view.activeTurn)).not.toContain('started')
+    expect(turnTitle(view.activeTurn)).not.toContain('waiting for')
+    expect(turnTitle(view.activeTurn)).not.toContain('started')
   })
 
   it('says Your turn when the viewer is the one up', () => {
     const view = makeView({
       activeTurn: { playerId: 'p1', username: 'Alice', turnNumber: 2, phase: 'CM', startPlayer: 'Bob', waitingFor: [{ username: 'Alice', phase: 'CM' }] },
     })
-    expect(chatOrdersTitle(view.activeTurn, 'p1')).toBe('Turn 2 · Your turn — city management phase')
-    expect(chatOrdersTitle(view.activeTurn, 'someone-else')).toBe("Turn 2 · Alice's turn — city management phase")
+    expect(turnTitle(view.activeTurn, 'p1')).toBe('Turn 2 · Your turn — city management phase')
+    expect(turnTitle(view.activeTurn, 'someone-else')).toBe("Turn 2 · Alice's turn — city management phase")
   })
 
   it('says so when everyone is done, and when nobody is up', () => {
     const finished = { playerId: 'p', username: 'Alice', turnNumber: 5, phase: 'SOT', startPlayer: 'Cy', waitingFor: [] }
-    expect(chatOrdersTitle(makeView({ activeTurn: finished }).activeTurn)).toBe('Turn 5 · everyone is done')
-    expect(chatOrdersTitle(null)).toBe('Nobody is up')
+    expect(turnTitle(makeView({ activeTurn: finished }).activeTurn)).toBe('Turn 5 · everyone is done')
+    expect(turnTitle(null)).toBe('Nobody is up')
   })
 
   it('lists every player with a colour dot and their phase, or Done', () => {
@@ -942,7 +975,7 @@ describe('header helpers', () => {
     ])
   })
 
-  it('asks before an out-of-turn draw only when chat orders is on and someone else is up', () => {
+  it('asks before an out-of-turn draw only when someone else is up', () => {
     const others = { playerId: 'id-Bob', username: 'Bob', turnNumber: 4, phase: 'SOT', waitingFor: [] }
     expect(outOfTurnQuestion(makeView({ activeTurn: others }))).toBe(
       'It is not your turn. Bob is up. Draw anyway?',
@@ -952,6 +985,5 @@ describe('header helpers', () => {
       'It is not your turn. Nobody is up. Draw anyway?',
     )
     expect(outOfTurnQuestion(makeView({ you: null, activeTurn: others }))).toBeNull()
-    expect(outOfTurnQuestion({ ...makeView({ activeTurn: others }), chatOrders: false })).toBeNull()
   })
 })

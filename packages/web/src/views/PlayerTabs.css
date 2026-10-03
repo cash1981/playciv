@@ -1,6 +1,4 @@
-/* The player tabs of the Techs and Social policy panels. Sized and shaped
-   like `.turn-tab` in TurnPanel.css; kept separate so neither panel depends
-   on the other's stylesheet. */
+/* The player tabs of the Techs, Social policy and Player status panels. */
 
 .player-tabs {
   display: flex;

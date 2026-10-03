@@ -1,5 +1,5 @@
 /*
- * Chat orders timeline (issue #215). Mobile first: everything fits a 375 px
+ * The chat and orders timeline (issue #215). Mobile first: everything fits a 375 px
  * screen with no sideways scroll, controls are at least 44 px high, and the
  * composer stays inside the screen under the timeline.
  * Colours come from the theme variables, so the dark and light themes both work.
@@ -159,7 +159,7 @@
   background: var(--panel);
 }
 
-.chat-orders-composer .turn-markdown {
+.chat-orders-composer .markdown-editor {
   max-height: 10rem;
   overflow-y: auto;
 }
