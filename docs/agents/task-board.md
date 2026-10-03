@@ -12,19 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### finished-game-cleanup
-
-- **Owner:** Claude (orchestrator; coder role)
-- **Branch:** `feat/finished-game-cleanup`
-- **Brief:** `docs/agents/tasks/finished-game-cleanup.md`
-- **Status:** claimed
-- **Claimed paths:**
-  - `packages/server/src/store/types.ts`, `store/d1.ts`, `store/json-file.ts` (revision cleanup methods only)
-  - `packages/server/src/routes/admin.ts` (the cleanup routes only)
-  - `packages/server/test/finished-game-cleanup.test.ts`
-  - `packages/web/src/lib/api.ts` (cleanup functions only), `packages/web/src/views/AdminView.tsx` and its test
-- **Notes:** the `broadcast-batching` claim was released here because its PR (#237) is merged. Issue #238 phases 1 to 3 (delta storage) are a separate task that touches the same store files and comes after this one.
-
 ---
 
 ## Format

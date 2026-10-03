@@ -48,10 +48,11 @@ function readExclude(body: Record<string, unknown>): string[] | undefined | 'inv
   return isStringArray(value) && value.length <= MAX_BROADCAST_LIST ? value : 'invalid'
 }
 
-/** Games one cleanup request handles: one guarded delete each, well inside a Worker's subrequest limit. */
-// The free plan allows 50 subrequests per request and a run costs about 2 per game
-// (the delete and, when it removed nothing, a read) plus a few, so keep this below
-// roughly 23.
+/**
+ * Games one cleanup request handles: one guarded delete each. The free plan allows
+ * 50 subrequests per request and a run costs about 2 per game (the delete and, when
+ * it removed nothing, a read) plus a few, so keep this below roughly 23.
+ */
 const CLEANUP_GAMES_PER_REQUEST = 20
 
 function enabledAdminCount(players: readonly StoredPlayer[]): number {
