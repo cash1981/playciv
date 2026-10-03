@@ -29,8 +29,14 @@ Ended this game — cash" should only say who won.
    public classic orders into `chat`). Finished games are included.
 2. Finished games are migrated the same way; they show the timeline, and the
    title does not claim anyone is waiting.
-3. Only public order history is copied (as today). Drafts and private notes are
-   not copied.
+3. Public order history is copied into the timeline as `order` rows. Private
+   material migrates as private notes: an unpublished draft of the old Turn
+   orders panel (a non-empty `orders[phase]` with `revealed[phase]` not true) is
+   appended to its owner's `gamenote` as a `### Turn N, <phase> (unpublished
+   draft)` section, after any existing text. The `gamenote` itself already is the
+   private tab of the timeline, so an existing note needs nothing. Nothing
+   private reaches another player or `publicTurns`. (The human changed this from
+   "drafts are not copied" after the first draft of this brief.)
 4. `chatOrders` leaves `GameState` and `PlayerView`. The baton actions
    (`endTurn`, `takeTurn`), their routes, API calls and buttons go. The per
    player `yourTurn` flag stays as stored data (it also marks "game started"),
@@ -80,6 +86,7 @@ timeline reads them); mail hold-until-opened (#217).
 - [ ] A classic state loads as a chat-mode state with the right baseline, and
       loading it twice changes nothing more.
 - [ ] Finished game: the revision line shows only who won.
-- [ ] Hidden information: the migration route copies only `publicOrderVersions`;
-      a test proves an unrevealed draft and a private note are not copied.
+- [ ] Hidden information: the migration route copies only `publicOrderVersions`
+      into the timeline; a test proves an unrevealed draft and a private note are
+      not in the rows, and that a draft reaches only its owner's note.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
