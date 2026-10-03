@@ -33,7 +33,7 @@ interface Account {
 interface Harness {
   readonly app: App
   readonly repo: Repository
-  /** The raw stored `state` text of every delta row of a game; D1 only. */
+  /** The raw stored `state` text of every delta row of a game, read from the D1 table or the JSON file. */
   deltaTexts(gameId: string): Promise<readonly string[]>
   close(): void
 }
@@ -137,7 +137,7 @@ describe.each(backends)('revision history of a played game: %s', (_name, create)
   it('stores the game as deltas and still reads every revision as it was saved', async () => {
     const { gameId } = await play()
     const deltas = await harness.deltaTexts(gameId)
-    // 14 rounds of three recorded actions, a keyframe every 25 rows. Only D1 can show its rows.
+    // 14 rounds of three recorded actions, a keyframe every 25 rows.
     expect(deltas.length).toBeGreaterThan(30)
     const all = await harness.repo.listGameRevisions(gameId)
     expect(all.length).toBeGreaterThan(40)

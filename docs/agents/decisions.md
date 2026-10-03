@@ -4255,7 +4255,7 @@ only the app (cleanup, compaction, `deleteGame`) may.
 deploy is not sealed, and the old code does not track unrecorded changes. Do not use the
 admin chat orders switch (or any other non-note admin change) between applying 0006 and
 deploying the Worker, and right after the deploy run the sealing statement of the migration
-again; it is idempotent, and at worst costs one extra keyframe per game:
+again, before anyone plays (a move made in between is already written and the statement does not repair it); it is idempotent, and at worst costs one extra keyframe per game:
 `wrangler d1 execute playciv --remote --command "UPDATE game_revision SET sealed = 1 WHERE revision = (SELECT MAX(r.revision) FROM game_revision r WHERE r.game_id = game_revision.game_id);"`.
 
 **Rollback.** Before the first delta exists (the migration and the deploy alone, up to the
@@ -4284,3 +4284,8 @@ the value at all (0.1 ms), but I did not assume D1 has it. `kind`, `base_revisio
 them reads the value's pages; a covering index would avoid it and was left out of the
 migration to keep it cheap and safe on 150 MB. D1's daily limit on rows written is not a
 concern: a compaction updates about as many rows as the table has, a few hundred.
+
+**A game that fails its check holds up "Compact all".** The compaction charges a failed game
+its real cost against the per-request budget, so when the largest game keeps failing it is
+first in line every time and "Compact all" frees nothing. The failing game is named in the
+panel; compact the other games with their own buttons, which work independently.

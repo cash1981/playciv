@@ -795,7 +795,7 @@ without any conversion, so the migration and the deploy are safe on their own pr
 admin chat orders switch (or other non-note admin change) is made between applying `0006`
 and deploying the Worker; right after the deploy, run the sealing statement of the
 migration once more (it is idempotent): `wrangler d1 execute playciv --remote --command
-"UPDATE game_revision SET sealed = 1 WHERE revision = (SELECT MAX(r.revision) FROM game_revision r WHERE r.game_id = game_revision.game_id);"`. The first move of each game after the deploy is a keyframe. Rolling the Worker back is only
+"UPDATE game_revision SET sealed = 1 WHERE revision = (SELECT MAX(r.revision) FROM game_revision r WHERE r.game_id = game_revision.game_id);"`. Run it before anyone plays: a move made between the deploy and the statement is not repaired by it. The first move of each game after the deploy is a keyframe. Rolling the Worker back is only
 possible before a game has written its second state after the deploy (the old code cannot
 read a delta); after that, roll forward or restore the Time Travel bookmark. The old
 stop-gap SQL that deletes the oldest states of a game would break a delta chain, and a
