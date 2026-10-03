@@ -4064,6 +4064,12 @@ game. Everything else in `game_revision` for that game is deleted.
 - A cleaned game's history bar has a single entry. That is the intent.
 - D1 may not report a smaller database after the delete: freed pages are reused by
   later writes, so the size in `wrangler d1 info` might not drop at once.
+- D1's free plan also has a daily limit on rows written, so a very large backlog
+  may need to be cleaned over several days if a press fails partway. Each game's
+  delete is independent (one statement), so nothing is left half done.
+- In an all-games run a game that turns out deleted or running between the listing
+  and its delete is skipped, so the report of the games already cleaned survives;
+  a named game still answers 404 or 409.
 - There is no undo in the app. D1 Time Travel restores the database to an earlier
   minute (`wrangler d1 time-travel info playciv`).
 - Not verified here: a cleanup against the real D1 (no Cloudflare runtime in the

@@ -765,7 +765,7 @@ again while it says games are left). The final board, the log, the chat, the
 highscore and the ratings stay as they were; running games are never touched. A
 cleaned game's history bar has a single entry. D1 may not report a smaller database
 at once, because freed pages are reused, so the size in `wrangler d1 info` might not
-drop. There is no undo in the app: restore with D1 Time Travel
+drop. D1's free plan also has a daily limit on rows written, so a very large backlog may need to be cleaned over several days if a press fails partway; each game's delete is independent, so nothing is left half done. There is no undo in the app: restore with D1 Time Travel
 (`wrangler d1 time-travel info playciv`). See `docs/agents/decisions.md`.
 
 **Only Tradable cards can be given away.** The hand's "Give" control was drawn

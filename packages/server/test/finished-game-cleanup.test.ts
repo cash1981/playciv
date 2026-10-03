@@ -205,6 +205,38 @@ describe('admin cleanup of finished games', () => {
   })
 })
 
+describe('an all-games run when a game changes after the listing', () => {
+  it.each(['not-found', 'active'] as const)(
+    'skips a game that answers %s and still reports the others',
+    async (status) => {
+      const admin = await makeAdmin('boss')
+      const first = await seed('First', 3, true)
+      const vanishing = await seed('Vanishing', 5, true)
+      const last = await seed('Last', 2, true)
+      // Between the listing and the delete the middle game is gone (or running again).
+      const realDelete = repo.deleteOldGameRevisions.bind(repo)
+      repo.deleteOldGameRevisions = async (id) =>
+        id === vanishing.id ? { status } : realDelete(id)
+
+      const response = await clean(admin)
+
+      expect(response.status).toBe(200)
+      const answer = await response.json<CleanupAnswer>()
+      expect(answer.games.map((game) => game.id).sort()).toEqual([first.id, last.id].sort())
+      expect(answer.totalRevisions).toBe(3)
+      expect(answer.totalBytes).toBe(answer.games.reduce((total, game) => total + game.removedBytes, 0))
+      expect(answer.remaining).toBe(0)
+      expect(await repo.listGameRevisions(first.id)).toHaveLength(1)
+      expect(await repo.listGameRevisions(last.id)).toHaveLength(1)
+      expect(await repo.listGameRevisions(vanishing.id)).toHaveLength(5)
+
+      // A named game still gets its own error.
+      const named = await clean(admin, { gameId: vanishing.id })
+      expect(named.status).toBe(status === 'active' ? 409 : 404)
+    },
+  )
+})
+
 describe('a cleaned game reads the same afterwards', () => {
   /** A real two-player game: someone draws a card, they chat, then it ends. */
   async function playedFinishedGame() {

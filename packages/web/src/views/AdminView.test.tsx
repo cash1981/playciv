@@ -663,6 +663,8 @@ describe('clean up finished games panel', () => {
     expect(question).toContain('2 finished games')
     expect(question).toContain('128 saved states')
     expect(question).toContain('27.0 MB')
+    expect(question).toContain('limited number of games')
+    expect(question).not.toMatch(/at most \d+/)
     expect(question).toContain('replay of the game is lost')
     expect(await screen.findByText(/1 more game is left; press "Clean up all" again/, undefined, { timeout: 5_000 })).toBeTruthy()
     // No game id: the server takes the largest finished games.

@@ -869,7 +869,7 @@ function FinishedGameCleanupPanel({
       !window.confirm(
         `Clean up ${preview.games.length} finished ${preview.games.length === 1 ? 'game' : 'games'}? ` +
           `${preview.totalRevisions} saved states (about ${formatMegabytes(preview.totalBytes)}) ` +
-          `will be removed, the largest games first and at most 20 games at a time. ${CLEANUP_LOSS}`,
+          `will be removed, the largest games first. Each press handles a limited number of games; press again if some remain. ${CLEANUP_LOSS}`,
       )
     ) {
       return

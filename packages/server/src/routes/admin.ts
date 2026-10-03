@@ -49,6 +49,9 @@ function readExclude(body: Record<string, unknown>): string[] | undefined | 'inv
 }
 
 /** Games one cleanup request handles: one guarded delete each, well inside a Worker's subrequest limit. */
+// The free plan allows 50 subrequests per request and a run costs about 2 per game
+// (the delete and, when it removed nothing, a read) plus a few, so keep this below
+// roughly 23.
 const CLEANUP_GAMES_PER_REQUEST = 20
 
 function enabledAdminCount(players: readonly StoredPlayer[]): number {
@@ -377,16 +380,19 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
     const games: { id: string; name: string; removedRevisions: number; removedBytes: number }[] = []
     for (const game of batch) {
       const result = await context.repo.deleteOldGameRevisions(game.gameId)
-      if (result.status === 'not-found') {
-        return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${game.gameId}`)
-      }
-      if (result.status === 'active') {
-        return sendError(
-          c,
-          409,
-          'GAME_ACTIVE',
-          'The game is still running; only finished games can be cleaned up',
-        )
+      if (result.status !== 'cleaned') {
+        // In an all-games run the game changed after the listing (deleted, or no
+        // longer finished): skip it, so the report of the games already cleaned
+        // is not thrown away. A named game gets its own error.
+        if (gameId === undefined) continue
+        return result.status === 'not-found'
+          ? sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${game.gameId}`)
+          : sendError(
+              c,
+              409,
+              'GAME_ACTIVE',
+              'The game is still running; only finished games can be cleaned up',
+            )
       }
       games.push({
         id: game.gameId,

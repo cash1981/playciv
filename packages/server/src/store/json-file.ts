@@ -287,7 +287,7 @@ export class JsonFileRepository implements Repository {
     for (const game of this.games.values()) {
       if (game.active || (gameId !== undefined && game.id !== gameId)) continue
       const revisions = [...this.revisions.values()].filter((entry) => entry.gameId === game.id)
-      const newest = Math.max(...revisions.map((entry) => entry.revision))
+      const newest = revisions.reduce((max, entry) => Math.max(max, entry.revision), -1)
       const removable = revisions.filter((entry) => entry.revision < newest)
       usage.push({
         gameId: game.id,
@@ -312,7 +312,7 @@ export class JsonFileRepository implements Repository {
     if (game === undefined) return { status: 'not-found' }
     if (game.active) return { status: 'active' }
     const revisions = [...this.revisions.entries()].filter(([, entry]) => entry.gameId === gameId)
-    const newest = Math.max(...revisions.map(([, entry]) => entry.revision))
+    const newest = revisions.reduce((max, [, entry]) => Math.max(max, entry.revision), -1)
     let removed = 0
     for (const [key, entry] of revisions) {
       if (entry.revision >= newest) continue
