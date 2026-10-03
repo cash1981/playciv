@@ -13,11 +13,15 @@ _Last updated: 2026-10-02_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 781 engine, 295 server, 467 web on `feat/culture-hand-size` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 785 engine, 295 server, 469 web on `feat/wonder-sort` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Wonder sorting.** The board palette's Wonders category and the "Wonders in play"
+  panel list wonders by level (Ancient 1, Medieval 2, Modern 3), then alphabetically
+  within the level, ignoring a leading "The". `WONDER_LEVELS` and `compareWonderNames`
+  live in the engine next to `WONDER_DESCRIPTIONS`. Brief: `tasks/wonder-sort.md`.
 - **Culture hand size and Combat hand size.** A read-only Culture hand size column
   in the Trade, Coins & Culture cards group: base 2, +1 each for Pottery, Civil
   Service and Theology, Computers +1 per 5 coins, Valmiki +2, EftA +1 from the

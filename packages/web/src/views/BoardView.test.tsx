@@ -293,6 +293,28 @@ describe('BoardPalette finite supplies', () => {
     cleanup()
   })
 
+  it('lists wonders by level, then alphabetically', () => {
+    const wonders = ['wonders/internet', 'wonders/pyramids', 'wonders/hanginggardens']
+      .map((id) => findBoardAsset(id))
+      .filter((asset): asset is NonNullable<typeof asset> => asset !== undefined)
+    expect(wonders).toHaveLength(3)
+
+    render(
+      <BoardPalette
+        assets={[...wonders]}
+        category="wonder"
+        onCategoryChange={() => undefined}
+        replaying={false}
+        pieces={[]}
+        numOfPlayers={2}
+      />,
+    )
+    const labels = screen.getAllByRole('button', { name: /Hanging|Pyramids|Internet/ })
+      .map((button) => button.getAttribute('title'))
+    expect(labels).toEqual(['The Hanging Gardens', 'The Pyramids', 'The Internet'])
+    cleanup()
+  })
+
   it('shows the remaining count and disables an exhausted building family', () => {
     const academy = findBoardAsset('buildings/academy')
     if (academy === undefined) throw new Error('academy missing from manifest')

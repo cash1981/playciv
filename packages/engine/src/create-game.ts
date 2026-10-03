@@ -36,13 +36,44 @@ const GAMEDATA: Readonly<Record<GameType, GameDataFile>> = {
  * never filled in), the Wonders sheet's Description column is populated, so
  * this reads straight from `gamedataWaw` rather than inventing wording.
  */
+const WONDER_ENTRIES = wonderReference(GAMEDATA.WAW)
+
 export const WONDER_DESCRIPTIONS: Readonly<Record<string, string>> = Object.fromEntries(
-  wonderReference(GAMEDATA.WAW)
+  WONDER_ENTRIES
     .filter((entry): entry is WonderReference & { description: string } =>
       entry.description !== null && entry.description !== '',
     )
     .map((entry): readonly [string, string] => [entry.name, entry.description]),
 )
+
+/** The level a wonder is printed at: Ancient is 1, Medieval 2, Modern 3. */
+const WONDER_LEVEL_BY_TYPE: Readonly<Record<WonderReference['type'], 1 | 2 | 3>> = {
+  Ancient: 1,
+  Medieval: 2,
+  Modern: 3,
+}
+
+/** Every wonder's level by name, computed once from the Wonders sheet. */
+export const WONDER_LEVELS: Readonly<Record<string, 1 | 2 | 3>> = Object.fromEntries(
+  WONDER_ENTRIES.map((entry): readonly [string, 1 | 2 | 3] => [
+    entry.name,
+    WONDER_LEVEL_BY_TYPE[entry.type],
+  ]),
+)
+
+/** A wonder's name without a leading "The", so "The Pyramids" files under P. */
+const wonderSortName = (name: string): string => name.replace(/^The /, '')
+
+/**
+ * Orders wonders by level (1, 2, 3) and alphabetically within a level. A name
+ * the sheet does not know sorts after the known ones, alphabetically.
+ */
+export function compareWonderNames(a: string, b: string): number {
+  const levelA = WONDER_LEVELS[a] ?? Number.POSITIVE_INFINITY
+  const levelB = WONDER_LEVELS[b] ?? Number.POSITIVE_INFINITY
+  if (levelA !== levelB) return levelA < levelB ? -1 : 1
+  return wonderSortName(a).localeCompare(wonderSortName(b), 'en')
+}
 
 export interface NewPlayer {
   readonly playerId: string

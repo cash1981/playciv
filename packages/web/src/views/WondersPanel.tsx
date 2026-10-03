@@ -1,4 +1,4 @@
-import { WONDER_DESCRIPTIONS } from '@civ/engine'
+import { compareWonderNames, WONDER_DESCRIPTIONS } from '@civ/engine'
 
 import type { PlayerView } from '../lib/api.js'
 import { api } from '../lib/api.js'
@@ -22,7 +22,9 @@ export function WondersPanel({
   // wonder moved out of the shared Wonders area (e.g. onto the map) stays
   // listed here; only removing the piece entirely drops it, since `removePiece`
   // is what takes it out of `board.pieces` (issue #191).
-  const pieces = view.board.pieces.filter((piece) => piece.category === 'wonder')
+  const pieces = view.board.pieces
+    .filter((piece) => piece.category === 'wonder')
+    .sort((a, b) => compareWonderNames(a.label, b.label))
   const players = [
     ...(view.you === null ? [] : [{ playerId: view.you.playerId, username: view.you.username }]),
     ...view.opponents.map(({ playerId, username }) => ({ playerId, username })),
