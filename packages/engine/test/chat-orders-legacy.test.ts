@@ -1,20 +1,21 @@
 /**
- * Chat orders (issue #215): copying the classic turn orders into the timeline
- * the first time it is switched on. The engine only decides when (once) and what
- * (the public history); the server writes the rows.
+ * Chat orders (issue #215): moving the orders of the old Turn orders panel into
+ * the single chat. The engine only decides what: the public history goes to the
+ * timeline (the server writes the rows) and the unpublished drafts go to the
+ * owner's private note.
  */
 
 import { describe, expect, it } from 'vitest'
 
-import { revealTurnOrder, setChatOrders, updateTurn } from '../src/actions/turn.js'
+import { revealTurnOrder, updateTurn } from '../src/actions/turn.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
 import type { TurnPhase } from '../src/turn.js'
-import { publicOrderVersions } from '../src/turn.js'
+import { draftsToPrivateNote, publicOrderVersions, unpublishedDrafts } from '../src/turn.js'
 
-import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
+import { CASH1981, CHUL, KARANDRAS1, firstCivGame } from './fixture.js'
 
 const write = (
   state: GameState,
@@ -31,28 +32,10 @@ const write = (
 }
 
 describe('legacyOrdersCopied', () => {
-  it('is false in a new game and not in the player view', () => {
+  it('is true in a new game, which writes its orders to the timeline itself, and not in the player view', () => {
     const state = firstCivGame()
-    expect(state.legacyOrdersCopied).toBe(false)
+    expect(state.legacyOrdersCopied).toBe(true)
     expect(Object.keys(toPlayerView(state, CASH1981))).not.toContain('legacyOrdersCopied')
-  })
-
-  it('is set by the first switch-on and by nothing before it', () => {
-    const off = firstCivGame()
-    expect(unwrap(setChatOrders(off, false)).legacyOrdersCopied).toBe(false)
-
-    const on = unwrap(setChatOrders(off, true, 't0'))
-    expect(on.legacyOrdersCopied).toBe(true)
-  })
-
-  it('stays set when chat orders is switched off and on again', () => {
-    let state = unwrap(setChatOrders(firstCivGame(), true, 't0'))
-    state = unwrap(setChatOrders(state, false, 't1'))
-    expect(state.legacyOrdersCopied).toBe(true)
-    state = unwrap(setChatOrders(state, true, 't2'))
-    expect(state.legacyOrdersCopied).toBe(true)
-    // Switching on while it is on changes nothing
-    expect(unwrap(setChatOrders(state, true))).toBe(state)
   })
 
   it('migrates to false for an old save, and to true for a game already in chat mode', () => {
@@ -64,6 +47,7 @@ describe('legacyOrdersCopied', () => {
     expect(migrateGameState(inChatMode as unknown as GameState).legacyOrdersCopied).toBe(true)
     // What is stored wins
     expect(migrateGameState({ ...firstCivGame(), legacyOrdersCopied: true }).legacyOrdersCopied).toBe(true)
+    expect(migrateGameState({ ...firstCivGame(), legacyOrdersCopied: false }).legacyOrdersCopied).toBe(false)
   })
 })
 
@@ -140,5 +124,86 @@ describe('publicOrderVersions', () => {
     if (turn === undefined) throw new Error('no public turn')
     const legacy = { ...state, publicTurns: { ...state.publicTurns, [key]: { ...turn, history: { ...turn.history, SOT: [] } } } }
     expect(publicOrderVersions(legacy)).toEqual([])
+  })
+})
+
+describe('draftsToPrivateNote', () => {
+  const withNote = (state: GameState, playerId: string, gamenote: string | null): GameState => ({
+    ...state,
+    players: state.players.map((player) => (player.playerId === playerId ? { ...player, gamenote } : player)),
+  })
+  const noteOf = (state: GameState, playerId: string): string | null | undefined =>
+    state.players.find((player) => player.playerId === playerId)?.gamenote
+
+  it('puts an unpublished draft in its owner\'s note, under a heading, and nowhere else', () => {
+    let state = write(firstCivGame(), CASH1981, 3, 'TRADE', 'sell the silk')
+    state = write(state, KARANDRAS1, 1, 'SOT', 'karandras draft')
+
+    const moved = draftsToPrivateNote(state)
+
+    expect(noteOf(moved, CASH1981)).toBe('### Turn 3, trade (unpublished draft)\n\nsell the silk')
+    expect(noteOf(moved, KARANDRAS1)).toBe('### Turn 1, start of turn (unpublished draft)\n\nkarandras draft')
+    // Nothing public changed, and the players' own turns are as they were
+    expect(moved.publicTurns).toBe(state.publicTurns)
+    expect(moved.log).toBe(state.log)
+    expect(moved.players.map((player) => player.playerTurns)).toEqual(state.players.map((player) => player.playerTurns))
+  })
+
+  it('does not show a draft to another player in the projection, and shows it to the owner', () => {
+    const moved = draftsToPrivateNote(write(firstCivGame(), CASH1981, 2, 'CM', 'SECRET-DRAFT-TEXT'))
+
+    expect(JSON.stringify(toPlayerView(moved, KARANDRAS1))).not.toContain('SECRET-DRAFT-TEXT')
+    expect(toPlayerView(moved, CASH1981).you?.gamenote).toContain('SECRET-DRAFT-TEXT')
+  })
+
+  it('adds to a note that already has text, after it and a blank line, in turn and phase order', () => {
+    let state = withNote(firstCivGame(), CASH1981, 'my own note\n')
+    state = write(state, CASH1981, 2, 'SOT', 'second turn')
+    state = write(state, CASH1981, 1, 'MOVEMENT', 'first turn movement')
+    state = write(state, CASH1981, 1, 'TRADE', 'first turn trade')
+
+    expect(noteOf(draftsToPrivateNote(state), CASH1981)).toBe(
+      [
+        'my own note',
+        '### Turn 1, trade (unpublished draft)\n\nfirst turn trade',
+        '### Turn 1, movement (unpublished draft)\n\nfirst turn movement',
+        '### Turn 2, start of turn (unpublished draft)\n\nsecond turn',
+      ].join('\n\n'),
+    )
+  })
+
+  it('does not copy an order that was published, only a draft written after it', () => {
+    let state = write(firstCivGame(), CASH1981, 1, 'SOT', 'published order', '2026-01-01T09:00:00.000Z')
+    expect(noteOf(draftsToPrivateNote(state), CASH1981)).toBeNull()
+
+    // Edited after the reveal: the new text is private again, the old one stays public
+    state = write(state, CASH1981, 1, 'SOT', 'edited, not yet published')
+    const note = noteOf(draftsToPrivateNote(state), CASH1981)
+    expect(note).toContain('edited, not yet published')
+    expect(note).not.toContain('published order')
+  })
+
+  it('adds nothing for an empty or blank draft, and returns the same state', () => {
+    let state = write(firstCivGame(), CASH1981, 1, 'SOT', '')
+    state = write(state, CASH1981, 1, 'TRADE', '   \n ')
+    expect(unpublishedDrafts(state)).toEqual([])
+    expect(draftsToPrivateNote(state)).toBe(state)
+  })
+
+  it('a second run adds nothing more', () => {
+    const once = draftsToPrivateNote(write(firstCivGame(), CASH1981, 1, 'CM', 'a draft'))
+    expect(draftsToPrivateNote(once)).toEqual(once)
+  })
+
+  it('also moves the draft of a player who has withdrawn, into that player\'s own note', () => {
+    const state = write(firstCivGame(), CHUL, 1, 'SOT', 'chul draft')
+    const chul = state.players.find((player) => player.playerId === CHUL)
+    if (chul === undefined) throw new Error('no Chul')
+    const gone: GameState = {
+      ...state,
+      players: state.players.filter((player) => player.playerId !== CHUL),
+      withdrawnPlayers: [chul],
+    }
+    expect(draftsToPrivateNote(gone).withdrawnPlayers[0]?.gamenote).toContain('chul draft')
   })
 })

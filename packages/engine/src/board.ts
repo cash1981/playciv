@@ -224,8 +224,8 @@ export function boardAssetLimit(asset: BoardAsset, numOfPlayers: number): number
 }
 
 /**
- * The start player marker (issue #215). With chat orders on, the player whose
- * area holds its centre is the start player.
+ * The start player marker (issue #215). The player whose area holds its centre
+ * is the start player.
  */
 export const START_PLAYER_ID = 'markers/startplayer'
 

@@ -10,14 +10,13 @@ import { describe, expect, it } from 'vitest'
 
 import { placePiece, redoLastBoardChange, undoLastBoardChange } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
+import { markPhasesDone } from '../src/actions/turn.js'
 import { isInWondersArea } from '../src/board.js'
 import {
   chooseSocialPolicy,
   chooseTech,
   discardItem,
   discardRandomGreatPerson,
-  endTurn,
-  isYourTurn,
   remainingTechsForPlayer,
   removeSocialPolicy,
   removeTech,
@@ -26,7 +25,6 @@ import {
   revealTech,
   revealedTechsForAllPlayers,
   saveNote,
-  takeTurn,
   tradeToPlayer,
 } from '../src/actions/player.js'
 import type { CivItem } from '../src/item.js'
@@ -321,20 +319,18 @@ describe('reveal civilization', () => {
     expect(error).toEqual({ kind: 'NOT_YOUR_TURN', playerId: KARANDRAS1 })
   })
 
-  // Reveal a civilization for every player, in player-number order, forcing the
-  // turn to each in turn (drawing and revealing both require the turn).
+  // Reveal a civilization for every player, in player-number order. Each player
+  // marks the start of turn done afterwards, which hands the turn to the next seat
+  // (drawing and revealing both require it).
   const revealEveryCiv = (start: GameState): GameState => {
     let state = start
     const order = [...state.players]
       .sort((a, b) => a.playernumber - b.playernumber)
       .map((player) => player.playerId)
     for (const playerId of order) {
-      state = {
-        ...state,
-        players: state.players.map((p) => ({ ...p, yourTurn: p.playerId === playerId })),
-      }
       state = unwrap(draw(state, { playerId, sheetName: 'CIV' }))
       state = unwrap(revealCivFor(state, playerId))
+      state = unwrap(markPhasesDone(state, { playerId, turnNumber: 1, upToPhase: 'SOT' }))
     }
     return state
   }
@@ -406,15 +402,12 @@ describe('reveal civilization', () => {
       .sort((a, b) => a.playernumber - b.playernumber)
       .map((player) => player.playerId)
     for (const playerId of order) {
-      state = {
-        ...state,
-        players: state.players.map((p) => ({ ...p, yourTurn: p.playerId === playerId })),
-      }
       state =
         playerId === egyptPlayerId
           ? giveCiv(state, playerId, 'Egyptians')
           : unwrap(draw(state, { playerId, sheetName: 'CIV' }))
       state = unwrap(revealCivFor(state, playerId))
+      state = unwrap(markPhasesDone(state, { playerId, turnNumber: 1, upToPhase: 'SOT' }))
     }
     return state
   }
@@ -870,61 +863,6 @@ describe('discardRandomGreatPerson', () => {
       discardRandomGreatPerson(firstCivGame(), { playerId: 'player-nobody', type: 'General' }),
     )
     expect(error.kind).toBe('NO_ACCESS')
-  })
-})
-
-/** Java: `PlayerAction.endTurn` and `takeTurnButton`. */
-describe('changing turn', () => {
-  it('returns GAME_NOT_STARTED for a legacy zero-numbered game rather than guessing an index', () => {
-    const before = firstCivGame()
-    const legacy = {
-      ...before,
-      players: before.players.map((player) => ({ ...player, playernumber: 0 })),
-    }
-
-    const result = endTurn(legacy, { playerId: CASH1981, username: 'cash1981' })
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error.kind).toBe('GAME_NOT_STARTED')
-  })
-
-  it('returns GAME_NOT_STARTED when no player has the turn yet', () => {
-    const before = firstCivGame()
-    const unstarted = {
-      ...before,
-      players: before.players.map((player) => ({ ...player, yourTurn: false })),
-    }
-
-    const result = endTurn(unstarted)
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error.kind).toBe('GAME_NOT_STARTED')
-  })
-
-  it('gives the turn to the next player number', () => {
-    const before = firstCivGame()
-    expect(isYourTurn(before, CASH1981)).toBe(true)
-
-    const after = unwrap(endTurn(before))
-    expect(isYourTurn(after, CASH1981)).toBe(false)
-    expect(isYourTurn(after, KARANDRAS1)).toBe(true)
-  })
-
-  it('wraps back to the first player after the last', () => {
-    let state = firstCivGame()
-    for (let i = 0; i < 4; i++) state = unwrap(endTurn(state))
-
-    expect(isYourTurn(state, CASH1981)).toBe(true)
-    expect(state.players.filter((player) => player.yourTurn)).toHaveLength(1)
-  })
-
-  it('takeTurn takes the turn from anyone', () => {
-    const state = unwrap(takeTurn(firstCivGame(), CHUL))
-
-    expect(isYourTurn(state, CHUL)).toBe(true)
-    expect(isYourTurn(state, CASH1981)).toBe(false)
-    expect(state.log.at(-2)?.publicLog).toBe('Chul took turn button')
-    expect(state.log.at(-1)?.publicLog).toBe(
-      "System: Turn 1 - it is now Chul's turn (start of turn phase)",
-    )
   })
 })
 

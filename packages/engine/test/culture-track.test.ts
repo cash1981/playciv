@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 
 import { movePiece, placePiece } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
+import { markPhasesDone } from '../src/actions/turn.js'
 import { revealItem } from '../src/actions/player.js'
 import type { BoardPiece } from '../src/board.js'
 import {
@@ -276,7 +277,7 @@ describe('choosing a civilization', () => {
   it('a second player lands on START without covering the first', () => {
     let state = chooseCiv(firstCivGame(), CASH1981)
     // Karandras1 needs the turn before the reveal can draw starting units
-    state = { ...state, players: state.players.map((player) => ({ ...player, yourTurn: player.playerId === KARANDRAS1 })) }
+    state = unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
     state = chooseCiv(state, KARANDRAS1)
 
     const markers = state.board.pieces.filter((piece) => piece.category === 'leader')

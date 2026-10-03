@@ -14,7 +14,8 @@ import type { SocialPolicyItem } from './item.js'
 import type { GameState, Playerhand, PlayerStats } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
-import { migratePlayerTurn } from './turn.js'
+import type { PlayerTurn } from './turn.js'
+import { TURN_PHASES, migratePlayerTurn, startPlayerOf } from './turn.js'
 
 /**
  * Issue #175: a game saved before `gamedata.ts` started correcting the
@@ -37,8 +38,11 @@ const correctSocialPolicyFlipsides = (
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret' | 'chatOrders' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters' | 'legacyOrdersCopied'
-> &
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters' | 'legacyOrdersCopied'
+> & {
+    /** The switch that used to choose between the old baton view and chat orders. Gone from `GameState`. */
+    readonly chatOrders?: boolean
+  } &
   Partial<
     Pick<
       GameState,
@@ -49,7 +53,6 @@ type MaybeOlder = Omit<
       | 'battle'
       | 'rev'
       | 'createdAt'
-      | 'chatOrders'
       | 'chatOrdersStartTurn'
       | 'startPlayerId'
       | 'legacyOrdersCopied'
@@ -154,8 +157,44 @@ function historyForImportedPieces(
   }))
 }
 
+/**
+ * The turn the old baton view says a game is on: the turn of whoever holds the
+ * baton, moved on by one when that player has revealed every phase. A flag
+ * missing from an old `revealed` map blocks nothing, only an explicit `false`.
+ */
+function batonTurn(players: readonly Playerhand[]): number {
+  const current = players.find((player) => player.yourTurn)
+  if (current === undefined) return 1
+  const latest = current.playerTurns.reduce<PlayerTurn | undefined>(
+    (best, turn) => (best === undefined || turn.turnNumber > best.turnNumber ? turn : best),
+    undefined,
+  )
+  if (latest === undefined) return 1
+  const roundDone = TURN_PHASES.every((phase) => latest.revealed[phase] !== false)
+  return roundDone ? latest.turnNumber + 1 : latest.turnNumber
+}
+
+/**
+ * The turn a game has reached, read from the whole table rather than from the
+ * baton holder alone. The baton only looks at whoever holds it, and a holder who
+ * never wrote turn orders would report turn 1 in a game that is on turn 20. So:
+ * the larger of the baton turn and the highest turn anyone has a record for,
+ * moved on by one when everybody who has a record for that turn has finished all
+ * its phases. Overshooting only marks old turns finished, which is what a
+ * baseline is for; undershooting would pin the game to an old turn.
+ */
+function playedTurn(players: readonly Playerhand[]): number {
+  const baton = batonTurn(players)
+  const recorded = players.flatMap((player) => player.playerTurns)
+  const highest = recorded.reduce((best, turn) => Math.max(best, turn.turnNumber), 0)
+  if (highest === 0) return baton
+  const atHighest = recorded.filter((turn) => turn.turnNumber === highest)
+  const finished = atHighest.every((turn) => TURN_PHASES.every((phase) => turn.revealed[phase] !== false))
+  return Math.max(baton, finished ? highest + 1 : highest)
+}
+
 export function migrateGameState(state: GameState): GameState {
-  const older = state as MaybeOlder
+  const { chatOrders, ...older } = state as MaybeOlder
   const board = older.board as MaybeOlderBoard | undefined
   const battle = older.battle as MaybeOlderBattle | null | undefined
   // A board saved before the shapes existed is a plain rectangle of its own
@@ -199,16 +238,16 @@ export function migrateGameState(state: GameState): GameState {
     state.numOfPlayers === state.players.length &&
     state.players.every((player) => player.civilization !== null)
 
-  return {
-    ...state,
+  const migrated: GameState = {
+    ...older,
     createdAt: older.createdAt ?? null,
     // A game saved before the public item numbers were keyed has no key yet. It
     // is left empty, and the server puts a random one in before the next action
     // (`applyToGame`). Nothing in the game state is safe to derive it from: the
     // rng stream is published through log and item ids.
     logSecret: older.logSecret ?? '',
-    log: state.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
-    players: state.players.map(withPlayerDefaults),
+    log: older.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
+    players: older.players.map(withPlayerDefaults),
     board:
       board === undefined
         ? fresh
@@ -221,7 +260,7 @@ export function migrateGameState(state: GameState): GameState {
             history: board.history ?? historyForImportedPieces(board.pieces),
             redo: board.redo ?? [],
           },
-    socialPolicies: correctSocialPolicyFlipsides(state.socialPolicies),
+    socialPolicies: correctSocialPolicyFlipsides(older.socialPolicies),
     withdrawnPlayers: (older.withdrawnPlayers ?? []).map(withPlayerDefaults),
     publicTurns: Object.fromEntries(
       Object.entries(older.publicTurns ?? {}).map(([key, turn]) => [key, migratePlayerTurn(turn)]),
@@ -242,14 +281,41 @@ export function migrateGameState(state: GameState): GameState {
             departedUnits: battle.departedUnits ?? [],
           },
     rev: older.rev ?? 0,
-    // Chat orders (issue #215) is opt-in, so every older save starts with it off.
-    chatOrders: older.chatOrders ?? false,
-    // Turn 1 is the baseline of a game that has never used chat orders.
     chatOrdersStartTurn: older.chatOrdersStartTurn ?? 1,
     startPlayerId: older.startPlayerId ?? null,
-    // A game that is already in chat mode has its orders in the timeline, and
-    // copying the classic ones later would duplicate those posted there.
-    legacyOrdersCopied: older.legacyOrdersCopied ?? older.chatOrders === true,
+    // A game that was already in chat mode has its orders in the timeline, and
+    // copying the old ones later would duplicate those posted there. A save
+    // without the flag from before chat orders existed has not been copied.
+    legacyOrdersCopied: older.legacyOrdersCopied ?? chatOrders === true,
     turnStarters: older.turnStarters ?? {},
+  }
+  // The old baton view is gone, and every game is a chat game. Adopt one that was
+  // saved with the switch off, or from before it existed (neither it nor the
+  // baseline is there). A state saved by this code has the baseline and no
+  // switch, so it is left alone, and so is a second load of an adopted one.
+  const classic = chatOrders === false || (chatOrders === undefined && older.chatOrdersStartTurn === undefined)
+  return classic ? adoptClassicGame(migrated) : migrated
+}
+
+/**
+ * What switching chat orders on used to do to the state, minus the board marker
+ * and the log line: the baseline moves up to the turn the game has reached (never
+ * down), and the start player and the starter of that turn are recorded. The
+ * start player comes from the marker when the board has one and from
+ * `startPlayerId` or seat 1 when it has not (`startPlayerOf`); no marker is
+ * placed, because a load must not write to the board, and the next turn's
+ * rotation places one.
+ */
+function adoptClassicGame(state: GameState): GameState {
+  const chatOrdersStartTurn = Math.max(state.chatOrdersStartTurn, playedTurn(state.players))
+  const starter = startPlayerOf(state)
+  return {
+    ...state,
+    chatOrdersStartTurn,
+    startPlayerId: starter?.playerId ?? state.startPlayerId,
+    turnStarters:
+      starter === undefined || state.turnStarters[chatOrdersStartTurn] !== undefined
+        ? state.turnStarters
+        : { ...state.turnStarters, [chatOrdersStartTurn]: starter.username },
   }
 }

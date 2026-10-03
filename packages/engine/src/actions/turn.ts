@@ -13,11 +13,11 @@
  */
 
 import type { EngineError } from '../errors.js'
-import { appendInfoLog, appendLog, appendPublicLog, createLogTexts } from '../log.js'
+import { appendLog, appendPublicLog, createLogTexts } from '../log.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, LogType, Playerhand } from '../state.js'
-import { activeTurnStatus, findPlayer, hasUserAccess, withPlayer } from '../state.js'
+import { findPlayer, hasUserAccess, withPlayer } from '../state.js'
 import type { PlayerTurn, TurnPhase } from '../turn.js'
 import {
   TURN_PHASES,
@@ -26,12 +26,9 @@ import {
   publicTurnKey,
   publicTurn,
   sameTurn,
-  startPlayerOf,
   TURN_PHASE_LABEL,
   withOrder,
 } from '../turn.js'
-import { START_PLAYER_ID } from '../board.js'
-import { placeStartMarker } from './board.js'
 import { startMissingTurns } from './new-turn.js'
 
 type ActionResult = Result<GameState, EngineError>
@@ -116,8 +113,7 @@ export function revealTurnOrder(state: GameState, input: RevealTurnOrderInput): 
   const updated: PlayerTurn = {
     ...turn,
     revealed: { ...turn.revealed, [input.phase]: true },
-    // Chat orders (issue #215): a classic reveal finishes the phase too, so the
-    // two modes agree about what is done when the setting is switched.
+    // A reveal finishes the phase too, so `done` and `revealed` agree.
     done: { ...turn.done, [input.phase]: true },
     history: {
       ...turn.history,
@@ -147,7 +143,7 @@ export function revealTurnOrder(state: GameState, input: RevealTurnOrderInput): 
     privateLog: message,
     publicLog: message,
   })
-  // A reveal sets `done` too, so it can finish a turn. Nothing happens with chat orders off.
+  // A reveal sets `done` too, so it can finish a turn.
   return ok(startMissingTurns(revealed, player.playerId, input.at))
 }
 
@@ -243,10 +239,8 @@ export function playersTurns(state: GameState, playerId: string): readonly Playe
 // ---------------------------------------------------------------------------
 // Chat orders (issue #215)
 //
-// None of these require it to be the caller's turn: with chat orders on there
-// is no baton, and players work on their own turn independently. They refuse
-// with `CHAT_ORDERS_OFF` while the setting is off; the classic reveal is
-// unaffected.
+// None of these require it to be the caller's turn: there is no baton, and
+// players work on their own turn independently.
 // ---------------------------------------------------------------------------
 
 /** Replaces one player's turn (creating it when missing) and keeps the public copy in step. */
@@ -283,7 +277,6 @@ export interface MarkPhasesDoneInput {
  * logs nothing.
  */
 export function markPhasesDone(state: GameState, input: MarkPhasesDoneInput): ActionResult {
-  if (!state.chatOrders) return err({ kind: 'CHAT_ORDERS_OFF' })
   const access = requireAccess(state, input.playerId)
   if (!access.ok) return access
   const player = access.value
@@ -327,7 +320,6 @@ export interface UnmarkPhaseDoneInput {
  * an order.
  */
 export function unmarkPhaseDone(state: GameState, input: UnmarkPhaseDoneInput): ActionResult {
-  if (!state.chatOrders) return err({ kind: 'CHAT_ORDERS_OFF' })
   const access = requireAccess(state, input.playerId)
   if (!access.ok) return access
   const player = access.value
@@ -360,12 +352,10 @@ export interface PostOrderInput {
 
 /**
  * Writes the order for a phase and publishes it in one step: `orders[phase]` is
- * the newest text and `history` keeps every version, so the classic Turn orders
- * panel reads the same data. A phase can take several orders. It does not mark
+ * the newest text and `history` keeps every version. A phase can take several orders. It does not mark
  * the phase done.
  */
 export function postOrder(state: GameState, input: PostOrderInput): ActionResult {
-  if (!state.chatOrders) return err({ kind: 'CHAT_ORDERS_OFF' })
   const access = requireAccess(state, input.playerId)
   if (!access.ok) return access
   const player = access.value
@@ -380,8 +370,8 @@ export function postOrder(state: GameState, input: PostOrderInput): ActionResult
       [input.phase]: [...turn.history[input.phase], { markdown: input.markdown, at: input.at }],
     },
   }
-  // The text stays out of the log, as with a classic reveal: it is in the
-  // published history and, in chat mode, in the timeline.
+  // The text stays out of the log, as with a reveal: it is in the published
+  // history and in the timeline.
   const message = `Turn ${input.turnNumber} - ${player.username} posted an order for ${TURN_PHASE_LABEL[input.phase]} phase`
   return ok(
     appendLog(withPlayerTurn(state, player, updated), {
@@ -392,64 +382,4 @@ export function postOrder(state: GameState, input: PostOrderInput): ActionResult
       publicLog: message,
     }),
   )
-}
-
-/**
- * The turn a game has reached, read from the whole table rather than from the
- * baton holder alone. The classic view only looks at whoever holds the baton,
- * and a holder who never wrote turn orders would report turn 1 in a game that is
- * on turn 20. So: the larger of the classic turn and the highest turn anyone has
- * a record for, moved on by one when everybody who has a record for that turn
- * has finished all its phases. Overshooting only marks old turns finished, which
- * is what a baseline is for; undershooting would pin the game to an old turn.
- */
-function playedTurn(state: GameState): number {
-  const classicTurn = activeTurnStatus({ ...state, chatOrders: false })?.turnNumber ?? 1
-  const recorded = state.players.flatMap((player) => player.playerTurns)
-  const highest = recorded.reduce((best, turn) => Math.max(best, turn.turnNumber), 0)
-  if (highest === 0) return classicTurn
-  const atHighest = recorded.filter((turn) => turn.turnNumber === highest)
-  const finished = atHighest.every((turn) => TURN_PHASES.every((phase) => turn.revealed[phase] !== false))
-  return Math.max(classicTurn, finished ? highest + 1 : highest)
-}
-
-/**
- * Switches chat orders on or off for a game. The engine has no notion of an
- * admin, so the server route is what restricts who may call this.
- *
- * Switching on sets the baseline `chatOrdersStartTurn` to the turn the classic
- * view reports right now (computed before the flag flips), never lowering it.
- * It also settles the start player: the marker stays where it is when the board
- * has one, and is placed in the start player's area when it has not (a board
- * history entry, made in the start player's name since the admin may not be in
- * the game). The starter of the baseline turn is recorded. Switching off touches
- * nothing else, which is why going back and forth loses no data, and places no
- * marker.
- */
-export function setChatOrders(state: GameState, enabled: boolean, at?: string): ActionResult {
-  if (state.chatOrders === enabled) return ok(state)
-  const chatOrdersStartTurn = enabled
-    ? Math.max(state.chatOrdersStartTurn, playedTurn(state))
-    : state.chatOrdersStartTurn
-  const flipped = appendInfoLog(
-    // The first switch-on is the one time the classic orders are copied over
-    { ...state, chatOrders: enabled, chatOrdersStartTurn, legacyOrdersCopied: state.legacyOrdersCopied || enabled },
-    `Chat orders turned ${enabled ? 'on' : 'off'}`,
-  )
-  if (!enabled) return ok(flipped)
-
-  const starter = startPlayerOf(flipped)
-  if (starter === undefined) return ok(flipped)
-  const hasMarker = flipped.board.pieces.some((piece) => piece.assetId === START_PLAYER_ID)
-  const placed = hasMarker ? flipped : placeStartMarker(flipped, starter, starter.playerId, at)
-  // A marker that was already there decides who the start player is
-  const settled = startPlayerOf(placed) ?? starter
-  return ok({
-    ...placed,
-    startPlayerId: settled.playerId,
-    turnStarters:
-      placed.turnStarters[chatOrdersStartTurn] === undefined
-        ? { ...placed.turnStarters, [chatOrdersStartTurn]: settled.username }
-        : placed.turnStarters,
-  })
 }

@@ -199,10 +199,10 @@ export function createGame(options: CreateGameOptions): GameState {
     logSecret: options.secret ?? deriveLogSecret(seed, gameId),
     itemCounter: counter,
     wondersDealt: false,
-    chatOrders: false,
     chatOrdersStartTurn: 1,
     startPlayerId: null,
-    legacyOrdersCopied: false,
+    // Nothing to copy: a new game writes its orders to the timeline itself
+    legacyOrdersCopied: true,
     turnStarters: {},
     battle: null,
     rev: 0,

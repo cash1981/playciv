@@ -1,9 +1,9 @@
 /**
- * Chat orders (issue #215): starting a turn.
+ * Starting a turn (issue #215).
  *
  * A turn starts when `turnStatus.currentTurn` gets ahead of the last turn that
  * has a starter. That can happen in more than one way: the last player marks
- * Research done, a classic reveal sets `done`, or a withdrawal removes the one
+ * Research done, a reveal sets `done`, or a withdrawal removes the one
  * player who held the turn back. So the roll-over is a catch-up that every such
  * action calls, and not a step inside one of them.
  */
@@ -15,7 +15,7 @@ import { placeStartMarker } from './board.js'
 
 /**
  * Starts every turn between the newest one with a starter and the current turn,
- * one seat of rotation each. Nothing when chat orders is off.
+ * one seat of rotation each.
  *
  * `turnStarters` is the guard, so unmarking a Research and marking it again, which
  * moves `currentTurn` back and forth, never rotates twice, and an unmark never
@@ -32,7 +32,6 @@ export function startMissingTurns(
   actorId: string | undefined,
   at: string | undefined,
 ): GameState {
-  if (!state.chatOrders) return state
   const current = turnStatus(state).currentTurn
   const started = Object.keys(state.turnStarters).reduce(
     (best, key) => Math.max(best, Number(key)),

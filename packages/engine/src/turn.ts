@@ -165,7 +165,7 @@ export function migratePlayerTurn(turn: PlayerTurn): PlayerTurn {
   return {
     ...turn,
     revealed,
-    // Turns saved before chat orders existed: a phase counts as done when it
+    // Turns saved before the done markers existed: a phase counts as done when it
     // was published, the same rule that backfills `revealed` above.
     done: Object.fromEntries(
       TURN_PHASES.map((phase) => [phase, turn.done?.[phase] ?? revealed[phase]]),
@@ -201,32 +201,6 @@ export function publicTurn(turn: PlayerTurn): PlayerTurn {
  */
 export function publicTurnKey(turn: PlayerTurn): string {
   return `${turn.turnNumber}${turn.username}`
-}
-
-/** Java: `PlayerTurn.endTurn()` bumped the turn number. */
-export function nextTurnNumber(turn: PlayerTurn): number {
-  return turn.turnNumber + 1
-}
-
-/**
- * New in the port, no Java counterpart. The phase a player should currently be
- * working on: the first phase of their given turn not yet revealed, or `SOT`
- * once every phase of that turn has been revealed (they are between rounds,
- * waiting to start the next one). A missing turn (nothing saved yet) is also
- * `SOT`. Never `null`, so a caller always has something concrete to point a
- * player at.
- *
- * Reads only the `revealed` flags, which are already public (`publicTurn`
- * masks order text, not these booleans), so this is safe to expose to anyone.
- *
- * A flag missing from a legacy, not-yet-migrated `revealed` map is treated as
- * revealed (blocking only on an explicit `false`), the same rule
- * `activeTurnStatus` uses to decide a turn is fully done — so the two never
- * disagree about whether a round is complete.
- */
-export function currentPhaseStatus(turn: PlayerTurn | undefined): TurnPhase {
-  if (turn === undefined) return 'SOT'
-  return TURN_PHASES.find((phase) => turn.revealed[phase] === false) ?? 'SOT'
 }
 
 // ---------------------------------------------------------------------------
@@ -275,7 +249,7 @@ export const bySeat = (players: readonly Playerhand[]): readonly Playerhand[] =>
  *
  * The current turn is the lowest one that some active player has not finished
  * (Research not marked done), counting from `chatOrdersStartTurn`. It is that
- * baseline (1 in a game that never played classic) when nobody has anything
+ * baseline (1 in a game that never used the old baton) when nobody has anything
  * yet, and it moves on by itself once the last player marks Research done.
  */
 export function turnStatus(state: GameState): TurnStatus {
@@ -379,7 +353,7 @@ export function startPlayerName(state: GameState, turnNumber: number): string | 
 }
 
 /**
- * Who "has the turn" when chat orders are on. There is no baton: it is the
+ * Who "has the turn". There is no baton: it is the
  * first player, in seat order starting from the start player, who has not
  * marked the earliest open phase done. The earliest open phase is the first one
  * some active player has not marked done in the current turn.
@@ -406,7 +380,7 @@ export function turnHolder(state: GameState, startPlayerNumber?: number): Player
   return ordered.find((player) => !isDone(turnOf(player, currentTurn), earliest))
 }
 
-/** One published version of a phase's order, as the classic Turn orders panel showed it. */
+/** One published version of a phase's order. */
 export interface PublicOrderVersion {
   readonly username: string
   readonly turnNumber: number
@@ -422,9 +396,9 @@ export interface PublicOrderVersion {
  * Every revealed version of every order, oldest first, read from the public copy
  * only (`publicTurns`), never from a player's own turns: a draft that was never
  * revealed is masked there and has no history entry, so it cannot be returned by
- * accident. Chat orders copies these into the timeline when it is first switched
- * on. A version without a usable `at` is left out rather than given a made-up
- * time. Orders revealed before versions were kept (old saves) have none and are
+ * accident. The server copies these into the timeline when it migrates a game
+ * from the old Turn orders panel. A version without a usable `at` is left out
+ * rather than given a made-up time. Orders revealed before versions were kept (old saves) have none and are
  * not returned.
  */
 export function publicOrderVersions(state: GameState): readonly PublicOrderVersion[] {
@@ -445,4 +419,64 @@ export function publicOrderVersions(state: GameState): readonly PublicOrderVersi
       compareJavaStrings(a.username, b.username) ||
       a.index - b.index,
   )
+}
+
+/** One order a player wrote in the old Turn orders panel and never published. */
+export interface UnpublishedDraft {
+  readonly playerId: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+  readonly markdown: string
+}
+
+/**
+ * Every draft that was never published, in player, turn and phase order: a
+ * non-blank `orders[phase]` while `revealed[phase]` is not true. This reads the
+ * players' own turns, so it is private data. It is for the migration only, and
+ * its result must go nowhere but back into the owner's own `gamenote`.
+ */
+export function unpublishedDrafts(state: GameState): readonly UnpublishedDraft[] {
+  return [...state.players, ...state.withdrawnPlayers].flatMap((player) =>
+    [...player.playerTurns]
+      .sort((a, b) => a.turnNumber - b.turnNumber)
+      .flatMap((turn) =>
+        TURN_PHASES.flatMap((phase): readonly UnpublishedDraft[] => {
+          const markdown = (turn.orders[phase] ?? '').trim()
+          return markdown === '' || turn.revealed[phase] === true
+            ? []
+            : [{ playerId: player.playerId, turnNumber: turn.turnNumber, phase, markdown }]
+        }),
+      ),
+  )
+}
+
+const draftSection = (draft: UnpublishedDraft): string =>
+  `### Turn ${draft.turnNumber}, ${TURN_PHASE_LABEL[draft.phase]} (unpublished draft)\n\n${draft.markdown}`
+
+/**
+ * Moves the unpublished drafts of the old Turn orders panel into their owners'
+ * private note (`gamenote`), which is what the private tab of the timeline shows.
+ * Each draft becomes a markdown section headed `### Turn N, <phase> (unpublished
+ * draft)`, added after whatever the note already says and separated by a blank
+ * line. A section the note already holds, word for word, is not added again, so a
+ * second run changes nothing. `publicTurns` and the players' own turns are left
+ * alone: nothing another player sees changes.
+ */
+export function draftsToPrivateNote(state: GameState): GameState {
+  const drafts = unpublishedDrafts(state)
+  if (drafts.length === 0) return state
+  const withNote = (player: Playerhand): Playerhand => {
+    const note = player.gamenote ?? ''
+    const sections = drafts
+      .filter((draft) => draft.playerId === player.playerId)
+      .map(draftSection)
+      .filter((section) => !note.includes(section))
+    if (sections.length === 0) return player
+    return { ...player, gamenote: [note.trimEnd(), ...sections].filter((part) => part !== '').join('\n\n') }
+  }
+  return {
+    ...state,
+    players: state.players.map(withNote),
+    withdrawnPlayers: state.withdrawnPlayers.map(withNote),
+  }
 }

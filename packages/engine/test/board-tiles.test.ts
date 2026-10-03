@@ -9,7 +9,8 @@ import { describe, expect, it } from 'vitest'
 
 import { movePiece, placePiece, rotatePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
-import { endTurn, revealItem } from '../src/actions/player.js'
+import { markPhasesDone } from '../src/actions/turn.js'
+import { revealItem } from '../src/actions/player.js'
 import { createGame } from '../src/create-game.js'
 import {
   SQUARE_SIZE,
@@ -473,7 +474,7 @@ describe('revealing civilizations, one player at a time (issue #171)', () => {
       })
 
       for (let turn = 0; turn < numOfPlayers; turn++) {
-        const current = state.players.find((player) => player.yourTurn)
+        const current = state.players[turn]
         if (current === undefined) throw new Error('no current player')
 
         state = unwrap(draw(state, { playerId: current.playerId, sheetName: 'CIV' }))
@@ -487,8 +488,8 @@ describe('revealing civilizations, one player at a time (issue #171)', () => {
             itemNumber: civ.itemNumber,
           }),
         )
-
-        if (turn < numOfPlayers - 1) state = unwrap(endTurn(state))
+        // Finishing the start of turn hands the turn to the next seat
+        state = unwrap(markPhasesDone(state, { playerId: current.playerId, turnNumber: 1, upToPhase: 'SOT' }))
       }
 
       const civTiles = state.board.pieces.filter((piece) => piece.category === 'civtile')
