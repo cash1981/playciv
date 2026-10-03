@@ -22,6 +22,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/server/src/mail.ts`, `packages/server/src/notifications.ts`, `packages/server/src/routes/admin.ts`
   - `packages/server/test/mail.test.ts`, `packages/server/test/admin-email-broadcast.test.ts`
   - `packages/web/src/lib/api.ts` (only `broadcastEmail`), `packages/web/src/views/AdminView.tsx` and its test
+  - Slice 2 (`docs/agents/tasks/broadcast-queue.md`): `packages/worker/migrations/0005_broadcast_queue.sql`, `packages/worker/src/index.ts`, `wrangler.jsonc`, `packages/server/src/store/types.ts`, `store/d1.ts`, `store/json-file.ts`, the broadcast functions in `packages/web/src/lib/api.ts`
 - **Notes:** the `chat-orders` claim above and its `api.ts` row look stale (its work is on `main`); this task only touches `broadcastEmail` in `api.ts`.
 
 ---
