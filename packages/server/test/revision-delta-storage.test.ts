@@ -33,7 +33,7 @@ const K = REVISION_KEYFRAME_INTERVAL
 const text = (state: unknown): string => JSON.stringify(state)
 
 /** One more recorded action by whoever holds the turn, saved like `applyToGame` does. */
-async function saveNextTurn(fixture: StoreFixture, live: GameState): Promise<GameState> {
+async function saveNextTurn(fixture: Pick<StoreFixture, 'repo'>, live: GameState): Promise<GameState> {
   const result = endTurn(live)
   if (!result.ok) throw new Error(result.error.kind)
   const after = stampLog({ ...result.value, rev: live.rev + 1 }, '2026-10-02T00:00:00.000Z')
@@ -400,7 +400,7 @@ describe('delta revisions in the JSON file store: the file', () => {
     }
   })
 
-  it('a file from before delta storage still loads and the next revision is a delta against it', async () => {
+  it('a file from before delta storage still loads; its newest row is sealed, so a keyframe comes next, then deltas', async () => {
     const filePath = join(directory, 'data.json')
     const live = startGame({ name: 'Legacy file' })
     const legacy = createGameRevision(undefined, live, ACTOR, '2026-10-02T00:00:00.000Z', 'legacy')
@@ -425,12 +425,14 @@ describe('delta revisions in the JSON file store: the file', () => {
         revisionSnapshot(live),
       ),
     ).toBe(true)
+    const afterNext = await saveNextTurn({ repo }, next)
     await repo.flush()
     const file = JSON.parse(await readFile(filePath, 'utf8')) as { revisions: { kind?: string; baseRevision?: number | null }[] }
     expect(file.revisions.map((row) => [row.kind, row.baseRevision])).toEqual([
       ['full', null],
-      ['delta', live.rev],
+      ['full', next.rev],
+      ['delta', next.rev],
     ])
-    expect((await repo.findGameRevision(live.id, next.rev))?.state.rev).toBe(next.rev)
+    expect((await repo.findGameRevision(live.id, afterNext.rev))?.state.rev).toBe(afterNext.rev)
   })
 })

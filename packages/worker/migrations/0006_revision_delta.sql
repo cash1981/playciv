@@ -22,3 +22,11 @@
 ALTER TABLE game_revision ADD COLUMN kind TEXT NOT NULL DEFAULT 'full';
 ALTER TABLE game_revision ADD COLUMN base_revision INTEGER;
 ALTER TABLE game_revision ADD COLUMN sealed INTEGER NOT NULL DEFAULT 0;
+
+-- The code that wrote the existing rows did not track changes the history does
+-- not record (an admin setting saved without a revision, say), so nothing says
+-- the live game still equals its newest revision. Seal every game's newest row:
+-- the first revision written after the deploy is then a keyframe, and deltas
+-- start from a state known to be right.
+UPDATE game_revision SET sealed = 1
+WHERE revision = (SELECT MAX(r.revision) FROM game_revision r WHERE r.game_id = game_revision.game_id);

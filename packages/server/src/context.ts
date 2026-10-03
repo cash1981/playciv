@@ -12,6 +12,7 @@ import type { ResetTokenSigner, TokenSigner } from './auth.js'
 import { newId } from './auth.js'
 import { sendEngineError, sendError } from './errors.js'
 import type { Notifications } from './notifications.js'
+import { sameJson } from './revision-delta.js'
 import type { GameRevision, Repository, StoredPlayer } from './store/types.js'
 
 export interface AppContext {
@@ -145,6 +146,15 @@ export function revisionSnapshot(state: GameState): GameState {
   }
 }
 
+/**
+ * Whether two live states differ only in private notes (and `rev`), the one kind
+ * of unrecorded change a delta against the newest revision does not need to know
+ * about: revision snapshots blank the notes anyway.
+ */
+export function differOnlyInNotes(before: GameState, after: GameState): boolean {
+  return sameJson({ ...revisionSnapshot(before), rev: 0 }, { ...revisionSnapshot(after), rev: 0 })
+}
+
 export function createGameRevision(
   before: GameState | undefined,
   state: GameState,
@@ -270,7 +280,11 @@ export async function applyToGame(
   const stamped = stampLog({ ...result.value, rev: game.rev + 1 }, now)
 
   if (options.record === false) {
-    const saved = await context.repo.saveGameIfRevision(stamped, game.rev)
+    // A note leaves the chain of revisions alone; anything else this path saves
+    // (an admin setting) makes the next revision a keyframe.
+    const saved = await context.repo.saveGameIfRevision(stamped, game.rev, {
+      notesOnly: differOnlyInNotes(game, stamped),
+    })
     if (!saved) {
       return sendError(
         c,
@@ -303,6 +317,9 @@ export async function applyToGame(
         options.description ?? 'Game state updated',
       ),
       game.rev,
+      // The live game before the action is the newest revision's state (notes
+      // blanked), so the store can keep the revision as a small delta.
+      revisionSnapshot(game),
     )
     if (!saved) {
       return sendError(
