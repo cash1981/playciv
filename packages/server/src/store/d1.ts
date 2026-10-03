@@ -23,11 +23,16 @@ import { ratedHighscore, resultFromGame } from './rating.js'
 
 import { normalizeChatMessage } from './types.js'
 import type {
+  BroadcastCounts,
+  BroadcastRecipientStatus,
+  BroadcastStatus,
   ChatMessage,
   GameRevision,
   GameRevisionMetadata,
   PlayerUpdate,
   Repository,
+  StoredBroadcast,
+  StoredBroadcastRecipient,
   StoredChatRow,
   StoredPlayer,
 } from './types.js'
@@ -105,6 +110,43 @@ interface FinishedGameRow {
   readonly winner: string
   readonly state: string
 }
+
+interface BroadcastRow {
+  readonly id: string
+  readonly subject: string
+  readonly markdown: string
+  readonly include_unsubscribed: number
+  readonly per_run: number
+  readonly status: string
+  readonly created_at: string
+  readonly last_run_at: string | null
+}
+
+interface BroadcastRecipientRow {
+  readonly broadcast_id: string
+  readonly player_id: string
+  readonly email: string
+  readonly status: string
+  readonly sent_at: string | null
+  readonly error: string | null
+  /** Only present on a claim's `RETURNING`, to restore the queued order. */
+  readonly seq?: number
+}
+
+/**
+ * Recipients per insert statement. A recipient list travels as one JSON
+ * parameter (`json_each`), which keeps a queue of hundreds to a few statements
+ * instead of one per row; the chunk keeps each parameter well under D1's size
+ * limits.
+ */
+const BROADCAST_INSERT_CHUNK = 500
+
+const BROADCAST_SELECT = `SELECT id, subject, markdown, include_unsubscribed, per_run, status,
+                                 created_at, last_run_at
+                          FROM broadcast`
+
+const RECIPIENT_SELECT = `SELECT broadcast_id, player_id, email, status, sent_at, error
+                          FROM broadcast_recipient`
 
 interface OkRow {
   readonly ok: number
@@ -468,6 +510,197 @@ export class D1Repository implements Repository {
   }
 
   // ---------------------------------------------------------------------
+  // Admin broadcast queue
+  // ---------------------------------------------------------------------
+
+  async createBroadcast(
+    broadcast: StoredBroadcast,
+    recipients: readonly { readonly playerId: string; readonly email: string }[],
+  ): Promise<boolean> {
+    const statements = [
+      this.db
+        .prepare(
+          `INSERT INTO broadcast
+             (id, subject, markdown, include_unsubscribed, per_run, status, created_at, last_run_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          broadcast.id,
+          broadcast.subject,
+          broadcast.markdown,
+          broadcast.includeUnsubscribed ? 1 : 0,
+          broadcast.perRun,
+          broadcast.status,
+          broadcast.createdAt,
+          broadcast.lastRunAt,
+        ),
+    ]
+    for (let at = 0; at < recipients.length; at += BROADCAST_INSERT_CHUNK) {
+      statements.push(
+        this.db
+          .prepare(
+            `INSERT INTO broadcast_recipient (broadcast_id, player_id, email, status)
+             SELECT ?, json_extract(value, '$.playerId'), json_extract(value, '$.email'), 'pending'
+             FROM json_each(?)`,
+          )
+          .bind(broadcast.id, JSON.stringify(recipients.slice(at, at + BROADCAST_INSERT_CHUNK))),
+      )
+    }
+    try {
+      // One batch, so a refused queue leaves no recipients behind. The partial
+      // unique index on `status = 'active'` is what refuses a second queue.
+      await this.db.batch(statements)
+      return true
+    } catch (error) {
+      if (isUniqueViolation(error)) return false
+      throw error
+    }
+  }
+
+  async currentBroadcast(): Promise<StoredBroadcast | undefined> {
+    const row = await this.db
+      .prepare(`${BROADCAST_SELECT} ORDER BY status = 'active' DESC, created_at DESC, rowid DESC LIMIT 1`)
+      .first<BroadcastRow>()
+    return row === null ? undefined : toStoredBroadcast(row)
+  }
+
+  async claimBroadcastRecipients(
+    broadcastId: string,
+    limit: number,
+  ): Promise<readonly StoredBroadcastRecipient[]> {
+    // One statement, so two overlapping runs cannot both take a row: SQLite
+    // evaluates the sub-select and the update together, and D1 runs writes one
+    // at a time. The rows end up `sending`, so a crash after this point leaves
+    // them claimed rather than free to be sent again.
+    const result = await this.db
+      .prepare(
+        `UPDATE broadcast_recipient SET status = 'sending'
+         WHERE broadcast_id = ? AND status = 'pending'
+           AND rowid IN (
+             SELECT rowid FROM broadcast_recipient
+             WHERE broadcast_id = ? AND status = 'pending'
+             ORDER BY rowid LIMIT ?)
+           AND EXISTS (SELECT 1 FROM broadcast WHERE id = ? AND status = 'active')
+         RETURNING rowid AS seq, broadcast_id, player_id, email, status, sent_at, error`,
+      )
+      .bind(broadcastId, broadcastId, limit, broadcastId)
+      .all<BroadcastRecipientRow>()
+    // RETURNING does not promise an order.
+    return [...result.results]
+      .sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+      .map(toStoredBroadcastRecipient)
+  }
+
+  async markBroadcastRecipientsSent(
+    broadcastId: string,
+    playerIds: readonly string[],
+    sentAt: string,
+  ): Promise<void> {
+    if (playerIds.length === 0) return
+    await this.db
+      .prepare(
+        `UPDATE broadcast_recipient SET status = 'sent', sent_at = ?, error = NULL
+         WHERE broadcast_id = ? AND status = 'sending'
+           AND player_id IN (SELECT value FROM json_each(?))`,
+      )
+      .bind(sentAt, broadcastId, JSON.stringify(playerIds))
+      .run()
+  }
+
+  async markBroadcastRecipientsFailed(
+    broadcastId: string,
+    failures: readonly { readonly playerId: string; readonly error: string }[],
+  ): Promise<void> {
+    if (failures.length === 0) return
+    const json = JSON.stringify(failures)
+    await this.db
+      .prepare(
+        `UPDATE broadcast_recipient SET status = 'failed',
+           error = (SELECT json_extract(f.value, '$.error') FROM json_each(?) AS f
+                    WHERE json_extract(f.value, '$.playerId') = broadcast_recipient.player_id)
+         WHERE broadcast_id = ? AND status = 'sending'
+           AND player_id IN (SELECT json_extract(value, '$.playerId') FROM json_each(?))`,
+      )
+      .bind(json, broadcastId, json)
+      .run()
+  }
+
+  async releaseBroadcastRecipients(
+    broadcastId: string,
+    playerIds: readonly string[],
+  ): Promise<void> {
+    if (playerIds.length === 0) return
+    await this.db
+      .prepare(
+        `UPDATE broadcast_recipient SET status = 'pending'
+         WHERE broadcast_id = ? AND status = 'sending'
+           AND player_id IN (SELECT value FROM json_each(?))`,
+      )
+      .bind(broadcastId, JSON.stringify(playerIds))
+      .run()
+  }
+
+  async releaseStuckBroadcastRecipients(broadcastId: string): Promise<number> {
+    const result = await this.db
+      .prepare(
+        `UPDATE broadcast_recipient SET status = 'pending'
+         WHERE broadcast_id = ? AND status = 'sending'
+           AND EXISTS (SELECT 1 FROM broadcast WHERE id = ? AND status = 'active')`,
+      )
+      .bind(broadcastId, broadcastId)
+      .run()
+    return changes(result)
+  }
+
+  async finishBroadcast(broadcastId: string, status: 'done' | 'cancelled'): Promise<boolean> {
+    const result = await this.db
+      .prepare(`UPDATE broadcast SET status = ? WHERE id = ? AND status = 'active'`)
+      .bind(status, broadcastId)
+      .run()
+    return changes(result) > 0
+  }
+
+  async recordBroadcastRun(broadcastId: string, at: string): Promise<void> {
+    await this.db
+      .prepare(`UPDATE broadcast SET last_run_at = ? WHERE id = ?`)
+      .bind(at, broadcastId)
+      .run()
+  }
+
+  async broadcastCounts(broadcastId: string): Promise<BroadcastCounts> {
+    const rows = await this.db
+      .prepare(
+        `SELECT status, COUNT(*) AS total FROM broadcast_recipient
+         WHERE broadcast_id = ? GROUP BY status`,
+      )
+      .bind(broadcastId)
+      .all<{ status: string; total: number }>()
+    const counts: Record<BroadcastRecipientStatus, number> = {
+      pending: 0,
+      sending: 0,
+      sent: 0,
+      failed: 0,
+    }
+    for (const row of rows.results) {
+      if (Object.hasOwn(counts, row.status)) {
+        counts[row.status as BroadcastRecipientStatus] = row.total
+      }
+    }
+    return counts
+  }
+
+  async listBroadcastRecipients(
+    broadcastId: string,
+    status: BroadcastRecipientStatus,
+  ): Promise<readonly StoredBroadcastRecipient[]> {
+    const rows = await this.db
+      .prepare(`${RECIPIENT_SELECT} WHERE broadcast_id = ? AND status = ? ORDER BY rowid`)
+      .bind(broadcastId, status)
+      .all<BroadcastRecipientRow>()
+    return rows.results.map(toStoredBroadcastRecipient)
+  }
+
+  // ---------------------------------------------------------------------
   // Highscore
   // ---------------------------------------------------------------------
 
@@ -584,6 +817,36 @@ function revisionParams(revision: GameRevision): readonly unknown[] {
     JSON.stringify(revision.logIds),
     JSON.stringify(revision.state),
   ]
+}
+
+function toStoredBroadcast(row: BroadcastRow): StoredBroadcast {
+  const status: BroadcastStatus =
+    row.status === 'done' || row.status === 'cancelled' ? row.status : 'active'
+  return {
+    id: row.id,
+    subject: row.subject,
+    markdown: row.markdown,
+    includeUnsubscribed: row.include_unsubscribed === 1,
+    perRun: row.per_run,
+    status,
+    createdAt: row.created_at,
+    lastRunAt: row.last_run_at,
+  }
+}
+
+function toStoredBroadcastRecipient(row: BroadcastRecipientRow): StoredBroadcastRecipient {
+  const status: BroadcastRecipientStatus =
+    row.status === 'sending' || row.status === 'sent' || row.status === 'failed'
+      ? row.status
+      : 'pending'
+  return {
+    broadcastId: row.broadcast_id,
+    playerId: row.player_id,
+    email: row.email,
+    status,
+    sentAt: row.sent_at,
+    error: row.error,
+  }
 }
 
 function changes(result: D1Result<unknown>): number {

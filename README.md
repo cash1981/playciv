@@ -305,7 +305,8 @@ guarded statements or one `batch()`, which D1 runs atomically:
 
 Tables: `player`, `game`, `game_revision`, `chat` (`game_id IS NULL` is lobby,
 live from now on), `game_mail` (when each player was last emailed about a
-game and last opened it), `email_sent` (imported, no longer read), and `pbf` + `pbf_doc` (the old games,
+game and last opened it), `broadcast` + `broadcast_recipient` (the admin
+broadcast queue, migration `0005_broadcast_queue.sql`), `email_sent` (imported, no longer read), and `pbf` + `pbf_doc` (the old games,
 read-only: a highscore source plus the full document, chunked because one
 document can exceed D1's ~100 KB per-statement limit, kept for future
 statistics such as the most-researched tech). The old `chat`, `gamelog` and
@@ -734,10 +735,26 @@ whose body is rendered to HTML by `marked` (the Markdown source stays as the
 plain-text fallback), and a checkbox to also mail players who have unsubscribed.
 Each mail keeps the `Hello <username>` greeting and the unsubscribe link. The
 rendered HTML is not sanitised: only an admin can reach the route and an admin
-already controls every account, so the content is trusted. Sends run in-request,
-one provider call per recipient, so a very large account list could hit the
-Worker's subrequest/CPU limits — a known limitation, not fixed here. See
-`docs/agents/decisions.md`.
+already controls every account, so the content is trusted. The mails go out
+through Resend's batch endpoint, 100 per request and at most 40 requests per
+broadcast, so a Worker's 50-subrequest limit is no longer reached (the first
+version, one request per recipient, delivered 49 of 555). The result lists what
+was sent, skipped by reason, failed with the provider's message, and deferred,
+plus why the run stopped if it did. A "Skip these addresses" box and a "Send to at
+most" field let the admin run in pieces by pasting the previous run's sent
+addresses back in; Resend's free plan allows only 100 mails a day, shared with the
+game mails. So there is also a queue ("Send over several days"): the message and
+its recipients are stored once, and a daily Worker cron at 17:00 UTC
+(`0 17 * * *` in `wrangler.jsonc`) sends the next 50 pending recipients until
+everyone has had it. The admin page shows sent, pending, failed and stuck counts,
+and has "Send next batch now" and "Cancel". Only one queue is active at a time,
+a recipient who unsubscribes after queueing is skipped at send time, and a
+recipient a crashed or timed-out run left in `sending` is never resent by itself,
+because the mail may have been delivered; such rows keep the queue open until the
+owner releases them (after checking Resend's log) or cancels. **Deploy order for the queue:** apply migration
+`0005` to D1 (`wrangler d1 migrations apply playciv --remote`), then deploy the
+Worker; the cron only exists after a deploy, and its first run should be watched in the
+Worker's logs. See `docs/agents/decisions.md`.
 
 **Only Tradable cards can be given away.** The hand's "Give" control was drawn
 on every card, but `tradeToPlayer` only ever accepted Java's `Tradable` set

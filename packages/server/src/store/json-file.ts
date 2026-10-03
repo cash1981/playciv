@@ -19,12 +19,16 @@ import { ratedHighscore, resultFromGame } from './rating.js'
 
 import { normalizeChatMessage } from './types.js'
 import type {
+  BroadcastCounts,
+  BroadcastRecipientStatus,
   ChatMessage,
   FinishedGame,
   GameRevision,
   GameRevisionMetadata,
   PlayerUpdate,
   Repository,
+  StoredBroadcast,
+  StoredBroadcastRecipient,
   StoredChatRow,
   StoredPlayer,
   UserRole,
@@ -44,6 +48,9 @@ interface Snapshot {
   /** Per player and game: when they were last emailed and last opened it. */
   readonly gameMail?: Readonly<Record<string, GameMailStamps>>
   readonly highscore?: HighscoreResult
+  /** The admin broadcast queue; recipients keep the order they were queued in. */
+  readonly broadcasts?: readonly StoredBroadcast[]
+  readonly broadcastRecipients?: readonly StoredBroadcastRecipient[]
 }
 
 /** ISO timestamps; either may be missing until the event first happens. */
@@ -64,6 +71,8 @@ export class JsonFileRepository implements Repository {
   private readonly games = new Map<string, GameState>()
   private readonly revisions = new Map<string, GameRevision>()
   private readonly gameMail = new Map<string, GameMailStamps>()
+  private readonly broadcasts = new Map<string, StoredBroadcast>()
+  private readonly broadcastRecipients = new Map<string, StoredBroadcastRecipient>()
   private chat: ChatMessage[] = []
   private highscoreCache: HighscoreResult | undefined
   private highscoreGeneration = 0
@@ -114,6 +123,10 @@ export class JsonFileRepository implements Repository {
     this.highscoreCache = snapshot.highscore
     for (const [key, stamps] of Object.entries(snapshot.gameMail ?? {})) {
       this.gameMail.set(key, stamps)
+    }
+    for (const broadcast of snapshot.broadcasts ?? []) this.broadcasts.set(broadcast.id, broadcast)
+    for (const recipient of snapshot.broadcastRecipients ?? []) {
+      this.broadcastRecipients.set(this.recipientKey(recipient.broadcastId, recipient.playerId), recipient)
     }
   }
 
@@ -354,6 +367,159 @@ export class JsonFileRepository implements Repository {
     this.highscoreCache = undefined
   }
 
+  // ---------------------------------------------------------------------
+  // Admin broadcast queue
+  // ---------------------------------------------------------------------
+
+  private recipientKey(broadcastId: string, playerId: string): string {
+    return `${broadcastId}:${playerId}`
+  }
+
+  private recipientsOf(broadcastId: string): StoredBroadcastRecipient[] {
+    return [...this.broadcastRecipients.values()].filter(
+      (recipient) => recipient.broadcastId === broadcastId,
+    )
+  }
+
+  async createBroadcast(
+    broadcast: StoredBroadcast,
+    recipients: readonly { readonly playerId: string; readonly email: string }[],
+  ): Promise<boolean> {
+    if ([...this.broadcasts.values()].some((existing) => existing.status === 'active')) return false
+    this.broadcasts.set(broadcast.id, broadcast)
+    for (const recipient of recipients) {
+      this.broadcastRecipients.set(this.recipientKey(broadcast.id, recipient.playerId), {
+        broadcastId: broadcast.id,
+        playerId: recipient.playerId,
+        email: recipient.email,
+        status: 'pending',
+        sentAt: null,
+        error: null,
+      })
+    }
+    this.scheduleWrite()
+    return true
+  }
+
+  async currentBroadcast(): Promise<StoredBroadcast | undefined> {
+    const all = [...this.broadcasts.values()]
+    return all.find((broadcast) => broadcast.status === 'active') ?? all[all.length - 1]
+  }
+
+  async claimBroadcastRecipients(
+    broadcastId: string,
+    limit: number,
+  ): Promise<readonly StoredBroadcastRecipient[]> {
+    if (this.broadcasts.get(broadcastId)?.status !== 'active') return []
+    // No await between the read and the write, so two callers cannot interleave.
+    const claimed: StoredBroadcastRecipient[] = []
+    for (const recipient of this.recipientsOf(broadcastId)) {
+      if (claimed.length >= limit) break
+      if (recipient.status !== 'pending') continue
+      const taken = { ...recipient, status: 'sending' as const }
+      this.broadcastRecipients.set(this.recipientKey(broadcastId, recipient.playerId), taken)
+      claimed.push(taken)
+    }
+    if (claimed.length > 0) this.scheduleWrite()
+    return claimed
+  }
+
+  /** Moves the claimed (`sending`) rows among `playerIds` to `status`. */
+  private moveClaimed(
+    broadcastId: string,
+    playerIds: readonly string[],
+    change: (recipient: StoredBroadcastRecipient) => StoredBroadcastRecipient,
+  ): void {
+    for (const playerId of playerIds) {
+      const key = this.recipientKey(broadcastId, playerId)
+      const recipient = this.broadcastRecipients.get(key)
+      if (recipient?.status === 'sending') this.broadcastRecipients.set(key, change(recipient))
+    }
+    this.scheduleWrite()
+  }
+
+  async markBroadcastRecipientsSent(
+    broadcastId: string,
+    playerIds: readonly string[],
+    sentAt: string,
+  ): Promise<void> {
+    this.moveClaimed(broadcastId, playerIds, (recipient) => ({
+      ...recipient,
+      status: 'sent',
+      sentAt,
+      error: null,
+    }))
+  }
+
+  async markBroadcastRecipientsFailed(
+    broadcastId: string,
+    failures: readonly { readonly playerId: string; readonly error: string }[],
+  ): Promise<void> {
+    const reasons = new Map(failures.map((failure) => [failure.playerId, failure.error]))
+    this.moveClaimed(
+      broadcastId,
+      failures.map((failure) => failure.playerId),
+      (recipient) => ({
+        ...recipient,
+        status: 'failed',
+        error: reasons.get(recipient.playerId) ?? null,
+      }),
+    )
+  }
+
+  async releaseBroadcastRecipients(
+    broadcastId: string,
+    playerIds: readonly string[],
+  ): Promise<void> {
+    this.moveClaimed(broadcastId, playerIds, (recipient) => ({ ...recipient, status: 'pending' }))
+  }
+
+  async releaseStuckBroadcastRecipients(broadcastId: string): Promise<number> {
+    if (this.broadcasts.get(broadcastId)?.status !== 'active') return 0
+    let released = 0
+    for (const [key, recipient] of this.broadcastRecipients) {
+      if (recipient.broadcastId === broadcastId && recipient.status === 'sending') {
+        this.broadcastRecipients.set(key, { ...recipient, status: 'pending' })
+        released += 1
+      }
+    }
+    if (released > 0) this.scheduleWrite()
+    return released
+  }
+
+  async finishBroadcast(broadcastId: string, status: 'done' | 'cancelled'): Promise<boolean> {
+    const broadcast = this.broadcasts.get(broadcastId)
+    if (broadcast?.status !== 'active') return false
+    this.broadcasts.set(broadcastId, { ...broadcast, status })
+    this.scheduleWrite()
+    return true
+  }
+
+  async recordBroadcastRun(broadcastId: string, at: string): Promise<void> {
+    const broadcast = this.broadcasts.get(broadcastId)
+    if (broadcast === undefined) return
+    this.broadcasts.set(broadcastId, { ...broadcast, lastRunAt: at })
+    this.scheduleWrite()
+  }
+
+  async broadcastCounts(broadcastId: string): Promise<BroadcastCounts> {
+    const counts: Record<BroadcastRecipientStatus, number> = {
+      pending: 0,
+      sending: 0,
+      sent: 0,
+      failed: 0,
+    }
+    for (const recipient of this.recipientsOf(broadcastId)) counts[recipient.status] += 1
+    return counts
+  }
+
+  async listBroadcastRecipients(
+    broadcastId: string,
+    status: BroadcastRecipientStatus,
+  ): Promise<readonly StoredBroadcastRecipient[]> {
+    return this.recipientsOf(broadcastId).filter((recipient) => recipient.status === status)
+  }
+
   async flush(): Promise<void> {
     if (this.timer !== undefined) {
       clearTimeout(this.timer)
@@ -384,6 +550,8 @@ export class JsonFileRepository implements Repository {
       chat: this.chat,
       revisions: [...this.revisions.values()],
       gameMail: Object.fromEntries(this.gameMail),
+      broadcasts: [...this.broadcasts.values()],
+      broadcastRecipients: [...this.broadcastRecipients.values()],
       ...(this.highscoreCache === undefined ? {} : { highscore: this.highscoreCache }),
     }
 

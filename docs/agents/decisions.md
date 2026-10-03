@@ -1204,9 +1204,10 @@ is pure JS with no Node built-ins, so it runs on Cloudflare Workers.
   and an admin may have set it to raw HTML through the user editor.
 - Sends run in-request, one provider call per recipient, exactly like the old
   `sendMailToAll` and the existing game mails. A very large account list could
-  hit the Worker's subrequest/CPU limits; that is a known limitation, not fixed
-  here. One recipient's failure is logged and swallowed - never thrown out of
-  the loop - and counts as `skipped`, so `skipped` means "not sent".
+  hit the Worker's subrequest/CPU limits. (This limitation is fixed by the
+  batching decision of 2026-10-03 below; the first real broadcast hit it.)
+  One recipient's failure is logged and swallowed - never thrown out of the
+  loop - and, as first built, counted as `skipped`.
 - Disabled accounts are not filtered. Java's `sendMailToAll` filtered only on
   `disableEmail`, and the game mails behave the same, so this does too.
 - Deliberate differences from Java: the default subject uses the current domain
@@ -3862,3 +3863,154 @@ not in the human's table; the review found it in the game data and the human sai
 it must count. It gives +4 to its explicit owner, wherever the piece sits, the
 same way the Statue of Zeus works for combat. The board is public, so it needs no
 reveal.
+
+## 2026-10-03 - The admin broadcast is batched, bounded and honest about the result
+
+**Decision.** `Notifications.broadcast` sends through Resend's batch endpoint
+(`POST /emails/batch`, up to 100 personalised mails per request) instead of one
+fetch per recipient. A `Mailer` gets an optional `sendBatch`; a mailer without it
+(the no-op mailer, test doubles) is driven one `send` at a time. The provider
+answering with a non-2xx status throws a `MailError` carrying `status` and
+`detail`; `send` keeps its message text.
+
+**Why.** The first real broadcast (555 accounts) printed "Sent to 49 players; 506
+skipped." A Worker on the Cloudflare free plan may make 50 subrequests per
+invocation, and one fetch per recipient used all of them (49 sends plus the
+database read). The failures were swallowed and counted as `skipped`, and the
+logged error printed only a stack, so nothing said why. Batching is the fix for
+the 50 subrequest limit: 555 accounts are now 6 requests.
+
+**Rules.**
+- **Budget: 40 provider requests per broadcast.** The Worker's 50 includes the
+  database read and the auth check, so the broadcast keeps a margin of 10. When
+  the budget runs out the run stops with a `stopReason` and the rest is
+  `deferred`.
+- **Bisect on a per-message 4xx.** One bad address makes Resend reject the whole
+  batch with a 422. On a 400, 413 or 422 the chunk is split in two and each half
+  retried, down to the single address, which is recorded in `failed` with the
+  provider's message. Every retry spends budget: one bad address in 100 costs 15
+  requests. Any other 4xx (401, 403 and so on) is about the request, not one
+  message, so it stops the run like a 5xx instead of being split. A cheap shape
+  check (`something@something.tld`) catches the obvious bad addresses first, so
+  they never reach the provider.
+- **Why the bisect cannot duplicate.** Resend rejects a whole batch when one email
+  in it fails validation (the batch endpoint is all or nothing by default), so a
+  rejected chunk sent nothing and its halves can be retried safely. That comes
+  from Resend's documentation and the 2026-10-03 incident (one 422 for the
+  whole request); re-check it if the bisect ever sends someone a mail twice.
+- **Paced at 600 ms between requests.** Resend's default is about 2 requests per
+  second across the API and it answers 429 beyond that, so the broadcast pauses
+  600 ms between provider requests (never before the first). The pause is
+  injectable (`config.sleep`), so tests do not wait.
+- **A mailer without `sendBatch` is unbudgeted and unpaced.** It is driven one
+  `send` per recipient with no request budget and no pause. That is acceptable
+  only because no mailer that makes network calls lacks `sendBatch` (the no-op
+  mailer and the test doubles do not); a new network mailer must implement it.
+- **429, 5xx, a network error or a timeout stops the run.** The unsent accounts
+  are `deferred`, and `stopReason` says why. A timed-out batch may in fact have
+  been accepted, so its `stopReason` says to check the provider's log first.
+- **A 45 second time budget** (measured with the injected clock). When it is used
+  up the run stops with a `stopReason` and defers the rest. There are two ways a
+  rerun can mail someone twice: a timed-out request that was in fact accepted,
+  and a lost HTTP response, where the admin never sees `sentTo` (a client or edge
+  timeout). The time budget is what keeps the result reachable: the run ends well
+  inside such a window instead of running until something cuts it off.
+- **The result explains itself:** `sent`, `sentTo`, `skipped` by reason
+  (`noAddress`, `unsubscribed`, `excluded`), `failed` with address and reason,
+  `deferred`, `stopReason`. `skipped` no longer includes send failures.
+- **Resuming without a table.** `exclude` (addresses to skip, compared trimmed and
+  case-insensitively) and `limit` (attempt at most N eligible accounts, in
+  account order) let the admin run in pieces: paste the last run's `sentTo` into
+  the next run's skip box. Nothing is remembered in the database; a table of who
+  got which broadcast is a separate task if this proves clumsy.
+- The Markdown is rendered once per broadcast; only the greeting and the
+  unsubscribe link differ per mail. Failures are logged with the message in the
+  string (`console.error` with a second argument prints only the stack on
+  Workers), and never with a bulk list of addresses.
+
+**Still true.** The Resend free plan allows 100 mails a day and 3000 a month, so
+batching alone does not get a long list out in one day; `limit` and `exclude`
+exist for that. Game mails (`notify`) are unchanged and still one `send` per
+recipient.
+
+## 2026-10-03 - The admin broadcast queue: 50 a day from a daily cron
+
+**Decision.** An admin can queue a broadcast instead of sending it at once. The
+message and its recipients are stored in two D1 tables (`broadcast`,
+`broadcast_recipient`, migration `0005`), and a Worker cron at **17:00 UTC**
+(`0 17 * * *`) sends the next `perRun` pending recipients, 50 by default, until
+none are pending. The admin page can also send the next batch now, and cancel.
+The direct broadcast stays. Both call the same batch sender (`sendInBatches`), so
+the request budget, the pause, the time budget and the bisect are shared.
+
+**Why.** Resend's free plan allows 100 mails a day, shared with the game mails
+(your turn, chat, ...), and the owner does not want to pay for Pro. After the
+first broadcast reached 49 of 555 accounts, the other 506 go out at 50 a day, about
+11 days, with no manual step and no exclude list to paste each day. 17:00 UTC is
+the owner's choice of time. Fifty leaves half of the day's quota for game mail.
+
+**Rules.**
+- **Exactly one active queue at a time**, enforced by a partial unique index on
+  `broadcast(status) WHERE status = 'active'`, so two overlapping "queue it"
+  requests cannot both succeed. A second one answers 409.
+- **The recipients are a snapshot taken when the message is queued** (same
+  classification as the direct broadcast: no address, unsubscribed unless
+  included, on the skip list, an address that looks invalid). At send time the
+  player is read again: one who has unsubscribed meanwhile is marked `failed` with
+  "unsubscribed since queueing" (unless the queue includes unsubscribed accounts),
+  a deleted account is `failed`, and the mail gets the current username and a
+  fresh unsubscribe link. The queued address is used, because the skip list was
+  applied to it.
+- **A recipient left in `sending` is never resent automatically.** The claim sets
+  rows to `sending` in one guarded `UPDATE ... RETURNING`, so two overlapping runs
+  (the cron and a manual "send next batch now") cannot take the same row, and a
+  crash after the claim leaves the rows `sending`, not `pending`. A run releases
+  its own claimed rows back to `pending` only when the provider *answered* with a
+  refusal or the run stopped before trying them: a 429, a 5xx, another 4xx, the
+  request budget or the time budget (nothing was sent). A request that got **no
+  answer** (a timeout, an aborted or failed fetch) is **not** released: the mail
+  may have been delivered, and putting those rows back to `pending` would mail
+  them again the next day. They stay `sending`, the status lists them as stuck, and
+  the direct broadcast still counts them as `deferred` with the "may still have
+  been accepted" reason.
+- **Stuck rows keep the queue open.** A queue is marked `done` only when nothing is
+  `pending` and nothing is `sending`. With stuck rows it stays `active` and the
+  daily run is a quiet no-op (it claims nothing and does not move `last_run_at`).
+  There is no deadlock: Cancel is always the way out, and "Release stuck rows"
+  (`POST .../queue/release-stuck`, guarded to `status = 'sending'` of the active
+  queue) puts them back to `pending` after the owner has checked Resend's email
+  log. The button's confirmation says plainly that releasing can send them twice.
+- **Releasing is refused for five minutes after a run started.** Releasing frees
+  every `sending` row, including the rows of a run that is sending right now; its
+  `sent` update is guarded to `sending`, so it would then update nothing and the
+  mails already sent would be `pending` again, mailed a second time the next day.
+  So `releaseStuckQueuedRecipients` answers `RECENT_RUN` (route: 409
+  `RUN_IN_PROGRESS`, "A run started less than five minutes ago; wait and try
+  again") while `now - lastRunAt < RELEASE_COOLDOWN_MS` (5 minutes, with the
+  injected clock). A run holds its rows for at most the 45 s time budget plus one
+  15 s batch timeout, so five minutes is well past it. `lastRunAt` only moves on a
+  day that claimed rows, so a queue that is purely stuck can still be released at
+  once. This closes the in-flight window by code; the confirmation text only adds
+  a warning on top. One gap is left: a run records `lastRunAt` right after its
+  claim, a few milliseconds later, and a release landing in that gap is not
+  refused.
+- A run result reports `indeterminate` (claimed, no answer from the provider), so
+  a timed-out run reads "Sent 0, failed 0, 50 not confirmed" on the admin page
+  instead of looking like nothing happened.
+- A finished queue (`done`) or a cancelled one yields no claims. D1 has no interactive transactions, so every step is one
+  guarded statement or one `batch()` (the recipients go in as JSON through
+  `json_each`, a few statements for a whole list, to stay well under the Worker's
+  query allowance).
+- A daily run of 50 is one provider request, so the 600 ms pause and the 45 second
+  budget cost nothing there, but the shared sender keeps them.
+- The scheduled handler catches and logs its own errors. It builds the same
+  repository and mailer as `fetch`.
+
+**Not verified here.** There is no Cloudflare runtime in the development
+environment, so the cron trigger itself (the `scheduled` handler running at 17:00
+UTC) has not been run; the run function is tested directly, and the handler is a
+thin wrapper around it. Check the first scheduled run in the Worker's logs.
+
+**Deploy order.** Apply migration `0005` to D1, then deploy the Worker. The cron
+exists only after a deploy. Watch the first scheduled run in the Worker's logs
+(look for a `Daily broadcast:` line), since the cron has not been run anywhere else.

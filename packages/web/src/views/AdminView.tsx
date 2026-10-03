@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { api } from '../lib/api.js'
-import type { AdminUserDto, PlayerDto } from '../lib/api.js'
+import type { AdminUserDto, BroadcastQueueDto, BroadcastResultDto, PlayerDto } from '../lib/api.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
 import type { MarkdownEditorComponent } from './MarkdownEditor.js'
 
@@ -19,6 +19,29 @@ const PAGE_SIZE = 10
 
 /** Java's subject was "Message from cash at playciv.com"; the domain moved. */
 const DEFAULT_SUBJECT = 'Message from cash at playciv.app'
+
+/**
+ * The skip box takes addresses separated by newlines, commas or spaces, so a
+ * list copied from a spreadsheet or from the last run's result both work.
+ */
+function parseAddressList(text: string): string[] {
+  return text
+    .split(/[\s,]+/)
+    .map((address) => address.trim())
+    .filter((address) => address !== '')
+}
+
+/** The server accepts a limit of 1 to this; the field is invalid outside it. */
+const MAX_LIMIT = 5000
+
+/** The limit field: empty means no limit, anything but a whole number from 1 to 5000 is invalid. */
+function parseLimit(text: string): number | undefined | 'invalid' {
+  const trimmed = text.trim()
+  if (trimmed === '') return undefined
+  return /^[0-9]+$/.test(trimmed) && Number(trimmed) >= 1 && Number(trimmed) <= MAX_LIMIT
+    ? Number(trimmed)
+    : 'invalid'
+}
 
 export function AdminView({
   player,
@@ -37,7 +60,9 @@ export function AdminView({
   const [emailBody, setEmailBody] = useState('')
   const [includeUnsubscribed, setIncludeUnsubscribed] = useState(false)
   const [sending, setSending] = useState(false)
-  const [sentNotice, setSentNotice] = useState<string | null>(null)
+  const [skipAddresses, setSkipAddresses] = useState('')
+  const [limitText, setLimitText] = useState('')
+  const [broadcastResult, setBroadcastResult] = useState<BroadcastResultDto | null>(null)
 
   /** The user being edited, and the draft values for the free-text fields. */
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -143,28 +168,38 @@ export function AdminView({
     }
   }
 
+  const limit = parseLimit(limitText)
+
   async function sendBroadcast(): Promise<void> {
-    if (sending || emailSubject.trim() === '' || emailBody.trim() === '') return
-    if (
-      !window.confirm(
-        includeUnsubscribed
-          ? 'Send this email to every player, including those who unsubscribed?'
-          : 'Send this email to every player with an email address?',
-      )
-    ) {
+    if (sending || emailSubject.trim() === '' || emailBody.trim() === '' || limit === 'invalid') {
       return
     }
+    const exclude = parseAddressList(skipAddresses)
+    const audience = includeUnsubscribed
+      ? 'every player, including those who unsubscribed'
+      : 'every player with an email address'
+    const question =
+      `Send this email to ${audience}` +
+      (limit === undefined ? '' : `, at most ${limit} of them`) +
+      (exclude.length === 0 ? '' : `, skipping ${exclude.length} listed addresses`) +
+      '?'
+    if (!window.confirm(question)) return
     setSending(true)
     setError(null)
-    setSentNotice(null)
+    setBroadcastResult(null)
     try {
-      const { sent, skipped } = await api.broadcastEmail(
-        emailSubject.trim(),
-        emailBody,
-        includeUnsubscribed,
-      )
-      setSentNotice(`Sent to ${sent} players; ${skipped} skipped.`)
-      setEmailBody('')
+      const result = await api.broadcastEmail(emailSubject.trim(), emailBody, includeUnsubscribed, {
+        exclude,
+        ...(limit === undefined ? {} : { limit }),
+      })
+      setBroadcastResult(result)
+      // Keep the message while the run is unfinished, so it can be sent again
+      // for the rest without being retyped. A failed address does not count as
+      // unfinished: one malformed stored address would keep the old message in
+      // the composer for good.
+      if (result.deferred === 0 && result.stopReason === null) {
+        setEmailBody('')
+      }
     } catch (caught) {
       if (isUnauthorized(caught)) return onUnauthorized()
       setError(errorMessage(caught))
@@ -318,7 +353,7 @@ export function AdminView({
           source as the plain-text fallback. Every account with an email address gets its own
           copy, greeted with its username and carrying the unsubscribe link.
         </p>
-        {sentNotice !== null && <div className="notice">{sentNotice}</div>}
+        {broadcastResult !== null && <BroadcastSummary result={broadcastResult} />}
 
         <label className="inline-label">
           Subject
@@ -348,16 +383,413 @@ export function AdminView({
           Also send to players who have unsubscribed
         </label>
 
+        <label>
+          Skip these addresses
+          <textarea
+            value={skipAddresses}
+            disabled={sending}
+            placeholder="One per line, or separated by commas or spaces"
+            onChange={(event) => setSkipAddresses(event.target.value)}
+          />
+        </label>
+
+        <label className="inline-label">
+          Send to at most
+          <input
+            type="number"
+            min={1}
+            max={MAX_LIMIT}
+            step={1}
+            value={limitText}
+            disabled={sending}
+            placeholder="no limit"
+            onChange={(event) => setLimitText(event.target.value)}
+            style={{ width: '7rem' }}
+          />
+          accounts
+        </label>
+        {limit === 'invalid' && (
+          <div className="error">The limit must be a whole number from 1 to 5000.</div>
+        )}
+
         <div className="row">
           <button
             className="primary"
-            disabled={sending || emailSubject.trim() === '' || emailBody.trim() === ''}
+            disabled={
+              sending || emailSubject.trim() === '' || emailBody.trim() === '' || limit === 'invalid'
+            }
             onClick={() => void sendBroadcast()}
           >
             {sending ? 'Sending …' : 'Send email'}
           </button>
         </div>
       </section>
+
+      <BroadcastQueuePanel
+        users={users}
+        subject={emailSubject}
+        body={emailBody}
+        includeUnsubscribed={includeUnsubscribed}
+        skipAddresses={skipAddresses}
+        busy={sending}
+        onUnauthorized={onUnauthorized}
+        onQueued={() => setEmailBody('')}
+      />
     </>
+  )
+}
+
+/** The readable outcome of one broadcast, with the addresses to skip next time. */
+function BroadcastSummary({ result }: { readonly result: BroadcastResultDto }): React.JSX.Element {
+  const { skipped } = result
+  return (
+    <div className="notice">
+      <p>
+        <strong>Sent to {result.sent} players.</strong>
+      </p>
+      <ul>
+        <li>
+          Skipped: {skipped.noAddress} without an address, {skipped.unsubscribed} unsubscribed,{' '}
+          {skipped.excluded} on the skip list
+        </li>
+        <li>Failed: {result.failed.length}</li>
+        <li>Not attempted yet: {result.deferred}</li>
+      </ul>
+      {result.failed.length > 0 && (
+        <ul aria-label="Failed addresses">
+          {result.failed.map((failure, index) => (
+            // Two accounts may share an address, so the address is not a key.
+            <li key={index}>
+              {failure.email}: {failure.reason}
+            </li>
+          ))}
+        </ul>
+      )}
+      {result.stopReason !== null && (
+        <p>
+          <strong>The run stopped early.</strong> {result.stopReason}
+        </p>
+      )}
+      {result.sentTo.length > 0 && (
+        <>
+          <label>
+            Addresses sent in this run
+            <textarea readOnly value={result.sentTo.join('\n')} />
+          </label>
+          <p className="muted">
+            Paste these into the skip box on the next run so nobody gets the mail twice, and
+            leave the message as it is when you resume.
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
+const PER_DAY_DEFAULT = '50'
+const PER_DAY_MAX = 100
+
+/** The "Per day" field: a whole number from 1 to 100, or `'invalid'`. */
+function parsePerDay(text: string): number | 'invalid' {
+  const trimmed = text.trim()
+  return /^[0-9]+$/.test(trimmed) && Number(trimmed) >= 1 && Number(trimmed) <= PER_DAY_MAX
+    ? Number(trimmed)
+    : 'invalid'
+}
+
+interface QueuePanelProps {
+  readonly users: readonly AdminUserDto[]
+  /** The composer's subject, message, checkbox and skip box: the queue reuses them. */
+  readonly subject: string
+  readonly body: string
+  readonly includeUnsubscribed: boolean
+  readonly skipAddresses: string
+  /** The direct send is running. */
+  readonly busy: boolean
+  readonly onUnauthorized: () => void
+  /** The message was queued, so the composer can let go of it. */
+  readonly onQueued: () => void
+}
+
+/**
+ * "Send over several days": queues the composer's message for the daily job
+ * (17:00 UTC), which sends the next `perDay` recipients each time. The status
+ * is read when the panel opens and after each action, never on a timer.
+ */
+function BroadcastQueuePanel({
+  users,
+  subject,
+  body,
+  includeUnsubscribed,
+  skipAddresses,
+  busy,
+  onUnauthorized,
+  onQueued,
+}: QueuePanelProps): React.JSX.Element {
+  const [perDayText, setPerDayText] = useState(PER_DAY_DEFAULT)
+  const [queue, setQueue] = useState<BroadcastQueueDto | null>(null)
+  const [working, setWorking] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const perDay = parsePerDay(perDayText)
+  const active = queue?.status === 'active'
+
+  useEffect(() => {
+    let current = true
+    api
+      .broadcastQueue()
+      .then((answer) => {
+        if (current) setQueue(answer.queue)
+      })
+      .catch((caught: unknown) => {
+        if (isUnauthorized(caught)) return onUnauthorized()
+        if (current) setError(errorMessage(caught))
+      })
+    return () => {
+      current = false
+    }
+  }, [onUnauthorized])
+
+  /** Runs one action, reporting a failure here and a lapsed session to the app. */
+  async function act(action: () => Promise<void>): Promise<void> {
+    setWorking(true)
+    setError(null)
+    setNotice(null)
+    try {
+      await action()
+    } catch (caught) {
+      if (isUnauthorized(caught)) return onUnauthorized()
+      setError(errorMessage(caught))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  /** The accounts the queue would take, as far as the user list shows: the server decides. */
+  function estimateRecipients(exclude: readonly string[]): number {
+    const skipped = new Set(exclude.map((address) => address.toLowerCase()))
+    return users.filter(
+      (user) =>
+        user.email !== null &&
+        user.email.trim() !== '' &&
+        (includeUnsubscribed || user.disableEmail !== true) &&
+        !skipped.has(user.email.trim().toLowerCase()),
+    ).length
+  }
+
+  async function queueIt(): Promise<void> {
+    if (working || busy || active || perDay === 'invalid') return
+    if (subject.trim() === '' || body.trim() === '') return
+    const exclude = parseAddressList(skipAddresses)
+    const recipients = estimateRecipients(exclude)
+    const days = Math.max(1, Math.ceil(recipients / perDay))
+    if (
+      !window.confirm(
+        `Queue this email for about ${recipients} players, ${perDay} a day? ` +
+          `It will take about ${days} ${days === 1 ? 'day' : 'days'}, ` +
+          'and the recipients are fixed now.',
+      )
+    ) {
+      return
+    }
+    await act(async () => {
+      const answer = await api.queueBroadcast(subject.trim(), body, includeUnsubscribed, {
+        perRun: perDay,
+        exclude,
+      })
+      setQueue(answer.queue)
+      const total = answer.queue.counts.pending
+      const left = answer.skipped
+      setNotice(
+        `Queued for ${total} players. Left out: ${left.noAddress} without an address, ` +
+          `${left.unsubscribed} unsubscribed, ${left.excluded} on the skip list` +
+          (answer.rejected.length === 0
+            ? '.'
+            : `, ${answer.rejected.length} with an invalid address (${answer.rejected
+                .map((entry) => entry.email)
+                .join(', ')}).`),
+      )
+      onQueued()
+    })
+  }
+
+  async function runNow(): Promise<void> {
+    if (queue === null) return
+    const batch = Math.min(queue.perRun, queue.counts.pending)
+    if (
+      !window.confirm(
+        `Send the next batch now? Up to ${batch} of the ${queue.counts.pending} pending ` +
+          'recipients will be mailed.',
+      )
+    ) {
+      return
+    }
+    await act(async () => {
+      const answer = await api.runBroadcastQueue()
+      setQueue(answer.queue)
+      const { run } = answer
+      setNotice(
+        `Sent ${run.sent}, failed ${run.failed}` +
+          (run.released > 0 ? `, ${run.released} put back for the next run` : '') +
+          (run.indeterminate > 0
+            ? `, ${run.indeterminate} not confirmed (they may have been delivered; see the stuck rows)`
+            : '') +
+          (run.finished ? '. The queue is finished.' : '.') +
+          (run.stopReason === null ? '' : ` The run stopped early: ${run.stopReason}`),
+      )
+    })
+  }
+
+  async function releaseStuck(): Promise<void> {
+    if (
+      !window.confirm(
+        "Check Resend's email log first. These mails may already have been delivered, " +
+          'and releasing them can send them twice. Do not use this while a run may be in ' +
+          'progress (the 17:00 UTC run, or "Send next batch now"). Release the stuck rows anyway?',
+      )
+    ) {
+      return
+    }
+    await act(async () => {
+      const answer = await api.releaseStuckBroadcastQueue()
+      setQueue(answer.queue)
+      setNotice(`Released ${answer.released} stuck rows; the next run will send them.`)
+    })
+  }
+
+  async function cancel(): Promise<void> {
+    if (!window.confirm('Cancel this queue? Recipients still pending will not be sent.')) return
+    await act(async () => {
+      const answer = await api.cancelBroadcastQueue()
+      setQueue(answer.queue)
+      setNotice('The queue was cancelled.')
+    })
+  }
+
+  return (
+    <section className="panel">
+      <h2>Send over several days</h2>
+      <p className="muted">
+        Uses the subject, message, unsubscribe checkbox and skip box above. The recipients are
+        fixed when you queue it, and a daily job at 17:00 UTC sends the next batch until
+        everyone has had it. Resend&apos;s free plan allows 100 mails a day, shared with the
+        game mails, so 50 a day is the default.
+      </p>
+      {error !== null && <div className="error">{error}</div>}
+      {notice !== null && <div className="notice">{notice}</div>}
+
+      <label className="inline-label">
+        Per day
+        <input
+          type="number"
+          min={1}
+          max={PER_DAY_MAX}
+          step={1}
+          value={perDayText}
+          disabled={working || active}
+          onChange={(event) => setPerDayText(event.target.value)}
+          style={{ width: '7rem' }}
+        />
+      </label>
+      {perDay === 'invalid' && (
+        <div className="error">Per day must be a whole number from 1 to {PER_DAY_MAX}.</div>
+      )}
+      <div className="row">
+        <button
+          className="primary"
+          disabled={
+            working ||
+            busy ||
+            active ||
+            perDay === 'invalid' ||
+            subject.trim() === '' ||
+            body.trim() === ''
+          }
+          onClick={() => void queueIt()}
+        >
+          Queue it
+        </button>
+        {active && <span className="muted">A queue is already running.</span>}
+      </div>
+
+      {queue !== null && (
+        <QueueStatus
+          queue={queue}
+          disabled={working}
+          onReleaseStuck={() => void releaseStuck()}
+        />
+      )}
+      {active && (
+        <div className="row">
+          <button disabled={working} onClick={() => void runNow()}>
+            Send next batch now
+          </button>
+          <button disabled={working} onClick={() => void cancel()}>
+            Cancel
+          </button>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function QueueStatus({
+  queue,
+  disabled,
+  onReleaseStuck,
+}: {
+  readonly queue: BroadcastQueueDto
+  readonly disabled: boolean
+  readonly onReleaseStuck: () => void
+}): React.JSX.Element {
+  const { counts } = queue
+  return (
+    <div className="notice">
+      <p>
+        <strong>{queue.subject}</strong> ({queue.status}, {queue.perRun} a day)
+      </p>
+      <ul>
+        <li>Sent: {counts.sent}</li>
+        <li>Pending: {counts.pending}</li>
+        <li>Failed: {counts.failed}</li>
+        <li>Stuck: {queue.stuck.length}</li>
+      </ul>
+      <p>
+        Last run: {queue.lastRunAt === null ? 'never' : new Date(queue.lastRunAt).toLocaleString()}
+        {queue.status === 'active' && ' · Next run: 17:00 UTC'}
+      </p>
+      {queue.failed.length > 0 && (
+        <ul aria-label="Failed queue addresses">
+          {queue.failed.map((failure, index) => (
+            // Two accounts may share an address, so the address is not a key.
+            <li key={index}>
+              {failure.email}: {failure.reason}
+            </li>
+          ))}
+        </ul>
+      )}
+      {queue.stuck.length > 0 && (
+        <>
+          <p>
+            These were taken by a run that never reported back, so they may have been mailed.
+            They are not sent again by themselves, and the queue stays open until they are
+            released or it is cancelled. Check Resend&apos;s log and decide.
+          </p>
+          <ul aria-label="Stuck queue addresses">
+            {queue.stuck.map((email, index) => (
+              <li key={index}>{email}</li>
+            ))}
+          </ul>
+          {queue.status === 'active' && (
+            <div className="row">
+              <button disabled={disabled} onClick={onReleaseStuck}>
+                Release stuck rows
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   )
 }

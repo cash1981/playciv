@@ -13,8 +13,15 @@
  * `RESEND_API_KEY`, `MAIL_FROM`, `APP_ORIGIN`.
  */
 
-import type { App } from '@civ/server'
-import { D1Repository, createApp, createResendMailer, noopMailer } from '@civ/server'
+import type { App, Mailer } from '@civ/server'
+import {
+  D1Repository,
+  createApp,
+  createNotifications,
+  createResendMailer,
+  noopMailer,
+  runDailyBroadcast,
+} from '@civ/server'
 
 interface Env {
   /** The built SPA (packages/web/dist), bound in wrangler.jsonc. */
@@ -34,18 +41,20 @@ interface Env {
 // by the binding object because `env` itself is not guaranteed to be stable.
 const apps = new WeakMap<D1Database, App>()
 
+function buildMailer(env: Env): Mailer {
+  return env.RESEND_API_KEY === undefined || env.RESEND_API_KEY === ''
+    ? noopMailer
+    : createResendMailer({
+        apiKey: env.RESEND_API_KEY,
+        from: env.MAIL_FROM ?? 'noreply@playciv.app',
+      })
+}
+
 function buildApp(env: Env): App {
-  const mailer =
-    env.RESEND_API_KEY === undefined || env.RESEND_API_KEY === ''
-      ? noopMailer
-      : createResendMailer({
-          apiKey: env.RESEND_API_KEY,
-          from: env.MAIL_FROM ?? 'noreply@playciv.app',
-        })
   return createApp({
     repo: new D1Repository(env.DB),
     tokenSecret: env.TOKEN_SECRET ?? '',
-    mailer,
+    mailer: buildMailer(env),
     ...(env.APP_ORIGIN !== undefined ? { appOrigin: env.APP_ORIGIN } : {}),
   })
 }
@@ -74,5 +83,19 @@ export default {
       apps.set(env.DB, app)
     }
     return app.fetch(request, env, ctx)
+  },
+  /**
+   * The daily cron (`0 17 * * *`, wrangler.jsonc): sends the next batch of the
+   * queued admin broadcast. It builds the same repository and mailer as
+   * `fetch`; there is no request to carry them, so nothing else is shared.
+   * `runDailyBroadcast` catches and logs its own errors.
+   */
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    const notifications = createNotifications({
+      repo: new D1Repository(env.DB),
+      mailer: buildMailer(env),
+      ...(env.APP_ORIGIN !== undefined ? { appOrigin: env.APP_ORIGIN } : {}),
+    })
+    await runDailyBroadcast(notifications, new Date(controller.scheduledTime))
   },
 }

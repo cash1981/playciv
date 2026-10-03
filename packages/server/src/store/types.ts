@@ -107,6 +107,39 @@ export interface GameRevision {
  */
 export type GameRevisionMetadata = Omit<GameRevision, 'state'>
 
+export type BroadcastStatus = 'active' | 'done' | 'cancelled'
+
+/**
+ * `sending` is a claimed row: a run took it and has not reported back. It is
+ * released to `pending` only by a run that stopped before sending it; one left
+ * behind by a crash stays `sending` and is never resent by itself, because the
+ * mail may have been delivered.
+ */
+export type BroadcastRecipientStatus = 'pending' | 'sending' | 'sent' | 'failed'
+
+/** A queued admin broadcast (the daily job sends it `perRun` recipients at a time). */
+export interface StoredBroadcast {
+  readonly id: string
+  readonly subject: string
+  readonly markdown: string
+  readonly includeUnsubscribed: boolean
+  readonly perRun: number
+  readonly status: BroadcastStatus
+  readonly createdAt: string
+  readonly lastRunAt: string | null
+}
+
+export interface StoredBroadcastRecipient {
+  readonly broadcastId: string
+  readonly playerId: string
+  readonly email: string
+  readonly status: BroadcastRecipientStatus
+  readonly sentAt: string | null
+  readonly error: string | null
+}
+
+export type BroadcastCounts = Readonly<Record<BroadcastRecipientStatus, number>>
+
 export interface Repository {
   createPlayer(player: StoredPlayer): Promise<void>
   findPlayerById(id: string): Promise<StoredPlayer | undefined>
@@ -184,6 +217,57 @@ export interface Repository {
     fallbackWaitMs: number,
     now: Date,
   ): Promise<boolean>
+
+  /**
+   * Stores a queued broadcast and its recipients (all `pending`, in the order
+   * given) in one step. Returns false and stores nothing when a broadcast is
+   * already `active`: there is at most one at a time, and the check and the
+   * insert must not be separable.
+   */
+  createBroadcast(
+    broadcast: StoredBroadcast,
+    recipients: readonly { readonly playerId: string; readonly email: string }[],
+  ): Promise<boolean>
+  /** The `active` broadcast, or failing that the most recently created one. */
+  currentBroadcast(): Promise<StoredBroadcast | undefined>
+  /**
+   * Atomically takes up to `limit` `pending` recipients, oldest first, and sets
+   * them `sending`. Two overlapping calls never return the same row, and a
+   * broadcast that is not `active` yields none. A crash after this call leaves
+   * the rows `sending`, never `pending`.
+   */
+  claimBroadcastRecipients(
+    broadcastId: string,
+    limit: number,
+  ): Promise<readonly StoredBroadcastRecipient[]>
+  /** Marks claimed (`sending`) recipients `sent`. Other rows are left alone. */
+  markBroadcastRecipientsSent(
+    broadcastId: string,
+    playerIds: readonly string[],
+    sentAt: string,
+  ): Promise<void>
+  /** Marks claimed (`sending`) recipients `failed`, each with its reason. */
+  markBroadcastRecipientsFailed(
+    broadcastId: string,
+    failures: readonly { readonly playerId: string; readonly error: string }[],
+  ): Promise<void>
+  /** Puts claimed (`sending`) recipients back to `pending`: a run stopped before sending them. */
+  releaseBroadcastRecipients(broadcastId: string, playerIds: readonly string[]): Promise<void>
+  /**
+   * Puts every `sending` recipient of an `active` broadcast back to `pending`
+   * and returns how many. Only for the owner's decision about stuck rows, which
+   * may have been delivered; a run releases its own rows by id instead.
+   */
+  releaseStuckBroadcastRecipients(broadcastId: string): Promise<number>
+  /** Ends an `active` broadcast. Returns false when it was not active (already done or cancelled). */
+  finishBroadcast(broadcastId: string, status: 'done' | 'cancelled'): Promise<boolean>
+  recordBroadcastRun(broadcastId: string, at: string): Promise<void>
+  broadcastCounts(broadcastId: string): Promise<BroadcastCounts>
+  /** The recipients in one status, in the order they were queued. */
+  listBroadcastRecipients(
+    broadcastId: string,
+    status: BroadcastRecipientStatus,
+  ): Promise<readonly StoredBroadcastRecipient[]>
 
   /**
    * Finished, won games as a source for `highscore()`, roster included —
