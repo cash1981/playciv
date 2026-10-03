@@ -137,7 +137,7 @@ describe.each(implementations)('broadcast queue storage: %s', (_name, create) =>
     expect(await repo.broadcastCounts('a')).toEqual({ pending: 0, sending: 5, sent: 0, failed: 0 })
   })
 
-  it('never hands the same recipient to two overlapping claims', async () => {
+  it('hands no recipient to two claims issued at the same time (SQLite itself is synchronous, so this checks the claim, not real parallelism)', async () => {
     await repo.createBroadcast(broadcast('a'), people(7))
 
     const [one, two] = await Promise.all([
@@ -199,6 +199,27 @@ describe.each(implementations)('broadcast queue storage: %s', (_name, create) =>
     expect(await repo.broadcastCounts('a')).toEqual({ pending: 1, sending: 2, sent: 0, failed: 0 })
     // The released row can be claimed again; the others stay claimed.
     expect((await repo.claimBroadcastRecipients('a', 10)).map((row) => row.playerId)).toEqual(['p001'])
+  })
+
+  it('releases every stuck row of an active broadcast, and only those', async () => {
+    await repo.createBroadcast(broadcast('a'), people(5))
+    await repo.claimBroadcastRecipients('a', 3)
+    await repo.markBroadcastRecipientsSent('a', ['p000'], '2026-10-04T17:00:00.000Z')
+
+    expect(await repo.releaseStuckBroadcastRecipients('a')).toBe(2)
+
+    expect(await repo.broadcastCounts('a')).toEqual({ pending: 4, sending: 0, sent: 1, failed: 0 })
+    // Nothing left to release.
+    expect(await repo.releaseStuckBroadcastRecipients('a')).toBe(0)
+  })
+
+  it('releases nothing for a broadcast that is not active', async () => {
+    await repo.createBroadcast(broadcast('a'), people(2))
+    await repo.claimBroadcastRecipients('a', 2)
+    await repo.finishBroadcast('a', 'cancelled')
+
+    expect(await repo.releaseStuckBroadcastRecipients('a')).toBe(0)
+    expect((await repo.broadcastCounts('a')).sending).toBe(2)
   })
 
   it('finishes a broadcast only while it is active', async () => {

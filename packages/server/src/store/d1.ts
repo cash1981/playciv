@@ -640,6 +640,18 @@ export class D1Repository implements Repository {
       .run()
   }
 
+  async releaseStuckBroadcastRecipients(broadcastId: string): Promise<number> {
+    const result = await this.db
+      .prepare(
+        `UPDATE broadcast_recipient SET status = 'pending'
+         WHERE broadcast_id = ? AND status = 'sending'
+           AND EXISTS (SELECT 1 FROM broadcast WHERE id = ? AND status = 'active')`,
+      )
+      .bind(broadcastId, broadcastId)
+      .run()
+    return changes(result)
+  }
+
   async finishBroadcast(broadcastId: string, status: 'done' | 'cancelled'): Promise<boolean> {
     const result = await this.db
       .prepare(`UPDATE broadcast SET status = ? WHERE id = ? AND status = 'active'`)
@@ -670,7 +682,9 @@ export class D1Repository implements Repository {
       failed: 0,
     }
     for (const row of rows.results) {
-      if (row.status in counts) counts[row.status as BroadcastRecipientStatus] = row.total
+      if (Object.hasOwn(counts, row.status)) {
+        counts[row.status as BroadcastRecipientStatus] = row.total
+      }
     }
     return counts
   }

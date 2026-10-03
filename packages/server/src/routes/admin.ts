@@ -246,7 +246,8 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
         `exclude must be an array of at most ${MAX_BROADCAST_LIST} strings`,
       )
     }
-    const perRunValue = body['perRun'] ?? DEFAULT_PER_RUN
+    // `=== undefined`, not `??`: an explicit null is a wrong type, not the default.
+    const perRunValue = body['perRun'] === undefined ? DEFAULT_PER_RUN : body['perRun']
     if (
       typeof perRunValue !== 'number' ||
       !Number.isInteger(perRunValue) ||
@@ -284,6 +285,18 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       return sendError(c, 409, 'NO_ACTIVE_BROADCAST', 'There is no queued broadcast to send')
     }
     return c.json({ run, queue: await context.notifications.queuedBroadcastStatus() })
+  })
+
+  /**
+   * The owner's decision about rows a run left in `sending`: they may already
+   * have been delivered, so only the admin can say they are safe to send again.
+   */
+  app.post('/api/admin/email/broadcast/queue/release-stuck', admin, async (c) => {
+    const result = await context.notifications.releaseStuckQueuedRecipients()
+    if (result === null) {
+      return sendError(c, 409, 'NO_ACTIVE_BROADCAST', 'There is no queued broadcast to release rows in')
+    }
+    return c.json(result)
   })
 
   app.post('/api/admin/email/broadcast/queue/cancel', admin, async (c) => {

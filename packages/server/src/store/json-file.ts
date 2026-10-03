@@ -474,6 +474,19 @@ export class JsonFileRepository implements Repository {
     this.moveClaimed(broadcastId, playerIds, (recipient) => ({ ...recipient, status: 'pending' }))
   }
 
+  async releaseStuckBroadcastRecipients(broadcastId: string): Promise<number> {
+    if (this.broadcasts.get(broadcastId)?.status !== 'active') return 0
+    let released = 0
+    for (const [key, recipient] of this.broadcastRecipients) {
+      if (recipient.broadcastId === broadcastId && recipient.status === 'sending') {
+        this.broadcastRecipients.set(key, { ...recipient, status: 'pending' })
+        released += 1
+      }
+    }
+    if (released > 0) this.scheduleWrite()
+    return released
+  }
+
   async finishBroadcast(broadcastId: string, status: 'done' | 'cancelled'): Promise<boolean> {
     const broadcast = this.broadcasts.get(broadcastId)
     if (broadcast?.status !== 'active') return false

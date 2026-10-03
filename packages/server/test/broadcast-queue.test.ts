@@ -310,7 +310,7 @@ describe('runQueuedBroadcast', () => {
     expect(mail?.text).toContain('/api/admin/email/notification/p000/stop')
   })
 
-  it('never resends a row left in sending, and reports it', async () => {
+  it('never resends a row left in sending, reports it, and keeps the queue open', async () => {
     await seed(repo, 4)
     const notifications = notificationsFor(repo, mailer)
     await notifications.queueBroadcast(message)
@@ -320,11 +320,112 @@ describe('runQueuedBroadcast', () => {
 
     const run = await notifications.runQueuedBroadcast(NOW)
 
-    expect(run).toMatchObject({ sent: 2, finished: true })
+    // The two untouched rows go out; the stuck two do not, and they keep the
+    // queue active (Cancel or "release stuck rows" is the way out).
+    expect(run).toMatchObject({ sent: 2, finished: false })
     expect(mailer.addresses()).toEqual(['user2@example.com', 'user3@example.com'])
     const status = await notifications.queuedBroadcastStatus()
+    expect(status?.status).toBe('active')
     expect(status?.counts.sending).toBe(2)
     expect(status?.stuck).toEqual(['user0@example.com', 'user1@example.com'])
+
+    // Tomorrow's run finds nothing to send and leaves everything as it was.
+    const next = await notifications.runQueuedBroadcast(new Date('2026-10-05T17:00:00.000Z'))
+    expect(next).toMatchObject({ sent: 0, finished: false })
+    expect(mailer.addresses()).toHaveLength(2)
+    expect((await notifications.queuedBroadcastStatus())?.lastRunAt).toBe(NOW.toISOString())
+  })
+
+  it.each([
+    ['a failed fetch', () => new TypeError('fetch failed')],
+    [
+      'a timeout',
+      () => Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }),
+    ],
+  ])('leaves the claimed rows in sending after %s, so the next run cannot mail them again', async (_name, makeError) => {
+    await seed(repo, 50)
+    mailer.rejects = () => makeError()
+    const notifications = notificationsFor(repo, mailer)
+    await notifications.queueBroadcast(message)
+
+    const run = await notifications.runQueuedBroadcast(NOW)
+
+    // No answer arrived, so the mail may have been delivered: nothing is released.
+    expect(run).toMatchObject({ ran: true, sent: 0, released: 0, finished: false })
+    expect(run.stopReason).toContain('may still have been accepted')
+    const status = await notifications.queuedBroadcastStatus()
+    expect(status?.counts).toEqual({ pending: 0, sending: 50, sent: 0, failed: 0 })
+    expect(status?.stuck).toHaveLength(50)
+    expect(status?.status).toBe('active')
+
+    // The provider is fine again the next day; still nobody is mailed.
+    mailer.rejects = () => undefined
+    const next = await notifications.runQueuedBroadcast(new Date('2026-10-05T17:00:00.000Z'))
+    expect(next.sent).toBe(0)
+    expect(mailer.requests).toHaveLength(0)
+  })
+
+  it('does not close the queue while this run left rows in sending, even with none pending', async () => {
+    await seed(repo, 3)
+    mailer.rejects = () => new TypeError('fetch failed')
+    const notifications = notificationsFor(repo, mailer)
+    await notifications.queueBroadcast(message)
+
+    expect((await notifications.runQueuedBroadcast(NOW)).finished).toBe(false)
+    expect((await notifications.queuedBroadcastStatus())?.status).toBe('active')
+  })
+
+  it('releases stuck rows on request, then sends them and finishes', async () => {
+    await seed(repo, 4)
+    const notifications = notificationsFor(repo, mailer)
+    await notifications.queueBroadcast(message)
+    const broadcast = await repo.currentBroadcast()
+    await repo.claimBroadcastRecipients(broadcast?.id ?? '', 2)
+    await notifications.runQueuedBroadcast(NOW)
+
+    const released = await notifications.releaseStuckQueuedRecipients()
+
+    expect(released?.released).toBe(2)
+    expect(released?.queue.counts).toEqual({ pending: 2, sending: 0, sent: 2, failed: 0 })
+    expect(released?.queue.stuck).toEqual([])
+    const run = await notifications.runQueuedBroadcast(NOW)
+    expect(run).toMatchObject({ sent: 2, finished: true })
+    expect(new Set(mailer.addresses()).size).toBe(4)
+  })
+
+  it('has nothing to release when no queue is active', async () => {
+    await seed(repo, 2)
+    const notifications = notificationsFor(repo, mailer)
+    expect(await notifications.releaseStuckQueuedRecipients()).toBeNull()
+
+    await notifications.queueBroadcast(message)
+    await notifications.cancelQueuedBroadcast()
+    expect(await notifications.releaseStuckQueuedRecipients()).toBeNull()
+  })
+
+  it('does not move the last run time on a day that claimed nothing', async () => {
+    await seed(repo, 2)
+    const notifications = notificationsFor(repo, mailer)
+    await notifications.queueBroadcast(message)
+    await notifications.runQueuedBroadcast(NOW)
+    await repo.createBroadcast(
+      {
+        id: 'second',
+        subject: 's',
+        markdown: 'm',
+        includeUnsubscribed: false,
+        perRun: 5,
+        status: 'active',
+        createdAt: '2026-10-05T00:00:00.000Z',
+        lastRunAt: null,
+      },
+      [],
+    )
+
+    const run = await notifications.runQueuedBroadcast(new Date('2026-10-06T17:00:00.000Z'))
+
+    expect(run.sent).toBe(0)
+    expect((await repo.currentBroadcast())?.lastRunAt).toBeNull()
   })
 
   it('sends nothing after the queue is cancelled', async () => {
@@ -457,6 +558,7 @@ describe('broadcast queue routes', () => {
       ['GET', QUEUE],
       ['POST', `${QUEUE}/run`],
       ['POST', `${QUEUE}/cancel`],
+      ['POST', `${QUEUE}/release-stuck`],
     ] as const) {
       const response = await call(user.token, method, url, method === 'POST' ? { subject: 's', markdown: 'b' } : undefined)
       expect(response.status).toBe(403)
@@ -470,6 +572,7 @@ describe('broadcast queue routes', () => {
       { perRun: 101 },
       { perRun: 2.5 },
       { perRun: '50' },
+      { perRun: null },
       { exclude: 'a@b.c' },
       { exclude: [1] },
       { exclude: new Array(5001).fill('a@b.c') },
@@ -537,6 +640,30 @@ describe('broadcast queue routes', () => {
     expect((await call(admin.token, 'POST', `${QUEUE}/run`)).status).toBe(409)
     expect((await call(admin.token, 'POST', `${QUEUE}/cancel`)).status).toBe(409)
     expect(sent).toHaveLength(1)
+  })
+
+  it('releases stuck rows for an admin only, and answers 409 when no queue is active', async () => {
+    const admin = await makeAdmin('queue-release')
+    const user = await register('queue-release-user')
+    const RELEASE = `${QUEUE}/release-stuck`
+
+    expect((await call(user.token, 'POST', RELEASE)).status).toBe(403)
+    expect((await call(admin.token, 'POST', RELEASE)).status).toBe(409)
+
+    await call(admin.token, 'POST', QUEUE, { subject: 'Hi', markdown: 'There' })
+    const queued = (await (await call(admin.token, 'GET', QUEUE)).json()) as { queue: { id: string } }
+    await appRepo.claimBroadcastRecipients(queued.queue.id, 2)
+
+    const response = await call(admin.token, 'POST', RELEASE)
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      released: number
+      queue: { counts: { pending: number; sending: number }; stuck: string[] }
+    }
+    expect(body.released).toBe(2)
+    expect(body.queue.counts).toMatchObject({ pending: 2, sending: 0 })
+    expect(body.queue.stuck).toEqual([])
   })
 
   it('answers 409 to run when nothing is queued', async () => {

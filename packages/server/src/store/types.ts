@@ -253,6 +253,12 @@ export interface Repository {
   ): Promise<void>
   /** Puts claimed (`sending`) recipients back to `pending`: a run stopped before sending them. */
   releaseBroadcastRecipients(broadcastId: string, playerIds: readonly string[]): Promise<void>
+  /**
+   * Puts every `sending` recipient of an `active` broadcast back to `pending`
+   * and returns how many. Only for the owner's decision about stuck rows, which
+   * may have been delivered; a run releases its own rows by id instead.
+   */
+  releaseStuckBroadcastRecipients(broadcastId: string): Promise<number>
   /** Ends an `active` broadcast. Returns false when it was not active (already done or cancelled). */
   finishBroadcast(broadcastId: string, status: 'done' | 'cancelled'): Promise<boolean>
   recordBroadcastRun(broadcastId: string, at: string): Promise<void>

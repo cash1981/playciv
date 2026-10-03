@@ -226,6 +226,15 @@ export interface Notifications {
   queuedBroadcastStatus(): Promise<BroadcastQueueStatus | null>
   /** Cancels the active queue; pending recipients are never sent. `null` when none is active. */
   cancelQueuedBroadcast(): Promise<BroadcastQueueStatus | null>
+  /**
+   * Puts the active queue's stuck (`sending`) recipients back to pending, so the
+   * next run mails them. They may already have been delivered: the caller must
+   * have checked the provider's log. `null` when no queue is active.
+   */
+  releaseStuckQueuedRecipients(): Promise<{
+    readonly released: number
+    readonly queue: BroadcastQueueStatus
+  } | null>
 }
 
 /**
@@ -336,7 +345,8 @@ export function createNotifications(config: NotificationsConfig): Notifications 
   /**
    * Sends the recipients through the provider's batch endpoint, in order, and
    * accounts for every one of them: `sent`, `failed` (a bad address, found by
-   * splitting) or `unsent` (the run stopped first). Shared by the direct
+   * splitting), `indeterminate` (a request that got no answer) or `unsent` (the
+   * run stopped before trying them). Shared by the direct
    * broadcast and the daily queue, so both keep the same budgets and rules.
    * Never throws.
    */
@@ -359,6 +369,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
 
     const sent: BroadcastRecipient[] = []
     const failed: { recipient: BroadcastRecipient; reason: string }[] = []
+    const indeterminate: BroadcastRecipient[] = []
     let requests = 0
     let stopReason: string | null = null
 
@@ -412,25 +423,28 @@ export function createNotifications(config: NotificationsConfig): Notifications 
             const middle = Math.ceil(group.length / 2)
             queue.unshift(group.slice(0, middle), group.slice(middle))
           }
-        } else {
+        } else if (error instanceof MailError) {
+          // The provider answered, so nothing in this group was sent: it goes
+          // back on the queue as not attempted.
           queue.unshift(group)
-          if (error instanceof MailError) {
-            stopReason =
-              error.status === 429
-                ? `The mail provider is rate limiting or out of quota (429): ${message}`
-                : `The mail provider answered ${error.status}: ${message}`
-          } else {
-            // No answer arrived, so the last request may or may not have
-            // been accepted. The one case where a rerun could duplicate.
-            stopReason =
-              `Could not get an answer from the mail provider: ${message}. The last ` +
-              'request may still have been accepted; check the provider log before sending again.'
-          }
+          stopReason =
+            error.status === 429
+              ? `The mail provider is rate limiting or out of quota (429): ${message}`
+              : `The mail provider answered ${error.status}: ${message}`
+        } else {
+          // No answer arrived (a timeout, an aborted or failed fetch), so the
+          // request may or may not have been accepted. These recipients are
+          // neither sent nor safely unsent: the queue must not hand them out
+          // again by itself, because that is the one case that can duplicate.
+          indeterminate.push(...group)
+          stopReason =
+            `Could not get an answer from the mail provider: ${message}. The last ` +
+            'request may still have been accepted; check the provider log before sending again.'
         }
       }
     }
 
-    return { sent, failed, unsent: queue.flat(), stopReason }
+    return { sent, failed, indeterminate, unsent: queue.flat(), stopReason }
   }
 
   async function queueStatusOf(broadcast: StoredBroadcast): Promise<BroadcastQueueStatus> {
@@ -633,12 +647,18 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         sentTo: outcome.sent.map((recipient) => recipient.email),
         skipped,
         failed,
-        deferred: eligible.length - attempted.length + outcome.unsent.length,
+        deferred:
+          eligible.length - attempted.length + outcome.unsent.length + outcome.indeterminate.length,
         stopReason: outcome.stopReason,
       }
     },
 
     async queueBroadcast(options: QueueBroadcastOptions): Promise<QueueBroadcastResult> {
+      // Refuse early, before scanning every account. The unique index on an
+      // active status is still the real guard against two racing requests.
+      if ((await repo.currentBroadcast())?.status === 'active') {
+        return { ok: false, reason: 'ALREADY_ACTIVE' }
+      }
       const { eligible, skipped, rejected } = classifyRecipients(await repo.allPlayers(), options)
       if (eligible.length === 0) return { ok: false, reason: 'NO_RECIPIENTS' }
 
@@ -682,7 +702,8 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       // Rows go to `sending` here and are only freed again by this run's own
       // release below, so a crash from this point on cannot cause a resend.
       const claimed = await repo.claimBroadcastRecipients(broadcast.id, broadcast.perRun)
-      await repo.recordBroadcastRun(broadcast.id, now.toISOString())
+      // A day that claimed nothing is not a run worth showing.
+      if (claimed.length > 0) await repo.recordBroadcastRun(broadcast.id, now.toISOString())
 
       // One read for all of them: a scheduled run has the same 50-query allowance
       // as a request, and a lookup per recipient would use it up.
@@ -724,11 +745,14 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         outcome.unsent.map((recipient) => recipient.id),
       )
 
-      // Rows stuck in `sending` do not hold the queue open: nothing will ever
-      // send them, and the status keeps showing them.
+      // Only a refusal or a stop before sending frees a row. A request with no
+      // answer (`indeterminate`) stays `sending`: it may have been delivered.
+      // This run's own rows are settled above, so what is still `sending` now
+      // is stuck, and a queue with stuck rows is not finished: the owner
+      // either releases them or cancels.
+      const counts = await repo.broadcastCounts(broadcast.id)
       const finished =
-        (await repo.broadcastCounts(broadcast.id)).pending === 0 &&
-        (await repo.finishBroadcast(broadcast.id, 'done'))
+        counts.pending === 0 && counts.sending === 0 && (await repo.finishBroadcast(broadcast.id, 'done'))
 
       return {
         ran: true,
@@ -750,6 +774,13 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       if (broadcast === undefined || broadcast.status !== 'active') return null
       await repo.finishBroadcast(broadcast.id, 'cancelled')
       return queueStatusOf({ ...broadcast, status: 'cancelled' })
+    },
+
+    async releaseStuckQueuedRecipients() {
+      const broadcast = await repo.currentBroadcast()
+      if (broadcast === undefined || broadcast.status !== 'active') return null
+      const released = await repo.releaseStuckBroadcastRecipients(broadcast.id)
+      return { released, queue: await queueStatusOf(broadcast) }
     },
   }
 }
@@ -786,7 +817,9 @@ interface BroadcastRecipient {
 interface BatchOutcome {
   readonly sent: readonly BroadcastRecipient[]
   readonly failed: readonly { readonly recipient: BroadcastRecipient; readonly reason: string }[]
-  /** Not attempted, or in a request that was not accepted, because the run stopped. */
+  /** In a request that got no answer: it may have been delivered. */
+  readonly indeterminate: readonly BroadcastRecipient[]
+  /** Not attempted, or answered with a refusal, because the run stopped: safe to try again. */
   readonly unsent: readonly BroadcastRecipient[]
   readonly stopReason: string | null
 }
