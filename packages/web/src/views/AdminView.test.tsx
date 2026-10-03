@@ -901,6 +901,27 @@ describe('compact revision history panel', () => {
     expect(vi.mocked(api.compactRevisions)).toHaveBeenCalledTimes(1)
   })
 
+  it('says nothing was compacted, and shows no empty problem box, when a press moved nothing and nothing failed', async () => {
+    vi.mocked(api.compactPreview).mockResolvedValue(preview())
+    // Another tab got there first: nothing converted, nothing failed, work still left.
+    vi.mocked(api.compactRevisions).mockResolvedValue({
+      games: [],
+      totalConverted: 0,
+      totalBytes: 0,
+      remaining: 1,
+      remainingRevisions: 599,
+    })
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compact all' }))
+
+    expect(await screen.findByText(/Nothing was compacted by this press; 599 saved states are left, and you can press again/, undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(screen.queryByText(/see below/)).toBeNull()
+    expect(document.querySelectorAll('.error')).toHaveLength(0)
+    expect(vi.mocked(api.compactRevisions)).toHaveBeenCalledTimes(1)
+  })
+
   it('says so when no game has old saved states', async () => {
     vi.mocked(api.compactPreview).mockResolvedValue(emptyPreview)
     renderView()

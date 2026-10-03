@@ -241,8 +241,7 @@ describe.each(storeImplementations)('compaction routes: %s', (_name, create) => 
   describe('when a conversion does not check out', () => {
     const badCodec: RevisionCodec = { diff: (prev) => diffValues(prev, prev), apply: applyDelta }
 
-    it('reports the game and revision, leaves its rows untouched, and still compacts the others', async () => {
-      // One codec for all games, so make the other game pass by having nothing to convert in it.
+    it('reports the game and revision and leaves its rows untouched', async () => {
       const s = await setup([20], badCodec)
       const gameId = s.games[0]?.gameId ?? ''
       const before = await s.fixture.rows(gameId)
@@ -258,6 +257,49 @@ describe.each(storeImplementations)('compaction routes: %s', (_name, create) => 
       expect(body.remaining).toBe(1)
       expect(await s.fixture.rows(gameId)).toEqual(before)
       await expectAllReadAsSaved(s)
+    })
+  })
+
+  describe('the byte budget of one press', () => {
+    const badCodec: RevisionCodec = { diff: (prev) => diffValues(prev, prev), apply: applyDelta }
+
+    it('is spent by games that fail their check too, so five failing games do not parse five budgets', async () => {
+      const s = await setup([8, 8, 8, 8, 8], badCodec)
+      const repo = s.fixture.repo
+      const realCompact = repo.compactGameRevisions.bind(repo)
+      let handled = 0
+      let entered = 0
+      repo.compactGameRevisions = async (...args) => {
+        const result = await realCompact(...args)
+        entered += 1
+        if (result.status !== 'not-found') handled += result.handledBytes
+        return result
+      }
+
+      const body = await (await compact(s)).json<Answer>()
+
+      expect(body.games.every((game) => game.status === 'mismatch')).toBe(true)
+      // The first game took most of the budget; the next was entered only while its first chunk still fit.
+      expect(entered).toBe(body.games.length)
+      expect(entered).toBeLessThan(5)
+      expect(handled).toBeLessThanOrEqual(COMPACT_BYTES_PER_REQUEST)
+      // Nothing was lost: every failing game is still counted as work left.
+      expect(body.remaining).toBe(5)
+      expect(body.remainingRevisions).toBe(40)
+    })
+
+    it('the first game of a press is entered with the whole budget', async () => {
+      const s = await setup([4])
+      const repo = s.fixture.repo
+      const realCompact = repo.compactGameRevisions.bind(repo)
+      const budgets: number[] = []
+      repo.compactGameRevisions = async (id, rows, bytes) => {
+        budgets.push(bytes ?? -1)
+        return realCompact(id, rows, 1)
+      }
+      const body = await (await compact(s)).json<Answer>()
+      expect(budgets).toEqual([COMPACT_BYTES_PER_REQUEST])
+      expect(body.games).toHaveLength(1)
     })
   })
 

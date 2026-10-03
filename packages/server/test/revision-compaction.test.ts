@@ -412,7 +412,7 @@ describe('revision compaction in D1: runs that overlap other writes', () => {
     expect(rows.at(-1)).toMatchObject({ revision: next.rev, kind: 'delta' })
   })
 
-  it('a live write that lands between a writer reading its tail and committing is refused cleanly when the chain moved', async () => {
+  it('a compaction that finishes between a writer reading its tail and committing does not hurt the write', async () => {
     const { fixture, gameId, saved, game } = await legacyGame(35)
     const db = fixture.db as NonNullable<StoreFixture['db']>
     const live = game.steps.at(-1)?.after as GameState

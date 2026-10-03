@@ -6,13 +6,19 @@
  * ever return one, and a spectator reading an old revision still gets no hands.
  */
 
+import { mkdtemp, readFile } from 'node:fs/promises'
+import { rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import type { GameState } from '@civ/engine'
 import { itemName } from '@civ/engine'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { App } from '../src/app.js'
-import { createApp, createTestApp } from '../src/app.js'
+import { createApp } from '../src/app.js'
 import { D1Repository } from '../src/store/d1.js'
+import { JsonFileRepository } from '../src/store/json-file.js'
 import type { Repository } from '../src/store/types.js'
 import { createD1Adapter } from './d1-sqlite-adapter.js'
 import type { D1Adapter } from './d1-sqlite-adapter.js'
@@ -36,8 +42,25 @@ const backends: readonly [string, () => Promise<Harness>][] = [
   [
     'JsonFileRepository',
     async () => {
-      const { app, repo } = await createTestApp()
-      return { app, repo, deltaTexts: async () => [], close: () => undefined }
+      // A file, so the stored rows (and their deltas) can be read back like D1's.
+      const directory = await mkdtemp(join(tmpdir(), 'civ-api-'))
+      const filePath = join(directory, 'data.json')
+      const repo = new JsonFileRepository({ filePath, debounceMs: 60_000 })
+      const app = createApp({ repo, tokenSecret: 'test-secret', logger: false })
+      return {
+        app,
+        repo,
+        async deltaTexts(gameId) {
+          await repo.flush()
+          const file = JSON.parse(await readFile(filePath, 'utf8')) as {
+            revisions: { gameId: string; kind?: string; state: unknown }[]
+          }
+          return file.revisions
+            .filter((row) => row.gameId === gameId && row.kind === 'delta')
+            .map((row) => JSON.stringify(row.state))
+        },
+        close: () => rmSync(directory, { recursive: true, force: true }),
+      }
     },
   ],
   [
@@ -115,7 +138,7 @@ describe.each(backends)('revision history of a played game: %s', (_name, create)
     const { gameId } = await play()
     const deltas = await harness.deltaTexts(gameId)
     // 14 rounds of three recorded actions, a keyframe every 25 rows. Only D1 can show its rows.
-    if (_name === 'D1Repository') expect(deltas.length).toBeGreaterThan(30)
+    expect(deltas.length).toBeGreaterThan(30)
     const all = await harness.repo.listGameRevisions(gameId)
     expect(all.length).toBeGreaterThan(40)
     for (const revision of all) {
@@ -185,6 +208,8 @@ describe.each(backends)('revision history of a played game: %s', (_name, create)
   it('no route returns a stored delta', async () => {
     const { gameId, alice, spectator } = await play()
     const deltas = await harness.deltaTexts(gameId)
+    // Not an empty comparison: both stores hold the deltas the routes must never return.
+    expect(deltas.length).toBeGreaterThan(30)
     const numbers = (await harness.repo.listGameRevisionSummaries(gameId)).map((row) => row.revision)
     const urls = [
       `/api/games/${gameId}`,

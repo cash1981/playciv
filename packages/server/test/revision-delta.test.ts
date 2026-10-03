@@ -6,6 +6,8 @@
  * on the consecutive states of a game played through the engine.
  */
 
+import { migrateGameState } from '@civ/engine'
+import type { GameState } from '@civ/engine'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -400,5 +402,35 @@ describe('delta codec: states recorded from a game played through the engine', (
     // A real action touches a log entry, a hand and maybe the board: a few percent at most.
     expect(average).toBeLessThan(fullSize / 20)
     expect(Math.max(...sizes)).toBeLessThan(fullSize / 4)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The assumption the chain stands on
+// ---------------------------------------------------------------------------
+
+describe('migrateGameState on states the engine produces', () => {
+  // A keyframe is migrated when it is read, and the deltas after it were computed
+  // between states that were migrated when the live game was loaded. That only
+  // rebuilds the saved state if migration changes nothing in a current state, key
+  // order included: idempotent is not enough. If this ever fails, the chain is
+  // wrong for that state; do not work around it here.
+  const games = [
+    playRecordedGame({ steps: 120, players: 3, noteEvery: 9, name: 'Identity three' }),
+    playRecordedGame({ steps: 60, players: 2, name: 'Identity two' }),
+    playRecordedGame({ steps: 60, players: 5, noteEvery: 5, name: 'Identity five' }),
+  ]
+
+  it('returns every recorded state unchanged', () => {
+    let checked = 0
+    for (const game of games) {
+      const states = [game.start, ...game.steps.flatMap((step) => [step.after, ...(step.revision ? [step.revision.state] : [])])]
+      for (const state of states) {
+        const stored = JSON.parse(JSON.stringify(state)) as GameState
+        expect(JSON.stringify(migrateGameState(stored)), `rev ${state.rev}`).toBe(JSON.stringify(state))
+        checked += 1
+      }
+    }
+    expect(checked).toBeGreaterThan(400)
   })
 })

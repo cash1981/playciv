@@ -1104,13 +1104,17 @@ function RevisionCompactionPanel({
         `Compacted ${handled} saved states (about ${formatMegabytes(freed)} freed) in ${requests} ` +
           `${requests === 1 ? 'request' : 'requests'}.` +
           (stoppedWithoutProgress
-            ? ` ${remaining} saved states could not be compacted; see below.`
+            ? failed.length > 0
+              ? ` ${remaining} saved states could not be compacted; see below.`
+              : // Nothing failed and nothing moved: another press (or tab) got there first.
+                ` Nothing was compacted by this press; ${remaining} saved states are left, and you can press again.`
             : remaining > 0
               ? ` ${remaining} saved states are left; press again to continue.`
               : ''),
       )
       // Refresh from the server rather than subtracting here: it is the source of the numbers.
-      setPreview(await api.compactPreview())
+      const refreshed = await api.compactPreview()
+      if (mounted.current) setPreview(refreshed)
     })
   }
 
