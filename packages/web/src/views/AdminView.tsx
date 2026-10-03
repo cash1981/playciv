@@ -24,18 +24,23 @@ const DEFAULT_SUBJECT = 'Message from cash at playciv.app'
  * The skip box takes addresses separated by newlines, commas or spaces, so a
  * list copied from a spreadsheet or from the last run's result both work.
  */
-export function parseAddressList(text: string): string[] {
+function parseAddressList(text: string): string[] {
   return text
     .split(/[\s,]+/)
     .map((address) => address.trim())
     .filter((address) => address !== '')
 }
 
-/** The limit field: empty means no limit, anything but a positive whole number is invalid. */
+/** The server accepts a limit of 1 to this; the field is invalid outside it. */
+const MAX_LIMIT = 5000
+
+/** The limit field: empty means no limit, anything but a whole number from 1 to 5000 is invalid. */
 function parseLimit(text: string): number | undefined | 'invalid' {
   const trimmed = text.trim()
   if (trimmed === '') return undefined
-  return /^[0-9]+$/.test(trimmed) && Number(trimmed) >= 1 ? Number(trimmed) : 'invalid'
+  return /^[0-9]+$/.test(trimmed) && Number(trimmed) >= 1 && Number(trimmed) <= MAX_LIMIT
+    ? Number(trimmed)
+    : 'invalid'
 }
 
 export function AdminView({
@@ -188,7 +193,11 @@ export function AdminView({
         ...(limit === undefined ? {} : { limit }),
       })
       setBroadcastResult(result)
-      setEmailBody('')
+      // Keep the message while the run is unfinished, so it can be sent again
+      // for the rest without being retyped.
+      if (result.deferred === 0 && result.stopReason === null && result.failed.length === 0) {
+        setEmailBody('')
+      }
     } catch (caught) {
       if (isUnauthorized(caught)) return onUnauthorized()
       setError(errorMessage(caught))
@@ -387,7 +396,7 @@ export function AdminView({
           <input
             type="number"
             min={1}
-            max={5000}
+            max={MAX_LIMIT}
             step={1}
             value={limitText}
             disabled={sending}
@@ -398,7 +407,7 @@ export function AdminView({
           accounts
         </label>
         {limit === 'invalid' && (
-          <div className="error">The limit must be a whole number of at least 1.</div>
+          <div className="error">The limit must be a whole number from 1 to 5000.</div>
         )}
 
         <div className="row">
@@ -435,8 +444,9 @@ function BroadcastSummary({ result }: { readonly result: BroadcastResultDto }): 
       </ul>
       {result.failed.length > 0 && (
         <ul aria-label="Failed addresses">
-          {result.failed.map((failure) => (
-            <li key={failure.email}>
+          {result.failed.map((failure, index) => (
+            // Two accounts may share an address, so the address is not a key.
+            <li key={index}>
               {failure.email}: {failure.reason}
             </li>
           ))}

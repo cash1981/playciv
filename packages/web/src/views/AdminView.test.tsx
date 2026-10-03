@@ -180,6 +180,38 @@ describe('admin email broadcast form (issue #92)', () => {
     expect(sendButton().disabled).toBe(false)
   })
 
+  it('keeps the message body when the run did not finish, and clears it when it did', async () => {
+    vi.mocked(api.broadcastEmail).mockResolvedValueOnce({
+      sent: 100,
+      sentTo: ['a@example.com'],
+      skipped: { noAddress: 0, unsubscribed: 0, excluded: 0 },
+      failed: [],
+      deferred: 50,
+      stopReason: 'Stopped after 45 seconds',
+    })
+    renderView()
+
+    fireEvent.change(bodyField(), { target: { value: 'Body' } })
+    fireEvent.click(sendButton())
+    expect(await screen.findByText('Sent to 100 players.', undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(bodyField().value).toBe('Body')
+
+    // The rerun finishes everything (the default mock), so the body goes.
+    fireEvent.click(sendButton())
+    expect(await screen.findByText('Sent to 2 players.', undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(bodyField().value).toBe('')
+  })
+
+  it('will not send a limit above 5000', () => {
+    renderView()
+
+    fireEvent.change(bodyField(), { target: { value: 'Body' } })
+    fireEvent.change(screen.getByLabelText(/Send to at most/), { target: { value: '5001' } })
+    expect(sendButton().disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText(/Send to at most/), { target: { value: '5000' } })
+    expect(sendButton().disabled).toBe(false)
+  })
+
   it('summarises every count, each failure, the stop reason and the sent addresses', async () => {
     vi.mocked(api.broadcastEmail).mockResolvedValue({
       sent: 2,

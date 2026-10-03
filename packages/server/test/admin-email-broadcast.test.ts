@@ -6,7 +6,7 @@
  * No provider is contacted: a `FakeMailer` records every send.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { App } from '../src/app.js'
 import { createTestApp } from '../src/app.js'
@@ -14,7 +14,9 @@ import type { Mailer, OutgoingEmail } from '../src/mail.js'
 import { MailError } from '../src/mail.js'
 import {
   BROADCAST_BATCH_SIZE,
+  BROADCAST_PAUSE_MS,
   BROADCAST_REQUEST_BUDGET,
+  BROADCAST_TIME_BUDGET_MS,
   createNotifications,
 } from '../src/notifications.js'
 import { JsonFileRepository } from '../src/store/json-file.js'
@@ -293,6 +295,7 @@ async function accounts(
   count: number,
   mailer: Mailer,
   tweak: (index: number) => { email?: string | null; disableEmail?: boolean; username?: string } = () => ({}),
+  extra: { now?: () => Date; sleep?: (ms: number) => Promise<void> } = {},
 ) {
   const memory = new JsonFileRepository({ filePath: null })
   for (let index = 0; index < count; index += 1) {
@@ -306,10 +309,21 @@ async function accounts(
       ...(changes.disableEmail === undefined ? {} : { disableEmail: changes.disableEmail }),
     })
   }
-  return createNotifications({ repo: memory, mailer, appOrigin: 'https://playciv.app' })
+  return createNotifications({
+    repo: memory,
+    mailer,
+    appOrigin: 'https://playciv.app',
+    // Tests must not wait out the pause between provider requests.
+    sleep: async () => undefined,
+    ...extra,
+  })
 }
 
 const message = { subject: 'News', markdown: 'Hello **all**', includeUnsubscribed: false }
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('admin email broadcast: batching', () => {
   it('sends 555 accounts in six provider requests of at most 100', async () => {
@@ -397,7 +411,8 @@ describe('admin email broadcast: batching', () => {
     expect(result.failed).toEqual([{ email: bad, reason: 'Invalid `to` field.' }])
     expect(result.deferred).toBe(0)
     expect(result.stopReason).toBeNull()
-    expect(attempts.mock.calls.length).toBeLessThanOrEqual(BROADCAST_REQUEST_BUDGET)
+    // One request for the batch, then two per level of the split (100 -> 1).
+    expect(attempts.mock.calls.length).toBeLessThanOrEqual(16)
   })
 
   it('stops with a reason when splitting runs out of request budget', async () => {
@@ -476,7 +491,6 @@ describe('admin email broadcast: batching', () => {
     expect(result.stopReason).toContain('may still have been accepted')
     // The message is in the logged string itself, not a second argument.
     expect(errors).toHaveBeenCalledWith(expect.stringContaining('fetch failed'))
-    errors.mockRestore()
   })
 
   it('stops on a 5xx answer and defers the rest', async () => {
@@ -528,5 +542,71 @@ describe('admin email broadcast: batching', () => {
     }
     expect(mails[0]?.text).toContain('Hello user0\nHello **all**')
     expect(mails[1]?.html).toContain('<p>Hello &lt;b&gt;evil&lt;/b&gt;</p>')
+  })
+
+  it('stops on a 401 without splitting, counting nobody as failed', async () => {
+    const batch = new BatchMailer()
+    batch.rejects = () =>
+      new MailError('Resend rejected the email batch (401)', 401, '{"message":"API key is invalid"}')
+    const attempts = vi.spyOn(batch, 'sendBatch')
+    const notifications = await accounts(250, batch)
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    const result = await notifications.broadcast(message)
+
+    // About the request, not one message: splitting would only burn the budget.
+    expect(attempts).toHaveBeenCalledTimes(1)
+    expect(result.failed).toEqual([])
+    expect(result.sent).toBe(0)
+    expect(result.deferred).toBe(250)
+    expect(result.stopReason).toContain('401')
+    expect(result.stopReason).toContain('API key is invalid')
+  })
+
+  it('waits between provider requests, but not before the first', async () => {
+    const batch = new BatchMailer()
+    const events: string[] = []
+    const send = batch.sendBatch.bind(batch)
+    batch.sendBatch = async (emails) => {
+      events.push('request')
+      await send(emails)
+    }
+    const notifications = await accounts(250, batch, () => ({}), {
+      sleep: async (ms) => {
+        events.push(`pause ${ms}`)
+      },
+    })
+
+    const result = await notifications.broadcast(message)
+
+    expect(result.sent).toBe(250)
+    expect(events).toEqual([
+      'request',
+      `pause ${BROADCAST_PAUSE_MS}`,
+      'request',
+      `pause ${BROADCAST_PAUSE_MS}`,
+      'request',
+    ])
+  })
+
+  it('stops when the wall-clock budget is used up and defers the rest', async () => {
+    const batch = new BatchMailer()
+    // A fake clock that only moves when the broadcast pauses, 20 s at a time.
+    let elapsed = 0
+    const notifications = await accounts(500, batch, () => ({}), {
+      now: () => new Date(Date.UTC(2026, 9, 3) + elapsed),
+      sleep: async () => {
+        elapsed += 20_000
+      },
+    })
+
+    const result = await notifications.broadcast(message)
+
+    // Requests start at 0 s, 20 s and 40 s; the fourth would start at 60 s.
+    expect(BROADCAST_TIME_BUDGET_MS).toBe(45_000)
+    expect(batch.requests).toHaveLength(3)
+    expect(result.sent).toBe(300)
+    expect(result.deferred).toBe(200)
+    expect(result.stopReason).toContain('45 seconds')
   })
 })

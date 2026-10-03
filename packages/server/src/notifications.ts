@@ -31,8 +31,10 @@ export interface NotificationsConfig {
   readonly repo: Repository
   readonly mailer: Mailer
   readonly appOrigin?: string
-  /** Injectable clock, so the cooldown is testable. */
+  /** Injectable clock, so the cooldown and the broadcast's time budget are testable. */
   readonly now?: () => Date
+  /** Injectable pause, so the broadcast's spacing between requests costs a test nothing. */
+  readonly sleep?: (ms: number) => Promise<void>
 }
 
 /** Resend's limit for one `/emails/batch` request. */
@@ -44,6 +46,24 @@ export const BROADCAST_BATCH_SIZE = 100
  * use some of them, so the broadcast keeps a margin.
  */
 export const BROADCAST_REQUEST_BUDGET = 40
+
+/**
+ * Resend allows about two requests per second across the whole API by default,
+ * and answers 429 beyond that. Waiting between requests keeps a long broadcast
+ * under it; 600 ms leaves a little room.
+ */
+export const BROADCAST_PAUSE_MS = 600
+
+/**
+ * Wall-clock budget for one broadcast. If the HTTP response is lost (a client
+ * or edge timeout) the admin never sees `sentTo`, and a rerun would mail the
+ * same people again. A run that always ends well inside that window keeps the
+ * result reachable, so the rest is deferred instead.
+ */
+export const BROADCAST_TIME_BUDGET_MS = 45_000
+
+/** Statuses that can be about one message in the batch; anything else is about the request. */
+const PER_MESSAGE_STATUSES: ReadonlySet<number> = new Set([400, 413, 422])
 
 /** Deliberately loose: it only has to catch what Resend would reject for the whole batch. */
 const PLAUSIBLE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -150,6 +170,8 @@ export function createNotifications(config: NotificationsConfig): Notifications 
   const { repo, mailer } = config
   const appOrigin = (config.appOrigin ?? DEFAULT_APP_ORIGIN).replace(/\/+$/, '')
   const clock = config.now ?? ((): Date => new Date())
+  const sleep =
+    config.sleep ?? ((ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms)))
 
   const gameLink = (gameId: string): string => `${appOrigin}/game/${gameId}`
 
@@ -369,6 +391,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
      * that did not go out is accounted for.
      */
     async broadcast(options: BroadcastOptions): Promise<BroadcastResult> {
+      const startedAt = clock().getTime()
       const excluded = new Set((options.exclude ?? []).map(normaliseAddress))
       const skipped = { noAddress: 0, unsubscribed: 0, excluded: 0 }
       const failed: { email: string; reason: string }[] = []
@@ -387,7 +410,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         } else if (!PLAUSIBLE_EMAIL.test(player.email)) {
           // Resend would reject the whole batch for this one address.
           failed.push({ email: player.email, reason: 'Not a valid email address' })
-          console.error(`Broadcast to ${player.id} skipped: not a valid email address`)
+          console.error(`Broadcast to ${player.id} failed: not a valid email address`)
         } else {
           eligible.push({ id: player.id, username: player.username, email: player.email })
         }
@@ -411,8 +434,11 @@ export function createNotifications(config: NotificationsConfig): Notifications 
           unsubscribeHtml(recipient.id),
       })
 
-      // A mailer without `sendBatch` is driven one mail per call. That makes no
-      // Worker subrequests worth budgeting (the no-op mailer, test doubles).
+      // A mailer without `sendBatch` is driven one mail per call, with no
+      // request budget and no pause. That is only right because no mailer that
+      // makes network calls lacks `sendBatch` (the no-op mailer and test doubles
+      // do not): a new network mailer must implement `sendBatch`, or it will
+      // spend a subrequest per recipient again.
       const sendBatch = mailer.sendBatch?.bind(mailer)
       const groupSize = sendBatch === undefined ? 1 : BROADCAST_BATCH_SIZE
       const queue: BroadcastRecipient[][] = []
@@ -428,12 +454,24 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         const group = queue.shift()
         if (group === undefined) break
 
-        if (sendBatch !== undefined && requests >= BROADCAST_REQUEST_BUDGET) {
-          queue.unshift(group)
-          stopReason =
-            `Stopped after ${BROADCAST_REQUEST_BUDGET} provider requests, the most one run ` +
-            'may make. Run again with the sent addresses in the skip list.'
-          break
+        if (sendBatch !== undefined) {
+          if (requests >= BROADCAST_REQUEST_BUDGET) {
+            queue.unshift(group)
+            stopReason =
+              `Stopped after ${BROADCAST_REQUEST_BUDGET} provider requests, the most one run ` +
+              'may make. Run again with the sent addresses in the skip list.'
+            break
+          }
+          // Spaced out, but not before the first request.
+          if (requests > 0) await sleep(BROADCAST_PAUSE_MS)
+          if (clock().getTime() - startedAt >= BROADCAST_TIME_BUDGET_MS) {
+            queue.unshift(group)
+            stopReason =
+              `Stopped after ${BROADCAST_TIME_BUDGET_MS / 1000} seconds, the longest one run ` +
+              'may take, so that the result still reaches you. Run again with the sent ' +
+              'addresses in the skip list.'
+            break
+          }
         }
 
         requests += 1
@@ -448,14 +486,12 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         } catch (error) {
           const message = describeError(error)
           console.error(`Broadcast batch failed: ${message}`)
-          if (
-            error instanceof MailError &&
-            error.status >= 400 &&
-            error.status < 500 &&
-            error.status !== 429
-          ) {
-            // One bad address makes Resend reject the whole batch. Split it
-            // until the culprit stands alone; each half costs a request.
+          if (error instanceof MailError && PER_MESSAGE_STATUSES.has(error.status)) {
+            // One bad address makes Resend reject the whole batch (the batch
+            // endpoint is all or nothing), so nothing in it was sent. Split it
+            // until the culprit stands alone; each half costs a request. Other
+            // 4xx codes (a bad key, a forbidden domain) are about the request,
+            // not a message, and fall through to a stop.
             const [only] = group
             if (group.length === 1 && only !== undefined) {
               failed.push({ email: only.email, reason: message })
