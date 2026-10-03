@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AdminUserDto, BroadcastQueueDto, PlayerDto } from '../lib/api.js'
+import type { AdminUserDto, BroadcastQueueDto, CleanupPreviewDto, PlayerDto } from '../lib/api.js'
 import { ApiError, api } from '../lib/api.js'
 import type { MarkdownEditorHandle, MarkdownEditorProps } from './MarkdownEditor.js'
 import { AdminView } from './AdminView.js'
@@ -22,6 +22,8 @@ vi.mock('../lib/api.js', async (importOriginal) => ({
     runBroadcastQueue: vi.fn(),
     cancelBroadcastQueue: vi.fn(),
     releaseStuckBroadcastQueue: vi.fn(),
+    cleanupPreview: vi.fn(),
+    cleanFinishedGames: vi.fn(),
   },
 }))
 
@@ -567,5 +569,147 @@ describe('admin broadcast queue panel', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('clean up finished games panel', () => {
+  const MB = 1024 * 1024
+  const preview = (): CleanupPreviewDto => ({
+    games: [
+      { id: 'g-big', name: 'Big game', revisions: 120, removableRevisions: 119, removableBytes: 25 * MB },
+      { id: 'g-small', name: 'Small game', revisions: 10, removableRevisions: 9, removableBytes: 2 * MB },
+    ],
+    totalRevisions: 128,
+    totalBytes: 27 * MB,
+  })
+  const emptyPreview: CleanupPreviewDto = { games: [], totalRevisions: 0, totalBytes: 0 }
+
+  async function openList(): Promise<void> {
+    fireEvent.click(await screen.findByRole('button', { name: 'Show what can be cleaned' }, { timeout: 5_000 }))
+    await screen.findByText('Big game', undefined, { timeout: 5_000 })
+  }
+
+  it('reads nothing until asked, then shows each game, its size and the total', async () => {
+    vi.mocked(api.cleanupPreview).mockResolvedValue(preview())
+    renderView()
+    await screen.findByText('Clean up finished games', undefined, { timeout: 5_000 })
+    expect(vi.mocked(api.cleanupPreview)).not.toHaveBeenCalled()
+
+    await openList()
+
+    expect(vi.mocked(api.cleanupPreview)).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('119 of 120')).toBeTruthy()
+    expect(screen.getByText('25.0 MB')).toBeTruthy()
+    expect(screen.getByText('2.0 MB')).toBeTruthy()
+    // The total row.
+    expect(screen.getByText('128')).toBeTruthy()
+    expect(screen.getByText('27.0 MB')).toBeTruthy()
+  })
+
+  it('says what is kept and what is lost, how the size may not drop, and how to undo', async () => {
+    renderView()
+    const panel = (await screen.findByText('Clean up finished games', undefined, { timeout: 5_000 })).closest('section')
+    const text = panel?.textContent ?? ''
+    expect(text).toContain('final board, the log and the chat stay')
+    expect(text).toContain('may not report a smaller size at once')
+    expect(text).toContain('wrangler d1 time-travel info playciv')
+  })
+
+  it('names the game and the size in the confirmation, and cleans just that game', async () => {
+    vi.mocked(api.cleanupPreview).mockResolvedValueOnce(preview()).mockResolvedValueOnce({
+      games: [preview().games[1] as CleanupPreviewDto['games'][number]],
+      totalRevisions: 9,
+      totalBytes: 2 * MB,
+    })
+    vi.mocked(api.cleanFinishedGames).mockResolvedValue({
+      games: [{ id: 'g-big', name: 'Big game', removedRevisions: 119, removedBytes: 25 * MB }],
+      totalRevisions: 119,
+      totalBytes: 25 * MB,
+      remaining: 0,
+    })
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clean up Big game' }))
+
+    const question = String(vi.mocked(window.confirm).mock.calls[0]?.[0])
+    expect(question).toContain('Big game')
+    expect(question).toContain('119 of its 120')
+    expect(question).toContain('25.0 MB')
+    expect(question).toContain('replay of the game is lost')
+    expect(question).toContain('final board, the log and the chat stay')
+    expect(await screen.findByText(/Removed 119 saved states \(about 25.0 MB\) from 1 game\./, undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(vi.mocked(api.cleanFinishedGames)).toHaveBeenCalledWith('g-big')
+    // The list is read again, and the cleaned game is gone from it.
+    await waitFor(() => expect(screen.queryByText('Big game')).toBeNull(), { timeout: 5_000 })
+    expect(vi.mocked(api.cleanupPreview)).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Small game')).toBeTruthy()
+  })
+
+  it('cleans every game with one request and tells when more are left', async () => {
+    vi.mocked(api.cleanupPreview).mockResolvedValueOnce(preview()).mockResolvedValueOnce(preview())
+    vi.mocked(api.cleanFinishedGames).mockResolvedValue({
+      games: [{ id: 'g-big', name: 'Big game', removedRevisions: 119, removedBytes: 25 * MB }],
+      totalRevisions: 119,
+      totalBytes: 25 * MB,
+      remaining: 1,
+    })
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clean up all' }))
+
+    const question = String(vi.mocked(window.confirm).mock.calls[0]?.[0])
+    expect(question).toContain('2 finished games')
+    expect(question).toContain('128 saved states')
+    expect(question).toContain('27.0 MB')
+    expect(question).toContain('limited number of games')
+    expect(question).not.toMatch(/at most \d+/)
+    expect(question).toContain('replay of the game is lost')
+    expect(await screen.findByText(/1 more game is left; press "Clean up all" again/, undefined, { timeout: 5_000 })).toBeTruthy()
+    // No game id: the server takes the largest finished games.
+    expect(vi.mocked(api.cleanFinishedGames)).toHaveBeenCalledWith(undefined)
+    expect(vi.mocked(api.cleanupPreview)).toHaveBeenCalledTimes(2)
+  })
+
+  it('cleans nothing when the confirmation is declined', async () => {
+    vi.mocked(api.cleanupPreview).mockResolvedValue(preview())
+    vi.mocked(window.confirm).mockReturnValue(false)
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clean up Big game' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clean up all' }))
+
+    expect(vi.mocked(window.confirm)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(api.cleanFinishedGames)).not.toHaveBeenCalled()
+  })
+
+  it('shows the server message when the game turns out to be running, and keeps the list', async () => {
+    vi.mocked(api.cleanupPreview).mockResolvedValue(preview())
+    vi.mocked(api.cleanFinishedGames).mockRejectedValue(
+      new ApiError(409, 'GAME_ACTIVE', 'The game is still running; only finished games can be cleaned up'),
+    )
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clean up Small game' }))
+
+    expect(
+      await screen.findByText('The game is still running; only finished games can be cleaned up', undefined, {
+        timeout: 5_000,
+      }),
+    ).toBeTruthy()
+    expect(screen.getByText('Small game')).toBeTruthy()
+  })
+
+  it('says so when no finished game has anything to clean', async () => {
+    vi.mocked(api.cleanupPreview).mockResolvedValue(emptyPreview)
+    renderView()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show what can be cleaned' }, { timeout: 5_000 }))
+
+    expect(await screen.findByText('No finished game has anything to clean up.', undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Clean up all' })).toBeNull()
   })
 })

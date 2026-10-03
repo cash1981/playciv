@@ -23,6 +23,8 @@ import type {
   BroadcastRecipientStatus,
   ChatMessage,
   FinishedGame,
+  FinishedGameCleanup,
+  FinishedGameRevisionUsage,
   GameRevision,
   GameRevisionMetadata,
   PlayerUpdate,
@@ -276,6 +278,49 @@ export class JsonFileRepository implements Repository {
     }
     this.scheduleWrite()
     return deleted
+  }
+
+  async finishedGameRevisionUsage(
+    gameId?: string,
+  ): Promise<readonly FinishedGameRevisionUsage[]> {
+    const usage: FinishedGameRevisionUsage[] = []
+    for (const game of this.games.values()) {
+      if (game.active || (gameId !== undefined && game.id !== gameId)) continue
+      const revisions = [...this.revisions.values()].filter((entry) => entry.gameId === game.id)
+      const newest = revisions.reduce((max, entry) => Math.max(max, entry.revision), -1)
+      const removable = revisions.filter((entry) => entry.revision < newest)
+      usage.push({
+        gameId: game.id,
+        name: game.name,
+        revisions: revisions.length,
+        removableRevisions: removable.length,
+        // D1 sums the stored JSON text; this is the same text's size.
+        removableBytes: removable.reduce(
+          (sum, entry) => sum + Buffer.byteLength(JSON.stringify(entry.state), 'utf8'),
+          0,
+        ),
+      })
+    }
+    return usage.sort(
+      (left, right) =>
+        right.removableBytes - left.removableBytes || left.gameId.localeCompare(right.gameId),
+    )
+  }
+
+  async deleteOldGameRevisions(gameId: string): Promise<FinishedGameCleanup> {
+    const game = this.games.get(gameId)
+    if (game === undefined) return { status: 'not-found' }
+    if (game.active) return { status: 'active' }
+    const revisions = [...this.revisions.entries()].filter(([, entry]) => entry.gameId === gameId)
+    const newest = revisions.reduce((max, [, entry]) => Math.max(max, entry.revision), -1)
+    let removed = 0
+    for (const [key, entry] of revisions) {
+      if (entry.revision >= newest) continue
+      this.revisions.delete(key)
+      removed += 1
+    }
+    if (removed > 0) this.scheduleWrite()
+    return { status: 'cleaned', removed }
   }
 
   async appendChat(message: StoredChatRow): Promise<void> {

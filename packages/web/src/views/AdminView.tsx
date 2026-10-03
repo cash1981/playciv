@@ -2,7 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { api } from '../lib/api.js'
-import type { AdminUserDto, BroadcastQueueDto, BroadcastResultDto, PlayerDto } from '../lib/api.js'
+import type {
+  AdminUserDto,
+  BroadcastQueueDto,
+  BroadcastResultDto,
+  CleanupCandidateDto,
+  CleanupPreviewDto,
+  PlayerDto,
+} from '../lib/api.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
 import type { MarkdownEditorComponent } from './MarkdownEditor.js'
 
@@ -435,6 +442,8 @@ export function AdminView({
         onUnauthorized={onUnauthorized}
         onQueued={() => setEmailBody('')}
       />
+
+      <FinishedGameCleanupPanel onUnauthorized={onUnauthorized} />
     </>
   )
 }
@@ -791,5 +800,172 @@ function QueueStatus({
         </>
       )}
     </div>
+  )
+}
+
+/** Megabytes as the panel shows them; a sliver is "under 0.1 MB", not "0.0 MB". */
+function formatMegabytes(bytes: number): string {
+  const megabytes = bytes / (1024 * 1024)
+  return bytes > 0 && megabytes < 0.05 ? 'under 0.1 MB' : `${megabytes.toFixed(1)} MB`
+}
+
+/** What each confirmation says, and what it keeps: the replay goes, the final state stays. */
+const CLEANUP_LOSS =
+  'The step by step replay of the game is lost. The final board, the log and the chat stay.'
+
+/**
+ * "Clean up finished games": shrinks games that have ended to their newest
+ * revision. The dry run is read when the admin asks for it, and again after each
+ * cleanup, never on a timer. A server cap per request means "Clean up all" may
+ * need pressing more than once.
+ */
+function FinishedGameCleanupPanel({
+  onUnauthorized,
+}: {
+  readonly onUnauthorized: () => void
+}): React.JSX.Element {
+  const [preview, setPreview] = useState<CleanupPreviewDto | null>(null)
+  const [working, setWorking] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  /** Runs one action, reporting a failure here and a lapsed session to the app. */
+  async function act(action: () => Promise<void>): Promise<void> {
+    setWorking(true)
+    setError(null)
+    try {
+      await action()
+    } catch (caught) {
+      if (isUnauthorized(caught)) return onUnauthorized()
+      setError(errorMessage(caught))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  async function load(): Promise<void> {
+    setNotice(null)
+    await act(async () => {
+      setPreview(await api.cleanupPreview())
+    })
+  }
+
+  async function cleanOne(game: CleanupCandidateDto): Promise<void> {
+    if (working) return
+    if (
+      !window.confirm(
+        `Clean up ${game.name}? ${game.removableRevisions} of its ${game.revisions} saved ` +
+          `states (about ${formatMegabytes(game.removableBytes)}) will be removed. ${CLEANUP_LOSS}`,
+      )
+    ) {
+      return
+    }
+    await run(game.id)
+  }
+
+  async function cleanAll(): Promise<void> {
+    if (working || preview === null || preview.games.length === 0) return
+    if (
+      !window.confirm(
+        `Clean up ${preview.games.length} finished ${preview.games.length === 1 ? 'game' : 'games'}? ` +
+          `${preview.totalRevisions} saved states (about ${formatMegabytes(preview.totalBytes)}) ` +
+          `will be removed, the largest games first. Each press handles a limited number of games; press again if some remain. ${CLEANUP_LOSS}`,
+      )
+    ) {
+      return
+    }
+    await run(undefined)
+  }
+
+  async function run(gameId: string | undefined): Promise<void> {
+    setNotice(null)
+    await act(async () => {
+      const result = await api.cleanFinishedGames(gameId)
+      setNotice(
+        `Removed ${result.totalRevisions} saved states (about ${formatMegabytes(result.totalBytes)}) ` +
+          `from ${result.games.length} ${result.games.length === 1 ? 'game' : 'games'}.` +
+          (result.remaining > 0
+            ? ` ${result.remaining} more ${result.remaining === 1 ? 'game is' : 'games are'} left; press "Clean up all" again.`
+            : ''),
+      )
+      // Refresh from the server rather than subtracting here: it is the source of the numbers.
+      setPreview(await api.cleanupPreview())
+    })
+  }
+
+  return (
+    <section className="panel">
+      <h2>Clean up finished games</h2>
+      <p className="muted">
+        A finished game keeps a saved state after every move, only so it can be replayed step
+        by step. Cleaning removes all of them except the last: the final board, the log and the
+        chat stay, and so do the highscore and ratings. Games that are still running are never
+        touched. The database may not report a smaller size at once, because D1 reuses the
+        freed space. To undo a mistake, restore the database with D1 Time Travel (
+        <code>wrangler d1 time-travel info playciv</code>).
+      </p>
+      {error !== null && <div className="error">{error}</div>}
+      {notice !== null && <div className="notice">{notice}</div>}
+
+      <div className="row">
+        <button disabled={working} onClick={() => void load()}>
+          {preview === null ? 'Show what can be cleaned' : 'Refresh'}
+        </button>
+      </div>
+
+      {preview !== null && preview.games.length === 0 && (
+        <p className="muted">No finished game has anything to clean up.</p>
+      )}
+      {preview !== null && preview.games.length > 0 && (
+        <>
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Game</th>
+                  <th>Saved states</th>
+                  <th>Would free</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {preview.games.map((game) => (
+                  <tr key={game.id}>
+                    <td>{game.name}</td>
+                    <td>
+                      {game.removableRevisions} of {game.revisions}
+                    </td>
+                    <td>{formatMegabytes(game.removableBytes)}</td>
+                    <td>
+                      <button
+                        className="small"
+                        disabled={working}
+                        aria-label={`Clean up ${game.name}`}
+                        onClick={() => void cleanOne(game)}
+                      >
+                        Clean up
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>Total</td>
+                  <td>{preview.totalRevisions}</td>
+                  <td>{formatMegabytes(preview.totalBytes)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div className="row">
+            <button className="danger" disabled={working} onClick={() => void cleanAll()}>
+              Clean up all
+            </button>
+          </div>
+        </>
+      )}
+    </section>
   )
 }

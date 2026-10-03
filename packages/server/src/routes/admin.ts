@@ -48,8 +48,19 @@ function readExclude(body: Record<string, unknown>): string[] | undefined | 'inv
   return isStringArray(value) && value.length <= MAX_BROADCAST_LIST ? value : 'invalid'
 }
 
+/**
+ * Games one cleanup request handles: one guarded delete each. The free plan allows
+ * 50 subrequests per request and a run costs about 2 per game (the delete and, when
+ * it removed nothing, a read) plus a few, so keep this below roughly 23.
+ */
+const CLEANUP_GAMES_PER_REQUEST = 20
+
 function enabledAdminCount(players: readonly StoredPlayer[]): number {
   return players.filter(isAdmin).length
+}
+
+function sum(values: readonly number[]): number {
+  return values.reduce((total, value) => total + value, 0)
 }
 
 export function registerAdminRoutes(app: App, context: AppContext): void {
@@ -312,6 +323,91 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       return sendError(c, 409, 'NO_ACTIVE_BROADCAST', 'There is no queued broadcast to cancel')
     }
     return c.json({ queue })
+  })
+
+  /**
+   * The dry run of the finished-game cleanup. Only counts and names leave the
+   * repository, never a state. Games with nothing to remove are left out; the
+   * list is what a cleanup would act on.
+   */
+  app.get('/api/admin/games/cleanup', admin, async (c) => {
+    const usage = (await context.repo.finishedGameRevisionUsage()).filter(
+      (game) => game.removableRevisions > 0,
+    )
+    return c.json({
+      games: usage.map((game) => ({
+        id: game.gameId,
+        name: game.name,
+        revisions: game.revisions,
+        removableRevisions: game.removableRevisions,
+        removableBytes: game.removableBytes,
+      })),
+      totalRevisions: sum(usage.map((game) => game.removableRevisions)),
+      totalBytes: sum(usage.map((game) => game.removableBytes)),
+    })
+  })
+
+  /**
+   * Shrinks finished games to their newest revision (the final board, log and
+   * chat stay; the step by step replay goes). `gameId` names one game, no
+   * `gameId` takes the largest finished games, at most
+   * `CLEANUP_GAMES_PER_REQUEST` of them, and says how many are left.
+   */
+  app.post('/api/admin/games/cleanup', admin, async (c) => {
+    // A body that is not an object is refused rather than read as "every game".
+    const parsed: unknown = await c.req.json().catch(() => undefined)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'Send a JSON object, with gameId to clean one game')
+    }
+    const body = asRecord(parsed)
+    const gameId = body['gameId']
+    if (gameId !== undefined && (typeof gameId !== 'string' || gameId.trim() === '')) {
+      return sendError(c, 400, 'BAD_REQUEST', 'gameId must be a non-empty string')
+    }
+
+    const targets =
+      gameId === undefined
+        ? (await context.repo.finishedGameRevisionUsage()).filter(
+            (game) => game.removableRevisions > 0,
+          )
+        : await context.repo.finishedGameRevisionUsage(gameId)
+    // A named game goes through the delete even when it is not in the list, so a
+    // running or unknown one gets its own answer instead of an empty success.
+    const batch =
+      gameId === undefined
+        ? targets.slice(0, CLEANUP_GAMES_PER_REQUEST)
+        : [{ gameId, name: targets[0]?.name ?? gameId, removableBytes: targets[0]?.removableBytes ?? 0 }]
+
+    const games: { id: string; name: string; removedRevisions: number; removedBytes: number }[] = []
+    for (const game of batch) {
+      const result = await context.repo.deleteOldGameRevisions(game.gameId)
+      if (result.status !== 'cleaned') {
+        // In an all-games run the game changed after the listing (deleted, or no
+        // longer finished): skip it, so the report of the games already cleaned
+        // is not thrown away. A named game gets its own error.
+        if (gameId === undefined) continue
+        return result.status === 'not-found'
+          ? sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${game.gameId}`)
+          : sendError(
+              c,
+              409,
+              'GAME_ACTIVE',
+              'The game is still running; only finished games can be cleaned up',
+            )
+      }
+      games.push({
+        id: game.gameId,
+        name: game.name,
+        removedRevisions: result.removed,
+        removedBytes: result.removed > 0 ? game.removableBytes : 0,
+      })
+    }
+    return c.json({
+      games,
+      totalRevisions: sum(games.map((game) => game.removedRevisions)),
+      totalBytes: sum(games.map((game) => game.removedBytes)),
+      remaining: gameId === undefined ? targets.length - batch.length : 0,
+    })
   })
 
   /**

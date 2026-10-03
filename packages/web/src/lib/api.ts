@@ -134,6 +134,34 @@ export interface QueueBroadcastResponse {
   readonly rejected: readonly { readonly email: string; readonly reason: string }[]
 }
 
+/** One finished game the admin cleanup would shrink: counts and sizes, never any state. */
+export interface CleanupCandidateDto {
+  readonly id: string
+  readonly name: string
+  readonly revisions: number
+  readonly removableRevisions: number
+  readonly removableBytes: number
+}
+
+export interface CleanupPreviewDto {
+  readonly games: readonly CleanupCandidateDto[]
+  readonly totalRevisions: number
+  readonly totalBytes: number
+}
+
+export interface CleanupResultDto {
+  readonly games: readonly {
+    readonly id: string
+    readonly name: string
+    readonly removedRevisions: number
+    readonly removedBytes: number
+  }[]
+  readonly totalRevisions: number
+  readonly totalBytes: number
+  /** Finished games a "clean up all" left for the next press; 0 for a single game. */
+  readonly remaining: number
+}
+
 export interface BroadcastRunDto {
   readonly ran: boolean
   readonly sent: number
@@ -476,6 +504,11 @@ export const api = {
     ),
   cancelBroadcastQueue: () =>
     post<{ readonly queue: BroadcastQueueDto }>('/api/admin/email/broadcast/queue/cancel'),
+  /** The dry run: finished games with revisions the cleanup would remove. */
+  cleanupPreview: () => get<CleanupPreviewDto>('/api/admin/games/cleanup'),
+  /** Cleans one finished game, or the largest ones when `gameId` is left out. */
+  cleanFinishedGames: (gameId?: string) =>
+    post<CleanupResultDto>('/api/admin/games/cleanup', gameId === undefined ? {} : { gameId }),
   /** Public: the server route needs no bearer token. */
   highscore: () => get<HighscoreResult>('/api/highscore'),
   publicGames: () => get<PublicGameSummary[]>('/api/public/games'),

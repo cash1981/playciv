@@ -13,11 +13,17 @@ _Last updated: 2026-10-03_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 785 engine, 386 server, 492 web on `fix/broadcast-batching` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 785 engine, 408 server, 499 web on `feat/finished-game-cleanup` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Admin cleanup of finished games.** "Clean up finished games" on the admin page
+  (`GET`/`POST /api/admin/games/cleanup`) deletes every `game_revision` row of a
+  finished game except the newest, behind a dry run and a confirmation, at most 20
+  games per request. The final board, log, chat, highscore and ratings are untouched;
+  undo is D1 Time Travel. Not run against the real D1. Brief:
+  `tasks/finished-game-cleanup.md`; see `decisions.md`, 2026-10-03.
 - **Admin broadcast queue.** A broadcast can be queued ("Send over several days"):
   the recipients are snapshotted into `broadcast`/`broadcast_recipient` (migration
   `0005`), and a Worker cron at 17:00 UTC (`0 17 * * *`) sends the next 50 pending

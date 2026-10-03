@@ -756,6 +756,18 @@ owner releases them (after checking Resend's log) or cancels. **Deploy order for
 Worker; the cron only exists after a deploy, and its first run should be watched in the
 Worker's logs. See `docs/agents/decisions.md`.
 
+**The admin page can clean up finished games.** The database keeps a full saved
+state after every move, only so a game can be replayed step by step, and that is
+most of its size. "Clean up finished games" shows, as a dry run, which finished
+games have such states and how many MB would go, and removes all of them except the
+newest, one game at a time or the largest 20 at a time with "Clean up all" (press it
+again while it says games are left). The final board, the log, the chat, the
+highscore and the ratings stay as they were; running games are never touched. A
+cleaned game's history bar has a single entry. D1 may not report a smaller database
+at once, because freed pages are reused, so the size in `wrangler d1 info` might not
+drop. D1's free plan also has a daily limit on rows written, so a very large backlog may need to be cleaned over several days if a press fails partway; each game's delete is independent, so nothing is left half done. There is no undo in the app: restore with D1 Time Travel
+(`wrangler d1 time-travel info playciv`). See `docs/agents/decisions.md`.
+
 **Only Tradable cards can be given away.** The hand's "Give" control was drawn
 on every card, but `tradeToPlayer` only ever accepted Java's `Tradable` set
 (Culture I/II/III, Hut, Village); every other kind came back `ITEM_NOT_FOUND`.
