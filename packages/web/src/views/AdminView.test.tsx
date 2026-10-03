@@ -4,7 +4,14 @@ import { forwardRef, useImperativeHandle } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AdminUserDto, BroadcastQueueDto, CleanupPreviewDto, PlayerDto } from '../lib/api.js'
+import type {
+  AdminUserDto,
+  BroadcastQueueDto,
+  CleanupPreviewDto,
+  MigrateChatPreviewDto,
+  MigrateChatResultDto,
+  PlayerDto,
+} from '../lib/api.js'
 import { ApiError, api } from '../lib/api.js'
 import type { MarkdownEditorHandle, MarkdownEditorProps } from './MarkdownEditor.js'
 import { AdminView } from './AdminView.js'
@@ -24,6 +31,8 @@ vi.mock('../lib/api.js', async (importOriginal) => ({
     releaseStuckBroadcastQueue: vi.fn(),
     cleanupPreview: vi.fn(),
     cleanFinishedGames: vi.fn(),
+    migrateChatPreview: vi.fn(),
+    migrateChat: vi.fn(),
   },
 }))
 
@@ -711,5 +720,155 @@ describe('clean up finished games panel', () => {
 
     expect(await screen.findByText('No finished game has anything to clean up.', undefined, { timeout: 5_000 })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Clean up all' })).toBeNull()
+  })
+})
+
+describe('move old games to the single chat panel', () => {
+  const preview = (): MigrateChatPreviewDto => ({
+    games: [
+      { id: 'g-old', name: 'Old game', active: true, orderRows: 14, drafts: 2 },
+      { id: 'g-done', name: 'Finished game', active: false, orderRows: 1, drafts: 0 },
+    ],
+    totalOrderRows: 15,
+    totalDrafts: 2,
+  })
+  const emptyPreview: MigrateChatPreviewDto = { games: [], totalOrderRows: 0, totalDrafts: 0 }
+  const result = (overrides: Partial<MigrateChatResultDto> = {}): MigrateChatResultDto => ({
+    games: [{ id: 'g-old', name: 'Old game', orderRows: 14, drafts: 2 }],
+    totalOrderRows: 14,
+    totalDrafts: 2,
+    skipped: 0,
+    partial: null,
+    remaining: 0,
+    ...overrides,
+  })
+
+  async function openList(): Promise<void> {
+    fireEvent.click(await screen.findByRole('button', { name: 'Show what can be moved' }, { timeout: 5_000 }))
+    await screen.findByText('Old game', undefined, { timeout: 5_000 })
+  }
+
+  it('reads nothing until asked, then shows each game, its orders, its drafts and the totals', async () => {
+    vi.mocked(api.migrateChatPreview).mockResolvedValue(preview())
+    renderView()
+    await screen.findByText('Move old games to the single chat', undefined, { timeout: 5_000 })
+    expect(vi.mocked(api.migrateChatPreview)).not.toHaveBeenCalled()
+
+    await openList()
+
+    expect(vi.mocked(api.migrateChatPreview)).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('14')).toBeTruthy()
+    // The finished game is marked, and is listed like any other
+    expect(screen.getByText('Finished game')).toBeTruthy()
+    expect(screen.getByText('ended')).toBeTruthy()
+    // The total row.
+    expect(screen.getByText('15')).toBeTruthy()
+  })
+
+  it('says what is copied and that a draft stays private', async () => {
+    renderView()
+    const panel = (await screen.findByText('Move old games to the single chat', undefined, { timeout: 5_000 })).closest('section')
+    const text = panel?.textContent ?? ''
+    expect(text).toContain('copies the public orders into the timeline')
+    expect(text).toContain('private note')
+    expect(text).toContain('never published are not shown to anyone else')
+  })
+
+  it('names the game and the counts in the confirmation, and moves just that game', async () => {
+    vi.mocked(api.migrateChatPreview).mockResolvedValueOnce(preview()).mockResolvedValueOnce({
+      games: [preview().games[1] as MigrateChatPreviewDto['games'][number]],
+      totalOrderRows: 1,
+      totalDrafts: 0,
+    })
+    vi.mocked(api.migrateChat).mockResolvedValue(result())
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Old game' }))
+
+    const question = String(vi.mocked(window.confirm).mock.calls[0]?.[0])
+    expect(question).toContain('Old game')
+    expect(question).toContain('14 orders')
+    expect(question).toContain('2 unpublished drafts')
+    expect(question).toContain('private note')
+    expect(await screen.findByText(/Moved 1 game: 14 orders copied, 2 drafts added to private notes\./, undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(screen.getByText(/Nothing is left to move\./)).toBeTruthy()
+    expect(vi.mocked(api.migrateChat)).toHaveBeenCalledWith('g-old')
+    // The list is read again, and the moved game is gone from it.
+    await waitFor(() => expect(screen.queryByText('Old game')).toBeNull(), { timeout: 5_000 })
+    expect(vi.mocked(api.migrateChatPreview)).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Finished game')).toBeTruthy()
+  })
+
+  it('moves every game with one request and tells how many are left, until none are', async () => {
+    vi.mocked(api.migrateChatPreview).mockResolvedValue(preview())
+    vi.mocked(api.migrateChat)
+      .mockResolvedValueOnce(result({ remaining: 1, skipped: 1, partial: 'g-done' }))
+      .mockResolvedValueOnce(result({
+        games: [{ id: 'g-done', name: 'Finished game', orderRows: 1, drafts: 0 }],
+        totalOrderRows: 1,
+        totalDrafts: 0,
+        remaining: 0,
+      }))
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move all' }))
+
+    const question = String(vi.mocked(window.confirm).mock.calls[0]?.[0])
+    expect(question).toContain('2 games')
+    expect(question).toContain('15 orders')
+    expect(question).toContain('2 unpublished drafts')
+    expect(question).toContain('limited number of games')
+    const first = await screen.findByText(/1 game is left; press "Move all" again\./, undefined, { timeout: 5_000 })
+    expect(first.textContent).toContain('Moved 1 game: 14 orders copied, 2 drafts added to private notes.')
+    expect(first.textContent).toContain('1 game was skipped because it changed meanwhile.')
+    expect(first.textContent).toContain('Game g-done was only partly copied')
+    // No game id: the server takes every game that has not been moved.
+    expect(vi.mocked(api.migrateChat)).toHaveBeenCalledWith(undefined)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move all' }))
+
+    expect(await screen.findByText(/Moved 1 game: 1 order copied, 0 drafts added to private notes\. Nothing is left to move\./, undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(vi.mocked(api.migrateChat)).toHaveBeenCalledTimes(2)
+  })
+
+  it('moves nothing when the confirmation is declined', async () => {
+    vi.mocked(api.migrateChatPreview).mockResolvedValue(preview())
+    vi.mocked(window.confirm).mockReturnValue(false)
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Old game' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move all' }))
+
+    expect(vi.mocked(window.confirm)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(api.migrateChat)).not.toHaveBeenCalled()
+  })
+
+  it('shows the server message when the game changed, and keeps the list', async () => {
+    vi.mocked(api.migrateChatPreview).mockResolvedValue(preview())
+    vi.mocked(api.migrateChat).mockRejectedValue(
+      new ApiError(409, 'CONFLICT', 'The game changed while it was being migrated; try again'),
+    )
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Old game' }))
+
+    expect(
+      await screen.findByText('The game changed while it was being migrated; try again', undefined, { timeout: 5_000 }),
+    ).toBeTruthy()
+    expect(screen.getByText('Old game')).toBeTruthy()
+  })
+
+  it('says so when every game has been moved', async () => {
+    vi.mocked(api.migrateChatPreview).mockResolvedValue(emptyPreview)
+    renderView()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show what can be moved' }, { timeout: 5_000 }))
+
+    expect(await screen.findByText('Every game has been moved to the single chat.', undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Move all' })).toBeNull()
   })
 })
