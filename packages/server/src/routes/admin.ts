@@ -30,6 +30,13 @@ function hasField(body: Record<string, unknown>, field: string): boolean {
   return Object.prototype.hasOwnProperty.call(body, field)
 }
 
+/** Both the skip list and the per-run limit of the email broadcast stop here. */
+const MAX_BROADCAST_LIST = 5000
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string')
+}
+
 function enabledAdminCount(players: readonly StoredPlayer[]): number {
   return players.filter(isAdmin).length
 }
@@ -168,10 +175,40 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       return sendError(c, 400, 'BAD_REQUEST', 'includeUnsubscribed must be a boolean')
     }
 
+    const excludeValue = body['exclude']
+    if (
+      excludeValue !== undefined &&
+      (!isStringArray(excludeValue) || excludeValue.length > MAX_BROADCAST_LIST)
+    ) {
+      return sendError(
+        c,
+        400,
+        'BAD_REQUEST',
+        `exclude must be an array of at most ${MAX_BROADCAST_LIST} strings`,
+      )
+    }
+    const limitValue = body['limit']
+    if (
+      limitValue !== undefined &&
+      (typeof limitValue !== 'number' ||
+        !Number.isInteger(limitValue) ||
+        limitValue < 1 ||
+        limitValue > MAX_BROADCAST_LIST)
+    ) {
+      return sendError(
+        c,
+        400,
+        'BAD_REQUEST',
+        `limit must be an integer from 1 to ${MAX_BROADCAST_LIST}`,
+      )
+    }
+
     const result = await context.notifications.broadcast({
       subject,
       markdown,
       includeUnsubscribed: includeValue === true,
+      ...(excludeValue === undefined ? {} : { exclude: excludeValue }),
+      ...(limitValue === undefined ? {} : { limit: limitValue }),
     })
     return c.json(result)
   })

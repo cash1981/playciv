@@ -11,7 +11,8 @@
 import type { GameState, TurnPhase } from '@civ/engine'
 import { activeTurnStatus, TURN_PHASE_LABEL, turnHolder } from '@civ/engine'
 
-import type { Mailer } from './mail.js'
+import type { Mailer, OutgoingEmail } from './mail.js'
+import { MailError } from './mail.js'
 import { escapeHtml, renderMarkdown } from './markdown.js'
 import type { Repository } from './store/types.js'
 
@@ -32,6 +33,44 @@ export interface NotificationsConfig {
   readonly appOrigin?: string
   /** Injectable clock, so the cooldown is testable. */
   readonly now?: () => Date
+}
+
+/** Resend's limit for one `/emails/batch` request. */
+export const BROADCAST_BATCH_SIZE = 100
+
+/**
+ * Provider calls one broadcast may make. A Worker on the free plan allows 50
+ * subrequests per invocation in total, and the database read and the auth check
+ * use some of them, so the broadcast keeps a margin.
+ */
+export const BROADCAST_REQUEST_BUDGET = 40
+
+/** Deliberately loose: it only has to catch what Resend would reject for the whole batch. */
+const PLAUSIBLE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+export interface BroadcastOptions {
+  readonly subject: string
+  readonly markdown: string
+  readonly includeUnsubscribed: boolean
+  /** Addresses to leave out, typically `sentTo` from an earlier run. Case-insensitive. */
+  readonly exclude?: readonly string[]
+  /** Attempt at most this many eligible accounts; the rest are `deferred`. */
+  readonly limit?: number
+}
+
+export interface BroadcastResult {
+  readonly sent: number
+  /** Addresses the provider accepted in this run, for the next run's exclude list. */
+  readonly sentTo: readonly string[]
+  readonly skipped: {
+    readonly noAddress: number
+    readonly unsubscribed: number
+    readonly excluded: number
+  }
+  readonly failed: readonly { readonly email: string; readonly reason: string }[]
+  /** Eligible but not attempted: the limit, the quota, the request budget or a stop. */
+  readonly deferred: number
+  readonly stopReason: string | null
 }
 
 export interface Notifications {
@@ -86,14 +125,11 @@ export interface Notifications {
   /**
    * Java `GameAction.sendMailToAll(msg)` — the admin's message to every
    * account. Its old endpoint was commented out, so this is the first time it
-   * is reachable. One personalised mail per eligible account; `skipped` counts
-   * both the policy skips (no address, or unsubscribed) and the send failures.
+   * is reachable. One personalised mail per eligible account, sent in batches.
+   * Never throws: whatever stops the run is reported in the result, so the
+   * admin can resume it with the `sentTo` addresses as the next `exclude`.
    */
-  broadcast(options: {
-    readonly subject: string
-    readonly markdown: string
-    readonly includeUnsubscribed: boolean
-  }): Promise<{ readonly sent: number; readonly skipped: number }>
+  broadcast(options: BroadcastOptions): Promise<BroadcastResult>
 }
 
 /**
@@ -326,54 +362,165 @@ export function createNotifications(config: NotificationsConfig): Notifications 
 
     /**
      * Java's `sendMailToAll` ran one `parallelStream` send per opted-in player
-     * and told the caller nothing. Here the loop is sequential (so the counts
-     * are deterministic) and returns how many were sent and how many were not.
-     * Like `notify`, a single send failure is logged and swallowed so the rest
-     * of the list still goes out.
+     * and told the caller nothing. A Worker may make only 50 subrequests per
+     * request, so one fetch per recipient reached 49 of 555 accounts and counted
+     * the rest as skipped (2026-10-03). Here the mails go out through the
+     * provider's batch endpoint, within a fixed request budget, and everything
+     * that did not go out is accounted for.
      */
-    async broadcast(options: {
-      readonly subject: string
-      readonly markdown: string
-      readonly includeUnsubscribed: boolean
-    }): Promise<{ readonly sent: number; readonly skipped: number }> {
-      let sent = 0
-      let skipped = 0
-      const players = await repo.allPlayers()
-      for (const player of players) {
+    async broadcast(options: BroadcastOptions): Promise<BroadcastResult> {
+      const excluded = new Set((options.exclude ?? []).map(normaliseAddress))
+      const skipped = { noAddress: 0, unsubscribed: 0, excluded: 0 }
+      const failed: { email: string; reason: string }[] = []
+      const eligible: BroadcastRecipient[] = []
+
+      for (const player of await repo.allPlayers()) {
         // No address: nothing to send to. Same guard as `notify`.
         if (player.email === null || player.email === '') {
-          skipped += 1
-          continue
-        }
-        // Java's `!isDisableEmail()` filter, except the admin may deliberately
-        // override it for this one mail.
-        if (player.disableEmail === true && !options.includeUnsubscribed) {
-          skipped += 1
-          continue
-        }
-
-        // Java: "Hello " + username + "\n" + msg, then sendMessage appended the
-        // unsubscribe footer. A single newline after the greeting, as Java had.
-        const text = `Hello ${player.username}\n${options.markdown}${unsubscribe(player.id)}`
-        const html =
-          `<p>Hello ${escapeHtml(player.username)}</p>` +
-          renderMarkdown(options.markdown) +
-          unsubscribeHtml(player.id)
-
-        try {
-          await mailer.send({
-            to: player.email,
-            subject: options.subject,
-            text,
-            html,
-          })
-          sent += 1
-        } catch (error) {
-          console.error(`Broadcast email to ${player.id} failed`, error)
-          skipped += 1
+          skipped.noAddress += 1
+        } else if (player.disableEmail === true && !options.includeUnsubscribed) {
+          // Java's `!isDisableEmail()` filter, except the admin may deliberately
+          // override it for this one mail.
+          skipped.unsubscribed += 1
+        } else if (excluded.has(normaliseAddress(player.email))) {
+          skipped.excluded += 1
+        } else if (!PLAUSIBLE_EMAIL.test(player.email)) {
+          // Resend would reject the whole batch for this one address.
+          failed.push({ email: player.email, reason: 'Not a valid email address' })
+          console.error(`Broadcast to ${player.id} skipped: not a valid email address`)
+        } else {
+          eligible.push({ id: player.id, username: player.username, email: player.email })
         }
       }
-      return { sent, skipped }
+
+      const attempted = options.limit === undefined ? eligible : eligible.slice(0, options.limit)
+      let deferred = eligible.length - attempted.length
+
+      // The Markdown is the same for everyone; only the greeting and the
+      // unsubscribe link differ, and the Worker's CPU time is small.
+      const bodyHtml = renderMarkdown(options.markdown)
+      const build = (recipient: BroadcastRecipient): OutgoingEmail => ({
+        to: recipient.email,
+        subject: options.subject,
+        // Java: "Hello " + username + "\n" + msg, then sendMessage appended the
+        // unsubscribe footer. A single newline after the greeting, as Java had.
+        text: `Hello ${recipient.username}\n${options.markdown}${unsubscribe(recipient.id)}`,
+        html:
+          `<p>Hello ${escapeHtml(recipient.username)}</p>` +
+          bodyHtml +
+          unsubscribeHtml(recipient.id),
+      })
+
+      // A mailer without `sendBatch` is driven one mail per call. That makes no
+      // Worker subrequests worth budgeting (the no-op mailer, test doubles).
+      const sendBatch = mailer.sendBatch?.bind(mailer)
+      const groupSize = sendBatch === undefined ? 1 : BROADCAST_BATCH_SIZE
+      const queue: BroadcastRecipient[][] = []
+      for (let at = 0; at < attempted.length; at += groupSize) {
+        queue.push(attempted.slice(at, at + groupSize))
+      }
+
+      const sentTo: string[] = []
+      let requests = 0
+      let stopReason: string | null = null
+
+      while (stopReason === null) {
+        const group = queue.shift()
+        if (group === undefined) break
+
+        if (sendBatch !== undefined && requests >= BROADCAST_REQUEST_BUDGET) {
+          queue.unshift(group)
+          stopReason =
+            `Stopped after ${BROADCAST_REQUEST_BUDGET} provider requests, the most one run ` +
+            'may make. Run again with the sent addresses in the skip list.'
+          break
+        }
+
+        requests += 1
+        try {
+          if (sendBatch !== undefined) {
+            await sendBatch(group.map(build))
+          } else {
+            const [only] = group
+            if (only !== undefined) await mailer.send(build(only))
+          }
+          for (const recipient of group) sentTo.push(recipient.email)
+        } catch (error) {
+          const message = describeError(error)
+          console.error(`Broadcast batch failed: ${message}`)
+          if (
+            error instanceof MailError &&
+            error.status >= 400 &&
+            error.status < 500 &&
+            error.status !== 429
+          ) {
+            // One bad address makes Resend reject the whole batch. Split it
+            // until the culprit stands alone; each half costs a request.
+            const [only] = group
+            if (group.length === 1 && only !== undefined) {
+              failed.push({ email: only.email, reason: message })
+              console.error(`Broadcast to ${only.id} failed: ${message}`)
+            } else {
+              const middle = Math.ceil(group.length / 2)
+              queue.unshift(group.slice(0, middle), group.slice(middle))
+            }
+          } else {
+            queue.unshift(group)
+            if (error instanceof MailError) {
+              stopReason =
+                error.status === 429
+                  ? `The mail provider is rate limiting or out of quota (429): ${message}`
+                  : `The mail provider answered ${error.status}: ${message}`
+            } else {
+              // No answer arrived, so the last request may or may not have
+              // been accepted. The one case where a rerun could duplicate.
+              stopReason =
+                `Could not get an answer from the mail provider: ${message}. The last ` +
+                'request may still have been accepted; check the provider log before sending again.'
+            }
+          }
+        }
+      }
+
+      for (const group of queue) deferred += group.length
+
+      return {
+        sent: sentTo.length,
+        sentTo,
+        skipped,
+        failed,
+        deferred,
+        stopReason,
+      }
     },
   }
+}
+
+interface BroadcastRecipient {
+  readonly id: string
+  readonly username: string
+  readonly email: string
+}
+
+const normaliseAddress = (address: string): string => address.trim().toLowerCase()
+
+/**
+ * Resend's error body is JSON with a `message`; keep just that when it parses,
+ * since the admin reads it on a page. Anything else is shown as it came,
+ * shortened.
+ */
+function describeError(error: unknown): string {
+  if (error instanceof MailError) {
+    try {
+      const parsed: unknown = JSON.parse(error.detail)
+      if (typeof parsed === 'object' && parsed !== null && 'message' in parsed) {
+        const { message } = parsed as { message: unknown }
+        if (typeof message === 'string' && message !== '') return message
+      }
+    } catch {
+      // Not JSON: fall through to the raw text.
+    }
+    return (error.detail || error.message).slice(0, 300)
+  }
+  return (error instanceof Error ? error.message : String(error)).slice(0, 300)
 }
