@@ -4075,3 +4075,116 @@ game. Everything else in `game_revision` for that game is deleted.
 - Not verified here: a cleanup against the real D1 (no Cloudflare runtime in the
   development environment). The repository tests run the SQL on `node:sqlite` with
   every migration applied.
+
+## 2026-10-03 - The chat and orders timeline is the only mode
+
+New in the rewrite, so there is no old-system counterpart. Brief
+`tasks/single-chat.md`, on the branch of PR #218. It follows the entries of
+2026-09-29 and 2026-10-01 on chat orders.
+
+**Why.** The human tested the timeline for a while on `main`, liked it and did not
+want the old view back: "Make this the new default and remove the option of turning
+it on/off. Delete all dead code and migrate any existing to single chat if not
+already done." That includes finished games. The human did not answer the open
+questions, so the brief took the proposals as the decisions.
+
+**Chat orders is the only mode, and the flag and the baton are gone.**
+- `chatOrders` leaves `GameState` and `PlayerView`, with `setChatOrders`, the
+  `CHAT_ORDERS_OFF` error and the admin route that switched it. The baton actions
+  (`endTurn`, `takeTurn`), their routes, API calls and buttons are removed, and so
+  are the Turn orders and Chat panels and the classic array answer of
+  `GET /chat`. The chat route always answers `{ messages, hasMore }`; `?before=`
+  pages older turns and `paged` is ignored.
+- Draw is allowed for every player. Out of turn the player is asked first and the
+  server still refuses without `confirmedOutOfTurn`. The "turn" tag on the status
+  panel and the title follow `activeTurn`, which is the holder from `turnHolder`.
+
+**A saved classic game is adopted when it is loaded.** `migrateGameState` treats a
+state as classic when it carries `chatOrders: false`, or when it carries neither
+`chatOrders` nor `chatOrdersStartTurn` (a save from before the switch existed). It
+then sets `chatOrdersStartTurn` to the larger of the stored value and the turn
+played so far, records `startPlayerId` and the starter of that turn, and writes
+nothing to the log or the board (a load must not write to the board; the next
+turn's rotation places the marker). The condition is idempotent: a state saved by
+the new code has `chatOrdersStartTurn` and no `chatOrders`, so a second load leaves
+it alone, and so does a state that was saved with the switch on.
+
+**`legacyOrdersCopied` keeps its meaning: the database rows were copied.** It says
+that the public orders of the old Turn orders panel are in the `chat` table as
+`order` rows. An old save defaults to false, a save that was already in chat mode
+to true (its orders were written to the timeline as they were posted, so copying
+the old ones would duplicate them), and a new game starts with it true. The
+migration only runs for games where it is false, and the same save that sets it
+true also does the draft move below, so the whole move happens once.
+
+**The database rows are moved by an admin route, not on load.** `GET` and `POST
+/api/admin/games/migrate-chat`, finished games included. The GET is a dry run with
+counts and names only (`orderRows`, `drafts`). The POST copies `publicOrderVersions`
+into the timeline, then saves with `legacyOrdersCopied` true through
+`saveGameIfRevision`, so a game that changed meanwhile is skipped and counted. A
+request has a budget of 40 database calls (a Worker request may make 50), so it
+stops part way through a game with many rows, answers `partial` and `remaining`,
+and the admin presses again; rows already written are skipped. The admin page has
+the panel "Move old games to the single chat" with the same confirmation pattern as
+the cleanup. No real D1 was touched; the tests run the repository on `node:sqlite`.
+
+**Private material becomes a private note, and nothing else.** An unpublished draft
+of the old panel (a non-empty `orders[phase]` while `revealed[phase]` is not true)
+is appended to its owner's `gamenote` as a `### Turn N, <phase> (unpublished
+draft)` section, after whatever the note already says. The `gamenote` already is
+the Private tab of the timeline, so an existing note needs nothing. The human
+changed this from "drafts are not copied" after the first draft of the brief.
+Only `publicOrderVersions`, which reads the masked public copy, feeds the timeline,
+and a test shows that an unrevealed draft and a private note are not in the rows
+and that a draft reaches only its owner's note. The move leaves `playerTurns` and
+`publicTurns` as they are, and a section the note already holds is not added twice.
+
+**The finished game names only the winner.** The human: the revision line "System:
+cash won the game! Congratulations! . System: admin Ended this game, cash" should
+only say who won. The server now sends exactly `<winner> won the game!
+Congratulations!` as the description of that revision, and the replay bar leaves
+off the actor when the description matches that line, because the actor is the
+admin who pressed End game. Every other revision still reads `<description> -
+<actor>`. The title of an ended game reads `<winner> won the game`, or `Game ended`
+without a winner, shows no whose-turn chips and no progress strip (the strip would
+say that someone is waiting), and the "ended" tag is only shown beside a named
+winner so it does not repeat the title.
+
+**Dead code removed.** From the web: `TurnPanel`, `ChatPanel`, their tests and
+styles, the End turn and Take the turn buttons, the Chat orders item of the Actions
+menu, and the api calls `endTurn`, `takeTurn`, `setChatOrders`, `chat`,
+`publicTurns`, `myTurns`, `updateTurn`, `revealTurnOrder` and `lockTurn`. The
+private log editor, the tab key handler and the markdown editor styles lived in
+`TurnPanel` and moved to files of their own. From the server: the routes
+`turns/update`, `turns/reveal`, `turns/lock`, `turns/mine` and `turns/public`, the
+per-phase "updated" mail (a posted order is mailed as a chat message, as before)
+and `publicTurns` in a revision view. From the engine: `updateTurn`,
+`revealTurnOrder`, `addNewTurn`, `lockOrUnlockTurn`, `allPublicTurns`,
+`playersTurns`, `withOrder`, `compareTurns` and `publicTurns` in an opponent's
+player view. Nothing read those last two after the panel went, and the field was
+masked order text sent to every viewer for nothing.
+
+**What stays, and why.**
+- The stored shapes `playerTurns`, `publicTurns`, `orders`, `revealed`, `done`,
+  `history` and `disabled`. The timeline, `postOrder`, `turnStatus`, the migration
+  and old saves read them, and removing a field would change stored data.
+  Nothing writes `disabled` any more.
+- `yourTurn` as stored data on a player. It also marks "game started" and is in
+  every saved game, but nothing moves it any more: it is a leftover of the baton,
+  not the turn holder. Code that needs the holder uses `turnHolder` or
+  `activeTurn`. Removing the field needs a data migration for no gain now.
+- `TURN_NOT_FOUND`, still returned by `unmarkPhaseDone`, and the migration code
+  that names the old baton view, which is what it adopts.
+- `publicOrderVersions`, `unpublishedDrafts` and `draftsToPrivateNote`, used by the
+  migration route.
+- Tests that build an old save use a fixture (`saved-orders.ts` in the engine and
+  in the server tests) that writes the stored shape directly, because the actions
+  that used to write it are gone.
+
+**Known gap, not fixed.** Revealing a civilization at game start draws the
+starting units through `draw`, which requires that the player is the `turnHolder`.
+So only the holder can reveal a civilization during setup, and the other players
+get 403, as before. It was already the case under the baton and is not changed here.
+The test "a player whose turn it is not cannot reveal a civilization" documents it.
+The rules were not touched; whether setup should be exempt from the turn check is a
+question for the human.

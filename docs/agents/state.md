@@ -13,11 +13,23 @@ _Last updated: 2026-10-03_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 785 engine, 408 server, 499 web on `feat/finished-game-cleanup` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 750 engine, 403 server, 473 web on `claude/pr-218-default-view-wlml28` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Single chat: the timeline is the only view (branch `claude/pr-218-default-view-wlml28`, PR #218).**
+  No switch, no Turn orders or Chat panel, no End turn or Take the turn button; every
+  game, running or finished, uses the chat and orders timeline. `chatOrders` is gone
+  from `GameState` and `PlayerView`, a saved classic game is adopted when it is loaded,
+  and the admin page has "Move old games to the single chat" (`GET`/`POST
+  /api/admin/games/migrate-chat`) for the database rows, which also moves an
+  unpublished draft into its owner's private note. A finished game is titled with its
+  winner and its replay bar shows only who won. The old Turn orders routes, engine
+  actions and the per-phase mail are removed; the stored order data and `yourTurn` stay.
+  Known gap, not fixed: revealing a civilization at game start draws through `draw`,
+  which needs `turnHolder`. Not run against the real D1. Brief: `tasks/single-chat.md`;
+  see `decisions.md`, 2026-10-03.
 - **Admin cleanup of finished games.** "Clean up finished games" on the admin page
   (`GET`/`POST /api/admin/games/cleanup`) deletes every `game_revision` row of a
   finished game except the newest, behind a dry run and a confirmation, at most 20
