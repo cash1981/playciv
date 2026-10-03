@@ -6,14 +6,14 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-02_
+_Last updated: 2026-10-03_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 785 engine, 295 server, 469 web on `feat/wonder-sort` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 785 engine, 317 server, 475 web on `fix/broadcast-batching` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -23,7 +23,8 @@ _Last updated: 2026-10-02_
   batch split to find the bad address) instead of one fetch per recipient, which
   stopped at 49 of 555 on the Worker's 50-subrequest limit. The result reports
   sent, `sentTo`, skips by reason, failures with reasons, deferred and a stop
-  reason; the route takes `exclude` and `limit`, and the admin page has a skip box,
+  reason; requests are paced at 600 ms and a run is capped at 40 requests and 45 s;
+  the route takes `exclude` and `limit`, and the admin page has a skip box,
   a limit field and a readable summary. The Resend free plan's 100 a day still caps
   a single day. Brief: `tasks/broadcast-batching.md`; see `decisions.md`, 2026-10-03.
 - **Wonder sorting.** The board palette's Wonders category and the "Wonders in play"

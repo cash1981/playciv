@@ -17,7 +17,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** Claude (orchestrator; coder role)
 - **Branch:** `fix/broadcast-batching`
 - **Brief:** `docs/agents/tasks/broadcast-batching.md`
-- **Status:** claimed
+- **Status:** in review
 - **Claimed paths:**
   - `packages/server/src/mail.ts`, `packages/server/src/notifications.ts`, `packages/server/src/routes/admin.ts`
   - `packages/server/test/mail.test.ts`, `packages/server/test/admin-email-broadcast.test.ts`

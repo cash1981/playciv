@@ -3885,16 +3885,32 @@ the 50 subrequest limit: 555 accounts are now 6 requests.
   database read and the auth check, so the broadcast keeps a margin of 10. When
   the budget runs out the run stops with a `stopReason` and the rest is
   `deferred`.
-- **Bisect on a 4xx.** One bad address makes Resend reject the whole batch with a
-  422. On a 4xx other than 429 the chunk is split in two and each half retried,
-  down to the single address, which is recorded in `failed` with the provider's
-  message. Every retry spends budget: one bad address in 100 costs about 15
-  requests. A cheap shape check (`something@something.tld`) catches the obvious
-  ones first, so they never reach the provider.
+- **Bisect on a per-message 4xx.** One bad address makes Resend reject the whole
+  batch with a 422. On a 400, 413 or 422 the chunk is split in two and each half
+  retried, down to the single address, which is recorded in `failed` with the
+  provider's message. Every retry spends budget: one bad address in 100 costs 15
+  requests. Any other 4xx (401, 403 and so on) is about the request, not one
+  message, so it stops the run like a 5xx instead of being split. A cheap shape
+  check (`something@something.tld`) catches the obvious bad addresses first, so
+  they never reach the provider.
+- **Why the bisect cannot duplicate.** Resend rejects a whole batch when one email
+  in it fails validation (the batch endpoint is all or nothing by default), so a
+  rejected chunk sent nothing and its halves can be retried safely. That comes
+  from Resend's documentation and the 2026-10-03 incident (one 422 for the
+  whole request); re-check it if the bisect ever sends someone a mail twice.
+- **Paced at 600 ms between requests.** Resend's default is about 2 requests per
+  second across the API and it answers 429 beyond that, so the broadcast pauses
+  600 ms between provider requests (never before the first). The pause is
+  injectable (`config.sleep`), so tests do not wait.
 - **429, 5xx, a network error or a timeout stops the run.** The unsent accounts
   are `deferred`, and `stopReason` says why. A timed-out batch may in fact have
-  been accepted, so its `stopReason` says to check the provider's log first; it
-  is the one case where a rerun could mail someone twice.
+  been accepted, so its `stopReason` says to check the provider's log first.
+- **A 45 second time budget** (measured with the injected clock). When it is used
+  up the run stops with a `stopReason` and defers the rest. There are two ways a
+  rerun can mail someone twice: a timed-out request that was in fact accepted,
+  and a lost HTTP response, where the admin never sees `sentTo` (a client or edge
+  timeout). The time budget is what keeps the result reachable: the run ends well
+  inside such a window instead of running until something cuts it off.
 - **The result explains itself:** `sent`, `sentTo`, `skipped` by reason
   (`noAddress`, `unsubscribed`, `excluded`), `failed` with address and reason,
   `deferred`, `stopReason`. `skipped` no longer includes send failures.
