@@ -143,3 +143,12 @@ export function rebuildState(
 export function chainBase(row: { readonly revision: number; readonly baseRevision: number | null }): number {
   return row.baseRevision ?? row.revision
 }
+
+/**
+ * What a cleanup frees: the bytes of every row but the newest, less what writing
+ * the newest back as a keyframe adds (`growth`, positive only when the newest is
+ * a delta). Never negative.
+ */
+export function netRemovableBytes(removableBytes: number, growth: number): number {
+  return Math.max(0, removableBytes - Math.max(0, growth))
+}

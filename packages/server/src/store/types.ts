@@ -129,11 +129,18 @@ export interface FinishedGameRevisionUsage {
   readonly removableBytes: number
 }
 
-/** `active` and `not-found` remove nothing; a finished game with one revision is `cleaned` with `removed: 0`. */
+/**
+ * `active`, `not-found` and `changed` remove nothing; a finished game with one
+ * revision is `cleaned` with `removed: 0`. `changed` means the game or its
+ * history moved while the cleanup rebuilt the newest revision (an admin acted on
+ * a finished game, or another run got there first); nothing was written and
+ * trying again is safe.
+ */
 export type FinishedGameCleanup =
   | { readonly status: 'cleaned'; readonly removed: number }
   | { readonly status: 'active' }
   | { readonly status: 'not-found' }
+  | { readonly status: 'changed' }
 
 export type BroadcastStatus = 'active' | 'done' | 'cancelled'
 
@@ -239,9 +246,11 @@ export interface Repository {
   finishedGameRevisionUsage(gameId?: string): Promise<readonly FinishedGameRevisionUsage[]>
   /**
    * Removes every revision of a finished game except the newest, which keeps the
-   * history view and "Live" a snapshot to read. Refuses a running or unknown
-   * game and touches nothing but that game's `game_revision` rows. Safe to
-   * repeat: a second call removes 0.
+   * history view and "Live" a snapshot to read. When the newest is a delta it is
+   * first rewritten as a keyframe (it would not survive losing its chain), in the
+   * same atomic step as the delete. Refuses a running or unknown game and
+   * touches nothing but that game's `game_revision` rows. Safe to repeat: a
+   * second call removes 0.
    */
   deleteOldGameRevisions(gameId: string): Promise<FinishedGameCleanup>
 

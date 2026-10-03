@@ -49,11 +49,13 @@ function readExclude(body: Record<string, unknown>): string[] | undefined | 'inv
 }
 
 /**
- * Games one cleanup request handles: one guarded delete each. The free plan allows
- * 50 subrequests per request and a run costs about 2 per game (the delete and, when
- * it removed nothing, a read) plus a few, so keep this below roughly 23.
+ * Games one cleanup request handles. The free plan allows 50 subrequests per
+ * request. A game costs 2 when its newest revision is a keyframe (read the game,
+ * delete) and 3 when it is a delta (read the game, rebuild the newest revision,
+ * one batch that rewrites it and deletes the rest). Worst case 12 * 3 = 36, plus
+ * the listing and the admin check, stays well under 50.
  */
-const CLEANUP_GAMES_PER_REQUEST = 20
+const CLEANUP_GAMES_PER_REQUEST = 12
 
 function enabledAdminCount(players: readonly StoredPlayer[]): number {
   return players.filter(isAdmin).length
@@ -386,8 +388,11 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
         // longer finished): skip it, so the report of the games already cleaned
         // is not thrown away. A named game gets its own error.
         if (gameId === undefined) continue
-        return result.status === 'not-found'
-          ? sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${game.gameId}`)
+        if (result.status === 'not-found') {
+          return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${game.gameId}`)
+        }
+        return result.status === 'changed'
+          ? sendError(c, 409, 'GAME_CHANGED', 'The game changed while it was cleaned up; try again')
           : sendError(
               c,
               409,

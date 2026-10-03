@@ -20,10 +20,10 @@ import type { FinishedGame, GameState, HighscoreResult, RatedGame } from '@civ/e
 import { migrateGameState } from '@civ/engine'
 
 import type { RevisionCodec } from '../revision-delta.js'
-import { defaultRevisionCodec } from '../revision-delta.js'
+import { defaultRevisionCodec, sameJson } from '../revision-delta.js'
 import { ratedHighscore, resultFromGame } from './rating.js'
 import type { ChainRow, RevisionEncoding, RevisionTail } from './revision-chain.js'
-import { encodeRevision, rebuildState } from './revision-chain.js'
+import { encodeRevision, netRemovableBytes, rebuildState } from './revision-chain.js'
 import { normalizeChatMessage } from './types.js'
 import type {
   BroadcastCounts,
@@ -138,6 +138,9 @@ interface RevisionUsageRow {
   readonly revisions: number
   readonly removable_revisions: number
   readonly removable_bytes: number
+  readonly newest_kind: string | null
+  readonly newest_bytes: number | null
+  readonly keyframe_bytes: number | null
 }
 
 interface BroadcastRow {
@@ -587,7 +590,9 @@ export class D1Repository implements Repository {
   ): Promise<readonly FinishedGameRevisionUsage[]> {
     // The sizes are summed inside SQLite: no snapshot reaches the Worker. The
     // CAST makes LENGTH count bytes, not characters. The name is read out of the
-    // live game's JSON for the same reason.
+    // live game's JSON for the same reason. When the newest revision is a delta
+    // the cleanup has to write it back as a keyframe, which costs about as much
+    // as the chain's keyframe; the three newest_* columns let the dry run say so.
     const rows = await this.db
       .prepare(
         `SELECT g.id AS id,
@@ -595,7 +600,13 @@ export class D1Repository implements Repository {
                 COUNT(r.revision) AS revisions,
                 COALESCE(SUM(CASE WHEN r.revision < m.newest THEN 1 ELSE 0 END), 0) AS removable_revisions,
                 COALESCE(SUM(CASE WHEN r.revision < m.newest THEN LENGTH(CAST(r.state AS BLOB)) ELSE 0 END), 0)
-                  AS removable_bytes
+                  AS removable_bytes,
+                (SELECT kind FROM game_revision n WHERE n.game_id = g.id AND n.revision = m.newest) AS newest_kind,
+                (SELECT LENGTH(CAST(n.state AS BLOB)) FROM game_revision n
+                  WHERE n.game_id = g.id AND n.revision = m.newest) AS newest_bytes,
+                (SELECT LENGTH(CAST(k.state AS BLOB)) FROM game_revision n
+                  JOIN game_revision k ON k.game_id = n.game_id AND k.revision = COALESCE(n.base_revision, n.revision)
+                  WHERE n.game_id = g.id AND n.revision = m.newest) AS keyframe_bytes
          FROM game g
          LEFT JOIN (SELECT game_id, MAX(revision) AS newest FROM game_revision GROUP BY game_id) m
            ON m.game_id = g.id
@@ -611,30 +622,77 @@ export class D1Repository implements Repository {
       name: row.name ?? '',
       revisions: row.revisions,
       removableRevisions: row.removable_revisions,
-      removableBytes: row.removable_bytes,
+      removableBytes: netRemovableBytes(
+        row.removable_bytes,
+        row.newest_kind === 'delta' ? (row.keyframe_bytes ?? 0) - (row.newest_bytes ?? 0) : 0,
+      ),
     }))
   }
 
   async deleteOldGameRevisions(gameId: string): Promise<FinishedGameCleanup> {
-    // One statement, so the finished check and the delete cannot be separated.
-    const result = await this.db
+    const state = await this.db
       .prepare(
-        `DELETE FROM game_revision
-         WHERE game_id = ?
-           AND revision < (SELECT MAX(revision) FROM game_revision WHERE game_id = ?)
-           AND EXISTS (SELECT 1 FROM game WHERE id = ? AND active = 0)`,
+        `SELECT g.active AS active, g.rev AS rev,
+                (SELECT MAX(revision) FROM game_revision WHERE game_id = g.id) AS newest,
+                (SELECT kind FROM game_revision n WHERE n.game_id = g.id
+                  AND n.revision = (SELECT MAX(revision) FROM game_revision WHERE game_id = g.id)) AS newest_kind
+         FROM game g WHERE g.id = ?`,
       )
-      .bind(gameId, gameId, gameId)
-      .run()
-    const removed = changes(result)
-    if (removed > 0) return { status: 'cleaned', removed }
-    // Nothing went: either there was nothing to remove or the game was refused.
-    const game = await this.db
-      .prepare(`SELECT active FROM game WHERE id = ?`)
       .bind(gameId)
-      .first<{ active: number }>()
-    if (game === null) return { status: 'not-found' }
-    return game.active === 0 ? { status: 'cleaned', removed: 0 } : { status: 'active' }
+      .first<{ active: number; rev: number; newest: number | null; newest_kind: string | null }>()
+    if (state === null) return { status: 'not-found' }
+    if (state.active !== 0) return { status: 'active' }
+    if (state.newest === null) return { status: 'cleaned', removed: 0 }
+
+    if (state.newest_kind !== 'delta') {
+      // The newest revision is a keyframe: everything below it goes. The bound is
+      // the revision read above, not "the current newest", so a revision written
+      // meanwhile (an admin can still act on a finished game) keeps the keyframe
+      // it hangs on. One statement, so the finished check and the delete cannot
+      // be separated.
+      const result = await this.db
+        .prepare(
+          `DELETE FROM game_revision
+           WHERE game_id = ? AND revision < ?
+             AND EXISTS (SELECT 1 FROM game WHERE id = ? AND active = 0)`,
+        )
+        .bind(gameId, state.newest, gameId)
+        .run()
+      return { status: 'cleaned', removed: changes(result) }
+    }
+
+    // The newest revision is a delta: deleting the rows below it would destroy
+    // the chain it is built from. Rebuild it, write it back as a keyframe and
+    // delete the rest in one batch. Both statements are guarded by the live
+    // game still being finished and unchanged, and the delete by the newest row
+    // being a keyframe, so a half done cleanup is not possible.
+    const rebuilt = await this.readRevisionChain(gameId, state.newest)
+    if (rebuilt === undefined) return { status: 'changed' }
+    const keyframe = JSON.stringify(rebuilt.state)
+    // What is about to be stored must read back as the state that was rebuilt.
+    if (!sameJson(JSON.parse(keyframe) as unknown, rebuilt.state, true)) return { status: 'changed' }
+    const results = await this.db.batch([
+      this.db
+        .prepare(
+          `UPDATE game_revision SET state = ?, kind = 'full', base_revision = revision, sealed = 0
+           WHERE game_id = ? AND revision = ? AND kind = 'delta'
+             AND EXISTS (SELECT 1 FROM game WHERE id = ? AND active = 0 AND rev = ?)`,
+        )
+        .bind(keyframe, gameId, state.newest, gameId, state.rev),
+      this.db
+        .prepare(
+          `DELETE FROM game_revision
+           WHERE game_id = ? AND revision < ?
+             AND EXISTS (SELECT 1 FROM game_revision WHERE game_id = ? AND revision = ? AND kind = 'full')
+             AND EXISTS (SELECT 1 FROM game WHERE id = ? AND active = 0)`,
+        )
+        .bind(gameId, state.newest, gameId, state.newest, gameId),
+    ])
+    const [converted, deleted] = results
+    if (converted === undefined || deleted === undefined || changes(converted) === 0) {
+      return { status: 'changed' }
+    }
+    return { status: 'cleaned', removed: changes(deleted) }
   }
 
   // ---------------------------------------------------------------------

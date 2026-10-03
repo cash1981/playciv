@@ -19,7 +19,7 @@ import type { RevisionCodec } from '../revision-delta.js'
 import { defaultRevisionCodec } from '../revision-delta.js'
 import { ratedHighscore, resultFromGame } from './rating.js'
 import type { RevisionEncoding, RevisionKind, RevisionTail } from './revision-chain.js'
-import { chainBase, encodeRevision, rebuildState, utf8Length } from './revision-chain.js'
+import { chainBase, encodeRevision, netRemovableBytes, rebuildState, utf8Length } from './revision-chain.js'
 import { normalizeChatMessage } from './types.js'
 import type {
   BroadcastCounts,
@@ -142,8 +142,10 @@ export class JsonFileRepository implements Repository {
     if (normalizedPlayers) this.scheduleWrite()
     // Games saved before a field existed must be filled in before use
     for (const game of snapshot.games) this.games.set(game.id, migrateGameState(game))
+    const fromOldFile = new Set<string>()
     for (const revision of snapshot.revisions ?? []) {
       const kind: RevisionKind = revision.kind === 'delta' ? 'delta' : 'full'
+      if (revision.kind === undefined) fromOldFile.add(revision.gameId)
       const row: StoredRevision = {
         ...revision,
         kind,
@@ -154,6 +156,9 @@ export class JsonFileRepository implements Repository {
       }
       this.revisions.set(this.revisionKey(revision.gameId, revision.revision), row)
     }
+    // Like migration 0006 for D1: what wrote an old file did not track changes the
+    // history does not record, so the next revision of each of its games is a keyframe.
+    for (const gameId of fromOldFile) this.sealNewest(gameId)
     // Rows saved before chat orders (issue #215) have no kind or tags
     this.chat = snapshot.chat.map(normalizeChatMessage)
     this.highscoreCache = snapshot.highscore
@@ -312,11 +317,22 @@ export class JsonFileRepository implements Repository {
   }
 
   async findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined> {
+    const row = this.revisions.get(this.revisionKey(gameId, revision))
+    if (row === undefined) return undefined
+    const state = await this.rebuildRow(gameId, revision)
+    if (state === undefined) throw new Error(`Revision ${revision} of game ${gameId} cannot be rebuilt`)
+    return this.toGameRevision(row, state)
+  }
+
+  /**
+   * The full state of one revision: the nearest keyframe at or below it and every
+   * row up to it, applied in order. `undefined` when the chain does not hold
+   * together.
+   */
+  private async rebuildRow(gameId: string, revision: number): Promise<GameState | undefined> {
     const rows = this.rowsOf(gameId)
     const index = rows.findIndex((row) => row.revision === revision)
-    const row = rows[index]
-    if (row === undefined) return undefined
-    // The chain is the nearest keyframe at or below the revision and every row up to it.
+    if (index < 0) return undefined
     let start = index
     while (start > 0 && rows[start]?.kind !== 'full') start -= 1
     const rebuilt = rebuildState(
@@ -329,8 +345,7 @@ export class JsonFileRepository implements Repository {
       this.codec,
       (state) => state,
     )
-    if (!rebuilt.ok) throw new Error(`Revision ${revision} of game ${gameId}: ${rebuilt.reason}`)
-    return this.toGameRevision(row, rebuilt.state)
+    return rebuilt.ok ? rebuilt.state : undefined
   }
 
   async findGame(id: string): Promise<GameState | undefined> {
@@ -367,19 +382,20 @@ export class JsonFileRepository implements Repository {
     const usage: FinishedGameRevisionUsage[] = []
     for (const game of this.games.values()) {
       if (game.active || (gameId !== undefined && game.id !== gameId)) continue
-      const revisions = [...this.revisions.values()].filter((entry) => entry.gameId === game.id)
-      const newest = revisions.reduce((max, entry) => Math.max(max, entry.revision), -1)
-      const removable = revisions.filter((entry) => entry.revision < newest)
+      const rows = this.rowsOf(game.id)
+      const newest = rows.at(-1)
+      const removable = rows.filter((entry) => entry.revision < (newest?.revision ?? -1))
+      // D1 sums the stored JSON text; this is the same text's size.
+      const bytes = (row: StoredRevision) => utf8Length(JSON.stringify(row.state))
+      const keyframe = newest === undefined ? undefined : rows.find((row) => row.revision === chainBase(newest))
+      const growth =
+        newest?.kind === 'delta' && keyframe !== undefined ? bytes(keyframe) - bytes(newest) : 0
       usage.push({
         gameId: game.id,
         name: game.name,
-        revisions: revisions.length,
+        revisions: rows.length,
         removableRevisions: removable.length,
-        // D1 sums the stored JSON text; this is the same text's size.
-        removableBytes: removable.reduce(
-          (sum, entry) => sum + Buffer.byteLength(JSON.stringify(entry.state), 'utf8'),
-          0,
-        ),
+        removableBytes: netRemovableBytes(removable.reduce((sum, row) => sum + bytes(row), 0), growth),
       })
     }
     return usage.sort(
@@ -392,15 +408,29 @@ export class JsonFileRepository implements Repository {
     const game = this.games.get(gameId)
     if (game === undefined) return { status: 'not-found' }
     if (game.active) return { status: 'active' }
-    const revisions = [...this.revisions.entries()].filter(([, entry]) => entry.gameId === gameId)
-    const newest = revisions.reduce((max, [, entry]) => Math.max(max, entry.revision), -1)
+    const rows = this.rowsOf(gameId)
+    const newest = rows.at(-1)
+    if (newest === undefined) return { status: 'cleaned', removed: 0 }
+
+    if (newest.kind === 'delta') {
+      // The newest revision would not survive losing its chain: keep it as a keyframe.
+      const rebuilt = await this.rebuildRow(gameId, newest.revision)
+      if (rebuilt === undefined) return { status: 'changed' }
+      this.revisions.set(this.revisionKey(gameId, newest.revision), {
+        ...newest,
+        kind: 'full',
+        baseRevision: newest.revision,
+        sealed: false,
+        state: rebuilt,
+      })
+    }
     let removed = 0
-    for (const [key, entry] of revisions) {
-      if (entry.revision >= newest) continue
-      this.revisions.delete(key)
+    for (const row of rows) {
+      if (row.revision >= newest.revision) continue
+      this.revisions.delete(this.revisionKey(gameId, row.revision))
       removed += 1
     }
-    if (removed > 0) this.scheduleWrite()
+    this.scheduleWrite()
     return { status: 'cleaned', removed }
   }
 
