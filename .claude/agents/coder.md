@@ -24,12 +24,12 @@ Do not read the whole codebase. The brief names the files; start there.
   it. Another agent may be in it.
 - **Never commit on `main`,** never force-push, never merge, never open a pull
   request. You work on the feature branch you were given.
-- **The old system is the reference** — the old backend (`old-civ-rest`, Java)
-  and the old client (`old-civ-web`, AngularJS) together. Where it disagrees
-  with your instinct, follow the old system (the backend wins when the same
-  rule is in both and they conflict) and note the disagreement in your report.
-- **Do not invent FFG game rules.** If the brief needs a rule that is not in
-  the old system, stop and report the question instead of guessing.
+- **The current code and its tests are the reference.** Follow how the code
+  behaves today and keep its tests passing; change behaviour only when the brief
+  says so, and note it in your report. The old repositories are not the
+  specification any more.
+- **Do not invent FFG game rules.** If the brief needs a rule that is not in the
+  rulebooks or the code, stop and report the question instead of guessing.
 - **The engine is pure.** No `Date.now()`, no `Math.random()`, no I/O, nothing
   that throws. Errors are `Result` values.
 - **Do not weaken a projection.** Anything you add to `toPlayerView` or a route
@@ -64,7 +64,7 @@ Keep it short and factual:
 - The exact verification output: typecheck, test counts, build.
 - What you did **not** do, and why — anything out of scope, blocked, or
   deliberately left.
-- Any disagreement with the brief, any Java oddity you preserved, and any
+- Any disagreement with the brief, and any
   question you need answered.
 
 Do not claim something works that you did not check.

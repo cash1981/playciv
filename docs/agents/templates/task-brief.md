@@ -27,8 +27,8 @@ particular way, quote them — the exact wording usually carries a constraint.
 
 ## Reference
 
-What the Java source or the AngularJS client did here, and where to find it.
-`old-civ-rest/src/main/java/...`, `old-civ-web/app/...`. If there is no
+What the current code, the rulebooks or an earlier decision say about this.
+`decisions.md`, the code and tests it touches, `Civilization/`. If there is no
 reference — the feature is new — say so plainly, because that is the signal to
 ask the human rather than invent.
 
