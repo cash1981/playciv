@@ -4,7 +4,14 @@ import { forwardRef, useImperativeHandle } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AdminUserDto, BroadcastQueueDto, CleanupPreviewDto, PlayerDto } from '../lib/api.js'
+import type {
+  AdminUserDto,
+  BroadcastQueueDto,
+  CleanupPreviewDto,
+  CompactPreviewDto,
+  CompactResultDto,
+  PlayerDto,
+} from '../lib/api.js'
 import { ApiError, api } from '../lib/api.js'
 import type { MarkdownEditorHandle, MarkdownEditorProps } from './MarkdownEditor.js'
 import { AdminView } from './AdminView.js'
@@ -24,6 +31,8 @@ vi.mock('../lib/api.js', async (importOriginal) => ({
     releaseStuckBroadcastQueue: vi.fn(),
     cleanupPreview: vi.fn(),
     cleanFinishedGames: vi.fn(),
+    compactPreview: vi.fn(),
+    compactRevisions: vi.fn(),
   },
 }))
 
@@ -711,5 +720,194 @@ describe('clean up finished games panel', () => {
 
     expect(await screen.findByText('No finished game has anything to clean up.', undefined, { timeout: 5_000 })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Clean up all' })).toBeNull()
+  })
+})
+
+describe('compact revision history panel', () => {
+  const MB = 1024 * 1024
+  const preview = (): CompactPreviewDto => ({
+    games: [
+      { id: 'g-big', name: 'Big game', active: true, revisions: 600, fullRevisions: 599, freeableBytes: 200 * MB },
+      { id: 'g-small', name: 'Small game', active: false, revisions: 40, fullRevisions: 39, freeableBytes: 5 * MB },
+    ],
+    totalRevisions: 638,
+    totalBytes: 205 * MB,
+  })
+  const emptyPreview: CompactPreviewDto = { games: [], totalRevisions: 0, totalBytes: 0 }
+
+  /** One request's answer: some states handled in the named games, `left` still to do. */
+  const answer = (
+    games: readonly { id: string; name: string; converted: number; keyframes?: number; freedBytes?: number }[],
+    left: number,
+  ): CompactResultDto => ({
+    games: games.map((game) => ({
+      id: game.id,
+      name: game.name,
+      status: 'compacted' as const,
+      converted: game.converted,
+      keyframes: game.keyframes ?? 0,
+      freedBytes: game.freedBytes ?? game.converted * MB,
+      remaining: left,
+    })),
+    totalConverted: games.reduce((sum, game) => sum + game.converted, 0),
+    totalBytes: games.reduce((sum, game) => sum + (game.freedBytes ?? game.converted * MB), 0),
+    remaining: left > 0 ? 1 : 0,
+    remainingRevisions: left,
+  })
+
+  async function openList(): Promise<void> {
+    fireEvent.click(await screen.findByRole('button', { name: 'Show what can be compacted' }, { timeout: 5_000 }))
+    await screen.findByText(/Big game/, undefined, { timeout: 5_000 })
+  }
+
+  it('reads nothing until asked, then shows each game, its numbers and the total', async () => {
+    vi.mocked(api.compactPreview).mockResolvedValue(preview())
+    renderView()
+    await screen.findByText('Compact revision history', undefined, { timeout: 5_000 })
+    expect(vi.mocked(api.compactPreview)).not.toHaveBeenCalled()
+
+    await openList()
+
+    expect(vi.mocked(api.compactPreview)).toHaveBeenCalledTimes(1)
+    // A running game says so.
+    expect(screen.getByText('Big game (running)')).toBeTruthy()
+    expect(screen.getByText('Small game')).toBeTruthy()
+    expect(screen.getByText('599 of 600')).toBeTruthy()
+    expect(screen.getByText('200.0 MB')).toBeTruthy()
+    expect(screen.getByText('5.0 MB')).toBeTruthy()
+    // The total row.
+    expect(screen.getByText('638')).toBeTruthy()
+    expect(screen.getByText('205.0 MB')).toBeTruthy()
+  })
+
+  it('tells the owner to take a Time Travel bookmark first, and that the games read the same', async () => {
+    renderView()
+    const panel = (await screen.findByText('Compact revision history', undefined, { timeout: 5_000 })).closest('section')
+    const text = panel?.textContent ?? ''
+    expect(text).toContain('take a D1 Time Travel bookmark first')
+    expect(text).toContain('wrangler d1 time-travel info playciv')
+    expect(text).toContain('read exactly as before')
+    expect(text).toContain('except their newest saved state')
+  })
+
+  it('names the game and the numbers in the confirmation, and keeps asking for that game until nothing is left', async () => {
+    vi.mocked(api.compactPreview).mockResolvedValueOnce(preview()).mockResolvedValueOnce({
+      games: [preview().games[1] as CompactPreviewDto['games'][number]],
+      totalRevisions: 39,
+      totalBytes: 5 * MB,
+    })
+    vi.mocked(api.compactRevisions)
+      .mockResolvedValueOnce(answer([{ id: 'g-big', name: 'Big game', converted: 8, keyframes: 1 }], 590))
+      .mockResolvedValueOnce(answer([{ id: 'g-big', name: 'Big game', converted: 580, keyframes: 10 }], 0))
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compact Big game' }))
+
+    const question = String(vi.mocked(window.confirm).mock.calls[0]?.[0])
+    expect(question).toContain('Big game')
+    expect(question).toContain('599 of its 600')
+    expect(question).toContain('200.0 MB')
+    expect(question).toContain('checked against the originals before anything is replaced')
+    expect(question).toContain('newest saved state untouched')
+    expect(await screen.findByText(/Compacted 599 saved states \(about 588.0 MB freed\) in 2 requests\./, undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(vi.mocked(api.compactRevisions)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(api.compactRevisions)).toHaveBeenNthCalledWith(1, 'g-big')
+    expect(vi.mocked(api.compactRevisions)).toHaveBeenNthCalledWith(2, 'g-big')
+    // The list is read again, and the compacted game is gone from it.
+    await waitFor(() => expect(screen.queryByText(/Big game/)).toBeNull(), { timeout: 5_000 })
+    expect(vi.mocked(api.compactPreview)).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Small game')).toBeTruthy()
+  })
+
+  it('compacts every game without a game id, repeating until the server says nothing is left', async () => {
+    vi.mocked(api.compactPreview).mockResolvedValueOnce(preview()).mockResolvedValueOnce(emptyPreview)
+    vi.mocked(api.compactRevisions)
+      .mockResolvedValueOnce(answer([{ id: 'g-big', name: 'Big game', converted: 40 }], 598))
+      .mockResolvedValueOnce(answer([{ id: 'g-big', name: 'Big game', converted: 40 }], 558))
+      .mockResolvedValueOnce(
+        answer(
+          [
+            { id: 'g-big', name: 'Big game', converted: 519 },
+            { id: 'g-small', name: 'Small game', converted: 39 },
+          ],
+          0,
+        ),
+      )
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compact all' }))
+
+    const question = String(vi.mocked(window.confirm).mock.calls[0]?.[0])
+    expect(question).toContain('2 games')
+    expect(question).toContain('638 saved states')
+    expect(question).toContain('205.0 MB')
+    expect(question).toContain('many requests')
+    expect(await screen.findByText(/Compacted 638 saved states \(about 638.0 MB freed\) in 3 requests\./, undefined, { timeout: 5_000 })).toBeTruthy()
+    for (const call of vi.mocked(api.compactRevisions).mock.calls) expect(call).toEqual([undefined])
+    expect(vi.mocked(api.compactRevisions)).toHaveBeenCalledTimes(3)
+    expect(await screen.findByText('No game has old saved states left to compact.', undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Compact all' })).toBeNull()
+  })
+
+  it('compacts nothing when the confirmation is declined', async () => {
+    vi.mocked(api.compactPreview).mockResolvedValue(preview())
+    vi.mocked(window.confirm).mockReturnValue(false)
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compact Big game' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Compact all' }))
+
+    expect(vi.mocked(window.confirm)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(api.compactRevisions)).not.toHaveBeenCalled()
+  })
+
+  it('shows the server message when a request fails, stops asking and keeps the list', async () => {
+    vi.mocked(api.compactPreview).mockResolvedValue(preview())
+    vi.mocked(api.compactRevisions)
+      .mockResolvedValueOnce(answer([{ id: 'g-big', name: 'Big game', converted: 40 }], 559))
+      .mockRejectedValueOnce(new ApiError(503, 'HTTP_503', 'error code: 1102'))
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compact all' }))
+
+    expect(await screen.findByText(/1102/, undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(vi.mocked(api.compactRevisions)).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Small game')).toBeTruthy()
+    // The buttons are usable again.
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Compact all' }) as HTMLButtonElement).disabled).toBe(false), { timeout: 5_000 })
+  })
+
+  it('reports a game that failed its check, and stops when only such games are left', async () => {
+    vi.mocked(api.compactPreview).mockResolvedValue(preview())
+    vi.mocked(api.compactRevisions).mockResolvedValue({
+      games: [{ id: 'g-big', name: 'Big game', status: 'mismatch', revision: 12 }],
+      totalConverted: 0,
+      totalBytes: 0,
+      remaining: 1,
+      remainingRevisions: 599,
+    })
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compact Big game' }))
+
+    expect(await screen.findByText('Big game: saved state 12 did not check out, so the game was left as it was.', undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(screen.getByText(/599 saved states could not be compacted/)).toBeTruthy()
+    // One request, not a loop that changes nothing.
+    expect(vi.mocked(api.compactRevisions)).toHaveBeenCalledTimes(1)
+  })
+
+  it('says so when no game has old saved states', async () => {
+    vi.mocked(api.compactPreview).mockResolvedValue(emptyPreview)
+    renderView()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show what can be compacted' }, { timeout: 5_000 }))
+
+    expect(await screen.findByText('No game has old saved states left to compact.', undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Compact all' })).toBeNull()
   })
 })

@@ -162,6 +162,52 @@ export interface CleanupResultDto {
   readonly remaining: number
 }
 
+/** One game whose old saved states the compaction would turn into deltas: counts and sizes, never any state. */
+export interface CompactCandidateDto {
+  readonly id: string
+  readonly name: string
+  /** A game that is still running is compacted too; its newest state is never touched. */
+  readonly active: boolean
+  readonly revisions: number
+  /** Saved states still stored in full, from before delta storage. */
+  readonly fullRevisions: number
+  /** An estimate, in bytes. */
+  readonly freeableBytes: number
+}
+
+export interface CompactPreviewDto {
+  readonly games: readonly CompactCandidateDto[]
+  readonly totalRevisions: number
+  readonly totalBytes: number
+}
+
+export type CompactGameResultDto =
+  | {
+      readonly id: string
+      readonly name: string
+      readonly status: 'compacted'
+      readonly converted: number
+      readonly keyframes: number
+      readonly freedBytes: number
+      readonly remaining: number
+    }
+  | {
+      readonly id: string
+      readonly name: string
+      readonly status: 'mismatch'
+      /** The saved state whose rebuilt copy differed from the original; the game was left as it was. */
+      readonly revision: number
+    }
+
+export interface CompactResultDto {
+  readonly games: readonly CompactGameResultDto[]
+  readonly totalConverted: number
+  readonly totalBytes: number
+  /** Games with something left after this request. */
+  readonly remaining: number
+  readonly remainingRevisions: number
+}
+
 export interface BroadcastRunDto {
   readonly ran: boolean
   readonly sent: number
@@ -509,6 +555,11 @@ export const api = {
   /** Cleans one finished game, or the largest ones when `gameId` is left out. */
   cleanFinishedGames: (gameId?: string) =>
     post<CleanupResultDto>('/api/admin/games/cleanup', gameId === undefined ? {} : { gameId }),
+  /** The dry run of the revision compaction: games with old full saved states. */
+  compactPreview: () => get<CompactPreviewDto>('/api/admin/games/revisions/compact'),
+  /** One bounded step of the compaction, for one game or for the games with the most to gain. */
+  compactRevisions: (gameId?: string) =>
+    post<CompactResultDto>('/api/admin/games/revisions/compact', gameId === undefined ? {} : { gameId }),
   /** Public: the server route needs no bearer token. */
   highscore: () => get<HighscoreResult>('/api/highscore'),
   publicGames: () => get<PublicGameSummary[]>('/api/public/games'),
