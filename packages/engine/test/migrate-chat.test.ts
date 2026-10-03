@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { placeUnchecked } from '../src/actions/board.js'
-import { markPhasesDone, revealTurnOrder, updateTurn } from '../src/actions/turn.js'
+import { markPhasesDone } from '../src/actions/turn.js'
 import { START_PLAYER_ID, playerAreas } from '../src/board.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap } from '../src/result.js'
@@ -16,6 +16,7 @@ import { toPlayerView } from '../src/state.js'
 import { TURN_PHASES, startPlayerOf, turnHolder, turnStatus } from '../src/turn.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
+import { savedOrder } from './saved-orders.js'
 
 /** A state as the old code saved it with the switch off. */
 const savedClassic = (state: GameState): GameState => ({ ...state, chatOrders: false }) as unknown as GameState
@@ -33,8 +34,7 @@ const classicGame = (turns: number, skipFirst: readonly string[] = []): GameStat
   for (const playerId of [CASH1981, KARANDRAS1, ITCHI, CHUL]) {
     for (let turnNumber = skipFirst.includes(playerId) ? 2 : 1; turnNumber <= turns; turnNumber += 1) {
       for (const phase of TURN_PHASES) {
-        state = unwrap(updateTurn(state, { playerId, turnNumber, phase, order: `${phase} ${turnNumber}` }))
-        state = unwrap(revealTurnOrder(state, { playerId, turnNumber, phase, at: 't' }))
+        state = savedOrder(state, playerId, turnNumber, phase, `${phase} ${turnNumber}`, 't')
       }
     }
   }
@@ -86,8 +86,7 @@ describe('adopting a state saved with the baton view', () => {
       let next = state
       for (let turnNumber = 1; turnNumber <= 20; turnNumber += 1) {
         for (const phase of TURN_PHASES) {
-          next = unwrap(updateTurn(next, { playerId, turnNumber, phase, order: `${phase} ${turnNumber}` }))
-          next = unwrap(revealTurnOrder(next, { playerId, turnNumber, phase, at: 't' }))
+          next = savedOrder(next, playerId, turnNumber, phase, `${phase} ${turnNumber}`, 't')
         }
       }
       return next
@@ -138,9 +137,7 @@ describe('adopting a state saved with the baton view', () => {
 
   it('mid-turn it uses the turn the old view reports, and never goes back down', () => {
     // Turn 3 is under way for the baton holder: not all phases revealed yet
-    const midTurn = unwrap(
-      updateTurn(classicGame(2), { playerId: CASH1981, turnNumber: 3, phase: 'SOT', order: 'x' }),
-    )
+    const midTurn = savedOrder(classicGame(2), CASH1981, 3, 'SOT', 'x')
     expect(migrateGameState(savedClassic(midTurn)).chatOrdersStartTurn).toBe(3)
 
     // A baseline an earlier switch-on had set stays when it is higher

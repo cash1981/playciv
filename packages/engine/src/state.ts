@@ -515,11 +515,6 @@ export interface OpaquePlayerhand {
    * "blank" tech card, so the name is stripped in `opaque()` below.
    */
   readonly pyramidPlacements: readonly PublicPyramidPlacement[]
-  /**
-   * Public turn-order copies. `gamenote` and `playerTurns` are private and do
-   * not appear here.
-   */
-  readonly publicTurns: readonly PlayerTurn[]
   /** The status board (issue #43) is public, unlike the rest of the hand. */
   readonly stats: PlayerStats
   readonly government: Government
@@ -553,9 +548,6 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     revealedTechs: player.techsChosen.filter((tech) => !tech.hidden),
     revealedSocialPolicies: player.socialPolicies.filter((policy) => !policy.hidden),
     pyramidPlacements: player.pyramidPlacements.map((placement) => ({ slot: placement.slot })),
-    publicTurns: Object.values(state.publicTurns).filter(
-      (turn) => turn.username === player.username,
-    ),
     stats: {
       ...player.stats,
       combat: combatBonusOf(state, player),

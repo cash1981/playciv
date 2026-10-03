@@ -3,7 +3,8 @@
  *
  * A turn has five phases. Each phase holds the current order and the history
  * of the versions its owner has *revealed*, so the players can see what was
- * published before. Saving never creates a version.
+ * published before. An order is published when it is posted, and every posted
+ * version is kept.
  *
  * `TurnKey.java` is not ported. It was an attempt at a composite key for
  * `publicTurns`, but Java could not get Jackson to serialise the map and ended
@@ -113,26 +114,6 @@ export function compareJavaStrings(a: string, b: string): number {
   if (a < b) return -1
   if (a > b) return 1
   return 0
-}
-
-/** Java: `compareTo` sorted on turn number, then username. */
-export function compareTurns(a: PlayerTurn, b: PlayerTurn): number {
-  return a.turnNumber - b.turnNumber || compareJavaStrings(a.username, b.username)
-}
-
-/**
- * Sets the order for one phase.
- *
- * Saving never creates a history version — only `revealTurnOrder` does — so
- * this no longer touches `history`.
- */
-export function withOrder(turn: PlayerTurn, phase: TurnPhase, order: string): PlayerTurn {
-  return {
-    ...turn,
-    orders: { ...turn.orders, [phase]: order },
-    // A changed order must be explicitly published again.
-    revealed: { ...turn.revealed, [phase]: false },
-  }
 }
 
 const isVersion = (entry: unknown): entry is TurnOrderVersion =>

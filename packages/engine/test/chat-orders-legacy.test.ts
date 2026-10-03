@@ -7,15 +7,14 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { revealTurnOrder, updateTurn } from '../src/actions/turn.js'
 import { migrateGameState } from '../src/migrate.js'
-import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
 import type { TurnPhase } from '../src/turn.js'
 import { draftsToPrivateNote, publicOrderVersions, unpublishedDrafts } from '../src/turn.js'
 
 import { CASH1981, CHUL, KARANDRAS1, firstCivGame } from './fixture.js'
+import { savedOrder } from './saved-orders.js'
 
 const write = (
   state: GameState,
@@ -24,12 +23,7 @@ const write = (
   phase: TurnPhase,
   order: string,
   at?: string,
-): GameState => {
-  const written = unwrap(updateTurn(state, { playerId, turnNumber, phase, order }))
-  return at === undefined
-    ? written
-    : unwrap(revealTurnOrder(written, { playerId, turnNumber, phase, at }))
-}
+): GameState => savedOrder(state, playerId, turnNumber, phase, order, at)
 
 describe('legacyOrdersCopied', () => {
   it('is true in a new game, which writes its orders to the timeline itself, and not in the player view', () => {

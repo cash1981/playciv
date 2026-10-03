@@ -7,14 +7,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { draw, drawWonder } from '../src/actions/draw.js'
-import {
-  allPublicTurns,
-  markPhasesDone,
-  postOrder,
-  revealTurnOrder,
-  unmarkPhaseDone,
-  updateTurn,
-} from '../src/actions/turn.js'
+import { markPhasesDone, postOrder, unmarkPhaseDone } from '../src/actions/turn.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { activeTurnStatus, findPlayer, toPlayerView } from '../src/state.js'
@@ -22,6 +15,7 @@ import type { PlayerTurn, TurnPhase } from '../src/turn.js'
 import { TURN_PHASES, migratePlayerTurn, turnHolder, turnStatus } from '../src/turn.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
+import { savedOrder } from './saved-orders.js'
 
 const done = (state: GameState, playerId: string, turnNumber = 1): Readonly<Record<TurnPhase, boolean>> | undefined =>
   findPlayer(state, playerId)?.playerTurns.find((turn) => turn.turnNumber === turnNumber)?.done
@@ -34,23 +28,14 @@ const finishTurn = (state: GameState, turnNumber: number): GameState =>
     state,
   )
 
-describe('the classic update and reveal', () => {
-  it('still work, and a reveal publishes the order and marks the phase done', () => {
-    let state = unwrap(updateTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'classic' }))
-    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', at: 't1' }))
-    expect(state.publicTurns['1cash1981']?.orders.SOT).toBe('classic')
-    expect(done(state, CASH1981)?.SOT).toBe(true)
-  })
-})
-
 describe('PlayerTurn.done', () => {
   it('a new turn starts with nothing done', () => {
-    const state = unwrap(updateTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'x' }))
+    const state = unwrap(postOrder(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase: 'SOT', markdown: 'x', at: 't' }))
     expect(done(state, CASH1981)).toEqual({ SOT: false, TRADE: false, CM: false, MOVEMENT: false, RESEARCH: false })
   })
 
   it('an old turn migrates with done equal to revealed', () => {
-    const state = unwrap(updateTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase: 'SOT', order: 'x' }))
+    const state = savedOrder(firstCivGame(), CASH1981, 1, 'SOT', 'x')
     const stored = state.publicTurns['1cash1981'] as PlayerTurn
     const strip = (turn: PlayerTurn, revealed?: Record<string, boolean>): PlayerTurn => {
       const old = { ...turn } as Record<string, unknown>
@@ -71,15 +56,6 @@ describe('PlayerTurn.done', () => {
     expect(migratePlayerTurn(partly)).toEqual(partly)
     const explicit = migratePlayerTurn({ ...partly, done: { ...partly.done, TRADE: true } })
     expect(explicit.done.TRADE).toBe(true)
-  })
-
-  it('a classic reveal also marks the phase done', () => {
-    let state = unwrap(updateTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase: 'TRADE', order: 'trade 6' }))
-    expect(done(state, CASH1981)?.TRADE).toBe(false)
-    state = unwrap(revealTurnOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'TRADE', at: 't1' }))
-    expect(done(state, CASH1981)?.TRADE).toBe(true)
-    expect(done(state, CASH1981)?.SOT).toBe(false)
-    expect(state.publicTurns['1cash1981']?.done.TRADE).toBe(true)
   })
 })
 
@@ -160,7 +136,7 @@ describe('postOrder', () => {
 
     // Public at once: opponents read it from publicTurns
     expect(state.publicTurns['1Karandras1']?.orders.MOVEMENT).toBe('A6 to A5')
-    expect(allPublicTurns(state)[0]?.history.MOVEMENT).toHaveLength(1)
+    expect(state.publicTurns['1Karandras1']?.history.MOVEMENT).toHaveLength(1)
     expect(state.log.at(-1)?.publicLog).toBe('Turn 1 - Karandras1 posted an order for movement phase')
     // The text is in the history, not in the log
     expect(JSON.stringify(state.log)).not.toContain('A6 to A5')
@@ -184,7 +160,7 @@ describe('postOrder', () => {
   })
 
   it('does not disturb the other phases of the turn', () => {
-    let state = unwrap(updateTurn(firstCivGame(), { playerId: CASH1981, turnNumber: 1, phase: 'CM', order: 'draft, unpublished' }))
+    let state = savedOrder(firstCivGame(), CASH1981, 1, 'CM', 'draft, unpublished')
     state = unwrap(postOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', markdown: 'go', at: 't' }))
     const turn = findPlayer(state, CASH1981)?.playerTurns[0]
     expect(turn?.orders.CM).toBe('draft, unpublished')
@@ -373,7 +349,7 @@ describe('hidden information', () => {
   it('another player sees the flags and posted orders but no private log, note or draft', () => {
     let state = firstCivGame()
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'GREAT_PERSON' }))
-    state = unwrap(updateTurn(state, { playerId: CASH1981, turnNumber: 1, phase: 'CM', order: 'DRAFT-SECRET-PLAN' }))
+    state = savedOrder(state, CASH1981, 1, 'CM', 'DRAFT-SECRET-PLAN')
     state = unwrap(postOrder(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT', markdown: 'public order', at: 't' }))
     state = unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
     const cash = findPlayer(state, CASH1981)
@@ -391,8 +367,8 @@ describe('hidden information', () => {
     expect(json).not.toContain('DRAFT-SECRET-PLAN')
     expect(json).not.toContain('NOTE-SECRET')
     expect(json).not.toContain(privateLog)
-    // What is public is there
-    expect(json).toContain('public order')
+    // A posted order reaches the others through the timeline, not through the view
+    expect(json).not.toContain('public order')
     expect(toPlayerView(state, KARANDRAS1).activeTurn?.waitingFor).toBeDefined()
     // The owner still has their own
     expect(JSON.stringify(toPlayerView(state, CASH1981))).toContain('DRAFT-SECRET-PLAN')

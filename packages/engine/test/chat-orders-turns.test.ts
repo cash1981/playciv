@@ -15,19 +15,14 @@ import {
   undoLastBoardChange,
 } from '../src/actions/board.js'
 import { withdrawFromGame } from '../src/actions/game.js'
-import {
-  markPhasesDone,
-  revealTurnOrder,
-  unmarkPhaseDone,
-  updateTurn,
-} from '../src/actions/turn.js'
+import { markPhasesDone, unmarkPhaseDone } from '../src/actions/turn.js'
 import { START_PLAYER_ID, areaAt, findBoardAsset, mapTop, playerAreas } from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
-import { TURN_PHASES, startPlayerOf, turnHolder, turnStatus } from '../src/turn.js'
+import { startPlayerOf, turnHolder, turnStatus } from '../src/turn.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
@@ -379,27 +374,6 @@ describe('more than one start player marker', () => {
 })
 
 describe('catching up when the turn advances some other way', () => {
-  /** A classic finish: write and reveal every phase, which sets `done` too. */
-  const revealAll = (state: GameState, playerId: string, turnNumber: number): GameState =>
-    TURN_PHASES.reduce((current, phase) => {
-      const written = unwrap(updateTurn(current, { playerId, turnNumber, phase, order: `order ${phase}` }))
-      return unwrap(revealTurnOrder(written, { playerId, turnNumber, phase, at: 'reveal' }))
-    }, state)
-
-  it('starts the turn when a classic reveal finishes the last Research', () => {
-    let state = finishTurn(markedGame(), 1, [CASH1981, KARANDRAS1, ITCHI])
-    expect(turnStatus(state).currentTurn).toBe(1)
-
-    state = revealAll(state, CHUL, 1)
-
-    expect(turnStatus(state).currentTurn).toBe(2)
-    expect(markerArea(state)).toBe('Karandras1')
-    expect(state.turnStarters).toEqual({ 1: 'cash1981', 2: 'Karandras1' })
-    expect(startLines(state)).toEqual(['Turn 2: Karandras1 starts with the Start of turn phase'])
-    expect(state.board.history.at(-1)?.playerId).toBe(CHUL)
-    expect(state.board.history.at(-1)?.at).toBe('reveal')
-  })
-
   it('starts the turn when the withdrawal of the last unfinished player ends it', () => {
     let state = finishTurn(markedGame(), 1, [CASH1981, KARANDRAS1, ITCHI])
     expect(turnStatus(state).currentTurn).toBe(1)
