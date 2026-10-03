@@ -12,6 +12,19 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### delta-revisions
+
+- **Owner:** Claude (orchestrator; coder role)
+- **Branch:** `feat/delta-revisions`
+- **Brief:** `docs/agents/tasks/delta-revisions.md`
+- **Status:** claimed
+- **Claimed paths:**
+  - `packages/worker/migrations/0006_revision_delta.sql`
+  - `packages/server/src/` new revision delta codec module, `store/types.ts`, `store/d1.ts`, `store/json-file.ts`, `context.ts` and `routes/games.ts` (save path only), `routes/admin.ts` (the compact routes only)
+  - `packages/server/test/` new delta, store and compact tests
+  - `packages/web/src/lib/api.ts` (compact functions only), `packages/web/src/views/AdminView.tsx` and its test
+- **Notes:** issue #238 phases 1 and 2. The finished-game cleanup (PR #239) is merged; this task must keep its "newest revision is a keyframe" assumption true.
+
 ---
 
 ## Format
