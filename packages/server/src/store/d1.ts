@@ -27,6 +27,8 @@ import type {
   BroadcastRecipientStatus,
   BroadcastStatus,
   ChatMessage,
+  FinishedGameCleanup,
+  FinishedGameRevisionUsage,
   GameRevision,
   GameRevisionMetadata,
   PlayerUpdate,
@@ -109,6 +111,14 @@ interface FinishedGameRow {
   readonly num_of_players: number
   readonly winner: string
   readonly state: string
+}
+
+interface RevisionUsageRow {
+  readonly id: string
+  readonly name: string | null
+  readonly revisions: number
+  readonly removable_revisions: number
+  readonly removable_bytes: number
 }
 
 interface BroadcastRow {
@@ -418,6 +428,61 @@ export class D1Repository implements Repository {
     ])
     const game = results[2]
     return game !== undefined && changes(game) > 0
+  }
+
+  async finishedGameRevisionUsage(
+    gameId?: string,
+  ): Promise<readonly FinishedGameRevisionUsage[]> {
+    // The sizes are summed inside SQLite: no snapshot reaches the Worker. The
+    // CAST makes LENGTH count bytes, not characters. The name is read out of the
+    // live game's JSON for the same reason.
+    const rows = await this.db
+      .prepare(
+        `SELECT g.id AS id,
+                json_extract(g.state, '$.name') AS name,
+                COUNT(r.revision) AS revisions,
+                COALESCE(SUM(CASE WHEN r.revision < m.newest THEN 1 ELSE 0 END), 0) AS removable_revisions,
+                COALESCE(SUM(CASE WHEN r.revision < m.newest THEN LENGTH(CAST(r.state AS BLOB)) ELSE 0 END), 0)
+                  AS removable_bytes
+         FROM game g
+         LEFT JOIN (SELECT game_id, MAX(revision) AS newest FROM game_revision GROUP BY game_id) m
+           ON m.game_id = g.id
+         LEFT JOIN game_revision r ON r.game_id = g.id
+         WHERE g.active = 0 AND (? IS NULL OR g.id = ?)
+         GROUP BY g.id, m.newest
+         ORDER BY removable_bytes DESC, g.id ASC`,
+      )
+      .bind(gameId ?? null, gameId ?? null)
+      .all<RevisionUsageRow>()
+    return rows.results.map((row) => ({
+      gameId: row.id,
+      name: row.name ?? '',
+      revisions: row.revisions,
+      removableRevisions: row.removable_revisions,
+      removableBytes: row.removable_bytes,
+    }))
+  }
+
+  async deleteOldGameRevisions(gameId: string): Promise<FinishedGameCleanup> {
+    // One statement, so the finished check and the delete cannot be separated.
+    const result = await this.db
+      .prepare(
+        `DELETE FROM game_revision
+         WHERE game_id = ?
+           AND revision < (SELECT MAX(revision) FROM game_revision WHERE game_id = ?)
+           AND EXISTS (SELECT 1 FROM game WHERE id = ? AND active = 0)`,
+      )
+      .bind(gameId, gameId, gameId)
+      .run()
+    const removed = changes(result)
+    if (removed > 0) return { status: 'cleaned', removed }
+    // Nothing went: either there was nothing to remove or the game was refused.
+    const game = await this.db
+      .prepare(`SELECT active FROM game WHERE id = ?`)
+      .bind(gameId)
+      .first<{ active: number }>()
+    if (game === null) return { status: 'not-found' }
+    return game.active === 0 ? { status: 'cleaned', removed: 0 } : { status: 'active' }
   }
 
   // ---------------------------------------------------------------------

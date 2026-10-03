@@ -107,6 +107,25 @@ export interface GameRevision {
  */
 export type GameRevisionMetadata = Omit<GameRevision, 'state'>
 
+/**
+ * What the admin cleanup of a finished game would remove (everything but the
+ * newest revision), counted without loading any snapshot.
+ */
+export interface FinishedGameRevisionUsage {
+  readonly gameId: string
+  readonly name: string
+  readonly revisions: number
+  readonly removableRevisions: number
+  /** The serialised size of the revisions that would go, in bytes. */
+  readonly removableBytes: number
+}
+
+/** `active` and `not-found` remove nothing; a finished game with one revision is `cleaned` with `removed: 0`. */
+export type FinishedGameCleanup =
+  | { readonly status: 'cleaned'; readonly removed: number }
+  | { readonly status: 'active' }
+  | { readonly status: 'not-found' }
+
 export type BroadcastStatus = 'active' | 'done' | 'cancelled'
 
 /**
@@ -181,6 +200,19 @@ export interface Repository {
   findGame(id: string): Promise<GameState | undefined>
   allGames(): Promise<readonly GameState[]>
   deleteGame(id: string): Promise<boolean>
+  /**
+   * Every finished game (`active = 0`) with how many revisions it holds and how
+   * much the cleanup would free, largest first. `gameId` narrows it to one
+   * game. Never loads a snapshot into memory: D1 sums `LENGTH(state)` in SQL.
+   */
+  finishedGameRevisionUsage(gameId?: string): Promise<readonly FinishedGameRevisionUsage[]>
+  /**
+   * Removes every revision of a finished game except the newest, which keeps the
+   * history view and "Live" a snapshot to read. Refuses a running or unknown
+   * game and touches nothing but that game's `game_revision` rows. Safe to
+   * repeat: a second call removes 0.
+   */
+  deleteOldGameRevisions(gameId: string): Promise<FinishedGameCleanup>
 
   /** Plain chat may leave out `kind` and the tags; they are stored as `chat` and `null`. */
   appendChat(message: StoredChatRow): Promise<void>
