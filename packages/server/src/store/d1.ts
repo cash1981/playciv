@@ -19,8 +19,11 @@
 import type { FinishedGame, GameState, HighscoreResult, RatedGame } from '@civ/engine'
 import { migrateGameState } from '@civ/engine'
 
+import type { RevisionCodec } from '../revision-delta.js'
+import { defaultRevisionCodec } from '../revision-delta.js'
 import { ratedHighscore, resultFromGame } from './rating.js'
-
+import type { ChainRow, RevisionEncoding, RevisionTail } from './revision-chain.js'
+import { encodeRevision, rebuildState } from './revision-chain.js'
 import { normalizeChatMessage } from './types.js'
 import type {
   BroadcastCounts,
@@ -33,6 +36,7 @@ import type {
   GameRevisionMetadata,
   PlayerUpdate,
   Repository,
+  SaveGameOptions,
   StoredBroadcast,
   StoredBroadcastRecipient,
   StoredChatRow,
@@ -84,11 +88,26 @@ interface RevisionRow {
   readonly public_description: string
   readonly private_descriptions: string
   readonly log_ids: string
+  /** `full` or `delta` (issue #238). */
+  readonly kind: string
+  /** The keyframe the row's chain starts from; `NULL` on rows from before delta storage. */
+  readonly base_revision: number | null
+  /** The full state for a keyframe, the delta JSON for a delta. */
   readonly state: string
 }
 
 /** `RevisionRow` without the `state` snapshot, for the summary query. */
-type RevisionMetadataRow = Omit<RevisionRow, 'state'>
+type RevisionMetadataRow = Omit<RevisionRow, 'state' | 'kind' | 'base_revision'>
+
+/** The newest revision of a game as a write needs it: no `state`. */
+interface RevisionTailRow {
+  readonly revision: number
+  readonly base_revision: number
+  readonly sealed: number
+  readonly chain_rows: number
+  /** The size of the chain's keyframe, to judge a delta against. */
+  readonly base_bytes: number | null
+}
 
 interface ChatRow {
   readonly id: string
@@ -166,11 +185,18 @@ const PLAYER_SELECT = `SELECT id, username, username_lower, email, password, cre
                               role, disabled, disable_email
                        FROM player`
 
+export interface D1RepositoryOptions {
+  /** How revisions are diffed and rebuilt. A seam for tests; the default is the real codec. */
+  readonly codec?: RevisionCodec
+}
+
 export class D1Repository implements Repository {
   private readonly db: D1Database
+  private readonly codec: RevisionCodec
 
-  constructor(db: D1Database) {
+  constructor(db: D1Database, options: D1RepositoryOptions = {}) {
     this.db = db
+    this.codec = options.codec ?? defaultRevisionCodec
   }
 
   // ---------------------------------------------------------------------
@@ -272,46 +298,69 @@ export class D1Repository implements Repository {
   // ---------------------------------------------------------------------
 
   async saveGame(game: GameState): Promise<void> {
-    await this.db
-      .prepare(
-        `INSERT INTO game (id, rev, active, winner, num_of_players, state)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           rev = excluded.rev,
-           active = excluded.active,
-           winner = excluded.winner,
-           num_of_players = excluded.num_of_players,
-           state = excluded.state`,
-      )
-      .bind(...gameParams(game))
-      .run()
+    // The game is replaced wholesale, so the newest revision no longer describes
+    // it: seal it, and the next revision starts a new chain.
+    await this.db.batch([
+      this.db
+        .prepare(
+          `INSERT INTO game (id, rev, active, winner, num_of_players, state)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             rev = excluded.rev,
+             active = excluded.active,
+             winner = excluded.winner,
+             num_of_players = excluded.num_of_players,
+             state = excluded.state`,
+        )
+        .bind(...gameParams(game)),
+      this.db.prepare(SEAL_NEWEST).bind(game.id, game.id),
+    ])
   }
 
-  async saveGameIfRevision(game: GameState, expectedRevision: number): Promise<boolean> {
-    const result = await this.db
+  async saveGameIfRevision(
+    game: GameState,
+    expectedRevision: number,
+    options: SaveGameOptions = {},
+  ): Promise<boolean> {
+    const update = this.db
       .prepare(
         `UPDATE game SET rev = ?, active = ?, winner = ?, num_of_players = ?, state = ?
          WHERE id = ? AND rev = ?`,
       )
       .bind(...gameStateParams(game), game.id, expectedRevision)
-      .run()
-    return changes(result) > 0
+    if (options.notesOnly === true) return changes(await update.run()) > 0
+
+    // Anything but a private note leaves the live game different from the newest
+    // revision in a way the next delta would not carry. Seal that revision in the
+    // same transaction; the guard makes it a no-op when the update did not apply.
+    const results = await this.db.batch([
+      update,
+      this.db
+        .prepare(
+          `${SEAL_NEWEST} AND EXISTS (SELECT 1 FROM game WHERE id = ? AND rev = ?)`,
+        )
+        .bind(game.id, game.id, game.id, game.rev),
+    ])
+    const first = results[0]
+    return first !== undefined && changes(first) > 0
   }
 
   async saveGameWithRevision(
     game: GameState,
     revision: GameRevision,
     expectedRevision: number | null,
+    previous?: GameState,
   ): Promise<boolean> {
+    const { encoding, tail } = await this.encodeRevision(revision, expectedRevision, previous)
     const insertRevision = this.db
       .prepare(
         `INSERT INTO game_revision
            (game_id, revision, created_at, actor_id, actor_username,
-            public_description, private_descriptions, log_ids, state)
-         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+            public_description, private_descriptions, log_ids, state, kind, base_revision)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
          WHERE EXISTS (SELECT 1 FROM game WHERE id = ? AND rev = ?)`,
       )
-      .bind(...revisionParams(revision), revision.gameId, revision.revision)
+      .bind(...revisionParams(revision, encoding), revision.gameId, revision.revision)
 
     try {
       if (expectedRevision === null) {
@@ -327,12 +376,29 @@ export class D1Repository implements Repository {
         return true
       }
 
+      // A delta is only as good as the chain it was computed against. The same
+      // statement that wins the compare-and-set also checks that the keyframe it
+      // hangs on is still a keyframe and the revision before it still the newest
+      // (a cleanup or a compaction may have run since the tail was read); if not,
+      // nothing is written and the caller sees a conflict, like any lost race.
+      const chainGuard =
+        encoding.kind === 'delta' && tail !== undefined
+          ? ` AND EXISTS (SELECT 1 FROM game_revision WHERE game_id = ? AND revision = ? AND kind = 'full')
+              AND (SELECT MAX(revision) FROM game_revision WHERE game_id = ?) = ?`
+          : ''
       const updateGame = this.db
         .prepare(
           `UPDATE game SET rev = ?, active = ?, winner = ?, num_of_players = ?, state = ?
-           WHERE id = ? AND rev = ?`,
+           WHERE id = ? AND rev = ?${chainGuard}`,
         )
-        .bind(...gameStateParams(game), game.id, expectedRevision)
+        .bind(
+          ...gameStateParams(game),
+          game.id,
+          expectedRevision,
+          ...(chainGuard === '' || tail === undefined
+            ? []
+            : [game.id, tail.baseRevision, game.id, tail.revision]),
+        )
       const results = await this.db.batch([updateGame, insertRevision])
       // The revision insert is guarded by `game.rev = revision.revision`, so it
       // only ran if the update did; the update's own row count is the answer.
@@ -344,24 +410,70 @@ export class D1Repository implements Repository {
     }
   }
 
+  /**
+   * Chooses the stored form of a new revision. Reads only the newest row's
+   * metadata, never a state: the previous state comes from the caller.
+   */
+  private async encodeRevision(
+    revision: GameRevision,
+    expectedRevision: number | null,
+    previous: GameState | undefined,
+  ): Promise<{ encoding: RevisionEncoding; tail: RevisionTail | undefined }> {
+    const keyframe: RevisionEncoding = { kind: 'full', baseRevision: revision.revision }
+    if (expectedRevision === null || previous === undefined) return { encoding: keyframe, tail: undefined }
+    const row = await this.db
+      .prepare(
+        `SELECT p.revision AS revision,
+                COALESCE(p.base_revision, p.revision) AS base_revision,
+                p.sealed AS sealed,
+                (SELECT COUNT(*) FROM game_revision c
+                  WHERE c.game_id = p.game_id AND c.revision >= COALESCE(p.base_revision, p.revision)) AS chain_rows,
+                (SELECT LENGTH(CAST(k.state AS BLOB)) FROM game_revision k
+                  WHERE k.game_id = p.game_id AND k.revision = COALESCE(p.base_revision, p.revision)) AS base_bytes
+         FROM game_revision p
+         WHERE p.game_id = ?
+         ORDER BY p.revision DESC
+         LIMIT 1`,
+      )
+      .bind(revision.gameId)
+      .first<RevisionTailRow>()
+    if (row === null) return { encoding: keyframe, tail: undefined }
+    const tail: RevisionTail = {
+      revision: row.revision,
+      baseRevision: row.base_revision,
+      sealed: row.sealed !== 0,
+      chainRows: row.chain_rows,
+    }
+    const encoding = encodeRevision({
+      revision: revision.revision,
+      state: revision.state,
+      previous,
+      tail,
+      codec: this.codec,
+      fullBytes: () => row.base_bytes ?? undefined,
+    })
+    return { encoding, tail }
+  }
+
   async ensureGameRevision(
     revision: GameRevision,
     expectedRevision: number,
   ): Promise<boolean> {
     // Best-effort baseline: insert one only while the live game is still at the
     // expected revision and it has no history yet. `OR IGNORE` makes a losing
-    // race a no-op instead of an error; the read below then decides.
+    // race a no-op instead of an error; the read below then decides. The
+    // baseline is always a keyframe.
     await this.db
       .prepare(
         `INSERT OR IGNORE INTO game_revision
            (game_id, revision, created_at, actor_id, actor_username,
-            public_description, private_descriptions, log_ids, state)
-         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+            public_description, private_descriptions, log_ids, state, kind, base_revision)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
          WHERE EXISTS (SELECT 1 FROM game WHERE id = ? AND rev = ?)
            AND NOT EXISTS (SELECT 1 FROM game_revision WHERE game_id = ?)`,
       )
       .bind(
-        ...revisionParams(revision),
+        ...revisionParams(revision, { kind: 'full', baseRevision: revision.revision }),
         revision.gameId,
         expectedRevision,
         revision.gameId,
@@ -380,7 +492,25 @@ export class D1Repository implements Repository {
       .prepare(`${REVISION_SELECT} WHERE game_id = ? ORDER BY revision ASC`)
       .bind(gameId)
       .all<RevisionRow>()
-    return rows.results.map(toGameRevision)
+    // Oldest first, each state rebuilt from the one before it.
+    const revisions: GameRevision[] = []
+    let keyframe: number | undefined
+    let current: GameState | undefined
+    for (const row of rows.results) {
+      if (row.kind !== 'delta') {
+        keyframe = row.revision
+        current = parseGame(row.state)
+      } else {
+        if (current === undefined || row.base_revision !== keyframe) {
+          throw new Error(`Revision ${row.revision} of game ${gameId} has no keyframe`)
+        }
+        const applied = this.codec.apply(current, JSON.parse(row.state) as unknown)
+        if (!applied.ok) throw new Error(`Revision ${row.revision} of game ${gameId}: ${applied.reason}`)
+        current = applied.value as GameState
+      }
+      revisions.push(toGameRevision(row, current))
+    }
+    return revisions
   }
 
   async listGameRevisionSummaries(gameId: string): Promise<readonly GameRevisionMetadata[]> {
@@ -395,11 +525,33 @@ export class D1Repository implements Repository {
   }
 
   async findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined> {
-    const row = await this.db
-      .prepare(`${REVISION_SELECT} WHERE game_id = ? AND revision = ?`)
-      .bind(gameId, revision)
-      .first<RevisionRow>()
-    return row === null ? undefined : toGameRevision(row)
+    const state = await this.readRevisionChain(gameId, revision)
+    return state === undefined ? undefined : toGameRevision(state.row, state.state)
+  }
+
+  /**
+   * Rebuilds one revision: a single query for the keyframe at or below it and
+   * every row between (a chain is at most K rows long), then the deltas in order.
+   */
+  private async readRevisionChain(
+    gameId: string,
+    revision: number,
+  ): Promise<{ row: RevisionRow; state: GameState } | undefined> {
+    const rows = await this.db
+      .prepare(
+        `${REVISION_SELECT}
+         WHERE game_id = ? AND revision <= ?
+           AND revision >= COALESCE(
+             (SELECT MAX(revision) FROM game_revision WHERE game_id = ? AND revision <= ? AND kind = 'full'), 0)
+         ORDER BY revision ASC`,
+      )
+      .bind(gameId, revision, gameId, revision)
+      .all<RevisionRow>()
+    const last = rows.results.at(-1)
+    if (last === undefined || last.revision !== revision) return undefined
+    const rebuilt = rebuildState(rows.results.map(toChainRow), this.codec)
+    if (!rebuilt.ok) throw new Error(`Revision ${revision} of game ${gameId}: ${rebuilt.reason}`)
+    return { row: last, state: rebuilt.state }
   }
 
   async findGame(id: string): Promise<GameState | undefined> {
@@ -850,8 +1002,18 @@ export class D1Repository implements Repository {
 }
 
 const REVISION_SELECT = `SELECT game_id, revision, created_at, actor_id, actor_username,
-                                public_description, private_descriptions, log_ids, state
+                                public_description, private_descriptions, log_ids,
+                                kind, base_revision, state
                          FROM game_revision`
+
+/**
+ * Marks a game's newest revision as followed by a change it does not describe.
+ * Append a guard with `AND ...` and bind the game id twice, then the guard's own
+ * values.
+ */
+const SEAL_NEWEST = `UPDATE game_revision SET sealed = 1
+                     WHERE game_id = ?
+                       AND revision = (SELECT MAX(revision) FROM game_revision WHERE game_id = ?)`
 
 /**
  * `REVISION_SELECT` minus `state`. Kept as its own statement so the summary
@@ -870,7 +1032,8 @@ function gameStateParams(game: GameState): readonly unknown[] {
   return [game.rev, game.active ? 1 : 0, game.winner, game.numOfPlayers, JSON.stringify(game)]
 }
 
-function revisionParams(revision: GameRevision): readonly unknown[] {
+/** The values of an insert into `game_revision`, in column order. */
+function revisionParams(revision: GameRevision, encoding: RevisionEncoding): readonly unknown[] {
   return [
     revision.gameId,
     revision.revision,
@@ -880,7 +1043,9 @@ function revisionParams(revision: GameRevision): readonly unknown[] {
     revision.publicDescription,
     JSON.stringify(revision.privateDescriptions),
     JSON.stringify(revision.logIds),
-    JSON.stringify(revision.state),
+    encoding.kind === 'delta' ? encoding.json : JSON.stringify(revision.state),
+    encoding.kind,
+    encoding.baseRevision,
   ]
 }
 
@@ -940,7 +1105,18 @@ function toStoredPlayer(row: PlayerRow): StoredPlayer {
   }
 }
 
-function toGameRevision(row: RevisionRow): GameRevision {
+/** A stored row as the chain code sees it, its payload parsed. */
+function toChainRow(row: RevisionRow): ChainRow {
+  return {
+    revision: row.revision,
+    kind: row.kind === 'delta' ? 'delta' : 'full',
+    baseRevision: row.base_revision,
+    payload: JSON.parse(row.state) as unknown,
+  }
+}
+
+/** `state` is the rebuilt full state: the row's own `state` column may be a delta. */
+function toGameRevision(row: RevisionRow, state: GameState): GameRevision {
   return {
     gameId: row.game_id,
     revision: row.revision,
@@ -949,7 +1125,7 @@ function toGameRevision(row: RevisionRow): GameRevision {
     publicDescription: row.public_description,
     privateDescriptions: JSON.parse(row.private_descriptions) as Record<string, string>,
     logIds: JSON.parse(row.log_ids) as string[],
-    state: parseGame(row.state),
+    state,
   }
 }
 

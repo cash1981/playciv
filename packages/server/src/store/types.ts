@@ -88,7 +88,11 @@ export function normalizeChatMessage(row: StoredChatRow): ChatMessage {
   }
 }
 
-/** One immutable full-state checkpoint. Raw snapshots never leave the repository layer. */
+/**
+ * One immutable full-state checkpoint. Raw snapshots never leave the repository
+ * layer. Storage may keep a revision as a delta against the one before it
+ * (issue #238); `findGameRevision` and the lists always give the full `state`.
+ */
 export interface GameRevision {
   readonly gameId: string
   readonly revision: number
@@ -106,6 +110,11 @@ export interface GameRevision {
  * to tip a Worker over its resource limit (see `listGameRevisionSummaries`).
  */
 export type GameRevisionMetadata = Omit<GameRevision, 'state'>
+
+export interface SaveGameOptions {
+  /** The change is a private note only, which no revision snapshot carries. */
+  readonly notesOnly?: boolean
+}
 
 /**
  * What the admin cleanup of a finished game would remove (everything but the
@@ -169,17 +178,39 @@ export interface Repository {
   updatePlayer(id: string, changes: PlayerUpdate): Promise<StoredPlayer | undefined>
   deletePlayer(id: string): Promise<boolean>
 
+  /** Overwrites the live game. The next revision of the game is a keyframe. */
   saveGame(game: GameState): Promise<void>
-  /** Saves a non-revisioned change only while the live game is unchanged. */
-  saveGameIfRevision(game: GameState, expectedRevision: number): Promise<boolean>
+  /**
+   * Saves a non-revisioned change only while the live game is unchanged. Unless
+   * `options.notesOnly` says the change touches nothing but private notes (which
+   * revision snapshots blank), the next revision is stored as a keyframe: the
+   * live game then differs from the newest revision in a way a delta against it
+   * would not carry.
+   */
+  saveGameIfRevision(
+    game: GameState,
+    expectedRevision: number,
+    options?: SaveGameOptions,
+  ): Promise<boolean>
   /**
    * Saves the live game and matching checkpoint only when the stored game is
    * still at `expectedRevision`. `null` means that the game must not exist.
+   *
+   * `previous` is the snapshot of the newest stored revision, which the caller
+   * already holds: the live game before the action, notes blanked
+   * (`revisionSnapshot`). With it the checkpoint can be stored as a delta; without
+   * it, or whenever a delta would not be safe, it is a keyframe. The store
+   * checks the delta before writing (it must give the new state back) and the
+   * chain at write time (the newest row and its keyframe are still the ones the
+   * delta was made for), but it cannot check that `previous` really is what is
+   * stored: that is the contract with the caller, kept by `saveGameIfRevision`
+   * sealing the chain after any change that a revision would not record.
    */
   saveGameWithRevision(
     game: GameState,
     revision: GameRevision,
     expectedRevision: number | null,
+    previous?: GameState,
   ): Promise<boolean>
   /**
    * Adds a baseline only while the live game still exists at

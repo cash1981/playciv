@@ -15,8 +15,11 @@ import { dirname } from 'node:path'
 import type { GameState, HighscoreResult } from '@civ/engine'
 import { migrateGameState } from '@civ/engine'
 
+import type { RevisionCodec } from '../revision-delta.js'
+import { defaultRevisionCodec } from '../revision-delta.js'
 import { ratedHighscore, resultFromGame } from './rating.js'
-
+import type { RevisionEncoding, RevisionKind, RevisionTail } from './revision-chain.js'
+import { chainBase, encodeRevision, rebuildState, utf8Length } from './revision-chain.js'
 import { normalizeChatMessage } from './types.js'
 import type {
   BroadcastCounts,
@@ -29,6 +32,7 @@ import type {
   GameRevisionMetadata,
   PlayerUpdate,
   Repository,
+  SaveGameOptions,
   StoredBroadcast,
   StoredBroadcastRecipient,
   StoredChatRow,
@@ -46,7 +50,7 @@ interface Snapshot {
   readonly games: readonly GameState[]
   /** Old files hold rows without `kind` and the tags; `load` fills them in. */
   readonly chat: readonly StoredChatRow[]
-  readonly revisions?: readonly GameRevision[]
+  readonly revisions?: readonly StoredRevisionFile[]
   /** Per player and game: when they were last emailed and last opened it. */
   readonly gameMail?: Readonly<Record<string, GameMailStamps>>
   readonly highscore?: HighscoreResult
@@ -54,6 +58,24 @@ interface Snapshot {
   readonly broadcasts?: readonly StoredBroadcast[]
   readonly broadcastRecipients?: readonly StoredBroadcastRecipient[]
 }
+
+/**
+ * A revision row as it is kept: the metadata of a `GameRevision`, and a `state`
+ * that is the full state for a keyframe or the delta for a delta (issue #238),
+ * the same two forms the D1 table holds.
+ */
+interface StoredRevision extends Omit<GameRevision, 'state'> {
+  readonly kind: RevisionKind
+  /** The keyframe the row's chain starts from; `null` for a row from before delta storage. */
+  readonly baseRevision: number | null
+  /** The live game moved on after this row without a new revision being recorded. */
+  readonly sealed: boolean
+  readonly state: unknown
+}
+
+/** A file written before delta storage has plain `GameRevision` rows. */
+type StoredRevisionFile = Omit<StoredRevision, 'kind' | 'baseRevision' | 'sealed'> &
+  Partial<Pick<StoredRevision, 'kind' | 'baseRevision' | 'sealed'>>
 
 /** ISO timestamps; either may be missing until the event first happens. */
 interface GameMailStamps {
@@ -66,12 +88,14 @@ export interface JsonFileRepositoryOptions {
   readonly filePath: string | null
   /** Milliseconds to wait before writing, so a burst of changes is one write. */
   readonly debounceMs?: number
+  /** How revisions are diffed and rebuilt. A seam for tests; the default is the real codec. */
+  readonly codec?: RevisionCodec
 }
 
 export class JsonFileRepository implements Repository {
   private readonly players = new Map<string, StoredPlayer>()
   private readonly games = new Map<string, GameState>()
-  private readonly revisions = new Map<string, GameRevision>()
+  private readonly revisions = new Map<string, StoredRevision>()
   private readonly gameMail = new Map<string, GameMailStamps>()
   private readonly broadcasts = new Map<string, StoredBroadcast>()
   private readonly broadcastRecipients = new Map<string, StoredBroadcastRecipient>()
@@ -81,12 +105,14 @@ export class JsonFileRepository implements Repository {
 
   private readonly filePath: string | null
   private readonly debounceMs: number
+  private readonly codec: RevisionCodec
   private timer: NodeJS.Timeout | undefined
   private writing: Promise<void> = Promise.resolve()
 
   constructor(options: JsonFileRepositoryOptions) {
     this.filePath = options.filePath
     this.debounceMs = options.debounceMs ?? 250
+    this.codec = options.codec ?? defaultRevisionCodec
   }
 
   /** Reads an existing file when there is one. Called once at startup. */
@@ -117,8 +143,16 @@ export class JsonFileRepository implements Repository {
     // Games saved before a field existed must be filled in before use
     for (const game of snapshot.games) this.games.set(game.id, migrateGameState(game))
     for (const revision of snapshot.revisions ?? []) {
-      const migrated = { ...revision, state: migrateGameState(revision.state) }
-      this.revisions.set(this.revisionKey(revision.gameId, revision.revision), migrated)
+      const kind: RevisionKind = revision.kind === 'delta' ? 'delta' : 'full'
+      const row: StoredRevision = {
+        ...revision,
+        kind,
+        baseRevision: revision.baseRevision ?? null,
+        sealed: revision.sealed === true,
+        // Only a keyframe is a game state; a delta is not migrated.
+        state: kind === 'full' ? migrateGameState(revision.state as GameState) : revision.state,
+      }
+      this.revisions.set(this.revisionKey(revision.gameId, revision.revision), row)
     }
     // Rows saved before chat orders (issue #215) have no kind or tags
     this.chat = snapshot.chat.map(normalizeChatMessage)
@@ -185,13 +219,20 @@ export class JsonFileRepository implements Repository {
   async saveGame(game: GameState): Promise<void> {
     if (!game.active || this.games.get(game.id)?.active === false) this.invalidateHighscore()
     this.games.set(game.id, game)
+    // Replaced wholesale: the newest revision no longer describes the game.
+    this.sealNewest(game.id)
     this.scheduleWrite()
   }
 
-  async saveGameIfRevision(game: GameState, expectedRevision: number): Promise<boolean> {
+  async saveGameIfRevision(
+    game: GameState,
+    expectedRevision: number,
+    options: SaveGameOptions = {},
+  ): Promise<boolean> {
     if (this.games.get(game.id)?.rev !== expectedRevision) return false
     if (!game.active || this.games.get(game.id)?.active === false) this.invalidateHighscore()
     this.games.set(game.id, game)
+    if (options.notesOnly !== true) this.sealNewest(game.id)
     this.scheduleWrite()
     return true
   }
@@ -200,6 +241,7 @@ export class JsonFileRepository implements Repository {
     game: GameState,
     revision: GameRevision,
     expectedRevision: number | null,
+    previous?: GameState,
   ): Promise<boolean> {
     const current = this.games.get(game.id)
     const revisionKey = this.revisionKey(revision.gameId, revision.revision)
@@ -211,7 +253,11 @@ export class JsonFileRepository implements Repository {
     }
     if (!game.active || current?.active === false) this.invalidateHighscore()
     this.games.set(game.id, game)
-    this.revisions.set(revisionKey, revision)
+    const encoding =
+      expectedRevision === null || previous === undefined
+        ? undefined
+        : this.encodeRevision(revision, previous)
+    this.revisions.set(revisionKey, this.toRow(revision, encoding))
     this.scheduleWrite()
     return true
   }
@@ -223,33 +269,68 @@ export class JsonFileRepository implements Repository {
     if (this.games.get(revision.gameId)?.rev !== expectedRevision) return false
     if ([...this.revisions.values()].some((entry) => entry.gameId === revision.gameId)) return true
     const key = this.revisionKey(revision.gameId, revision.revision)
-    this.revisions.set(key, revision)
+    this.revisions.set(key, this.toRow(revision, undefined))
     this.scheduleWrite()
     return true
   }
 
   async listGameRevisions(gameId: string): Promise<readonly GameRevision[]> {
-    return [...this.revisions.values()]
-      .filter((revision) => revision.gameId === gameId)
-      .sort((left, right) => left.revision - right.revision)
+    const revisions: GameRevision[] = []
+    let current: GameState | undefined
+    let keyframe: number | undefined
+    for (const row of this.rowsOf(gameId)) {
+      if (row.kind === 'full') {
+        keyframe = row.revision
+        current = row.state as GameState
+      } else {
+        const applied =
+          current === undefined || row.baseRevision !== keyframe
+            ? undefined
+            : this.codec.apply(current, row.state)
+        if (applied === undefined || !applied.ok) {
+          throw new Error(`Revision ${row.revision} of game ${gameId} cannot be rebuilt`)
+        }
+        current = applied.value as GameState
+      }
+      revisions.push(this.toGameRevision(row, current))
+    }
+    return revisions
   }
 
   async listGameRevisionSummaries(gameId: string): Promise<readonly GameRevisionMetadata[]> {
     // In memory there is nothing to save by dropping `state`, but the method
     // exists so both stores answer the history route the same way.
-    return (await this.listGameRevisions(gameId)).map((revision) => ({
-      gameId: revision.gameId,
-      revision: revision.revision,
-      createdAt: revision.createdAt,
-      actor: revision.actor,
-      publicDescription: revision.publicDescription,
-      privateDescriptions: revision.privateDescriptions,
-      logIds: revision.logIds,
+    return this.rowsOf(gameId).map((row) => ({
+      gameId: row.gameId,
+      revision: row.revision,
+      createdAt: row.createdAt,
+      actor: row.actor,
+      publicDescription: row.publicDescription,
+      privateDescriptions: row.privateDescriptions,
+      logIds: row.logIds,
     }))
   }
 
   async findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined> {
-    return this.revisions.get(this.revisionKey(gameId, revision))
+    const rows = this.rowsOf(gameId)
+    const index = rows.findIndex((row) => row.revision === revision)
+    const row = rows[index]
+    if (row === undefined) return undefined
+    // The chain is the nearest keyframe at or below the revision and every row up to it.
+    let start = index
+    while (start > 0 && rows[start]?.kind !== 'full') start -= 1
+    const rebuilt = rebuildState(
+      rows.slice(start, index + 1).map((entry) => ({
+        revision: entry.revision,
+        kind: entry.kind,
+        baseRevision: entry.baseRevision,
+        payload: entry.state,
+      })),
+      this.codec,
+      (state) => state,
+    )
+    if (!rebuilt.ok) throw new Error(`Revision ${revision} of game ${gameId}: ${rebuilt.reason}`)
+    return this.toGameRevision(row, rebuilt.state)
   }
 
   async findGame(id: string): Promise<GameState | undefined> {
@@ -614,5 +695,67 @@ export class JsonFileRepository implements Repository {
 
   private revisionKey(gameId: string, revision: number): string {
     return `${gameId}:${revision}`
+  }
+
+  /** A game's rows, oldest first. */
+  private rowsOf(gameId: string): StoredRevision[] {
+    return [...this.revisions.values()]
+      .filter((row) => row.gameId === gameId)
+      .sort((left, right) => left.revision - right.revision)
+  }
+
+  private sealNewest(gameId: string): void {
+    const newest = this.rowsOf(gameId).at(-1)
+    if (newest === undefined || newest.sealed) return
+    this.revisions.set(this.revisionKey(gameId, newest.revision), { ...newest, sealed: true })
+  }
+
+  /** Same decision as D1: a delta only against a safe, unsealed chain that is not yet K rows long. */
+  private encodeRevision(revision: GameRevision, previous: GameState): RevisionEncoding | undefined {
+    const newest = this.rowsOf(revision.gameId).at(-1)
+    if (newest === undefined) return undefined
+    const base = chainBase(newest)
+    const tail: RevisionTail = {
+      revision: newest.revision,
+      baseRevision: base,
+      sealed: newest.sealed,
+      chainRows: this.rowsOf(revision.gameId).filter((row) => row.revision >= base).length,
+    }
+    return encodeRevision({
+      revision: revision.revision,
+      state: revision.state,
+      previous,
+      tail,
+      codec: this.codec,
+      // What a keyframe of this revision would take; D1 uses its chain's keyframe.
+      fullBytes: () => utf8Length(JSON.stringify(revision.state)),
+    })
+  }
+
+  private toRow(revision: GameRevision, encoding: RevisionEncoding | undefined): StoredRevision {
+    const { state, ...metadata } = revision
+    if (encoding === undefined || encoding.kind === 'full') {
+      return { ...metadata, kind: 'full', baseRevision: revision.revision, sealed: false, state }
+    }
+    return {
+      ...metadata,
+      kind: 'delta',
+      baseRevision: encoding.baseRevision,
+      sealed: false,
+      state: JSON.parse(encoding.json) as unknown,
+    }
+  }
+
+  private toGameRevision(row: StoredRevision, state: GameState): GameRevision {
+    return {
+      gameId: row.gameId,
+      revision: row.revision,
+      createdAt: row.createdAt,
+      actor: row.actor,
+      publicDescription: row.publicDescription,
+      privateDescriptions: row.privateDescriptions,
+      logIds: row.logIds,
+      state,
+    }
   }
 }
