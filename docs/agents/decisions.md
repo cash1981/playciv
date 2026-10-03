@@ -4014,3 +4014,58 @@ thin wrapper around it. Check the first scheduled run in the Worker's logs.
 **Deploy order.** Apply migration `0005` to D1, then deploy the Worker. The cron
 exists only after a deploy. Watch the first scheduled run in the Worker's logs
 (look for a `Daily broadcast:` line), since the cron has not been run anywhere else.
+
+## 2026-10-03 - Admin cleanup of finished games drops their step by step replay
+
+New in the rewrite, so there is no old-system counterpart. Issue #238, phase 4;
+brief `tasks/finished-game-cleanup.md`.
+
+**Why.** The production D1 database hit the free plan's 500 MB limit; 446 MB of it
+was `game_revision`, one full copy of the game state per action (issue #70). A
+stop-gap deletion left about 150 MB, growing 30 MB a day. Nobody replays a game
+that ended, so finished games are the cheapest thing to shrink. Delta storage for
+running games comes later.
+
+**What a cleaned game keeps.** The live `game` row (final board, players, public
+log, `active`, `winner`), every chat message, `game_mail`, `rated_result` and the
+highscore cache are not touched; none of the highscore or rating code reads
+`game_revision`. Exactly one revision stays, the newest, so the history list and
+"Live" still have a snapshot and `ensureGameRevision` (which only inserts when a
+game has no revision at all) does not invent a new baseline when someone opens the
+game. Everything else in `game_revision` for that game is deleted.
+
+**Decisions.**
+- One guarded statement per game:
+  `DELETE ... WHERE game_id = ? AND revision < (SELECT MAX(revision) ...) AND
+  EXISTS (SELECT 1 FROM game WHERE id = ? AND active = 0)`. The finished check and
+  the delete cannot be separated, and a running game is never touched even if a
+  caller names it. The repository answers `cleaned`, `active` or `not-found`; the
+  routes turn the last two into 409 `GAME_ACTIVE` and 404 `GAME_NOT_FOUND`. A game
+  with a single revision is `cleaned` with 0 removed, which makes a second run
+  idempotent.
+- The dry run sums `LENGTH(CAST(state AS BLOB))` in SQL and reads the name with
+  `json_extract` from the live row, so no snapshot reaches the Worker. The JSON
+  file store uses the serialised length. The route leaves out finished games with
+  nothing to remove; the repository returns them all.
+- A cleanup over all games handles the 20 largest per request (one delete each,
+  plus the listing, well under the Worker's subrequest limit) and answers
+  `remaining`; the admin presses the button again. A named game is cleaned alone.
+- The POST refuses a body that is not a JSON object with 400, instead of reading a
+  malformed request as "every game".
+- The admin page asks for the dry run only when the button is pressed, repeats the
+  numbers in the confirmation, says the replay is lost, and reads the list again
+  after each run.
+- Only counts and names leave the server. The routes add no game state to any
+  projection; the safety test compares the highscore response, the game views, the
+  chat and the history before and after a cleanup, and checks that a spectator's
+  history still shows no hands or private log.
+
+**Consequences.**
+- A cleaned game's history bar has a single entry. That is the intent.
+- D1 may not report a smaller database after the delete: freed pages are reused by
+  later writes, so the size in `wrangler d1 info` might not drop at once.
+- There is no undo in the app. D1 Time Travel restores the database to an earlier
+  minute (`wrangler d1 time-travel info playciv`).
+- Not verified here: a cleanup against the real D1 (no Cloudflare runtime in the
+  development environment). The repository tests run the SQL on `node:sqlite` with
+  every migration applied.
