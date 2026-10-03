@@ -791,12 +791,16 @@ amount, so the page keeps pressing until nothing is left. **Deploy order:** appl
 migration `0006` to D1 (`wrangler d1 migrations apply playciv --remote`), deploy the
 Worker, take a D1 Time Travel bookmark (`wrangler d1 time-travel info playciv`), read the
 dry run, compact one game and look at its history, then "Compact all". Old rows stay valid
-without any conversion, so the migration and the deploy are safe on their own, and the
-first move of each game after the deploy is a keyframe. Rolling the Worker back is only
+without any conversion, so the migration and the deploy are safe on their own provided no
+admin chat orders switch (or other non-note admin change) is made between applying `0006`
+and deploying the Worker; right after the deploy, run the sealing statement of the
+migration once more (it is idempotent): `wrangler d1 execute playciv --remote --command
+"UPDATE game_revision SET sealed = 1 WHERE revision = (SELECT MAX(r.revision) FROM game_revision r WHERE r.game_id = game_revision.game_id);"`. The first move of each game after the deploy is a keyframe. Rolling the Worker back is only
 possible before a game has written its second state after the deploy (the old code cannot
 read a delta); after that, roll forward or restore the Time Travel bookmark. The old
-stop-gap SQL that deletes the oldest states of a game would break a delta chain; use the
-admin cleanup instead. See `docs/agents/decisions.md`.
+stop-gap SQL that deletes the oldest states of a game would break a delta chain, and a
+single revision row deleted or edited by hand can make a chain rebuild wrong without any
+error: never touch revision rows outside the app; use the admin cleanup instead. See `docs/agents/decisions.md`.
 
 **Only Tradable cards can be given away.** The hand's "Give" control was drawn
 on every card, but `tradeToPlayer` only ever accepted Java's `Tradable` set

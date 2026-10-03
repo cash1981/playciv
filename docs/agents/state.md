@@ -13,7 +13,7 @@ _Last updated: 2026-10-03 (delta revisions)_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 785 engine, 570 server, 507 web on `feat/delta-revisions` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 785 engine, 577 server, 508 web on `feat/delta-revisions` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -35,7 +35,7 @@ _Last updated: 2026-10-03 (delta revisions)_
   `tasks/delta-revisions.md`; see `decisions.md`, 2026-10-03.
 - **Admin cleanup of finished games.** "Clean up finished games" on the admin page
   (`GET`/`POST /api/admin/games/cleanup`) deletes every `game_revision` row of a
-  finished game except the newest, behind a dry run and a confirmation, at most 20
+  finished game except the newest, behind a dry run and a confirmation, at most 12
   games per request. The final board, log, chat, highscore and ratings are untouched;
   undo is D1 Time Travel. Not run against the real D1. Brief:
   `tasks/finished-game-cleanup.md`; see `decisions.md`, 2026-10-03.

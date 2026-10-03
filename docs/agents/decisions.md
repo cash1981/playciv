@@ -4148,8 +4148,13 @@ check), never a state.
 
 **Keyframes are read through `migrateGameState`, deltas are not.** A delta is computed
 between two migrated states (the live game is migrated when it is loaded), so a read
-migrates the keyframe first and applies the deltas to that. Migration is idempotent, so
-the result needs no second pass.
+migrates the keyframe first and applies the deltas to that. That rebuilds the saved state
+only if `migrateGameState` is the identity on every state the engine produces, key order
+included; idempotent would not be enough, because a revision's stored form and the live
+game it was computed from would then differ. A test asserts the identity on every state of
+three engine-played games (`revision-delta.test.ts`). Adding a migration rule that changes
+a current state (not only an older shape) would break this for chains already stored; seal
+or compact again, or tell the owner first.
 
 **Cleanup of finished games (the critical interaction).** `deleteOldGameRevisions` used to
 delete everything below the newest revision, which destroys a newest revision that is a
@@ -4157,7 +4162,8 @@ delta. It now reads the game state and the newest row in one query; when the new
 keyframe it deletes everything below the revision it read (not "the current newest", so a
 revision written meanwhile keeps its keyframe); when it is a delta it rebuilds it, checks
 that the text it is about to store reads back as the rebuilt state, and rewrites it as a
-keyframe (`base_revision` = its own number) and deletes the rest in one batch. Both
+keyframe (`base_revision` = its own number, `sealed` left as it was: it says the live game
+moved past the row, not how the row is stored) and deletes the rest in one batch. Both
 statements require the game to be finished and unchanged (`rev`), and the delete requires
 the newest row to be a keyframe, so a half done cleanup cannot exist. If the game moved in
 between, the answer is the new status `changed` (route: 409 `GAME_CHANGED`, skipped in an
@@ -4195,12 +4201,18 @@ write's chain guard above. Both are tests, on the sqlite adapter, which now runs
 without yielding as D1 does.
 
 *Chunk sizing.* The free plan allows 50 subrequests and about 10 ms of CPU per request. A
-game costs at most 7 subrequests (exists, rows, the state before the first row, the old
-rows, one batch, two more only when the batch did not apply as planned), so a request
-visits at most 5 games (35 plus the listing and the admin check). The CPU is the real limit
-and grows with the size of the states, not the number of rows, so a request takes rows
-until about 1 MB of state text is reached (at least one row; the state before the first
-row counts once more), at most 40 rows (the size of the batch). Measured on Node, a
+game costs at most 6 subrequests (exists, rows, the state before the first row, the old
+rows, one batch, and a re-read of the rows only when the batch did not apply as planned),
+assuming `db.batch()` counts as one subrequest however many statements it holds. The
+listing is 2 and the admin check 1, so 5 games is at most 33 of 50. The CPU is the real
+limit and grows with the size of the states, not the number of rows, so a request takes
+rows until about 1 MB of state text is reached (at least one row; the state before the
+first row counts once more), at most 40 rows (the size of the batch). The budget is spent
+by every game a request visits, whatever it answers: a game that fails its check or whose
+rows changed under it reports the text it parsed, a game is entered only while the budget
+left covers its first chunk (the first game of a request always is), and a press with
+five failing games therefore stays within about one budget. Compaction and the cleanup
+leave `sealed` alone. Measured on Node, a
 conversion costs about 2.1 ms per revision at 421 KB states (0.7 ms parse and migrate,
 1.5 ms diff and verify), 4.4 ms per MB of text including the rebuild of the previous state.
 One MB is about 5 ms there: 1 row of the largest states, about 6 of 140 KB states. A Worker
@@ -4231,6 +4243,20 @@ subtrees (`prev === next` prunes a subtree), and it stringifies a delta instead 
 400 KB state. A run of the real server over HTTP on a seeded legacy file (two games, 301
 revisions): 98 compact requests, every one of the 302 history responses byte for byte
 the same before and after, the file 42.8 MB to 4.8 MB.
+
+**Known limit: a missing middle row.** Revision numbers skip when a private note advances
+`rev`, so contiguity of a chain cannot be checked, and a delta row deleted or edited by hand
+rebuilds silently wrong (a missing keyframe is detected, a missing middle row is not). A
+guard would need a `prev_revision` column written on every save; that was judged not worth
+a fourth column and a longer migration. Never delete or edit single revision rows by hand;
+only the app (cleanup, compaction, `deleteGame`) may.
+
+**Deploy window.** A row written by the old Worker after migration 0006 and before the
+deploy is not sealed, and the old code does not track unrecorded changes. Do not use the
+admin chat orders switch (or any other non-note admin change) between applying 0006 and
+deploying the Worker, and right after the deploy run the sealing statement of the migration
+again; it is idempotent, and at worst costs one extra keyframe per game:
+`wrangler d1 execute playciv --remote --command "UPDATE game_revision SET sealed = 1 WHERE revision = (SELECT MAX(r.revision) FROM game_revision r WHERE r.game_id = game_revision.game_id);"`.
 
 **Rollback.** Before the first delta exists (the migration and the deploy alone, up to the
 second move of a game, since the first is a keyframe) the old Worker can simply be
