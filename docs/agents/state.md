@@ -18,6 +18,14 @@ _Last updated: 2026-10-02_
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Admin broadcast: batching and honest results.** The broadcast now sends through
+  Resend's batch endpoint (100 per request, at most 40 requests per run, a failed
+  batch split to find the bad address) instead of one fetch per recipient, which
+  stopped at 49 of 555 on the Worker's 50-subrequest limit. The result reports
+  sent, `sentTo`, skips by reason, failures with reasons, deferred and a stop
+  reason; the route takes `exclude` and `limit`, and the admin page has a skip box,
+  a limit field and a readable summary. The Resend free plan's 100 a day still caps
+  a single day. Brief: `tasks/broadcast-batching.md`; see `decisions.md`, 2026-10-03.
 - **Wonder sorting.** The board palette's Wonders category and the "Wonders in play"
   panel list wonders by level (Ancient 1, Medieval 2, Modern 3), then alphabetically
   within the level, ignoring a leading "The". `WONDER_LEVELS` and `compareWonderNames`

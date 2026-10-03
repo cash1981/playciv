@@ -734,9 +734,14 @@ whose body is rendered to HTML by `marked` (the Markdown source stays as the
 plain-text fallback), and a checkbox to also mail players who have unsubscribed.
 Each mail keeps the `Hello <username>` greeting and the unsubscribe link. The
 rendered HTML is not sanitised: only an admin can reach the route and an admin
-already controls every account, so the content is trusted. Sends run in-request,
-one provider call per recipient, so a very large account list could hit the
-Worker's subrequest/CPU limits — a known limitation, not fixed here. See
+already controls every account, so the content is trusted. The mails go out
+through Resend's batch endpoint, 100 per request and at most 40 requests per
+broadcast, so a Worker's 50-subrequest limit is no longer reached (the first
+version, one request per recipient, delivered 49 of 555). The result lists what
+was sent, skipped by reason, failed with the provider's message, and deferred,
+plus why the run stopped if it did. A "Skip these addresses" box and a "Send to at
+most" field let the admin run in pieces by pasting the previous run's sent
+addresses back in; Resend's free plan allows only 100 mails a day. See
 `docs/agents/decisions.md`.
 
 **Only Tradable cards can be given away.** The hand's "Give" control was drawn

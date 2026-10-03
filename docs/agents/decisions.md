@@ -1204,9 +1204,10 @@ is pure JS with no Node built-ins, so it runs on Cloudflare Workers.
   and an admin may have set it to raw HTML through the user editor.
 - Sends run in-request, one provider call per recipient, exactly like the old
   `sendMailToAll` and the existing game mails. A very large account list could
-  hit the Worker's subrequest/CPU limits; that is a known limitation, not fixed
-  here. One recipient's failure is logged and swallowed - never thrown out of
-  the loop - and counts as `skipped`, so `skipped` means "not sent".
+  hit the Worker's subrequest/CPU limits. (This limitation is fixed by the
+  batching decision of 2026-10-03 below; the first real broadcast hit it.)
+  One recipient's failure is logged and swallowed - never thrown out of the
+  loop - and, as first built, counted as `skipped`.
 - Disabled accounts are not filtered. Java's `sendMailToAll` filtered only on
   `disableEmail`, and the game mails behave the same, so this does too.
 - Deliberate differences from Java: the default subject uses the current domain
@@ -3862,3 +3863,52 @@ not in the human's table; the review found it in the game data and the human sai
 it must count. It gives +4 to its explicit owner, wherever the piece sits, the
 same way the Statue of Zeus works for combat. The board is public, so it needs no
 reveal.
+
+## 2026-10-03 - The admin broadcast is batched, bounded and honest about the result
+
+**Decision.** `Notifications.broadcast` sends through Resend's batch endpoint
+(`POST /emails/batch`, up to 100 personalised mails per request) instead of one
+fetch per recipient. A `Mailer` gets an optional `sendBatch`; a mailer without it
+(the no-op mailer, test doubles) is driven one `send` at a time. The provider
+answering with a non-2xx status throws a `MailError` carrying `status` and
+`detail`; `send` keeps its message text.
+
+**Why.** The first real broadcast (555 accounts) printed "Sent to 49 players; 506
+skipped." A Worker on the Cloudflare free plan may make 50 subrequests per
+invocation, and one fetch per recipient used all of them (49 sends plus the
+database read). The failures were swallowed and counted as `skipped`, and the
+logged error printed only a stack, so nothing said why. Batching is the fix for
+the 50 subrequest limit: 555 accounts are now 6 requests.
+
+**Rules.**
+- **Budget: 40 provider requests per broadcast.** The Worker's 50 includes the
+  database read and the auth check, so the broadcast keeps a margin of 10. When
+  the budget runs out the run stops with a `stopReason` and the rest is
+  `deferred`.
+- **Bisect on a 4xx.** One bad address makes Resend reject the whole batch with a
+  422. On a 4xx other than 429 the chunk is split in two and each half retried,
+  down to the single address, which is recorded in `failed` with the provider's
+  message. Every retry spends budget: one bad address in 100 costs about 15
+  requests. A cheap shape check (`something@something.tld`) catches the obvious
+  ones first, so they never reach the provider.
+- **429, 5xx, a network error or a timeout stops the run.** The unsent accounts
+  are `deferred`, and `stopReason` says why. A timed-out batch may in fact have
+  been accepted, so its `stopReason` says to check the provider's log first; it
+  is the one case where a rerun could mail someone twice.
+- **The result explains itself:** `sent`, `sentTo`, `skipped` by reason
+  (`noAddress`, `unsubscribed`, `excluded`), `failed` with address and reason,
+  `deferred`, `stopReason`. `skipped` no longer includes send failures.
+- **Resuming without a table.** `exclude` (addresses to skip, compared trimmed and
+  case-insensitively) and `limit` (attempt at most N eligible accounts, in
+  account order) let the admin run in pieces: paste the last run's `sentTo` into
+  the next run's skip box. Nothing is remembered in the database; a table of who
+  got which broadcast is a separate task if this proves clumsy.
+- The Markdown is rendered once per broadcast; only the greeting and the
+  unsubscribe link differ per mail. Failures are logged with the message in the
+  string (`console.error` with a second argument prints only the stack on
+  Workers), and never with a bulk list of addresses.
+
+**Still true.** The Resend free plan allows 100 mails a day and 3000 a month, so
+batching alone does not get a long list out in one day; `limit` and `exclude`
+exist for that. Game mails (`notify`) are unchanged and still one `send` per
+recipient.
