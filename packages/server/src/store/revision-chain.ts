@@ -339,6 +339,7 @@ export function compactChunk(input: {
 export function summarizeCompaction(rows: readonly CompactionRow[]): {
   readonly fullRevisions: number
   readonly freeableBytes: number
+  readonly nextChunkBytes: number
 } {
   const plan = planCompaction(rows, Number.POSITIVE_INFINITY)
   const bytes = new Map(rows.map((row) => [row.revision, row.bytes]))
@@ -354,7 +355,11 @@ export function summarizeCompaction(rows: readonly CompactionRow[]): {
     chainRows += 1
     freeable += Math.max(0, (bytes.get(revision) ?? 0) - ESTIMATED_DELTA_BYTES)
   }
-  return { fullRevisions: plan.todo.length, freeableBytes: freeable }
+  return {
+    fullRevisions: plan.todo.length,
+    freeableBytes: freeable,
+    nextChunkBytes: planCompaction(rows, 1).bytes,
+  }
 }
 
 /**

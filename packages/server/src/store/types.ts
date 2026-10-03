@@ -159,6 +159,12 @@ export interface RevisionCompactionUsage {
   readonly fullRevisions: number
   /** An estimate, in bytes: each row that becomes a delta is counted at a typical delta size. */
   readonly freeableBytes: number
+  /**
+   * What the next request would at least have to parse: the first row to handle,
+   * counted twice when the state before it must be rebuilt. The caller's byte
+   * budget decides from it whether another game is worth entering.
+   */
+  readonly nextChunkBytes: number
 }
 
 /**
@@ -172,11 +178,19 @@ export type RevisionCompaction =
       readonly converted: number
       readonly keyframes: number
       readonly freedBytes: number
-      /** The size of the state text of the rows handled, for the caller's budget. */
+      /** The state text parsed for this request, for the caller's budget. */
       readonly handledBytes: number
+      /** The rows looked at, for the caller's row budget. */
+      readonly handledRows: number
       readonly remaining: number
     }
-  | { readonly status: 'mismatch'; readonly revision: number }
+  | {
+      readonly status: 'mismatch'
+      readonly revision: number
+      /** What was parsed before the check failed: a failing game still spent its share. */
+      readonly handledBytes: number
+      readonly handledRows: number
+    }
   | { readonly status: 'not-found' }
 
 export type BroadcastStatus = 'active' | 'done' | 'cancelled'

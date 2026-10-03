@@ -98,6 +98,7 @@ describe.each(storeImplementations)('revision compaction: %s', (_name, create) =
       keyframes: 0,
       freedBytes: 0,
       handledBytes: 0,
+      handledRows: 0,
       remaining: 0,
     })
     expect(await fixture.rows(gameId)).toEqual(once)
@@ -160,7 +161,7 @@ describe.each(storeImplementations)('revision compaction: %s', (_name, create) =
     // Never more than the old rows hold.
     expect(usage?.freeableBytes).toBeLessThan(rows.reduce((sum, row) => sum + row.bytes, 0))
     expect(Object.keys(usage ?? {}).sort()).toEqual(
-      ['active', 'freeableBytes', 'fullRevisions', 'gameId', 'name', 'revisions'],
+      ['active', 'freeableBytes', 'fullRevisions', 'gameId', 'name', 'nextChunkBytes', 'revisions'],
     )
 
     await fixture.repo.compactGameRevisions(gameId, 1000)
@@ -184,7 +185,7 @@ describe.each(storeImplementations)('revision compaction: %s', (_name, create) =
       const result = await fixture.repo.compactGameRevisions(gameId, 1000)
 
       // The first row stays a keyframe; the second is the first conversion.
-      expect(result).toEqual({ status: 'mismatch', revision: before[1]?.revision })
+      expect(result).toMatchObject({ status: 'mismatch', revision: before[1]?.revision })
       expect(await fixture.rows(gameId)).toEqual(before)
       await expectReadsAsSaved(fixture, gameId, saved)
     })
@@ -226,7 +227,7 @@ describe.each(storeImplementations)('revision compaction: %s', (_name, create) =
       badFrom = saved[15]?.revision ?? 0
       const second = await fixture.repo.compactGameRevisions(gameId, 10)
 
-      expect(second).toEqual({ status: 'mismatch', revision: badFrom })
+      expect(second).toMatchObject({ status: 'mismatch', revision: badFrom })
       expect(await fixture.rows(gameId)).toEqual(afterFirst)
       await expectReadsAsSaved(fixture, gameId, saved)
 

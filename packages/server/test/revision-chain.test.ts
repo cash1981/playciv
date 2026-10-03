@@ -67,12 +67,14 @@ describe('summarizeCompaction', () => {
     const rows = Array.from({ length: 2 * K + 1 }, (_, index) => legacy(index, 100_000))
     const summary = summarizeCompaction(rows)
     expect(summary.fullRevisions).toBe(2 * K)
+    // The first row of a game has no state before it to rebuild.
+    expect(summary.nextChunkBytes).toBe(100_000)
     // Two rows are keyframes, the rest become deltas.
     expect(summary.freeableBytes).toBe((2 * K - 2) * (100_000 - ESTIMATED_DELTA_BYTES))
   })
 
   it('is zero for a game that is done', () => {
-    expect(summarizeCompaction([keyframe(0), delta(1, 0), legacy(2)])).toEqual({ fullRevisions: 0, freeableBytes: 0 })
+    expect(summarizeCompaction([keyframe(0), delta(1, 0), legacy(2)])).toEqual({ fullRevisions: 0, freeableBytes: 0, nextChunkBytes: 0 })
   })
 })
 

@@ -65,15 +65,25 @@ const CLEANUP_GAMES_PER_REQUEST = 12
  * about 4.4 ms per MB of state text, so 1 MB per request is about 5 ms there, 2
  * rows of the largest states or 11 of the smallest. See decisions.md (2026-10-03,
  * delta storage). The row cap only bounds the size of the batch.
+ *
+ * The budget is spent by every game a request visits, whatever it answers: a game
+ * that fails its check still parsed its states, and the store reports those bytes.
+ * A game is entered only while the budget left covers the least it can do (its
+ * first row, twice when the state before it is rebuilt); the first game of a
+ * request is always entered, or a game with huge states could never be compacted.
+ * So a request parses at most the budget, except when a single first chunk is
+ * larger than it by itself.
  */
 export const COMPACT_BYTES_PER_REQUEST = 1_000_000
 export const COMPACT_REVISIONS_PER_REQUEST = 40
 
 /**
- * Games one compaction request visits. A game costs up to 7 subrequests (does it
- * exist, its rows, the state before the first conversion, the old rows, one
- * batch, and two more only when the batch did not apply as planned); the free
- * plan allows 50, so 5 games is at most 35 plus the listing and the admin check.
+ * Games one compaction request visits. A game costs at most 6 subrequests (does it
+ * exist, its rows, the state before the first conversion, the old rows, one batch,
+ * and a re-read of the rows only when the batch did not apply as planned), taking
+ * `db.batch()` as one subrequest however many statements it holds. The listing
+ * (2) and the admin check (1) come on top: 5 games is at most 33 of the 50 the
+ * free plan allows.
  */
 const COMPACT_GAMES_PER_REQUEST = 5
 
@@ -500,7 +510,8 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
     let remainingGames = 0
     let remainingRevisions = 0
     for (const game of targets) {
-      if (revisionBudget <= 0 || byteBudget <= 0 || visited >= COMPACT_GAMES_PER_REQUEST) {
+      const affordable = visited === 0 || (revisionBudget > 0 && byteBudget >= game.nextChunkBytes)
+      if (!affordable || visited >= COMPACT_GAMES_PER_REQUEST) {
         remainingGames += game.fullRevisions > 0 ? 1 : 0
         remainingRevisions += game.fullRevisions
         continue
@@ -508,14 +519,15 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       visited += 1
       const result = await context.repo.compactGameRevisions(game.gameId, revisionBudget, byteBudget)
       if (result.status === 'not-found') continue
+      // Every answer spent some of the request, a failed check included.
+      revisionBudget -= result.handledRows
+      byteBudget -= result.handledBytes
       if (result.status === 'mismatch') {
         games.push({ id: game.gameId, name: game.name, status: 'mismatch', revision: result.revision })
         remainingGames += 1
         remainingRevisions += game.fullRevisions
         continue
       }
-      revisionBudget -= result.converted + result.keyframes
-      byteBudget -= result.handledBytes
       games.push({
         id: game.gameId,
         name: game.name,

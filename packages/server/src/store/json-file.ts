@@ -442,7 +442,8 @@ export class JsonFileRepository implements Repository {
         ...newest,
         kind: 'full',
         baseRevision: newest.revision,
-        sealed: false,
+        // Whether the live game moved past this row is not a matter of how the row is stored.
+        sealed: newest.sealed,
         state: rebuilt,
       })
     }
@@ -481,13 +482,23 @@ export class JsonFileRepository implements Repository {
     const rows = this.rowsOf(gameId)
     const plan = planCompaction(rows.map(toCompactionRow), maxRevisions, maxBytes)
     if (plan.todo.length === 0) {
-      return { status: 'compacted', converted: 0, keyframes: 0, freedBytes: 0, handledBytes: 0, remaining: plan.remaining }
+      return {
+        status: 'compacted',
+        converted: 0,
+        keyframes: 0,
+        freedBytes: 0,
+        handledBytes: 0,
+        handledRows: 0,
+        remaining: plan.remaining,
+      }
     }
 
     let previousState: GameState | undefined
     if (plan.previous !== undefined) {
       previousState = await this.rebuildRow(gameId, plan.previous)
-      if (previousState === undefined) return { status: 'mismatch', revision: plan.previous }
+      if (previousState === undefined) {
+        return { status: 'mismatch', revision: plan.previous, handledBytes: plan.bytes, handledRows: plan.todo.length }
+      }
     }
     const outcome = compactChunk({
       plan,
@@ -499,7 +510,9 @@ export class JsonFileRepository implements Repository {
       }),
       codec: this.codec,
     })
-    if (!outcome.ok) return { status: 'mismatch', revision: outcome.revision }
+    if (!outcome.ok) {
+      return { status: 'mismatch', revision: outcome.revision, handledBytes: plan.bytes, handledRows: plan.todo.length }
+    }
 
     let converted = 0
     let keyframes = 0
@@ -521,9 +534,19 @@ export class JsonFileRepository implements Repository {
       }
     }
     const broken = firstBrokenRevision(this.rowsOf(gameId).map(toCompactionRow))
-    if (broken !== undefined) return { status: 'mismatch', revision: broken }
+    if (broken !== undefined) {
+      return { status: 'mismatch', revision: broken, handledBytes: plan.bytes, handledRows: plan.todo.length }
+    }
     this.scheduleWrite()
-    return { status: 'compacted', converted, keyframes, freedBytes, handledBytes: plan.bytes, remaining: plan.remaining }
+    return {
+      status: 'compacted',
+      converted,
+      keyframes,
+      freedBytes,
+      handledBytes: plan.bytes,
+      handledRows: plan.todo.length,
+      remaining: plan.remaining,
+    }
   }
 
   async appendChat(message: StoredChatRow): Promise<void> {

@@ -565,10 +565,12 @@ export class D1Repository implements Repository {
         `${REVISION_SELECT}
          WHERE game_id = ? AND revision <= ?
            AND revision >= COALESCE(
-             (SELECT MAX(revision) FROM game_revision WHERE game_id = ? AND revision <= ? AND kind = 'full'), 0)
+             (SELECT MAX(revision) FROM game_revision WHERE game_id = ? AND revision <= ? AND kind = 'full'), ?)
          ORDER BY revision ASC`,
       )
-      .bind(gameId, revision, gameId, revision)
+      // With no keyframe at all, start at the revision itself: one delta row, which
+      // the rebuild refuses, instead of every row from the start of the game.
+      .bind(gameId, revision, gameId, revision, revision)
       .all<RevisionRow>()
     const last = rows.results.at(-1)
     if (last === undefined || last.revision !== revision) return undefined
@@ -694,7 +696,7 @@ export class D1Repository implements Repository {
     const results = await this.db.batch([
       this.db
         .prepare(
-          `UPDATE game_revision SET state = ?, kind = 'full', base_revision = revision, sealed = 0
+          `UPDATE game_revision SET state = ?, kind = 'full', base_revision = revision
            WHERE game_id = ? AND revision = ? AND kind = 'delta'
              AND EXISTS (SELECT 1 FROM game WHERE id = ? AND active = 0 AND rev = ?)`,
         )
@@ -709,9 +711,11 @@ export class D1Repository implements Repository {
         .bind(gameId, state.newest, gameId, state.newest, gameId),
     ])
     const [converted, deleted] = results
-    if (converted === undefined || deleted === undefined || changes(converted) === 0) {
-      return { status: 'changed' }
-    }
+    if (converted === undefined || deleted === undefined) return { status: 'changed' }
+    // The delete only runs once the newest row is a keyframe. If the rewrite did
+    // not apply (another cleanup already did it) but the delete did, the game is
+    // cleaned; if neither did, the game moved and nothing was written.
+    if (changes(converted) === 0 && changes(deleted) === 0) return { status: 'changed' }
     return { status: 'cleaned', removed: changes(deleted) }
   }
 
@@ -763,7 +767,15 @@ export class D1Repository implements Repository {
     const first = plan.todo[0]
     const last = plan.todo.at(-1)
     if (first === undefined || last === undefined) {
-      return { status: 'compacted', converted: 0, keyframes: 0, freedBytes: 0, handledBytes: 0, remaining: plan.remaining }
+      return {
+        status: 'compacted',
+        converted: 0,
+        keyframes: 0,
+        freedBytes: 0,
+        handledBytes: 0,
+        handledRows: 0,
+        remaining: plan.remaining,
+      }
     }
 
     // The state of the row before the first one to convert, rebuilt from its own
@@ -775,7 +787,9 @@ export class D1Repository implements Repository {
       } catch {
         previousState = undefined
       }
-      if (previousState === undefined) return { status: 'mismatch', revision: plan.previous }
+      if (previousState === undefined) {
+        return { status: 'mismatch', revision: plan.previous, handledBytes: plan.bytes, handledRows: plan.todo.length }
+      }
     }
     const legacy = await this.db
       .prepare(
@@ -792,7 +806,9 @@ export class D1Repository implements Repository {
         converted: 0,
         keyframes: 0,
         freedBytes: 0,
-        handledBytes: 0,
+        // The rows were read even though nothing was converted.
+        handledBytes: plan.bytes,
+        handledRows: plan.todo.length,
         remaining: plan.remaining + plan.todo.length,
       }
     }
@@ -806,7 +822,9 @@ export class D1Repository implements Repository {
       })),
       codec: this.codec,
     })
-    if (!outcome.ok) return { status: 'mismatch', revision: outcome.revision }
+    if (!outcome.ok) {
+      return { status: 'mismatch', revision: outcome.revision, handledBytes: plan.bytes, handledRows: plan.todo.length }
+    }
 
     // One batch, so the chunk is written or not at all. A repeated or overlapping
     // run finds the rows already converted and its guards change nothing.
@@ -847,7 +865,9 @@ export class D1Repository implements Repository {
     if (unapplied > 0) {
       // Rows changed under us. Nothing is wrong unless the chain itself is now broken.
       const broken = firstBrokenRevision(await this.compactionRows(gameId))
-      if (broken !== undefined) return { status: 'mismatch', revision: broken }
+      if (broken !== undefined) {
+        return { status: 'mismatch', revision: broken, handledBytes: plan.bytes, handledRows: plan.todo.length }
+      }
     }
     return {
       status: 'compacted',
@@ -855,6 +875,7 @@ export class D1Repository implements Repository {
       keyframes,
       freedBytes,
       handledBytes: plan.bytes,
+      handledRows: plan.todo.length,
       remaining: plan.remaining + unapplied,
     }
   }

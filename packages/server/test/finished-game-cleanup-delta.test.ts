@@ -5,6 +5,7 @@
  * rewritten as a keyframe first, in the same atomic step as the delete.
  */
 
+import { endTurn } from '@civ/engine'
 import type { GameState } from '@civ/engine'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -55,12 +56,43 @@ describe.each(storeImplementations)('cleanup of a finished game with delta revis
     expect(result).toEqual({ status: 'cleaned', removed: before.length - 1 })
     const after = await fixture.rows(gameId)
     expect(after).toEqual([
-      expect.objectContaining({ revision: newest, kind: 'full', baseRevision: newest, sealed: false }),
+      // Whether the live game moved past the row is not changed by how the row is stored.
+      expect.objectContaining({ revision: newest, kind: 'full', baseRevision: newest, sealed: before.at(-1)?.sealed }),
     ])
     const read = await fixture.repo.findGameRevision(gameId, newest)
     expect(text(read)).toBe(text(original))
     expect((await fixture.repo.listGameRevisionSummaries(gameId)).map((row) => row.revision)).toEqual([newest])
     expect((await fixture.repo.listGameRevisions(gameId)).map((row) => text(row.state))).toEqual([text(original?.state)])
+  })
+
+  it('a sealed newest revision stays sealed, so the next revision is a keyframe that carries the unrecorded change', async () => {
+    const { gameId, newest } = await playedGame(fixture, 30, true)
+    expect((await fixture.rows(gameId)).at(-1)?.kind).toBe('delta')
+    // An admin setting on the finished game: saved without a revision, not just a note.
+    const live = (await fixture.repo.findGame(gameId)) as GameState
+    const switched = { ...live, rev: live.rev + 1, chatOrders: true }
+    expect(await fixture.repo.saveGameIfRevision(switched, live.rev)).toBe(true)
+    expect((await fixture.rows(gameId)).at(-1)?.sealed).toBe(true)
+
+    expect(await fixture.repo.deleteOldGameRevisions(gameId)).toMatchObject({ status: 'cleaned' })
+    expect(await fixture.rows(gameId)).toEqual([
+      expect.objectContaining({ revision: newest, kind: 'full', baseRevision: newest, sealed: true }),
+    ])
+
+    // The next recorded revision must not be a delta against a row that lacks the setting.
+    const result = endTurn(switched)
+    if (!result.ok) throw new Error(result.error.kind)
+    const after = { ...result.value, rev: switched.rev + 1 }
+    expect(
+      await fixture.repo.saveGameWithRevision(
+        after,
+        createGameRevision(switched, after, ACTOR, '2026-10-03T00:00:00.000Z', 'later'),
+        switched.rev,
+        revisionSnapshot(switched),
+      ),
+    ).toBe(true)
+    expect((await fixture.rows(gameId)).at(-1)).toMatchObject({ revision: after.rev, kind: 'full', sealed: false })
+    expect((await fixture.repo.findGameRevision(gameId, after.rev))?.state.chatOrders).toBe(true)
   })
 
   it('a second run changes nothing', async () => {
