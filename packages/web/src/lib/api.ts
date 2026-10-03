@@ -467,6 +467,11 @@ export const api = {
     post<{ readonly run: BroadcastRunDto; readonly queue: BroadcastQueueDto | null }>(
       '/api/admin/email/broadcast/queue/run',
     ),
+  /** Sets stuck rows back to pending. They may already have been delivered. */
+  releaseStuckBroadcastQueue: () =>
+    post<{ readonly released: number; readonly queue: BroadcastQueueDto }>(
+      '/api/admin/email/broadcast/queue/release-stuck',
+    ),
   cancelBroadcastQueue: () =>
     post<{ readonly queue: BroadcastQueueDto }>('/api/admin/email/broadcast/queue/cancel'),
   /** Public: the server route needs no bearer token. */

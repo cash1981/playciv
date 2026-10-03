@@ -749,10 +749,12 @@ its recipients are stored once, and a daily Worker cron at 17:00 UTC
 everyone has had it. The admin page shows sent, pending, failed and stuck counts,
 and has "Send next batch now" and "Cancel". Only one queue is active at a time,
 a recipient who unsubscribes after queueing is skipped at send time, and a
-recipient a crashed run left in `sending` is never resent by itself, because the
-mail may have been delivered. **Deploy order for the queue:** apply migration
+recipient a crashed or timed-out run left in `sending` is never resent by itself,
+because the mail may have been delivered; such rows keep the queue open until the
+owner releases them (after checking Resend's log) or cancels. **Deploy order for the queue:** apply migration
 `0005` to D1 (`wrangler d1 migrations apply playciv --remote`), then deploy the
-Worker; the cron only exists after a deploy. See `docs/agents/decisions.md`.
+Worker; the cron only exists after a deploy, and its first run should be watched in the
+Worker's logs. See `docs/agents/decisions.md`.
 
 **Only Tradable cards can be given away.** The hand's "Give" control was drawn
 on every card, but `tradeToPlayer` only ever accepted Java's `Tradable` set

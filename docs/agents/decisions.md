@@ -3964,13 +3964,25 @@ the owner's choice of time. Fifty leaves half of the day's quota for game mail.
 - **A recipient left in `sending` is never resent automatically.** The claim sets
   rows to `sending` in one guarded `UPDATE ... RETURNING`, so two overlapping runs
   (the cron and a manual "send next batch now") cannot take the same row, and a
-  crash after the claim leaves the rows `sending`, not `pending`. Only a run that
-  stopped before sending its own claimed rows (a 429, a 5xx, a timeout, a budget)
-  releases them back to `pending`. A row stuck in `sending` may have been
-  delivered, so the admin page lists such rows and the owner decides.
-- A run that leaves nothing `pending` marks the queue `done`; stuck rows do not
-  hold it open. Cancelling sets `cancelled`, and a cancelled or finished queue
-  yields no claims. D1 has no interactive transactions, so every step is one
+  crash after the claim leaves the rows `sending`, not `pending`. A run releases
+  its own claimed rows back to `pending` only when the provider *answered* with a
+  refusal or the run stopped before trying them: a 429, a 5xx, another 4xx, the
+  request budget or the time budget (nothing was sent). A request that got **no
+  answer** (a timeout, an aborted or failed fetch) is **not** released: the mail
+  may have been delivered, and putting those rows back to `pending` would mail
+  them again the next day. They stay `sending`, the status lists them as stuck, and
+  the direct broadcast still counts them as `deferred` with the "may still have
+  been accepted" reason.
+- **Stuck rows keep the queue open.** A queue is marked `done` only when nothing is
+  `pending` and nothing is `sending`. With stuck rows it stays `active` and the
+  daily run is a quiet no-op (it claims nothing and does not move `last_run_at`).
+  There is no deadlock: Cancel is always the way out, and "Release stuck rows"
+  (`POST .../queue/release-stuck`, guarded to `status = 'sending'` of the active
+  queue) puts them back to `pending` after the owner has checked Resend's email
+  log. The button's confirmation says plainly that releasing can send them twice.
+  Releasing while a run is in flight would release that run's own rows too, so it
+  is for a queue that is idle.
+- A finished queue (`done`) or a cancelled one yields no claims. D1 has no interactive transactions, so every step is one
   guarded statement or one `batch()` (the recipients go in as JSON through
   `json_each`, a few statements for a whole list, to stay well under the Worker's
   query allowance).
@@ -3985,4 +3997,5 @@ UTC) has not been run; the run function is tested directly, and the handler is a
 thin wrapper around it. Check the first scheduled run in the Worker's logs.
 
 **Deploy order.** Apply migration `0005` to D1, then deploy the Worker. The cron
-exists only after a deploy.
+exists only after a deploy. Watch the first scheduled run in the Worker's logs
+(look for a `Daily broadcast:` line), since the cron has not been run anywhere else.

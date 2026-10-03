@@ -19,6 +19,7 @@ vi.mock('../lib/api.js', () => ({
     broadcastQueue: vi.fn(),
     runBroadcastQueue: vi.fn(),
     cancelBroadcastQueue: vi.fn(),
+    releaseStuckBroadcastQueue: vi.fn(),
   },
 }))
 
@@ -419,6 +420,8 @@ describe('admin broadcast queue panel', () => {
 
     expect(await screen.findByText('Sent 50, failed 0.', undefined, { timeout: 5_000 })).toBeTruthy()
     expect(vi.mocked(api.runBroadcastQueue)).toHaveBeenCalledTimes(1)
+    // The confirmation said how many would go out: perRun 50 of the 100 pending.
+    expect(String(vi.mocked(window.confirm).mock.calls[0]?.[0])).toContain('Up to 50 of the 100 pending')
     expect(await screen.findByText('Pending: 50', undefined, { timeout: 5_000 })).toBeTruthy()
   })
 
@@ -444,12 +447,72 @@ describe('admin broadcast queue panel', () => {
     expect(vi.mocked(api.cancelBroadcastQueue)).not.toHaveBeenCalled()
   })
 
-  it('reads the status when the panel opens, not on a timer', async () => {
+  it('does not send the next batch when the confirmation is declined', async () => {
+    vi.mocked(api.broadcastQueue).mockResolvedValue({ queue: queueDto() })
+    vi.mocked(window.confirm).mockReturnValue(false)
     renderView()
-    await waitFor(() => expect(vi.mocked(api.broadcastQueue)).toHaveBeenCalledTimes(1))
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    fireEvent.click(await screen.findByRole('button', { name: 'Send next batch now' }, { timeout: 5_000 }))
 
-    expect(vi.mocked(api.broadcastQueue)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(api.runBroadcastQueue)).not.toHaveBeenCalled()
+  })
+
+  it('releases stuck rows only after a warning to check the Resend log', async () => {
+    vi.mocked(api.broadcastQueue).mockResolvedValue({
+      queue: queueDto({ counts: { pending: 0, sending: 2, sent: 98, failed: 0 }, stuck: ['a@example.com', 'b@example.com'] }),
+    })
+    vi.mocked(api.releaseStuckBroadcastQueue).mockResolvedValue({
+      released: 2,
+      queue: queueDto({ counts: { pending: 2, sending: 0, sent: 98, failed: 0 }, stuck: [] }),
+    })
+    renderView()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Release stuck rows' }, { timeout: 5_000 }))
+
+    const question = String(vi.mocked(window.confirm).mock.calls[0]?.[0])
+    expect(question).toContain("Check Resend's email log first")
+    expect(question).toContain('send them twice')
+    expect(await screen.findByText(/Released 2 stuck rows/, undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(vi.mocked(api.releaseStuckBroadcastQueue)).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Release stuck rows' })).toBeNull()
+  })
+
+  it('does not release stuck rows when the warning is declined', async () => {
+    vi.mocked(api.broadcastQueue).mockResolvedValue({
+      queue: queueDto({ counts: { pending: 0, sending: 1, sent: 99, failed: 0 }, stuck: ['a@example.com'] }),
+    })
+    vi.mocked(window.confirm).mockReturnValue(false)
+    renderView()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Release stuck rows' }, { timeout: 5_000 }))
+
+    expect(vi.mocked(api.releaseStuckBroadcastQueue)).not.toHaveBeenCalled()
+  })
+
+  it('offers no release button on a queue that is no longer active', async () => {
+    vi.mocked(api.broadcastQueue).mockResolvedValue({
+      queue: queueDto({ status: 'cancelled', counts: { pending: 0, sending: 1, sent: 99, failed: 0 }, stuck: ['a@example.com'] }),
+    })
+    renderView()
+
+    expect(await screen.findByText('Stuck: 1', undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Release stuck rows' })).toBeNull()
+  })
+
+  it('reads the status when the panel opens and not again however long it stays open', async () => {
+    // Fake timers before the first render, so a polling interval or a timeout
+    // chain started on mount would fire inside the advance below.
+    vi.useFakeTimers()
+    try {
+      renderView()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(vi.mocked(api.broadcastQueue)).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+
+      expect(vi.mocked(api.broadcastQueue)).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -615,6 +615,16 @@ function BroadcastQueuePanel({
   }
 
   async function runNow(): Promise<void> {
+    if (queue === null) return
+    const batch = Math.min(queue.perRun, queue.counts.pending)
+    if (
+      !window.confirm(
+        `Send the next batch now? Up to ${batch} of the ${queue.counts.pending} pending ` +
+          'recipients will be mailed.',
+      )
+    ) {
+      return
+    }
     await act(async () => {
       const answer = await api.runBroadcastQueue()
       setQueue(answer.queue)
@@ -625,6 +635,22 @@ function BroadcastQueuePanel({
           (run.finished ? '. The queue is finished.' : '.') +
           (run.stopReason === null ? '' : ` The run stopped early: ${run.stopReason}`),
       )
+    })
+  }
+
+  async function releaseStuck(): Promise<void> {
+    if (
+      !window.confirm(
+        "Check Resend's email log first. These mails may already have been delivered, " +
+          'and releasing them can send them twice. Release the stuck rows anyway?',
+      )
+    ) {
+      return
+    }
+    await act(async () => {
+      const answer = await api.releaseStuckBroadcastQueue()
+      setQueue(answer.queue)
+      setNotice(`Released ${answer.released} stuck rows; the next run will send them.`)
     })
   }
 
@@ -683,7 +709,13 @@ function BroadcastQueuePanel({
         {active && <span className="muted">A queue is already running.</span>}
       </div>
 
-      {queue !== null && <QueueStatus queue={queue} />}
+      {queue !== null && (
+        <QueueStatus
+          queue={queue}
+          disabled={working}
+          onReleaseStuck={() => void releaseStuck()}
+        />
+      )}
       {active && (
         <div className="row">
           <button disabled={working} onClick={() => void runNow()}>
@@ -698,7 +730,15 @@ function BroadcastQueuePanel({
   )
 }
 
-function QueueStatus({ queue }: { readonly queue: BroadcastQueueDto }): React.JSX.Element {
+function QueueStatus({
+  queue,
+  disabled,
+  onReleaseStuck,
+}: {
+  readonly queue: BroadcastQueueDto
+  readonly disabled: boolean
+  readonly onReleaseStuck: () => void
+}): React.JSX.Element {
   const { counts } = queue
   return (
     <div className="notice">
@@ -729,13 +769,21 @@ function QueueStatus({ queue }: { readonly queue: BroadcastQueueDto }): React.JS
         <>
           <p>
             These were taken by a run that never reported back, so they may have been mailed.
-            They are not sent again by themselves; check Resend&apos;s log and decide.
+            They are not sent again by themselves, and the queue stays open until they are
+            released or it is cancelled. Check Resend&apos;s log and decide.
           </p>
           <ul aria-label="Stuck queue addresses">
             {queue.stuck.map((email, index) => (
               <li key={index}>{email}</li>
             ))}
           </ul>
+          {queue.status === 'active' && (
+            <div className="row">
+              <button disabled={disabled} onClick={onReleaseStuck}>
+                Release stuck rows
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
