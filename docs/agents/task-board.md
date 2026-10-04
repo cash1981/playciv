@@ -12,26 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-253-a-coins
-
-- **Owner:** Codex (GPT-6)
-- **Branch:** `feat/issue-253-a-coins`
-- **Brief:** `docs/agents/tasks/issue-253-a-coins.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/coins.ts`
-  - `packages/engine/src/actions/player.ts`
-  - `packages/engine/src/actions/board.ts`
-  - `packages/engine/src/board.ts`
-  - `packages/engine/src/state.ts`
-  - `packages/engine/src/migrate.ts`
-  - `packages/engine/test/coin-sources.test.ts`
-  - `packages/engine/test/blockade.test.ts`
-  - `packages/web/src/views/StatusPanel.tsx`
-  - `packages/web/src/views/StatusPanel.test.tsx`
-  - `docs/agents/decisions.md`
-- **Notes:** Issue #253 section A, first release A1 + A2. Panama coin tokens need wonder-scoped storage so ownership transfers follow the physical wonder.
-
 ---
 
 ## Format

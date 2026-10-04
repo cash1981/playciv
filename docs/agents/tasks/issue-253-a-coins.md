@@ -3,7 +3,7 @@
 - **Slug:** `issue-253-a-coins`
 - **Branch:** `feat/issue-253-a-coins`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -56,15 +56,15 @@ Add optional, backward-compatible coin-token data to wonder board pieces, migrat
 
 ## Acceptance criteria
 
-- [ ] Education is available only after reveal, starts at zero, is capped at 4 normally, permits up to 6 only while its owner has an active, unblocked Internet, and can still be lowered after losing capacity.
-- [ ] Education is included in migration defaults and the coin total; removing the tech resets its counter.
-- [ ] Internet capacity works in all supported board areas and is disabled by blockade or clearing/disabling ownership; UI and reducer agree.
-- [ ] Panama tokens stay with the wonder across owner changes; only the active owner's total includes them. Blockade hides the contribution but preserves the token count.
-- [ ] Existing games migrate the prior Panama counter from its current owner; undo/replay restores ownership and coin values consistently.
-- [ ] Tests cover reveal/removal/migration, normal and Internet limits, area movement, blockade/unblock, disable/clear, reassignment, legacy values, and derived totals.
-- [ ] Hidden information: Education's public counter stays unavailable while the tech is hidden; existing projection tests continue to pass.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
-- [ ] Browser verified: coin row availability, capacity and Panama owner/disabled display.
+- [x] Education is available only after reveal, starts at zero, is capped at 4 normally, permits up to 6 only while its owner has an active, unblocked Internet, and can still be lowered after losing capacity.
+- [x] Education is included in migration defaults and the coin total; removing the tech resets its counter.
+- [x] Internet capacity works in all supported board areas and is disabled by blockade or clearing/disabling ownership; UI and reducer agree.
+- [x] Panama tokens stay with the wonder across owner changes; only the active owner's total includes them. Blockade hides the contribution but preserves the token count.
+- [x] Existing games migrate the prior Panama counter from its current owner; undo/replay restores ownership and coin values consistently.
+- [x] Tests cover reveal/removal/migration, normal and Internet limits, area movement, blockade/unblock, disable/clear, reassignment, legacy values, and derived totals.
+- [x] Hidden information: Education's public counter stays unavailable while the tech is hidden; owner and opponent projections both return zero.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
+- [ ] Browser verified: no authenticated local game was available; StatusPanel behavior is covered by tests.
 
 ## Open questions
 
