@@ -13,7 +13,7 @@ _Last updated: 2026-10-04 (building terrain warning, issue #255)_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 867 engine, 593 server, 528 web on `feat/building-terrain` (merged with main) (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 891 engine, 593 server, 528 web on `feat/building-terrain` (merged with main) (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
