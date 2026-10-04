@@ -4585,3 +4585,8 @@ expansions.
 - The four Moderator disaster images (`drought`, `forest`, `grassland`, `water`) are public board assets in their own **Disasters** category. They use the normal board-piece placement and drag behavior, with no per-piece supply cap or new disaster rules. A distinct category keeps them findable without treating them as game buildings in supply accounting.
 - The generator caps disaster artwork at 90 px on its longest side, so each marker fits within one board square. The assets are otherwise purely visual.
 - The local dev browser had an empty game store and no authenticated game, so an interactive board drag was not browser-verified. Palette rendering and the generic placement path are covered by tests.
+
+## 2026-10-04: disabling a wonder preserves its board piece
+
+- The Wonders panel's Disable action now clears the wonder's owner through the existing reversible `setWonderOwner` board action. The wonder stays on the board and in the Wonders panel; its current owner-based bonuses turn off. The owner can be assigned again with the existing owner selector. Unowned wonders have no Disable control. This replaces the old panel action that removed the board piece entirely (issue #244).
+- The human asked to leave the reported culture-token behavior out of scope for this change.

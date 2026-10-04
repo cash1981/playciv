@@ -190,6 +190,13 @@ describe('cultureHandSizeOf', () => {
     }))
     expect(sizeOf(other)).toBe(2)
     expect(toPlayerView(other, ITCHI).you?.stats.cultureHandSize).toBe(6)
+
+    const disabled = unwrap(setWonderOwner(other, {
+      playerId: CASH1981, pieceId: wonder.id, ownerId: null,
+    }))
+    expect(sizeOf(disabled)).toBe(2)
+    expect(toPlayerView(disabled, ITCHI).you?.stats.cultureHandSize).toBe(2)
+    expect(disabled.board.pieces.some((piece) => piece.id === wonder.id)).toBe(true)
   })
 
   it('counts an owned Cristo Redentor that sits outside the Wonders area', () => {

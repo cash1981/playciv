@@ -129,6 +129,8 @@ describe('wonder ownership', () => {
       playerId: CASH1981, pieceId: wonder.id, ownerId: null,
     }))
     expect(cleared.board.pieces.find((piece) => piece.id === wonder.id)?.ownerId).toBeNull()
+    expect(cleared.board.pieces).toHaveLength(placed.board.pieces.length)
+    expect(cleared.board.pieces.some((piece) => piece.id === wonder.id)).toBe(true)
   })
 })
 

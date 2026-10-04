@@ -6,18 +6,19 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-04 (disaster markers added)_
+_Last updated: 2026-10-04 (issue #244 wonder deactivation)_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 767 engine, 590 server, 499 web on `feat/disasters` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 767 engine, 590 server, 499 web on `fix/issue-244-removing-wonder` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Issue #244: disabling a wonder preserves the piece and turns off its owner bonuses.** The Wonders panel clears ownership instead of deleting the board piece; it remains on the board and can be reassigned. Culture-token behavior is out of scope per the human. `pnpm -r typecheck`, all 1,856 tests and `pnpm -r build` pass; review approved by sol. Interactive browser check not done because the local store had no game. See `decisions.md`, 2026-10-04. Brief: `tasks/issue-244-removing-wonder.md`.
 - **Blockade: an enemy figure disables a building or Great Person (issue #241, branch `fix/great-person-disable`).**
   Derived from the board (`engine/src/blockade.ts`): a blockaded piece is greyed and struck
   through, adds nothing to the combat bonus, and a Great Person card is marked when every
