@@ -12,7 +12,22 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing._
+### issue-253-metropolis-footprint
+
+- **Owner:** Codex (GPT-6)
+- **Branch:** `feat/issue-253-metropolis-footprint`
+- **Brief:** `docs/agents/tasks/issue-253-metropolis-footprint.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/blockade.ts`
+  - `packages/engine/test/blockade.test.ts`
+  - `packages/engine/test/coin-sources.test.ts`
+  - `docs/agents/tasks/issue-253-metropolis-footprint.md`
+  - `docs/agents/decisions.md`
+  - `docs/agents/state.md`
+  - `README.md`
+  - `docs/agents/task-board.md`
+- **Notes:** Extend the shared city footprint to the ten outskirts around a two-square metropolis, in horizontal and vertical orientations.
 
 ---
 
