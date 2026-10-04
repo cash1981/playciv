@@ -173,7 +173,7 @@ export function firstOpenPhase(view: PlayerView, turnNumber: number): TurnPhase 
 export function turnTitle(activeTurn: ActiveTurnStatus | null, viewerId?: string): string {
   if (activeTurn === null) return 'Nobody is up'
   const turn = `Turn ${activeTurn.turnNumber}`
-  if ((activeTurn.waitingFor ?? []).length === 0) return `${turn} · everyone is done`
+  if (activeTurn.waitingFor.length === 0) return `${turn} · everyone is done`
   const who = viewerId !== undefined && activeTurn.playerId === viewerId ? 'Your turn' : `${activeTurn.username}'s turn`
   return `${turn} · ${who} — ${TURN_PHASE_LABEL[activeTurn.phase]} phase`
 }

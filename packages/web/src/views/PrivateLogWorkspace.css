@@ -3,6 +3,7 @@
 }
 
 .private-log-phase {
+  margin-top: 0.8rem;
   padding: 0.55rem;
   border: 1px solid transparent;
   border-radius: var(--radius);

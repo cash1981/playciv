@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs'
+
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
@@ -46,5 +48,11 @@ describe('PrivateLogWorkspace', () => {
       />,
     )
     expect(failed).toContain('Save failed: Private log')
+  })
+
+  it('keeps a gap above the note box, as the old Turn orders private log had', () => {
+    const css = readFileSync('src/views/PrivateLogWorkspace.css', 'utf8').replaceAll('\r\n', '\n')
+    const rule = /\.private-log-phase \{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(rule).toContain('margin-top: 0.8rem;')
   })
 })
