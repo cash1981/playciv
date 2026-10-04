@@ -15,6 +15,7 @@ import {
   placePiece,
   redoLastBoardChange,
   removePiece,
+  setWonderOwner,
   undoLastBoardChange,
 } from '../src/actions/board.js'
 import { initiateBattle } from '../src/actions/arena.js'
@@ -302,6 +303,23 @@ describe('which pieces can be blockaded', () => {
 })
 
 describe('wonders and the blockade', () => {
+  it('suspends The Internet coin capacity while blockaded and restores it afterward', () => {
+    let state = put(game(), CASH1981, 'wonders/internet', 8, 8, CASH1981)
+    state = unwrap(setCoinSource(state, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'pottery', value: 4,
+    }))
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 8, 8)
+    expect(unwrapErr(setCoinSource(state, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'pottery', value: 5,
+    }))).toEqual({ kind: 'INVALID_COIN_VALUE', value: 5, max: 4 })
+
+    const army = lastPiece(state)
+    state = unwrap(removePiece(state, { playerId: KARANDRAS1, pieceId: army.id }))
+    expect(unwrap(setCoinSource(state, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'pottery', value: 5,
+    }))).toBeDefined()
+  })
+
   const wonderIn = (state: GameState): BoardPiece => {
     const found = state.board.pieces.find((p) => p.category === 'wonder')
     if (found === undefined) throw new Error('no wonder')
@@ -409,27 +427,31 @@ describe('wonders and the blockade', () => {
     expect(shown(state)).toBe(0)
     expect(totalCoins(coinSourcesOf(state, player(state)))).toBe(0)
     expect(toPlayerView(state, CASH1981).you?.stats.coinSources.panamaCanal).toBe(0)
-    // The stored value is untouched.
-    expect(player(state).stats.coinSources.panamaCanal).toBe(3)
+    // The tokens stay physically on the wonder while their contribution is suppressed.
+    expect(state.board.pieces.find((piece) => piece.assetId === 'wonders/panamacanal')?.coinTokens).toBe(3)
 
     state = unwrap(removePiece(state, { playerId: KARANDRAS1, pieceId: army.id }))
     expect(shown(state)).toBe(3)
     expect(toPlayerView(state, KARANDRAS1).opponents.find((o) => o.playerId === CASH1981)?.stats.coinSources.panamaCanal).toBe(3)
   })
 
-  it('another player’s Panama Canal blockade does not touch my counter', () => {
+  it('Panama tokens follow the wonder when its owner changes', () => {
     let state = put(game(), CASH1981, 'wonders/panamacanal', 8, 8, CASH1981)
     state = unwrap(
-      setCoinSource(state, { editorPlayerId: KARANDRAS1, targetPlayerId: KARANDRAS1, source: 'panamaCanal', value: 2 }),
+      setCoinSource(state, { editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'panamaCanal', value: 2 }),
     )
-    // Itchi's Green army is an enemy of Cash (Red) but not of Karandras (Blue), so
-    // only the ownerId guard keeps Karandras's own counter out of it.
-    state = put(state, ITCHI, 'figures/greenarmy', 8, 8)
+    const canal = lastPiece(state)
+    state = unwrap(setWonderOwner(state, { playerId: CASH1981, pieceId: canal.id, ownerId: KARANDRAS1 }))
     expect(coinSourcesOf(state, player(state, CASH1981)).panamaCanal).toBe(0)
     expect(coinSourcesOf(state, player(state, KARANDRAS1)).panamaCanal).toBe(2)
+
+    // Itchi's Green army is an enemy of Karandras (Blue), so the stored tokens
+    // remain on the wonder while their active contribution is suppressed.
+    state = put(state, ITCHI, 'figures/greenarmy', 8, 8)
+    expect(coinSourcesOf(state, player(state, KARANDRAS1)).panamaCanal).toBe(0)
     const seen = toPlayerView(state, KARANDRAS1).opponents
     expect(seen.find((o) => o.playerId === CASH1981)?.stats.coinSources.panamaCanal).toBe(0)
-    expect(toPlayerView(state, KARANDRAS1).you?.stats.coinSources.panamaCanal).toBe(2)
+    expect(toPlayerView(state, KARANDRAS1).you?.stats.coinSources.panamaCanal).toBe(0)
   })
 })
 

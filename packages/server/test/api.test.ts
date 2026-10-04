@@ -2636,6 +2636,38 @@ describe('player stats (#43)', () => {
     expect((await rejected.json() as { error: string }).error).toBe('COIN_SOURCE_NOT_EDITABLE')
   })
 
+  it('spends the required resource and grants a Democracy coin once per City Management turn', async () => {
+    const { gameId, starter } = await startedGame('Democracy coin purchase')
+    const current = await inject(app, { method: 'GET', url: `/api/games/${gameId}`, headers: bearer(starter) })
+    const playerId = (await current.json() as { you: { playerId: string } }).you.playerId
+
+    for (const [url, payload] of [
+      [`/api/games/${gameId}/techs/choose`, { name: 'Democracy' }],
+      [`/api/games/${gameId}/techs/reveal`, { name: 'Democracy' }],
+      [`/api/games/${gameId}/players/${playerId}/stat`, { stat: 'trade', value: 6 }],
+      [`/api/games/${gameId}/turns/done`, { phase: 'TRADE' }],
+    ] as const) {
+      const response = await inject(app, { method: 'POST', url, headers: bearer(starter), payload })
+      expect(response.status).toBe(200)
+    }
+
+    const purchased = await inject(app, {
+      method: 'POST', url: `/api/games/${gameId}/coin-purchase`,
+      headers: bearer(starter), payload: { source: 'democracy' },
+    })
+    expect(purchased.status).toBe(200)
+    const view = await purchased.json() as { you: { stats: { trade: number; coinSources: CoinSources } } }
+    expect(view.you.stats.trade).toBe(0)
+    expect(view.you.stats.coinSources.democracy).toBe(1)
+
+    const repeated = await inject(app, {
+      method: 'POST', url: `/api/games/${gameId}/coin-purchase`,
+      headers: bearer(starter), payload: { source: 'democracy' },
+    })
+    expect(repeated.status).toBe(409)
+    expect((await repeated.json() as { error: string }).error).toBe('COIN_PURCHASE_REJECTED')
+  })
+
   it('refuses a non-member on the coin route too', async () => {
     const { gameId, starter } = await startedGame('CoinsGuard')
     const { other } = await ids(gameId, starter)

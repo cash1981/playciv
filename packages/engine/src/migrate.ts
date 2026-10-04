@@ -239,6 +239,36 @@ export function migrateGameState(state: GameState): GameState {
     state.numOfPlayers === state.players.length &&
     state.players.every((player) => player.civilization !== null)
 
+  // Panama coins were historically stored on each player's status board. The
+  // tokens physically belong to the wonder, so copy the current owner's value
+  // once when an older save first gains wonder-scoped storage.
+  const migratedPlayers = older.players.map(withPlayerDefaults)
+  const legacyPanamaOwner = (board?.pieces ?? []).find(
+    (piece) => piece.category === 'wonder' && piece.assetId === 'wonders/panamacanal' && piece.ownerId != null,
+  )?.ownerId
+  const legacyPanamaCoins = migratedPlayers.find((player) => player.playerId === legacyPanamaOwner)
+    ?.stats.coinSources.panamaCanal ?? 0
+  const hasWonderScopedPanamaCoins = (board?.pieces ?? []).some(
+    (piece) => piece.category === 'wonder' && piece.assetId === 'wonders/panamacanal' && piece.coinTokens !== undefined,
+  )
+  let copiedLegacyPanamaCoins = false
+  const boardPieces = (board?.pieces ?? []).map((piece): BoardPiece => {
+    if (
+      piece.category !== 'wonder' ||
+      piece.assetId !== 'wonders/panamacanal' ||
+      piece.coinTokens !== undefined
+    ) return piece
+    if (
+      hasWonderScopedPanamaCoins ||
+      piece.ownerId !== legacyPanamaOwner ||
+      copiedLegacyPanamaCoins
+    ) {
+      return { ...piece, coinTokens: 0 }
+    }
+    copiedLegacyPanamaCoins = true
+    return { ...piece, coinTokens: legacyPanamaCoins }
+  })
+
   const migrated: GameState = {
     ...older,
     createdAt: older.createdAt ?? null,
@@ -248,12 +278,13 @@ export function migrateGameState(state: GameState): GameState {
     // rng stream is published through log and item ids.
     logSecret: older.logSecret ?? '',
     log: older.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
-    players: older.players.map(withPlayerDefaults),
+    players: migratedPlayers,
     board:
       board === undefined
         ? fresh
         : {
             ...board,
+            pieces: boardPieces,
             areaRows: board.areaRows ?? fresh.areaRows,
             slots: board.slots ?? shapeSource.slots,
             slotStep: board.slotStep ?? shapeSource.slotStep,

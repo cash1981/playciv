@@ -66,6 +66,10 @@ describe('saved turns migrate', () => {
     // A save written before `history` existed is tolerated.
     const withoutHistory = { ...stored, history: undefined } as unknown as PlayerTurn
     expect(migratePlayerTurn(withoutHistory).history.SOT).toEqual([])
+    expect(migratePlayerTurn(withoutHistory).usedActions).toEqual([])
+
+    const actionUsed = { ...stored, usedActions: ['coin-purchase:democracy'] }
+    expect(migratePlayerTurn(actionUsed).usedActions).toEqual(['coin-purchase:democracy'])
   })
 })
 

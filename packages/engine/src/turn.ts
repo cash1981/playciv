@@ -54,6 +54,8 @@ export interface PlayerTurn {
    * by the reveal history, because only a reveal is public information.
    */
   readonly history: Readonly<Record<TurnPhase, readonly TurnOrderVersion[]>>
+  /** Explicit once-per-turn action markers (issue #253; reusable by #247). */
+  readonly usedActions: readonly string[]
 }
 
 const emptyOrders = (): Record<TurnPhase, string> => ({
@@ -97,6 +99,7 @@ export function createPlayerTurn(username: string, turnNumber: number): PlayerTu
     revealed: emptyRevealed(),
     done: emptyDone(),
     history: emptyHistory(),
+    usedActions: [],
   }
 }
 
@@ -158,6 +161,7 @@ export function migratePlayerTurn(turn: PlayerTurn): PlayerTurn {
       MOVEMENT: versionsFor('MOVEMENT'),
       RESEARCH: versionsFor('RESEARCH'),
     },
+    usedActions: turn.usedActions ?? [],
   }
 }
 

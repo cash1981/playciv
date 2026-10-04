@@ -16,10 +16,10 @@ import type { CSSProperties } from 'react'
 
 import {
   ALWAYS_AVAILABLE_COIN_SOURCES,
+  activeWonderOwnerIds,
   COIN_SOURCES,
   GOVERNMENT_CARDS,
   GOVERNMENTS,
-  isInWondersArea,
   isCombatHandSizeValue,
   isMovementValue,
   MAX_COMBAT_HAND_SIZE_LENGTH,
@@ -64,17 +64,11 @@ interface Row {
 }
 
 /**
- * Who owns the copies of one wonder that sit in the shared Wonders area. The
- * Internet's raised coin limits (issue #145) and the Panama Canal coin source
- * (issue #158) both hang off the owner.
+ * Owners with an active, unblocked copy of a wonder. Internet coin limits and
+ * Panama Canal bookkeeping follow its explicit owner wherever its marker sits.
  */
 function wonderOwners(view: PlayerView, assetId: string): ReadonlySet<string> {
-  return new Set(
-    view.board.pieces
-      .filter((piece) => piece.assetId === assetId && isInWondersArea(view.board, piece))
-      .map((piece) => piece.ownerId)
-      .filter((owner): owner is string => owner != null),
-  )
+  return activeWonderOwnerIds(view.board.pieces, assetId, view.blockadedPieceIds ?? [])
 }
 
 /**
@@ -222,6 +216,9 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
           <CoinSection
             gameId={gameId}
             rows={rows}
+            currentPlayerId={view.you?.playerId ?? null}
+            currentTurnNumber={view.activeTurn?.turnNumber ?? null}
+            currentPlayerTurns={view.you?.playerTurns ?? []}
             internetOwners={wonderOwners(view, 'wonders/internet')}
             panamaOwners={wonderOwners(view, 'wonders/panamacanal')}
             panamaBlockaded={blockadedWonderOwners(view, 'wonders/panamacanal')}
@@ -394,9 +391,9 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
 
 /**
  * The coin sources a player currently has, from public data only (issue #158):
- * the always-available sources, the eight coin-token techs the player has
- * revealed, Organized Religion, the Democracy government and the Panama Canal
- * wonder in the shared Wonders area. A source that is not here gets no counter
+ * the always-available sources, the revealed coin-token techs, Organized
+ * Religion, the Democracy government and an active Panama Canal wonder. A
+ * source that is not here gets no counter
  * in the Coins table.
  */
 function availableCoinSources(
@@ -424,13 +421,16 @@ function availableCoinSources(
  * row with no cell at all is not drawn. A counter that still holds coins stays
  * visible even when its source is no longer valid, so a value can never be
  * hidden and impossible to lower. A final Total row repeats each player's sum,
- * the same number the Status table's Coins column shows. The Great People row
- * is the exception: the engine derives it from the tokens on the board, so it
- * shows the number and has no buttons.
+ * the same number the Status table's Coins column shows. Bank, Adam Smith and
+ * Great People are derived from public state, so they show numbers without
+ * counter buttons.
  */
 function CoinSection({
   gameId,
   rows,
+  currentPlayerId,
+  currentTurnNumber,
+  currentPlayerTurns,
   internetOwners,
   panamaOwners,
   panamaBlockaded,
@@ -440,6 +440,9 @@ function CoinSection({
 }: {
   readonly gameId: string
   readonly rows: readonly Row[]
+  readonly currentPlayerId: string | null
+  readonly currentTurnNumber: number | null
+  readonly currentPlayerTurns: NonNullable<PlayerView['you']>['playerTurns']
   readonly internetOwners: ReadonlySet<string>
   readonly panamaOwners: ReadonlySet<string>
   /** Owners whose Panama Canal is blockaded: the engine shows its coins as 0 until it is released. */
@@ -456,6 +459,25 @@ function CoinSection({
     available.get(row.playerId)?.has(key) === true ||
     row.stats.coinSources[key] > 0 ||
     (key === 'panamaCanal' && panamaBlockaded.has(row.playerId))
+  const activePlayerTurn = currentPlayerTurns.find((turn) => turn.turnNumber === currentTurnNumber)
+  const canPurchase = (row: Row, source: 'democracy' | 'printingPress'): boolean => {
+    const techName = source === 'democracy' ? 'Democracy' : 'Printing Press'
+    const resource = source === 'democracy' ? 'trade' : 'culture'
+    const cost = source === 'democracy' ? 6 : 5
+    const key = `coin-purchase:${source}`
+    const limit = source === 'democracy' ? 4 : 4
+    return row.playerId === currentPlayerId &&
+      row.revealedTechNames.includes(techName) &&
+      activePlayerTurn !== undefined &&
+      activePlayerTurn.done.SOT &&
+      activePlayerTurn.done.TRADE &&
+      !activePlayerTurn.done.CM &&
+      !activePlayerTurn.done.MOVEMENT &&
+      !activePlayerTurn.done.RESEARCH &&
+      !activePlayerTurn.usedActions.includes(key) &&
+      row.stats[resource] >= cost &&
+      row.stats.coinSources[source] < limit + (internetOwners.has(row.playerId) ? 2 : 0)
+  }
   const sources = COIN_SOURCES.filter((source) => rows.some((row) => renders(row, source.key)))
   return (
     <div className="scroll-x">
@@ -486,7 +508,7 @@ function CoinSection({
               </th>
               {rows.map((row) => (
                 <td key={row.playerId} className="status-group-start">
-                  {renders(row, source.key) && source.key === 'greatPeople' && (
+                  {renders(row, source.key) && (source.key === 'bank' || source.key === 'greatPeople' || source.key === 'adamSmith') && (
                     // Derived from the tokens on the board (issue #241), so no buttons.
                     <span className="coin-counter">
                       <span className="coin-value" aria-label={`${row.username} ${source.label}`}>
@@ -511,13 +533,16 @@ function CoinSection({
                   )}
                   {renders(row, source.key) &&
                     source.key !== 'greatPeople' &&
+                    source.key !== 'adamSmith' &&
+                    source.key !== 'bank' &&
                     !(source.key === 'panamaCanal' && panamaBlockaded.has(row.playerId)) && (
+                    <>
                     <CoinCounter
                       label={`${row.username} ${source.label}`}
                       value={row.stats.coinSources[source.key]}
                       max={
                         source.max !== null &&
-                        ['codeOfLaws', 'pottery', 'democracy', 'printingPress'].includes(source.key) &&
+                        ['codeOfLaws', 'pottery', 'democracy', 'printingPress', 'education'].includes(source.key) &&
                         internetOwners.has(row.playerId)
                           ? source.max + 2
                           : source.max
@@ -527,6 +552,21 @@ function CoinSection({
                         void run(() => api.setPlayerCoin(gameId, row.playerId, source.key, value))
                       }
                     />
+                    {(source.key === 'democracy' || source.key === 'printingPress') &&
+                      row.playerId === currentPlayerId && row.revealedTechNames.includes(
+                        source.key === 'democracy' ? 'Democracy' : 'Printing Press',
+                      ) && (
+                        <button
+                          type="button"
+                          className="button secondary"
+                          disabled={disabled || !canPurchase(row, source.key)}
+                          title={canPurchase(row, source.key) ? undefined : 'Available once during your open City Management phase'}
+                          onClick={() => void run(() => api.purchaseCoin(gameId, source.key))}
+                        >
+                          {source.key === 'democracy' ? 'Spend 6 trade' : 'Spend 5 culture'}
+                        </button>
+                      )}
+                    </>
                   )}
                 </td>
               ))}

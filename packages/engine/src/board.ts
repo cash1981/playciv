@@ -287,6 +287,8 @@ export interface BoardPiece {
   readonly placedBy: string | null
   /** Explicit owner of a wonder; legacy pieces and unowned wonders omit it. */
   readonly ownerId?: string | null
+  /** Coin tokens physically on the Panama Canal wonder; absent on other pieces. */
+  readonly coinTokens?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -320,6 +322,7 @@ export type BoardChange =
       readonly to: Rotation
     }
   | { readonly kind: 'owner'; readonly pieceId: string; readonly from: string | null; readonly to: string | null }
+  | { readonly kind: 'wonderCoins'; readonly pieceId: string; readonly from: number; readonly to: number }
   | {
       readonly kind: 'reorder'
       readonly pieceId: string
@@ -1175,6 +1178,8 @@ export function applyChange(
       )
     case 'owner':
       return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ownerId: change.to } : piece)
+    case 'wonderCoins':
+      return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, coinTokens: change.to } : piece)
     case 'reorder': {
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces
@@ -1217,6 +1222,8 @@ export function revertChange(
       )
     case 'owner':
       return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ownerId: change.from } : piece)
+    case 'wonderCoins':
+      return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, coinTokens: change.from } : piece)
     case 'reorder': {
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces

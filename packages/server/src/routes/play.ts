@@ -34,6 +34,7 @@ import {
   revealedTechsForAllPlayers,
   saveNote,
   setCoinSource,
+  purchaseCoin,
   setPlayerStat,
   setPlayerGovernment,
   setPyramidPlacementSlot,
@@ -697,6 +698,19 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
         source,
         value,
       }),
+    )
+  })
+
+  /** Atomic Democracy / Printing Press City Management coin purchases (#253). */
+  app.post('/api/games/:gameId/coin-purchase', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const source = requireString(body, 'source')
+    if (source !== 'democracy' && source !== 'printingPress') {
+      return sendError(c, 400, 'BAD_REQUEST', 'source must be democracy or printingPress')
+    }
+    return applyToGame(context, c, gameId, (state) =>
+      purchaseCoin(state, { playerId: currentPlayer(c).id, source }),
     )
   })
 

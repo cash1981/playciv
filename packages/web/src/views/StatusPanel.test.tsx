@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createBoard, DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS, wondersArea } from '@civ/engine'
+import { createBoard, createPlayerTurn, DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS, wondersArea } from '@civ/engine'
 import type { CoinSources, Government } from '@civ/engine'
 
 import { api } from '../lib/api.js'
@@ -280,6 +280,21 @@ describe('StatusPanel Coins section', () => {
     expect(screen.getByText('Coins from culture cards, loot or village etc.')).toBeTruthy()
   })
 
+  it('shows Education coins only after Education is revealed', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({}, { techs: ['Education'] })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+    openCoins()
+    expect(screen.getByText('Education (III)')).toBeTruthy()
+    expect(screen.getByText('1 coin each time you build a wonder (up to 4)')).toBeTruthy()
+  })
+
   it('leaves out every source nobody has', () => {
     render(
       <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
@@ -375,7 +390,49 @@ describe('StatusPanel Coins section', () => {
     expect(screen.queryByRole('button', { name: 'Increase Bob Organized Religion' })).toBeNull()
   })
 
-  it('offers Panama Canal only to the wonder’s owner in the Wonders area', () => {
+  it('shows Adam Smith as a separate derived coin with no manual controls', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({ adamSmith: 1 })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+    openCoins()
+    expect(screen.getByText('Adam Smith')).toBeTruthy()
+    expect(screen.getByLabelText('Alice Adam Smith').textContent).toBe('1')
+    expect(screen.queryByRole('button', { name: 'Increase Alice Adam Smith' })).toBeNull()
+  })
+
+  it('buys a Democracy coin through one atomic action during City Management', async () => {
+    const purchase = vi.spyOn(api, 'purchaseCoin').mockResolvedValue(memberView)
+    const base = coinView({}, { techs: ['Democracy'] })
+    const turn = createPlayerTurn('Alice', 1)
+    const view = {
+      ...base,
+      activeTurn: {
+        playerId: 'player-me', username: 'Alice', turnNumber: 1, phase: 'CM', waitingFor: [], startPlayer: 'Alice',
+      },
+      you: {
+        ...base.you!,
+        stats: { ...base.you!.stats, trade: 6 },
+        playerTurns: [{
+          ...turn,
+          done: { ...turn.done, SOT: true, TRADE: true },
+        }],
+      },
+    } as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+    fireEvent.click(screen.getByRole('button', { name: 'Spend 6 trade' }))
+
+    await waitFor(() => expect(purchase).toHaveBeenCalledWith('game-1', 'democracy'))
+  })
+
+  it('offers Panama Canal to its owner wherever the wonder is displayed', () => {
     render(
       <StatusPanel
         gameId="game-1"
@@ -392,7 +449,7 @@ describe('StatusPanel Coins section', () => {
     expect(screen.queryByRole('button', { name: 'Increase Bob Panama Canal' })).toBeNull()
   })
 
-  it('a Panama Canal piece outside the Wonders area offers nothing', () => {
+  it('a Panama Canal in a player area or on the map remains an active source', () => {
     render(
       <StatusPanel
         gameId="game-1"
@@ -405,7 +462,7 @@ describe('StatusPanel Coins section', () => {
 
     openCoins()
 
-    expect(screen.queryByText('Panama Canal')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Increase Alice Panama Canal' })).toBeTruthy()
   })
 
   it('keeps a counter with coins on it visible even when its source is not available', () => {
@@ -454,7 +511,8 @@ describe('StatusPanel Coins section', () => {
     expect(screen.queryByRole('button', { name: 'Increase Alice Great People' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Decrease Alice Great People' })).toBeNull()
     // The other rows keep their buttons.
-    expect(screen.getByRole('button', { name: 'Increase Alice Bank (Building)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Increase Alice Bank (Building)' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Increase Alice Sheet' })).toBeTruthy()
   })
 
   it('shows a blockaded hint on the Panama Canal row, with no buttons, while an enemy figure is on it (issue #241)', () => {
@@ -507,10 +565,10 @@ describe('StatusPanel Coins section', () => {
     )
 
     openCoins()
-    fireEvent.click(screen.getByRole('button', { name: 'Increase Bob Bank (Building)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Increase Bob Sheet' }))
 
     await waitFor(() =>
-      expect(setCoin).toHaveBeenCalledWith('game-1', 'player-them', 'bank', 1),
+      expect(setCoin).toHaveBeenCalledWith('game-1', 'player-them', 'sheet', 1),
     )
   })
 

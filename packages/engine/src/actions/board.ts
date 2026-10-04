@@ -515,6 +515,33 @@ export function setWonderOwner(
   }))
 }
 
+/** Edits the coin tokens physically stored on a Panama Canal wonder. */
+export function setWonderCoinTokens(
+  state: GameState,
+  input: PieceInput & { readonly value: number },
+): ActionResult {
+  const denied = requireAccess(state, input.playerId)
+  if (denied !== undefined) return err(denied)
+  if (!Number.isInteger(input.value) || input.value < 0) {
+    return err({ kind: 'INVALID_COIN_VALUE', value: input.value, max: null })
+  }
+  const piece = findPiece(state.board, input.pieceId)
+  if (piece === undefined || piece.category !== 'wonder' || piece.assetId !== 'wonders/panamacanal') {
+    return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+  }
+  const from = piece.coinTokens ?? 0
+  if (from === input.value) return ok(state)
+  const pieces = state.board.pieces.map((other) =>
+    other.id === piece.id ? { ...other, coinTokens: input.value } : other,
+  )
+  return ok(record(input, {
+    state,
+    pieces,
+    change: { kind: 'wonderCoins', pieceId: piece.id, from, to: input.value },
+    description: `set the Panama Canal's coin tokens to ${input.value}`,
+  }))
+}
+
 // ---------------------------------------------------------------------------
 // Removing
 // ---------------------------------------------------------------------------

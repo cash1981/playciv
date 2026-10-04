@@ -4590,3 +4590,17 @@ expansions.
 
 - The Wonders panel's Disable action now clears the wonder's owner through the existing reversible `setWonderOwner` board action. The wonder stays on the board and in the Wonders panel; its current owner-based bonuses turn off. The owner can be assigned again with the existing owner selector. Unowned wonders have no Disable control. This replaces the old panel action that removed the board piece entirely (issue #244).
 - The human asked to leave the reported culture-token behavior out of scope for this change.
+
+## 2026-10-04: Education coins and active wonder ownership
+
+- Education (III) is a zero-starting, manually maintained coin source capped at four, with The Internet raising the cap to six. It becomes available only after reveal; reveal does not award a coin. This fills the gap between its card text and the shipped coin table without inferring a wonder-build event.
+- The Internet's capacity follows its explicit owner in any board area and is inactive when unowned or blockaded. The Coins panel and reducer share the same board-derived owner eligibility.
+- Panama Canal coin tokens belong to the physical wonder marker. They follow it across ownership changes, stay stored during temporary blockade or while unowned, and count only toward the current owner's total while the wonder is unblocked. A legacy save transfers the current owner's old per-player counter to the marker once; counters on other players are ignored.
+- Panama counter edits are board-history changes, so undo and replay restore the physical token count. The coin edit still writes its public log entry.
+
+## 2026-10-04: derived Bank and Adam Smith coins; atomic tech coin purchases
+
+- Bank coins are derived from each Bank on the map whose square is in exactly one player's city footprint and is not blockaded. `placedBy` is not enough to claim ownership. A legacy Bank counter remains a floor so older saves do not lose coins; new manual corrections for incomplete maps or scout transfers use the existing Sheet row.
+- A revealed Adam Smith in its owner's hand adds its own +1 coin row. This remains separate from the Merchant token's printed coin. The card is unusable only when the player's tracked Merchant/Explorer tokens are all blockaded, reusing the existing no-token compatibility policy (FAQ 2.0 p. 5). Hidden Adam Smith cards contribute nothing to public projections.
+- Bank ownership uses the engine's existing city-center-plus-eight-neighbor footprint. Extra metropolis outskirts and scout-held coin squares are not inferred by the current board model; use the Sheet row for corrections until those locations are represented. The stricter expansion rule that a Great Person needs a matching token is also left at the project's documented no-token compatibility policy.
+- Democracy and Printing Press purchases are explicit City Management actions: pay 6 trade or 5 culture and add one coin atomically. Usage is recorded on the player's turn, each action once per turn; the shared field can also support the later phase-effects actions in #247. Manual counter editing remains available for correction.

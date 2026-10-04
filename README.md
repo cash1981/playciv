@@ -533,27 +533,32 @@ Arts investment (+1) and owning Cristo Redentor (+4). A hidden tech or Great
 Person counts for nobody until it is revealed; the wonder needs no reveal, since
 the board is public. Combat hand size is free text, such as `+1`. New games
 start with the standard unit and modifier defaults.
-The panel's **Coins** section keeps one counter per coin source per player —
-Code of Laws, Pottery, Civil Service, Democracy, Printing Press, Bureaucracy,
-Railroad, Computers, Bank, Democracy (Govt), Great People, Terrain, Panama
-Canal, Organized Religion and Sheet — capped at the limit printed on the
-reference sheet (4 on the four coin-token techs, 1 on the static sources, none
-on Sheet or Panama Canal), with the status table's Coins column as the
-read-only sum. Only the sources a player actually has get a counter in that
-player's column: a revealed coin-token tech, a revealed Organized Religion
-policy, the Democracy government, and the Panama Canal in the Wonders area,
-plus the four always-available rows Bank, Great People, Terrain and Sheet. A
-row nobody can use is not drawn, and a counter that still holds coins stays
-visible until it is lowered. Removing the source — a government change away
-from Democracy, a removed tech or social policy — clears its counter. The
-player assigned to *The Internet* can hold up to two extra
-coins on each of the four technology sources. Revealing a card that prints a
-flat "1 coin" sets its counter to 1 at once: Organized Religion, Civil Service,
-Bureaucracy, Railroad and Computers, and moving to the Democracy government does
-the same for Democracy (Govt). The player can still lower any of them to 0. The
-Anarchy government sets the Organized Religion counter to 0, as social policies
-have no effect there, and leaving Anarchy sets it back to 1 for a revealed
-policy. The "up to 4" techs and the other sources stay manual. Wonders in play are listed with an
+The panel's **Coins** section tracks one row per source — Code of Laws, Pottery,
+Civil Service, Democracy, Printing Press, Bureaucracy, Railroad, Computers,
+Education, Bank, Adam Smith, Democracy (Govt), Great People, Terrain, Panama
+Canal, Organized Religion and Sheet — and the status table's Coins column shows
+the read-only total. Coin-token techs hold up to four coins (six with an active
+Internet); static card sources hold one. Bank, Adam Smith, Great People, Sheet
+and Panama Canal have no shared cap. Bank coins are derived per unblocked Bank
+in a uniquely owned city footprint; Sheet remains the manual path for map gaps
+and scout transfers. Adam Smith adds one separate coin while revealed and
+usable, in addition to Merchant token coins.
+
+Coin-token techs, Organized Religion, Democracy (Govt) and Panama Canal appear
+when their source is available. Bank, Adam Smith, Great People, Terrain and
+Sheet rows are always visible; keeping Adam Smith visible at zero avoids
+revealing a hidden card through the presence of a row. A counter that still
+holds coins stays visible until it is lowered. Removing a tech, policy or
+government source clears its counter. The player assigned to *The Internet* can
+hold up to two extra coins on Code of Laws, Pottery, Democracy, Printing Press
+and Education. Revealing a card that prints a flat "1 coin" sets its counter
+to 1 at once: Organized Religion, Civil Service, Bureaucracy, Railroad and
+Computers; moving to the Democracy government does the same for Democracy
+(Govt). The player can still lower them to 0. Anarchy sets Organized Religion
+to 0, and leaving Anarchy restores 1 for a revealed policy. The "up to 4" tech
+counters remain editable for correction. During a player's open City Management
+phase, the Democracy and Printing Press buttons spend 6 trade or 5 culture for
+one coin each, once per turn. Wonders in play are listed with an
 assignable owner wherever the piece currently sits on the board, until it is
 removed entirely — not only while it sits in the shared Wonders area, which
 still governs *The Internet*'s and the Panama Canal's coin allowances above.
