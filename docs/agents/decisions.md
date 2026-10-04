@@ -4222,3 +4222,25 @@ question for the human.
   game! Congratulations!`, without `System: ` and without the actor. Stored
   revisions are not rewritten. A description that merely ends with the winner text
   is not read as a winner line.
+
+**2026-10-04, after the second review of the single chat work.**
+- Run the migration before players post in a legacy phase. Posting an order to a
+  phase replaces the legacy revealed text in `orders[phase]` and makes `history`
+  non-empty, so the text of a version-less reveal can no longer be copied once
+  somebody has posted there.
+- A game already marked `legacyOrdersCopied` is not always done. Games switched to
+  chat mode under the old toggle, or derived from `chatOrders === true` on load, were
+  copied by code that read only `publicOrderVersions`, so their version-less reveals
+  never reached the timeline. `GET`/`POST /api/admin/games/migrate-chat` now also
+  includes such a game when `legacyOrderRows` would still write at least one row after
+  the dedupe against its chat. For that game only rows are copied: no draft is moved,
+  the game is not saved again and the flag and revision stay. A rerun, or a game with
+  everything in the timeline, is not listed. The dry run reads the chat only of moved
+  games that have version-less orders, at most 40 of them, and reports `unchecked`
+  for any beyond that; the real run counts the same reads in its call budget and
+  handles unmoved games first.
+- The reveal date is read from the log line `Turn N - <user> revealed <phase label>
+  phase`. The removed reveal action wrote it with `TURN_PHASE_LABEL` (checked in git
+  history at commit 69e8154, `packages/engine/src/actions/turn.ts`). The lookup is
+  built once per call, one pass over the log, keeping the newest line with a usable
+  `createdAt` per turn, user and phase label; the result is unchanged.
