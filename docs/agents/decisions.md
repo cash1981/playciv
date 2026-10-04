@@ -4244,3 +4244,29 @@ question for the human.
   history at commit 69e8154, `packages/engine/src/actions/turn.ts`). The lookup is
   built once per call, one pass over the log, keeping the newest line with a usable
   `createdAt` per turn, user and phase label; the result is unchanged.
+- `legacyRevealsCopied`: a game already marked `legacyOrdersCopied` stayed a
+  migration target for as long as it had version-less orders, because that is a
+  property of the state, and the flagged branch never wrote the game. Every such game
+  burned a chat read on every run, so the all-games run could finish at most 39 of
+  them with its 40-call budget, `remaining` stuck above 0 and the dry run read 40
+  chats and never listed the later games. The new public boolean on `GameState` says
+  that the orders revealed before versions were stored have been copied into the
+  timeline. It is true for a game created by `createGame`, false when a loaded game
+  lacks it (`migrate.ts`) and never in `PlayerView`. An unmoved game's guarded save
+  sets it together with `legacyOrdersCopied`. A moved game with it false is a target
+  only while it has version-less orders; its missing rows are copied and, when
+  `copyLegacyOrders` reports `complete`, one guarded save (`saveGameIfRevision`, the
+  revision moves on by one, skipped if the game changed meanwhile) sets only this
+  flag, with no draft move and no change to `legacyOrdersCopied`. That save also marks
+  a game whose rows were all copied already, at the cost of one read and one save,
+  without reporting written rows. A moved game with the flag true, or with no
+  version-less orders, is never a target and costs no read. The dry run lists a moved
+  game only when a row is missing, so it shrinks run by run, and `remaining` counts
+  only games still to be done. A moved game now costs a read, its rows and a save
+  against the budget, so a run finishes about 13 such games with one row each.
+- Smaller changes in the same round: `publicOrdersWithoutVersions` builds its reveal
+  log map on the first qualifying phase only, so a game without such orders never
+  reads its log; the phase labels in the reveal line pattern are interpolated
+  unescaped and must stay plain letters and spaces; the dry run response is shown in
+  the admin panel with `unchecked` ("N more games were not checked, run the move
+  again").

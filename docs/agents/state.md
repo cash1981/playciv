@@ -29,7 +29,7 @@ _Last updated: 2026-10-04_
   actions and the per-phase mail are removed; the stored order data and `yourTurn` stay.
   Known gap, not fixed: revealing a civilization at game start draws through `draw`,
   which needs `turnHolder`. Not run against the real D1. Brief: `tasks/single-chat.md`;
-  see `decisions.md`, 2026-10-03.
+  see `decisions.md`, 2026-10-03. A moved game is done for good once `legacyRevealsCopied` is set, so the migration no longer revisits it (`decisions.md`, 2026-10-04). 766 engine, 421 server, 481 web tests.
 - **Admin cleanup of finished games.** "Clean up finished games" on the admin page
   (`GET`/`POST /api/admin/games/cleanup`) deletes every `game_revision` row of a
   finished game except the newest, behind a dry run and a confirmation, at most 20
