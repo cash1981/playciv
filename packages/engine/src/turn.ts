@@ -422,6 +422,34 @@ const usableTime = (at: string | null | undefined): at is string =>
 /** Used when neither the reveal log nor the game says when an old reveal happened. */
 const EPOCH = '1970-01-01T00:00:00.000Z'
 
+const revealKey = (turnNumber: number, username: string, label: string): string =>
+  `${turnNumber}\u0000${username}\u0000${label}`.toLowerCase()
+
+/** Finds `turn N - <user> revealed <phase label> phase` anywhere in a lowercased line; the lookahead lets matches overlap. */
+const REVEAL_LINE = new RegExp(
+  `(?=turn (\\d+) - (.+?) revealed (${Object.values(TURN_PHASE_LABEL).map((label) => label.toLowerCase()).join('|')}) phase)`,
+  'g',
+)
+
+/**
+ * The time of the newest reveal log line with a usable `createdAt`, per turn, user
+ * and phase label (all lowercased). One pass over the log, each line lowercased once.
+ */
+function revealLineTimes(state: GameState): ReadonlyMap<string, string> {
+  const times = new Map<string, string>()
+  for (let index = state.log.length - 1; index >= 0; index -= 1) {
+    const entry = state.log[index]
+    if (entry === undefined || !usableTime(entry.createdAt)) continue
+    for (const match of entry.publicLog.toLowerCase().matchAll(REVEAL_LINE)) {
+      const [, turn, user, label] = match
+      if (turn === undefined || user === undefined || label === undefined) continue
+      const key = `${turn}\u0000${user}\u0000${label}`
+      if (!times.has(key)) times.set(key, entry.createdAt)
+    }
+  }
+  return times
+}
+
 /**
  * Orders that were revealed before versions were kept: a phase of a public turn
  * that is revealed, holds text, and has an empty history (`migratePlayerTurn`
@@ -441,15 +469,10 @@ const EPOCH = '1970-01-01T00:00:00.000Z'
  * order `publicOrderVersions` uses.
  */
 export function publicOrdersWithoutVersions(state: GameState): readonly PublicOrderVersion[] {
-  const revealedAt = (username: string, turnNumber: number, phase: TurnPhase): string => {
-    const wanted = `Turn ${turnNumber} - ${username} revealed ${TURN_PHASE_LABEL[phase]} phase`.toLowerCase()
-    for (let index = state.log.length - 1; index >= 0; index -= 1) {
-      const entry = state.log[index]
-      if (entry === undefined || !usableTime(entry.createdAt)) continue
-      if (entry.publicLog.toLowerCase().includes(wanted)) return entry.createdAt
-    }
-    return usableTime(state.createdAt) ? state.createdAt : EPOCH
-  }
+  const revealedAtByKey = revealLineTimes(state)
+  const fallback = usableTime(state.createdAt) ? state.createdAt : EPOCH
+  const revealedAt = (username: string, turnNumber: number, phase: TurnPhase): string =>
+    revealedAtByKey.get(revealKey(turnNumber, username, TURN_PHASE_LABEL[phase])) ?? fallback
   const versions = Object.values(state.publicTurns).flatMap((turn) =>
     TURN_PHASES.flatMap((phase): readonly PublicOrderVersion[] => {
       const markdown = turn.orders[phase] ?? ''

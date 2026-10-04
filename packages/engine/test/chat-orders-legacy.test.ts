@@ -177,6 +177,41 @@ describe('publicOrdersWithoutVersions', () => {
     expect(publicOrdersWithoutVersions({ ...noLine, createdAt: 'garbage' }).map((v) => v.at)).toEqual(['1970-01-01T00:00:00.000Z'])
   })
 
+  it('dates each of several phases and users from its own newest usable reveal line, falling back per phase', () => {
+    let state = bareReveal(firstCivGame(), CASH1981, 1, 'SOT', 'cash sot')
+    state = bareReveal(state, CASH1981, 1, 'TRADE', 'cash trade')
+    state = bareReveal(state, CASH1981, 2, 'TRADE', 'cash turn 2 trade')
+    state = bareReveal(state, KARANDRAS1, 1, 'TRADE', 'karandras trade')
+    state = bareReveal(state, KARANDRAS1, 1, 'MOVEMENT', 'karandras movement')
+    state = { ...state, createdAt: '2026-01-05T00:00:00.000Z' }
+    state = logReveal(state, 'cash1981', 1, 'start of turn', '2026-03-01T01:00:00.000Z')
+    state = logReveal(state, 'cash1981', 1, 'start of turn', '2026-03-01T02:00:00.000Z')
+    state = logReveal(state, 'cash1981', 1, 'start of turn', null)
+    state = logReveal(state, 'Karandras1', 1, 'trade', '2026-03-01T03:00:00.000Z')
+    state = logReveal(state, 'cash1981', 1, 'trade', '2026-03-01T04:00:00.000Z')
+    state = logReveal(state, 'CASH1981', 1, 'TRADE', '2026-03-01T05:00:00.000Z')
+    state = logReveal(state, 'cash1981', 1, 'trade', 'not a date')
+    // Same user and phase, other turn; and a line with no usable time at all for Karandras1 movement
+    state = logReveal(state, 'cash1981', 2, 'trade', '2026-03-01T06:00:00.000Z')
+    state = logReveal(state, 'Karandras1', 1, 'movement', null)
+
+    const at = (username: string, turnNumber: number, phase: TurnPhase): string | undefined =>
+      publicOrdersWithoutVersions(state).find(
+        (version) => version.username === username && version.turnNumber === turnNumber && version.phase === phase,
+      )?.at
+    // The newest usable line wins; a later line without a usable time is passed over
+    expect(at('cash1981', 1, 'SOT')).toBe('2026-03-01T02:00:00.000Z')
+    // Matching ignores case, and the newest of the case variants is taken
+    expect(at('cash1981', 1, 'TRADE')).toBe('2026-03-01T05:00:00.000Z')
+    expect(at('Karandras1', 1, 'TRADE')).toBe('2026-03-01T03:00:00.000Z')
+    expect(at('cash1981', 2, 'TRADE')).toBe('2026-03-01T06:00:00.000Z')
+    // No usable line for this phase: the game date, not another phase's time
+    expect(at('Karandras1', 1, 'MOVEMENT')).toBe('2026-01-05T00:00:00.000Z')
+    expect(publicOrdersWithoutVersions({ ...state, createdAt: null }).find((v) => v.phase === 'MOVEMENT')?.at).toBe(
+      '1970-01-01T00:00:00.000Z',
+    )
+  })
+
   it('skips a phase that has versions, a blank text and a phase that is not revealed', () => {
     let state = write(firstCivGame(), CASH1981, 1, 'SOT', 'versioned', '2026-01-01T09:00:00.000Z')
     state = bareReveal(state, CASH1981, 1, 'TRADE', '   ')
