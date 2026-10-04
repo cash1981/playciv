@@ -7,11 +7,12 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { appendLog } from '../src/log.js'
 import { migrateGameState } from '../src/migrate.js'
 import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
 import type { TurnPhase } from '../src/turn.js'
-import { draftsToPrivateNote, publicOrderVersions, unpublishedDrafts } from '../src/turn.js'
+import { draftsToPrivateNote, publicOrderVersions, publicOrdersWithoutVersions, unpublishedDrafts } from '../src/turn.js'
 
 import { CASH1981, CHUL, KARANDRAS1, firstCivGame } from './fixture.js'
 import { savedOrder } from './saved-orders.js'
@@ -118,6 +119,103 @@ describe('publicOrderVersions', () => {
     if (turn === undefined) throw new Error('no public turn')
     const legacy = { ...state, publicTurns: { ...state.publicTurns, [key]: { ...turn, history: { ...turn.history, SOT: [] } } } }
     expect(publicOrderVersions(legacy)).toEqual([])
+  })
+})
+
+describe('publicOrdersWithoutVersions', () => {
+  /** An order revealed before versions were kept: the text is public, the history is empty. */
+  const bareReveal = (state: GameState, playerId: string, turnNumber: number, phase: TurnPhase, order: string): GameState => {
+    const published = write(state, playerId, turnNumber, phase, order, '2026-01-01T00:00:00.000Z')
+    const erase = <T extends { readonly history: Record<TurnPhase, readonly unknown[]> }>(turn: T): T => ({
+      ...turn,
+      history: { ...turn.history, [phase]: [] },
+    })
+    return {
+      ...published,
+      players: published.players.map((player) => ({ ...player, playerTurns: player.playerTurns.map(erase) })),
+      publicTurns: Object.fromEntries(Object.entries(published.publicTurns).map(([key, turn]) => [key, erase(turn)])),
+    }
+  }
+  const logReveal = (state: GameState, username: string, turnNumber: number, label: string, createdAt: string | null): GameState =>
+    appendLog(state, {
+      username,
+      logType: 'REVEAL',
+      privateLog: `Turn ${turnNumber} - ${username} revealed ${label} phase`,
+      publicLog: `Turn ${turnNumber} - ${username} revealed ${label} phase`,
+      createdAt,
+    })
+
+  it('returns a revealed text with an empty history, dated from the reveal log line', () => {
+    let state = bareReveal(firstCivGame(), CASH1981, 2, 'CM', 'cash city management')
+    state = logReveal(state, 'cash1981', 2, 'trade', '2026-02-01T08:00:00.000Z')
+    state = logReveal(state, 'cash1981', 2, 'city management', '2026-02-01T09:00:00.000Z')
+    state = logReveal(state, 'Karandras1', 2, 'city management', '2026-02-01T10:00:00.000Z')
+
+    expect(publicOrderVersions(state)).toEqual([])
+    expect(publicOrdersWithoutVersions(state)).toEqual([
+      {
+        username: 'cash1981',
+        turnNumber: 2,
+        phase: 'CM',
+        markdown: 'cash city management',
+        at: '2026-02-01T09:00:00.000Z',
+        index: 0,
+      },
+    ])
+  })
+
+  it('takes the newest reveal line with a usable time, then the game date, then the epoch', () => {
+    let state = bareReveal(firstCivGame(), CASH1981, 1, 'SOT', 'text')
+    state = logReveal(state, 'cash1981', 1, 'start of turn', '2026-03-01T09:00:00.000Z')
+    state = logReveal(state, 'cash1981', 1, 'start of turn', null)
+    state = logReveal(state, 'cash1981', 1, 'start of turn', 'yesterday')
+    expect(publicOrdersWithoutVersions(state).map((v) => v.at)).toEqual(['2026-03-01T09:00:00.000Z'])
+
+    const noLine = { ...bareReveal(firstCivGame(), CASH1981, 1, 'SOT', 'text'), createdAt: '2026-01-05T00:00:00.000Z' }
+    expect(publicOrdersWithoutVersions(noLine).map((v) => v.at)).toEqual(['2026-01-05T00:00:00.000Z'])
+    expect(publicOrdersWithoutVersions({ ...noLine, createdAt: null }).map((v) => v.at)).toEqual(['1970-01-01T00:00:00.000Z'])
+    expect(publicOrdersWithoutVersions({ ...noLine, createdAt: 'garbage' }).map((v) => v.at)).toEqual(['1970-01-01T00:00:00.000Z'])
+  })
+
+  it('skips a phase that has versions, a blank text and a phase that is not revealed', () => {
+    let state = write(firstCivGame(), CASH1981, 1, 'SOT', 'versioned', '2026-01-01T09:00:00.000Z')
+    state = bareReveal(state, CASH1981, 1, 'TRADE', '   ')
+    state = write(state, CASH1981, 1, 'CM', 'unrevealed')
+    expect(publicOrdersWithoutVersions(state)).toEqual([])
+  })
+
+  it('reads only the public copy: an unrevealed draft and an edit made after the reveal never appear', () => {
+    let state = bareReveal(firstCivGame(), CASH1981, 1, 'SOT', 'public text')
+    state = write(state, CASH1981, 1, 'TRADE', 'SECRET-DRAFT')
+    // Edited after the reveal: the player's own turn holds the new text, the public copy is masked
+    state = write(state, CASH1981, 1, 'SOT', 'SECRET-EDIT')
+    state = {
+      ...state,
+      players: state.players.map((player) =>
+        player.playerId === CASH1981 ? { ...player, gamenote: 'SECRET-NOTE' } : player,
+      ),
+    }
+    const secrets = JSON.stringify(publicOrdersWithoutVersions(state))
+    expect(secrets).not.toContain('SECRET')
+
+    // A phase still revealed in the public copy returns the text that was revealed, not a later edit
+    const stillPublic = bareReveal(firstCivGame(), CASH1981, 1, 'SOT', 'revealed text')
+    const edited: GameState = {
+      ...stillPublic,
+      players: stillPublic.players.map((player) => ({
+        ...player,
+        playerTurns: player.playerTurns.map((turn) => ({ ...turn, orders: { ...turn.orders, SOT: 'SECRET-LATER-EDIT' } })),
+      })),
+    }
+    expect(publicOrdersWithoutVersions(edited).map((v) => v.markdown)).toEqual(['revealed text'])
+  })
+
+  it('is oldest first, by the date it was given', () => {
+    let state = bareReveal(firstCivGame(), CASH1981, 1, 'SOT', 'later')
+    state = bareReveal(state, KARANDRAS1, 1, 'SOT', 'earlier')
+    state = logReveal(state, 'cash1981', 1, 'start of turn', '2026-01-02T00:00:00.000Z')
+    state = logReveal(state, 'Karandras1', 1, 'start of turn', '2026-01-01T00:00:00.000Z')
+    expect(publicOrdersWithoutVersions(state).map((v) => v.markdown)).toEqual(['earlier', 'later'])
   })
 })
 

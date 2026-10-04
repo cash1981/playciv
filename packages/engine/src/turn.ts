@@ -379,8 +379,8 @@ export interface PublicOrderVersion {
  * revealed is masked there and has no history entry, so it cannot be returned by
  * accident. The server copies these into the timeline when it migrates a game
  * from the old Turn orders panel. A version without a usable `at` is left out
- * rather than given a made-up time. Orders revealed before versions were kept (old saves) have none and are
- * not returned.
+ * rather than given a made-up time. Orders revealed before versions were kept (old
+ * saves) have none and are not returned here; `publicOrdersWithoutVersions` has them.
  */
 export function publicOrderVersions(state: GameState): readonly PublicOrderVersion[] {
   const versions = Object.values(state.publicTurns).flatMap((turn) =>
@@ -392,7 +392,11 @@ export function publicOrderVersions(state: GameState): readonly PublicOrderVersi
       ),
     ),
   )
-  return [...versions].sort(
+  return sortVersions(versions)
+}
+
+const sortVersions = (versions: readonly PublicOrderVersion[]): readonly PublicOrderVersion[] =>
+  [...versions].sort(
     (a, b) =>
       Date.parse(a.at) - Date.parse(b.at) ||
       a.turnNumber - b.turnNumber ||
@@ -400,6 +404,60 @@ export function publicOrderVersions(state: GameState): readonly PublicOrderVersi
       compareJavaStrings(a.username, b.username) ||
       a.index - b.index,
   )
+
+const usableTime = (at: string | null | undefined): at is string =>
+  typeof at === 'string' && !Number.isNaN(Date.parse(at))
+
+/** Used when neither the reveal log nor the game says when an old reveal happened. */
+const EPOCH = '1970-01-01T00:00:00.000Z'
+
+/**
+ * Orders that were revealed before versions were kept: a phase of a public turn
+ * that is revealed, holds text, and has an empty history (`migratePlayerTurn`
+ * drops the bare strings old saves kept there, so the text survives only in
+ * `publicTurns[key].orders[phase]`). Each becomes one version, so the migration
+ * can put it in the timeline. `publicOrderVersions` does not return these and
+ * keeps its meaning.
+ *
+ * `at` comes from the reveal's own log line, `Turn N - <user> revealed <phase>
+ * phase`, taking the newest match with a usable time because the text shown is the
+ * last one revealed. With no such line it is the game's `createdAt`, and when that
+ * is unusable too, the epoch `1970-01-01T00:00:00.000Z`: a stored time is never
+ * invented from the clock.
+ *
+ * Only `publicTurns` is read, never a player's own turns, so an unrevealed draft
+ * (blank or masked in the public copy) cannot be returned. Oldest first, in the
+ * order `publicOrderVersions` uses.
+ */
+export function publicOrdersWithoutVersions(state: GameState): readonly PublicOrderVersion[] {
+  const revealedAt = (username: string, turnNumber: number, phase: TurnPhase): string => {
+    const wanted = `Turn ${turnNumber} - ${username} revealed ${TURN_PHASE_LABEL[phase]} phase`.toLowerCase()
+    for (let index = state.log.length - 1; index >= 0; index -= 1) {
+      const entry = state.log[index]
+      if (entry === undefined || !usableTime(entry.createdAt)) continue
+      if (entry.publicLog.toLowerCase().includes(wanted)) return entry.createdAt
+    }
+    return usableTime(state.createdAt) ? state.createdAt : EPOCH
+  }
+  const versions = Object.values(state.publicTurns).flatMap((turn) =>
+    TURN_PHASES.flatMap((phase): readonly PublicOrderVersion[] => {
+      const markdown = turn.orders[phase] ?? ''
+      if (turn.revealed?.[phase] !== true || markdown.trim() === '' || (turn.history?.[phase] ?? []).length > 0) {
+        return []
+      }
+      return [
+        {
+          username: turn.username,
+          turnNumber: turn.turnNumber,
+          phase,
+          markdown,
+          at: revealedAt(turn.username, turn.turnNumber, phase),
+          index: 0,
+        },
+      ]
+    }),
+  )
+  return sortVersions(versions)
 }
 
 /** One order a player wrote in the old Turn orders panel and never published. */
