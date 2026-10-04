@@ -13,12 +13,13 @@ _Last updated: 2026-10-04 (issue #253 A1–A4 coin handling)_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 837 engine, 593 server, 511 web on the issue #253 A3/A4 continuation (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 861 engine, 593 server, 511 web on `feat/issue-253-metropolis-footprint` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
-- **Issue #253 A1–A4: coin handling.** Education is a revealed-only coin source with manual awards and Internet capacity; Panama tokens live on the wonder and follow ownership/blockade. A3 derives Bank and Adam Smith as separate coin sources; A4 adds atomic Democracy/Printing Press purchases during City Management. Review approved; no authenticated local game was available for interactive browser verification. `pnpm -r typecheck`, 1,941 tests (837 engine, 593 server, 511 web) and `pnpm -r build` pass. PR #254: https://github.com/cash1981/playciv/pull/254. Brief: `tasks/issue-253-a-coins.md`; see `decisions.md`, 2026-10-04. Known rule-model limit: metropolis extra outskirts and scout-held Bank squares still need Sheet corrections.
+- **Issue #253 A1–A4: coin handling.** Education is a revealed-only coin source with manual awards and Internet capacity; Panama tokens live on the wonder and follow ownership/blockade. A3 derives Bank and Adam Smith as separate coin sources; A4 adds atomic Democracy/Printing Press purchases during City Management. Review approved; no authenticated local game was available for interactive browser verification. PR #254: https://github.com/cash1981/playciv/pull/254. Brief: `tasks/issue-253-a-coins.md`; see `decisions.md`, 2026-10-04. Scout-held Bank squares still need Sheet corrections.
+- **Issue #253 metropolis outskirts.** The shared city footprint now models the ten squares around a metropolis's two center squares, using the marker's horizontal or vertical orientation and excluding both centers from Bank/Great Person outskirts coins. Blockade and city ownership use the same footprint. Review approved; `pnpm -r typecheck`, 1,965 tests (861 engine, 593 server, 511 web) and `pnpm -r build` pass. PR forthcoming. See `tasks/issue-253-metropolis-footprint.md` and `decisions.md`, 2026-10-04.
 - **Issue #244: disabling a wonder preserves the piece and turns off its owner bonuses.** The Wonders panel clears ownership instead of deleting the board piece; it remains on the board and can be reassigned. Culture-token behavior is out of scope per the human. `pnpm -r typecheck`, all 1,856 tests and `pnpm -r build` pass; review approved by sol. Interactive browser check not done because the local store had no game. See `decisions.md`, 2026-10-04. Brief: `tasks/issue-244-removing-wonder.md`.
 - **Blockade: an enemy figure disables a building or Great Person (issue #241, branch `fix/great-person-disable`).**
   Derived from the board (`engine/src/blockade.ts`): a blockaded piece is greyed and struck

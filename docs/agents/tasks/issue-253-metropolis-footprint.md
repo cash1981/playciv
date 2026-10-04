@@ -3,7 +3,7 @@
 - **Slug:** `issue-253-metropolis-footprint`
 - **Branch:** `feat/issue-253-metropolis-footprint`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -11,7 +11,7 @@ Include the full ten-square outskirts of a metropolis in derived city ownership 
 
 ## Scope
 
-- Treat a metropolis as two adjacent city-center squares along its visual long axis. Rotation 0/180 is horizontal; 90/270 is vertical.
+- Treat a metropolis as two adjacent city-center squares along its visual long axis. Its visual center lies on the boundary between those squares; the existing center-to-cell floor convention anchors the eastern/southern center. Rotation 0/180 is horizontal; 90/270 is vertical.
 - Include the union of the eight surrounding squares around those two centers (ten distinct outskirts squares) in the shared city footprint.
 - Exclude both center squares from Bank and Great Person outskirts coins.
 - Keep city ownership, placement provenance, blockade, and ambiguous adjacent-city behavior consistent with the existing shared helper.
@@ -24,9 +24,9 @@ Include the full ten-square outskirts of a metropolis in derived city ownership 
 
 ## Acceptance
 
-- [ ] A Bank in an outermost metropolis outskirts square is credited horizontally and vertically.
-- [ ] The 180° and 270° variants produce the same respective footprints as 0° and 90°.
-- [ ] Neither of the two metropolis center squares is treated as an outskirts coin location.
-- [ ] Existing city, blockade, Great Person and coin tests pass; no ownership is inferred from `placedBy` alone.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
-- [ ] Read-only review approves; update issue #253 and project state.
+- [x] A Bank in an outermost metropolis outskirts square is credited horizontally and vertically, with fixtures placing its center on the grid boundary between the city-center squares.
+- [x] The 180° and 270° variants produce the same respective footprints as 0° and 90°.
+- [x] Neither of the two metropolis center squares is treated as an outskirts coin location.
+- [x] Existing city, blockade, Great Person and coin tests pass; no ownership is inferred from `placedBy` alone.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
+- [x] Read-only review approves; issue #253 and project state are updated.
