@@ -6,18 +6,19 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-04 (delta revisions merged with the single chat)_
+_Last updated: 2026-10-04 (disaster markers added)_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 766 engine, 590 server, 498 web on `feat/delta-revisions` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 767 engine, 590 server, 499 web on `feat/disasters` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Disaster markers in Pieces.** The four `Moderator/disasters` assets appear in a Disasters palette category and use generic board-piece placement, without disaster rules or supply caps. `pnpm -r typecheck`, all 1,856 tests and `pnpm -r build` pass; review approved by sol. Interactive browser drag was not checked because the local store had no game. See `decisions.md`, 2026-10-04. Brief: `tasks/disasters.md`.
 - **Delta storage for game revisions, and an admin compaction** (issue #238, phases 1
   and 2). A saved state is a keyframe (full) or a delta against the state before it, a
   keyframe every 25 rows, after any unrecorded change, and for the first revision;

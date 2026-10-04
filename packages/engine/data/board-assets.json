@@ -1902,6 +1902,38 @@
       "label": "Seven Cities of Gold",
       "width": 84,
       "height": 84
+    },
+    {
+      "id": "disasters/drought",
+      "category": "disaster",
+      "path": "disasters/drought.png",
+      "label": "Drought",
+      "width": 85,
+      "height": 82
+    },
+    {
+      "id": "disasters/forest",
+      "category": "disaster",
+      "path": "disasters/forest.png",
+      "label": "Forest",
+      "width": 85,
+      "height": 84
+    },
+    {
+      "id": "disasters/grassland",
+      "category": "disaster",
+      "path": "disasters/grassland.png",
+      "label": "Grassland",
+      "width": 84,
+      "height": 85
+    },
+    {
+      "id": "disasters/water",
+      "category": "disaster",
+      "path": "disasters/water.png",
+      "label": "Water",
+      "width": 83,
+      "height": 81
     }
   ]
 }

@@ -4520,3 +4520,9 @@ question for the human.
   route changed; `revision-delta-api.test.ts` now runs the real route and checks that it adds
   no revision, seals the newest one, and that the next revision is a keyframe that carries
   the move. The deploy order is unchanged, with this run in the place of the switch.
+
+## 2026-10-04: disaster markers in the board Pieces palette
+
+- The four Moderator disaster images (`drought`, `forest`, `grassland`, `water`) are public board assets in their own **Disasters** category. They use the normal board-piece placement and drag behavior, with no per-piece supply cap or new disaster rules. A distinct category keeps them findable without treating them as game buildings in supply accounting.
+- The generator caps disaster artwork at 90 px on its longest side, so each marker fits within one board square. The assets are otherwise purely visual.
+- The local dev browser had an empty game store and no authenticated game, so an interactive board drag was not browser-verified. Palette rendering and the generic placement path are covered by tests.
