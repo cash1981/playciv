@@ -152,7 +152,14 @@ describe('totalCoins', () => {
   })
 })
 
-function putOnMap(state: GameState, playerId: string, assetId: string, column: number, row: number): GameState {
+function putOnMap(
+  state: GameState,
+  playerId: string,
+  assetId: string,
+  column: number,
+  row: number,
+  rotation: 0 | 90 | 180 | 270 = 0,
+): GameState {
   const asset = findBoardAsset(assetId)
   if (asset === undefined) throw new Error(`Missing board asset ${assetId}`)
   return unwrap(placePiece(state, {
@@ -160,6 +167,30 @@ function putOnMap(state: GameState, playerId: string, assetId: string, column: n
     assetId,
     x: column * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2,
     y: mapTop(state.board) + row * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2,
+    rotation,
+  }))
+}
+
+/** Places a metropolis with its image centre on the boundary between its two city squares. */
+function putMetropolisOnMap(
+  state: GameState,
+  playerId: string,
+  column: number,
+  row: number,
+  rotation: 0 | 90 | 180 | 270,
+): GameState {
+  const assetId = 'cities/redmetropolis2'
+  const asset = findBoardAsset(assetId)
+  if (asset === undefined) throw new Error(`Missing board asset ${assetId}`)
+  const horizontal = rotation === 0 || rotation === 180
+  const centerX = (column + (horizontal ? 0 : 0.5)) * SQUARE_SIZE
+  const centerY = mapTop(state.board) + (row + (horizontal ? 0.5 : 0)) * SQUARE_SIZE
+  return unwrap(placePiece(state, {
+    playerId,
+    assetId,
+    x: centerX - asset.width / 2,
+    y: centerY - asset.height / 2,
+    rotation,
   }))
 }
 
@@ -205,6 +236,49 @@ describe('derived Bank and Adam Smith coins (issue #253 A3)', () => {
     }
     state = putOnMap(state, CASH1981, 'cities/redcity2', 5, 5)
     state = putOnMap(state, CASH1981, 'buildings/bank', 5, 5)
+    expect(coinSourcesOf(state, fixturePlayer(state, CASH1981)).bank).toBe(0)
+  })
+
+  it.each([
+    [0, 3, 5, 7, 5],
+    [180, 3, 5, 7, 5],
+    [90, 5, 3, 5, 7],
+    [270, 5, 3, 5, 7],
+  ] as const)(
+    'uses the two-square metropolis footprint at rotation %s for Bank coins',
+    (rotation, outskirtsColumn, outskirtsRow, outsideColumn, outsideRow) => {
+      let state = firstCivGame()
+      state = {
+        ...state,
+        players: state.players.map((p) => p.playerId === CASH1981
+          ? { ...p, color: 'Red' }
+          : p.playerId === KARANDRAS1 ? { ...p, color: 'Blue' } : p),
+      }
+      state = putMetropolisOnMap(state, CASH1981, 5, 5, rotation)
+      state = putOnMap(state, KARANDRAS1, 'buildings/bank', outskirtsColumn, outskirtsRow)
+      state = putOnMap(state, KARANDRAS1, 'buildings/bank', outsideColumn, outsideRow)
+
+      expect(coinSourcesOf(state, fixturePlayer(state, CASH1981)).bank).toBe(1)
+      state = putOnMap(state, KARANDRAS1, 'figures/bluearmy', outskirtsColumn, outskirtsRow)
+      expect(coinSourcesOf(state, fixturePlayer(state, CASH1981)).bank).toBe(0)
+    },
+  )
+
+  it.each([
+    [0, 4, 5],
+    [180, 4, 5],
+    [90, 5, 4],
+    [270, 5, 4],
+  ] as const)('excludes both metropolis center squares from Bank coins at rotation %s', (rotation, centerColumn, centerRow) => {
+    let state = firstCivGame()
+    state = {
+      ...state,
+      players: state.players.map((p) => p.playerId === CASH1981 ? { ...p, color: 'Red' } : p),
+    }
+    state = putMetropolisOnMap(state, CASH1981, 5, 5, rotation)
+    state = putOnMap(state, CASH1981, 'buildings/bank', 5, 5)
+    state = putOnMap(state, CASH1981, 'buildings/bank', centerColumn, centerRow)
+
     expect(coinSourcesOf(state, fixturePlayer(state, CASH1981)).bank).toBe(0)
   })
 

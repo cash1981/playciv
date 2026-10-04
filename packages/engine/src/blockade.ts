@@ -59,6 +59,12 @@ interface Cell {
   readonly row: number
 }
 
+interface CityFootprint {
+  readonly color: string
+  readonly centers: readonly Cell[]
+  readonly cells: readonly Cell[]
+}
+
 /**
  * The map square a piece sits in, as numbers, or `null` off the map. Same
  * arithmetic as `squareOf` (which is what decides whether the piece is on a
@@ -75,25 +81,55 @@ function cellOf(board: Board, piece: BoardPiece): Cell | null {
 
 const keyOf = (cell: Cell): string => `${cell.column},${cell.row}`
 
+/** The metropolis marker spans two city squares along its long axis. */
+function cityFootprint(board: Board, piece: BoardPiece, color: string): CityFootprint | undefined {
+  const anchor = cellOf(board, piece)
+  if (anchor === null) return undefined
+  const isMetropolis = piece.assetId.includes('metropolis')
+  const isVertical = piece.rotation === 90 || piece.rotation === 270
+  const centers: readonly Cell[] = isMetropolis
+    ? [anchor, {
+        column: anchor.column - (isVertical ? 0 : 1),
+        row: anchor.row - (isVertical ? 1 : 0),
+      }]
+    : [anchor]
+  const cells = new Map<string, Cell>()
+  for (const center of centers) {
+    for (let columnOffset = -1; columnOffset <= 1; columnOffset += 1) {
+      for (let rowOffset = -1; rowOffset <= 1; rowOffset += 1) {
+        const cell = {
+          column: center.column + columnOffset,
+          row: center.row + rowOffset,
+        }
+        cells.set(keyOf(cell), cell)
+      }
+    }
+  }
+  return { color, centers, cells: [...cells.values()] }
+}
+
 /**
  * Everything the questions below need, worked out once from the board: the
  * colours of the cities on the map and of the figures in each square.
  */
 class BlockadeIndex {
-  private readonly cities: readonly (Cell & { readonly color: string })[]
+  private readonly cities: readonly CityFootprint[]
   private readonly figureColors = new Map<string, Set<string | undefined>>()
   private readonly russiaColor: string | undefined
   private readonly hasRussia: boolean
 
   constructor(private readonly state: Pick<GameState, 'board' | 'players'>) {
-    const cities: (Cell & { color: string })[] = []
+    const cities: CityFootprint[] = []
     for (const piece of state.board.pieces) {
       if (piece.category !== 'city' && piece.category !== 'figure') continue
       const cell = cellOf(state.board, piece)
       if (cell === null) continue
       const color = pieceColorOf(piece)
       if (piece.category === 'city') {
-        if (color !== undefined) cities.push({ ...cell, color })
+        if (color !== undefined) {
+          const footprint = cityFootprint(state.board, piece, color)
+          if (footprint !== undefined) cities.push(footprint)
+        }
         continue
       }
       const seen = this.figureColors.get(keyOf(cell)) ?? new Set<string | undefined>()
@@ -106,15 +142,19 @@ class BlockadeIndex {
     this.russiaColor = russia?.color?.toLowerCase()
   }
 
-  /** The colours of the cities in the square or any of the eight around it. */
+  /** The colours of cities whose center or outskirts include this square. */
   cityColorsAround(cell: Cell): ReadonlySet<string> {
     const colors = new Set<string>()
     for (const city of this.cities) {
-      if (Math.abs(city.column - cell.column) <= 1 && Math.abs(city.row - cell.row) <= 1) {
+      if (city.cells.some((cityCell) => keyOf(cityCell) === keyOf(cell))) {
         colors.add(city.color)
       }
     }
     return colors
+  }
+
+  isCityCenter(cell: Cell): boolean {
+    return this.cities.some((city) => city.centers.some((center) => keyOf(center) === keyOf(cell)))
   }
 
   /**
@@ -145,7 +185,7 @@ class BlockadeIndex {
   cityOwnerColor(piece: BoardPiece): string | undefined {
     const cell = cellOf(this.state.board, piece)
     if (cell === null) return undefined
-    if (this.cities.some((city) => city.column === cell.column && city.row === cell.row)) return undefined
+    if (this.isCityCenter(cell)) return undefined
     const around = this.cityColorsAround(cell)
     return around.size === 1 ? [...around][0] : undefined
   }
@@ -179,7 +219,8 @@ class BlockadeIndex {
 /**
  * The colour that owns a `building` or `greatperson` piece: the unique colour
  * of the cities (capital, city or metropolis, walled or not; city-states do not
- * count) in its square or the eight around it, which is the city's outskirts.
+ * count) in its square or outskirts. A metropolis has two center squares along
+ * the marker's rotated long axis and ten surrounding squares.
  * With no city, or cities of more than one colour, it is the colour of the
  * player who placed it. `undefined` when that is unknown too: the piece then
  * belongs to nobody, is never blockaded and gives no coin.
@@ -313,6 +354,7 @@ export function greatPersonCoinsOf(
     if (!COIN_TOKEN_IDS.has(piece.assetId)) continue
     const cell = cellOf(state.board, piece)
     if (cell === null) continue
+    if (index.isCityCenter(cell)) continue
     if (!index.cityColorsAround(cell).has(colour)) continue
     if (index.ownerColor(piece) !== colour || index.isBlockaded(piece)) continue
     coins += 1
