@@ -4188,3 +4188,37 @@ get 403, as before. It was already the case under the baton and is not changed h
 The test "a player whose turn it is not cannot reveal a civilization" documents it.
 The rules were not touched; whether setup should be exempt from the turn check is a
 question for the human.
+
+**2026-10-04, after the review of the single chat work.**
+- Orders revealed before versions were kept are copied too. `migratePlayerTurn`
+  drops the bare strings old saves kept in `history`, so for a game imported from
+  the old system `history[phase]` is empty and the revealed text only survives in
+  `publicTurns[key].orders[phase]`. `publicOrdersWithoutVersions` returns one
+  version for each revealed phase with text and an empty history, and the migration
+  writes it as an `order` row for its owner with the id `legacy-reveal-<game>-<turn>-<user>-<phase>-0`
+  (the rows from a history keep `legacy-...`). `publicOrderVersions` is unchanged. The
+  row is dated from the newest reveal log line, `Turn N - <user> revealed <phase>
+  phase`, that has a usable `createdAt`; with no such line from the game's
+  `createdAt`; with that unusable too, from `1970-01-01T00:00:00.000Z`. The clock is
+  never used. A row that the timeline already holds for the same author, turn,
+  phase and text is not written again, whatever its time. Only `publicTurns` is read,
+  so an unrevealed draft is not copied, and the dry run counts these rows. The
+  drafts count of the dry run and of the report is now the number of sections the
+  move would add, so a section the note already holds is not counted.
+- A game that has not started takes no orders and has no active turn. Nobody has
+  `yourTurn` until `startIfAllPlayers` runs, so `gameHasStarted` (some player, a
+  withdrawn one included, has `yourTurn`) is the "started" signal, and that is why
+  the field stays as stored data. `activeTurnStatus` is `null` before that, and
+  `postOrder`, `markPhasesDone` and `unmarkPhaseDone` answer `GAME_NOT_STARTED`
+  (409, after the access check). `draw` and `turnHolder` are not gated. Before this
+  a lobby with one of four players could post an order and mark a phase done, which
+  started a turn and placed a marker on the board.
+- `GET /api/games/:id/chat` answers 404 for an unknown game; before it answered an
+  empty list. It reads the game on every poll, because the current turn decides
+  which turns the page holds.
+- A winner revision stored by the earlier code reads `System: <winner> won the game!
+  Congratulations! . System: <admin> Ended this game`, the two lines joined. The
+  replay bar recognises both that and the new line and shows only `<winner> won the
+  game! Congratulations!`, without `System: ` and without the actor. Stored
+  revisions are not rewritten. A description that merely ends with the winner text
+  is not read as a winner line.

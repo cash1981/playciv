@@ -6,14 +6,14 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-03_
+_Last updated: 2026-10-04_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 750 engine, 403 server, 473 web on `claude/pr-218-default-view-wlml28` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 761 engine, 412 server, 478 web on `claude/pr-218-default-view-wlml28` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -25,7 +25,7 @@ _Last updated: 2026-10-03_
   and the admin page has "Move old games to the single chat" (`GET`/`POST
   /api/admin/games/migrate-chat`) for the database rows, which also moves an
   unpublished draft into its owner's private note. A finished game is titled with its
-  winner and its replay bar shows only who won. The old Turn orders routes, engine
+  winner and its replay bar shows only who won (stored joined winner lines too). A game that has not started takes no orders and has no active turn, and orders revealed before versions were kept are copied by the migration (decisions.md, 2026-10-04). The old Turn orders routes, engine
   actions and the per-phase mail are removed; the stored order data and `yourTurn` stay.
   Known gap, not fixed: revealing a civilization at game start draws through `draw`,
   which needs `turnHolder`. Not run against the real D1. Brief: `tasks/single-chat.md`;
