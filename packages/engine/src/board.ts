@@ -99,6 +99,8 @@ export type BoardAssetCategory =
   | 'citystate'
   /** Relic markers (Fame and Fortune, Wisdom and Warfare); one of each exists in a game. */
   | 'relic'
+  /** Disaster markers, which can be placed on the map like buildings. */
+  | 'disaster'
 
 /** Pieces can face four ways. Degrees, clockwise. */
 export type Rotation = 0 | 90 | 180 | 270

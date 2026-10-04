@@ -417,6 +417,27 @@ describe('BoardPalette finite supplies', () => {
     expect(markup).not.toContain('palette-group')
   })
 
+  it('lists disasters in their own draggable Pieces category', () => {
+    const disasters = BOARD_ASSETS.filter((asset) => asset.category === 'disaster')
+    expect(disasters).toHaveLength(4)
+    const markup = renderToStaticMarkup(
+      <BoardPalette
+        assets={BOARD_ASSETS}
+        category="disaster"
+        onCategoryChange={() => undefined}
+        replaying={false}
+        pieces={[]}
+        numOfPlayers={4}
+      />,
+    )
+    expect(markup).toContain('Disasters')
+    expect(markup).toContain('Drought')
+    expect(markup).toContain('Forest')
+    expect(markup).toContain('Grassland')
+    expect(markup).toContain('Water')
+    expect(markup).toContain('draggable="true"')
+  })
+
   it('lists the relics in their own group and disables one once it is on the board (issue #227)', () => {
     const relics = BOARD_ASSETS.filter((asset) => asset.category === 'relic')
     expect(relics).toHaveLength(5)

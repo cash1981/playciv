@@ -4580,3 +4580,8 @@ expansions.
   show the state.
 - **Not done.** Production, trade and culture of blockaded squares are not computed from
   the board in this game.
+## 2026-10-04: disaster markers in the board Pieces palette
+
+- The four Moderator disaster images (`drought`, `forest`, `grassland`, `water`) are public board assets in their own **Disasters** category. They use the normal board-piece placement and drag behavior, with no per-piece supply cap or new disaster rules. A distinct category keeps them findable without treating them as game buildings in supply accounting.
+- The generator caps disaster artwork at 90 px on its longest side, so each marker fits within one board square. The assets are otherwise purely visual.
+- The local dev browser had an empty game store and no authenticated game, so an interactive board drag was not browser-verified. Palette rendering and the generic placement path are covered by tests.
