@@ -53,6 +53,11 @@ $WONDER_MAX = 90
 # sits in a single square the way a city does.
 $CITYSTATE_MAX = 90
 
+# Buildings are 82-87 px, except the Shipyard source art, which is 108 px and drew
+# a quarter larger than the rest. Cap the longer side at 87
+# (keeping aspect) so every building is about the same size on the map.
+$BUILDING_MAX = 87
+
 # Relic markers sit on the map like buildings, which are ~85 px. The source art
 # is 84-112 px; cap the longer side at 90 (keeping aspect) so a relic fits in a
 # single square.
@@ -240,6 +245,15 @@ foreach ($folder in $categories.Keys) {
                 $maxDim = [Math]::Max($image.Width, $image.Height)
                 if ($maxDim -gt $CITYSTATE_MAX) {
                     $scale = $CITYSTATE_MAX / $maxDim
+                    $width = [int] [Math]::Round($image.Width * $scale)
+                    $height = [int] [Math]::Round($image.Height * $scale)
+                }
+            }
+
+            if ($category -eq 'building') {
+                $maxDim = [Math]::Max($image.Width, $image.Height)
+                if ($maxDim -gt $BUILDING_MAX) {
+                    $scale = $BUILDING_MAX / $maxDim
                     $width = [int] [Math]::Round($image.Width * $scale)
                     $height = [int] [Math]::Round($image.Height * $scale)
                 }
