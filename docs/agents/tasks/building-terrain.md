@@ -3,7 +3,7 @@
 - **Slug:** `building-terrain`
 - **Branch:** `feat/building-terrain`
 - **Owner:** Claude (orchestrator), coder role for the code
-- **Status:** in progress
+- **Status:** in review
 - **Issue:** https://github.com/cash1981/playciv/issues/255
 
 ## Goal

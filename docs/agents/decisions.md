@@ -4604,3 +4604,25 @@ expansions.
 - A revealed Adam Smith in its owner's hand adds its own +1 coin row. This remains separate from the Merchant token's printed coin. The card is unusable only when the player's tracked Merchant/Explorer tokens are all blockaded, reusing the existing no-token compatibility policy (FAQ 2.0 p. 5). Hidden Adam Smith cards contribute nothing to public projections.
 - Bank ownership uses the engine's existing city-center-plus-eight-neighbor footprint. Extra metropolis outskirts and scout-held coin squares are not inferred by the current board model; use the Sheet row for corrections until those locations are represented. The stricter expansion rule that a Great Person needs a matching token is also left at the project's documented no-token compatibility policy.
 - Democracy and Printing Press purchases are explicit City Management actions: pay 6 trade or 5 culture and add one coin atomically. Usage is recorded on the player's turn, each action once per turn; the shared field can also support the later phase-effects actions in #247. Manual counter editing remains available for correction.
+
+## 2026-10-04: a building on the wrong terrain asks first (issue #255)
+
+- **Client-side warning, never a refusal.** Placing or moving a building onto a map square
+  whose terrain the rulebook does not allow asks "A Library is meant for grassland, but this
+  square is forest. Place it anyway?" (`window.confirm`, the pattern the web package uses
+  elsewhere). OK places it. The server and the engine actions are unchanged, so a player can
+  always do it, and nothing reaches a projection.
+- **The rules** (base rulebook p. 16, and the issue for the navy buildings): Harbor, Shipyard
+  and Military Dock on water; Trading Post on desert; Workshop and Iron Mine on mountain;
+  Library, University, Granary and Aqueduct on grassland; Market, Bank, Temple, Cathedral,
+  Barracks and Academy on any terrain except water. Wonders and Great Persons (any terrain
+  except water) and "one limited building per city" are not checked.
+- **Terrain data** is new: `packages/engine/data/tile-terrain.json` has the terrain of each
+  of the 43 map tiles (4 x 4 squares, in the printed orientation; the rotation of a placed
+  tile is undone in `terrainAt`). It was not printed anywhere in a usable form: the squares
+  were classified from the tile images by colour and then checked and corrected by eye, so
+  some squares are best guesses and the file may be corrected by hand. A square that is mostly
+  land with a pond counts as water where the human said so (the Aztec tile). A tile without
+  data (the tile back) or a point off the map never warns.
+- Moving a building that already stands on a warned terrain to another square of the same
+  terrain does not ask again. A held arrow key asks once, not on every auto-repeat.

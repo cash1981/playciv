@@ -12,17 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### building-terrain
-
-- **Owner:** Claude (orchestrator) with the coder role
-- **Branch:** `feat/building-terrain`
-- **Brief:** `docs/agents/tasks/building-terrain.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/terrain.ts` (new), `packages/engine/src/index.ts`, `packages/engine/data/tile-terrain.json` (new)
-  - `packages/web/src/views/BoardView.tsx`
-- **Notes:** issue #255. Client-side warning only.
-
 _Nothing._
 
 ---
