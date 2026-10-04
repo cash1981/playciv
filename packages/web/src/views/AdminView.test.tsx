@@ -800,6 +800,20 @@ describe('move old games to the single chat panel', () => {
     expect(screen.getByText('Finished game')).toBeTruthy()
   })
 
+  it('names the game own button when a single game run ends partial, not Move all', async () => {
+    vi.mocked(api.migrateChatPreview).mockResolvedValue(preview())
+    vi.mocked(api.migrateChat).mockResolvedValue(result({ games: [], totalOrderRows: 0, totalDrafts: 0, partial: 'g-old', remaining: 1 }))
+    renderView()
+    await openList()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Old game' }))
+
+    const notice = await screen.findByText(/Game g-old was only partly copied/, undefined, { timeout: 5_000 })
+    expect(vi.mocked(api.migrateChat)).toHaveBeenCalledWith('g-old')
+    expect(notice.textContent).toContain('press "Move" on Old game again.')
+    expect(notice.textContent).not.toContain('Move all')
+  })
+
   it('moves every game with one request and tells how many are left, until none are', async () => {
     vi.mocked(api.migrateChatPreview).mockResolvedValue(preview())
     vi.mocked(api.migrateChat)

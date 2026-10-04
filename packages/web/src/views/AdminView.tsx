@@ -1032,7 +1032,7 @@ function MigrateChatPanel({
     ) {
       return
     }
-    await run(game.id)
+    await run(game)
   }
 
   async function migrateAll(): Promise<void> {
@@ -1050,13 +1050,16 @@ function MigrateChatPanel({
     await run(undefined)
   }
 
-  async function run(gameId: string | undefined): Promise<void> {
+  /** One game, or every game that has not been moved when `game` is left out. */
+  async function run(game?: MigrateChatGameDto): Promise<void> {
     setNotice(null)
     await act(async () => {
-      const result = await api.migrateChat(gameId)
+      const result = await api.migrateChat(game?.id)
       const left =
         result.remaining > 0
-          ? ` ${countOf(result.remaining, 'game is', 'games are')} left; press "Move all" again.`
+          ? game === undefined
+            ? ` ${countOf(result.remaining, 'game is', 'games are')} left; press "Move all" again.`
+            : ` ${game.name} is not fully moved yet; press "Move" on ${game.name} again.`
           : ' Nothing is left to move.'
       setNotice(
         `Moved ${countOf(result.games.length, 'game', 'games')}: ` +
