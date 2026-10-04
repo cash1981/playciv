@@ -58,6 +58,8 @@ export function statusFor(error: EngineError): number {
     case 'ARENA_POSITION_OCCUPIED':
     case 'PLAYER_COLOR_TAKEN':
       return 409
+    case 'COIN_PURCHASE_REJECTED':
+      return error.reason === 'ALREADY_USED' ? 409 : 400
     case 'NO_BATTLE_ACTIVE':
     case 'ARENA_UNIT_NOT_FOUND':
       return 404

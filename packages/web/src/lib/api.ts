@@ -760,6 +760,8 @@ export const api = {
     value: number,
   ) =>
     post<PlayerView>(`/api/games/${gameId}/players/${targetPlayerId}/coin`, { source, value }),
+  purchaseCoin: (gameId: string, source: 'democracy' | 'printingPress') =>
+    post<PlayerView>(`/api/games/${gameId}/coin-purchase`, { source }),
   setPlayerGovernment: (
     gameId: string,
     targetPlayerId: string,

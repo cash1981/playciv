@@ -44,8 +44,9 @@ export interface PlayerStats {
   /**
    * One coin counter per source, replacing the old status board's single
    * `coins` number. See {@link CoinSources} for the sources and their limits.
-   * The `greatPeople` entry is ignored on read: the projections replace it with
-   * the tokens on the board (issue #241, `coinSourcesOf`).
+   * Bank, Adam Smith and Great People entries are derived from board/card
+   * eligibility by `coinSourcesOf`; a legacy Bank value is retained as a floor
+   * so an existing save does not silently lose coins.
    */
   readonly coinSources: CoinSources
   readonly trade: number
@@ -451,9 +452,9 @@ export function buildingCountOf(state: GameState, playerId: string): number {
 
 /**
  * The stats with the derived numbers filled in: `combat` is computed from the
- * board, MIC, government and civilization (issue #197), the Great People coins
- * from the tokens on the board (issue #241), so whatever is stored for them is
- * ignored on read.
+ * board, MIC, government and civilization (issue #197), and Bank, Adam Smith
+ * and Great People coins from public board/card eligibility (issues #241 and
+ * #253). A legacy Bank value is retained as a floor for compatibility.
  */
 function derivedStats(state: GameState, player: Playerhand): PlayerStats {
   return {

@@ -141,6 +141,15 @@ class BlockadeIndex {
       ?.color?.toLowerCase()
   }
 
+  /** A building's city owner without the placedBy fallback. */
+  cityOwnerColor(piece: BoardPiece): string | undefined {
+    const cell = cellOf(this.state.board, piece)
+    if (cell === null) return undefined
+    if (this.cities.some((city) => city.column === cell.column && city.row === cell.row)) return undefined
+    const around = this.cityColorsAround(cell)
+    return around.size === 1 ? [...around][0] : undefined
+  }
+
   isBlockaded(piece: BoardPiece): boolean {
     const owner = this.ownerColor(piece)
     return owner !== undefined && this.hasEnemyFigure(piece, owner)
@@ -180,6 +189,19 @@ export function pieceOwnerColor(
   piece: BoardPiece,
 ): string | undefined {
   return new BlockadeIndex(state).ownerColor(piece)
+}
+
+/**
+ * A building's owner only when its map square is in exactly one colour's city
+ * footprint. Unlike {@link pieceOwnerColor}, this never guesses from who placed
+ * the piece; derived Bank coins use it so a transferred or misplaced Bank is
+ * not silently credited to its old placer.
+ */
+export function pieceCityOwnerColor(
+  state: Pick<GameState, 'board' | 'players'>,
+  piece: BoardPiece,
+): string | undefined {
+  return new BlockadeIndex(state).cityOwnerColor(piece)
 }
 
 /**

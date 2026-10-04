@@ -29,7 +29,7 @@
  * is blockaded or unowned.
  */
 
-import { greatPersonCoinsOf, isOwnWonderBlockaded } from './blockade.js'
+import { blockadedGreatPersonTypes, greatPersonCoinsOf, isBlockaded, isOwnWonderBlockaded, pieceCityOwnerColor } from './blockade.js'
 import type { BoardPiece } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
@@ -64,7 +64,13 @@ export const COIN_SOURCES = [
   { key: 'railroad', label: 'Railroad (III)', help: '1 coin', max: 1 },
   { key: 'education', label: 'Education (III)', help: '1 coin each time you build a wonder (up to 4)', max: 4 },
   { key: 'computers', label: 'Computers (IV)', help: '1 coin', max: 1 },
-  { key: 'bank', label: 'Bank (Building)', help: '1 coin', max: 1 },
+  { key: 'bank', label: 'Bank (Building)', help: '1 per controlled, unblocked Bank; use Sheet for manual adjustments', max: null },
+  {
+    key: 'adamSmith',
+    label: 'Adam Smith',
+    help: '1 coin while revealed, usable and in hand; additional to Merchant token coins',
+    max: 1,
+  },
   { key: 'democracyGovernment', label: 'Democracy (Govt)', help: '1 coin', max: 1 },
   // Derived from the board (issue #241), so it is read-only and has no printed
   // limit: three tokens in three cities give 3. `setCoinSource` refuses it.
@@ -108,6 +114,7 @@ export const EMPTY_COIN_SOURCES: CoinSources = {
   education: 0,
   computers: 0,
   bank: 0,
+  adamSmith: 0,
   democracyGovernment: 0,
   greatPeople: 0,
   terrain: 0,
@@ -162,17 +169,27 @@ export function socialPolicyCoinSource(policyName: string): CoinSourceKey | unde
  * the counters are public and would show which card the player holds.
  */
 export function coinOnReveal(key: CoinSourceKey): number {
-  return BY_KEY.get(key)?.max === 1 ? 1 : 0
+  return FLAT_REVEAL_COIN_SOURCES.has(key) ? 1 : 0
 }
 
+const FLAT_REVEAL_COIN_SOURCES: ReadonlySet<CoinSourceKey> = new Set([
+  'civilService',
+  'bureaucracy',
+  'railroad',
+  'computers',
+  'democracyGovernment',
+  'organizedReligion',
+])
+
 /**
- * The sources the Coins table always offers for manual bookkeeping. Bank and
- * terrain refer to public board pieces, Great Person coins are derived, and
+ * The sources the Coins table always offers for manual bookkeeping. Terrain
+ * refers to public board pieces, Bank/Adam Smith/Great Person coins are derived, and
  * Sheet is the catch-all the human asked for. The other rows are conditional;
  * see `techCoinSource`, `socialPolicyCoinSource` and `docs/agents/tasks/issue-158-valid-coins.md`.
  */
 export const ALWAYS_AVAILABLE_COIN_SOURCES: readonly CoinSourceKey[] = [
   'bank',
+  'adamSmith',
   'greatPeople',
   'terrain',
   'sheet',
@@ -242,10 +259,24 @@ export function coinSourcesOf(state: GameState, player: Playerhand): CoinSources
       !panamaIsBlockaded,
     )
     .reduce((total, piece) => total + (piece.coinTokens ?? 0), 0)
+  const cityColor = player.color?.toLowerCase()
+  const banks = cityColor === undefined || cityColor === null
+    ? 0
+    : state.board.pieces.filter((piece) =>
+        piece.category === 'building' &&
+        piece.assetId === 'buildings/bank' &&
+        pieceCityOwnerColor(state, piece) === cityColor &&
+        !isBlockaded(state, piece),
+      ).length
+  const smithIsUsable = player.items.some(
+    (item) => item.kind === 'greatperson' && item.name === 'Adam Smith' && !item.hidden,
+  ) && !blockadedGreatPersonTypes(state, player).includes('Merchant or Explorer')
   return {
     ...player.stats.coinSources,
-    education: educationIsRevealed ? player.stats.coinSources.education : 0,
+    bank: Math.max(player.stats.coinSources.bank, banks),
+    adamSmith: smithIsUsable ? 1 : 0,
     greatPeople: greatPersonCoinsOf(state, player),
+    education: educationIsRevealed ? player.stats.coinSources.education : 0,
     panamaCanal,
   }
 }

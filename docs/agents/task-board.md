@@ -12,30 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-253-a-coins-complete
-
-- **Owner:** Codex (GPT-6)
-- **Branch:** `feat/issue-253-a-coins-complete`
-- **Brief:** `docs/agents/tasks/issue-253-a-coins.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/coins.ts`
-  - `packages/engine/src/blockade.ts`
-  - `packages/engine/src/state.ts`
-  - `packages/engine/src/turn.ts`
-  - `packages/engine/src/actions/player.ts`
-  - `packages/engine/src/migrate.ts`
-  - `packages/engine/test/coin-sources.test.ts`
-  - `packages/engine/test/blockade.test.ts`
-  - `packages/server/src/routes/play.ts`
-  - `packages/server/test/play.test.ts`
-  - `packages/web/src/lib/api.ts`
-  - `packages/web/src/views/StatusPanel.tsx`
-  - `packages/web/src/views/StatusPanel.test.tsx`
-  - `packages/web/src/views/GameView.tsx`
-  - `docs/agents/tasks/issue-253-a-coins.md`
-  - `docs/agents/decisions.md`
-- **Notes:** Completes A3/A4 on top of PR #254's A1/A2; claims only these paths.
+_Nothing._
 
 ---
 

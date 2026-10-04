@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createBoard, DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS, wondersArea } from '@civ/engine'
+import { createBoard, createPlayerTurn, DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS, wondersArea } from '@civ/engine'
 import type { CoinSources, Government } from '@civ/engine'
 
 import { api } from '../lib/api.js'
@@ -390,6 +390,48 @@ describe('StatusPanel Coins section', () => {
     expect(screen.queryByRole('button', { name: 'Increase Bob Organized Religion' })).toBeNull()
   })
 
+  it('shows Adam Smith as a separate derived coin with no manual controls', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({ adamSmith: 1 })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+    openCoins()
+    expect(screen.getByText('Adam Smith')).toBeTruthy()
+    expect(screen.getByLabelText('Alice Adam Smith').textContent).toBe('1')
+    expect(screen.queryByRole('button', { name: 'Increase Alice Adam Smith' })).toBeNull()
+  })
+
+  it('buys a Democracy coin through one atomic action during City Management', async () => {
+    const purchase = vi.spyOn(api, 'purchaseCoin').mockResolvedValue(memberView)
+    const base = coinView({}, { techs: ['Democracy'] })
+    const turn = createPlayerTurn('Alice', 1)
+    const view = {
+      ...base,
+      activeTurn: {
+        playerId: 'player-me', username: 'Alice', turnNumber: 1, phase: 'CM', waitingFor: [], startPlayer: 'Alice',
+      },
+      you: {
+        ...base.you!,
+        stats: { ...base.you!.stats, trade: 6 },
+        playerTurns: [{
+          ...turn,
+          done: { ...turn.done, SOT: true, TRADE: true },
+        }],
+      },
+    } as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+    fireEvent.click(screen.getByRole('button', { name: 'Spend 6 trade' }))
+
+    await waitFor(() => expect(purchase).toHaveBeenCalledWith('game-1', 'democracy'))
+  })
+
   it('offers Panama Canal to its owner wherever the wonder is displayed', () => {
     render(
       <StatusPanel
@@ -469,7 +511,8 @@ describe('StatusPanel Coins section', () => {
     expect(screen.queryByRole('button', { name: 'Increase Alice Great People' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Decrease Alice Great People' })).toBeNull()
     // The other rows keep their buttons.
-    expect(screen.getByRole('button', { name: 'Increase Alice Bank (Building)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Increase Alice Bank (Building)' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Increase Alice Sheet' })).toBeTruthy()
   })
 
   it('shows a blockaded hint on the Panama Canal row, with no buttons, while an enemy figure is on it (issue #241)', () => {
@@ -522,10 +565,10 @@ describe('StatusPanel Coins section', () => {
     )
 
     openCoins()
-    fireEvent.click(screen.getByRole('button', { name: 'Increase Bob Bank (Building)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Increase Bob Sheet' }))
 
     await waitFor(() =>
-      expect(setCoin).toHaveBeenCalledWith('game-1', 'player-them', 'bank', 1),
+      expect(setCoin).toHaveBeenCalledWith('game-1', 'player-them', 'sheet', 1),
     )
   })
 

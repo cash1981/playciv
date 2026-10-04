@@ -7,7 +7,7 @@
 
 ## Goal
 
-Players can track Education's wonder coins and see/maintain Internet and Panama Canal coins according to the wonder's current ownership and usable state, including when the marker moves, becomes blockaded, is disabled, changes owner, or is restored by undo/time travel.
+Players can track eligible coin sources and complete low-cost coin bookkeeping without repeated arithmetic: Education, Internet and Panama Canal (A1/A2), derived Bank and Adam Smith coins (A3), and atomic Democracy/Printing Press coin purchases (A4).
 
 ## Why
 
@@ -24,11 +24,10 @@ The requested slice is section A of [issue #253](https://github.com/cash1981/pla
 - Reconcile legacy games by transferring the current Panama owner's existing stored counter to the wonder marker on migration; unowned Panama counters do not contribute. Removing/disabling the owner makes the tokens inactive until it has an owner again.
 - Keep undo/replay correct and preserve existing coin counters when a capacity falls; a player can lower a formerly valid counter.
 
-**Out:**
+**Still out of scope:**
 
-- Bank per-building coins and Adam Smith, which need reliable building/city ownership and footprints (A3).
-- Atomic Democracy/Printing Press purchases, which need turn/phase-use tracking (A4).
 - Automatically awarding Education coins when a wonder is built; there is no explicit Build wonder action yet.
+- Terrain coin derivation, which needs structured terrain/scout data.
 
 ## Reference
 
@@ -80,3 +79,14 @@ This continuation completes issue #253 A3 and A4 on top of A1/A2 in PR #254.
 - Add atomic Democracy tech and Printing Press coin purchase actions. Each checks a revealed matching tech, sufficient trade/culture, effective coin capacity (including Internet), and once-per-player-per-turn usage. Debit and coin grant commit together; a failed action changes neither.
 - Reuse the saved player turn keyed by its turn number for usage markers. Do not infer timing from piece movement or card reveal. Preserve manual counter editing for correction; the new purchase action is restricted to the current City Management turn and its CM phase not being marked done.
 - Cover actions through the engine, Hono routes and Coins UI. Keep payment/use details public, as these are shared status-board actions.
+
+
+### A3/A4 acceptance
+
+- [x] Bank coins are derived per unblocked Bank in the unique city footprint that owns it. Placement alone is not ownership. Existing Bank values survive as a compatibility floor; the Sheet source remains available for incomplete map/scout bookkeeping.
+- [x] Adam Smith adds one separate derived coin while revealed, in hand, and usable under the existing Great Person blockade policy. The Merchant token coin remains separate. Hidden card names and values do not leak.
+- [x] Democracy (6 trade) and Printing Press (5 culture) purchases debit and add a coin atomically during the player's open City Management phase, once per turn, with active Internet capacity and failed-action coverage.
+- [x] Per-turn action use is stored in the migrated player turn and exposed as public bookkeeping; no separate clock or inferred timing is added.
+- [x] Engine, server API and Coins panel tests cover purchases, capacity, hidden information, map ownership and blockade.
+- The derived Bank owner uses the engine's existing eight-neighbor city footprint. Extra metropolis outskirts and scout-held squares are not inferred; use Sheet for those until the board model tracks them.
+- Interactive browser verification remains unavailable without an authenticated local game; the panel behavior is covered by tests.

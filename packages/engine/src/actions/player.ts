@@ -18,6 +18,7 @@ import {
 import {
   activeWonderOwnerIds,
   coinOnReveal,
+  coinSourcesOf,
   findCoinSource,
   socialPolicyCoinSource,
   techCoinSource,
@@ -49,6 +50,7 @@ import {
   isMovementValue,
   withPlayer,
 } from '../state.js'
+import { publicTurn, publicTurnKey, sameTurn, turnStatus } from '../turn.js'
 
 import { placeUnchecked, setWonderCoinTokens } from './board.js'
 import { draw, drawWonderToBoard } from './draw.js'
@@ -1165,13 +1167,97 @@ export interface SetCoinSourceInput {
   readonly at?: string
 }
 
+export type CoinPurchaseSource = 'democracy' | 'printingPress'
+
+export interface PurchaseCoinInput {
+  readonly playerId: string
+  readonly source: CoinPurchaseSource
+  readonly at?: string
+}
+
+/**
+ * Atomically pays for one Democracy or Printing Press coin during the player's
+ * open City Management phase. Usage is stored on that player's turn, so retry,
+ * refresh and phase re-marking cannot grant it twice. The same `usedActions`
+ * field is available to later phase effects (#247).
+ */
+export function purchaseCoin(state: GameState, input: PurchaseCoinInput): ActionResult {
+  const access = requireAccess(state, input.playerId)
+  if (!access.ok) return access
+  const player = access.value
+  const source = input.source
+  const techName = source === 'democracy' ? 'Democracy' : 'Printing Press'
+  const resource = source === 'democracy' ? 'trade' : 'culture'
+  const cost = source === 'democracy' ? 6 : 5
+  const usageKey = `coin-purchase:${source}`
+  const reject = (reason: Extract<EngineError, { kind: 'COIN_PURCHASE_REJECTED' }>['reason']): ActionResult =>
+    err({ kind: 'COIN_PURCHASE_REJECTED', source, reason })
+
+  if (!player.techsChosen.some((tech) => tech.name === techName && !tech.hidden)) {
+    return reject('TECH_NOT_REVEALED')
+  }
+
+  const turnNumber = turnStatus(state).currentTurn
+  const existingTurn = player.playerTurns.find((turn) => turn.turnNumber === turnNumber)
+  if (
+    existingTurn === undefined ||
+    !existingTurn.done.SOT ||
+    !existingTurn.done.TRADE ||
+    existingTurn.done.CM ||
+    existingTurn.done.MOVEMENT ||
+    existingTurn.done.RESEARCH
+  ) {
+    return reject('PHASE_CLOSED')
+  }
+  if (existingTurn.usedActions.includes(usageKey)) return reject('ALREADY_USED')
+
+  if (player.stats[resource] < cost) return reject('INSUFFICIENT_RESOURCES')
+
+  const sourceKey = source
+  const current = coinSourcesOf(state, player)[sourceKey]
+  const coinSource = findCoinSource(sourceKey)
+  if (coinSource === undefined) return reject('AT_CAPACITY')
+  const blockadedIds = blockadedPieceIds(state)
+  const internetOwners = activeWonderOwnerIds(state.board.pieces, 'wonders/internet', blockadedIds)
+  const max = coinSource.max === null
+    ? null
+    : coinSource.max + (internetOwners.has(player.playerId) ? 2 : 0)
+  if (max !== null && current >= max) return reject('AT_CAPACITY')
+
+  const updatedTurn = {
+    ...existingTurn,
+    usedActions: [...existingTurn.usedActions, usageKey],
+  }
+  const playerTurns = player.playerTurns.map((turn) => sameTurn(turn, updatedTurn) ? updatedTurn : turn)
+  const key = publicTurnKey(updatedTurn)
+  const next: GameState = {
+    ...withPlayer(state, {
+      ...player,
+      playerTurns,
+      stats: {
+        ...player.stats,
+        [resource]: player.stats[resource] - cost,
+        coinSources: withCoinSource(player.stats.coinSources, sourceKey, current + 1),
+      },
+    }),
+    publicTurns: { ...state.publicTurns, [key]: publicTurn(updatedTurn) },
+  }
+  const paidFor = source === 'democracy' ? '6 trade' : '5 culture'
+  return ok(appendLog(next, {
+    username: player.username,
+    playerId: player.playerId,
+    publicLog: `${player.username} spent ${paidFor} to add 1 coin to ${techName}`,
+    privateLog: '',
+    createdAt: input.at ?? null,
+  }))
+}
+
 /**
  * Sets one coin counter on a player's status board, except Panama tokens which
- * are stored on their wonder marker. Like `setPlayerStat`, any
- * current player may maintain any other player's counters — they are shared
- * bookkeeping, not a private hand. The value must be a whole number from zero
- * up to the source's printed limit; `null` means no limit, as the reference
- * sheet prints none for the Sheet pile and Panama Canal.
+ * are stored on their wonder marker. Like `setPlayerStat`, any current player
+ * may maintain another player's editable counters — they are shared
+ * bookkeeping, not a private hand. Bank, Adam Smith and Great People are
+ * derived; a manual correction for missing map data belongs in Sheet.
  */
 export function setCoinSource(state: GameState, input: SetCoinSourceInput): ActionResult {
   const editorAccess = requireAccess(state, input.editorPlayerId)
@@ -1189,7 +1275,7 @@ export function setCoinSource(state: GameState, input: SetCoinSourceInput): Acti
 
   // Great People is derived from the tokens on the board (issue #241), so a
   // typed value would only be ignored on read; refuse it instead.
-  if (source.key === 'greatPeople') {
+  if (source.key === 'adamSmith' || source.key === 'greatPeople' || source.key === 'bank') {
     return err({ kind: 'COIN_SOURCE_NOT_EDITABLE', source: source.key })
   }
   if (

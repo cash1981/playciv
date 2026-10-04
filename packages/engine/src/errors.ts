@@ -97,13 +97,19 @@ export type EngineError =
   | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number | string }
   /** `setCoinSource` got a source key outside the reference sheet's rows */
   | { readonly kind: 'UNKNOWN_COIN_SOURCE'; readonly source: string }
-  /** `setCoinSource` (issue #241) was asked to set a row the engine derives from the board (Great People) */
+  /** `setCoinSource` was asked to set a row derived from current game state. */
   | { readonly kind: 'COIN_SOURCE_NOT_EDITABLE'; readonly source: string }
   /**
    * `setCoinSource` got a value the source does not allow: not a whole number,
    * negative, or above the printed limit (`max` is `null` when unlimited).
    */
   | { readonly kind: 'INVALID_COIN_VALUE'; readonly value: number; readonly max: number | null }
+  /** A once-per-turn coin purchase could not be completed atomically. */
+  | {
+      readonly kind: 'COIN_PURCHASE_REJECTED'
+      readonly source: 'democracy' | 'printingPress'
+      readonly reason: 'TECH_NOT_REVEALED' | 'PHASE_CLOSED' | 'ALREADY_USED' | 'INSUFFICIENT_RESOURCES' | 'AT_CAPACITY'
+    }
   /** `setPlayerGovernment` got a value outside the Wisdom and Warfare cards. */
   | { readonly kind: 'UNKNOWN_GOVERNMENT'; readonly government: string }
   /** A battle is already active — only one at a time is allowed */
@@ -215,6 +221,14 @@ export function describeError(error: EngineError): string {
       return error.max === null
         ? `Coin count must be a whole number of zero or more, got ${error.value}`
         : `Coin count must be a whole number between 0 and ${error.max}, got ${error.value}`
+    case 'COIN_PURCHASE_REJECTED':
+      return {
+        TECH_NOT_REVEALED: 'Reveal the matching technology before using this purchase.',
+        PHASE_CLOSED: 'This purchase is only available during your open City Management phase.',
+        ALREADY_USED: 'This purchase has already been used this turn.',
+        INSUFFICIENT_RESOURCES: 'You do not have enough trade or culture for this purchase.',
+        AT_CAPACITY: 'This coin source is already at its capacity.',
+      }[error.reason]
     case 'UNKNOWN_GOVERNMENT':
       return `Unknown government: ${error.government}`
     case 'BATTLE_ALREADY_ACTIVE':
