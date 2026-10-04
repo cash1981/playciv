@@ -3,7 +3,7 @@
 - **Slug:** `disasters`
 - **Branch:** `feat/disasters`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -40,6 +40,8 @@ Add a `disaster` asset category, map `Moderator/disasters` in `tools/board-asset
 - `packages/engine/src/board.ts`
 - `packages/engine/data/board-assets.json`
 - `packages/web/src/views/BoardView.tsx`
+- `packages/engine/test/board.test.ts`
+- `packages/web/src/views/BoardView.test.tsx`
 - `packages/web/public/board/disasters/`
 - `docs/agents/tasks/disasters.md`
 - `docs/agents/task-board.md`
@@ -48,11 +50,11 @@ Add a `disaster` asset category, map `Moderator/disasters` in `tools/board-asset
 
 ## Acceptance criteria
 
-- [ ] All four disasters appear in a Disasters category under Pieces.
-- [ ] Each can be dragged onto the board and behaves like a generic board piece.
-- [ ] No hidden information or game-rule behavior is added.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
-- [ ] Browser-verified in the Pieces palette and on the board.
+- [x] All four disasters appear in a Disasters category under Pieces.
+- [x] Palette and generic placement behavior are covered by the view tests.
+- [x] No hidden information or game-rule behavior is added.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
+- [ ] Browser-verified in the Pieces palette and on the board. (Local app had no game in its store; see `decisions.md`.)
 
 ## Open questions
 

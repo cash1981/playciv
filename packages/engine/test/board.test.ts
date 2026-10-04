@@ -133,13 +133,14 @@ describe('wonder ownership', () => {
 })
 
 describe('the manifest', () => {
-  it('has pieces in all twelve categories', () => {
+  it('has pieces in all thirteen categories', () => {
     const categories = new Set(BOARD_ASSETS.map((asset) => asset.category))
     expect([...categories].sort()).toEqual([
       'building',
       'city',
       'citystate',
       'civtile',
+      'disaster',
       'figure',
       'greatperson',
       'leader',
@@ -149,6 +150,19 @@ describe('the manifest', () => {
       'tile',
       'wonder',
     ])
+  })
+
+  it('has the four disaster markers sized to fit one board square', () => {
+    const disasters = BOARD_ASSETS.filter((asset) => asset.category === 'disaster')
+    expect(disasters.map((asset) => asset.label).sort()).toEqual([
+      'Drought',
+      'Forest',
+      'Grassland',
+      'Water',
+    ])
+    expect(disasters).toHaveLength(4)
+    expect(disasters.every((asset) => asset.width <= 90 && asset.height <= 90)).toBe(true)
+    expect(disasters.every((asset) => asset.id === asset.path.replace(/\.png$/, ''))).toBe(true)
   })
 
   it('has the five neutral city-states', () => {

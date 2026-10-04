@@ -31,6 +31,7 @@ $categories = [ordered] @{
     'wonders'      = 'wonder'
     'city-states'  = 'citystate'
     'relics'       = 'relic'
+    'disasters'    = 'disaster'
 }
 
 # A map tile covers 4 x 4 squares of 94 pixels. The source images are 375 x 375,
@@ -56,6 +57,9 @@ $CITYSTATE_MAX = 90
 # is 84-112 px; cap the longer side at 90 (keeping aspect) so a relic fits in a
 # single square.
 $RELIC_MAX = 90
+
+# Disaster markers sit on the map like buildings and fit within one square.
+$DISASTER_MAX = 90
 
 # The relic art (Moderator/relics) is named lower case with underscores. The
 # proper names are written out so the palette label reads well. Keys are the
@@ -246,6 +250,16 @@ foreach ($folder in $categories.Keys) {
                 $maxDim = [Math]::Max($image.Width, $image.Height)
                 if ($maxDim -gt $RELIC_MAX) {
                     $scale = $RELIC_MAX / $maxDim
+                    $width = [int] [Math]::Round($image.Width * $scale)
+                    $height = [int] [Math]::Round($image.Height * $scale)
+                }
+            }
+
+            if ($category -eq 'disaster') {
+                # Keep a disaster marker within one square, like a building.
+                $maxDim = [Math]::Max($image.Width, $image.Height)
+                if ($maxDim -gt $DISASTER_MAX) {
+                    $scale = $DISASTER_MAX / $maxDim
                     $width = [int] [Math]::Round($image.Width * $scale)
                     $height = [int] [Math]::Round($image.Height * $scale)
                 }

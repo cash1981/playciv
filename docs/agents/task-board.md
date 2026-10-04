@@ -12,24 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### disasters
-
-- **Owner:** Codex (GPT-6)
-- **Branch:** `feat/disasters`
-- **Brief:** `docs/agents/tasks/disasters.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `tools/board-assets.ps1`
-  - `packages/engine/src/board.ts`
-  - `packages/engine/data/board-assets.json`
-  - `packages/web/src/views/BoardView.tsx`
-  - `packages/web/public/board/disasters/`
-  - `docs/agents/tasks/disasters.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`
-  - `docs/agents/decisions.md`
-- **Notes:** Disaster assets come from the local `Moderator/disasters` folder.
-
 ---
 
 ## Format
