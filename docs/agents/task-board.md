@@ -12,6 +12,19 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### great-person-disable
+
+- **Owner:** Claude (orchestrator) with the coder role
+- **Branch:** `fix/great-person-disable`
+- **Brief:** `docs/agents/tasks/great-person-disable.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/blockade.ts` (new), `combat-bonus.ts`, `coins.ts`, `state.ts`, `culture-hand.ts`, `errors.ts`, `index.ts`
+  - `packages/engine/src/actions/player.ts` (`setCoinSource` only)
+  - `packages/server/src/store/rating.ts`
+  - `packages/web/src/views/BoardView.tsx`, `GameView.tsx`, `StatusPanel.tsx`, `packages/web/src/styles.css`
+- **Notes:** issue #241. Derived blockade rule, no stored state.
+
 ---
 
 ## Format
