@@ -174,6 +174,8 @@ export interface MigrateChatPreviewDto {
   readonly games: readonly (MigrateChatGameDto & { readonly active: boolean })[]
   readonly totalOrderRows: number
   readonly totalDrafts: number
+  /** Games the dry run left unchecked to stay within its budget of reads; they are not in `games`. */
+  readonly unchecked: number
 }
 
 export interface MigrateChatResultDto {

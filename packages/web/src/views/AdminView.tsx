@@ -1036,15 +1036,16 @@ function MigrateChatPanel({
   }
 
   async function migrateAll(): Promise<void> {
-    if (working || preview === null || preview.games.length === 0) return
-    if (
-      !window.confirm(
-        `Move ${countOf(preview.games.length, 'game', 'games')} to the single chat? ` +
+    if (working || preview === null || (preview.games.length === 0 && preview.unchecked === 0)) return
+    const question =
+      preview.games.length === 0
+        ? `Check the ${countOf(preview.unchecked, 'game', 'games')} that were not checked yet and move what is missing? ` +
+          `Each press handles a limited number of games; press again while some remain. ${MIGRATE_CHAT_EFFECT}`
+        : `Move ${countOf(preview.games.length, 'game', 'games')} to the single chat? ` +
           `${countOf(preview.totalOrderRows, 'order', 'orders')} will be copied into the timeline and ` +
           `${countOf(preview.totalDrafts, 'unpublished draft', 'unpublished drafts')} added to private notes. ` +
-          `Each press handles a limited number of games; press again while some remain. ${MIGRATE_CHAT_EFFECT}`,
-      )
-    ) {
+          `Each press handles a limited number of games; press again while some remain. ${MIGRATE_CHAT_EFFECT}`
+    if (!window.confirm(question)) {
       return
     }
     await run(undefined)
@@ -1097,8 +1098,13 @@ function MigrateChatPanel({
         </button>
       </div>
 
-      {preview !== null && preview.games.length === 0 && (
+      {preview !== null && preview.games.length === 0 && preview.unchecked === 0 && (
         <p className="muted">Every game has been moved to the single chat.</p>
+      )}
+      {preview !== null && preview.unchecked > 0 && (
+        <p className="muted">
+          {countOf(preview.unchecked, 'more game was', 'more games were')} not checked, run the move again.
+        </p>
       )}
       {preview !== null && preview.games.length > 0 && (
         <>
@@ -1144,12 +1150,14 @@ function MigrateChatPanel({
               </tfoot>
             </table>
           </div>
-          <div className="row">
-            <button className="danger" disabled={working} onClick={() => void migrateAll()}>
-              Move all
-            </button>
-          </div>
         </>
+      )}
+      {preview !== null && (preview.games.length > 0 || preview.unchecked > 0) && (
+        <div className="row">
+          <button className="danger" disabled={working} onClick={() => void migrateAll()}>
+            Move all
+          </button>
+        </div>
       )}
     </section>
   )

@@ -731,8 +731,9 @@ describe('move old games to the single chat panel', () => {
     ],
     totalOrderRows: 15,
     totalDrafts: 2,
+    unchecked: 0,
   })
-  const emptyPreview: MigrateChatPreviewDto = { games: [], totalOrderRows: 0, totalDrafts: 0 }
+  const emptyPreview: MigrateChatPreviewDto = { games: [], totalOrderRows: 0, totalDrafts: 0, unchecked: 0 }
   const result = (overrides: Partial<MigrateChatResultDto> = {}): MigrateChatResultDto => ({
     games: [{ id: 'g-old', name: 'Old game', orderRows: 14, drafts: 2 }],
     totalOrderRows: 14,
@@ -779,6 +780,7 @@ describe('move old games to the single chat panel', () => {
       games: [preview().games[1] as MigrateChatPreviewDto['games'][number]],
       totalOrderRows: 1,
       totalDrafts: 0,
+      unchecked: 0,
     })
     vi.mocked(api.migrateChat).mockResolvedValue(result())
     renderView()
@@ -874,6 +876,37 @@ describe('move old games to the single chat panel', () => {
       await screen.findByText('The game changed while it was being migrated; try again', undefined, { timeout: 5_000 }),
     ).toBeTruthy()
     expect(screen.getByText('Old game')).toBeTruthy()
+  })
+
+  it('says how many games were not checked, and does not claim that every game has been moved', async () => {
+    vi.mocked(api.migrateChatPreview).mockResolvedValue({ ...preview(), unchecked: 3 })
+    renderView()
+    await openList()
+
+    expect(screen.getByText('3 more games were not checked, run the move again.')).toBeTruthy()
+    expect(screen.queryByText('Every game has been moved to the single chat.')).toBeNull()
+  })
+
+  it('says it in the singular, and offers Move all when only unchecked games are left', async () => {
+    vi.mocked(api.migrateChatPreview).mockResolvedValue({ ...emptyPreview, unchecked: 1 })
+    vi.mocked(api.migrateChat).mockResolvedValue(result({ games: [], totalOrderRows: 0, totalDrafts: 0 }))
+    renderView()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show what can be moved' }, { timeout: 5_000 }))
+
+    expect(await screen.findByText('1 more game was not checked, run the move again.', undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(screen.queryByText('Every game has been moved to the single chat.')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Move all' }))
+    expect(String(vi.mocked(window.confirm).mock.calls[0]?.[0])).toContain('were not checked yet')
+    await waitFor(() => expect(vi.mocked(api.migrateChat)).toHaveBeenCalledWith(undefined), { timeout: 5_000 })
+  })
+
+  it('shows no unchecked line when every game was checked', async () => {
+    vi.mocked(api.migrateChatPreview).mockResolvedValue(preview())
+    renderView()
+    await openList()
+
+    expect(screen.queryByText(/not checked, run the move again/)).toBeNull()
   })
 
   it('says so when every game has been moved', async () => {

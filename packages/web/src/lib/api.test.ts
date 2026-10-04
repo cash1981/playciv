@@ -224,7 +224,7 @@ describe('api timeline and admin calls (issue #215)', () => {
   })
 
   it('reads the migration dry run, then migrates every game or just one', async () => {
-    const preview = respondWith(200, JSON.stringify({ games: [], totalOrderRows: 0, totalDrafts: 0 }))
+    const preview = respondWith(200, JSON.stringify({ games: [], totalOrderRows: 0, totalDrafts: 0, unchecked: 0 }))
     await api.migrateChatPreview()
     expect(lastCall(preview).path).toBe('/api/admin/games/migrate-chat')
 
