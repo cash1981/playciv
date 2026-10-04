@@ -283,6 +283,15 @@ export interface GameState {
    */
   readonly legacyOrdersCopied: boolean
   /**
+   * The orders revealed before versions were stored have been copied into the
+   * timeline. True for a game created by this code, false for a loaded game
+   * that lacks it, and set by the server's migration
+   * (`/api/admin/games/migrate-chat`) once such a game has nothing left to copy,
+   * so a finished game is not read again on every run. Public, but not in the
+   * view.
+   */
+  readonly legacyRevealsCopied: boolean
+  /**
    * The currently active battle, or null if no battle is in progress.
    * At most one battle may be active per game at a time.
    */

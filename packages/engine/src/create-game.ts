@@ -203,6 +203,7 @@ export function createGame(options: CreateGameOptions): GameState {
     startPlayerId: null,
     // Nothing to copy: a new game writes its orders to the timeline itself
     legacyOrdersCopied: true,
+    legacyRevealsCopied: true,
     turnStarters: {},
     battle: null,
     rev: 0,

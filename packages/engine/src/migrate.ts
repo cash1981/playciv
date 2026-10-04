@@ -38,7 +38,7 @@ const correctSocialPolicyFlipsides = (
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters' | 'legacyOrdersCopied'
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters' | 'legacyOrdersCopied' | 'legacyRevealsCopied'
 > & {
     /** The switch that used to choose between the old baton view and chat orders. Gone from `GameState`. */
     readonly chatOrders?: boolean
@@ -56,6 +56,7 @@ type MaybeOlder = Omit<
       | 'chatOrdersStartTurn'
       | 'startPlayerId'
       | 'legacyOrdersCopied'
+      | 'legacyRevealsCopied'
       | 'turnStarters'
       | 'logSecret'
     >
@@ -287,6 +288,8 @@ export function migrateGameState(state: GameState): GameState {
     // copying the old ones later would duplicate those posted there. A save
     // without the flag from before chat orders existed has not been copied.
     legacyOrdersCopied: older.legacyOrdersCopied ?? chatOrders === true,
+    // Not known to be copied until the server's migration has checked the game
+    legacyRevealsCopied: older.legacyRevealsCopied ?? false,
     turnStarters: older.turnStarters ?? {},
   }
   // The old baton view is gone, and every game is a chat game. Adopt one that was

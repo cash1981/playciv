@@ -46,6 +46,31 @@ describe('legacyOrdersCopied', () => {
   })
 })
 
+describe('legacyRevealsCopied', () => {
+  it('is true in a new game and not in the player view or in any seat of it', () => {
+    const state = firstCivGame()
+    expect(state.legacyRevealsCopied).toBe(true)
+    for (const playerId of [CASH1981, KARANDRAS1, CHUL]) {
+      const view = toPlayerView(state, playerId)
+      expect(Object.keys(view)).not.toContain('legacyRevealsCopied')
+      expect(JSON.stringify(view)).not.toContain('legacyRevealsCopied')
+    }
+  })
+
+  it('migrates to false when missing and keeps what is stored, so it survives a load and save', () => {
+    const old = { ...firstCivGame() } as Record<string, unknown>
+    delete old['legacyRevealsCopied']
+    const loaded = migrateGameState(old as unknown as GameState)
+    expect(loaded.legacyRevealsCopied).toBe(false)
+    // Saved as true, loaded again: still true
+    const saved = JSON.parse(JSON.stringify({ ...loaded, legacyRevealsCopied: true })) as GameState
+    expect(migrateGameState(saved).legacyRevealsCopied).toBe(true)
+    expect(migrateGameState(migrateGameState(saved)).legacyRevealsCopied).toBe(true)
+    // Independent of legacyOrdersCopied
+    expect(migrateGameState({ ...firstCivGame(), legacyOrdersCopied: false, legacyRevealsCopied: true }).legacyRevealsCopied).toBe(true)
+  })
+})
+
 describe('publicOrderVersions', () => {
   it('returns every revealed version, oldest first, with its owner, turn and phase', () => {
     let state = firstCivGame()
@@ -162,6 +187,47 @@ describe('publicOrdersWithoutVersions', () => {
         index: 0,
       },
     ])
+  })
+
+  it('does not read the log of a game with no such order', () => {
+    let reads = 0
+    const modern = write(firstCivGame(), CASH1981, 1, 'SOT', 'versioned', '2026-01-01T09:00:00.000Z')
+    const watched = {
+      ...modern,
+      get log() {
+        reads += 1
+        return modern.log
+      },
+    } as GameState
+    expect(publicOrdersWithoutVersions(watched)).toEqual([])
+    expect(reads).toBe(0)
+    // A qualifying phase does read it, once however many phases there are
+    const bare = bareReveal(bareReveal(firstCivGame(), CASH1981, 1, 'SOT', 'a'), CASH1981, 1, 'TRADE', 'b')
+    const watchedBare = {
+      ...bare,
+      get log() {
+        reads += 1
+        return bare.log
+      },
+    } as GameState
+    expect(publicOrdersWithoutVersions(watchedBare)).toHaveLength(2)
+    expect(reads).toBeGreaterThan(0)
+  })
+
+  it('finds the reveal date of a user whose name has regex characters', () => {
+    const name = 'a.b+c (1)'
+    let state = bareReveal(firstCivGame(), CASH1981, 1, 'SOT', 'text')
+    state = {
+      ...state,
+      players: state.players.map((player) => (player.playerId === CASH1981 ? { ...player, username: name } : player)),
+      publicTurns: Object.fromEntries(
+        Object.entries(state.publicTurns).map(([key, turn]) => [key, turn.username === 'cash1981' ? { ...turn, username: name } : turn]),
+      ),
+    }
+    state = logReveal(state, name, 1, 'start of turn', '2026-04-01T08:00:00.000Z')
+    // A user that only looks like the name through the regex characters must not match
+    state = logReveal(state, 'aXbbc 1', 1, 'start of turn', '2026-04-02T08:00:00.000Z')
+    expect(publicOrdersWithoutVersions(state).map((v) => [v.username, v.at])).toEqual([[name, '2026-04-01T08:00:00.000Z']])
   })
 
   it('takes the newest reveal line with a usable time, then the game date, then the epoch', () => {

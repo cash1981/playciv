@@ -469,10 +469,13 @@ function revealLineTimes(state: GameState): ReadonlyMap<string, string> {
  * order `publicOrderVersions` uses.
  */
 export function publicOrdersWithoutVersions(state: GameState): readonly PublicOrderVersion[] {
-  const revealedAtByKey = revealLineTimes(state)
   const fallback = usableTime(state.createdAt) ? state.createdAt : EPOCH
-  const revealedAt = (username: string, turnNumber: number, phase: TurnPhase): string =>
-    revealedAtByKey.get(revealKey(turnNumber, username, TURN_PHASE_LABEL[phase])) ?? fallback
+  // Built on the first phase that qualifies, so a game with no such order never reads its log
+  let revealedAtByKey: ReadonlyMap<string, string> | undefined
+  const revealedAt = (username: string, turnNumber: number, phase: TurnPhase): string => {
+    revealedAtByKey ??= revealLineTimes(state)
+    return revealedAtByKey.get(revealKey(turnNumber, username, TURN_PHASE_LABEL[phase])) ?? fallback
+  }
   const versions = Object.values(state.publicTurns).flatMap((turn) =>
     TURN_PHASES.flatMap((phase): readonly PublicOrderVersion[] => {
       const markdown = turn.orders[phase] ?? ''
