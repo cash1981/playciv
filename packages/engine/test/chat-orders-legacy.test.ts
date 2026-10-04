@@ -12,7 +12,7 @@ import { migrateGameState } from '../src/migrate.js'
 import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
 import type { TurnPhase } from '../src/turn.js'
-import { draftsToPrivateNote, publicOrderVersions, publicOrdersWithoutVersions, unpublishedDrafts } from '../src/turn.js'
+import { draftsToPrivateNote, publicOrderVersions, pendingDrafts, publicOrdersWithoutVersions, unpublishedDrafts } from '../src/turn.js'
 
 import { CASH1981, CHUL, KARANDRAS1, firstCivGame } from './fixture.js'
 import { savedOrder } from './saved-orders.js'
@@ -285,6 +285,16 @@ describe('draftsToPrivateNote', () => {
   it('a second run adds nothing more', () => {
     const once = draftsToPrivateNote(write(firstCivGame(), CASH1981, 1, 'CM', 'a draft'))
     expect(draftsToPrivateNote(once)).toEqual(once)
+  })
+
+  it('pendingDrafts leaves out a draft whose section the note holds, and is empty after the move', () => {
+    let state = write(firstCivGame(), CASH1981, 1, 'SOT', 'in the note')
+    state = write(state, CASH1981, 2, 'TRADE', 'not yet')
+    state = write(state, KARANDRAS1, 1, 'CM', 'theirs')
+    state = withNote(state, CASH1981, '### Turn 1, start of turn (unpublished draft)\n\nin the note')
+    expect(unpublishedDrafts(state)).toHaveLength(3)
+    expect(pendingDrafts(state).map((draft) => draft.markdown)).toEqual(['not yet', 'theirs'])
+    expect(pendingDrafts(draftsToPrivateNote(state))).toEqual([])
   })
 
   it('also moves the draft of a player who has withdrawn, into that player\'s own note', () => {

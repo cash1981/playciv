@@ -2,13 +2,13 @@
  * in storage on every request, so changing a role takes effect immediately. */
 
 import type { GameState } from '@civ/engine'
-import { draftsToPrivateNote, publicOrderVersions, unpublishedDrafts } from '@civ/engine'
+import { draftsToPrivateNote, pendingDrafts } from '@civ/engine'
 
 import type { App } from '../app.js'
 import type { AppContext } from '../context.js'
 import { asRecord, currentPlayer, requireAdminWith, requireString } from '../context.js'
 import { sendError } from '../errors.js'
-import { copyLegacyOrders } from '../legacy-orders.js'
+import { copyLegacyOrders, legacyOrderRows } from '../legacy-orders.js'
 import { toPlayerDto } from './auth.js'
 import type { PlayerUpdate, StoredPlayer, UserRole } from '../store/types.js'
 
@@ -434,8 +434,8 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       id: game.id,
       name: game.name,
       active: game.active,
-      orderRows: publicOrderVersions(game).length,
-      drafts: unpublishedDrafts(game).length,
+      orderRows: legacyOrderRows(game.id, game).length,
+      drafts: pendingDrafts(game).length,
     }))
     return c.json({
       games: rows,
@@ -460,10 +460,12 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       return sendError(c, 400, 'BAD_REQUEST', 'Send a JSON object, with gameId to migrate one game')
     }
-    const gameId = asRecord(parsed)['gameId']
-    if (gameId !== undefined && (typeof gameId !== 'string' || gameId.trim() === '')) {
+    const rawGameId = asRecord(parsed)['gameId']
+    if (rawGameId !== undefined && (typeof rawGameId !== 'string' || rawGameId.trim() === '')) {
       return sendError(c, 400, 'BAD_REQUEST', 'gameId must be a non-empty string')
     }
+    // Trimmed once, and the trimmed value is what is looked up and reported
+    const gameId = rawGameId?.trim()
 
     let targets: readonly GameState[]
     if (gameId === undefined) {
@@ -502,7 +504,7 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
         skipped += 1
         continue
       }
-      games.push({ id: game.id, name: game.name, orderRows: copy.written, drafts: unpublishedDrafts(game).length })
+      games.push({ id: game.id, name: game.name, orderRows: copy.written, drafts: pendingDrafts(game).length })
     }
     return c.json({
       games,

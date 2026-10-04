@@ -493,6 +493,18 @@ const draftSection = (draft: UnpublishedDraft): string =>
   `### Turn ${draft.turnNumber}, ${TURN_PHASE_LABEL[draft.phase]} (unpublished draft)\n\n${draft.markdown}`
 
 /**
+ * The drafts `draftsToPrivateNote` would add: those whose section the owner's note
+ * does not already hold, word for word. The migration reports this count, so a
+ * second run says nothing is left to move.
+ */
+export function pendingDrafts(state: GameState): readonly UnpublishedDraft[] {
+  const noteOf = new Map(
+    [...state.players, ...state.withdrawnPlayers].map((player) => [player.playerId, player.gamenote ?? ''] as const),
+  )
+  return unpublishedDrafts(state).filter((draft) => !(noteOf.get(draft.playerId) ?? '').includes(draftSection(draft)))
+}
+
+/**
  * Moves the unpublished drafts of the old Turn orders panel into their owners'
  * private note (`gamenote`), which is what the private tab of the timeline shows.
  * Each draft becomes a markdown section headed `### Turn N, <phase> (unpublished
@@ -502,14 +514,13 @@ const draftSection = (draft: UnpublishedDraft): string =>
  * alone: nothing another player sees changes.
  */
 export function draftsToPrivateNote(state: GameState): GameState {
-  const drafts = unpublishedDrafts(state)
+  const drafts = pendingDrafts(state)
   if (drafts.length === 0) return state
   const withNote = (player: Playerhand): Playerhand => {
     const note = player.gamenote ?? ''
     const sections = drafts
       .filter((draft) => draft.playerId === player.playerId)
       .map(draftSection)
-      .filter((section) => !note.includes(section))
     if (sections.length === 0) return player
     return { ...player, gamenote: [note.trimEnd(), ...sections].filter((part) => part !== '').join('\n\n') }
   }

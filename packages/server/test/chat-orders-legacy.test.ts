@@ -5,7 +5,7 @@
  * the port; the rules are in `docs/agents/decisions.md`.
  */
 
-import { toPlayerView } from '@civ/engine'
+import { appendLog, toPlayerView } from '@civ/engine'
 import type { GameState } from '@civ/engine'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -264,21 +264,130 @@ describe('the migrate-chat route', () => {
     expect(mailer.sent).toEqual([])
   })
 
-  it('copies nothing from an order revealed before versions were kept, but still marks the game', async () => {
+  /**
+   * An order revealed before versions were kept, as an imported game holds it: the
+   * public turn has the text and is revealed, the history is empty. `logAt` adds the
+   * reveal's own log line with that time.
+   */
+  async function bareReveal(
+    table: Table,
+    playerIndex: number,
+    turn: number,
+    phase: 'SOT' | 'TRADE' | 'CM' | 'MOVEMENT' | 'RESEARCH',
+    text: string,
+    logAt?: string,
+  ): Promise<void> {
+    const player = table.players[playerIndex]
+    if (player === undefined) throw new Error('no player')
+    let state = savedOrder(await loadGame(table.gameId), player.id, turn, phase, text, '2026-01-01T00:00:00.000Z')
+    const erase = <T extends { readonly history: Record<string, readonly unknown[]> }>(value: T): T => ({
+      ...value,
+      history: { ...value.history, [phase]: [] },
+    })
+    state = {
+      ...state,
+      players: state.players.map((hand) => ({ ...hand, playerTurns: hand.playerTurns.map(erase) })),
+      publicTurns: Object.fromEntries(Object.entries(state.publicTurns).map(([key, value]) => [key, erase(value)])),
+    }
+    if (logAt !== undefined) {
+      const label = { SOT: 'start of turn', TRADE: 'trade', CM: 'city management', MOVEMENT: 'movement', RESEARCH: 'research' }[phase]
+      const line = `Turn ${turn} - ${player.username} revealed ${label} phase`
+      state = appendLog(state, { username: player.username, playerId: player.id, logType: 'REVEAL', privateLog: line, publicLog: line, createdAt: logAt })
+    }
+    await repo.saveGame({ ...state, legacyOrdersCopied: false })
+  }
+
+  it('copies an order revealed before versions were kept, dated from the reveal log line, and not twice', async () => {
     const table = await twoPlayerGame('old-save')
+    const [one, two] = table.players
+    if (one === undefined || two === undefined) throw new Error('no players')
+    await bareReveal(table, 0, 3, 'CM', 'old city management', '2026-02-03T08:30:00.000Z')
+    // A draft of the other player in the same game: never revealed, so never a row
+    await classicOrders(table.gameId, [{ playerId: two.id, turn: 3, phase: 'TRADE', text: 'SECRET-DRAFT' }])
+    const before = await loadGame(table.gameId)
+    expect(JSON.parse((await dryRun(table)).body)).toMatchObject({ games: [{ id: table.gameId, orderRows: 1, drafts: 1 }], totalOrderRows: 1 })
+
+    const response = await migrate(table)
+
+    expect(JSON.parse(response.body)).toMatchObject({ games: [{ id: table.gameId, orderRows: 1, drafts: 1 }], totalOrderRows: 1 })
+    const rows = await orderRows(table.gameId)
+    expect(rows.map((row) => [row.username, row.turnNumber, row.phase, row.message, row.createdAt])).toEqual([
+      [one.username, 3, 'CM', 'old city management', '2026-02-03T08:30:00.000Z'],
+    ])
+    expect(rows[0]?.id).toBe(`legacy-reveal-${table.gameId}-3-${one.username}-CM-0`)
+    expect(JSON.stringify(await repo.chatFor(table.gameId))).not.toContain('SECRET-DRAFT')
+    const after = await loadGame(table.gameId)
+    expect(after.legacyOrdersCopied).toBe(true)
+    expect(after.publicTurns).toEqual(before.publicTurns)
+
+    // Running the copy again, even by hand, writes nothing
+    expect(await copyLegacyOrders(repo, table.gameId, before)).toEqual({ written: 0, complete: true })
+    expect(await orderRows(table.gameId)).toHaveLength(1)
+  })
+
+  it('dates a version-less order from the game when no log line names it, and from the epoch when the game has no date', async () => {
+    const table = await twoPlayerGame('old-dates')
+    await bareReveal(table, 0, 1, 'SOT', 'no log line')
+    const state = await loadGame(table.gameId)
+    await repo.saveGame({ ...state, createdAt: '2026-01-05T00:00:00.000Z' })
+
+    await migrate(table)
+    expect((await orderRows(table.gameId)).map((row) => row.createdAt)).toEqual(['2026-01-05T00:00:00.000Z'])
+
+    const other = await twoPlayerGame('old-epoch')
+    await bareReveal(other, 0, 1, 'SOT', 'no log line, no game date')
+    await repo.saveGame({ ...(await loadGame(other.gameId)), createdAt: null })
+
+    await migrate(other)
+    expect((await orderRows(other.gameId)).map((row) => row.createdAt)).toEqual(['1970-01-01T00:00:00.000Z'])
+  })
+
+  it('does not copy a version-less order that the timeline already holds', async () => {
+    const table = await twoPlayerGame('old-posted')
     const one = table.players[0]
     if (one === undefined) throw new Error('no player')
-    await classicOrders(table.gameId, [{ playerId: one.id, turn: 1, phase: 'SOT', text: 'old', at: '2026-01-01T09:00:00.000Z' }])
+    await bareReveal(table, 0, 1, 'SOT', 'already posted', '2026-02-03T08:30:00.000Z')
+    await repo.appendChat({
+      id: 'posted-by-new-code',
+      gameId: table.gameId,
+      username: one.username,
+      message: 'already posted',
+      createdAt: '2026-03-01T00:00:00.000Z',
+      kind: 'order',
+      turnNumber: 1,
+      phase: 'SOT',
+    })
+
+    await migrate(table)
+
+    expect((await orderRows(table.gameId)).map((row) => row.id)).toEqual(['posted-by-new-code'])
+  })
+
+  it('never copies an unrevealed draft, even one beside a version-less reveal in the same turn', async () => {
+    const table = await twoPlayerGame('old-draft')
+    const one = table.players[0]
+    if (one === undefined) throw new Error('no player')
+    await bareReveal(table, 0, 1, 'SOT', 'public text', '2026-02-03T08:30:00.000Z')
+    await classicOrders(table.gameId, [
+      { playerId: one.id, turn: 1, phase: 'TRADE', text: 'SECRET-DRAFT' },
+      // Edited after the reveal: only the public copy may be read
+      { playerId: one.id, turn: 1, phase: 'SOT', text: 'SECRET-EDIT' },
+    ])
+    // classicOrders saved the SOT edit as private again; put the revealed text back in the public copy
     const state = await loadGame(table.gameId)
     const key = `1${one.username}`
     const turn = state.publicTurns[key]
     if (turn === undefined) throw new Error('no public turn')
-    await repo.saveGame({ ...state, publicTurns: { ...state.publicTurns, [key]: { ...turn, history: { ...turn.history, SOT: [] } } } })
+    await repo.saveGame({
+      ...state,
+      publicTurns: { ...state.publicTurns, [key]: { ...turn, orders: { ...turn.orders, SOT: 'public text' }, revealed: { ...turn.revealed, SOT: true } } },
+    })
 
-    expect((await migrate(table)).status).toBe(200)
+    await migrate(table)
 
-    expect(await orderRows(table.gameId)).toEqual([])
-    expect((await loadGame(table.gameId)).legacyOrdersCopied).toBe(true)
+    const rows = await repo.chatFor(table.gameId)
+    expect(rows.map((row) => row.message)).toEqual(['public text'])
+    expect(JSON.stringify(rows)).not.toContain('SECRET')
   })
 
   it('leaves a game that is already in the single chat alone', async () => {
@@ -455,6 +564,93 @@ describe('the migrate-chat route', () => {
     // Paging back reaches every copied order exactly once, in a sensible order
     expect(all.filter((row) => row.kind === 'order').every((row) => seen.has(row.id))).toBe(true)
     expect(current.messages.map((row) => row.createdAt)).toEqual([...current.messages.map((row) => row.createdAt)].sort())
+  })
+})
+
+describe('the migrate-chat details', () => {
+  it('counts only the drafts it would add: a section the note already holds is not counted, in the dry run or the report', async () => {
+    const table = await twoPlayerGame('counted')
+    const [one, two] = table.players
+    if (one === undefined || two === undefined) throw new Error('no players')
+    await classicOrders(table.gameId, [
+      { playerId: one.id, turn: 1, phase: 'TRADE', text: 'ALREADY-THERE' },
+      { playerId: one.id, turn: 2, phase: 'TRADE', text: 'NEW-ONE' },
+      { playerId: two.id, turn: 1, phase: 'CM', text: 'THEIRS' },
+    ])
+    const note = '### Turn 1, trade (unpublished draft)\n\nALREADY-THERE'
+    expect((await post(one.token, `/api/games/${table.gameId}/note`, { note })).status).toBe(200)
+
+    expect(JSON.parse((await dryRun(table)).body)).toMatchObject({
+      games: [{ id: table.gameId, orderRows: 0, drafts: 2 }],
+      totalDrafts: 2,
+    })
+
+    const response = await migrate(table)
+
+    expect(JSON.parse(response.body)).toMatchObject({ games: [{ id: table.gameId, drafts: 2 }], totalDrafts: 2 })
+    expect(await noteOf(table.gameId, one.id)).toBe(`${note}\n\n### Turn 2, trade (unpublished draft)\n\nNEW-ONE`)
+  })
+
+  it('looks a game up by its trimmed id', async () => {
+    const table = await twoPlayerGame('trimmed')
+    const one = table.players[0]
+    if (one === undefined) throw new Error('no player')
+    await classicOrders(table.gameId, [{ playerId: one.id, turn: 1, phase: 'SOT', text: 'order', at: '2026-01-01T09:00:00.000Z' }])
+
+    const response = await migrate(table, `  ${table.gameId}  `)
+
+    expect(response.status).toBe(200)
+    expect(JSON.parse(response.body)).toMatchObject({ games: [{ id: table.gameId }], remaining: 0 })
+    expect((await migrate(table, '   ')).status).toBe(400)
+    const missing = await migrate(table, ' nobody ')
+    expect(missing.status).toBe(404)
+    expect(missing.body).toContain('No game with id nobody')
+  })
+
+  it('does not put a moved draft into any revision or into another player\'s view of the game', async () => {
+    const table = await twoPlayerGame('revision-leak')
+    const [one, two] = table.players
+    if (one === undefined || two === undefined) throw new Error('no players')
+    await classicOrders(table.gameId, [{ playerId: one.id, turn: 1, phase: 'TRADE', text: 'MOVED-DRAFT-TEXT' }])
+
+    expect((await migrate(table)).status).toBe(200)
+    expect(await noteOf(table.gameId, one.id)).toContain('MOVED-DRAFT-TEXT')
+
+    // The owner reads the note in their own game view, nobody else does
+    const ownView = await inject(app, { url: `/api/games/${table.gameId}`, headers: bearer(one.token) })
+    expect(ownView.body).toContain('MOVED-DRAFT-TEXT')
+    const otherView = await inject(app, { url: `/api/games/${table.gameId}`, headers: bearer(two.token) })
+    expect(otherView.status).toBe(200)
+    expect(otherView.body).not.toContain('MOVED-DRAFT-TEXT')
+
+    // A revision taken after the move holds the draft in the owner's note, and its projection blanks every note
+    // The next action in the game stores a revision of the state, with the moved note in it
+    expect((await post(two.token, `/api/games/${table.gameId}/turns/order`, { phase: 'SOT', markdown: 'a later order' })).status).toBe(200)
+    const list = await inject(app, { url: `/api/games/${table.gameId}/revisions`, headers: bearer(one.token) })
+    const latest = (await list.json<{ revision: number }[]>()).at(-1)?.revision
+    expect(latest).toBeDefined()
+    const stored = await repo.findGameRevision(table.gameId, latest as number)
+    expect(JSON.stringify(stored?.state)).toContain('MOVED-DRAFT-TEXT')
+    // The owner's own view of the revision still lists their own old draft in `playerTurns`
+    // (their data, as in the live view); the note, where the migration put it, is blanked
+    const ownRevision = await inject(app, {
+      url: `/api/games/${table.gameId}/revisions/${latest}`,
+      headers: bearer(one.token),
+    })
+    const own = await ownRevision.json<{ view: { you: { gamenote: string | null; playerTurns: unknown } } }>()
+    expect(own.view.you.gamenote).toBe('')
+    expect(JSON.stringify({ ...own, view: { ...own.view, you: { ...own.view.you, playerTurns: [] } } })).not.toContain(
+      'MOVED-DRAFT-TEXT',
+    )
+    // Nobody else gets it from a revision: another player, an admin who is not in the game, a visitor
+    for (const token of [two.token, table.admin, undefined]) {
+      const revision = await inject(app, {
+        url: `/api/games/${table.gameId}/revisions/${latest}`,
+        ...(token === undefined ? {} : { headers: bearer(token) }),
+      })
+      expect(revision.status).toBe(200)
+      expect(revision.body).not.toContain('MOVED-DRAFT-TEXT')
+    }
   })
 })
 
