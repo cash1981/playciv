@@ -42,6 +42,8 @@ import {
   nearestSlotOrigin,
   remainingBoardAssetCount,
   slotOrigin,
+  terrainAt,
+  terrainWarning,
 } from '@civ/engine'
 import type { Board, BoardArea, BoardAsset, BoardPiece } from '@civ/engine'
 
@@ -347,6 +349,27 @@ export function BoardView({
 
   const pieces = board.pieces
 
+  /**
+   * Asks before a building, wonder or Great Person goes onto terrain its rule
+   * does not allow (issue #255; the rules are in the engine's `terrain.ts`). The server never refuses it; this is the only place the rule shows.
+   * `from` is the piece being moved: staying on the terrain it already stands
+   * on is not worth a second question. Terrain that is unknown, such as a
+   * player area, never asks.
+   */
+  const terrainAllows = useCallback(
+    (assetId: string, centreX: number, centreY: number, from?: BoardPiece, quiet = false): boolean => {
+      const warning = terrainWarning(board, assetId, centreX, centreY)
+      if (warning === null) return true
+      if (from !== undefined && terrainAt(board, from.x + from.width / 2, from.y + from.height / 2) === warning.terrain) {
+        return true
+      }
+      // `quiet` is a held key repeating: the first press already asked, so say no without asking again.
+      if (quiet) return false
+      return window.confirm(`${warning.message} Place it anyway?`)
+    },
+    [board],
+  )
+
   const width = boardWidth(board)
   const zoom = zoomChoice === 'auto' ? autoZoom : zoomChoice
 
@@ -395,12 +418,13 @@ export function BoardView({
       // `snap: false` bypasses the player-area and map-tile snaps in
       // `movePiece`: a nudge always moves the piece by exactly the requested
       // step, not into the nearest grid slot the way a mouse drop is (issue #193).
+      if (!terrainAllows(piece.assetId, x + piece.width / 2, y + piece.height / 2, piece, event.repeat)) return
       void run(() => api.movePiece(gameId, piece.id, x, y, false))
     }
 
     document.addEventListener('keydown', nudgeSelectedPiece)
     return () => document.removeEventListener('keydown', nudgeSelectedPiece)
-  }, [selectedId, busy, readOnly, pieces, zoom, run, gameId, board])
+  }, [selectedId, busy, readOnly, pieces, zoom, run, gameId, board, terrainAllows])
 
   useEffect(() => {
     const scroll = scrollRef.current
@@ -476,7 +500,8 @@ export function BoardView({
     if (asset === undefined) return
 
     const [x, y] = toBoard(event.clientX, event.clientY)
-    // Drop the piece centred under the mouse
+    // Drop the piece centred under the mouse, so (x, y) is its centre
+    if (!terrainAllows(asset.id, x, y)) return
     void run(() => api.placePiece(gameId, assetId, x - asset.width / 2, y - asset.height / 2))
   }
 
@@ -516,6 +541,8 @@ export function BoardView({
 
     const [x, y] = toBoard(event.clientX, event.clientY)
     if (pendingAsset !== null) {
+      // Cancelling the question leaves the asset armed, so another square can be tapped.
+      if (!terrainAllows(pendingAsset.id, x, y)) return
       setPendingAssetId(null)
       void run(() => api.placePiece(gameId, pendingAsset.id, x - pendingAsset.width / 2, y - pendingAsset.height / 2))
       return
@@ -523,6 +550,7 @@ export function BoardView({
 
     const moving = pieces.find((piece) => piece.id === moveModeId)
     if (moving !== undefined) {
+      if (!terrainAllows(moving.assetId, x, y, moving)) return
       setMoveModeId(null)
       void run(() => api.movePiece(gameId, moving.id, x - moving.width / 2, y - moving.height / 2))
       return
@@ -651,6 +679,12 @@ export function BoardView({
         const previous = pieces.find((candidate) => candidate.id === drag.previous?.id)
         if (previous !== undefined && !isMapTile(previous) && drag.previous.armed) {
           const [x, y] = toBoard(event.clientX, event.clientY)
+          if (!terrainAllows(previous.assetId, x, y, previous)) {
+            // Cancelled: the press on the tile changed the selection, so give it back, still armed.
+            setSelectedId(previous.id)
+            setMoveModeId(previous.id)
+            return
+          }
           setSelectedId(previous.id)
           setMoveModeId(null)
           void run(() => api.movePiece(gameId, previous.id, x - previous.width / 2, y - previous.height / 2))
@@ -666,6 +700,8 @@ export function BoardView({
     // The drag itself already moved the piece; disarm so an unrelated later
     // tap on the board does not move it a second time.
     setMoveModeId(null)
+    // Cancelled, the piece springs back: the board is unchanged and the drag is already cleared.
+    if (piece !== undefined && !terrainAllows(piece.assetId, drag.x + piece.width / 2, drag.y + piece.height / 2, piece)) return
     void run(() => api.movePiece(gameId, drag.id, drag.x, drag.y))
   }
 

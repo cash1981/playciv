@@ -6,18 +6,25 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-04 (issue #253 B1 Valmiki blockade)_
+_Last updated: 2026-10-04 (building terrain warning, issue #255)_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 864 engine, 593 server, 511 web on issue #253 B1 (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 891 engine, 593 server, 528 web on `feat/building-terrain` (merged with main) (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Building terrain warning (issue #255, branch `feat/building-terrain`).** Placing or moving a
+  building, wonder or Great Person onto the wrong terrain asks first ("A Library is meant for grassland, but this square
+  is forest. Place it anyway?"); OK places it, the server never refuses. New
+  `engine/src/terrain.ts` (`terrainAt`, `terrainWarning`) and `engine/data/tile-terrain.json`, the
+  terrain of the 43 map tiles, read from the images and checked by the human. Wonders and Great
+  Persons are asked about on water too. Not checked in a real browser yet. Brief: `tasks/building-terrain.md`;
+  see `decisions.md`, 2026-10-04.
 - **Issue #253 B1: Valmiki follows Artist/Thinker blockade.** A revealed Valmiki's +2 culture hand-size bonus is suppressed when all tracked matching tokens are blockaded and restored when one is free. No-token compatibility and hidden-card projection behavior are preserved. Review and rules checks approved; `pnpm -r typecheck`, 1,968 tests (864 engine, 593 server, 511 web) and `pnpm -r build` pass. PR #258: https://github.com/cash1981/playciv/pull/258; brief: `tasks/issue-253-b1-valmiki.md`; see `decisions.md`, 2026-10-04.
 - **Issue #253 A1–A4: coin handling.** Education is a revealed-only coin source with manual awards and Internet capacity; Panama tokens live on the wonder and follow ownership/blockade. A3 derives Bank and Adam Smith as separate coin sources; A4 adds atomic Democracy/Printing Press purchases during City Management. Review approved; no authenticated local game was available for interactive browser verification. PR #254: https://github.com/cash1981/playciv/pull/254. Brief: `tasks/issue-253-a-coins.md`; see `decisions.md`, 2026-10-04. Scout-held Bank squares still need Sheet corrections.
 - **Issue #253 metropolis outskirts.** The shared city footprint now models the ten squares around a metropolis's two center squares, using the marker's horizontal or vertical orientation and excluding both centers from Bank/Great Person outskirts coins. Blockade and city ownership use the same footprint. Review approved; `pnpm -r typecheck`, 1,965 tests (861 engine, 593 server, 511 web) and `pnpm -r build` pass. PR #257: https://github.com/cash1981/playciv/pull/257. See `tasks/issue-253-metropolis-footprint.md` and `decisions.md`, 2026-10-04.

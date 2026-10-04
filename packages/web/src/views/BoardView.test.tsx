@@ -1,10 +1,23 @@
 // @vitest-environment jsdom
 
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
-import { BOARD_ASSETS, boardWidth, createBoard, createBoardForPlayers, findBoardAsset, slotOrigin } from '@civ/engine'
+import {
+  BOARD_ASSETS,
+  SQUARE_SIZE,
+  TILE_SQUARES,
+  areaBandTop,
+  boardWidth,
+  createBoard,
+  createBoardForPlayers,
+  findBoardAsset,
+  slotOrigin,
+  tileTerrainGrid,
+  wondersArea,
+} from '@civ/engine'
+import type { Terrain } from '@civ/engine'
 import type { BoardAsset, BoardPiece, PlayerView } from '@civ/engine'
 
 import type { GameRevisionView } from '../lib/api.js'
@@ -1453,5 +1466,423 @@ describe('blockaded pieces (issue #241)', () => {
     expect(container.querySelector('.board-piece-blockaded')).toBeNull()
     expect(container.querySelector('.board-piece-strike')).toBeNull()
     cleanup()
+  })
+})
+
+describe('BoardView terrain warning (issue #255)', () => {
+  // A failing test must not leave its board or its spies for the next one.
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  // Aztec has every terrain. Squares are found by search, so a corrected tile
+  // file does not break the tests. Zoom is set to 100 %, and jsdom reports a
+  // zero-size surface, so a client coordinate is a board coordinate.
+  const tileId = 'tiles/Aztec'
+  const grid = tileTerrainGrid(tileId) as readonly (readonly Terrain[])[]
+  const board0 = createBoard()
+  const [tileX, tileY] = slotOrigin(board0, board0.slots[0] as { x: number; y: number })
+  const centreOfSquare = (row: number, column: number): readonly [number, number] => [
+    tileX + column * SQUARE_SIZE + SQUARE_SIZE / 2,
+    tileY + row * SQUARE_SIZE + SQUARE_SIZE / 2,
+  ]
+  const squaresOf = (terrain: Terrain): readonly (readonly [number, number])[] =>
+    grid.flatMap((cells, row) =>
+      cells.flatMap((cell, column) => (cell === terrain ? [centreOfSquare(row, column)] : [])),
+    )
+  const squareOf = (terrain: Terrain, index = 0): readonly [number, number] => {
+    const found = squaresOf(terrain)[index]
+    if (found === undefined) throw new Error(`${tileId} has no ${terrain} square number ${index}`)
+    return found
+  }
+
+  const mapTile = {
+    ...piece(tileId, 'aztec'),
+    category: 'tile' as const,
+    label: 'Aztec',
+    path: 'tiles/Aztec.png',
+    x: tileX,
+    y: tileY,
+    width: TILE_SQUARES * SQUARE_SIZE,
+    height: TILE_SQUARES * SQUARE_SIZE,
+  }
+  const asset = (id: string): BoardAsset => {
+    const found = findBoardAsset(id)
+    if (found === undefined) throw new Error(`${id} missing from manifest`)
+    return found
+  }
+  /** A building of the real size whose centre is at (cx, cy). */
+  const building = (id: string, pieceId: string, [cx, cy]: readonly [number, number]): BoardPiece => {
+    const { width, height, label, path, category } = asset(id)
+    return { ...piece(id, pieceId), label, path, category, width, height, x: cx - width / 2, y: cy - height / 2 }
+  }
+
+  const pointer = (target: HTMLElement, type: string, pointerType: string, clientX: number, clientY: number) => {
+    const event = new Event(type, { bubbles: true })
+    for (const [name, value] of Object.entries({ pointerId: 7, pointerType, isPrimary: true, button: 0, clientX, clientY })) {
+      Object.defineProperty(event, name, { value })
+    }
+    target.dispatchEvent(event)
+  }
+  const tap = (target: HTMLElement, [x, y]: readonly [number, number]) => {
+    pointer(target, 'pointerdown', 'touch', x, y)
+    pointer(target, 'pointerup', 'touch', x, y)
+  }
+
+  const setup = (extra: readonly BoardPiece[] = [], assetIds: readonly string[] = []) => {
+    const assets = vi.spyOn(api, 'boardAssets').mockResolvedValue(assetIds.map(asset))
+    const placePiece = vi.spyOn(api, 'placePiece').mockResolvedValue({} as PlayerView)
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const all = [mapTile, ...extra]
+    const utils = render(
+      <BoardView
+        gameId="game"
+        board={{ ...board0, pieces: all }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async action => { await action() }}
+      />,
+    )
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    const surface = utils.container.querySelector('.board-surface') as HTMLElement
+    const element = (id: string) =>
+      utils.container.querySelectorAll<HTMLElement>('.board-piece')[all.findIndex(candidate => candidate.id === id)] as HTMLElement
+    return { assets, placePiece, movePiece, confirm, surface, element, container: utils.container }
+  }
+  const finish = (mocks: ReturnType<typeof setup>) => {
+    mocks.assets.mockRestore()
+    mocks.placePiece.mockRestore()
+    mocks.movePiece.mockRestore()
+    mocks.confirm.mockRestore()
+    cleanup()
+  }
+
+  /** Arms a building from the palette, as a tap on the board would place it. */
+  const arm = async (label: RegExp) => {
+    fireEvent.click(screen.getByRole('button', { name: 'Buildings' }))
+    const item = await screen.findByRole('button', { name: label })
+    fireEvent.click(item)
+  }
+
+  it('asks before a tapped Library goes onto forest, and places it on OK', async () => {
+    const mocks = setup([], ['buildings/library'])
+    const library = asset('buildings/library')
+    const [x, y] = squareOf('forest')
+    await arm(/^Library/)
+    tap(mocks.surface, [x, y])
+
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledWith('game', library.id, x - library.width / 2, y - library.height / 2))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      'A Library is meant for grassland, but this square is forest. Place it anyway?',
+    )
+    finish(mocks)
+  })
+
+  it('does not place the Library when the question is cancelled, and keeps it armed', async () => {
+    const mocks = setup([], ['buildings/library'])
+    mocks.confirm.mockReturnValue(false)
+    const [fx, fy] = squareOf('forest')
+    await arm(/^Library/)
+    tap(mocks.surface, [fx, fy])
+
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.placePiece).not.toHaveBeenCalled()
+    expect(screen.getByRole('status').textContent).toContain('Placing Library')
+
+    // The next tap, on grassland, needs no question and places it.
+    const [gx, gy] = squareOf('grassland')
+    tap(mocks.surface, [gx, gy])
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    finish(mocks)
+  })
+
+  it('does not ask for a Library on grassland', async () => {
+    const mocks = setup([], ['buildings/library'])
+    await arm(/^Library/)
+    tap(mocks.surface, squareOf('grassland'))
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).not.toHaveBeenCalled()
+    finish(mocks)
+  })
+
+  it('does not ask for a Harbor on water, but asks for a Market on water', async () => {
+    const mocks = setup([], ['buildings/harbor', 'buildings/market'])
+    await arm(/^Harbor/)
+    tap(mocks.surface, squareOf('water'))
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).not.toHaveBeenCalled()
+
+    mocks.placePiece.mockClear()
+    await arm(/^Market/)
+    tap(mocks.surface, squareOf('water'))
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(String(mocks.confirm.mock.calls[0]?.[0])).toContain(
+      'A Market is meant for any terrain except water, but this square is water.',
+    )
+    finish(mocks)
+  })
+
+  it('asks before a Library is dropped from the palette onto forest', async () => {
+    const mocks = setup([], ['buildings/library'])
+    const library = asset('buildings/library')
+    const [x, y] = squareOf('forest')
+    const dataTransfer = { getData: (type: string) => (type === 'text/civ-asset' ? library.id : '') }
+    // jsdom has no DragEvent, so the coordinates go on a plain event.
+    const drop = () => {
+      const event = new Event('drop', { bubbles: true, cancelable: true })
+      for (const [name, value] of Object.entries({ clientX: x, clientY: y, dataTransfer })) {
+        Object.defineProperty(event, name, { value })
+      }
+      fireEvent(mocks.surface, event)
+    }
+    // The palette fills in after the asset list has loaded; the drop reads from the same list.
+    fireEvent.click(screen.getByRole('button', { name: 'Buildings' }))
+    await screen.findByRole('button', { name: /^Library/ })
+
+    mocks.confirm.mockReturnValue(false)
+    drop()
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.placePiece).not.toHaveBeenCalled()
+
+    mocks.confirm.mockReturnValue(true)
+    drop()
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledWith('game', library.id, x - library.width / 2, y - library.height / 2))
+    finish(mocks)
+  })
+
+  /** Drops a palette asset at a board point; jsdom has no DragEvent, so the fields go on a plain event. */
+  const dropAsset = (surface: HTMLElement, assetId: string, [x, y]: readonly [number, number]) => {
+    const event = new Event('drop', { bubbles: true, cancelable: true })
+    const dataTransfer = { getData: (type: string) => (type === 'text/civ-asset' ? assetId : '') }
+    for (const [name, value] of Object.entries({ clientX: x, clientY: y, dataTransfer })) {
+      Object.defineProperty(event, name, { value })
+    }
+    fireEvent(surface, event)
+  }
+
+  it('asks before a wonder is dropped on water, and places it only on OK', async () => {
+    const mocks = setup([], ['wonders/pyramids'])
+    const pyramids = asset('wonders/pyramids')
+    const [x, y] = squareOf('water')
+    fireEvent.click(screen.getByRole('button', { name: 'Wonders' }))
+    await screen.findByRole('button', { name: /Pyramids/ })
+
+    mocks.confirm.mockReturnValue(false)
+    dropAsset(mocks.surface, pyramids.id, [x, y])
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      'The Pyramids is meant for any terrain except water, but this square is water. Place it anyway?',
+    )
+    expect(mocks.placePiece).not.toHaveBeenCalled()
+
+    mocks.confirm.mockReturnValue(true)
+    dropAsset(mocks.surface, pyramids.id, [x, y])
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledWith('game', pyramids.id, x - pyramids.width / 2, y - pyramids.height / 2))
+  })
+
+  it('does not ask for a wonder dropped on forest, or in the Wonders area', async () => {
+    const mocks = setup([], ['wonders/pyramids'])
+    const pyramids = asset('wonders/pyramids')
+    fireEvent.click(screen.getByRole('button', { name: 'Wonders' }))
+    await screen.findByRole('button', { name: /Pyramids/ })
+
+    dropAsset(mocks.surface, pyramids.id, squareOf('forest'))
+    const area = wondersArea(board0)
+    dropAsset(mocks.surface, pyramids.id, [area.x + area.width / 2, area.y + area.height / 2])
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledTimes(2))
+    expect(mocks.confirm).not.toHaveBeenCalled()
+  })
+
+  it('asks before a Great Person is tapped onto water, but not onto desert', async () => {
+    const mocks = setup([], ['great people/general'])
+    mocks.confirm.mockReturnValue(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Great People' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^General/ }))
+    tap(mocks.surface, squareOf('water'))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(String(mocks.confirm.mock.calls[0]?.[0])).toBe(
+      'A General is meant for any terrain except water, but this square is water. Place it anyway?',
+    )
+    expect(mocks.placePiece).not.toHaveBeenCalled()
+
+    tap(mocks.surface, squareOf('desert'))
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+  })
+
+  it('asks before a moved Library lands on forest, and moves nothing when cancelled', async () => {
+    const library = building('buildings/library', 'library-1', squareOf('grassland'))
+    const mocks = setup([library])
+    mocks.confirm.mockReturnValue(false)
+    const [x, y] = squareOf('forest')
+
+    tap(mocks.element('library-1'), [20, 20])
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Library'))
+    tap(mocks.surface, [x, y])
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.movePiece).not.toHaveBeenCalled()
+
+    // Still armed: a tap on another grassland square moves it without a question.
+    tap(mocks.surface, squareOf('grassland', 1))
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    finish(mocks)
+  })
+
+  it('keeps the armed Library selected when the question is cancelled after a press on a map tile', async () => {
+    const library = building('buildings/library', 'library-1', squareOf('grassland'))
+    const mocks = setup([library])
+    mocks.confirm.mockReturnValue(false)
+    const [x, y] = squareOf('forest')
+    const clickTile = () => {
+      pointer(mocks.element('aztec'), 'pointerdown', 'mouse', x, y)
+      pointer(mocks.element('aztec'), 'pointerup', 'mouse', x, y)
+    }
+
+    tap(mocks.element('library-1'), [20, 20])
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Library'))
+    // A mouse click on the tile is a board tap for the armed piece.
+    clickTile()
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.movePiece).not.toHaveBeenCalled()
+    await waitFor(() => expect(mocks.element('library-1').classList.contains('selected')).toBe(true))
+    expect(screen.getByRole('status').textContent).toContain('Moving Library')
+    expect(mocks.element('aztec').classList.contains('selected')).toBe(false)
+
+    // Still armed, so a second click and OK moves it.
+    mocks.confirm.mockReturnValue(true)
+    clickTile()
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledWith('game', 'library-1', x - library.width / 2, y - library.height / 2))
+  })
+
+  it('moves the Library on OK', async () => {
+    const library = building('buildings/library', 'library-1', squareOf('grassland'))
+    const mocks = setup([library])
+    const [x, y] = squareOf('forest')
+    tap(mocks.element('library-1'), [20, 20])
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Library'))
+    tap(mocks.surface, [x, y])
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledWith('game', 'library-1', x - library.width / 2, y - library.height / 2))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    finish(mocks)
+  })
+
+  it('does not ask when a Library already on forest moves to another forest square', async () => {
+    // It was placed there after an OK earlier, so asking again would be nagging.
+    const library = building('buildings/library', 'library-1', squareOf('forest', 0))
+    const mocks = setup([library])
+    tap(mocks.element('library-1'), [20, 20])
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Library'))
+    tap(mocks.surface, squareOf('forest', 1))
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).not.toHaveBeenCalled()
+    finish(mocks)
+  })
+
+  it('does not ask when a Library is moved off the map into the player band, where it is tidied into a slot', async () => {
+    const library = building('buildings/library', 'library-1', squareOf('grassland'))
+    const mocks = setup([library])
+    tap(mocks.element('library-1'), [20, 20])
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Library'))
+    tap(mocks.surface, [200, areaBandTop(board0) + SQUARE_SIZE])
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).not.toHaveBeenCalled()
+    finish(mocks)
+  })
+
+  it('asks before a dragged Library is dropped on forest, and the drag moves nothing when cancelled', async () => {
+    const start = squareOf('grassland')
+    const library = building('buildings/library', 'library-1', start)
+    const mocks = setup([library])
+    const [x, y] = squareOf('forest')
+    const target = mocks.element('library-1')
+    mocks.confirm.mockReturnValue(false)
+
+    pointer(target, 'pointerdown', 'mouse', start[0], start[1])
+    pointer(target, 'pointermove', 'mouse', x, y)
+    pointer(target, 'pointerup', 'mouse', x, y)
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.movePiece).not.toHaveBeenCalled()
+
+    mocks.confirm.mockReturnValue(true)
+    pointer(target, 'pointerdown', 'mouse', start[0], start[1])
+    pointer(target, 'pointermove', 'mouse', x, y)
+    pointer(target, 'pointerup', 'mouse', x, y)
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledOnce())
+    expect(mocks.movePiece).toHaveBeenCalledWith('game', 'library-1', x - library.width / 2, y - library.height / 2)
+    finish(mocks)
+  })
+
+  /** A Library 3 px short of the border with other terrain to its right, so one 6 px nudge crosses it. */
+  const libraryNextToBorder = (): BoardPiece => {
+    let border: readonly [number, number] | undefined
+    for (let row = 0; row < TILE_SQUARES; row++) {
+      for (let column = 0; column < TILE_SQUARES - 1; column++) {
+        if (grid[row]?.[column] === 'grassland' && grid[row]?.[column + 1] !== 'grassland') {
+          border = [tileX + (column + 1) * SQUARE_SIZE, centreOfSquare(row, column)[1]]
+        }
+      }
+    }
+    if (border === undefined) throw new Error(`${tileId} has no grassland square with another terrain to its right`)
+    return building('buildings/library', 'library-1', [border[0] - 3, border[1]])
+  }
+
+  it('asks before an arrow-key nudge carries a Library from grassland onto other terrain', async () => {
+    const mocks = setup([libraryNextToBorder()])
+    mocks.confirm.mockReturnValue(false)
+
+    tap(mocks.element('library-1'), [20, 20])
+    await waitFor(() => expect(mocks.element('library-1').classList.contains('selected')).toBe(true))
+    fireEvent.keyDown(document, { key: 'ArrowRight' })
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.movePiece).not.toHaveBeenCalled()
+
+    mocks.confirm.mockReturnValue(true)
+    fireEvent.keyDown(document, { key: 'ArrowRight' })
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledOnce())
+    expect(mocks.movePiece).toHaveBeenCalledWith('game', 'library-1', expect.any(Number), expect.any(Number), false)
+
+    // A nudge that stays inside the square it is on needs no question.
+    mocks.confirm.mockClear()
+    mocks.movePiece.mockClear()
+    fireEvent.keyDown(document, { key: 'ArrowDown' })
+    expect(mocks.confirm).not.toHaveBeenCalled()
+  })
+
+  it('a held arrow key does not ask again after Cancel, and moves nothing', async () => {
+    const mocks = setup([libraryNextToBorder()])
+    mocks.confirm.mockReturnValue(false)
+    tap(mocks.element('library-1'), [20, 20])
+    await waitFor(() => expect(mocks.element('library-1').classList.contains('selected')).toBe(true))
+
+    fireEvent.keyDown(document, { key: 'ArrowRight' })
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    // The browser repeats keydown while the key is held down.
+    for (let repeat = 0; repeat < 3; repeat++) fireEvent.keyDown(document, { key: 'ArrowRight', repeat: true })
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.movePiece).not.toHaveBeenCalled()
+
+    // A repeat that crosses no terrain border is an ordinary nudge.
+    fireEvent.keyDown(document, { key: 'ArrowDown', repeat: true })
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+  })
+
+  it('never asks about a piece that is not one of the listed buildings', async () => {
+    const hut = { ...piece('resources/hut', 'hut-1'), category: 'resource' as const, label: 'Hut', path: 'resources/hut.png', width: 40, height: 40 }
+    const [x, y] = squareOf('water')
+    const mocks = setup([{ ...hut, x: x - 20, y: y - 20 }])
+    tap(mocks.element('hut-1'), [20, 20])
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Hut'))
+    tap(mocks.surface, squareOf('forest'))
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).not.toHaveBeenCalled()
+    finish(mocks)
   })
 })

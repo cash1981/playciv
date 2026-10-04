@@ -4605,6 +4605,33 @@ expansions.
 - Bank ownership uses the engine's existing city-center-plus-eight-neighbor footprint. Extra metropolis outskirts and scout-held coin squares are not inferred by the current board model; use the Sheet row for corrections until those locations are represented. The stricter expansion rule that a Great Person needs a matching token is also left at the project's documented no-token compatibility policy.
 - Democracy and Printing Press purchases are explicit City Management actions: pay 6 trade or 5 culture and add one coin atomically. Usage is recorded on the player's turn, each action once per turn; the shared field can also support the later phase-effects actions in #247. Manual counter editing remains available for correction.
 
+## 2026-10-04: a building, wonder or Great Person on the wrong terrain asks first (issue #255)
+
+- **Client-side warning, never a refusal.** Placing or moving a building onto a map square
+  whose terrain the rulebook does not allow asks "A Library is meant for grassland, but this
+  square is forest. Place it anyway?" (`window.confirm`, the pattern the web package uses
+  elsewhere). OK places it. The server and the engine actions are unchanged, so a player can
+  always do it, and nothing reaches a projection.
+- **The rules** (base rulebook p. 16, and the issue for the navy buildings): Harbor, Shipyard
+  and Military Dock on water; Trading Post on desert; Workshop and Iron Mine on mountain;
+  Library, University, Granary and Aqueduct on grassland; Market, Bank, Temple, Cathedral,
+  Barracks and Academy on any terrain except water. Wonders (p. 17) and Great Persons (p. 18)
+  are asked about on water too, added at the human's request. "One limited building per
+  city" is not checked.
+- **Terrain data** is new: `packages/engine/data/tile-terrain.json` has the terrain of each
+  of the 43 map tiles (4 x 4 squares, in the printed orientation; the rotation of a placed
+  tile is undone in `terrainAt`). It was not printed anywhere in a usable form: the squares
+  were classified from the tile images by colour and corrected by eye, and the human then
+  settled the doubtful ones (arabia, greece, rome, spain, tile14 to tile23b, japan, mongolia).
+  The file can still be corrected by hand. A square that is mostly
+  land with a pond counts as water where the human said so (the Aztec tile). A tile without
+  data (the tile back) or a point off the map never warns.
+- A wonder is named without an article in the message ("The Pyramids is meant for ...", "Big Ben is
+  meant for ..."), a building or Great Person with one ("A General is ..."), because the wonder
+  labels are names. The plural names read slightly off; fixing that needs per-asset overrides.
+- Moving a piece that already stands on a warned terrain to another square of the same
+  terrain does not ask again. A held arrow key asks once, not on every auto-repeat.
+
 ## 2026-10-04: rotated metropolis city footprint
 
 - A metropolis occupies two adjacent city-center squares along its long axis and has ten outskirts squares: the union of each center's eight neighbors, excluding both centers. Rotation 0/180 uses the horizontal axis; 90/270 uses the vertical axis. Its visual center sits on the boundary between those two center squares; the map-cell calculation floors to the eastern/southern square, so the pair is `[anchor−1, anchor]` on the long axis.
