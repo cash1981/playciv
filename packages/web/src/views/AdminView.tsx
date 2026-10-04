@@ -1039,7 +1039,7 @@ function MigrateChatPanel({
     if (working || preview === null || (preview.games.length === 0 && preview.unchecked === 0)) return
     const question =
       preview.games.length === 0
-        ? `Check the ${countOf(preview.unchecked, 'game', 'games')} that were not checked yet and move what is missing? ` +
+        ? `Check ${countOf(preview.unchecked, 'game', 'games')} that ${preview.unchecked === 1 ? 'was' : 'were'} not checked yet and move what is missing? ` +
           `Each press handles a limited number of games; press again while some remain. ${MIGRATE_CHAT_EFFECT}`
         : `Move ${countOf(preview.games.length, 'game', 'games')} to the single chat? ` +
           `${countOf(preview.totalOrderRows, 'order', 'orders')} will be copied into the timeline and ` +

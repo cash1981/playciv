@@ -897,7 +897,7 @@ describe('move old games to the single chat panel', () => {
     expect(await screen.findByText('1 more game was not checked, run the move again.', undefined, { timeout: 5_000 })).toBeTruthy()
     expect(screen.queryByText('Every game has been moved to the single chat.')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Move all' }))
-    expect(String(vi.mocked(window.confirm).mock.calls[0]?.[0])).toContain('were not checked yet')
+    expect(String(vi.mocked(window.confirm).mock.calls[0]?.[0])).toContain('Check 1 game that was not checked yet')
     await waitFor(() => expect(vi.mocked(api.migrateChat)).toHaveBeenCalledWith(undefined), { timeout: 5_000 })
   })
 

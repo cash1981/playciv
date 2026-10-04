@@ -210,8 +210,9 @@ describe('publicOrdersWithoutVersions', () => {
         return bare.log
       },
     } as GameState
+    reads = 0
     expect(publicOrdersWithoutVersions(watchedBare)).toHaveLength(2)
-    expect(reads).toBeGreaterThan(0)
+    expect(reads).toBe(1)
   })
 
   it('finds the reveal date of a user whose name has regex characters', () => {

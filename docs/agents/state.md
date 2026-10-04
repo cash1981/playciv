@@ -13,7 +13,7 @@ _Last updated: 2026-10-04_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 762 engine, 416 server, 478 web on `claude/pr-218-default-view-wlml28` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 766 engine, 421 server, 481 web on `claude/pr-218-default-view-wlml28` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 

@@ -425,7 +425,11 @@ const EPOCH = '1970-01-01T00:00:00.000Z'
 const revealKey = (turnNumber: number, username: string, label: string): string =>
   `${turnNumber}\u0000${username}\u0000${label}`.toLowerCase()
 
-/** Finds `turn N - <user> revealed <phase label> phase` anywhere in a lowercased line; the lookahead lets matches overlap. */
+/**
+ * Finds `turn N - <user> revealed <phase label> phase` anywhere in a lowercased line; the lookahead
+ * lets matches overlap. The phase labels are interpolated unescaped, so they must stay plain letters
+ * and spaces (or be escaped first if a label ever gets a regex character).
+ */
 const REVEAL_LINE = new RegExp(
   `(?=turn (\\d+) - (.+?) revealed (${Object.values(TURN_PHASE_LABEL).map((label) => label.toLowerCase()).join('|')}) phase)`,
   'g',

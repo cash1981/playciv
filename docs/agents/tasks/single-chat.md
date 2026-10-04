@@ -3,7 +3,7 @@
 - **Slug:** `single-chat`
 - **Branch:** `claude/pr-218-default-view-wlml28`
 - **Owner:** Claude
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 

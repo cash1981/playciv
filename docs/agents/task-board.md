@@ -12,19 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### single-chat
-
-- **Owner:** Claude
-- **Branch:** `claude/pr-218-default-view-wlml28`
-- **Brief:** `docs/agents/tasks/single-chat.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/**`, `packages/engine/test/**`
-  - `packages/server/src/**`, `packages/server/test/**`
-  - `packages/web/src/**`
-  - `README.md`, `docs/agents/**`
-- **Notes:** also holds `state.ts` and `api.ts` (shared resources)
-
 ---
 
 ## Format
