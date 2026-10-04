@@ -185,7 +185,7 @@
   ],
   "tiles/arabia": [
    [
-    "mountain",
+    "desert",
     "desert",
     "desert",
     "water"
@@ -297,7 +297,7 @@
    [
     "forest",
     "mountain",
-    "mountain",
+    "grassland",
     "water"
    ],
    [
@@ -353,7 +353,7 @@
     "water"
    ],
    [
-    "grassland",
+    "mountain",
     "mountain",
     "forest",
     "water"
@@ -413,7 +413,7 @@
    [
     "water",
     "forest",
-    "forest",
+    "mountain",
     "water"
    ]
   ],
@@ -453,7 +453,7 @@
    [
     "water",
     "forest",
-    "mountain",
+    "grassland",
     "water"
    ],
    [
@@ -864,7 +864,7 @@
     "water",
     "mountain",
     "mountain",
-    "grassland"
+    "mountain"
    ],
    [
     "water",
@@ -901,7 +901,7 @@
    [
     "water",
     "water",
-    "grassland",
+    "mountain",
     "water"
    ],
    [

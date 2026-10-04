@@ -350,8 +350,8 @@ export function BoardView({
   const pieces = board.pieces
 
   /**
-   * Asks before a building goes onto terrain its rule does not allow (issue
-   * #255). The server never refuses it; this is the only place the rule shows.
+   * Asks before a building, wonder or Great Person goes onto terrain its rule
+   * does not allow (issue #255; the rules are in the engine's `terrain.ts`). The server never refuses it; this is the only place the rule shows.
    * `from` is the piece being moved: staying on the terrain it already stands
    * on is not worth a second question. Terrain that is unknown, such as a
    * player area, never asks.

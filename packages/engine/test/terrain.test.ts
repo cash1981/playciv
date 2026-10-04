@@ -11,6 +11,7 @@ import {
   ROTATIONS,
   SQUARE_SIZE,
   TILE_SQUARES,
+  areaBandTop,
   boardAssetsByCategory,
   boardWidth,
   createBoard,
@@ -18,6 +19,7 @@ import {
   mapHeight,
   mapTop,
   slotOrigin,
+  wondersArea,
 } from '../src/board.js'
 import type { Board, BoardPiece, Rotation } from '../src/board.js'
 import { BUILDING_TERRAIN, TERRAINS, terrainAt, terrainWarning, tileTerrainGrid } from '../src/terrain.js'
@@ -274,9 +276,11 @@ describe('terrainWarning', () => {
     }
     throw new Error(`${tileId} has no ${terrain} square`)
   }
+  // `building` is a name under buildings/, or a path starting with ../ for another folder.
   const warn = (building: string, terrain: Terrain) => {
     const [x, y] = squareWith(terrain)
-    return terrainWarning(board, `buildings/${building}`, x, y)
+    const id = building.startsWith('../') ? building.slice(3) : `buildings/${building}`
+    return terrainWarning(board, id, x, y)
   }
 
   it('says nothing for a building on terrain its rule allows', () => {
@@ -333,14 +337,62 @@ describe('terrainWarning', () => {
     expect(terrainWarning(back, 'buildings/library', ...centreOf(tileX, tileY, 0, 0))).toBeNull()
   })
 
-  it('says nothing for a piece that is not one of the listed buildings', () => {
+  it('says nothing for a piece with no rule', () => {
     const [x, y] = squareWith('water')
-    expect(terrainWarning(board, 'cities/city', x, y)).toBeNull()
-    expect(terrainWarning(board, 'figures/redarmy', x, y)).toBeNull()
     expect(terrainWarning(board, 'nonsense', x, y)).toBeNull()
-    // A wonder or a Great Person is out of scope: any terrain but water, and not checked.
-    for (const asset of boardAssetsByCategory('wonder')) {
+    // Only buildings, wonders and Great People have a rule; every other category is free.
+    const ruled = new Set(['building', 'wonder', 'greatperson'])
+    for (const asset of BOARD_ASSETS.filter((candidate) => !ruled.has(candidate.category))) {
       expect(terrainWarning(board, asset.id, x, y), asset.id).toBeNull()
+    }
+  })
+
+  it('warns about a wonder on water, by name, and not on any other terrain', () => {
+    expect(warn('../wonders/pyramids', 'water')).toEqual({
+      terrain: 'water',
+      allowed: ['grassland', 'forest', 'mountain', 'desert'],
+      message: 'The Pyramids is meant for any terrain except water, but this square is water.',
+    })
+    // A wonder without "The" in its name reads the same way.
+    expect(warn('../wonders/bigben', 'water')?.message).toBe(
+      'Big Ben is meant for any terrain except water, but this square is water.',
+    )
+    for (const terrain of ['grassland', 'forest', 'mountain', 'desert'] as const) {
+      expect(warn('../wonders/pyramids', terrain), terrain).toBeNull()
+    }
+  })
+
+  it('warns about every wonder and every Great Person on water, with no id list', () => {
+    const [x, y] = squareWith('water')
+    for (const asset of [...boardAssetsByCategory('wonder'), ...boardAssetsByCategory('greatperson')]) {
+      expect(terrainWarning(board, asset.id, x, y)?.terrain, asset.id).toBe('water')
+    }
+  })
+
+  it('warns about a Great Person on water, and not on desert', () => {
+    expect(warn('../great people/general', 'water')?.message).toBe(
+      'A General is meant for any terrain except water, but this square is water.',
+    )
+    expect(warn('../great people/general', 'desert')).toBeNull()
+    expect(warn('../great people/artist', 'water')?.message).toBe(
+      'An Artist is meant for any terrain except water, but this square is water.',
+    )
+  })
+
+  it('never warns about a wonder in the Wonders area or any piece in a player area', () => {
+    // A water tile left lying under those areas must not matter either: they are not map squares.
+    const area = wondersArea(board)
+    const inWondersArea: readonly [number, number] = [area.x + area.width / 2, area.y + area.height / 2]
+    const inPlayerBand: readonly [number, number] = [SQUARE_SIZE * 2, areaBandTop(board) + SQUARE_SIZE]
+    const stray = boardWith(
+      tilePiece(tileId, inWondersArea[0] - SQUARE_SIZE, inWondersArea[1] - SQUARE_SIZE),
+      tilePiece(tileId, inPlayerBand[0] - SQUARE_SIZE, inPlayerBand[1] - SQUARE_SIZE),
+    )
+    for (const id of ['wonders/pyramids', 'great people/general', 'buildings/market', 'buildings/library']) {
+      expect(terrainWarning(board, id, ...inWondersArea), id).toBeNull()
+      expect(terrainWarning(board, id, ...inPlayerBand), id).toBeNull()
+      expect(terrainWarning(stray, id, ...inWondersArea), id).toBeNull()
+      expect(terrainWarning(stray, id, ...inPlayerBand), id).toBeNull()
     }
   })
 })

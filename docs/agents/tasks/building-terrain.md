@@ -49,6 +49,9 @@ the player to do it if they press ok."
 
 **In:**
 
+0. Added after the first review, at the human's request: wonders and Great Persons ask
+   on water (any terrain except water), checked by the same paths.
+
 1. `packages/engine/src/terrain.ts` (new), pure:
    - `TERRAINS`, `Terrain` type; `terrainAt(board, x, y)` returns the terrain of the
      map square under board point (x, y), or `null` (no tile under it, a tile with no
@@ -84,7 +87,7 @@ the player to do it if they press ok."
 
 - Refusing the placement on the server, or any engine-side flag: the warning is
   client-side only so the API stays permissive.
-- Great Persons and wonders (any terrain except water), and "one per city".
+- "One per city".
 - Editing the terrain values (the human reviews them).
 
 ## Claimed paths

@@ -13,7 +13,7 @@
 import tileTerrain from '../data/tile-terrain.json' with { type: 'json' }
 
 import { TILE_SQUARES, findBoardAsset, mapTop } from './board.js'
-import type { Board, BoardPiece } from './board.js'
+import type { Board, BoardAssetCategory, BoardPiece } from './board.js'
 
 export const TERRAINS = ['water', 'grassland', 'forest', 'mountain', 'desert'] as const
 
@@ -125,6 +125,16 @@ export const BUILDING_TERRAIN: Readonly<Record<string, readonly Terrain[]>> = {
   'buildings/academy': NOT_WATER,
 }
 
+/**
+ * Rules that cover a whole category, so no id list is needed: wonders (p. 17 of
+ * the base rulebook) and Great People (p. 18) go on any terrain except water.
+ * A building's own entry in `BUILDING_TERRAIN` takes precedence.
+ */
+export const CATEGORY_TERRAIN: Readonly<Partial<Record<BoardAssetCategory, readonly Terrain[]>>> = {
+  wonder: NOT_WATER,
+  greatperson: NOT_WATER,
+}
+
 export interface TerrainWarning {
   /** The terrain the piece would stand on. */
   readonly terrain: Terrain
@@ -141,9 +151,18 @@ const describeAllowed = (allowed: readonly Terrain[]): string => {
 const withArticle = (label: string): string => `${/^[aeiou]/i.test(label) ? 'An' : 'A'} ${label}`
 
 /**
- * Whether a building whose centre is at (centreX, centreY) is on terrain its
- * rule does not allow. `null` when it is fine, when the terrain is unknown, or
- * when the asset has no rule (every piece that is not one of the listed buildings).
+ * How the piece is named in the sentence. A wonder's label already reads as a
+ * name ("The Pyramids", "Big Ben"), so it takes no article; a building or a Great
+ * Person is one of several, so "A Library", "An Academy", "A General".
+ */
+const nameOf = (category: BoardAssetCategory | undefined, label: string): string =>
+  category === 'wonder' ? label : withArticle(label)
+
+/**
+ * Whether a building, wonder or Great Person whose centre is at (centreX,
+ * centreY) is on terrain its rule does not allow. `null` when it is fine, when
+ * the terrain is unknown (a player area and the Wonders area are not map squares),
+ * or when the asset has no rule (every other piece).
  */
 export function terrainWarning(
   board: Board,
@@ -151,16 +170,17 @@ export function terrainWarning(
   centreX: number,
   centreY: number,
 ): TerrainWarning | null {
-  const allowed = BUILDING_TERRAIN[assetId]
+  const asset = findBoardAsset(assetId)
+  const allowed = BUILDING_TERRAIN[assetId] ?? (asset === undefined ? undefined : CATEGORY_TERRAIN[asset.category])
   if (allowed === undefined) return null
 
   const terrain = terrainAt(board, centreX, centreY)
   if (terrain === null || allowed.includes(terrain)) return null
 
-  const label = findBoardAsset(assetId)?.label ?? assetId.split('/').at(-1) ?? assetId
+  const label = asset?.label ?? assetId.split('/').at(-1) ?? assetId
   return {
     terrain,
     allowed,
-    message: `${withArticle(label)} is meant for ${describeAllowed(allowed)}, but this square is ${terrain}.`,
+    message: `${nameOf(asset?.category, label)} is meant for ${describeAllowed(allowed)}, but this square is ${terrain}.`,
   }
 }

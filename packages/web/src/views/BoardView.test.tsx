@@ -15,6 +15,7 @@ import {
   findBoardAsset,
   slotOrigin,
   tileTerrainGrid,
+  wondersArea,
 } from '@civ/engine'
 import type { Terrain } from '@civ/engine'
 import type { BoardAsset, BoardPiece, PlayerView } from '@civ/engine'
@@ -1653,6 +1654,66 @@ describe('BoardView terrain warning (issue #255)', () => {
     drop()
     await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledWith('game', library.id, x - library.width / 2, y - library.height / 2))
     finish(mocks)
+  })
+
+  /** Drops a palette asset at a board point; jsdom has no DragEvent, so the fields go on a plain event. */
+  const dropAsset = (surface: HTMLElement, assetId: string, [x, y]: readonly [number, number]) => {
+    const event = new Event('drop', { bubbles: true, cancelable: true })
+    const dataTransfer = { getData: (type: string) => (type === 'text/civ-asset' ? assetId : '') }
+    for (const [name, value] of Object.entries({ clientX: x, clientY: y, dataTransfer })) {
+      Object.defineProperty(event, name, { value })
+    }
+    fireEvent(surface, event)
+  }
+
+  it('asks before a wonder is dropped on water, and places it only on OK', async () => {
+    const mocks = setup([], ['wonders/pyramids'])
+    const pyramids = asset('wonders/pyramids')
+    const [x, y] = squareOf('water')
+    fireEvent.click(screen.getByRole('button', { name: 'Wonders' }))
+    await screen.findByRole('button', { name: /Pyramids/ })
+
+    mocks.confirm.mockReturnValue(false)
+    dropAsset(mocks.surface, pyramids.id, [x, y])
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      'The Pyramids is meant for any terrain except water, but this square is water. Place it anyway?',
+    )
+    expect(mocks.placePiece).not.toHaveBeenCalled()
+
+    mocks.confirm.mockReturnValue(true)
+    dropAsset(mocks.surface, pyramids.id, [x, y])
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledWith('game', pyramids.id, x - pyramids.width / 2, y - pyramids.height / 2))
+  })
+
+  it('does not ask for a wonder dropped on forest, or in the Wonders area', async () => {
+    const mocks = setup([], ['wonders/pyramids'])
+    const pyramids = asset('wonders/pyramids')
+    fireEvent.click(screen.getByRole('button', { name: 'Wonders' }))
+    await screen.findByRole('button', { name: /Pyramids/ })
+
+    dropAsset(mocks.surface, pyramids.id, squareOf('forest'))
+    const area = wondersArea(board0)
+    dropAsset(mocks.surface, pyramids.id, [area.x + area.width / 2, area.y + area.height / 2])
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledTimes(2))
+    expect(mocks.confirm).not.toHaveBeenCalled()
+  })
+
+  it('asks before a Great Person is tapped onto water, but not onto desert', async () => {
+    const mocks = setup([], ['great people/general'])
+    mocks.confirm.mockReturnValue(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Great People' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^General/ }))
+    tap(mocks.surface, squareOf('water'))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(String(mocks.confirm.mock.calls[0]?.[0])).toBe(
+      'A General is meant for any terrain except water, but this square is water. Place it anyway?',
+    )
+    expect(mocks.placePiece).not.toHaveBeenCalled()
+
+    tap(mocks.surface, squareOf('desert'))
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).toHaveBeenCalledOnce()
   })
 
   it('asks before a moved Library lands on forest, and moves nothing when cancelled', async () => {
