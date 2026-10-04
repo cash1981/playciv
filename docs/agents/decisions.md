@@ -4565,6 +4565,18 @@ expansions.
   `coinOnReveal('greatPeople')` is now 0 because the row has no limit.
 - **Marker, not lock.** A blockaded card keeps its buttons; the board piece is greyed with
   a diagonal strike and a tooltip.
-- **Not done.** Wonders are also blockaded by the rule (p. 27) but were not asked for, so
-  they are untouched. Production, trade and culture of blockaded squares are not computed
-  from the board in this game.
+- **Wonders (added at the human's request, same PR).** A wonder marker on a map square is
+  blockaded by an enemy figure in its square, like a building. Its owner is the player in
+  `ownerId` (assigned in the Wonders panel); a wonder with no `ownerId` falls back to the
+  city colour, then `placedBy`, which decides the board marker only: the three effects
+  below need an explicit owner. A wonder in the shared Wonders area or a player area is
+  never blockaded, since those are not map squares. Effects that exist in the engine and now
+  stop: Statue of Zeus (+6 combat), Cristo Redentor (+4 culture hand size), and the Panama
+  Canal counter, which shows 0 while blockaded and keeps its stored value for when the figure
+  leaves (FAQ 2.0 p. 4). The Coins tab shows a "blockaded" tag on that cell and no +/-
+  buttons. The Internet's coin-limit bonus needs the wonder in the Wonders area, so it can
+  never be blockaded. Culture produced by a wonder marker and the other wonder abilities are
+  not computed by this game, so there is nothing to switch off. The Wonders panel does not
+  show the state.
+- **Not done.** Production, trade and culture of blockaded squares are not computed from
+  the board in this game.

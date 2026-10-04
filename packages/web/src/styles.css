@@ -929,7 +929,7 @@ ul.list > li:last-child {
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.45);
 }
 
-/* A building or Great Person an enemy figure stands on (issue #241): greyed,
+/* A building, Great Person token or wonder an enemy figure stands on (issue #241): greyed,
    with a diagonal strike drawn over it by the sibling .board-piece-strike. */
 .board-piece.board-piece-blockaded {
   filter: grayscale(1) opacity(0.55);

@@ -70,8 +70,8 @@ This is the base game **blockade** rule, so it is a printed rule, not a new one.
   (`squareOf`, `findPiece`, the `figure`, `city`, `building`, `greatperson`
   categories). Board pieces carry no owner or colour for buildings and great
   persons; figures and cities carry the colour in the asset id.
-- Not in scope, but the same rule: wonders are also blockaded (p. 27). The human
-  did not ask for it. Leave wonders alone and say so in the PR.
+- Wonders are also blockaded (p. 27). Left out at first; the human asked for them
+  afterwards, so they are in scope: see `decisions.md`, 2026-10-04.
 
 ## Scope
 
@@ -120,7 +120,13 @@ This is the base game **blockade** rule, so it is a printed rule, not a new one.
    write a migration.
 4. `PlayerView`: add public `blockadedPieceIds: readonly string[]` (derived from
    the public board only) and, on `PlayerViewSelf` only, `blockadedGreatPersonTypes`.
-5. Web:
+5. Wonders (added at the human's request after the first review): a wonder marker on a
+   map square is blockaded by an enemy figure in its square; owner = `ownerId`'s colour,
+   else the city colour, else `placedBy`. Effects: Statue of Zeus (+6 combat), Cristo
+   Redentor (+4 culture hand size) and the Panama Canal counter (shown as 0, stored value
+   kept) stop while blockaded; the Coins tab tags the Panama cell. These three effects
+   need an explicit `ownerId`.
+6. Web:
    - `BoardView`: a blockaded piece is drawn greyed with a diagonal strike and a
      title/tooltip "Blockaded by an enemy figure". Keep it keyboard and screen
      reader friendly (an accessible label, not colour alone).
@@ -128,13 +134,13 @@ This is the base game **blockade** rule, so it is a printed rule, not a new one.
      gets a "Blockaded" tag and struck-through text. Cards stay usable for
      discard, give and so on; this is a marker, not a lock.
    - Coins tab: the Great People row shows the derived number, no input.
-6. `docs/agents/decisions.md` (append), `docs/agents/state.md`.
+7. `docs/agents/decisions.md` (append), `docs/agents/state.md`.
 
 **Out:**
 
 - A random-disable action or button (see Reference).
-- Wonders being blockaded; production, trade and culture of blockaded squares
-  (the game does not compute those from the board).
+- Production, trade and culture of blockaded squares (the game does not compute
+  those from the board), and a tag on the Wonders panel.
 - Changing how `placedBy` is used for the combat bonus.
 - A migration of the old manual `greatPeople` counters.
 
@@ -184,6 +190,8 @@ owned by `chat-orders`, which is merged and not on the live claims; take it.
       free token keeps it out; no token at all keeps it out.
 - [ ] Undo and redo of a figure move change the result back and forth (derived).
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
+- [ ] Wonders: an owned wonder on the map is blockaded by an enemy figure and not by its
+      owner's own figure; one in the Wonders area or a player area never is; Zeus, Cristo Redentor and Panama Canal drop and return.
 - [ ] Hidden information: `blockadedGreatPersonTypes` is derived from the public
       board and the viewer's colour only, never from the hand, and is absent from
       `opponents`. A test builds two players, one holding a General card and one

@@ -20,12 +20,13 @@
  * reducers that invalidate a source reset its counter instead of leaving a
  * hidden value behind. See `docs/agents/tasks/issue-158-valid-coins.md`.
  *
- * Issue #241: the Great People counter is the one derived row. It is worked out
- * from the Builder, Merchant and Humanitarian tokens on the board by
- * {@link coinSourcesOf}, so the stored value is ignored on read.
+ * Issue #241: the Great People counter is derived. It is worked out from the
+ * Builder, Merchant and Humanitarian tokens on the board by
+ * {@link coinSourcesOf}, so the stored value is ignored on read. The Panama
+ * Canal row is shown as 0 while an enemy figure blockades the wonder.
  */
 
-import { greatPersonCoinsOf } from './blockade.js'
+import { greatPersonCoinsOf, isOwnWonderBlockaded } from './blockade.js'
 import type { GameState, Playerhand } from './state.js'
 
 export interface CoinSource {
@@ -189,13 +190,20 @@ export function findCoinSource(key: string): CoinSource | undefined {
   return BY_KEY.get(key)
 }
 
+const PANAMA_CANAL_ASSET_ID = 'wonders/panamacanal'
+
 /**
- * A player's counters with the derived Great People row filled in from the
- * board (issue #241). Use this wherever the counters are read; the stored
- * `greatPeople` value is ignored.
+ * A player's counters with the derived rows filled in from the board (issue
+ * #241). Use this wherever the counters are read. The stored `greatPeople`
+ * value is ignored. The Panama Canal's coins stay on the card while an enemy
+ * figure blockades the wonder but are not counted (FAQ 2.0 p. 4), so the row
+ * reads 0 until it is released; the stored value is not touched.
  */
 export function coinSourcesOf(state: GameState, player: Playerhand): CoinSources {
-  return { ...player.stats.coinSources, greatPeople: greatPersonCoinsOf(state, player) }
+  const panamaCanal = isOwnWonderBlockaded(state, player, PANAMA_CANAL_ASSET_ID)
+    ? 0
+    : player.stats.coinSources.panamaCanal
+  return { ...player.stats.coinSources, greatPeople: greatPersonCoinsOf(state, player), panamaCanal }
 }
 
 /** What a player's counters add up to — the total the status table shows. */

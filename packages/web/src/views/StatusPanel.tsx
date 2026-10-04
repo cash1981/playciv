@@ -77,6 +77,20 @@ function wonderOwners(view: PlayerView, assetId: string): ReadonlySet<string> {
   )
 }
 
+/**
+ * Owners of a wonder that an enemy figure blockades (issue #241). Read off the
+ * public `blockadedPieceIds`, so it depends on the board alone.
+ */
+function blockadedWonderOwners(view: PlayerView, assetId: string): ReadonlySet<string> {
+  const blockaded = new Set(view.blockadedPieceIds ?? [])
+  return new Set(
+    view.board.pieces
+      .filter((piece) => piece.assetId === assetId && blockaded.has(piece.id))
+      .map((piece) => piece.ownerId)
+      .filter((owner): owner is string => owner != null),
+  )
+}
+
 type Section = 'status' | 'coins'
 
 const SECTIONS = [
@@ -210,6 +224,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
             rows={rows}
             internetOwners={wonderOwners(view, 'wonders/internet')}
             panamaOwners={wonderOwners(view, 'wonders/panamacanal')}
+            panamaBlockaded={blockadedWonderOwners(view, 'wonders/panamacanal')}
             busy={busy}
             readOnly={readOnly}
             run={run}
@@ -418,6 +433,7 @@ function CoinSection({
   rows,
   internetOwners,
   panamaOwners,
+  panamaBlockaded,
   busy,
   readOnly,
   run,
@@ -426,6 +442,8 @@ function CoinSection({
   readonly rows: readonly Row[]
   readonly internetOwners: ReadonlySet<string>
   readonly panamaOwners: ReadonlySet<string>
+  /** Owners whose Panama Canal is blockaded: the engine shows its coins as 0 until it is released. */
+  readonly panamaBlockaded: ReadonlySet<string>
   readonly busy: boolean
   readonly readOnly: boolean
   readonly run: Run
@@ -435,7 +453,9 @@ function CoinSection({
     rows.map((row) => [row.playerId, availableCoinSources(row, panamaOwners)] as const),
   )
   const renders = (row: Row, key: CoinSourceKey): boolean =>
-    available.get(row.playerId)?.has(key) === true || row.stats.coinSources[key] > 0
+    available.get(row.playerId)?.has(key) === true ||
+    row.stats.coinSources[key] > 0 ||
+    (key === 'panamaCanal' && panamaBlockaded.has(row.playerId))
   const sources = COIN_SOURCES.filter((source) => rows.some((row) => renders(row, source.key)))
   return (
     <div className="scroll-x">
@@ -474,7 +494,24 @@ function CoinSection({
                       </span>
                     </span>
                   )}
-                  {renders(row, source.key) && source.key !== 'greatPeople' && (
+                  {renders(row, source.key) && source.key === 'panamaCanal' && panamaBlockaded.has(row.playerId) && (
+                    // The coins stay on the card but are not counted while it is blockaded
+                    // (FAQ 2.0 p. 4), so the cell reads 0 whatever number is stored.
+                    <span className="coin-counter">
+                      <span className="coin-value" aria-label={`${row.username} ${source.label}`}>
+                        0
+                      </span>
+                      <span
+                        className="tag blockaded"
+                        title="The Panama Canal is blockaded by an enemy figure: its coins are not counted until it is released"
+                      >
+                        blockaded
+                      </span>
+                    </span>
+                  )}
+                  {renders(row, source.key) &&
+                    source.key !== 'greatPeople' &&
+                    !(source.key === 'panamaCanal' && panamaBlockaded.has(row.playerId)) && (
                     <CoinCounter
                       label={`${row.username} ${source.label}`}
                       value={row.stats.coinSources[source.key]}

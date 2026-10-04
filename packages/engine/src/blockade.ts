@@ -6,11 +6,14 @@
  * trade, culture, coins, or resources for the city's owner. A square may be
  * blockaded even if it contains a building or a great person." The official
  * FAQ adds that a Great Person card cannot use its ability while every token
- * of its type is blockaded.
+ * of its type is blockaded. Wonders follow the same rule (p. 27: the ability
+ * on the card cannot be used and the marker's culture cannot be collected
+ * while an enemy figure is in its square). FAQ 2.0 p. 4: the coin tokens on
+ * the Panama Canal stay on the card but are not counted while it is blockaded.
  *
  * Nothing here is saved in the game state, so undo, redo, time travel and old
- * games follow the board by themselves. Wonders are blockaded by the same rule,
- * but the human did not ask for it, so they are left out.
+ * games follow the board by themselves. Only a piece on a map square can be
+ * blockaded, so the shared Wonders area never is.
  */
 
 import type { Board, BoardPiece } from './board.js'
@@ -120,6 +123,13 @@ class BlockadeIndex {
    * colour of whoever placed it. `undefined` when even that is unknown.
    */
   ownerColor(piece: BoardPiece): string | undefined {
+    // A wonder's owner is assigned explicitly (`setWonderOwner`), not read off
+    // a city. An owner without a colour yet leaves it with no owner at all.
+    if (piece.category === 'wonder' && piece.ownerId !== undefined && piece.ownerId !== null) {
+      return this.state.players
+        .find((player) => player.playerId === piece.ownerId)
+        ?.color?.toLowerCase()
+    }
     const cell = cellOf(this.state.board, piece)
     if (cell !== null) {
       const around = this.cityColorsAround(cell)
@@ -203,12 +213,32 @@ export function blockadeCheckFor(
   return (piece, colour) => index.hasEnemyFigure(piece, colour)
 }
 
-/** The ids of every blockaded building and Great Person token on the board. */
+/**
+ * Whether a wonder the player owns (`ownerId`) stands on a map square with a
+ * figure of another colour than the player's in it. Used for the wonders whose
+ * effect the engine derives: the Statue of Zeus and the Panama Canal.
+ */
+export function isOwnWonderBlockaded(
+  state: Pick<GameState, 'board' | 'players'>,
+  player: Playerhand,
+  assetId: string,
+): boolean {
+  if (player.color === null) return false
+  const colour = player.color.toLowerCase()
+  const index = new BlockadeIndex(state)
+  return state.board.pieces.some(
+    (piece) => piece.assetId === assetId && piece.ownerId === player.playerId && index.hasEnemyFigure(piece, colour),
+  )
+}
+
+/** The ids of every blockaded building, wonder and Great Person token on the board. */
 export function blockadedPieceIds(state: Pick<GameState, 'board' | 'players'>): readonly string[] {
   const index = new BlockadeIndex(state)
   return state.board.pieces
     .filter(
-      (piece) => (piece.category === 'building' || piece.category === 'greatperson') && index.isBlockaded(piece),
+      (piece) =>
+        (piece.category === 'building' || piece.category === 'greatperson' || piece.category === 'wonder') &&
+        index.isBlockaded(piece),
     )
     .map((piece) => piece.id)
 }

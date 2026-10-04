@@ -59,6 +59,7 @@ function put(
   assetId: string,
   column: number,
   row: number,
+  ownerId?: string,
 ): GameState {
   const asset = findBoardAsset(assetId)
   if (asset === undefined) throw new Error(`no asset ${assetId}`)
@@ -68,6 +69,7 @@ function put(
       assetId,
       x: column * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2,
       y: mapTop(state.board) + row * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2,
+      ...(ownerId === undefined ? {} : { ownerId }),
     }),
   )
 }
@@ -286,16 +288,148 @@ describe('isBlockaded', () => {
 })
 
 describe('which pieces can be blockaded', () => {
-  it('leaves cities and wonders alone, even with an enemy figure on them', () => {
+  it('leaves cities alone, even with an enemy figure on them, and blockades buildings and wonders', () => {
     let state = game()
     state = put(state, CASH1981, 'cities/redcity2', 5, 5)
-    state = put(state, CASH1981, 'wonders/statueofzeus', 8, 8)
+    state = put(state, CASH1981, 'wonders/statueofzeus', 8, 8, CASH1981)
     state = put(state, CASH1981, 'buildings/library', 11, 11)
     state = put(state, KARANDRAS1, 'figures/bluearmy', 5, 5)
     state = put(state, KARANDRAS1, 'figures/bluearmy', 8, 8)
     state = put(state, KARANDRAS1, 'figures/bluearmy', 11, 11)
-    const library = state.board.pieces.find((p) => p.assetId === 'buildings/library')
-    expect(blockadedPieceIds(state)).toEqual([library?.id])
+    const ids = (asset: string): string | undefined => state.board.pieces.find((p) => p.assetId === asset)?.id
+    expect(blockadedPieceIds(state)).toEqual([ids('wonders/statueofzeus'), ids('buildings/library')])
+  })
+})
+
+describe('wonders and the blockade', () => {
+  const wonderIn = (state: GameState): BoardPiece => {
+    const found = state.board.pieces.find((p) => p.category === 'wonder')
+    if (found === undefined) throw new Error('no wonder')
+    return found
+  }
+
+  it.each(['figures/bluearmy', 'figures/bluescout'])('an enemy %s blockades an owned wonder on the map', (figure) => {
+    let state = put(game(), CASH1981, 'wonders/statueofzeus', 8, 8, CASH1981)
+    expect(isBlockaded(state, wonderIn(state))).toBe(false)
+    state = put(state, KARANDRAS1, figure, 8, 8)
+    expect(isBlockaded(state, wonderIn(state))).toBe(true)
+    expect(blockadedPieceIds(state)).toEqual([wonderIn(state).id])
+  })
+
+  it('the explicit owner decides, not the placer or a nearby city', () => {
+    // Karandras places it next to a Blue city, but Cash (Red) owns it.
+    let state = put(game(), KARANDRAS1, 'cities/bluecity2', 8, 8)
+    state = put(state, KARANDRAS1, 'wonders/statueofzeus', 8, 8, CASH1981)
+    expect(pieceOwnerColor(state, wonderIn(state))).toBe('red')
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 8, 8)
+    expect(isBlockaded(state, wonderIn(state))).toBe(true)
+    // Cash's own army alone would not.
+    let own = put(put(game(), KARANDRAS1, 'wonders/statueofzeus', 8, 8, CASH1981), CASH1981, 'figures/redarmy', 8, 8)
+    expect(isBlockaded(own, wonderIn(own))).toBe(false)
+    own = put(own, KARANDRAS1, 'figures/bluescout', 8, 8)
+    expect(isBlockaded(own, wonderIn(own))).toBe(true)
+  })
+
+  it('an own figure does not blockade it', () => {
+    const state = put(put(game(), CASH1981, 'wonders/statueofzeus', 8, 8, CASH1981), CASH1981, 'figures/redscout', 8, 8)
+    expect(isBlockaded(state, wonderIn(state))).toBe(false)
+  })
+
+  it('a wonder in the Wonders area or a player area is never blockaded', () => {
+    let state = put(game(), CASH1981, 'wonders/statueofzeus', 8, 8, CASH1981)
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 8, 8)
+    const wonder = wonderIn(state)
+    const army = state.board.pieces.find((p) => p.assetId === 'figures/bluearmy')
+    if (army === undefined) throw new Error('no army')
+    const areas = boardAreas(state.board, state.players)
+    for (const area of [areas.find((a) => a.playerId === CASH1981), areas.at(-1)]) {
+      if (area === undefined) throw new Error('no area')
+      const moved = withPiecesAt(state, [wonder.id, army.id], area.x + 40, area.y + 40)
+      expect(isBlockaded(moved, wonderIn(moved))).toBe(false)
+      expect(blockadedPieceIds(moved)).toEqual([])
+    }
+  })
+
+  it('a wonder with nobody to own it is never blockaded', () => {
+    let state = put(game(), CASH1981, 'wonders/statueofzeus', 8, 8)
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 8, 8)
+    // Placed by Cash, so it falls back to Red; take away who placed it and Red's colour.
+    const orphan = {
+      ...state,
+      board: {
+        ...state.board,
+        pieces: state.board.pieces.map((p) => (p.category === 'wonder' ? { ...p, placedBy: null } : p)),
+      },
+    }
+    expect(pieceOwnerColor(orphan, wonderIn(orphan))).toBeUndefined()
+    expect(isBlockaded(orphan, wonderIn(orphan))).toBe(false)
+    // An owner who has no colour yet leaves it ownerless as well.
+    const colourless = withColor(put(put(game(), CASH1981, 'wonders/statueofzeus', 8, 8, CASH1981), KARANDRAS1, 'figures/bluearmy', 8, 8), CASH1981, null)
+    expect(isBlockaded(colourless, wonderIn(colourless))).toBe(false)
+  })
+
+  it('the Statue of Zeus (+6) stops counting while blockaded and returns when released', () => {
+    let state = put(game(), CASH1981, 'wonders/statueofzeus', 8, 8, CASH1981)
+    const bonus = (s: GameState): number => combatBonusOf(s, player(s))
+    expect(bonus(state)).toBe(6)
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 8, 8)
+    const army = lastPiece(state)
+    expect(bonus(state)).toBe(0)
+    expect(toPlayerView(state, KARANDRAS1).opponents.find((o) => o.playerId === CASH1981)?.stats.combat).toBe(0)
+    state = unwrap(removePiece(state, { playerId: KARANDRAS1, pieceId: army.id }))
+    expect(bonus(state)).toBe(6)
+  })
+
+  it('Egypt’s owned Statue of Zeus in its player area keeps +6 when an enemy figure is dropped there', () => {
+    const state = game()
+    const area = boardAreas(state.board, state.players).find((a) => a.playerId === CASH1981)
+    if (area === undefined) throw new Error('no area for Cash')
+    const placed = unwrap(
+      placePiece(state, { playerId: CASH1981, assetId: 'wonders/statueofzeus', x: area.x + 20, y: area.y + 40, ownerId: CASH1981 }),
+    )
+    const wonder = lastPiece(placed)
+    // The enemy army is moved onto exactly the same point, so only the area can explain the answer.
+    const withArmy = unwrap(placePiece(placed, { playerId: KARANDRAS1, assetId: 'figures/bluearmy', x: 0, y: 0 }))
+    const army = lastPiece(withArmy)
+    const dropped = withPiecesAt(withArmy, [army.id], wonder.x, wonder.y)
+    expect(combatBonusOf(dropped, player(dropped))).toBe(6)
+    expect(blockadedPieceIds(dropped)).toEqual([])
+  })
+
+  it('the Panama Canal counter reads 0 while blockaded and its stored value comes back', () => {
+    let state = put(game(), CASH1981, 'wonders/panamacanal', 8, 8, CASH1981)
+    state = unwrap(
+      setCoinSource(state, { editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'panamaCanal', value: 3 }),
+    )
+    const shown = (s: GameState): number => coinSourcesOf(s, player(s)).panamaCanal
+    expect(shown(state)).toBe(3)
+
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 8, 8)
+    const army = lastPiece(state)
+    expect(shown(state)).toBe(0)
+    expect(totalCoins(coinSourcesOf(state, player(state)))).toBe(0)
+    expect(toPlayerView(state, CASH1981).you?.stats.coinSources.panamaCanal).toBe(0)
+    // The stored value is untouched.
+    expect(player(state).stats.coinSources.panamaCanal).toBe(3)
+
+    state = unwrap(removePiece(state, { playerId: KARANDRAS1, pieceId: army.id }))
+    expect(shown(state)).toBe(3)
+    expect(toPlayerView(state, KARANDRAS1).opponents.find((o) => o.playerId === CASH1981)?.stats.coinSources.panamaCanal).toBe(3)
+  })
+
+  it('another player’s Panama Canal blockade does not touch my counter', () => {
+    let state = put(game(), CASH1981, 'wonders/panamacanal', 8, 8, CASH1981)
+    state = unwrap(
+      setCoinSource(state, { editorPlayerId: KARANDRAS1, targetPlayerId: KARANDRAS1, source: 'panamaCanal', value: 2 }),
+    )
+    // Itchi's Green army is an enemy of Cash (Red) but not of Karandras (Blue), so
+    // only the ownerId guard keeps Karandras's own counter out of it.
+    state = put(state, ITCHI, 'figures/greenarmy', 8, 8)
+    expect(coinSourcesOf(state, player(state, CASH1981)).panamaCanal).toBe(0)
+    expect(coinSourcesOf(state, player(state, KARANDRAS1)).panamaCanal).toBe(2)
+    const seen = toPlayerView(state, KARANDRAS1).opponents
+    expect(seen.find((o) => o.playerId === CASH1981)?.stats.coinSources.panamaCanal).toBe(0)
+    expect(toPlayerView(state, KARANDRAS1).you?.stats.coinSources.panamaCanal).toBe(2)
   })
 })
 

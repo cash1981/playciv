@@ -13,7 +13,7 @@ _Last updated: 2026-10-04 (blockade, issue #241)_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 810 engine, 592 server, 504 web on `fix/great-person-disable` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 821 engine, 592 server, 507 web on `fix/great-person-disable` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -23,7 +23,7 @@ _Last updated: 2026-10-04 (blockade, issue #241)_
   through, adds nothing to the combat bonus, and a Great Person card is marked when every
   token of its type is blockaded. The Great People coin counter is now derived (1 per
   unblockaded Builder, Merchant or Humanitarian in the outskirts of an own city), read-only,
-  and the old manual value is ignored. No random-disable button, wonders not included.
+  and the old manual value is ignored. Wonders are included (Statue of Zeus, Cristo Redentor, Panama Canal stop while blockaded). No random-disable button.
   Not checked in a real browser yet. Brief: `tasks/great-person-disable.md`; see
   `decisions.md`, 2026-10-04.
 - **Delta storage for game revisions, and an admin compaction** (issue #238, phases 1

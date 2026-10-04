@@ -1390,6 +1390,34 @@ describe('blockaded pieces (issue #241)', () => {
     cleanup()
   })
 
+  it('draws a blockaded wonder like any other blockaded piece', () => {
+    const zeus = findBoardAsset('wonders/statueofzeus')
+    if (zeus === undefined) throw new Error('statue of zeus missing from manifest')
+    const wonder: BoardPiece = {
+      ...piece('wonders/statueofzeus', 'zeus-1'),
+      path: zeus.path,
+      label: zeus.label,
+      category: 'wonder',
+      ownerId: 'player-me',
+    }
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [wonder] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        blockadedPieceIds={['zeus-1']}
+        run={async () => undefined}
+      />,
+    )
+    const image = container.querySelector('[data-piece-id="zeus-1"]')
+    expect(image?.classList.contains('board-piece-blockaded')).toBe(true)
+    expect(image?.getAttribute('title')).toContain('Blockaded by an enemy figure')
+    expect(container.querySelectorAll('.board-piece-strike')).toHaveLength(1)
+    cleanup()
+  })
+
   it('draws no blockade marks when the view has no blockaded pieces', () => {
     const { container } = render(
       <BoardView

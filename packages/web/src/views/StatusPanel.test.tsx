@@ -457,6 +457,40 @@ describe('StatusPanel Coins section', () => {
     expect(screen.getByRole('button', { name: 'Increase Alice Bank (Building)' })).toBeTruthy()
   })
 
+  it('shows a blockaded hint on the Panama Canal row, with no buttons, while an enemy figure is on it (issue #241)', () => {
+    const view = {
+      // A stored count of 3 must not show while the wonder is blockaded.
+      ...coinView({ panamaCanal: 3 }, { panamaOwner: 'player-me', panamaOutsideWondersArea: true }),
+      blockadedPieceIds: ['panama-canal'],
+    } as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+
+    // The engine already shows the coins as 0; the row stays visible so the reason can be read.
+    expect(screen.getByText('Panama Canal')).toBeTruthy()
+    expect(screen.getByLabelText('Alice Panama Canal').textContent).toBe('0')
+    expect(screen.getByText('blockaded')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Increase Alice Panama Canal' })).toBeNull()
+  })
+
+  it('shows no hint and the usual buttons when the Panama Canal is free', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({}, { panamaOwner: 'player-me' })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    openCoins()
+
+    expect(screen.queryByText('blockaded')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Increase Alice Panama Canal' })).toBeTruthy()
+  })
+
   it('shows the empty state when nobody has joined', () => {
     const view = { ...memberView, you: null, opponents: [] } as unknown as PlayerView
     render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)

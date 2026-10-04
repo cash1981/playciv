@@ -39,9 +39,10 @@ const STATUE_OF_ZEUS_BONUS = 6
  * for its explicit owner, wherever the piece sits (Egypt's starting wonder is
  * owned but lives in Egypt's own area, not the shared Wonders area). A building
  * or general adds nothing while a figure of another colour than the player's
- * own stands in its square (issue #241, the blockade rule; see `blockade.ts`).
- * That is judged against the colour of the player it is attributed to, so a
- * player's own figure never switches off their own piece.
+ * own stands in its square (issue #241, the blockade rule; see `blockade.ts`),
+ * and so does the Statue of Zeus. That is judged against the colour of the
+ * player it is attributed to, so a player's own figure never switches off
+ * their own piece.
  */
 export function combatBonusOf(state: GameState, player: Playerhand): number {
   let bonus = 0
@@ -56,7 +57,12 @@ export function combatBonusOf(state: GameState, player: Playerhand): number {
         (BUILDING_BONUS[piece.assetId] ?? 0) + (piece.assetId === GENERAL_ASSET_ID ? GENERAL_BONUS : 0)
       if (value > 0 && !switchedOff(piece)) bonus += value
     }
-    if (piece.assetId === STATUE_OF_ZEUS_ASSET_ID && piece.ownerId === player.playerId) {
+    // A blockaded wonder's ability cannot be used (base rulebook p. 27).
+    if (
+      piece.assetId === STATUE_OF_ZEUS_ASSET_ID &&
+      piece.ownerId === player.playerId &&
+      !switchedOff(piece)
+    ) {
       bonus += STATUE_OF_ZEUS_BONUS
     }
   }

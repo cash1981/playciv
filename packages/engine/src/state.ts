@@ -622,7 +622,7 @@ export interface PlayerView {
   /** Derived from the player list, so it cannot drift out of step. */
   readonly boardAreas: readonly BoardArea[]
   /**
-   * Buildings and Great Person tokens an enemy figure stands on (issue #241).
+   * Buildings, Great Person tokens and wonders an enemy figure stands on (issue #241).
    * Derived from the public board alone, so every player gets the same list.
    */
   readonly blockadedPieceIds: readonly string[]
