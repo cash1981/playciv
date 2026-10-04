@@ -5,7 +5,8 @@
  * sources — the old shared spreadsheet kept one `coins` number per player and
  * the players summed the individual sources by hand ("3 coins on CoL"). The
  * fifteen rows below are the human's reference sheet
- * (`Civ_Tech_FF-WW.-1.jpg`): the four "Up to 4" techs hold coin tokens, the
+ * (`Civ_Tech_FF-WW.-1.jpg`), plus Education from its card text. The "Up to 4"
+ * techs hold coin tokens, the
  * "1 coin" rows are a single printed coin each, and `Sheet` (culture cards,
  * loot, villages, …) and Panama Canal have no printed limit.
  *
@@ -15,7 +16,8 @@
  * Issue #158: most sources only exist while the card or card-like thing that
  * holds them does — a tech is researched and revealed, a social policy is
  * chosen, the Democracy government is in play, the Panama Canal wonder is on
- * the table. {@link techCoinSource} and {@link socialPolicyCoinSource} are the
+ * the table. Panama tokens are stored on the wonder piece. {@link techCoinSource}
+ * and {@link socialPolicyCoinSource} are the
  * name → source mapping the engine and the client share, and the three
  * reducers that invalidate a source reset its counter instead of leaving a
  * hidden value behind. See `docs/agents/tasks/issue-158-valid-coins.md`.
@@ -23,10 +25,12 @@
  * Issue #241: the Great People counter is derived. It is worked out from the
  * Builder, Merchant and Humanitarian tokens on the board by
  * {@link coinSourcesOf}, so the stored value is ignored on read. The Panama
- * Canal row is shown as 0 while an enemy figure blockades the wonder.
+ * Canal row is derived from the wonder piece and shown as 0 while the wonder
+ * is blockaded or unowned.
  */
 
 import { greatPersonCoinsOf, isOwnWonderBlockaded } from './blockade.js'
+import type { BoardPiece } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
 export interface CoinSource {
@@ -58,6 +62,7 @@ export const COIN_SOURCES = [
   },
   { key: 'bureaucracy', label: 'Bureaucracy (II)', help: '1 coin', max: 1 },
   { key: 'railroad', label: 'Railroad (III)', help: '1 coin', max: 1 },
+  { key: 'education', label: 'Education (III)', help: '1 coin each time you build a wonder (up to 4)', max: 4 },
   { key: 'computers', label: 'Computers (IV)', help: '1 coin', max: 1 },
   { key: 'bank', label: 'Bank (Building)', help: '1 coin', max: 1 },
   { key: 'democracyGovernment', label: 'Democracy (Govt)', help: '1 coin', max: 1 },
@@ -100,6 +105,7 @@ export const EMPTY_COIN_SOURCES: CoinSources = {
   printingPress: 0,
   bureaucracy: 0,
   railroad: 0,
+  education: 0,
   computers: 0,
   bank: 0,
   democracyGovernment: 0,
@@ -127,6 +133,7 @@ const TECH_COIN_SOURCES: ReadonlyMap<string, CoinSourceKey> = new Map([
   ['Bureaucracy', 'bureaucracy'],
   ['Railroad', 'railroad'],
   ['Computers', 'computers'],
+  ['Education', 'education'],
 ])
 
 /**
@@ -150,7 +157,7 @@ export function socialPolicyCoinSource(policyName: string): CoinSourceKey | unde
 /**
  * The counter value a card gives the moment it is revealed: 1 for a source that
  * prints a flat "1 coin" (Civil Service, Bureaucracy, Railroad, Computers and
- * Organized Religion), 0 for every other. The four techs that print "up to 4"
+ * Organized Religion), 0 for every other. The five techs that print "up to 4"
  * are earned by playing, so they start empty. Hidden cards give nothing, since
  * the counters are public and would show which card the player holds.
  */
@@ -159,9 +166,8 @@ export function coinOnReveal(key: CoinSourceKey): number {
 }
 
 /**
- * The sources the Coins table always offers, for every player. None of them is
- * tracked per player in the game state: the Bank building and the Great Person
- * draws are public events, terrain coin spots sit on the shared board, and
+ * The sources the Coins table always offers for manual bookkeeping. Bank and
+ * terrain refer to public board pieces, Great Person coins are derived, and
  * Sheet is the catch-all the human asked for. The other rows are conditional;
  * see `techCoinSource`, `socialPolicyCoinSource` and `docs/agents/tasks/issue-158-valid-coins.md`.
  */
@@ -171,6 +177,30 @@ export const ALWAYS_AVAILABLE_COIN_SOURCES: readonly CoinSourceKey[] = [
   'terrain',
   'sheet',
 ]
+
+/**
+ * Owners whose copy of a wonder is usable: explicitly owned and not blocked.
+ * The caller supplies the board-derived blockade list, so the same rule is
+ * used by engine validation and the player's public status table.
+ */
+export function activeWonderOwnerIds(
+  pieces: readonly BoardPiece[],
+  assetId: string,
+  blockadedIds: readonly string[],
+): ReadonlySet<string> {
+  const blockaded = new Set(blockadedIds)
+  return new Set(
+    pieces
+      .filter((piece) =>
+        piece.category === 'wonder' &&
+        piece.assetId === assetId &&
+        piece.ownerId != null &&
+        !blockaded.has(piece.id),
+      )
+      .map((piece) => piece.ownerId)
+      .filter((owner): owner is string => owner != null),
+  )
+}
 
 /** A copy of the counters with one source set to `value`. */
 export function withCoinSource(
@@ -195,15 +225,29 @@ const PANAMA_CANAL_ASSET_ID = 'wonders/panamacanal'
 /**
  * A player's counters with the derived rows filled in from the board (issue
  * #241). Use this wherever the counters are read. The stored `greatPeople`
- * value is ignored. The Panama Canal's coins stay on the card while an enemy
- * figure blockades the wonder but are not counted (FAQ 2.0 p. 4), so the row
- * reads 0 until it is released; the stored value is not touched.
+ * value is ignored. The Panama Canal's coins stay on its board piece while an
+ * enemy figure blockades the wonder but are not counted (FAQ 2.0 p. 4), so the
+ * row reads 0 until it is released; clearing its owner hides the tokens too.
  */
 export function coinSourcesOf(state: GameState, player: Playerhand): CoinSources {
-  const panamaCanal = isOwnWonderBlockaded(state, player, PANAMA_CANAL_ASSET_ID)
-    ? 0
-    : player.stats.coinSources.panamaCanal
-  return { ...player.stats.coinSources, greatPeople: greatPersonCoinsOf(state, player), panamaCanal }
+  const panamaIsBlockaded = isOwnWonderBlockaded(state, player, PANAMA_CANAL_ASSET_ID)
+  const educationIsRevealed = player.techsChosen.some(
+    (tech) => tech.name === 'Education' && !tech.hidden,
+  )
+  const panamaCanal = state.board.pieces
+    .filter((piece) =>
+      piece.category === 'wonder' &&
+      piece.assetId === PANAMA_CANAL_ASSET_ID &&
+      piece.ownerId === player.playerId &&
+      !panamaIsBlockaded,
+    )
+    .reduce((total, piece) => total + (piece.coinTokens ?? 0), 0)
+  return {
+    ...player.stats.coinSources,
+    education: educationIsRevealed ? player.stats.coinSources.education : 0,
+    greatPeople: greatPersonCoinsOf(state, player),
+    panamaCanal,
+  }
 }
 
 /** What a player's counters add up to — the total the status table shows. */

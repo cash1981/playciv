@@ -280,6 +280,21 @@ describe('StatusPanel Coins section', () => {
     expect(screen.getByText('Coins from culture cards, loot or village etc.')).toBeTruthy()
   })
 
+  it('shows Education coins only after Education is revealed', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({}, { techs: ['Education'] })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+    openCoins()
+    expect(screen.getByText('Education (III)')).toBeTruthy()
+    expect(screen.getByText('1 coin each time you build a wonder (up to 4)')).toBeTruthy()
+  })
+
   it('leaves out every source nobody has', () => {
     render(
       <StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />,
@@ -375,7 +390,7 @@ describe('StatusPanel Coins section', () => {
     expect(screen.queryByRole('button', { name: 'Increase Bob Organized Religion' })).toBeNull()
   })
 
-  it('offers Panama Canal only to the wonder’s owner in the Wonders area', () => {
+  it('offers Panama Canal to its owner wherever the wonder is displayed', () => {
     render(
       <StatusPanel
         gameId="game-1"
@@ -392,7 +407,7 @@ describe('StatusPanel Coins section', () => {
     expect(screen.queryByRole('button', { name: 'Increase Bob Panama Canal' })).toBeNull()
   })
 
-  it('a Panama Canal piece outside the Wonders area offers nothing', () => {
+  it('a Panama Canal in a player area or on the map remains an active source', () => {
     render(
       <StatusPanel
         gameId="game-1"
@@ -405,7 +420,7 @@ describe('StatusPanel Coins section', () => {
 
     openCoins()
 
-    expect(screen.queryByText('Panama Canal')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Increase Alice Panama Canal' })).toBeTruthy()
   })
 
   it('keeps a counter with coins on it visible even when its source is not available', () => {

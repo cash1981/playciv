@@ -12,17 +12,18 @@ import {
   cultureStepOf,
   cultureTrackHeight,
   findBoardAsset,
-  isInWondersArea,
   leaderAssetId,
   startingCorner,
 } from '../board.js'
 import {
+  activeWonderOwnerIds,
   coinOnReveal,
   findCoinSource,
   socialPolicyCoinSource,
   techCoinSource,
   withCoinSource,
 } from '../coins.js'
+import { blockadedPieceIds } from '../blockade.js'
 import type { EngineError } from '../errors.js'
 import type { Government } from '../government.js'
 import { isGovernment, startingGovernmentFor } from '../government.js'
@@ -49,7 +50,7 @@ import {
   withPlayer,
 } from '../state.js'
 
-import { placeUnchecked } from './board.js'
+import { placeUnchecked, setWonderCoinTokens } from './board.js'
 import { draw, drawWonderToBoard } from './draw.js'
 
 type ActionResult = Result<GameState, EngineError>
@@ -1165,7 +1166,8 @@ export interface SetCoinSourceInput {
 }
 
 /**
- * Sets one coin counter on a player's status board. Like `setPlayerStat`, any
+ * Sets one coin counter on a player's status board, except Panama tokens which
+ * are stored on their wonder marker. Like `setPlayerStat`, any
  * current player may maintain any other player's counters — they are shared
  * bookkeeping, not a private hand. The value must be a whole number from zero
  * up to the source's printed limit; `null` means no limit, as the reference
@@ -1190,14 +1192,48 @@ export function setCoinSource(state: GameState, input: SetCoinSourceInput): Acti
   if (source.key === 'greatPeople') {
     return err({ kind: 'COIN_SOURCE_NOT_EDITABLE', source: source.key })
   }
+  if (
+    source.key === 'education' &&
+    !target.techsChosen.some((tech) => tech.name === 'Education' && !tech.hidden)
+  ) {
+    return err({ kind: 'COIN_SOURCE_NOT_EDITABLE', source: source.key })
+  }
 
-  const techCoinSources = new Set(['codeOfLaws', 'pottery', 'democracy', 'printingPress'])
-  const ownsInternet = state.board.pieces.some(
-    (piece) =>
-      piece.assetId === 'wonders/internet' &&
-      (piece.ownerId ?? null) === target.playerId &&
-      isInWondersArea(state.board, piece),
-  )
+  const blockadedIds = blockadedPieceIds(state)
+  const internetOwners = activeWonderOwnerIds(state.board.pieces, 'wonders/internet', blockadedIds)
+  const panamaOwners = activeWonderOwnerIds(state.board.pieces, 'wonders/panamacanal', blockadedIds)
+  if (source.key === 'panamaCanal') {
+    const panama = state.board.pieces.find(
+      (piece) =>
+        piece.category === 'wonder' &&
+        piece.assetId === 'wonders/panamacanal' &&
+        piece.ownerId === target.playerId &&
+        !blockadedIds.includes(piece.id),
+    )
+    if (!panamaOwners.has(target.playerId) || panama === undefined) {
+      return err({ kind: 'INVALID_COIN_VALUE', value: input.value, max: null })
+    }
+    const updated = setWonderCoinTokens(state, {
+      playerId: editor.playerId,
+      pieceId: panama.id,
+      value: input.value,
+      ...(input.at === undefined ? {} : { at: input.at }),
+    })
+    if (!updated.ok) return updated
+    const message = editor.playerId === target.playerId
+      ? `set their coins on ${source.label} to ${input.value}`
+      : `set ${target.username}'s coins on ${source.label} to ${input.value}`
+    return ok(appendLog(updated.value, {
+      username: editor.username,
+      playerId: editor.playerId,
+      publicLog: `${editor.username} ${message}`,
+      privateLog: '',
+      createdAt: input.at ?? null,
+    }))
+  }
+
+  const techCoinSources = new Set(['codeOfLaws', 'pottery', 'democracy', 'printingPress', 'education'])
+  const ownsInternet = internetOwners.has(target.playerId)
   const max = source.max !== null && techCoinSources.has(source.key) && ownsInternet
     ? source.max + 2
     : source.max
@@ -1235,5 +1271,3 @@ export function setCoinSource(state: GameState, input: SetCoinSourceInput): Acti
     }),
   )
 }
-
-

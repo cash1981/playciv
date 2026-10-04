@@ -19,13 +19,14 @@ import {
   setCoinSource,
   setPlayerGovernment,
 } from '../src/actions/player.js'
-import { movePiece, placePiece, setWonderOwner } from '../src/actions/board.js'
+import { movePiece, placePiece, redoLastBoardChange, setWonderOwner, undoLastBoardChange } from '../src/actions/board.js'
 import {
   ALWAYS_AVAILABLE_COIN_SOURCES,
   COIN_SOURCES,
   coinOnReveal,
   EMPTY_COIN_SOURCES,
   findCoinSource,
+  coinSourcesOf,
   socialPolicyCoinSource,
   techCoinSource,
   totalCoins,
@@ -39,7 +40,7 @@ import type { GameState } from '../src/state.js'
 import { CASH1981, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 describe('COIN_SOURCES', () => {
-  it('is the reference sheet’s fifteen rows, in order, with the printed limits', () => {
+  it('includes every tracked row, in order, with the printed limits', () => {
     expect(COIN_SOURCES.map((source) => source.label)).toEqual([
       'Code of Laws (I)',
       'Pottery (I)',
@@ -48,6 +49,7 @@ describe('COIN_SOURCES', () => {
       'Printing Press (II)',
       'Bureaucracy (II)',
       'Railroad (III)',
+      'Education (III)',
       'Computers (IV)',
       'Bank (Building)',
       'Democracy (Govt)',
@@ -61,7 +63,7 @@ describe('COIN_SOURCES', () => {
     // the two the human said are unlimited (Sheet and Panama Canal).
     expect(COIN_SOURCES.map((source) => source.max)).toEqual([
       // Great People is derived from the board (issue #241) and has no limit.
-      4, 4, 1, 4, 4, 1, 1, 1, 1, 1, null, 1, null, 1, null,
+      4, 4, 1, 4, 4, 1, 1, 4, 1, 1, 1, null, 1, null, 1, null,
     ])
   })
 
@@ -125,6 +127,7 @@ describe('coin source availability', () => {
       'Bureaucracy',
       'Railroad',
       'Computers',
+      'Education',
     ]) {
       const key = techCoinSource(techName)
       if (key !== undefined) reachable.add(key)
@@ -197,7 +200,7 @@ describe('setCoinSource', () => {
     }))).toEqual({ kind: 'INVALID_COIN_VALUE', value: 6, max: 4 })
   })
 
-  it('does not apply The Internet bonus after the wonder leaves the shared Wonders area', () => {
+  it('keeps The Internet bonus when the owned wonder moves out of the shared Wonders area', () => {
     const state = firstCivGame()
     const area = wondersArea(state.board)
     const placed = unwrap(placePiece(state, {
@@ -211,13 +214,13 @@ describe('setCoinSource', () => {
     const moved = unwrap(movePiece(owned, {
       playerId: CASH1981, pieceId: wonder.id, x: 300, y: 300,
     }))
-    expect(unwrapErr(setCoinSource(moved, {
+    expect(unwrap(setCoinSource(moved, {
       editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'pottery', value: 5,
-    }))).toEqual({ kind: 'INVALID_COIN_VALUE', value: 5, max: 4 })
+    }))).toBeDefined()
   })
 
   it('sets one counter and writes a public log entry', () => {
-    const state = unwrap(
+    let state = unwrap(
       setCoinSource(firstCivGame(), {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
@@ -284,8 +287,16 @@ describe('setCoinSource', () => {
   })
 
   it('has no limit on the Sheet pile or Panama Canal', () => {
+    const base = firstCivGame()
+    const area = wondersArea(base.board)
+    const placed = unwrap(placePiece(base, {
+      playerId: CASH1981, assetId: 'wonders/panamacanal', x: area.x + 20, y: area.y + 40,
+    }))
+    const piece = placed.board.pieces.at(-1)
+    if (piece === undefined) throw new Error('Panama Canal should be on the board')
+    const owned = unwrap(setWonderOwner(placed, { playerId: CASH1981, pieceId: piece.id, ownerId: CASH1981 }))
     let state = unwrap(
-      setCoinSource(firstCivGame(), {
+      setCoinSource(owned, {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
         source: 'sheet',
@@ -302,8 +313,140 @@ describe('setCoinSource', () => {
     )
 
     expect(findPlayer(state, CASH1981)?.stats.coinSources.sheet).toBe(12)
-    expect(findPlayer(state, CASH1981)?.stats.coinSources.panamaCanal).toBe(9)
-    expect(totalCoins(findPlayer(state, CASH1981)?.stats.coinSources ?? EMPTY_COIN_SOURCES)).toBe(21)
+    expect(state.board.pieces.find((candidate) => candidate.id === piece.id)?.coinTokens).toBe(9)
+    const owner = findPlayer(state, CASH1981)
+    if (owner === undefined) throw new Error('Cash should be a player')
+    expect(totalCoins(coinSourcesOf(state, owner))).toBe(21)
+  })
+
+  it('adds Education as a zero-starting technology coin source with Internet capacity', () => {
+    const selected = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Education' }))
+    expect(findPlayer(selected, CASH1981)?.stats.coinSources.education).toBe(0)
+    expect(unwrapErr(setCoinSource(selected, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'education', value: 1,
+    }))).toEqual({ kind: 'COIN_SOURCE_NOT_EDITABLE', source: 'education' })
+    const revealed = unwrap(revealTech(selected, { playerId: CASH1981, techName: 'Education' }))
+    expect(unwrapErr(setCoinSource(revealed, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'education', value: 5,
+    }))).toMatchObject({ kind: 'INVALID_COIN_VALUE', max: 4 })
+    const area = wondersArea(revealed.board)
+    const placed = unwrap(placePiece(revealed, {
+      playerId: CASH1981, assetId: 'wonders/internet', x: area.x + 20, y: area.y + 40,
+    }))
+    const internet = placed.board.pieces.at(-1)
+    if (internet === undefined) throw new Error('The Internet should be on the board')
+    const owned = unwrap(setWonderOwner(placed, { playerId: CASH1981, pieceId: internet.id, ownerId: CASH1981 }))
+    expect(unwrap(setCoinSource(owned, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'education', value: 6,
+    }))).toBeDefined()
+  })
+
+  it('clears Education coins when the technology is removed', () => {
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Education' }))
+    state = unwrap(revealTech(state, { playerId: CASH1981, techName: 'Education' }))
+    state = unwrap(setCoinSource(state, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'education', value: 4,
+    }))
+    state = unwrap(removeTech(state, { playerId: CASH1981, techName: 'Education' }))
+    expect(findPlayer(state, CASH1981)?.stats.coinSources.education).toBe(0)
+  })
+
+  it('does not project a hidden Education coin counter', () => {
+    const chosen = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Education' }))
+    const tampered = {
+      ...chosen,
+      players: chosen.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, stats: { ...player.stats, coinSources: { ...player.stats.coinSources, education: 3 } } }
+          : player,
+      ),
+    }
+    const projected = toPlayerView(tampered, CASH1981).you
+    expect(projected?.stats.coinSources.education).toBe(0)
+    if (projected === null) throw new Error('Cash should see their own status')
+    expect(totalCoins(projected.stats.coinSources)).toBe(0)
+    const opponentView = toPlayerView(tampered, KARANDRAS1).opponents.find(
+      (opponent) => opponent.playerId === CASH1981,
+    )
+    if (opponentView === undefined) throw new Error('Karandras should see Cash as an opponent')
+    expect(opponentView.stats.coinSources.education).toBe(0)
+    expect(totalCoins(opponentView.stats.coinSources)).toBe(0)
+  })
+
+  it('moves a legacy Panama balance onto the currently owned wonder once', () => {
+    const state = firstCivGame()
+    const area = wondersArea(state.board)
+    const placed = unwrap(placePiece(state, {
+      playerId: CASH1981, assetId: 'wonders/panamacanal', x: area.x + 20, y: area.y + 40,
+    }))
+    const canal = placed.board.pieces.at(-1)
+    if (canal === undefined) throw new Error('Panama Canal should be on the board')
+    const owned = unwrap(setWonderOwner(placed, { playerId: CASH1981, pieceId: canal.id, ownerId: CASH1981 }))
+    const legacy = {
+      ...owned,
+      players: owned.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, stats: { ...player.stats, coinSources: { ...player.stats.coinSources, panamaCanal: 3 } } }
+          : player,
+      ),
+    }
+
+    const migrated = migrateGameState(legacy)
+    expect(migrated.board.pieces.find((piece) => piece.id === canal.id)?.coinTokens).toBe(3)
+    expect(migrateGameState(migrated)).toEqual(migrated)
+  })
+
+  it('does not copy legacy Panama coins onto another marker when scoped coins already exist', () => {
+    const base = firstCivGame()
+    const area = wondersArea(base.board)
+    const first = unwrap(placePiece(base, {
+      playerId: CASH1981, assetId: 'wonders/panamacanal', x: area.x + 20, y: area.y + 40,
+    }))
+    const firstCanal = first.board.pieces.at(-1)
+    if (firstCanal === undefined) throw new Error('Panama Canal should be on the board')
+    const second = unwrap(placePiece(first, {
+      playerId: CASH1981, assetId: 'wonders/panamacanal', x: area.x + 120, y: area.y + 40,
+    }))
+    const secondCanal = second.board.pieces.at(-1)
+    if (secondCanal === undefined) throw new Error('second Panama marker should be on the board')
+    const owned = unwrap(setWonderOwner(second, { playerId: CASH1981, pieceId: firstCanal.id, ownerId: CASH1981 }))
+    const legacy = {
+      ...owned,
+      board: {
+        ...owned.board,
+        pieces: owned.board.pieces.map((piece) =>
+          piece.id === firstCanal.id ? { ...piece, coinTokens: 2 } : piece,
+        ),
+      },
+      players: owned.players.map((player) =>
+        player.playerId === CASH1981
+          ? { ...player, stats: { ...player.stats, coinSources: { ...player.stats.coinSources, panamaCanal: 3 } } }
+          : player,
+      ),
+    }
+
+    const migrated = migrateGameState(legacy)
+    expect(migrated.board.pieces.find((piece) => piece.id === firstCanal.id)?.coinTokens).toBe(2)
+    expect(migrated.board.pieces.find((piece) => piece.id === secondCanal.id)?.coinTokens).toBe(0)
+  })
+
+  it('undoes and replays Panama token edits with the wonder history', () => {
+    const base = firstCivGame()
+    const area = wondersArea(base.board)
+    const placed = unwrap(placePiece(base, {
+      playerId: CASH1981, assetId: 'wonders/panamacanal', x: area.x + 20, y: area.y + 40,
+    }))
+    const canal = placed.board.pieces.at(-1)
+    if (canal === undefined) throw new Error('Panama Canal should be on the board')
+    const owned = unwrap(setWonderOwner(placed, { playerId: CASH1981, pieceId: canal.id, ownerId: CASH1981 }))
+    const counted = unwrap(setCoinSource(owned, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, source: 'panamaCanal', value: 2,
+    }))
+
+    const undone = unwrap(undoLastBoardChange(counted, CASH1981))
+    expect(undone.board.pieces.find((piece) => piece.id === canal.id)?.coinTokens ?? 0).toBe(0)
+    const redone = unwrap(redoLastBoardChange(undone, CASH1981))
+    expect(redone.board.pieces.find((piece) => piece.id === canal.id)?.coinTokens).toBe(2)
   })
 
   it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(

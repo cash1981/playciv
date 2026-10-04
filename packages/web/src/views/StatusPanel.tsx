@@ -16,10 +16,10 @@ import type { CSSProperties } from 'react'
 
 import {
   ALWAYS_AVAILABLE_COIN_SOURCES,
+  activeWonderOwnerIds,
   COIN_SOURCES,
   GOVERNMENT_CARDS,
   GOVERNMENTS,
-  isInWondersArea,
   isCombatHandSizeValue,
   isMovementValue,
   MAX_COMBAT_HAND_SIZE_LENGTH,
@@ -64,17 +64,11 @@ interface Row {
 }
 
 /**
- * Who owns the copies of one wonder that sit in the shared Wonders area. The
- * Internet's raised coin limits (issue #145) and the Panama Canal coin source
- * (issue #158) both hang off the owner.
+ * Owners with an active, unblocked copy of a wonder. Internet coin limits and
+ * Panama Canal bookkeeping follow its explicit owner wherever its marker sits.
  */
 function wonderOwners(view: PlayerView, assetId: string): ReadonlySet<string> {
-  return new Set(
-    view.board.pieces
-      .filter((piece) => piece.assetId === assetId && isInWondersArea(view.board, piece))
-      .map((piece) => piece.ownerId)
-      .filter((owner): owner is string => owner != null),
-  )
+  return activeWonderOwnerIds(view.board.pieces, assetId, view.blockadedPieceIds ?? [])
 }
 
 /**
@@ -394,9 +388,9 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
 
 /**
  * The coin sources a player currently has, from public data only (issue #158):
- * the always-available sources, the eight coin-token techs the player has
- * revealed, Organized Religion, the Democracy government and the Panama Canal
- * wonder in the shared Wonders area. A source that is not here gets no counter
+ * the always-available sources, the revealed coin-token techs, Organized
+ * Religion, the Democracy government and an active Panama Canal wonder. A
+ * source that is not here gets no counter
  * in the Coins table.
  */
 function availableCoinSources(
@@ -517,7 +511,7 @@ function CoinSection({
                       value={row.stats.coinSources[source.key]}
                       max={
                         source.max !== null &&
-                        ['codeOfLaws', 'pottery', 'democracy', 'printingPress'].includes(source.key) &&
+                        ['codeOfLaws', 'pottery', 'democracy', 'printingPress', 'education'].includes(source.key) &&
                         internetOwners.has(row.playerId)
                           ? source.max + 2
                           : source.max

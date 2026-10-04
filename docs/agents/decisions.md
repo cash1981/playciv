@@ -4590,3 +4590,10 @@ expansions.
 
 - The Wonders panel's Disable action now clears the wonder's owner through the existing reversible `setWonderOwner` board action. The wonder stays on the board and in the Wonders panel; its current owner-based bonuses turn off. The owner can be assigned again with the existing owner selector. Unowned wonders have no Disable control. This replaces the old panel action that removed the board piece entirely (issue #244).
 - The human asked to leave the reported culture-token behavior out of scope for this change.
+
+## 2026-10-04: Education coins and active wonder ownership
+
+- Education (III) is a zero-starting, manually maintained coin source capped at four, with The Internet raising the cap to six. It becomes available only after reveal; reveal does not award a coin. This fills the gap between its card text and the shipped coin table without inferring a wonder-build event.
+- The Internet's capacity follows its explicit owner in any board area and is inactive when unowned or blockaded. The Coins panel and reducer share the same board-derived owner eligibility.
+- Panama Canal coin tokens belong to the physical wonder marker. They follow it across ownership changes, stay stored during temporary blockade or while unowned, and count only toward the current owner's total while the wonder is unblocked. A legacy save transfers the current owner's old per-player counter to the marker once; counters on other players are ignored.
+- Panama counter edits are board-history changes, so undo and replay restore the physical token count. The coin edit still writes its public log entry.
