@@ -565,6 +565,142 @@ describe('the migrate-chat route', () => {
     expect(all.filter((row) => row.kind === 'order').every((row) => seen.has(row.id))).toBe(true)
     expect(current.messages.map((row) => row.createdAt)).toEqual([...current.messages.map((row) => row.createdAt)].sort())
   })
+
+  /** Marks the game as already moved, the way the old toggle left a game it switched to chat mode. */
+  async function markCopied(gameId: string): Promise<void> {
+    await repo.saveGame({ ...(await loadGame(gameId)), legacyOrdersCopied: true })
+  }
+
+  it('copies a version-less reveal into a game that is already marked moved, and only the rows', async () => {
+    const table = await twoPlayerGame('flagged')
+    const [one, two] = table.players
+    if (one === undefined || two === undefined) throw new Error('no players')
+    await classicOrders(table.gameId, [{ playerId: two.id, turn: 1, phase: 'TRADE', text: 'SECRET-DRAFT' }])
+    await bareReveal(table, 0, 2, 'CM', 'missed reveal', '2026-02-03T08:30:00.000Z')
+    await markCopied(table.gameId)
+    const stored = await loadGame(table.gameId)
+
+    // The dry run lists it with the rows it would write and no drafts
+    expect(JSON.parse((await dryRun(table)).body)).toEqual({
+      games: [{ id: table.gameId, name: 'flagged', active: true, orderRows: 1, drafts: 0 }],
+      totalOrderRows: 1,
+      totalDrafts: 0,
+      unchecked: 0,
+    })
+    expect(await orderRows(table.gameId)).toEqual([])
+
+    const saves = vi.spyOn(repo, 'saveGame')
+    const guarded = vi.spyOn(repo, 'saveGameIfRevision')
+    const response = await migrate(table)
+
+    expect(JSON.parse(response.body)).toMatchObject({
+      games: [{ id: table.gameId, orderRows: 1, drafts: 0 }],
+      totalOrderRows: 1,
+      totalDrafts: 0,
+      partial: null,
+      remaining: 0,
+    })
+    const rows = await orderRows(table.gameId)
+    expect(rows.map((row) => [row.username, row.turnNumber, row.phase, row.message, row.createdAt])).toEqual([
+      [one.username, 2, 'CM', 'missed reveal', '2026-02-03T08:30:00.000Z'],
+    ])
+    expect(rows[0]?.id).toBe(`legacy-reveal-${table.gameId}-2-${one.username}-CM-0`)
+    // Only rows: no save, same revision, same flag, the draft is not moved into the note
+    expect(saves).not.toHaveBeenCalled()
+    expect(guarded).not.toHaveBeenCalled()
+    expect(await loadGame(table.gameId)).toEqual(stored)
+    expect(await noteOf(table.gameId, two.id)).toBeNull()
+    expect(JSON.stringify(await repo.chatFor(table.gameId))).not.toContain('SECRET-DRAFT')
+
+    // A second run copies nothing and the game is no longer listed, in either route
+    const appended = vi.spyOn(repo, 'appendChat')
+    const second = await migrate(table)
+    expect(JSON.parse(second.body)).toMatchObject({ games: [], totalOrderRows: 0, remaining: 0, partial: null })
+    expect(appended).not.toHaveBeenCalled()
+    expect(JSON.parse((await dryRun(table)).body)).toMatchObject({ games: [], totalOrderRows: 0 })
+    expect(await orderRows(table.gameId)).toHaveLength(1)
+    // Naming the game gives the same answer
+    expect(JSON.parse((await migrate(table, table.gameId)).body)).toMatchObject({ games: [] })
+  })
+
+  it('never lists a moved game that has no version-less orders, and does not read its chat', async () => {
+    const table = await twoPlayerGame('flagged-clean')
+    const one = table.players[0]
+    if (one === undefined) throw new Error('no player')
+    await classicOrders(table.gameId, [{ playerId: one.id, turn: 1, phase: 'SOT', text: 'versioned', at: '2026-01-01T09:00:00.000Z' }])
+    expect((await migrate(table)).status).toBe(200)
+    expect((await loadGame(table.gameId)).legacyOrdersCopied).toBe(true)
+    const reads = vi.spyOn(repo, 'chatFor')
+    const appended = vi.spyOn(repo, 'appendChat')
+
+    expect(JSON.parse((await dryRun(table)).body)).toMatchObject({ games: [], totalOrderRows: 0, unchecked: 0 })
+    expect(JSON.parse((await migrate(table)).body)).toMatchObject({ games: [], remaining: 0 })
+    expect(JSON.parse((await migrate(table, table.gameId)).body)).toMatchObject({ games: [], remaining: 0 })
+
+    expect(reads).not.toHaveBeenCalled()
+    expect(appended).not.toHaveBeenCalled()
+  })
+
+  it('moves drafts only for a game that was not marked moved, in the same run as a marked one', async () => {
+    const fresh = await twoPlayerGame('mixed-new')
+    const marked = await twoPlayerGame('mixed-old')
+    const freshOne = fresh.players[0]
+    const markedOne = marked.players[0]
+    if (freshOne === undefined || markedOne === undefined) throw new Error('no players')
+    await classicOrders(fresh.gameId, [
+      { playerId: freshOne.id, turn: 1, phase: 'SOT', text: 'fresh public', at: '2026-01-01T09:00:00.000Z' },
+      { playerId: freshOne.id, turn: 1, phase: 'TRADE', text: 'FRESH-DRAFT' },
+    ])
+    await classicOrders(marked.gameId, [{ playerId: markedOne.id, turn: 1, phase: 'TRADE', text: 'MARKED-DRAFT' }])
+    await bareReveal(marked, 0, 1, 'SOT', 'marked reveal', '2026-02-03T08:30:00.000Z')
+    await markCopied(marked.gameId)
+
+    const dry = JSON.parse((await dryRun(fresh)).body) as { games: { id: string; orderRows: number; drafts: number }[] }
+    expect(dry.games.map((game) => [game.id, game.orderRows, game.drafts]).sort()).toEqual(
+      [[fresh.gameId, 1, 1], [marked.gameId, 1, 0]].sort(),
+    )
+
+    const response = JSON.parse((await migrate(fresh)).body) as {
+      games: { id: string; orderRows: number; drafts: number }[]
+      totalDrafts: number
+      remaining: number
+    }
+
+    expect(response.games.map((game) => [game.id, game.orderRows, game.drafts]).sort()).toEqual(
+      [[fresh.gameId, 1, 1], [marked.gameId, 1, 0]].sort(),
+    )
+    expect(response.totalDrafts).toBe(1)
+    expect(response.remaining).toBe(0)
+    expect(await noteOf(fresh.gameId, freshOne.id)).toBe('### Turn 1, trade (unpublished draft)\n\nFRESH-DRAFT')
+    expect((await loadGame(fresh.gameId)).legacyOrdersCopied).toBe(true)
+    expect(await noteOf(marked.gameId, markedOne.id)).toBeNull()
+    expect((await orderRows(marked.gameId)).map((row) => row.message)).toEqual(['marked reveal'])
+    expect(JSON.stringify(await repo.chatFor(marked.gameId))).not.toContain('MARKED-DRAFT')
+  })
+
+  it('keeps within the call budget for moved games: the dry run reads at most 40 chats and counts the rest as unchecked', async () => {
+    const table = await twoPlayerGame('budget')
+    await bareReveal(table, 0, 1, 'SOT', 'text', '2026-02-03T08:30:00.000Z')
+    await markCopied(table.gameId)
+    const source = await loadGame(table.gameId)
+    for (let index = 0; index < 42; index += 1) await repo.saveGame({ ...source, id: `${table.gameId}-copy-${index}` })
+    const reads = vi.spyOn(repo, 'chatFor')
+
+    const body = JSON.parse((await dryRun(table)).body) as { games: unknown[]; unchecked: number }
+
+    // 43 moved games with a version-less order: 40 are read, 3 are left unchecked
+    expect(reads).toHaveBeenCalledTimes(40)
+    expect(body.games).toHaveLength(40)
+    expect(body.unchecked).toBe(3)
+
+    // The real run: a read and a row per game, 20 games in 40 calls, the rest is still remaining
+    reads.mockClear()
+    const appended = vi.spyOn(repo, 'appendChat')
+    const run = JSON.parse((await migrate(table)).body) as { games: unknown[]; partial: string | null; remaining: number }
+    expect(reads.mock.calls.length + appended.mock.calls.length).toBeLessThanOrEqual(40)
+    expect(run.games).toHaveLength(20)
+    expect(run.remaining).toBe(23)
+  })
 })
 
 describe('the migrate-chat details', () => {
@@ -677,6 +813,7 @@ describe('the migrate-chat dry run', () => {
       games: [{ id: table.gameId, name: 'dry', active: true, orderRows: 1, drafts: 1 }],
       totalOrderRows: 1,
       totalDrafts: 1,
+      unchecked: 0,
     })
     expect(body.games.map((game) => game.id)).not.toContain(migrated.gameId)
     // Counts and names only: no order or draft text leaves

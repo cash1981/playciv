@@ -2,13 +2,13 @@
  * in storage on every request, so changing a role takes effect immediately. */
 
 import type { GameState } from '@civ/engine'
-import { draftsToPrivateNote, pendingDrafts } from '@civ/engine'
+import { draftsToPrivateNote, pendingDrafts, publicOrdersWithoutVersions } from '@civ/engine'
 
 import type { App } from '../app.js'
 import type { AppContext } from '../context.js'
 import { asRecord, currentPlayer, requireAdminWith, requireString } from '../context.js'
 import { sendError } from '../errors.js'
-import { copyLegacyOrders, legacyOrderRows } from '../legacy-orders.js'
+import { copyLegacyOrders, legacyOrderRows, missingLegacyRows } from '../legacy-orders.js'
 import { toPlayerDto } from './auth.js'
 import type { PlayerUpdate, StoredPlayer, UserRole } from '../store/types.js'
 
@@ -67,6 +67,11 @@ const MIGRATE_CALLS_PER_REQUEST = 40
 
 function enabledAdminCount(players: readonly StoredPlayer[]): number {
   return players.filter(isAdmin).length
+}
+
+/** A game with orders revealed before versions were kept, which an older copy of the orders did not read. */
+function hasVersionlessOrders(game: GameState): boolean {
+  return publicOrdersWithoutVersions(game).length > 0
 }
 
 function sum(values: readonly number[]): number {
@@ -425,22 +430,44 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
    * their old Turn orders panel data to move: how many order rows would be written
    * into the timeline and how many unpublished drafts would be added to their
    * owners' private notes. Counts and names only, nothing is written and no order
-   * or draft text leaves. The row count is every public version, so a game that an
-   * earlier request copied partly shows its full count.
+   * or draft text leaves. For a game that has not been moved the row count is every
+   * public version, so a game that an earlier request copied partly shows its full
+   * count. A game that is already marked moved is listed only when it has orders
+   * revealed before versions were kept (an older copy read only the versions) that
+   * are not in its timeline yet; its count is the rows that would be written and it
+   * has no drafts to move. That costs one read of the game's chat, so at most
+   * `MIGRATE_CALLS_PER_REQUEST` such games are read and `unchecked` says how many
+   * were left out of the list for that reason.
    */
   app.get('/api/admin/games/migrate-chat', admin, async (c) => {
-    const games = (await context.repo.allGames()).filter((game) => !game.legacyOrdersCopied)
-    const rows = games.map((game) => ({
-      id: game.id,
-      name: game.name,
-      active: game.active,
-      orderRows: legacyOrderRows(game.id, game).length,
-      drafts: pendingDrafts(game).length,
-    }))
+    const rows: { id: string; name: string; active: boolean; orderRows: number; drafts: number }[] = []
+    let reads = 0
+    let unchecked = 0
+    for (const game of await context.repo.allGames()) {
+      if (!game.legacyOrdersCopied) {
+        rows.push({
+          id: game.id,
+          name: game.name,
+          active: game.active,
+          orderRows: legacyOrderRows(game.id, game).length,
+          drafts: pendingDrafts(game).length,
+        })
+        continue
+      }
+      if (!hasVersionlessOrders(game)) continue
+      if (reads >= MIGRATE_CALLS_PER_REQUEST) {
+        unchecked += 1
+        continue
+      }
+      reads += 1
+      const missing = missingLegacyRows(await context.repo.chatFor(game.id), game.id, game).length
+      if (missing > 0) rows.push({ id: game.id, name: game.name, active: game.active, orderRows: missing, drafts: 0 })
+    }
     return c.json({
       games: rows,
       totalOrderRows: sum(rows.map((game) => game.orderRows)),
       totalDrafts: sum(rows.map((game) => game.drafts)),
+      unchecked,
     })
   })
 
@@ -452,7 +479,10 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
    * so it runs once. `gameId` names one game. A game that changed while it was
    * being moved is skipped (its rows stay and are not written twice), and a run
    * stops when the request's budget of database calls is spent; `remaining` says
-   * how many games are still left, so run it again.
+   * how many games are still left, so run it again. A game already marked moved is
+   * only visited when it has orders revealed before versions were kept: the rows
+   * still missing from its timeline are written and nothing else (its drafts, its
+   * flag and its revision stay), and a visit that writes nothing is not reported.
    */
   app.post('/api/admin/games/migrate-chat', admin, async (c) => {
     // A body that is not an object is refused rather than read as "every game".
@@ -469,18 +499,38 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
 
     let targets: readonly GameState[]
     if (gameId === undefined) {
-      targets = (await context.repo.allGames()).filter((game) => !game.legacyOrdersCopied)
+      const all = await context.repo.allGames()
+      // Real work first, so the reads that only check a moved game cannot starve it
+      targets = [
+        ...all.filter((game) => !game.legacyOrdersCopied),
+        ...all.filter((game) => game.legacyOrdersCopied === true && hasVersionlessOrders(game)),
+      ]
     } else {
       const game = await context.repo.findGame(gameId)
       if (game === undefined) return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
-      targets = game.legacyOrdersCopied ? [] : [game]
+      targets = !game.legacyOrdersCopied || hasVersionlessOrders(game) ? [game] : []
     }
 
     const games: { id: string; name: string; orderRows: number; drafts: number }[] = []
     let skipped = 0
+    let checked = 0
     let partial: string | undefined
     let budget = MIGRATE_CALLS_PER_REQUEST
     for (const game of targets) {
+      if (game.legacyOrdersCopied === true) {
+        // Moved before: copy only the rows still missing. No draft, no save, no flag.
+        // The read of the chat and room for at least one row
+        if (budget < 2) break
+        const extra = await copyLegacyOrders(context.repo, game.id, game, budget - 1)
+        budget -= 1 + extra.written
+        if (!extra.complete) {
+          partial = game.id
+          break
+        }
+        if (extra.written === 0) checked += 1
+        else games.push({ id: game.id, name: game.name, orderRows: extra.written, drafts: 0 })
+        continue
+      }
       // The read of the chat and the save, and room for at least one row
       if (budget < 3) break
       const copy = await copyLegacyOrders(context.repo, game.id, game, budget - 2)
@@ -512,7 +562,7 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       totalDrafts: sum(games.map((game) => game.drafts)),
       skipped,
       partial: partial ?? null,
-      remaining: targets.length - games.length,
+      remaining: targets.length - games.length - checked,
     })
   })
 }

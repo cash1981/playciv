@@ -13,7 +13,7 @@ import type { GameState } from '@civ/engine'
 import { publicOrderVersions, publicOrdersWithoutVersions } from '@civ/engine'
 import type { PublicOrderVersion } from '@civ/engine'
 
-import type { Repository } from './store/types.js'
+import type { ChatMessage, Repository } from './store/types.js'
 
 /** Every public order the timeline should hold for this game, with the id its row gets. */
 export function legacyOrderRows(
@@ -39,6 +39,27 @@ export interface LegacyCopy {
 }
 
 /**
+ * The rows of `legacyOrderRows` that the given chat does not hold yet, oldest first:
+ * the same dedupe `copyLegacyOrders` writes by, so a count of these is what a copy
+ * would write.
+ */
+export function missingLegacyRows(
+  chat: readonly ChatMessage[],
+  gameId: string,
+  state: GameState,
+): ReturnType<typeof legacyOrderRows> {
+  const existing = new Set(chat.map((row) => row.id))
+  const orders = chat.filter((row) => row.kind === 'order')
+  const posted = new Set(orders.map((row) => [row.username, row.turnNumber, row.phase, row.createdAt, row.message].join('\u0000')))
+  const postedAnyTime = new Set(orders.map((row) => [row.username, row.turnNumber, row.phase, row.message].join('\u0000')))
+  return legacyOrderRows(gameId, state).filter(({ id, version, withoutVersion }) => {
+    const key = [version.username, version.turnNumber, version.phase, version.at, version.markdown].join('\u0000')
+    const keyAnyTime = [version.username, version.turnNumber, version.phase, version.markdown].join('\u0000')
+    return !(existing.has(id) || posted.has(key) || (withoutVersion && postedAnyTime.has(keyAnyTime)))
+  })
+}
+
+/**
  * Writes one `order` row per revealed version, oldest first, dated when the owner
  * published it, and one per order revealed before versions were kept, dated from the
  * reveal's log line (see `publicOrdersWithoutVersions`). The ids are made from the
@@ -55,23 +76,8 @@ export async function copyLegacyOrders(
   state: GameState,
   limit: number = Number.POSITIVE_INFINITY,
 ): Promise<LegacyCopy> {
-  const rows = await repo.chatFor(gameId)
-  const existing = new Set(rows.map((row) => row.id))
-  const posted = new Set(
-    rows
-      .filter((row) => row.kind === 'order')
-      .map((row) => [row.username, row.turnNumber, row.phase, row.createdAt, row.message].join('\u0000')),
-  )
-  const postedAnyTime = new Set(
-    rows
-      .filter((row) => row.kind === 'order')
-      .map((row) => [row.username, row.turnNumber, row.phase, row.message].join('\u0000')),
-  )
   let written = 0
-  for (const { id, version, withoutVersion } of legacyOrderRows(gameId, state)) {
-    const key = [version.username, version.turnNumber, version.phase, version.at, version.markdown].join('\u0000')
-    const keyAnyTime = [version.username, version.turnNumber, version.phase, version.markdown].join('\u0000')
-    if (existing.has(id) || posted.has(key) || (withoutVersion && postedAnyTime.has(keyAnyTime))) continue
+  for (const { id, version } of missingLegacyRows(await repo.chatFor(gameId), gameId, state)) {
     if (written >= limit) return { written, complete: false }
     await repo.appendChat({
       id,
