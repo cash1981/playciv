@@ -16,6 +16,7 @@ import type { PlayerTurn, TurnPhase } from '../turn.js'
 import {
   TURN_PHASES,
   createPlayerTurn,
+  gameHasStarted,
   publicTurnKey,
   publicTurn,
   sameTurn,
@@ -34,6 +35,7 @@ const PHASE_LOG_TYPE: Readonly<Record<TurnPhase, LogType>> = {
   RESEARCH: 'RESEARCH',
 }
 
+/** The caller's own hand, once the game has started. */
 function requireAccess(
   state: GameState,
   playerId: string,
@@ -41,6 +43,8 @@ function requireAccess(
   if (!hasUserAccess(state, playerId)) return err({ kind: 'NO_ACCESS', playerId })
   const player = findPlayer(state, playerId)
   if (player === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId })
+  // A table that is not full has no turn to write orders for or to mark done
+  if (!gameHasStarted(state)) return err({ kind: 'GAME_NOT_STARTED' })
   return ok(player)
 }
 

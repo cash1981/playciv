@@ -19,6 +19,7 @@ import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
 import type { WaitingFor } from './turn.js'
 import {
+  gameHasStarted,
   startPlayerName,
   turnHolder,
   turnStatus,
@@ -324,9 +325,11 @@ export interface ActiveTurnStatus {
 
 /**
  * There is no baton: the turn belongs to `turnHolder`, and the turn number and
- * phase come from `turnStatus`. `null` when there are no active players.
+ * phase come from `turnStatus`. `null` when there are no active players, and while
+ * the game has not started (`gameHasStarted`): a lobby has no turn yet.
  */
 export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
+  if (!gameHasStarted(state)) return null
   const holder = turnHolder(state)
   if (holder === undefined) return null
   const status = turnStatus(state)

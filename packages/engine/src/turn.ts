@@ -361,6 +361,17 @@ export function turnHolder(state: GameState, startPlayerNumber?: number): Player
   return ordered.find((player) => !isDone(turnOf(player, currentTurn), earliest))
 }
 
+/**
+ * Whether the game has started, that is, `startIfAllPlayers` has run. `yourTurn`
+ * stays as stored data for this reason: nobody has it until the table is full,
+ * then the first player gets it and nothing moves it any more (there is no baton).
+ * A withdrawn hand counts too, so a game whose first player has left is still
+ * started. A game that has not started takes no orders and has no active turn.
+ */
+export function gameHasStarted(state: GameState): boolean {
+  return [...state.players, ...state.withdrawnPlayers].some((player) => player.yourTurn)
+}
+
 /** One published version of a phase's order. */
 export interface PublicOrderVersion {
   readonly username: string
