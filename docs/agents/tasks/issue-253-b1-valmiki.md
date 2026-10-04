@@ -3,7 +3,7 @@
 - **Slug:** `issue-253-b1-valmiki`
 - **Branch:** `feat/issue-253-b1-valmiki`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done (PR #258)
 
 ## Goal
 
@@ -38,6 +38,7 @@ Use the existing public-board helper in the derived culture-hand calculation. Ad
 
 ## Claimed paths
 
+- `README.md`
 - `packages/engine/src/culture-hand.ts`
 - `packages/engine/test/culture-hand-size.test.ts`
 - `docs/agents/decisions.md`
@@ -47,12 +48,12 @@ Use the existing public-board helper in the derived culture-hand calculation. Ad
 
 ## Acceptance criteria
 
-- [ ] Revealed Valmiki gives +2 with no tracked Artist/Thinker token, preserving compatibility.
-- [ ] Revealed Valmiki gives no +2 when all tracked Artist/Thinker tokens are blockaded.
-- [ ] The bonus returns when at least one tracked token becomes unblocked.
-- [ ] Hidden Valmiki contributes nothing to the owner or opponent projection, regardless of blockade.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
-- [ ] Read-only review has no findings above a nit.
+- [x] Revealed Valmiki gives +2 with no tracked Artist/Thinker token, preserving compatibility.
+- [x] Revealed Valmiki gives no +2 when all tracked Artist/Thinker tokens are blockaded.
+- [x] The bonus returns when at least one tracked token becomes unblocked.
+- [x] Hidden Valmiki contributes nothing to the owner or opponent projection, regardless of blockade.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
+- [x] Read-only review has no findings above a nit.
 
 ## Open questions
 

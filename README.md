@@ -528,11 +528,12 @@ member of the game, with every edit written to the public log. Combat is
 calculated automatically from buildings, generals, MIC investments, government,
 civilization and the Statue of Zeus. Culture hand size starts at 2 and is
 calculated from Pottery, Civil Service and Theology (+1 each), Computers (+1 per
-5 coins), Valmiki (+2, gone again when discarded), the first Endowment for the
-Arts investment (+1) and owning Cristo Redentor (+4). A hidden tech or Great
-Person counts for nobody until it is revealed; the wonder needs no reveal, since
-the board is public. Combat hand size is free text, such as `+1`. New games
-start with the standard unit and modifier defaults.
+5 coins), Valmiki (+2 while revealed and usable, suppressed when all tracked
+Artist or Thinker tokens are blockaded, gone again when discarded), the first
+Endowment for the Arts investment (+1) and owning Cristo Redentor (+4). A hidden
+tech or Great Person counts for nobody until it is revealed; the wonder needs no
+reveal, since the board is public. Combat hand size is free text, such as `+1`.
+New games start with the standard unit and modifier defaults.
 The panel's **Coins** section tracks one row per source — Code of Laws, Pottery,
 Civil Service, Democracy, Printing Press, Bureaucracy, Railroad, Computers,
 Education, Bank, Adam Smith, Democracy (Govt), Great People, Terrain, Panama

@@ -12,20 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-253-b1-valmiki
-
-- **Owner:** Codex
-- **Branch:** `feat/issue-253-b1-valmiki`
-- **Brief:** `docs/agents/tasks/issue-253-b1-valmiki.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/culture-hand.ts`
-  - `packages/engine/test/culture-hand-size.test.ts`
-  - `docs/agents/decisions.md`
-  - `docs/agents/tasks/issue-253-b1-valmiki.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`
-- **Notes:** Continues issue #253 B1 after A and metropolis footprint work.
+_Nothing._
 
 ---
 
