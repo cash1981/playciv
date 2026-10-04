@@ -64,8 +64,6 @@ export type EngineError =
   /** Java: 403 "Only game creator can end game" */
   | { readonly kind: 'ONLY_GAME_CREATOR_CAN_END_GAME'; readonly playerId: string }
   | { readonly kind: 'TURN_NOT_FOUND'; readonly turnNumber: number }
-  /** Chat orders (issue #215): done markers and orders need the setting switched on. */
-  | { readonly kind: 'CHAT_ORDERS_OFF' }
   /** Every colour is taken */
   | { readonly kind: 'NO_COLOR_AVAILABLE' }
   | { readonly kind: 'INVALID_PLAYER_COLOR'; readonly color: string }
@@ -85,7 +83,7 @@ export type EngineError =
   | { readonly kind: 'BOARD_UNDO_NOT_YOURS' }
   /** Nothing has been undone since the last board change, so there is nothing to redo */
   | { readonly kind: 'NOTHING_TO_REDO_ON_BOARD' }
-  /** `endTurn` was called but no player has the turn yet — the game has not started */
+  /** The game has not started: there is no player to the left of the caller yet (barbarians) */
   | { readonly kind: 'GAME_NOT_STARTED' }
   /** Java has no equivalent — `setPlayerStat` (issue #43) got a key outside `PlayerStats` */
   | { readonly kind: 'UNKNOWN_STAT'; readonly stat: string }
@@ -175,8 +173,6 @@ export function describeError(error: EngineError): string {
       return 'Only game creator can end game'
     case 'TURN_NOT_FOUND':
       return `Could not find turn ${error.turnNumber}`
-    case 'CHAT_ORDERS_OFF':
-      return 'Chat orders are not switched on for this game'
     case 'NO_COLOR_AVAILABLE':
       return 'No colors left to assign'
     case 'INVALID_PLAYER_COLOR':
@@ -202,7 +198,7 @@ export function describeError(error: EngineError): string {
     case 'NOTHING_TO_REDO_ON_BOARD':
       return 'There is no undone board change to redo'
     case 'GAME_NOT_STARTED':
-      return 'The game has not started yet, so there is no turn to end'
+      return 'The game has not started yet'
     case 'UNKNOWN_STAT':
       return `Unknown player stat: ${error.stat}`
     case 'STAT_NOT_EDITABLE':

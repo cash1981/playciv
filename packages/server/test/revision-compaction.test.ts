@@ -6,13 +6,12 @@
  */
 
 import type { GameState } from '@civ/engine'
-import { endTurn } from '@civ/engine'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createGameRevision, revisionSnapshot, stampLog } from '../src/context.js'
 import type { RevisionCodec } from '../src/revision-delta.js'
 import { applyDelta, defaultRevisionCodec, diffValues, REVISION_KEYFRAME_INTERVAL } from '../src/revision-delta.js'
-import { playRecordedGame } from './revision-fixtures.js'
+import { passTurn, playRecordedGame } from './revision-fixtures.js'
 import { saveRecordedGame, storeImplementations } from './revision-store-harness.js'
 import type { StoreFactory, StoreFixture, StoredRow } from './revision-store-harness.js'
 
@@ -252,7 +251,7 @@ describe.each(storeImplementations)('revision compaction: %s', (_name, create) =
   describe('a game that is being played', () => {
     /** One more action by whoever holds the turn, saved the way `applyToGame` saves it. */
     async function playOn(fixture: StoreFixture, live: GameState): Promise<GameState> {
-      const result = endTurn(live)
+      const result = passTurn(live)
       if (!result.ok) throw new Error(result.error.kind)
       const after = stampLog({ ...result.value, rev: live.rev + 1 }, '2026-10-05T00:00:00.000Z')
       const revision = createGameRevision(live, after, ACTOR, '2026-10-05T00:00:00.000Z', 'End turn')
@@ -376,7 +375,7 @@ describe('revision compaction in D1: runs that overlap other writes', () => {
     const { fixture, gameId, saved, game } = await legacyGame(35)
     const db = fixture.db as NonNullable<StoreFixture['db']>
     let live = game.steps.at(-1)?.after as GameState
-    const after = endTurn(live)
+    const after = passTurn(live)
     if (!after.ok) throw new Error('cannot end turn')
     const next = stampLog({ ...after.value, rev: live.rev + 1 }, '2026-10-05T00:00:00.000Z')
 
@@ -416,7 +415,7 @@ describe('revision compaction in D1: runs that overlap other writes', () => {
     const { fixture, gameId, saved, game } = await legacyGame(35)
     const db = fixture.db as NonNullable<StoreFixture['db']>
     const live = game.steps.at(-1)?.after as GameState
-    const ended = endTurn(live)
+    const ended = passTurn(live)
     if (!ended.ok) throw new Error('cannot end turn')
     const next = stampLog({ ...ended.value, rev: live.rev + 1 }, '2026-10-05T00:00:00.000Z')
 

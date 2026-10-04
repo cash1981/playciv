@@ -1,6 +1,6 @@
 /**
  * Chat orders (issue #215), slice 3 on the server: the turn row, the start
- * player marker through the admin switch, and the mail to a new turn holder.
+ * player marker, and the mail to a new turn holder.
  * New in the port, so there is no Java counterpart.
  */
 
@@ -86,10 +86,6 @@ async function loadGame(gameId: string): Promise<GameState> {
   return game
 }
 
-const switchOn = async (table: Table): Promise<void> => {
-  expect((await post(table.admin, `/api/admin/games/${table.gameId}/chat-orders`, { enabled: true })).status).toBe(200)
-}
-
 const done = (table: Table, seat: number, phase: string, turnNumber?: number) => {
   const who = table.seats[seat]
   if (who === undefined) throw new Error(`no seat ${seat}`)
@@ -121,34 +117,32 @@ const markerOwner = (view: PlayerView): string | undefined => {
   return area?.username
 }
 
-describe('the admin switch and the start player marker', () => {
-  it('switching on puts the marker in seat 1\'s area and names them as the starter', async () => {
-    const table = await threePlayerGame('marker')
+describe('the start player marker', () => {
+  it('a new game has no marker, and seat 1 is named as the start player', async () => {
+    const table = await threePlayerGame('never-on')
     const seat1 = table.seats[0]
     if (seat1 === undefined) throw new Error('no seat 1')
-    expect((await loadGame(table.gameId)).board.pieces.some((piece) => piece.assetId === 'markers/startplayer')).toBe(false)
-
-    await switchOn(table)
-
     const view = await (await inject(app, { method: 'GET', url: `/api/games/${table.gameId}`, headers: bearer(seat1.token) })).json<PlayerView>()
-    expect(markerOwner(view)).toBe(seat1.username)
+    expect(view.board.pieces.some((piece) => piece.assetId === 'markers/startplayer')).toBe(false)
     expect(view.activeTurn?.startPlayer).toBe(seat1.username)
   })
 
-  it('a game that never switches it on has no marker and no start player in the view', async () => {
-    const table = await threePlayerGame('never-on')
+  it('the marker appears in the next seat when the first turn is finished', async () => {
+    const table = await threePlayerGame('marker')
     const seat2 = table.seats[1]
     if (seat2 === undefined) throw new Error('no seat 2')
+
+    await finishTurn(table, 1)
+
     const view = await (await inject(app, { method: 'GET', url: `/api/games/${table.gameId}`, headers: bearer(seat2.token) })).json<PlayerView>()
-    expect(view.board.pieces.some((piece) => piece.assetId === 'markers/startplayer')).toBe(false)
-    expect(view.activeTurn).not.toHaveProperty('startPlayer')
+    expect(markerOwner(view)).toBe(seat2.username)
+    expect(view.activeTurn?.startPlayer).toBe(seat2.username)
   })
 })
 
 describe('the row that starts a turn', () => {
   it('is written when the last player finishes Research, tagged with the new turn', async () => {
     const table = await threePlayerGame('turn-row')
-    await switchOn(table)
     const seat2 = table.seats[1]
     if (seat2 === undefined) throw new Error('no seat 2')
 
@@ -175,7 +169,6 @@ describe('the row that starts a turn', () => {
 
   it('takes the divider text from the engine line straight after the done line', async () => {
     const table = await threePlayerGame('turn-line')
-    await switchOn(table)
     await finishTurn(table, 1)
 
     const lines = (await loadGame(table.gameId)).log.map((entry) => entry.publicLog)
@@ -189,16 +182,15 @@ describe('the row that starts a turn', () => {
     expect(rows.at(-1)?.message).toBe(startLine)
   })
 
-  it('splits the paged timeline exactly at that row', async () => {
+  it('splits the timeline page exactly at that row', async () => {
     const table = await threePlayerGame('turn-page')
-    await switchOn(table)
     const seat1 = table.seats[0]
     if (seat1 === undefined) throw new Error('no seat 1')
     await post(seat1.token, `/api/games/${table.gameId}/chat`, { message: 'talk in turn 1' })
     await finishTurn(table, 1)
     await post(seat1.token, `/api/games/${table.gameId}/chat`, { message: 'talk in turn 2' })
     const page = (extra = '') =>
-      inject(app, { method: 'GET', url: `/api/games/${table.gameId}/chat?paged=1${extra}`, headers: bearer(seat1.token) })
+      inject(app, { method: 'GET', url: `/api/games/${table.gameId}/chat${extra}`, headers: bearer(seat1.token) })
         .then((response) => response.json<{ messages: ChatMessage[]; hasMore: boolean }>())
 
     const current = await page()
@@ -207,7 +199,7 @@ describe('the row that starts a turn', () => {
     expect(current.messages.at(-1)?.message).toBe('talk in turn 2')
 
     // The turn before ends right where the divider begins
-    const before = await page(`&before=${divider?.id ?? ''}`)
+    const before = await page(`?before=${divider?.id ?? ''}`)
     expect(before.messages.some((row) => row.turnNumber === 2)).toBe(false)
     expect(before.messages.at(-1)?.message).toContain('marked all phases up to research done')
     // Chat has no turn tag, so a turn's page begins at its first tagged row
@@ -216,7 +208,6 @@ describe('the row that starts a turn', () => {
 
   it('is not written a second time when Research is unmarked and marked again', async () => {
     const table = await threePlayerGame('turn-twice')
-    await switchOn(table)
     await finishTurn(table, 1)
     const last = table.seats[2]
     if (last === undefined) throw new Error('no seat 3')
@@ -232,7 +223,6 @@ describe('the row that starts a turn', () => {
 
   it('is not written for a done that leaves the turn open', async () => {
     const table = await threePlayerGame('turn-open')
-    await switchOn(table)
     expect((await done(table, 0, 'RESEARCH', 1)).status).toBe(200)
     expect((await rowsOf(table.gameId)).map((row) => row.turnNumber)).toEqual([1])
   })
@@ -244,7 +234,6 @@ describe('the mail to a new turn holder', () => {
 
   it('goes to the new holder only, and only when the holder changes', async () => {
     const table = await threePlayerGame('holder-mail')
-    await switchOn(table)
     const [one, two, three] = table.seats
     if (one === undefined || two === undefined || three === undefined) throw new Error('no seats')
     // Joining mailed the other players; let the 30 minute wait that stands in for a visit pass
@@ -274,7 +263,6 @@ describe('the mail to a new turn holder', () => {
 
   it('names the next turn and its starter when the turn rolls over', async () => {
     const table = await threePlayerGame('holder-roll')
-    await switchOn(table)
     const two = table.seats[1]
     if (two === undefined) throw new Error('no seat 2')
     await done(table, 0, 'RESEARCH', 1)
@@ -292,7 +280,6 @@ describe('the mail to a new turn holder', () => {
 
   it('is held like the other in-game mail: once, until the player opens the game or 30 minutes pass', async () => {
     const table = await threePlayerGame('holder-throttle')
-    await switchOn(table)
     const before = await loadGame(table.gameId)
     const after = unwrap(markPhasesDone(before, { playerId: table.seats[0]?.id ?? '', turnNumber: 1, upToPhase: 'SOT' }))
     const notifications = createNotifications({ repo, mailer, appOrigin: 'https://playciv.app', now: () => now })
@@ -311,7 +298,6 @@ describe('the mail to a new turn holder', () => {
 
   it('is sent again once the new holder has opened the game', async () => {
     const table = await threePlayerGame('holder-opened')
-    await switchOn(table)
     const before = await loadGame(table.gameId)
     const after = unwrap(markPhasesDone(before, { playerId: table.seats[0]?.id ?? '', turnNumber: 1, upToPhase: 'SOT' }))
     const holder = table.seats[1]
@@ -337,7 +323,6 @@ describe('the mail to a new turn holder', () => {
   it('sends nothing when the holder is the same, even once the hold has run out', async () => {
     const table = await threePlayerGame('holder-none')
     const notifications = createNotifications({ repo, mailer, appOrigin: 'https://playciv.app', now: () => now })
-    await switchOn(table)
     const on = await loadGame(table.gameId)
     expect(turnHolder(on)?.playerId).toBe(table.seats[0]?.id)
     // Past the hold, so a mail to the holder would not be swallowed by it
@@ -349,20 +334,6 @@ describe('the mail to a new turn holder', () => {
     expect(mailer.sent).toHaveLength(0)
   })
 
-  it('sends nothing with chat orders off, even when the turn holder would differ', async () => {
-    const table = await threePlayerGame('holder-off')
-    await switchOn(table)
-    const before = await loadGame(table.gameId)
-    const after = unwrap(markPhasesDone(before, { playerId: table.seats[0]?.id ?? '', turnNumber: 1, upToPhase: 'SOT' }))
-    expect(turnHolder(after)?.playerId).not.toBe(turnHolder(before)?.playerId)
-    const notifications = createNotifications({ repo, mailer, appOrigin: 'https://playciv.app', now: () => now })
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
-    mailer.sent.length = 0
-
-    await notifications.turnHolderChanged(before, { ...after, chatOrders: false })
-
-    expect(mailer.sent).toHaveLength(0)
-  })
 })
 
 describe('the mail for an order', () => {
@@ -377,7 +348,6 @@ describe('the mail for an order', () => {
 
   it('mails the other players like a chat message, with the public order in it', async () => {
     const table = await threePlayerGame('order-mail')
-    await switchOn(table)
     const [one, two, three] = table.seats
     if (one === undefined || two === undefined || three === undefined) throw new Error('no seats')
     // Joining mailed the other players; let the 30 minute wait that stands in for a visit pass
@@ -396,7 +366,6 @@ describe('the mail for an order', () => {
 
   it('is held like the chat mail: a second order mails nobody until the game is opened', async () => {
     const table = await threePlayerGame('order-held')
-    await switchOn(table)
     now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
     mailer.sent.length = 0
 
@@ -407,19 +376,8 @@ describe('the mail for an order', () => {
     expect(mailer.sent).toHaveLength(2)
   })
 
-  it('sends nothing for the refused order of a game with chat orders off', async () => {
-    const table = await threePlayerGame('order-off')
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
-    mailer.sent.length = 0
-
-    expect((await order(table, 0, 'nobody listens')).status).toBe(409)
-
-    expect(mailer.sent).toHaveLength(0)
-  })
-
   it('still mails the new turn holder when writing the done row to the timeline fails', async () => {
     const table = await threePlayerGame('row-fails')
-    await switchOn(table)
     const two = table.seats[1]
     if (two === undefined) throw new Error('no seat 2')
     now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
@@ -432,27 +390,5 @@ describe('the mail for an order', () => {
     expect(mailsTo(two.username)).toHaveLength(1)
     expect(mailsTo(two.username)[0]?.subject).toBe('It is your turn')
     expect(logged).toHaveBeenCalled()
-  })
-})
-
-describe('polling the classic chat', () => {
-  it('does not read the game, and still answers an unknown game with an empty list', async () => {
-    const table = await threePlayerGame('poll')
-    await switchOn(table)
-    const seat1 = table.seats[0]
-    if (seat1 === undefined) throw new Error('no seat 1')
-    await post(seat1.token, `/api/games/${table.gameId}/chat`, { message: 'hello' })
-    const findGame = vi.spyOn(repo, 'findGame')
-
-    const classic = await inject(app, { method: 'GET', url: `/api/games/${table.gameId}/chat`, headers: bearer(seat1.token) })
-    expect(classic.status).toBe(200)
-    expect(JSON.parse(classic.body)).toHaveLength(1)
-    const unknown = await inject(app, { method: 'GET', url: '/api/games/nope/chat', headers: bearer(seat1.token) })
-    expect(unknown.status).toBe(200)
-    expect(JSON.parse(unknown.body)).toEqual([])
-    expect(findGame).not.toHaveBeenCalled()
-
-    await inject(app, { method: 'GET', url: `/api/games/${table.gameId}/chat?paged=1`, headers: bearer(seat1.token) })
-    expect(findGame).toHaveBeenCalledTimes(1)
   })
 })

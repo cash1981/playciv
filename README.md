@@ -118,8 +118,8 @@ mail secrets live in the Cloudflare dashboard (see [Storage](#storage-d1-in-prod
 
 React and Vite. Replaces the AngularJS app in `old-civ-web`. Deliberately plain
 — the artwork comes later. It covers login, the game list, and the game page
-with hand, draws, battle, technology, social policy, turn orders, log, undo
-voting and chat.
+with hand, draws, battle, technology, social policy, the chat and orders
+timeline, log and undo voting.
 
 The client imports its types from `@civ/engine`, so it cannot drift out of step
 with what the server actually sends.
@@ -509,23 +509,6 @@ stays private — only its count is public — and a revealed one is also named 
 the public log. The Techs and Social policy panels each have one tab per player,
 labelled with the username and the player's colour. See `docs/agents/decisions.md`.
 
-**Turn orders are revealed per phase.** The old client published every saved
-turn-order phase immediately. The port keeps each phase private until its
-owner clicks Reveal, then publishes only that phase; existing saved turns are
-migrated as already public. Each phase also keeps the history of the versions
-its owner has revealed — oldest first, greyed and struck through above the
-current editor — so editing after a reveal does not erase what was published
-before. The revealed versions and the editor each keep a bounded,
-independently scrollable height — the long phases taller than trade and
-research — so a long order cannot make the section enormous. Each phase also
-has its own Save button beside Reveal, and Reveal itself now saves the phase
-first if it has unsaved edits, instead of staying disabled until a separate
-save. A single status — whose turn it is, and which of the five phases they
-are on — is derived from the phases already revealed (never the order text)
-and shown by the game's title, logged when a turn passes to the next player,
-and named in the "it's your turn" email; none of this existed in the old
-client. See `docs/agents/decisions.md`.
-
 **The password reset link is a signed, expiring token.** Java emailed
 `/api/auth/verify/{playerId}` and stored the pending password in plaintext on
 the player record, so anyone who knew a public player id could complete a reset.
@@ -620,15 +603,10 @@ not the catalogue number, so it cannot be matched to the tech list without the
 key. The history
 bar shows the public description only.
 
-**Five turn-phase methods became one.** `updateSOT`, `updateTrade`, `updateCM`,
-`updateMovement` and `updateResearch` differed only in the email text and the
-log type. The phase was already in the DTO, so `updateSOT` with `phase: "trade"`
-wrote to the trade phase but logged SOT. `updateTurn` takes the phase as an
-argument.
-
 **Reads no longer mutate.** `getRemaingTechsForPlayer` did `techs.removeAll(...)`
 on the list from Mongo, and `getAllPublicTurns` stripped history by changing the
-stored objects. Both are pure projections now.
+stored objects. Both were pure projections in the port, and `getAllPublicTurns` is
+gone with the old Turn orders panel.
 
 **`addNewTurn` saves.** Java forgot `pbfCollection.updateById`, so the new turn
 disappeared on the next read.
@@ -643,26 +621,16 @@ gets a new number.
 element out of a `HashSet`, in unspecified order. It now follows Green, Yellow,
 Purple, Red, Blue.
 
-**`endTurn` still lets anyone end the turn.** Java found the player whose turn
-it is and passed it on without looking at the caller. The engine still does
-this; membership is now enforced at the server route (`endturn`/`taketurn`
-reject a non-member with 403), which is where the authorization always belonged.
-
-**`endTurn` returns `GAME_NOT_STARTED` (409) when no one holds the turn.** Java
-either advanced by array index (its legacy pre-2015 branch) or threw
-`NoSuchElementException` → HTTP 500 (its numbered branch). Neither is useful for
-an unstarted game, and the legacy games that branch served are never loaded, so
-the engine returns a clear error instead. See `docs/agents/decisions.md`.
-
 **Transactional email is Resend, and unsubscribing works.** The old app sent
 through SendGrid (`SENDGRID_USERNAME`/`SENDGRID_PASSWORD`); the rewrite uses
 Resend (`RESEND_API_KEY`, from `noreply@playciv.app`). Every trigger the old
 system had is back except the new-game broadcast — it-is-your-turn, someone
-joined, chat, game ended, game deleted and the five turn-phase updates.
+joined, chat, game ended and game deleted. The five turn-phase updates are gone with
+the old Turn orders panel; a posted order is mailed like a chat message.
 Several old behaviours were corrected on purpose:
 
 - **One game email per player until they open the game** (issue #217). After a
-  chat, phase-update, it-is-your-turn or someone-joined mail, that player gets
+  chat, order, it-is-your-turn or someone-joined mail, that player gets
   no further such mail about the same game until they load the game while signed
   in. A player who has never opened the game falls back to Java's 30-minute
   wait. It is per player and per game. The game-ended and game-deleted mails are
@@ -671,12 +639,12 @@ Several old behaviours were corrected on purpose:
 
 - The unsubscribe link rides on **every** mail (Java's it-is-your-turn mail
   carried none), and it points at the **recipient's** id — Java passed the
-  author's id on the turn-phase mails, so the recipient's link unsubscribed the
+  author's id on its game mails, so the recipient's link unsubscribed the
   wrong account.
 - `disableEmail` stops **all** notifications (Java checked it only for the
   new-game broadcast and the admin mass mail, so its "unsubscribe from ALL
   emails" link did not actually stop most mail).
-- The author of a chat message or phase order is excluded by their stable
+- The author of a chat message or order is excluded by their stable
   player id, not by username (Java compared usernames, which stops matching
   after an admin renames the account), and the mail goes to the account's
   current email address rather than the address snapshotted into the game at
@@ -792,7 +760,7 @@ migration `0006` to D1 (`wrangler d1 migrations apply playciv --remote`), deploy
 Worker, take a D1 Time Travel bookmark (`wrangler d1 time-travel info playciv`), read the
 dry run, compact one game and look at its history, then "Compact all". Old rows stay valid
 without any conversion, so the migration and the deploy are safe on their own provided no
-admin chat orders switch (or other non-note admin change) is made between applying `0006`
+"Move old games to the single chat" run (or other non-note admin change) is made between applying `0006`
 and deploying the Worker; right after the deploy, run the sealing statement of the
 migration once more (it is idempotent): `wrangler d1 execute playciv --remote --command
 "UPDATE game_revision SET sealed = 1 WHERE revision = (SELECT MAX(r.revision) FROM game_revision r WHERE r.game_id = game_revision.game_id);"`. Run it before anyone plays: a move made between the deploy and the statement is not repaired by it. The first move of each game after the deploy is a keyframe. Rolling the Worker back is only
@@ -851,24 +819,39 @@ looking broken rather than intentionally unowned. `revealedFeed` now labels
 it `'Barbarians'`; `playerId` itself stays `null` — no player identity is
 invented. See `docs/agents/decisions.md`, 2026-09-25.
 
-**Chat orders are an admin-only switch per game (issue #215).** New, with no
-old-system counterpart. It is off by default, only the admin role can change it
-(the game menu's Actions, or `POST /api/admin/games/:gameId/chat-orders`), and
-switching it off gives the classic Chat and Turn orders panels back with no lost
-data. While it is on, a game has one timeline instead of those two panels: a
-message is chat or an order tagged with a turn and a phase, orders are public, and
-a player ends a turn from the Order tab, which marks the chosen phase done (and
-can take it back). The title says whose turn it is and which phase they are on,
-and a strip under it shows what each player is missing. The start player is
-derived from the Start player marker on the board (the player whose area holds
-it), and the turn starts by itself when the last player has finished Research: the
-marker moves one seat clockwise as a normal, undoable board change and the
-timeline gets a turn divider. The first time it is switched on for a game, the
-revealed classic turn orders are copied into the timeline once (public history
-only, no mail). The new turn holder is mailed, and an order is
-mailed like a chat message. The private log moves to a Private tab and is still
-only the owner's. See `docs/agents/decisions.md`, 2026-09-29 and 2026-10-01, and
-`docs/agents/tasks/chat-orders.md`.
+**One chat and orders timeline, for every game (issue #215).** New, with no
+old-system counterpart, and the only view: there is no switch and no separate
+Turn orders or Chat panel. A game, running or finished, has one timeline. A
+message is chat or an order tagged with a turn and a phase, orders are public the
+moment they are sent, and a player ends a turn from the Order tab, which marks the
+chosen phase done (and can take it back). There is no baton to pass: anyone can
+write at any time, and Draw only asks for a confirmation when it is not your turn.
+The title says whose turn it is and which phase they are on, and a strip under it
+shows what each player is missing; a finished game is titled with its winner
+instead, and its replay bar shows only who won. The start player is derived from
+the Start player marker on the board (the player whose area holds it), and the
+turn starts by itself when the last player has finished Research: the marker moves
+one seat clockwise as a normal, undoable board change and the timeline gets a turn
+divider. The new turn holder is mailed, and an order is mailed like a chat message.
+The private log is a Private tab and is only its owner's.
+
+Games that were saved with the old Turn orders panel open as a single chat. The
+game itself is adopted when it is loaded, and the admin page moves the database
+rows (see below), so the public orders of the old panel appear in the timeline and
+an unpublished draft is added to its owner's private log. See
+`docs/agents/decisions.md`, 2026-09-29, 2026-10-01 and 2026-10-03, and
+`docs/agents/tasks/chat-orders.md` and `docs/agents/tasks/single-chat.md`.
+
+**The admin page can move old games to the single chat.** "Move old games to the
+single chat" shows, as a dry run, every game that has not been moved (finished ones
+too), how many public orders would be copied into the timeline and how many
+unpublished drafts would be added to their owners' private logs. "Move all" or a
+single "Move" then does it after a confirmation. Each request spends a limited
+number of database calls, so press again while it says games are left; it also
+reports games skipped because they changed meanwhile and a game that was only
+partly copied, and both are picked up by the next press. A game is moved once and
+a repeat changes nothing. Only public orders go into the timeline: an unpublished
+draft and any private note reach nobody but their owner.
 
 ## Deferred
 

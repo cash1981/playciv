@@ -148,7 +148,7 @@ describe('api retry on a transient gateway failure', () => {
   it('does not retry a write, because the game actions are not idempotent', async () => {
     const fetchMock = respondWith(503, 'error code: 1102')
 
-    const caught = await rejectionOf(api.endTurn('some-game'))
+    const caught = await rejectionOf(api.draw('some-game', 'CIV'))
 
     expect(caught).toBeInstanceOf(ApiError)
     expect((caught as ApiError).status).toBe(503)
@@ -169,7 +169,7 @@ describe('api retry on a transient gateway failure', () => {
   })
 })
 
-describe('api chat orders calls (issue #215)', () => {
+describe('api timeline and admin calls (issue #215)', () => {
   /** The path and the parsed JSON body of the one call the stub received. */
   const lastCall = (fetchMock: ReturnType<typeof vi.fn>): { path: unknown; body: unknown } => {
     const [path, init] = fetchMock.mock.calls[0] as [unknown, { body?: string } | undefined]
@@ -179,11 +179,11 @@ describe('api chat orders calls (issue #215)', () => {
   it('asks for the current page, then for the turn before a message', async () => {
     const fetchMock = respondWith(200, JSON.stringify({ messages: [], hasMore: false }))
     await api.chatPage('g1')
-    expect(lastCall(fetchMock).path).toBe('/api/games/g1/chat?paged=1')
+    expect(lastCall(fetchMock).path).toBe('/api/games/g1/chat')
 
     const second = respondWith(200, JSON.stringify({ messages: [], hasMore: false }))
     await api.chatPage('g1', 'm 1')
-    expect(lastCall(second).path).toBe('/api/games/g1/chat?paged=1&before=m%201')
+    expect(lastCall(second).path).toBe('/api/games/g1/chat?before=m%201')
   })
 
   it('sends the turn only when it is given', async () => {
@@ -223,13 +223,18 @@ describe('api chat orders calls (issue #215)', () => {
     })
   })
 
-  it('switches chat orders through the admin route', async () => {
-    const fetchMock = respondWith(200, '{}')
-    await api.setChatOrders('g1', true)
-    expect(lastCall(fetchMock)).toEqual({
-      path: '/api/admin/games/g1/chat-orders',
-      body: { enabled: true },
-    })
+  it('reads the migration dry run, then migrates every game or just one', async () => {
+    const preview = respondWith(200, JSON.stringify({ games: [], totalOrderRows: 0, totalDrafts: 0, unchecked: 0 }))
+    await api.migrateChatPreview()
+    expect(lastCall(preview).path).toBe('/api/admin/games/migrate-chat')
+
+    const all = respondWith(200, '{}')
+    await api.migrateChat()
+    expect(lastCall(all)).toEqual({ path: '/api/admin/games/migrate-chat', body: {} })
+
+    const one = respondWith(200, '{}')
+    await api.migrateChat('g1')
+    expect(lastCall(one)).toEqual({ path: '/api/admin/games/migrate-chat', body: { gameId: 'g1' } })
   })
 })
 
@@ -249,7 +254,7 @@ describe('api requests and the global spinner', () => {
     const held = heldFetch()
 
     let pending: Promise<unknown> = Promise.resolve()
-    act(() => { pending = api.endTurn('g1') })
+    act(() => { pending = api.draw('g1', 'CIV') })
     expect(busy.result.current).toBe(true)
 
     await act(async () => {
@@ -264,7 +269,7 @@ describe('api requests and the global spinner', () => {
     const held = heldFetch()
 
     let pending: Promise<unknown> = Promise.resolve()
-    act(() => { pending = rejectionOf(api.endTurn('g1')) })
+    act(() => { pending = rejectionOf(api.draw('g1', 'CIV')) })
     expect(busy.result.current).toBe(true)
 
     await act(async () => {

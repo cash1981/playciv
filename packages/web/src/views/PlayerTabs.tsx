@@ -2,13 +2,14 @@
  * One coloured tab per player, shared by the Techs and Social policy panels —
  * and, without a colour, by the two sections of the Player status panel.
  *
- * The look and the keyboard handling follow the turn-order tabs (`TurnTabs` in
- * `TurnPanel.tsx`): the label is the username and the accent is the player's
- * board colour. The panels pass their own ids for `aria-controls` /
- * `aria-labelledby`.
+ * The label is the username and the accent is the player's board colour. The
+ * keyboard handling is the shared `handleTabKeyDown`. The panels pass their own
+ * ids for `aria-controls` / `aria-labelledby`.
  */
 
-import type { CSSProperties, KeyboardEvent } from 'react'
+import type { CSSProperties } from 'react'
+
+import { handleTabKeyDown } from './tabKeys.js'
 
 export interface PlayerTab {
   /** Stable identity for the tab: the player id. */
@@ -34,24 +35,6 @@ export function PlayerTabs({
   tabId,
   panelId,
 }: Props): React.JSX.Element {
-  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-    const all = Array.from(
-      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [],
-    )
-    const currentIndex = all.indexOf(event.currentTarget)
-    if (currentIndex < 0 || all.length === 0) return
-    const nextIndex =
-      event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? all.length - 1
-          : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + all.length) % all.length
-    event.preventDefault()
-    all[nextIndex]?.focus()
-    all[nextIndex]?.click()
-  }
-
   return (
     <div className="player-tabs" role="tablist" aria-label={ariaLabel}>
       {tabs.map((tab) => {
@@ -70,7 +53,7 @@ export function PlayerTabs({
             style={style}
             key={tab.key}
             onClick={() => onSelect(tab.key)}
-            onKeyDown={handleKeyDown}
+            onKeyDown={handleTabKeyDown}
           >
             {tab.label}
           </button>

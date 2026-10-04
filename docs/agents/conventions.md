@@ -3,27 +3,23 @@
 The rules, with the reasoning. The five headline rules are in `AGENTS.md`; this
 is the detail.
 
-## The old system is the reference
+## The current code is the reference
 
-The specification is the old system as a whole: the old backend
-(`old-civ-rest`, Java) and the old client (`old-civ-web`, AngularJS) together
-implement the business logic to reproduce. Read both. When the same rule lives
-in both and they disagree, the backend wins and its tests are the strongest
-evidence; when logic lived only in the old client, that client is the reference
-for it. When the port and the old system disagree, the old system is right and
-the port is wrong — even when the old behaviour is obviously buggy.
+The new system has replaced the old one. What it does today, and what its tests
+pin down, is what players rely on. The old repositories (`old-civ-rest`,
+`old-civ-web`) are no longer the specification; read them only when you need to
+see where something came from.
 
-- A ported test names its counterpart in a comment at the top — the old
-  backend's test, or the old-client behaviour it stands in for.
-- A deliberate difference from the old system goes in `decisions.md` **and** in
-  the "Known differences" or "Deliberate improvements" section of `README.md`.
-- Never "fix" old behaviour silently. `endTurn` letting anyone end the turn,
-  units always being level 0, double spaces in log text: all ported as they
-  are, all written down.
+- A change in behaviour comes with a test. When it changes a rule or a visible
+  choice, it also goes in `decisions.md`, and in "Known differences" or
+  "Deliberate improvements" in `README.md` if a player would notice.
+- Never change behaviour silently as a side effect of a refactor.
+- Older entries in `decisions.md` and ported tests still mention the Java
+  source. They stay as history; do not rewrite them.
 
 **Do not invent FFG rules.** The culture track is a marker with no rules
-attached precisely because neither the old backend nor the old client had any.
-If a rule is needed and is not in the old system, ask.
+attached because the project never had any for it. If a rule is needed and is
+not in the rulebooks (`Civilization/`) or the code, ask.
 
 ## The engine is pure
 

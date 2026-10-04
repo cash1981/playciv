@@ -1,0 +1,56 @@
+.auto-refresh-switch,
+.auto-refresh-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.auto-refresh-dot {
+  flex: none;
+  box-sizing: border-box;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  border: 2px solid var(--muted);
+  background: transparent;
+}
+
+.on > .auto-refresh-dot {
+  border-color: var(--good);
+  background: var(--good);
+  animation: auto-refresh-pulse 2s ease-in-out infinite;
+}
+
+.auto-refresh-switch.on {
+  border-color: var(--good);
+}
+
+.auto-refresh-switch.off {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.auto-refresh-status {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
+.auto-refresh-status.on {
+  color: var(--good);
+}
+
+.auto-refresh-status.off {
+  color: var(--muted);
+}
+
+@keyframes auto-refresh-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .on > .auto-refresh-dot {
+    animation: none;
+  }
+}

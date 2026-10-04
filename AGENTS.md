@@ -12,26 +12,25 @@ your bearings.
 
 A rewrite of the play-by-forum engine for *Sid Meier's Civilization: The Board
 Game* (Fantasy Flight), with the *Fame and Fortune* and *Wisdom and Warfare*
-expansions. It replaces two dead repositories that are still on disk as
-reference material: `old-civ-rest` (Java 8 / Dropwizard / MongoDB) and
-`old-civ-web` (AngularJS 1). Both are gitignored.
+expansions. It replaced two dead repositories, `old-civ-rest` (Java 8 /
+Dropwizard / MongoDB) and `old-civ-web` (AngularJS 1). Both are gitignored and
+may still be on the human's disk; they can be read when a question needs them,
+but they are no longer the specification.
 
 `README.md` is the human-facing description of the product. This file and
 `docs/agents/` are about how we work on it.
 
 ## The five rules that never bend
 
-1. **The old system is the reference.** The business logic to reproduce is what
-   the old backend (`old-civ-rest`, Java) and the old client (`old-civ-web`,
-   AngularJS) did *between them* — the two together implement it, not the Java
-   alone. Reproduce their combined behaviour. Where the same rule is
-   implemented in both and they disagree, the backend wins and its tests are
-   the strongest evidence; where logic lived only in the old client, that
-   client is the reference for it. If you think the old system is wrong, port
-   it as it is and write the disagreement down in `docs/agents/decisions.md`.
-2. **Do not invent FFG rules.** If a rule is unclear, read the old backend and
-   the old client and their tests. If it is still unclear, stop and ask the
-   human. Guessing a board game rule and encoding it is worse than leaving it
+1. **The current code and its tests are the reference.** The new system has
+   long since replaced the old one, and players rely on how it behaves now.
+   Change behaviour on purpose, with a test, and write the reason down in
+   `docs/agents/decisions.md` when a rule or a visible choice changes. The old
+   repositories are for looking something up, not for deciding what is right.
+2. **Do not invent FFG rules.** If a rule is unclear, read the rulebooks in
+   `Civilization/`, then the existing code and its tests. The old repositories
+   can help as a last lookup. If it is still unclear, stop and ask the human.
+   Guessing a board game rule and encoding it is worse than leaving it
    undone.
 3. **The engine is pure.** Every reducer is
    `(state, input) => Result<GameState, EngineError>`. No exceptions, no

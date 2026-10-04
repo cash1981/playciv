@@ -3,6 +3,8 @@ import type { ForwardRefExoticComponent, RefAttributes } from 'react'
 
 import type { CrepeBuilder } from '@milkdown/crepe/builder'
 
+import './MarkdownEditor.css'
+
 export interface MarkdownEditorHandle {
   /** Returns the editor document immediately, without waiting for markdownUpdated. */
   readonly getMarkdown: () => string
@@ -18,7 +20,7 @@ export interface MarkdownEditorProps {
   /**
    * `simple` trims Crepe's formatting bar to a text style (Normal or Heading),
    * bold and italic, each with a name for screen readers and a tooltip. The
-   * default keeps the full bar the turn orders have always had.
+   * default keeps the full bar, which the private log uses.
    */
   readonly toolbar?: 'full' | 'simple'
 }
@@ -49,6 +51,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const latestMarkdownRef = useRef(value)
     const lastEmittedRef = useRef(value)
     const previousValueRef = useRef(value)
+    // What this editor has reported since its value last matched the document.
+    // Milkdown reports 200 ms after a keystroke, so a value that comes back from
+    // the parent can be older than the document: the player typed on while it
+    // was rendered. Writing that value into the editor undoes the typing and
+    // drops the cursor, so a value in this set is an echo and is left alone.
+    const echoesRef = useRef(new Set<string>())
     const [ready, setReady] = useState(false)
     const [editorError, setEditorError] = useState(false)
 
@@ -57,8 +65,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     readOnlyRef.current = readOnly
     if (previousValueRef.current !== value) {
       previousValueRef.current = value
-      latestMarkdownRef.current = value
-      lastEmittedRef.current = value
+      if (!echoesRef.current.has(value)) {
+        latestMarkdownRef.current = value
+        lastEmittedRef.current = value
+      }
     }
 
     const readMarkdown = (): string => editorRef.current?.getMarkdown() ?? latestMarkdownRef.current
@@ -67,6 +77,20 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       latestMarkdownRef.current = markdown
       if (markdown === lastEmittedRef.current) return
       lastEmittedRef.current = markdown
+      // Only the rich editor reports late. The fallback textarea reports as it is
+      // typed, so nothing it says can be stale, and the effect that empties this
+      // set does not run until the rich editor is ready.
+      if (editorRef.current !== null) {
+        const echoes = echoesRef.current
+        echoes.add(markdown)
+        // A player cannot out-type the render by many reports, so the newest few are enough
+        if (echoes.size > 20) {
+          for (const oldest of echoes) {
+            echoes.delete(oldest)
+            break
+          }
+        }
+      }
       onChangeRef.current(markdown)
     }
 
@@ -217,7 +241,13 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 
     useEffect(() => {
       const editor = editorRef.current
-      if (!ready || editor === null || editor.getMarkdown() === value) return
+      if (!ready || editor === null) return
+      if (editor.getMarkdown() === value) {
+        echoesRef.current.clear()
+        return
+      }
+      if (echoesRef.current.has(value)) return
+      echoesRef.current.clear()
       void import('@milkdown/kit/utils').then(({ replaceAll }) => {
         if (editorRef.current === editor) editor.editor.action(replaceAll(value, true))
       })
@@ -225,7 +255,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 
     return (
       <div
-        className="turn-markdown"
+        className="markdown-editor"
         data-readonly={readOnly ? 'true' : 'false'}
         aria-label={ariaLabel}
         onInputCapture={() => onDirtyRef.current?.()}
@@ -233,7 +263,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         <div ref={rootRef} hidden={!ready} />
         {!ready && (
           <textarea
-            className="turn-markdown-fallback"
+            className="markdown-editor-fallback"
             aria-label={ariaLabel}
             value={latestMarkdownRef.current}
             readOnly={readOnly}

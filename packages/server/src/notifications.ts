@@ -8,7 +8,7 @@
  * mail provider and what "now" is.
  */
 
-import type { GameState, TurnPhase } from '@civ/engine'
+import type { GameState } from '@civ/engine'
 import { activeTurnStatus, TURN_PHASE_LABEL, turnHolder } from '@civ/engine'
 
 import { newId } from './auth.js'
@@ -179,12 +179,11 @@ export interface Notifications {
   gameOpened(game: GameState, viewerId: string): Promise<void>
   /** Java `GameAction.joinGame` — the other players, held until they open the game. */
   playerJoined(game: GameState, joinerPlayerId: string): Promise<void>
-  /** Java `PlayerAction.endTurn` → `sendYourTurn` — the next player, held until they open the game. */
-  turnEnded(before: GameState, after: GameState): Promise<void>
   /**
-   * Chat orders (issue #215) — the new turn holder, when marking a phase done
-   * changed who it is. Nothing when the holder is the same. Throttled like the
-   * other in-game mail (30 minutes per player per game).
+   * Java `PlayerAction.endTurn` → `sendYourTurn`, now without a baton (issue
+   * #215): the new turn holder, when marking a phase done changed who it is.
+   * Nothing when the holder is the same. Throttled like the other in-game mail
+   * (30 minutes per player per game).
    */
   turnHolderChanged(before: GameState, after: GameState): Promise<void>
   /**
@@ -203,14 +202,6 @@ export interface Notifications {
     authorPlayerId: string,
     authorUsername: string,
     message: string,
-  ): Promise<void>
-  /** Java `TurnAction.update*` — the other players, held until they open the game. */
-  phaseUpdated(
-    game: GameState,
-    authorPlayerId: string,
-    authorUsername: string,
-    phase: TurnPhase,
-    order: string,
   ): Promise<void>
   /**
    * Java `PlayerAction.newPassword(ForgotpassDTO)` — the reset verification
@@ -252,20 +243,6 @@ export interface Notifications {
    * sending the rows it claimed.
    */
   releaseStuckQueuedRecipients(): Promise<ReleaseStuckResult>
-}
-
-/**
- * Subject and noun for each phase. Java built the subject from the method name
- * (`updateSOT` → "Start of turn updated") and the body from a fixed phrase.
- * The wording is pinned here exactly, including the start-of-turn body's odd
- * `order\n:<order>` (Java line 44 concatenates the newline before the colon).
- */
-const PHASE_MAIL: Readonly<Record<TurnPhase, { readonly subject: string; readonly noun: string }>> = {
-  SOT: { subject: 'Start of turn updated', noun: 'start of turn' },
-  TRADE: { subject: 'Trade updated', noun: 'trade' },
-  CM: { subject: 'City management updated', noun: 'city management' },
-  MOVEMENT: { subject: 'Movement updated', noun: 'movement' },
-  RESEARCH: { subject: 'Research updated', noun: 'research' },
 }
 
 export function createNotifications(config: NotificationsConfig): Notifications {
@@ -508,26 +485,7 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       )
     },
 
-    async turnEnded(before: GameState, after: GameState): Promise<void> {
-      const previous = before.players.find((player) => player.yourTurn)?.playerId
-      const next = after.players.find((player) => player.yourTurn)
-      if (next === undefined || next.playerId === previous) return
-      // With chat orders on, `activeTurnStatus` describes the turn holder, not
-      // the player who has the baton, so its phase would be the wrong advice.
-      const status = after.chatOrders ? null : activeTurnStatus(after)
-      const phaseText =
-        status === null ? '' : ` Continue with the ${TURN_PHASE_LABEL[status.phase]} phase.`
-      await notify(
-        next.playerId,
-        'It is your turn',
-        `It's your turn to play in ${after.name}!${phaseText}\n\n` +
-          `Go to ${gameLink(after.id)} to start your turn`,
-        after.id,
-      )
-    },
-
     async turnHolderChanged(before: GameState, after: GameState): Promise<void> {
-      if (!after.chatOrders) return
       const holder = turnHolder(after)
       if (holder === undefined || holder.playerId === turnHolder(before)?.playerId) return
       const status = activeTurnStatus(after)
@@ -587,30 +545,6 @@ export function createNotifications(config: NotificationsConfig): Notifications 
         // mail the author their own message.
         (player) => player.playerId !== authorPlayerId,
         'New Chat',
-        body,
-        true,
-      )
-    },
-
-    async phaseUpdated(
-      game: GameState,
-      authorPlayerId: string,
-      authorUsername: string,
-      phase: TurnPhase,
-      order: string,
-    ): Promise<void> {
-      const mail = PHASE_MAIL[phase]
-      // Java: only the start-of-turn body put the newline before the colon.
-      const orderText =
-        phase === 'SOT'
-          ? `${authorUsername} has updated start of turn with the following order\n:${order}`
-          : `${authorUsername} has updated ${mail.noun} with the following order:\n${order}`
-      const body = `${orderText}.\n\nLogin to ${gameLink(game.id)} to see the order`
-      await notifyPlayers(
-        game,
-        // Stable id, not username — see `chatPosted`.
-        (player) => player.playerId !== authorPlayerId,
-        mail.subject,
         body,
         true,
       )

@@ -9,7 +9,6 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { endTurn } from '@civ/engine'
 import type { GameState } from '@civ/engine'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -21,7 +20,7 @@ import { JsonFileRepository } from '../src/store/json-file.js'
 import { createD1Adapter } from './d1-sqlite-adapter.js'
 import type { D1Adapter } from './d1-sqlite-adapter.js'
 import { readMigrations } from './migrations.js'
-import { playRecordedGame, startGame } from './revision-fixtures.js'
+import { passTurn, playRecordedGame, startGame } from './revision-fixtures.js'
 import type { RecordedGame } from './revision-fixtures.js'
 import { saveRecordedGame, storeImplementations } from './revision-store-harness.js'
 import type { StoreFixture } from './revision-store-harness.js'
@@ -34,7 +33,7 @@ const text = (state: unknown): string => JSON.stringify(state)
 
 /** One more recorded action by whoever holds the turn, saved like `applyToGame` does. */
 async function saveNextTurn(fixture: Pick<StoreFixture, 'repo'>, live: GameState): Promise<GameState> {
-  const result = endTurn(live)
+  const result = passTurn(live)
   if (!result.ok) throw new Error(result.error.kind)
   const after = stampLog({ ...result.value, rev: live.rev + 1 }, '2026-10-02T00:00:00.000Z')
   const revision = createGameRevision(live, after, ACTOR, '2026-10-02T00:00:00.000Z', 'End turn')
@@ -120,7 +119,7 @@ describe.each(storeImplementations)('delta revisions: %s', (_name, create) => {
     const before = await fixture.rows(small.start.id)
     const live = small.steps.at(-1)?.after as GameState
 
-    const result = endTurn(live)
+    const result = passTurn(live)
     if (!result.ok) throw new Error('fixture cannot end the turn')
     const next = stampLog({ ...result.value, rev: live.rev + 1 }, '2026-10-02T00:00:00.000Z')
     const revision = createGameRevision(live, next, ACTOR, '2026-10-02T00:00:00.000Z', 'late')
@@ -160,7 +159,7 @@ describe.each(storeImplementations)('delta revisions: %s', (_name, create) => {
     const live = small.steps.at(-1)?.after as GameState
 
     // An admin setting: saved without a revision, and not just a note.
-    const switched = { ...live, rev: live.rev + 1, chatOrders: true }
+    const switched = { ...live, rev: live.rev + 1, name: `${live.name} (changed by an admin)` }
     expect(await fixture.repo.saveGameIfRevision(switched, live.rev)).toBe(true)
     expect((await fixture.rows(live.id)).at(-1)?.sealed).toBe(true)
 
@@ -168,7 +167,7 @@ describe.each(storeImplementations)('delta revisions: %s', (_name, create) => {
     const rows = await fixture.rows(live.id)
     expect(rows.at(-1)).toMatchObject({ revision: after.rev, kind: 'full', sealed: false })
     // The keyframe carries the setting a delta against the old row would have lost.
-    expect((await fixture.repo.findGameRevision(live.id, after.rev))?.state.chatOrders).toBe(true)
+    expect((await fixture.repo.findGameRevision(live.id, after.rev))?.state.name).toBe(switched.name)
 
     // And the revision after that is an ordinary delta again.
     await saveNextTurn(fixture, after)
@@ -291,7 +290,7 @@ describe('delta revisions in D1: the SQL', () => {
     const created = createGameRevision(undefined, live, ACTOR, '2026-10-02T00:00:00.000Z', 'baseline')
     await repo.ensureGameRevision(created, live.rev)
 
-    const result = endTurn(live)
+    const result = passTurn(live)
     if (!result.ok) throw new Error('fixture cannot end the turn')
     const after = stampLog({ ...result.value, rev: live.rev + 1 }, '2026-10-02T00:00:00.000Z')
     const prepare = vi.spyOn(adapter.db, 'prepare')
@@ -325,7 +324,7 @@ describe('delta revisions in D1: the SQL', () => {
       .run()
     expect(await fixture(adapter, live.id)).toEqual([{ revision: live.rev, kind: 'full', base_revision: null }])
 
-    const result = endTurn(live)
+    const result = passTurn(live)
     if (!result.ok) throw new Error('cannot end turn')
     const next = stampLog({ ...result.value, rev: live.rev + 1 }, '2026-10-02T00:00:00.000Z')
     expect(
@@ -348,7 +347,7 @@ describe('delta revisions in D1: the SQL', () => {
     const small = playRecordedGame({ steps: 3 })
     await saveRecordedGame(repo, small)
     const live = small.steps.at(-1)?.after as GameState
-    const result = endTurn(live)
+    const result = passTurn(live)
     if (!result.ok) throw new Error('cannot end turn')
     const next = stampLog({ ...result.value, rev: live.rev + 1 }, '2026-10-02T00:00:00.000Z')
     const revision = createGameRevision(live, next, ACTOR, '2026-10-02T00:00:00.000Z', 'x')
@@ -424,7 +423,7 @@ describe('delta revisions in the JSON file store: the file', () => {
     await repo.load()
     expect(text((await repo.findGameRevision(live.id, live.rev))?.state)).toBe(text(legacy.state))
 
-    const result = endTurn(live)
+    const result = passTurn(live)
     if (!result.ok) throw new Error('cannot end turn')
     const next = stampLog({ ...result.value, rev: live.rev + 1 }, '2026-10-02T00:00:00.000Z')
     expect(

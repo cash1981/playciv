@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { GameState } from '@civ/engine'
-import { itemName } from '@civ/engine'
+import { activeTurnStatus, itemName } from '@civ/engine'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { App } from '../src/app.js'
@@ -30,11 +30,19 @@ interface Account {
   readonly token: string
 }
 
+interface StoredRow {
+  readonly revision: number
+  readonly kind: string
+  readonly sealed: boolean
+}
+
 interface Harness {
   readonly app: App
   readonly repo: Repository
   /** The raw stored `state` text of every delta row of a game, read from the D1 table or the JSON file. */
   deltaTexts(gameId: string): Promise<readonly string[]>
+  /** How every revision of a game is stored: a keyframe (`full`) or a delta, and whether it is sealed. */
+  rows(gameId: string): Promise<readonly StoredRow[]>
   close(): void
 }
 
@@ -59,6 +67,16 @@ const backends: readonly [string, () => Promise<Harness>][] = [
             .filter((row) => row.gameId === gameId && row.kind === 'delta')
             .map((row) => JSON.stringify(row.state))
         },
+        async rows(gameId) {
+          await repo.flush()
+          const file = JSON.parse(await readFile(filePath, 'utf8')) as {
+            revisions: { gameId: string; revision: number; kind?: string; sealed?: boolean }[]
+          }
+          return file.revisions
+            .filter((row) => row.gameId === gameId)
+            .map((row) => ({ revision: row.revision, kind: row.kind ?? 'full', sealed: row.sealed === true }))
+            .sort((left, right) => left.revision - right.revision)
+        },
         close: () => rmSync(directory, { recursive: true, force: true }),
       }
     },
@@ -78,6 +96,13 @@ const backends: readonly [string, () => Promise<Harness>][] = [
             .bind(gameId)
             .all<{ state: string }>()
           return rows.results.map((row) => row.state)
+        },
+        async rows(gameId) {
+          const rows = await adapter.db
+            .prepare(`SELECT revision, kind, sealed FROM game_revision WHERE game_id = ? ORDER BY revision`)
+            .bind(gameId)
+            .all<{ revision: number; kind: string; sealed: number }>()
+          return rows.results.map((row) => ({ revision: row.revision, kind: row.kind, sealed: row.sealed !== 0 }))
         },
         close: () => adapter.close(),
       }
@@ -111,7 +136,7 @@ describe.each(backends)('revision history of a played game: %s', (_name, create)
   const post = (token: string, url: string, payload: unknown = {}) =>
     inject(harness.app, { method: 'POST', url, headers: bearer(token), payload })
 
-  /** Two players take turns drawing, writing a private note and passing the turn. */
+  /** Two players take turns drawing, writing a private note and marking the turn done. */
   async function play() {
     const alice = await register('delta-alice')
     const bob = await register('delta-bob')
@@ -124,12 +149,11 @@ describe.each(backends)('revision history of a played game: %s', (_name, create)
     const sheets = ['CULTURE_1', 'INFANTRY', 'CULTURE_2', 'ARTILLERY', 'MOUNTED', 'CULTURE_3']
     for (let round = 0; round < 14; round++) {
       const live = (await harness.repo.findGame(gameId)) as GameState
-      const holder = live.players.find((player) => player.yourTurn)
-      const account = holder?.username === 'delta-alice' ? alice : bob
+      const account = activeTurnStatus(live)?.username === 'delta-alice' ? alice : bob
       expect((await post(account.token, `/api/games/${gameId}/draw/${sheets[round % sheets.length]}`)).status).toBe(200)
       expect((await post(account.token, `/api/games/${gameId}/note`, { note: `SECRET-NOTE-${round}` })).status).toBe(200)
       expect((await post(account.token, `/api/games/${gameId}/draw/${sheets[(round + 1) % sheets.length]}`)).status).toBe(200)
-      expect((await post(account.token, `/api/games/${gameId}/endturn`)).status).toBe(200)
+      expect((await post(account.token, `/api/games/${gameId}/turns/done`, { phase: 'RESEARCH' })).status).toBe(200)
     }
     return { gameId, alice, bob, spectator }
   }
@@ -227,23 +251,31 @@ describe.each(backends)('revision history of a played game: %s', (_name, create)
     }
   })
 
-  it('an admin setting saved without a revision makes the next revision a keyframe that carries it', async () => {
+  it('moving a game to the single chat saves it without a revision, and the next revision is a keyframe that carries it', async () => {
     const { gameId, alice } = await play()
     const adminAccount = await register('delta-boss')
     await harness.repo.updatePlayer(adminAccount.id, { role: 'admin' })
-    const before = await harness.repo.listGameRevisionSummaries(gameId)
 
-    const switched = await post(adminAccount.token, `/api/admin/games/${gameId}/chat-orders`, { enabled: true })
-    expect(switched.status).toBe(200)
-    // The setting is not a move, so it adds no revision.
-    expect(await harness.repo.listGameRevisionSummaries(gameId)).toHaveLength(before.length)
+    // An old game that has not been moved yet. The write seals the newest revision, so
+    // one ordinary action follows before the move: the move itself is what is under test.
+    const live = (await harness.repo.findGame(gameId)) as GameState
+    await harness.repo.saveGame({ ...live, rev: live.rev + 1, legacyOrdersCopied: false, legacyRevealsCopied: false })
+    expect((await post(alice.token, `/api/games/${gameId}/players/${alice.id}/stat`, { stat: 'trade', value: 2 })).status).toBe(200)
+    const before = await harness.rows(gameId)
+    expect(before.at(-1)).toMatchObject({ sealed: false })
+
+    const moved = await post(adminAccount.token, '/api/admin/games/migrate-chat', { gameId })
+    expect(moved.status).toBe(200)
+    // The move is not a game action, so it adds no revision, and it seals the newest one.
+    expect(await harness.rows(gameId)).toEqual([...before.slice(0, -1), { ...before.at(-1), sealed: true }])
 
     expect((await post(alice.token, `/api/games/${gameId}/players/${alice.id}/stat`, { stat: 'trade', value: 3 })).status).toBe(200)
-    const after = await harness.repo.listGameRevisionSummaries(gameId)
+    const after = await harness.rows(gameId)
     expect(after).toHaveLength(before.length + 1)
-    const newest = after.at(-1)?.revision ?? 0
-    // A delta against the old newest revision would have lost the setting.
-    expect((await harness.repo.findGameRevision(gameId, newest))?.state.chatOrders).toBe(true)
-    expect((await harness.repo.findGameRevision(gameId, before.at(-1)?.revision ?? 0))?.state.chatOrders).toBe(false)
+    const newest = after.at(-1)
+    // A delta against the old newest revision would have lost the move.
+    expect(newest).toMatchObject({ kind: 'full', sealed: false })
+    expect((await harness.repo.findGameRevision(gameId, newest?.revision ?? 0))?.state.legacyOrdersCopied).toBe(true)
+    expect((await harness.repo.findGameRevision(gameId, before.at(-1)?.revision ?? 0))?.state.legacyOrdersCopied).toBe(false)
   })
 })

@@ -1,9 +1,8 @@
 /**
- * Chat orders (issue #215): one timeline instead of the Chat and Turn orders
- * panels. A message is chat or an order tagged with a turn and a phase, and
- * a player says a turn is finished with End turn on the Order tab, which marks
- * the chosen phase done. Shown only while `view.chatOrders` is on; the classic
- * panels are untouched.
+ * The chat and orders timeline (issue #215): one timeline for chat and orders.
+ * A message is chat or an order tagged with a turn and a phase, and a player
+ * says a turn is finished with End turn on the Order tab, which marks the chosen
+ * phase done.
  *
  * The timeline is public. The Private tab is the viewer's own `gamenote`, which
  * the view already carries for them alone.
@@ -18,20 +17,27 @@ import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { ActiveTurnStatus, PlayerView, TimelineMessageDto } from '../lib/api.js'
 import type { NavigationAttempt } from '../lib/navigationGuard.js'
+import { AutoRefreshStatus } from './AutoRefresh.js'
 import { ChatTimestamp } from './ChatTimestamp.js'
-import type { ChatAuthor } from './ChatPanel.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
 import type { MarkdownEditorComponent, MarkdownEditorHandle } from './MarkdownEditor.js'
 import { colorClass } from './playerColor.js'
-import type { SaveStatus } from './TurnPanel.js'
-import { handleTabKeyDown, PrivateLogWorkspace } from './TurnPanel.js'
+import { PrivateLogWorkspace } from './PrivateLogWorkspace.js'
+import type { SaveStatus } from './PrivateLogWorkspace.js'
+import { handleTabKeyDown } from './tabKeys.js'
 import './ChatOrdersPanel.css'
 
 const TIMELINE_REFRESH_MS = 10_000
 
-// react-markdown and its parser are a large part of the bundle and only a game
-// with chat orders on needs them, so they load on first use. The plain text shows
+/** What the timeline shows next to a nickname; both are already public in the view. */
+export interface ChatAuthor {
+  readonly civilization: string | null
+  readonly color: string | null
+}
+
+// react-markdown and its parser are a large part of the bundle, so they load on
+// first use. The plain text shows
 // until they have, and for as long as they fail to.
 // A rejected import (a deploy replaced the chunk, a flaky connection) would otherwise
 // reach the root and blank the page, as Suspense only catches suspending. So the
@@ -165,10 +171,10 @@ export function firstOpenPhase(view: PlayerView, turnNumber: number): TurnPhase 
  * for the holder. Only whose turn it is and which phase they are on: the full
  * list of who is missing what is the status strip below the title.
  */
-export function chatOrdersTitle(activeTurn: ActiveTurnStatus | null, viewerId?: string): string {
+export function turnTitle(activeTurn: ActiveTurnStatus | null, viewerId?: string): string {
   if (activeTurn === null) return 'Nobody is up'
   const turn = `Turn ${activeTurn.turnNumber}`
-  if ((activeTurn.waitingFor ?? []).length === 0) return `${turn} · everyone is done`
+  if (activeTurn.waitingFor.length === 0) return `${turn} · everyone is done`
   const who = viewerId !== undefined && activeTurn.playerId === viewerId ? 'Your turn' : `${activeTurn.username}'s turn`
   return `${turn} · ${who} — ${TURN_PHASE_LABEL[activeTurn.phase]} phase`
 }
@@ -184,12 +190,9 @@ export const isTurnDivider = (row: TimelineMessageDto): boolean =>
   row.turnNumber !== null &&
   /^Turn \d+: .+ starts with the Start of turn phase$/.test(row.message)
 
-/**
- * The question to ask before an out-of-turn draw, or `null` when the viewer may
- * just draw. Only relevant with chat orders on; the classic panel disables Draw.
- */
+/** The question to ask before an out-of-turn draw, or `null` when the viewer may just draw. */
 export function outOfTurnQuestion(view: PlayerView): string | null {
-  if (!view.chatOrders || view.you === null) return null
+  if (view.you === null) return null
   if (view.activeTurn?.playerId === view.you.playerId) return null
   const up = view.activeTurn?.username
   return `It is not your turn. ${up === undefined ? 'Nobody is up' : `${up} is up`}. Draw anyway?`
@@ -489,26 +492,29 @@ export function ChatOrdersPanel({
     <CollapsiblePanel id="chat-orders" title="Chat and orders" defaultOpen className="chat-orders">
       {loadError !== null && <div className="error">{loadError}</div>}
 
-      <div className="chat-orders-filters" role="tablist" aria-label="Show">
-        {showFilters.map(({ filter: name, label }) => (
-          <button
-            key={name}
-            type="button"
-            role="tab"
-            id={`chat-orders-filter-${name}`}
-            className="chat-orders-chip"
-            aria-selected={filter === name}
-            aria-controls={name === 'private' ? 'chat-orders-private-panel' : 'chat-orders-timeline-panel'}
-            tabIndex={filter === name ? 0 : -1}
-            onKeyDown={handleTabKeyDown}
-            onClick={() => {
-              setFilter(name)
-              stickToBottom.current = true
-            }}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="chat-orders-head">
+        <div className="chat-orders-filters" role="tablist" aria-label="Show">
+          {showFilters.map(({ filter: name, label }) => (
+            <button
+              key={name}
+              type="button"
+              role="tab"
+              id={`chat-orders-filter-${name}`}
+              className="chat-orders-chip"
+              aria-selected={filter === name}
+              aria-controls={name === 'private' ? 'chat-orders-private-panel' : 'chat-orders-timeline-panel'}
+              tabIndex={filter === name ? 0 : -1}
+              onKeyDown={handleTabKeyDown}
+              onClick={() => {
+                setFilter(name)
+                stickToBottom.current = true
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <AutoRefreshStatus on={autoRefresh} />
       </div>
 
       {filter === 'private' && view.you !== null && replaying ? (

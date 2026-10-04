@@ -5,7 +5,6 @@
  * rewritten as a keyframe first, in the same atomic step as the delete.
  */
 
-import { endTurn } from '@civ/engine'
 import type { GameState } from '@civ/engine'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -14,7 +13,7 @@ import { REVISION_KEYFRAME_INTERVAL } from '../src/revision-delta.js'
 import { D1Repository } from '../src/store/d1.js'
 import { createD1Adapter } from './d1-sqlite-adapter.js'
 import { readMigrations } from './migrations.js'
-import { playRecordedGame } from './revision-fixtures.js'
+import { passTurn, playRecordedGame } from './revision-fixtures.js'
 import { saveRecordedGame, storeImplementations } from './revision-store-harness.js'
 import type { StoreFixture } from './revision-store-harness.js'
 
@@ -70,7 +69,7 @@ describe.each(storeImplementations)('cleanup of a finished game with delta revis
     expect((await fixture.rows(gameId)).at(-1)?.kind).toBe('delta')
     // An admin setting on the finished game: saved without a revision, not just a note.
     const live = (await fixture.repo.findGame(gameId)) as GameState
-    const switched = { ...live, rev: live.rev + 1, chatOrders: true }
+    const switched = { ...live, rev: live.rev + 1, name: `${live.name} (changed by an admin)` }
     expect(await fixture.repo.saveGameIfRevision(switched, live.rev)).toBe(true)
     expect((await fixture.rows(gameId)).at(-1)?.sealed).toBe(true)
 
@@ -80,7 +79,7 @@ describe.each(storeImplementations)('cleanup of a finished game with delta revis
     ])
 
     // The next recorded revision must not be a delta against a row that lacks the setting.
-    const result = endTurn(switched)
+    const result = passTurn(switched)
     if (!result.ok) throw new Error(result.error.kind)
     const after = { ...result.value, rev: switched.rev + 1 }
     expect(
@@ -92,7 +91,7 @@ describe.each(storeImplementations)('cleanup of a finished game with delta revis
       ),
     ).toBe(true)
     expect((await fixture.rows(gameId)).at(-1)).toMatchObject({ revision: after.rev, kind: 'full', sealed: false })
-    expect((await fixture.repo.findGameRevision(gameId, after.rev))?.state.chatOrders).toBe(true)
+    expect((await fixture.repo.findGameRevision(gameId, after.rev))?.state.name).toBe(switched.name)
   })
 
   it('a second run changes nothing', async () => {

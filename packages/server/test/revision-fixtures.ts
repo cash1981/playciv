@@ -10,12 +10,13 @@
  */
 
 import {
+  activeTurnStatus,
   chooseTech,
   createGame,
   discardItem,
   draw,
-  endTurn,
   joinGame,
+  markPhasesDone,
   placePiece,
   revealItem,
   saveNote,
@@ -66,6 +67,16 @@ const TECHS = ['Pottery', 'Bronze Working', 'Writing', 'Masonry', 'Currency', 'M
 
 type Outcome = Result<GameState, EngineError>
 
+/**
+ * Passing the turn, now that there is no baton: whoever holds the turn marks every
+ * phase of the current turn done. The turn moves on when the last player has.
+ */
+export function passTurn(state: GameState): Outcome {
+  const status = activeTurnStatus(state)
+  if (status === null) throw new Error('Nobody holds the turn')
+  return markPhasesDone(state, { playerId: status.playerId, turnNumber: status.turnNumber, upToPhase: 'RESEARCH' })
+}
+
 /** A tiny deterministic generator, so the recorded game is the same on every run. */
 function lcg(seed: number): () => number {
   let state = seed >>> 0
@@ -113,7 +124,8 @@ export function playRecordedGame(options: PlayOptions): RecordedGame {
     tick += 1
     if (tick > options.steps * 20) throw new Error('The recorded game made no progress')
     const now = `2026-10-01T00:${String(Math.floor(tick / 60) % 60).padStart(2, '0')}:${String(tick % 60).padStart(2, '0')}.000Z`
-    const holder = live.players.find((player) => player.yourTurn)
+    const holderId = activeTurnStatus(live)?.playerId
+    const holder = live.players.find((player) => player.playerId === holderId)
     if (holder === undefined) throw new Error('Nobody holds the turn')
 
     const isNote = noteEvery > 0 && tick % noteEvery === 0
@@ -129,13 +141,13 @@ export function playRecordedGame(options: PlayOptions): RecordedGame {
     const pick = Math.floor(random() * 10)
     let outcome: Outcome
     if (turnActions >= 4 + (tick % 3)) {
-      outcome = endTurn(live)
+      outcome = passTurn(live)
     } else if (pick < 4) {
       outcome = draw(live, { playerId: holder.playerId, sheetName: SHEETS[Math.floor(random() * SHEETS.length)] as SheetName })
     } else if (pick === 4 && holder.items.length > 0) {
       const item = holder.items[Math.floor(random() * holder.items.length)]
       outcome = item === undefined
-        ? endTurn(live)
+        ? passTurn(live)
         : discardItem(live, { playerId: holder.playerId, sheetName: item.sheetName, itemNumber: item.itemNumber, name: 'x' })
     } else if (pick === 5) {
       outcome = chooseTech(live, { playerId: holder.playerId, techName: TECHS[Math.floor(random() * TECHS.length)] as string })
@@ -158,10 +170,10 @@ export function playRecordedGame(options: PlayOptions): RecordedGame {
     } else if (pick === 8 && holder.items.length > 0) {
       const item = holder.items[0]
       outcome = item === undefined
-        ? endTurn(live)
+        ? passTurn(live)
         : revealItem(live, { playerId: holder.playerId, sheetName: item.sheetName, itemNumber: item.itemNumber })
     } else {
-      outcome = endTurn(live)
+      outcome = passTurn(live)
     }
     if (!outcome.ok) {
       // A refused action changes nothing and saves nothing, like the route.

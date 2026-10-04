@@ -6,14 +6,14 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-03 (delta revisions)_
+_Last updated: 2026-10-04 (delta revisions merged with the single chat)_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 785 engine, 577 server, 508 web on `feat/delta-revisions` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 766 engine, 590 server, 498 web on `feat/delta-revisions` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -33,6 +33,23 @@ _Last updated: 2026-10-03 (delta revisions)_
   migration `0006`, Worker, Time Travel bookmark, dry run, one game, then all. Not run
   against a real D1 or Workers; phase 3 (gzip) not done. Brief:
   `tasks/delta-revisions.md`; see `decisions.md`, 2026-10-03.
+- **Typing keeps the cursor; auto-refresh is readable (same branch and PR).** `MarkdownEditor` no
+  longer writes its own, older report back over newer typing, which took focus and the
+  cursor and lost text on a long timeline (found and fixed in a real browser). The
+  header button is a switch with a dot, and the chat panel says whether auto-refresh is
+  on. Brief: `tasks/typing-cursor.md`; see `decisions.md`, 2026-10-04 (later).
+- **Single chat: the timeline is the only view (branch `claude/pr-218-default-view-wlml28`, PR #218).**
+  No switch, no Turn orders or Chat panel, no End turn or Take the turn button; every
+  game, running or finished, uses the chat and orders timeline. `chatOrders` is gone
+  from `GameState` and `PlayerView`, a saved classic game is adopted when it is loaded,
+  and the admin page has "Move old games to the single chat" (`GET`/`POST
+  /api/admin/games/migrate-chat`) for the database rows, which also moves an
+  unpublished draft into its owner's private note. A finished game is titled with its
+  winner and its replay bar shows only who won (stored joined winner lines too). A game that has not started takes no orders and has no active turn, and orders revealed before versions were kept are copied by the migration, also for games already marked moved (decisions.md, 2026-10-04). The old Turn orders routes, engine
+  actions and the per-phase mail are removed; the stored order data and `yourTurn` stay.
+  Known gap, not fixed: revealing a civilization at game start draws through `draw`,
+  which needs `turnHolder`. Not run against the real D1. Brief: `tasks/single-chat.md`;
+  see `decisions.md`, 2026-10-03. A moved game is done for good once `legacyRevealsCopied` is set, so the migration no longer revisits it (`decisions.md`, 2026-10-04). 766 engine, 421 server, 481 web tests.
 - **Admin cleanup of finished games.** "Clean up finished games" on the admin page
   (`GET`/`POST /api/admin/games/cleanup`) deletes every `game_revision` row of a
   finished game except the newest, behind a dry run and a confirmation, at most 12

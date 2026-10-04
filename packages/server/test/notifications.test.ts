@@ -8,7 +8,7 @@
  */
 
 import type { GameState } from '@civ/engine'
-import { setChatOrders, unwrap } from '@civ/engine'
+import { activeTurnStatus } from '@civ/engine'
 import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -19,6 +19,7 @@ import {
   createNotifications,
 } from '../src/notifications.js'
 import type { JsonFileRepository } from '../src/store/json-file.js'
+import type { InjectResponse } from './helpers.js'
 import { inject, bearer } from './helpers.js'
 
 class FakeMailer implements Mailer {
@@ -100,16 +101,16 @@ async function loadGame(gameId: string): Promise<GameState> {
 /**
  * A started two-player game: the creator plus one joiner. `starter` is always
  * the creator's own credentials (several tests need the actual creator, e.g.
- * to end or delete the game), which is independent of who goes first —
- * `actions/game.ts` shuffles the starting `yourTurn`, so `waitingPlayer` (the
- * one NOT currently on turn) is resolved dynamically and may be either
- * account.
+ * to end or delete the game), which is independent of who holds the turn.
+ * `holder` is the player who holds the turn (the first seat, whoever that is) and
+ * `waitingPlayer` the other one, who is next once the holder has finished a phase.
  */
 async function startedGame(
   name: string,
 ): Promise<{
   gameId: string
   starter: { token: string; id: string }
+  holder: { token: string; id: string }
   waiting: string
   waitingPlayer: { token: string; id: string }
 }> {
@@ -119,118 +120,62 @@ async function startedGame(
   await join(other.token, gameId)
 
   const state = await loadGame(gameId)
-  const waitingPlayerState = state.players.find((player) => !player.yourTurn)
+  const holderId = activeTurnStatus(state)?.playerId
+  const waitingPlayerState = state.players.find((player) => player.playerId !== holderId)
   if (waitingPlayerState === undefined) throw new Error('no waiting player')
   const waitingPlayer = waitingPlayerState.playerId === creator.id ? creator : other
+  const holder = waitingPlayer === creator ? other : creator
 
   // Joining mailed the creator. Neither player has opened the game, so the 30
   // minute wait would hold back the next mail to them; let it pass.
   now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
 
-  return { gameId, starter: creator, waiting: waitingPlayerState.username, waitingPlayer }
+  return { gameId, starter: creator, holder, waiting: waitingPlayerState.username, waitingPlayer }
 }
 
+/** The player who holds the turn marks the start of turn done, which hands the turn on. */
+const finishStartOfTurn = (gameId: string, token: string): Promise<InjectResponse> =>
+  inject(app, {
+    method: 'POST',
+    url: `/api/games/${gameId}/turns/done`,
+    headers: bearer(token),
+    payload: { phase: 'SOT' },
+  })
+
 describe('your turn', () => {
-  it('emails the next player with Java\'s subject and link when a turn ends', async () => {
-    const { gameId, starter, waiting } = await startedGame('turn')
+  it('emails the new turn holder with the subject, phase and link when the holder finishes a phase', async () => {
+    const { gameId, holder, waiting } = await startedGame('turn')
     mailer.sent.length = 0
 
-    const response = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/endturn`,
-      headers: bearer(starter.token),
-      payload: {},
-    })
+    const response = await finishStartOfTurn(gameId, holder.token)
     expect(response.status).toBe(200)
 
     expect(mailer.sent).toHaveLength(1)
     const mail = mailer.sent[0]
     expect(mail?.to).toBe(`${waiting}@example.com`)
     expect(mail?.subject).toBe('It is your turn')
-    expect(mail?.text).toContain(`It's your turn to play in turn!`)
-    expect(mail?.text).toContain('Continue with the start of turn phase.')
+    expect(mail?.text).toContain('It is your turn: start of turn, turn 1 in turn.')
     expect(mail?.text).toContain(`https://playciv.app/game/${gameId}`)
     // Issue #30 puts the unsubscribe link on every mail, including this one.
     expect(mail?.text).toContain('/api/admin/email/notification/')
   })
 
-  it('names the phase the next player actually left off on, not just the default', async () => {
-    const { gameId, starter, waitingPlayer } = await startedGame('phase')
-    // The waiting player worked ahead and already revealed SOT for turn 1, so
-    // once the turn reaches them the mail should point at Trade, not SOT.
-    const updateResponse = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/turns/update`,
-      headers: bearer(waitingPlayer.token),
-      payload: { turnNumber: 1, phase: 'SOT', order: 'ready' },
-    })
-    expect(updateResponse.status).toBe(200)
-    const revealResponse = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/turns/reveal`,
-      headers: bearer(waitingPlayer.token),
-      payload: { turnNumber: 1, phase: 'SOT' },
-    })
-    expect(revealResponse.status).toBe(200)
+  it('sends nothing when the turn holder stays the same', async () => {
+    const { gameId, waitingPlayer } = await startedGame('same-holder')
     mailer.sent.length = 0
 
-    const response = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/endturn`,
-      headers: bearer(starter.token),
-      payload: {},
-    })
-    expect(response.status).toBe(200)
-
-    expect(mailer.sent).toHaveLength(1)
-    expect(mailer.sent[0]?.text).toContain('Continue with the trade phase.')
-  })
-
-  it('with chat orders on, the mail names no phase: the phase belongs to the turn holder, not the baton holder', async () => {
-    const { gameId, starter } = await startedGame('chat-phase')
-    await repo.saveGame(unwrap(setChatOrders(await loadGame(gameId), true)))
-    mailer.sent.length = 0
-
-    const response = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/endturn`,
-      headers: bearer(starter.token),
-      payload: {},
-    })
-    expect(response.status).toBe(200)
-
-    expect(mailer.sent).toHaveLength(1)
-    const text = mailer.sent[0]?.text ?? ''
-    expect(text).toContain("It's your turn to play in chat-phase!\n\n")
-    expect(text).not.toContain('Continue with')
-    expect(text).toContain(`https://playciv.app/game/${gameId}`)
-  })
-
-  it('sends nothing on the take-turn button', async () => {
-    const { gameId, starter } = await startedGame('take')
-    mailer.sent.length = 0
-
-    const response = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/taketurn`,
-      headers: bearer(starter.token),
-      payload: {},
-    })
+    // The player who is not the holder finishes first: the holder is still the holder
+    const response = await finishStartOfTurn(gameId, waitingPlayer.token)
     expect(response.status).toBe(200)
     expect(mailer.sent).toHaveLength(0)
   })
 
   it('a failing provider never fails the turn', async () => {
-    const { gameId, starter } = await startedGame('broken')
+    const { gameId, holder } = await startedGame('broken')
     mailer.sent.length = 0
     mailer.fail = true
 
-    const response = await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/endturn`,
-      headers: bearer(starter.token),
-      payload: {},
-    })
+    const response = await finishStartOfTurn(gameId, holder.token)
     expect(response.status).toBe(200)
     mailer.fail = false
   })
@@ -348,59 +293,37 @@ describe('chat', () => {
   })
 })
 
-describe('turn-phase updates', () => {
-  it("emails the others with Java's subject and excludes the author", async () => {
+describe('posted orders', () => {
+  it('emails the others like a chat message and excludes the author', async () => {
     const creator = await register('phase-a')
-    const gameId = await createGame(creator.token, 'phase mail', 3)
+    // Two seats, so the second join starts the game: a game that has not started takes no orders
+    const gameId = await createGame(creator.token, 'phase mail', 2)
     const other = await register('phase-b')
     await join(other.token, gameId)
     mailer.sent.length = 0
 
     const response = await inject(app, {
       method: 'POST',
-      url: `/api/games/${gameId}/turns/update`,
+      url: `/api/games/${gameId}/turns/order`,
       headers: bearer(creator.token),
-      payload: { phase: 'SOT', turnNumber: 1, order: 'build a temple' },
+      payload: { phase: 'SOT', turnNumber: 1, markdown: 'build a temple' },
     })
     expect(response.status).toBe(200)
 
-    const mails = mailer.subjects('Start of turn updated')
+    const mails = mailer.subjects('New Chat')
     expect(mails).toHaveLength(1)
     expect(mails[0]?.to).toBe('phase-b@example.com')
-    // Java's start-of-turn body put the newline before the colon.
-    expect(mails[0]?.text).toContain(
-      'phase-a has updated start of turn with the following order\n:build a temple.',
-    )
-    // The unsubscribe link must be the recipient's, not the author's: Java
-    // passed the author's id here, so the recipient's link was useless.
+    expect(mails[0]?.text).toContain('phase-a wrote in the chat: build a temple.')
+    // The unsubscribe link is the recipient's, not the author's
     expect(mails[0]?.text).toContain(`/api/admin/email/notification/${other.id}/stop`)
-  })
-
-  it('uses the trade subject and body for the trade phase', async () => {
-    const creator = await register('trade-a')
-    const gameId = await createGame(creator.token, 'trade mail', 3)
-    const other = await register('trade-b')
-    await join(other.token, gameId)
-    mailer.sent.length = 0
-
-    await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/turns/update`,
-      headers: bearer(creator.token),
-      payload: { phase: 'TRADE', turnNumber: 1, order: 'trade silk' },
-    })
-
-    const mails = mailer.subjects('Trade updated')
-    expect(mails).toHaveLength(1)
-    expect(mails[0]?.text).toContain(
-      'trade-a has updated trade with the following order:\ntrade silk.',
-    )
+    // The old per-phase mails are gone with the old Turn orders panel
+    expect(mailer.sent.map((mail) => mail.subject).filter((subject) => subject.endsWith(' updated'))).toEqual([])
   })
 })
 
 describe('unsubscribe', () => {
   it('stops every notification once the stop link is followed', async () => {
-    const { gameId, starter, waiting } = await startedGame('unsub')
+    const { gameId, holder, waiting } = await startedGame('unsub')
     const state = await loadGame(gameId)
     const waitingPlayer = state.players.find((player) => player.username === waiting)
     if (waitingPlayer === undefined) throw new Error('no waiting player')
@@ -414,12 +337,7 @@ describe('unsubscribe', () => {
     expect(stop.body).toContain('no longer get anymore emails')
 
     mailer.sent.length = 0
-    await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/endturn`,
-      headers: bearer(starter.token),
-      payload: {},
-    })
+    await finishStartOfTurn(gameId, holder.token)
     expect(mailer.sent).toHaveLength(0)
 
     const start = await inject(app, {
@@ -552,7 +470,7 @@ describe('held until the game is opened (issue #217)', () => {
     expect(mailer.subjects('New Chat')).toHaveLength(2)
   })
 
-  it('holds chat, phase updates, your turn and joins behind the same single email', async () => {
+  it('holds chat, orders, your turn and joins behind the same single email', async () => {
     const creator = await register('shared-a')
     const gameId = await createGame(creator.token, 'shared', 2)
     const other = await register('shared-b')
@@ -562,22 +480,17 @@ describe('held until the game is opened (issue #217)', () => {
     await open(other.token, gameId)
     mailer.sent.length = 0
 
-    const onTurn = (await loadGame(gameId)).players.find((player) => player.yourTurn)
+    const onTurn = activeTurnStatus(await loadGame(gameId))
     const [mover, waiter] = onTurn?.playerId === creator.id ? [creator, other] : [other, creator]
 
     await chat(mover.token, gameId, 'hello')
     await inject(app, {
       method: 'POST',
-      url: `/api/games/${gameId}/turns/update`,
+      url: `/api/games/${gameId}/turns/order`,
       headers: bearer(mover.token),
-      payload: { phase: 'SOT', turnNumber: 1, order: 'build' },
+      payload: { phase: 'SOT', turnNumber: 1, markdown: 'build' },
     })
-    await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/endturn`,
-      headers: bearer(mover.token),
-      payload: {},
-    })
+    await finishStartOfTurn(gameId, mover.token)
     const toWaiter = (): string[] =>
       mailer.sent
         .filter((mail) => mail.to === `${waiter === creator ? 'shared-a' : 'shared-b'}@example.com`)
@@ -585,17 +498,13 @@ describe('held until the game is opened (issue #217)', () => {
     expect(toWaiter()).toEqual(['New Chat'])
 
     await open(waiter.token, gameId)
+    // The waiter finishes the start of turn, and then the mover trade: the turn comes back to the waiter
+    await finishStartOfTurn(gameId, waiter.token)
     await inject(app, {
       method: 'POST',
-      url: `/api/games/${gameId}/endturn`,
-      headers: bearer(waiter.token),
-      payload: {},
-    })
-    await inject(app, {
-      method: 'POST',
-      url: `/api/games/${gameId}/endturn`,
+      url: `/api/games/${gameId}/turns/done`,
       headers: bearer(mover.token),
-      payload: {},
+      payload: { phase: 'TRADE' },
     })
     // The waiter opened the game, so the turn that came back to them mails once.
     expect(toWaiter()).toEqual(['New Chat', 'It is your turn'])
@@ -703,8 +612,8 @@ describe('battle turn', () => {
     const gameId = await createGame(creator.token, name, 2)
     const joiner = await register(`${name}-b`)
     await join(joiner.token, gameId)
-    // Only the player on turn may draw, so that player attacks.
-    const onTurn = (await loadGame(gameId)).players.find((player) => player.yourTurn)
+    // Only the turn holder may draw, so that player attacks.
+    const onTurn = activeTurnStatus(await loadGame(gameId))
     const starter = onTurn?.playerId === creator.id ? creator : joiner
     const waitingPlayer = starter === creator ? joiner : creator
     const mailOf = (who: { id: string }): string =>

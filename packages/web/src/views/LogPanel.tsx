@@ -3,8 +3,8 @@
  *
  * The public log comes from the server's `publicLog` field and never carries
  * the contents of a hidden card. The private log is filtered down to the
- * player's own entries on the server side. Chat lives in its own `ChatPanel`
- * (issue #68).
+ * player's own entries on the server side. Chat lives in the chat and orders
+ * timeline (`ChatOrdersPanel`).
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
