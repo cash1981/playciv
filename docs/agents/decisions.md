@@ -4270,3 +4270,26 @@ question for the human.
   unescaped and must stay plain letters and spaces; the dry run response is shown in
   the admin panel with `unchecked` ("N more games were not checked, run the move
   again").
+
+## 2026-10-04 (later): typing no longer loses the cursor, auto-refresh is easier to read
+
+- The human: writing an order or a chat message made the cursor jump, and it was hard
+  to tell whether auto-refresh was on. The jump was not auto-refresh. `MarkdownEditor`
+  wrote the parent's `value` into the Milkdown document whenever the two differed.
+  Milkdown reports a change 200 ms after the last keystroke, the parent stores it and
+  passes it back, and when one more letter was typed before that value rendered (a long
+  timeline makes the panel slow to render) the editor held newer text than `value`. The
+  write put the older text back, took focus away and moved the cursor; typing then went
+  nowhere. Reproduced in a real browser with a 250 message game, pauses of 150 to 350 ms
+  between letters, and fixed there at 1x and 6x CPU slowdown.
+- The rich editor now remembers the markdown it reported itself since the document last
+  matched `value` (at most 20 entries). The fallback textarea reports as it is typed, so
+  it can never be stale and is not recorded; recording it left a sent message in the box. A `value` in that set is an echo and is never
+  written back. A value the parent set itself, such as the empty draft after Send or a
+  private note saved from another tab, is not in the set and is written as before.
+- Auto-refresh: the header button is a switch (`role="switch"`) with a dot, filled and
+  pulsing green with "on", hollow and dashed with "off", and a tooltip that says what a
+  click does. The chat panel shows the same state as a line next to the filters, because
+  that is where the player is writing. Same words in both places.
+- Not changed: Safari does not keep the composer still when the timeline above it
+  grows, because it has no scroll anchoring. Not reproduced, so left alone.

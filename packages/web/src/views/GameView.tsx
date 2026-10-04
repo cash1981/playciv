@@ -28,6 +28,7 @@ import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
 import { WondersPanel } from './WondersPanel.js'
 import { TechPanel } from './TechPanel.js'
+import { AutoRefreshSwitch } from './AutoRefresh.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { DigitInput } from './DigitInput.js'
 import { groupByOldClientBucket } from './itemBuckets.js'
@@ -517,13 +518,11 @@ export function GameView({
           <span className="muted" style={{ fontSize: '0.9rem' }}>{displayedView.name}</span>
           {ended && displayedView.winner !== null && <span className="tag">ended</span>}
           <span style={{ flex: 1 }} />
-          <button
-            className={'small' + (autoRefresh ? ' revealed' : '')}
-            onClick={() => setAutoRefresh((v) => !v)}
-            title={`Auto-refresh every ${AUTO_REFRESH_MS / 1000} seconds`}
-          >
-            {autoRefresh ? 'Auto-refresh on' : 'Auto-refresh off'}
-          </button>
+          <AutoRefreshSwitch
+            on={autoRefresh}
+            seconds={AUTO_REFRESH_MS / 1000}
+            onToggle={() => setAutoRefresh((v) => !v)}
+          />
         </div>
 
         {!ended && <TurnStatusStrip view={displayedView} />}

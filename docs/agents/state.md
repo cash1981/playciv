@@ -13,11 +13,16 @@ _Last updated: 2026-10-04_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 766 engine, 421 server, 481 web on `claude/pr-218-default-view-wlml28` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 766 engine, 421 server, 489 web on `claude/pr-218-default-view-wlml28` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Typing keeps the cursor; auto-refresh is readable (same branch and PR).** `MarkdownEditor` no
+  longer writes its own, older report back over newer typing, which took focus and the
+  cursor and lost text on a long timeline (found and fixed in a real browser). The
+  header button is a switch with a dot, and the chat panel says whether auto-refresh is
+  on. Brief: `tasks/typing-cursor.md`; see `decisions.md`, 2026-10-04 (later).
 - **Single chat: the timeline is the only view (branch `claude/pr-218-default-view-wlml28`, PR #218).**
   No switch, no Turn orders or Chat panel, no End turn or Take the turn button; every
   game, running or finished, uses the chat and orders timeline. `chatOrders` is gone

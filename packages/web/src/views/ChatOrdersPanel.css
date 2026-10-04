@@ -18,6 +18,18 @@
   min-height: 44px;
 }
 
+.chat-orders-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.8rem;
+  margin-bottom: 0.6rem;
+}
+
+.chat-orders-head .chat-orders-filters {
+  margin-bottom: 0;
+}
+
 .chat-orders-filters,
 .chat-orders-mode {
   display: flex;

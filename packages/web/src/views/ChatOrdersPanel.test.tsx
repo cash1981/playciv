@@ -259,6 +259,14 @@ describe('the timeline', () => {
     expect(rows(container)).toEqual(['text of a', 'text of bb', 'text of ccc'])
   })
 
+  it('says in the panel whether auto-refresh is on', async () => {
+    const on = await renderPanel(makeView(), { autoRefresh: true })
+    expect(on.container.querySelector('.auto-refresh-status')?.textContent).toBe('Auto-refresh on')
+    cleanup()
+    const off = await renderPanel(makeView(), { autoRefresh: false })
+    expect(off.container.querySelector('.auto-refresh-status')?.textContent).toBe('Auto-refresh off')
+  })
+
   it('stops polling when auto-refresh is off', async () => {
     vi.useFakeTimers()
     chatPage.mockResolvedValue(page([message('a')]))

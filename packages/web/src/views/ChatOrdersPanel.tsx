@@ -17,6 +17,7 @@ import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { ActiveTurnStatus, PlayerView, TimelineMessageDto } from '../lib/api.js'
 import type { NavigationAttempt } from '../lib/navigationGuard.js'
+import { AutoRefreshStatus } from './AutoRefresh.js'
 import { ChatTimestamp } from './ChatTimestamp.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
@@ -491,26 +492,29 @@ export function ChatOrdersPanel({
     <CollapsiblePanel id="chat-orders" title="Chat and orders" defaultOpen className="chat-orders">
       {loadError !== null && <div className="error">{loadError}</div>}
 
-      <div className="chat-orders-filters" role="tablist" aria-label="Show">
-        {showFilters.map(({ filter: name, label }) => (
-          <button
-            key={name}
-            type="button"
-            role="tab"
-            id={`chat-orders-filter-${name}`}
-            className="chat-orders-chip"
-            aria-selected={filter === name}
-            aria-controls={name === 'private' ? 'chat-orders-private-panel' : 'chat-orders-timeline-panel'}
-            tabIndex={filter === name ? 0 : -1}
-            onKeyDown={handleTabKeyDown}
-            onClick={() => {
-              setFilter(name)
-              stickToBottom.current = true
-            }}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="chat-orders-head">
+        <div className="chat-orders-filters" role="tablist" aria-label="Show">
+          {showFilters.map(({ filter: name, label }) => (
+            <button
+              key={name}
+              type="button"
+              role="tab"
+              id={`chat-orders-filter-${name}`}
+              className="chat-orders-chip"
+              aria-selected={filter === name}
+              aria-controls={name === 'private' ? 'chat-orders-private-panel' : 'chat-orders-timeline-panel'}
+              tabIndex={filter === name ? 0 : -1}
+              onKeyDown={handleTabKeyDown}
+              onClick={() => {
+                setFilter(name)
+                stickToBottom.current = true
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <AutoRefreshStatus on={autoRefresh} />
       </div>
 
       {filter === 'private' && view.you !== null && replaying ? (

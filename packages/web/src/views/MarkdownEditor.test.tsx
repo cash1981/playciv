@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { createRef } from 'react'
+import { createRef, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -11,6 +11,9 @@ interface MockCrepeBuilderRecord {
   created: boolean
   destroyed: boolean
   markdown: string
+  /** What a player typing does: the document changes, and Milkdown reports it later. */
+  type: (markdown: string) => void
+  report: (markdown: string) => void
 }
 
 const milkdownLifecycle = vi.hoisted(() => ({
@@ -24,6 +27,8 @@ vi.mock('@milkdown/crepe/builder', () => ({
     created = false
     destroyed = false
     markdown: string
+    private reported = ''
+    private listener: ((context: unknown, markdown: string, previous: string) => void) | undefined
     readonly editor = {
       action: (command: { readonly markdown?: string }): void => {
         if (command.markdown !== undefined) this.markdown = command.markdown
@@ -32,6 +37,7 @@ vi.mock('@milkdown/crepe/builder', () => ({
 
     constructor(options: { readonly defaultValue: string }) {
       this.markdown = options.defaultValue
+      this.reported = options.defaultValue
       milkdownLifecycle.instances.push(this)
     }
 
@@ -43,8 +49,27 @@ vi.mock('@milkdown/crepe/builder', () => ({
       return this
     }
 
-    on(register: (listener: { markdownUpdated: (callback: () => void) => void }) => void): void {
-      register({ markdownUpdated: () => undefined })
+    on(
+      register: (listener: {
+        markdownUpdated: (callback: (context: unknown, markdown: string, previous: string) => void) => void
+      }) => void,
+    ): void {
+      register({
+        markdownUpdated: (callback) => {
+          this.listener = callback
+        },
+      })
+    }
+
+    type(markdown: string): void {
+      this.markdown = markdown
+    }
+
+    /** Milkdown reports with a delay, so it can report text the editor has since moved past. */
+    report(markdown: string): void {
+      const previous = this.reported
+      this.reported = markdown
+      this.listener?.(undefined, markdown, previous)
     }
 
     async create(): Promise<void> {
@@ -175,5 +200,85 @@ describe('MarkdownEditor lifecycle', () => {
 
     expect(saved).toEqual(['Fallback Markdown'])
     expect(milkdownLifecycle.getMarkdownCalls).toBe(0)
+  })
+
+  it('does not write its own, older report back over what was typed since', async () => {
+    const shown: string[] = []
+    function Parent(): React.JSX.Element {
+      const [value, setValue] = useState('')
+      shown.push(value)
+      return <MarkdownEditor value={value} onChange={setValue} readOnly={false} ariaLabel="Echo editor" />
+    }
+    render(<Parent />)
+    await vi.dynamicImportSettled()
+    await settle()
+    const editor = milkdownLifecycle.instances[0]
+    if (editor === undefined) throw new Error('the editor was not created')
+
+    // The player types "one t", then one more letter before the report for "one t" has rendered.
+    editor.type('one t')
+    act(() => {
+      editor.report('one t')
+      editor.type('one tw')
+    })
+    await vi.dynamicImportSettled()
+    await settle()
+
+    expect(shown.at(-1)).toBe('one t')
+    expect(editor.markdown).toBe('one tw')
+  })
+
+  it('still writes a value the parent set itself, such as a draft cleared after Send', async () => {
+    const draft = { set: (_value: string): void => undefined }
+    function Parent(): React.JSX.Element {
+      const [value, setValue] = useState('')
+      draft.set = setValue
+      return <MarkdownEditor value={value} onChange={setValue} readOnly={false} ariaLabel="Cleared editor" />
+    }
+    render(<Parent />)
+    await vi.dynamicImportSettled()
+    await settle()
+    const editor = milkdownLifecycle.instances[0]
+    if (editor === undefined) throw new Error('the editor was not created')
+
+    editor.type('Sent text')
+    act(() => editor.report('Sent text'))
+    await settle()
+    act(() => draft.set(''))
+    await vi.dynamicImportSettled()
+    await settle()
+
+    expect(editor.markdown).toBe('')
+
+    // Typing the same text again after the clear is the player's, not the parent's
+    editor.type('Sent text')
+    act(() => {
+      editor.report('Sent text')
+      editor.type('Sent text!')
+    })
+    await vi.dynamicImportSettled()
+    await settle()
+    expect(editor.markdown).toBe('Sent text!')
+  })
+
+  it('empties the fallback textarea when the parent clears it, whatever was typed there before', async () => {
+    milkdownLifecycle.create = () => new Promise<void>(() => undefined)
+    const draft = { set: (_value: string): void => undefined }
+    function Parent(): React.JSX.Element {
+      const [value, setValue] = useState('')
+      draft.set = setValue
+      return <MarkdownEditor value={value} onChange={setValue} readOnly={false} ariaLabel="Fallback editor" />
+    }
+    render(<Parent />)
+    const box = (): HTMLTextAreaElement => screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Fallback editor' })
+
+    // Typed and erased: the empty text has been reported once before it is sent
+    fireEvent.change(box(), { target: { value: 'h' } })
+    fireEvent.change(box(), { target: { value: '' } })
+    fireEvent.change(box(), { target: { value: 'hello' } })
+    act(() => draft.set(''))
+    await vi.dynamicImportSettled()
+
+    expect(box().value).toBe('')
   })
 })
