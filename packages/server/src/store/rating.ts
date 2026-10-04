@@ -1,4 +1,4 @@
-import { cultureMarkerLevelOf, highscore, rankByEvidence, totalCoins } from '@civ/engine'
+import { coinSourcesOf, cultureMarkerLevelOf, highscore, rankByEvidence, totalCoins } from '@civ/engine'
 import type { FinishedGame, GameState, HighscoreResult, PlacementEvidence, RatedGame } from '@civ/engine'
 import { ordinal, rate, rating } from 'openskill'
 
@@ -42,7 +42,7 @@ export function resultFromGame(game: GameState): RatedGame | null {
       username: player.username,
       techs: player.techsChosen.length,
       cultureTier: cultureMarkerLevelOf(game, player.playerId),
-      coins: totalCoins(player.stats.coinSources),
+      coins: totalCoins(coinSourcesOf(game, player)),
     }
   })
   return {

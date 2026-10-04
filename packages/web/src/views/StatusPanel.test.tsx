@@ -436,6 +436,27 @@ describe('StatusPanel Coins section', () => {
     expect(screen.queryByText('50% chance of providing 1 coin')).toBeNull()
   })
 
+  it('shows the Great People row as a number the engine derives, with no buttons (issue #241)', () => {
+    render(
+      <StatusPanel
+        gameId="game-1"
+        view={coinView({ greatPeople: 2 })}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    openCoins()
+
+    expect(screen.getByText("Builder, Merchant and Humanitarian on the map in your cities' outskirts")).toBeTruthy()
+    expect(screen.getByLabelText('Alice Great People').textContent).toBe('2')
+    expect(screen.queryByRole('button', { name: 'Increase Alice Great People' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Decrease Alice Great People' })).toBeNull()
+    // The other rows keep their buttons.
+    expect(screen.getByRole('button', { name: 'Increase Alice Bank (Building)' })).toBeTruthy()
+  })
+
   it('shows the empty state when nobody has joined', () => {
     const view = { ...memberView, you: null, opponents: [] } as unknown as PlayerView
     render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)

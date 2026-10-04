@@ -409,7 +409,9 @@ function availableCoinSources(
  * row with no cell at all is not drawn. A counter that still holds coins stays
  * visible even when its source is no longer valid, so a value can never be
  * hidden and impossible to lower. A final Total row repeats each player's sum,
- * the same number the Status table's Coins column shows.
+ * the same number the Status table's Coins column shows. The Great People row
+ * is the exception: the engine derives it from the tokens on the board, so it
+ * shows the number and has no buttons.
  */
 function CoinSection({
   gameId,
@@ -459,12 +461,20 @@ function CoinSection({
               <th scope="row">
                 <span className="coin-source">
                   <span>{source.label}</span>
-                  {source.help !== '' && <span className="muted">{source.help}</span>}
+                  {source.help.length > 0 && <span className="muted">{source.help}</span>}
                 </span>
               </th>
               {rows.map((row) => (
                 <td key={row.playerId} className="status-group-start">
-                  {renders(row, source.key) && (
+                  {renders(row, source.key) && source.key === 'greatPeople' && (
+                    // Derived from the tokens on the board (issue #241), so no buttons.
+                    <span className="coin-counter">
+                      <span className="coin-value" aria-label={`${row.username} ${source.label}`}>
+                        {row.stats.coinSources[source.key]}
+                      </span>
+                    </span>
+                  )}
+                  {renders(row, source.key) && source.key !== 'greatPeople' && (
                     <CoinCounter
                       label={`${row.username} ${source.label}`}
                       value={row.stats.coinSources[source.key]}

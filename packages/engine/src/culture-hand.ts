@@ -7,7 +7,7 @@
  * since the old status sheet was typed in by hand.
  */
 
-import { totalCoins } from './coins.js'
+import { coinSourcesOf, totalCoins } from './coins.js'
 import type { GameState, Playerhand } from './state.js'
 
 /** What every player holds before any card raises it, and the floor. */
@@ -46,7 +46,8 @@ const EFTA_BONUS = 1
  * revealed, so the number can never show another player what is still hidden.
  * Valmiki's +2 goes again when the card is discarded, because it then leaves the
  * player's items. The coin total, the EftA investment and the wonders on the
- * board are public already.
+ * board are public already. The coin total includes the derived Great People
+ * coins (issue #241), which follow the blockade.
  */
 export function cultureHandSizeOf(state: GameState, player: Playerhand): number {
   let size = BASE_CULTURE_HAND_SIZE
@@ -55,7 +56,7 @@ export function cultureHandSizeOf(state: GameState, player: Playerhand): number 
     if (tech.hidden) continue
     size += TECH_BONUS.get(tech.name) ?? 0
     if (tech.name === COMPUTERS) {
-      size += Math.floor(Math.max(totalCoins(player.stats.coinSources), 0) / COINS_PER_COMPUTERS_CARD)
+      size += Math.floor(Math.max(totalCoins(coinSourcesOf(state, player)), 0) / COINS_PER_COMPUTERS_CARD)
     }
   }
 

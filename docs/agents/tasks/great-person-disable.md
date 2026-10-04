@@ -3,7 +3,7 @@
 - **Slug:** `great-person-disable`
 - **Branch:** `fix/great-person-disable`
 - **Owner:** Claude (orchestrator), coder role for the code
-- **Status:** in progress
+- **Status:** in review
 - **Issue:** https://github.com/cash1981/playciv/issues/241
 
 ## Goal

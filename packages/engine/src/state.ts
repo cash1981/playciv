@@ -10,12 +10,13 @@
 import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement } from './item.js'
 import { isUnit } from './item.js'
 import type { Rng } from './random.js'
-import type { Board, BoardArea, BoardPiece } from './board.js'
+import type { Board, BoardArea } from './board.js'
 import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
+import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
 import { BASE_CULTURE_HAND_SIZE, cultureHandSizeOf } from './culture-hand.js'
 import type { CoinSources } from './coins.js'
-import { EMPTY_COIN_SOURCES } from './coins.js'
+import { EMPTY_COIN_SOURCES, coinSourcesOf } from './coins.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
 import type { WaitingFor } from './turn.js'
 import {
@@ -43,6 +44,8 @@ export interface PlayerStats {
   /**
    * One coin counter per source, replacing the old status board's single
    * `coins` number. See {@link CoinSources} for the sources and their limits.
+   * The `greatPeople` entry is ignored on read: the projections replace it with
+   * the tokens on the board (issue #241, `coinSourcesOf`).
    */
   readonly coinSources: CoinSources
   readonly trade: number
@@ -414,35 +417,27 @@ export function cultureMarkerLevelOf(state: GameState, playerId: string): number
   return cultureStepOf(state.board, piece)
 }
 
-/** The five player colours a city piece can come in, matching `PLAYER_COLORS`. */
-const CITY_COLOR_PREFIXES = ['blue', 'green', 'purple', 'red', 'yellow'] as const
-
 /**
- * A city piece's colour, read off its asset id — for example
- * "cities/redcity2" belongs to Red. There is no equivalent for `building`
+ * How many city pieces (capital, city or metropolis, walled or not) belong to a
+ * player. A city's colour is read off its asset id — for example "cities/redcity2"
+ * belongs to Red (see `pieceColorOf`). There is no equivalent for `building`
  * pieces: the manifest has one generic image per building type, with no
  * per-colour artwork, so `buildingCountOf` below falls back to `placedBy`
  * instead.
  */
-function cityColorOf(piece: BoardPiece): string | undefined {
-  const base = piece.assetId.split('/').at(-1)?.toLowerCase() ?? ''
-  return CITY_COLOR_PREFIXES.find((colour) => base.startsWith(colour))
-}
-
-/** How many city pieces (capital, city or metropolis, walled or not) belong to a player. */
 export function cityCountOf(state: GameState, playerId: string): number {
   const player = findPlayer(state, playerId)
   if (player === undefined || player.color === null) return 0
 
   const colour = player.color.toLowerCase()
   return state.board.pieces.filter(
-    (piece) => piece.category === 'city' && cityColorOf(piece) === colour,
+    (piece) => piece.category === 'city' && pieceColorOf(piece) === colour,
   ).length
 }
 
 /**
  * How many building pieces belong to a player. Buildings carry no per-colour
- * artwork (see {@link cityColorOf}), so ownership is read off `placedBy`
+ * artwork (see {@link cityCountOf}), so ownership is read off `placedBy`
  * instead — who put the piece on the board. Pieces can be moved by anyone
  * afterwards, same as any other board piece, so this undercounts a building
  * that changed hands after being moved; there is no stronger signal in the
@@ -455,18 +450,22 @@ export function buildingCountOf(state: GameState, playerId: string): number {
 }
 
 /**
- * The player with their derived stats filled in. `combat` is computed from the
- * board, MIC, government and civilization (issue #197), so whatever is stored is ignored on read.
+ * The stats with the derived numbers filled in: `combat` is computed from the
+ * board, MIC, government and civilization (issue #197), the Great People coins
+ * from the tokens on the board (issue #241), so whatever is stored for them is
+ * ignored on read.
  */
-function withDerivedStats(state: GameState, player: Playerhand): Playerhand {
+function derivedStats(state: GameState, player: Playerhand): PlayerStats {
   return {
-    ...player,
-    stats: {
-      ...player.stats,
-      combat: combatBonusOf(state, player),
-      cultureHandSize: cultureHandSizeOf(state, player),
-    },
+    ...player.stats,
+    coinSources: coinSourcesOf(state, player),
+    combat: combatBonusOf(state, player),
+    cultureHandSize: cultureHandSizeOf(state, player),
   }
+}
+
+function withDerivedStats(state: GameState, player: Playerhand): Playerhand {
+  return { ...player, stats: derivedStats(state, player) }
 }
 
 // ---------------------------------------------------------------------------
@@ -560,11 +559,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     revealedTechs: player.techsChosen.filter((tech) => !tech.hidden),
     revealedSocialPolicies: player.socialPolicies.filter((policy) => !policy.hidden),
     pyramidPlacements: player.pyramidPlacements.map((placement) => ({ slot: placement.slot })),
-    stats: {
-      ...player.stats,
-      combat: combatBonusOf(state, player),
-      cultureHandSize: cultureHandSizeOf(state, player),
-    },
+    stats: derivedStats(state, player),
     government: player.government,
     cultureMarkerLevel: cultureMarkerLevelOf(state, player.playerId),
     cityCount: cityCountOf(state, player.playerId),
@@ -594,6 +589,13 @@ export interface PlayerViewSelf extends Playerhand {
   readonly cultureMarkerLevel: number | null
   readonly cityCount: number
   readonly buildingCount: number
+  /**
+   * The Great Person card types the viewer cannot use for now (issue #241): they
+   * have tokens of the type on the map and every one is blockaded. Derived from
+   * the public board and the viewer's colour, never from the hand, and not part
+   * of `OpaquePlayerhand`.
+   */
+  readonly blockadedGreatPersonTypes: readonly string[]
 }
 
 /**
@@ -619,6 +621,11 @@ export interface PlayerView {
   readonly board: Board
   /** Derived from the player list, so it cannot drift out of step. */
   readonly boardAreas: readonly BoardArea[]
+  /**
+   * Buildings and Great Person tokens an enemy figure stands on (issue #241).
+   * Derived from the public board alone, so every player gets the same list.
+   */
+  readonly blockadedPieceIds: readonly string[]
   readonly log: readonly (PublicLogEntry | GameLogEntry)[]
   /**
    * The active battle, or null. The arena is fully public — both sides see all
@@ -679,6 +686,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           cultureMarkerLevel: cultureMarkerLevelOf(state, viewerId),
           cityCount: cityCountOf(state, viewerId),
           buildingCount: buildingCountOf(state, viewerId),
+          blockadedGreatPersonTypes: blockadedGreatPersonTypes(state, player),
         }
   return {
     id: state.id,
@@ -697,6 +705,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     techs: state.techs,
     board: state.board,
     boardAreas: boardAreas(state.board, state.players),
+    blockadedPieceIds: blockadedPieceIds(state),
     log: state.log.map((entry) =>
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),

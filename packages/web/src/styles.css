@@ -609,6 +609,18 @@ label > textarea {
   color: var(--bad);
 }
 
+/* A Great Person card whose tokens are all blockaded (issue #241): a marker,
+   not a lock, so the card keeps its buttons. */
+.tag.blockaded {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.card-blockaded .card-caption > strong,
+.card-blockaded .card-text {
+  text-decoration: line-through;
+}
+
 /* The "by X · revealed · discarded" line under a revealed card's caption. */
 .revealed-meta {
   display: flex;
@@ -915,6 +927,24 @@ ul.list > li:last-child {
   outline: 2px solid #fff;
   outline-offset: 0;
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.45);
+}
+
+/* A building or Great Person an enemy figure stands on (issue #241): greyed,
+   with a diagonal strike drawn over it by the sibling .board-piece-strike. */
+.board-piece.board-piece-blockaded {
+  filter: grayscale(1) opacity(0.55);
+}
+
+.board-piece-strike {
+  position: absolute;
+  pointer-events: none;
+  background: linear-gradient(
+    to top right,
+    transparent calc(50% - 1.5px),
+    #c0392b calc(50% - 1.5px),
+    #c0392b calc(50% + 1.5px),
+    transparent calc(50% + 1.5px)
+  );
 }
 
 .board-piece.selected {

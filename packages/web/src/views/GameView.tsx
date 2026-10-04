@@ -559,6 +559,7 @@ export function GameView({
         board={displayedView.board}
         numOfPlayers={displayedView.numOfPlayers}
         areas={displayedView.boardAreas}
+        blockadedPieceIds={displayedView.blockadedPieceIds}
         busy={interactionBusy}
         readOnly={replaying || locked}
         youId={you?.playerId ?? null}
@@ -758,6 +759,7 @@ function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
 function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   const items = view.you?.items ?? []
   const opponents = view.opponents
+  const blockadedTypes = view.you?.blockadedGreatPersonTypes ?? []
 
   return (
     <CollapsiblePanel id="hand" title={`Your hand (${items.length})`} defaultOpen>
@@ -785,6 +787,11 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
               busy={busy}
               run={run}
               opponents={opponents}
+              blockaded={
+                item.kind === 'greatperson' &&
+                item.type !== null &&
+                blockadedTypes.includes(item.type)
+              }
             />
           )),
         )}
@@ -902,18 +909,33 @@ export function HandItem({
   busy,
   run,
   opponents,
+  blockaded = false,
 }: {
   readonly item: Item
   readonly gameId: string
   readonly busy: boolean
   readonly run: Run
   readonly opponents: PlayerView['opponents']
+  /**
+   * Every token of this Great Person type that you have on the map is
+   * blockaded (issue #241). A marker only: the card stays usable here, since
+   * the game does not track what it does.
+   */
+  readonly blockaded?: boolean
 }): React.JSX.Element {
   return (
-    <ItemCard item={item}>
+    <ItemCard item={item} {...(blockaded ? { className: 'card-blockaded' } : {})}>
       <span className={item.hidden ? 'tag hidden' : 'tag revealed'}>
         {item.hidden ? 'only you' : 'published'}
       </span>
+      {blockaded && (
+        <span
+          className="tag blockaded"
+          title="Every token of this type you have on the map is blockaded by an enemy figure"
+        >
+          Blockaded
+        </span>
+      )}
       {item.hidden && (
         <button
           className="small"

@@ -6,18 +6,26 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-04 (delta revisions merged with the single chat)_
+_Last updated: 2026-10-04 (blockade, issue #241)_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 766 engine, 590 server, 498 web on `feat/delta-revisions` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing - 810 engine, 592 server, 504 web on `fix/great-person-disable` (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Blockade: an enemy figure disables a building or Great Person (issue #241, branch `fix/great-person-disable`).**
+  Derived from the board (`engine/src/blockade.ts`): a blockaded piece is greyed and struck
+  through, adds nothing to the combat bonus, and a Great Person card is marked when every
+  token of its type is blockaded. The Great People coin counter is now derived (1 per
+  unblockaded Builder, Merchant or Humanitarian in the outskirts of an own city), read-only,
+  and the old manual value is ignored. No random-disable button, wonders not included.
+  Not checked in a real browser yet. Brief: `tasks/great-person-disable.md`; see
+  `decisions.md`, 2026-10-04.
 - **Delta storage for game revisions, and an admin compaction** (issue #238, phases 1
   and 2). A saved state is a keyframe (full) or a delta against the state before it, a
   keyframe every 25 rows, after any unrecorded change, and for the first revision;

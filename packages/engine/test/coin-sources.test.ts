@@ -60,17 +60,20 @@ describe('COIN_SOURCES', () => {
     // The four "Up to 4" coin-token techs, the "1 coin" printed sources, and
     // the two the human said are unlimited (Sheet and Panama Canal).
     expect(COIN_SOURCES.map((source) => source.max)).toEqual([
-      4, 4, 1, 4, 4, 1, 1, 1, 1, 1, 1, 1, null, 1, null,
+      // Great People is derived from the board (issue #241) and has no limit.
+      4, 4, 1, 4, 4, 1, 1, 1, 1, 1, null, 1, null, 1, null,
     ])
   })
 
-  it('gives every source a helper text from the sheet’s second column, except Great People', () => {
+  it('gives every source a helper text from the sheet’s second column', () => {
     for (const source of COIN_SOURCES) {
-      if (source.key === 'greatPeople') continue
       expect(source.help.length).toBeGreaterThan(0)
     }
-    // Issue #158: the human asked for "50% chance of providing 1 coin" to go.
-    expect(findCoinSource('greatPeople')?.help).toBe('')
+    // Issue #158 removed "50% chance of providing 1 coin"; issue #241 made the
+    // row derived and says where the coins come from.
+    expect(findCoinSource('greatPeople')?.help).toBe(
+      "Builder, Merchant and Humanitarian on the map in your cities' outskirts",
+    )
     expect(findCoinSource('codeOfLaws')?.help).toBe('Up to 4 for winning battles')
     expect(findCoinSource('sheet')?.help).toBe('Coins from culture cards, loot or village etc.')
   })
@@ -477,7 +480,7 @@ describe('a counter does not outlive its source (issue #158)', () => {
       setCoinSource(state, {
         editorPlayerId: CASH1981,
         targetPlayerId: CASH1981,
-        source: 'greatPeople',
+        source: 'terrain',
         value: 1,
       }),
     )
@@ -492,7 +495,7 @@ describe('a counter does not outlive its source (issue #158)', () => {
 
     expect(findPlayer(state, CASH1981)?.stats.coinSources).toEqual({
       ...EMPTY_COIN_SOURCES,
-      greatPeople: 1,
+      terrain: 1,
     })
   })
 
@@ -587,7 +590,6 @@ describe('coins given when a card is revealed', () => {
       'computers',
       'bank',
       'democracyGovernment',
-      'greatPeople',
       'terrain',
       'organizedReligion',
     ]
