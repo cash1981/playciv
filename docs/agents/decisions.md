@@ -4631,3 +4631,8 @@ expansions.
   labels are names. The plural names read slightly off; fixing that needs per-asset overrides.
 - Moving a piece that already stands on a warned terrain to another square of the same
   terrain does not ask again. A held arrow key asks once, not on every auto-repeat.
+
+## 2026-10-04: rotated metropolis city footprint
+
+- A metropolis occupies two adjacent city-center squares along its long axis and has ten outskirts squares: the union of each center's eight neighbors, excluding both centers. Rotation 0/180 uses the horizontal axis; 90/270 uses the vertical axis. Its visual center sits on the boundary between those two center squares; the map-cell calculation floors to the eastern/southern square, so the pair is `[anchor−1, anchor]` on the long axis.
+- Shared city ownership, blockade, Bank coins and Great Person outskirts coins all use this footprint. Scout-held coin tracking remains manual because the board does not record the scout-gathering state.

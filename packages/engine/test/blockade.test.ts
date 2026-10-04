@@ -30,7 +30,7 @@ import {
   pieceOwnerColor,
 } from '../src/blockade.js'
 import { SQUARE_SIZE, boardAreas, findBoardAsset, mapTop } from '../src/board.js'
-import type { BoardPiece } from '../src/board.js'
+import type { BoardPiece, Rotation } from '../src/board.js'
 import { coinSourcesOf, totalCoins } from '../src/coins.js'
 import { GREAT_PERSON_REFERENCE } from '../src/create-game.js'
 import { combatBonusOf } from '../src/combat-bonus.js'
@@ -61,6 +61,7 @@ function put(
   column: number,
   row: number,
   ownerId?: string,
+  rotation: Rotation = 0,
 ): GameState {
   const asset = findBoardAsset(assetId)
   if (asset === undefined) throw new Error(`no asset ${assetId}`)
@@ -70,6 +71,7 @@ function put(
       assetId,
       x: column * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2,
       y: mapTop(state.board) + row * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2,
+      rotation,
       ...(ownerId === undefined ? {} : { ownerId }),
     }),
   )
@@ -79,6 +81,29 @@ function lastPiece(state: GameState): BoardPiece {
   const piece = state.board.pieces.at(-1)
   if (piece === undefined) throw new Error('the board is empty')
   return piece
+}
+
+/** Places a metropolis with its image centre on the boundary between its two city squares. */
+function putMetropolis(
+  state: GameState,
+  playerId: string,
+  column: number,
+  row: number,
+  rotation: Rotation,
+): GameState {
+  const assetId = 'cities/redmetropolis2'
+  const asset = findBoardAsset(assetId)
+  if (asset === undefined) throw new Error(`no asset ${assetId}`)
+  const horizontal = rotation === 0 || rotation === 180
+  const centerX = (column + (horizontal ? 0 : 0.5)) * SQUARE_SIZE
+  const centerY = mapTop(state.board) + (row + (horizontal ? 0.5 : 0)) * SQUARE_SIZE
+  return unwrap(placePiece(state, {
+    playerId,
+    assetId,
+    x: centerX - asset.width / 2,
+    y: centerY - asset.height / 2,
+    rotation,
+  }))
 }
 
 /** The most recently placed piece's id, after `put`. */
@@ -490,6 +515,24 @@ describe('pieceOwnerColor', () => {
     expect(pieceOwnerColor(put(state, ITCHI, 'cities/redcity2', 5, 3), general)).toBe('blue')
   })
 
+  it.each([
+    [0, 3, 5],
+    [180, 3, 5],
+    [90, 5, 3],
+    [270, 5, 3],
+  ] as const)(
+    'uses the metropolis outskirts for city ownership and blockade at rotation %s',
+    (rotation, column, row) => {
+      let state = putMetropolis(game(), CASH1981, 5, 5, rotation)
+      let token: BoardPiece
+      ;[state, token] = put2(state, KARANDRAS1, 'great people/general', column, row)
+
+      expect(pieceOwnerColor(state, token)).toBe('red')
+      state = put(state, KARANDRAS1, 'figures/bluescout', column, row)
+      expect(isBlockaded(state, token)).toBe(true)
+    },
+  )
+
   it('falls back to who placed the piece when cities of two colours are around it', () => {
     let state = game()
     let general: BoardPiece
@@ -642,6 +685,36 @@ describe('Great People coins', () => {
       expect(coins(unwrap(removePiece(state, { playerId: CASH1981, pieceId: piece.id })))).toBe(0)
     },
   )
+
+  it.each([
+    [0, 3, 5],
+    [180, 3, 5],
+    [90, 5, 3],
+    [270, 5, 3],
+  ] as const)('counts a token in a metropolis outskirts square at rotation %s', (rotation, column, row) => {
+    let state = putMetropolis(game(), CASH1981, 5, 5, rotation)
+    state = put(state, CASH1981, 'great people/merchant', column, row)
+
+    expect(coins(state)).toBe(1)
+    state = put(state, KARANDRAS1, 'figures/bluescout', column, row)
+    expect(coins(state)).toBe(0)
+  })
+
+  it.each([
+    [0, 5, 5],
+    [180, 5, 5],
+    [90, 5, 5],
+    [270, 5, 5],
+    [0, 4, 5],
+    [180, 4, 5],
+    [90, 5, 4],
+    [270, 5, 4],
+  ] as const)('does not count a token on a metropolis center square at rotation %s', (rotation, column, row) => {
+    let state = putMetropolis(game(), CASH1981, 5, 5, rotation)
+    state = put(state, CASH1981, 'great people/merchant', column, row)
+
+    expect(coins(state)).toBe(0)
+  })
 
   it('gives nothing in the player area, away from the cities or for the other tokens', () => {
     let state = put(game(), CASH1981, 'cities/redcity2', 5, 5)

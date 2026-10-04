@@ -540,8 +540,9 @@ Canal, Organized Religion and Sheet — and the status table's Coins column show
 the read-only total. Coin-token techs hold up to four coins (six with an active
 Internet); static card sources hold one. Bank, Adam Smith, Great People, Sheet
 and Panama Canal have no shared cap. Bank coins are derived per unblocked Bank
-in a uniquely owned city footprint; Sheet remains the manual path for map gaps
-and scout transfers. Adam Smith adds one separate coin while revealed and
+in a uniquely owned city footprint, including the ten outskirts around a
+metropolis in either orientation; Sheet remains the manual path for scout
+transfers. Adam Smith adds one separate coin while revealed and
 usable, in addition to Merchant token coins.
 
 Coin-token techs, Organized Religion, Democracy (Govt) and Panama Canal appear
