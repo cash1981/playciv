@@ -296,7 +296,8 @@ describe('chat', () => {
 describe('posted orders', () => {
   it('emails the others like a chat message and excludes the author', async () => {
     const creator = await register('phase-a')
-    const gameId = await createGame(creator.token, 'phase mail', 3)
+    // Two seats, so the second join starts the game: a game that has not started takes no orders
+    const gameId = await createGame(creator.token, 'phase mail', 2)
     const other = await register('phase-b')
     await join(other.token, gameId)
     mailer.sent.length = 0

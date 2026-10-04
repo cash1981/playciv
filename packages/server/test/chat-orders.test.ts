@@ -241,6 +241,76 @@ describe('marking phases done and not done', () => {
   })
 })
 
+describe('a game that has not started', () => {
+  /** A table of four with one player in it. */
+  async function lobby(name: string): Promise<{ gameId: string; creator: string }> {
+    const creator = await register(`${name}-a`)
+    const created = await inject(app, {
+      method: 'POST',
+      url: '/api/games',
+      headers: bearer(creator),
+      payload: { name, numOfPlayers: 4 },
+    })
+    expect(created.status).toBe(201)
+    return { gameId: (await created.json() as { id: string }).id, creator }
+  }
+
+  const join = async (token: string, gameId: string) =>
+    post(token, `/api/games/${gameId}/join`)
+
+  it('takes no order and no done marker, and writes no board marker, turn row or chat row', async () => {
+    const table = await lobby('lobby')
+    const before = await loadGame(table.gameId)
+    expect(before.players).toHaveLength(1)
+    const rows = (await repo.chatFor(table.gameId)).length
+
+    const attempts = [
+      post(table.creator, `/api/games/${table.gameId}/turns/order`, { phase: 'SOT', markdown: 'too early' }),
+      post(table.creator, `/api/games/${table.gameId}/turns/done`, { phase: 'SOT' }),
+      post(table.creator, `/api/games/${table.gameId}/turns/undone`, { phase: 'SOT', turnNumber: 1 }),
+    ]
+    for (const response of await Promise.all(attempts)) {
+      expect(response.status).toBe(409)
+      expect(response.body).toContain('GAME_NOT_STARTED')
+    }
+
+    const after = await loadGame(table.gameId)
+    expect(after).toEqual(before)
+    expect(after.board).toEqual(before.board)
+    expect(after.players[0]?.playerTurns).toEqual([])
+    expect(after.publicTurns).toEqual({})
+    expect((await repo.chatFor(table.gameId)).length).toBe(rows)
+    expect(JSON.stringify(await timeline(table.creator, table.gameId))).not.toContain('too early')
+  })
+
+  it('has no active turn in the game view, whoever asks', async () => {
+    const table = await lobby('lobby-view')
+    const second = await register('lobby-view-b')
+    expect((await join(second, table.gameId)).status).toBe(200)
+
+    for (const token of [table.creator, second]) {
+      const view = await (await get(token, `/api/games/${table.gameId}`)).json<PlayerView>()
+      expect(view.activeTurn).toBeNull()
+    }
+    expect((await inject(app, { url: `/api/games/${table.gameId}` })).body).toContain('"activeTurn":null')
+  })
+
+  it('starts the first turn as usual when the table fills', async () => {
+    const table = await lobby('lobby-fills')
+    for (const suffix of ['b', 'c', 'd']) {
+      expect((await join(await register(`lobby-fills-${suffix}`), table.gameId)).status).toBe(200)
+    }
+    const view = await (await get(table.creator, `/api/games/${table.gameId}`)).json<PlayerView>()
+    expect(view.activeTurn).toMatchObject({ turnNumber: 1, phase: 'SOT' })
+    expect((await loadGame(table.gameId)).players.some((player) => player.yourTurn)).toBe(true)
+
+    const posted = await post(table.creator, `/api/games/${table.gameId}/turns/order`, { phase: 'SOT', markdown: 'first order' })
+
+    expect(posted.status).toBe(200)
+    expect((await repo.chatFor(table.gameId)).filter((entry) => entry.kind === 'order').map((entry) => entry.message)).toEqual(['first order'])
+  })
+})
+
 describe('a game adopted from the old view', () => {
   it('has no route left for the old Turn orders panel', async () => {
     const game = await startedGame('no-classic-routes')
