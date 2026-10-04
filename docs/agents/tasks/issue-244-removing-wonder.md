@@ -3,7 +3,7 @@
 - **Slug:** `issue-244-removing-wonder`
 - **Branch:** `fix/issue-244-removing-wonder`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -18,7 +18,7 @@ Issue #244 reports that removing a wonder currently removes its token/building, 
 **In:**
 
 - Change the Wonders panel's Remove behavior to disable a wonder rather than delete its board piece.
-- Ensure disabled wonders do not retain the reported effect.
+- Ensure clearing ownership turns off current owner-based wonder bonuses.
 - Add regression coverage and document any visible behavior change.
 
 **Out:**
@@ -27,24 +27,20 @@ Issue #244 reports that removing a wonder currently removes its token/building, 
 
 ## Reference
 
-Today `WondersPanel.tsx` calls `api.removePiece`, which removes the `BoardPiece`; `setWonderOwner` is a separate existing action. Existing owner-dependent wonder bonuses check `ownerId`. The current engine does not model city devotion as an action, so the issue's “culture token” reference needs clarification before choosing the state change.
+Today `WondersPanel.tsx` calls `api.removePiece`, which removes the `BoardPiece`; `setWonderOwner` is a separate existing action. Existing owner-dependent wonder bonuses check `ownerId`. The human clarified that the physical piece should remain and its bonuses should turn off; the culture-token behavior is out of scope for this fix.
 
 ## Approach
 
-Pending clarification: establish what “disable” means in game state and how the culture token is represented, then implement the smallest engine/UI change and regression tests.
+Use the existing reversible `setWonderOwner(..., null)` action when the user disables an owned wonder. Label the control “Disable”, and keep the wonder piece visible in the Wonders panel and on the board. An unowned wonder already has no owner-based bonuses, so it has no Disable control.
 
 ## Claimed paths
 
 - `packages/web/src/views/WondersPanel.tsx`
 - `packages/web/src/views/WondersPanel.test.tsx`
-- `packages/engine/src/actions/board.ts`
-- `packages/engine/src/board.ts`
 - `packages/engine/test/board.test.ts`
 - `packages/engine/test/culture-hand-size.test.ts`
 - `packages/engine/test/combat-bonus.test.ts`
-- `packages/server/src/routes/board.ts`
 - `packages/server/test/board-api.test.ts`
-- `packages/web/src/lib/api.ts`
 - `docs/agents/tasks/issue-244-removing-wonder.md`
 - `docs/agents/task-board.md`
 - `docs/agents/state.md`
@@ -52,13 +48,12 @@ Pending clarification: establish what “disable” means in game state and how 
 
 ## Acceptance criteria
 
-- [ ] Removing a wonder disables it without deleting its board piece.
-- [ ] A disabled wonder does not produce the effect described in issue #244.
-- [ ] Regression tests cover removal, persistence and the effect.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
-- [ ] Browser-verified in the Wonders panel and relevant game view.
+- [x] Disabling an owned wonder clears its owner and preserves the board piece.
+- [x] Current owner-based wonder bonuses stop when the owner is cleared.
+- [x] Regression tests cover the UI action, persisted board piece, and disabled bonuses.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build` pass.
+- [ ] Browser-verified in the Wonders panel and relevant game view. (The local dev store has no game; UI behavior is covered by component tests.)
 
 ## Open questions
 
-- Should “disable” mean clearing the wonder's owner (which turns off current owner-based bonuses), or a separate disabled state?
-- What is the “culture token on the wonder” and what should happen to it when the wonder is disabled? The current engine has no city-devotion action.
+None. The human asked to leave the culture token behavior out of scope for now.

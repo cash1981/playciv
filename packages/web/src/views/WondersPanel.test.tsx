@@ -98,18 +98,41 @@ describe('WondersPanel', () => {
     expect(screen.getByText('The Internet')).toBeTruthy()
   })
 
-  it('removes a wonder from the panel via its own Remove button (issue #191)', async () => {
+  it('disables an owned wonder without removing its board piece (issue #244)', async () => {
+    const ownedPiece = { ...internetPiece, ownerId: 'alice' }
+    const ownedView = {
+      ...view,
+      board: { ...view.board, pieces: [ownedPiece, redArmyPiece] },
+    } as unknown as PlayerView
+    const disabledView = {
+      ...ownedView,
+      board: { ...ownedView.board, pieces: [{ ...ownedPiece, ownerId: null }, redArmyPiece] },
+    } as unknown as PlayerView
+    const setOwner = vi.spyOn(api, 'setWonderOwner').mockResolvedValue(disabledView)
     const removePiece = vi.spyOn(api, 'removePiece').mockResolvedValue(view)
-    render(<WondersPanel gameId="g" view={view} busy={false} readOnly={false} run={run} />)
+    const { rerender } = render(
+      <WondersPanel gameId="g" view={ownedView} busy={false} readOnly={false} run={run} />,
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Wonders in play (1)' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Remove The Internet' }))
-    await waitFor(() => expect(removePiece).toHaveBeenCalledWith('g', 'internet'))
+    fireEvent.click(screen.getByRole('button', { name: 'Disable The Internet' }))
+    await waitFor(() => expect(setOwner).toHaveBeenCalledWith('g', 'internet', null))
+    expect(removePiece).not.toHaveBeenCalled()
+
+    rerender(
+      <WondersPanel gameId="g" view={disabledView} busy={false} readOnly={false} run={run} />,
+    )
+    expect(screen.getByText('The Internet')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Disable The Internet' })).toBeNull()
   })
 
-  it('disables the Remove button in a read-only view', () => {
-    render(<WondersPanel gameId="g" view={view} busy={false} readOnly={true} run={run} />)
+  it('disables the Disable button in a read-only view', () => {
+    const ownedView = {
+      ...view,
+      board: { ...view.board, pieces: [{ ...internetPiece, ownerId: 'alice' }, redArmyPiece] },
+    } as unknown as PlayerView
+    render(<WondersPanel gameId="g" view={ownedView} busy={false} readOnly={true} run={run} />)
     expect(
-      (screen.getByRole('button', { name: 'Remove The Internet', hidden: true }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Disable The Internet', hidden: true }) as HTMLButtonElement).disabled,
     ).toBe(true)
   })
 })

@@ -59,14 +59,16 @@ export function WondersPanel({
                     ))}
                   </select>
                 </label>
-                <button
-                  className="small danger"
-                  aria-label={`Remove ${piece.label}`}
-                  disabled={busy || readOnly}
-                  onClick={() => void run(() => api.removePiece(gameId, piece.id))}
-                >
-                  Remove
-                </button>
+                {piece.ownerId != null && (
+                  <button
+                    className="small"
+                    aria-label={`Disable ${piece.label}`}
+                    disabled={busy || readOnly}
+                    onClick={() => void run(() => api.setWonderOwner(gameId, piece.id, null))}
+                  >
+                    Disable
+                  </button>
+                )}
               </li>
             )
           })}

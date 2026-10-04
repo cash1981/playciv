@@ -128,6 +128,12 @@ describe('combatBonusOf', () => {
     }))
     expect(bonus(owned, KARANDRAS1)).toBe(6)
     expect(bonus(owned, CASH1981)).toBe(0)
+
+    const disabled = unwrap(setWonderOwner(owned, {
+      playerId: CASH1981, pieceId: wonder.id, ownerId: null,
+    }))
+    expect(bonus(disabled, KARANDRAS1)).toBe(0)
+    expect(disabled.board.pieces.some((piece) => piece.id === wonder.id)).toBe(true)
   })
 
   it('counts an owned Statue of Zeus that sits outside the Wonders area, as Egypt\'s starting wonder does', () => {

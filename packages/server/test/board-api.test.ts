@@ -138,7 +138,7 @@ describe('player areas', () => {
 })
 
 describe('history over HTTP', () => {
-  it('sets a wonder owner through the public board route and records it in history', async () => {
+  it('assigns and disables a wonder through the public board route without deleting its piece', async () => {
     const { gameId, starter } = await startedGame('WonderOwner')
     const placed = await place(gameId, starter, 'wonders/internet', 1300, 1800)
     const piece = (await placed.json() as { board: { pieces: { id: string }[] } }).board.pieces[0]
@@ -161,6 +161,26 @@ describe('history over HTTP', () => {
     const view = await response.json() as { board: { pieces: { id: string; ownerId?: string }[]; history: { change: { kind: string } }[] } }
     expect(view.board.pieces.find((candidate) => candidate.id === piece.id)?.ownerId).toBe(ownerId)
     expect(view.board.history.at(-1)?.change.kind).toBe('owner')
+
+    const disabled = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/owner`,
+      headers: bearer(starter),
+      payload: { ownerId: null },
+    })
+    expect(disabled.status).toBe(200)
+    const disabledView = await disabled.json() as {
+      board: { pieces: { id: string; ownerId?: string | null }[]; history: { change: { kind: string } }[] }
+    }
+    expect(disabledView.board.pieces).toHaveLength(1)
+    expect(disabledView.board.pieces[0]?.id).toBe(piece.id)
+    expect(disabledView.board.pieces[0]?.ownerId).toBeNull()
+    expect(disabledView.board.history.at(-1)?.change.kind).toBe('owner')
+
+    const persisted = await repo.findGame(gameId)
+    expect(persisted?.board.pieces).toHaveLength(1)
+    expect(persisted?.board.pieces[0]?.id).toBe(piece.id)
+    expect(persisted?.board.pieces[0]?.ownerId).toBeNull()
   })
 
   it('records every change with a description and a timestamp', async () => {

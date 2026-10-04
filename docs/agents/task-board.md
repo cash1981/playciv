@@ -12,29 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### issue-244-removing-wonder
-
-- **Owner:** Codex (GPT-6)
-- **Branch:** `fix/issue-244-removing-wonder`
-- **Brief:** `docs/agents/tasks/issue-244-removing-wonder.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/WondersPanel.tsx`
-  - `packages/web/src/views/WondersPanel.test.tsx`
-  - `packages/engine/src/actions/board.ts`
-  - `packages/engine/src/board.ts`
-  - `packages/engine/test/board.test.ts`
-  - `packages/engine/test/culture-hand-size.test.ts`
-  - `packages/engine/test/combat-bonus.test.ts`
-  - `packages/server/src/routes/board.ts`
-  - `packages/server/test/board-api.test.ts`
-  - `packages/web/src/lib/api.ts`
-  - `docs/agents/tasks/issue-244-removing-wonder.md`
-  - `docs/agents/task-board.md`
-  - `docs/agents/state.md`
-  - `docs/agents/decisions.md`
-- **Notes:** Waiting on the meaning of “disable” and the culture token behavior in issue #244.
-
 ---
 
 ## Format
