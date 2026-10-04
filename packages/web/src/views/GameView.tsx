@@ -620,11 +620,24 @@ export function GameView({
 // ---------------------------------------------------------------------------
 
 /**
- * The server writes exactly this line for the revision in which a game ends with
- * a named winner. It already says who did it, so the replay bar shows it alone,
- * without the actor (the admin who pressed End game).
+ * The line a revision shows when a game ended with a named winner: only the
+ * winner, without a `System: ` prefix and without the actor (the admin who
+ * pressed End game). Two forms are recognised, both anchored on the whole
+ * description:
+ *
+ * - `<winner> won the game! Congratulations!`, what the server writes now;
+ * - `System: <winner> won the game! Congratulations! · System: <admin> Ended
+ *   this game`, what revisions stored earlier hold (the two log lines joined).
+ *
+ * `null` for any other description, so one that merely ends with the winner
+ * text (`Ended this game · cash won the game! Congratulations!`) keeps its actor.
  */
-export const isWinnerLine = (description: string): boolean => /^.+ won the game! Congratulations!$/.test(description)
+export const winnerOnlyLine = (description: string): string | null => {
+  // The winner name may not contain the joining " · ", or a description that
+  // starts with another line would be read as a winner name.
+  const match = /^(?:System: )?([^·]+? won the game! Congratulations!)(?: · System: [^·]+ Ended this game)?$/.exec(description)
+  return match?.[1] ?? null
+}
 
 export function GlobalReplayBar({
   revisions,
@@ -644,6 +657,7 @@ export function GlobalReplayBar({
     ? revisions.length - 1
     : revisions.findIndex((entry) => entry.revision === selectedRevision)
   const current = revisions[Math.max(0, selectedIndex)]
+  const winnerLine = current === undefined ? null : winnerOnlyLine(current.publicDescription)
   const hasNewer = selectedRevision !== null && selectedIndex < revisions.length - 1
   const canGoBack = selectedIndex > 0
   const canGoForward = selectedRevision !== null && selectedIndex >= 0 && selectedIndex < revisions.length - 1
@@ -678,8 +692,8 @@ export function GlobalReplayBar({
       </span>
       {hasNewer && <span className="tag revealed">Newer revisions available</span>}
       <span className="muted replay-what">
-        {current?.publicDescription ?? ''}
-        {current !== undefined && !isWinnerLine(current.publicDescription) && ` — ${current.actor.username}`}
+        {winnerLine ?? current?.publicDescription ?? ''}
+        {current !== undefined && winnerLine === null && ` — ${current.actor.username}`}
       </span>
     </div>
   )
