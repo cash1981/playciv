@@ -4513,7 +4513,7 @@ question for the human.
 - The single chat PR (#242) removed the admin chat orders switch, the one unrecorded admin
   write the delta work was built around, and the baton actions (`endTurn`) its tests played
   games with. Merged with main: the tests pass the turn with `passTurn` (the holder marks
-  every phase done, `tests/revision-fixtures.ts`) and use a renamed game as the stand-in for
+  every phase done, `packages/server/test/revision-fixtures.ts`) and use a renamed game as the stand-in for
   "an admin write without a revision".
 - The one real unrecorded admin write left is the "Move old games to the single chat" run.
   It saves with `saveGameIfRevision`, which seals the newest revision, so nothing in the
