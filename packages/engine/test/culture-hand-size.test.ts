@@ -75,6 +75,19 @@ function withValmiki(state: GameState, hidden: boolean): GameState {
   }
 }
 
+function withBlockadeColors(state: GameState): GameState {
+  return {
+    ...state,
+    players: state.players.map((player) =>
+      player.playerId === CASH1981
+        ? { ...player, color: 'Red' }
+        : player.playerId === KARANDRAS1
+          ? { ...player, color: 'Blue' }
+          : player,
+    ),
+  }
+}
+
 describe('cultureHandSizeOf', () => {
   it('is 2 for a player with nothing', () => {
     expect(sizeOf(firstCivGame())).toBe(2)
@@ -128,6 +141,60 @@ describe('cultureHandSizeOf', () => {
 
   it('counts Valmiki as +2', () => {
     expect(sizeOf(withValmiki(firstCivGame(), false))).toBe(4)
+  })
+
+  it('suppresses Valmiki while every tracked Artist or Thinker token is blockaded', () => {
+    const state = withBlockadeColors(withValmiki(firstCivGame(), false))
+    const withArtist = unwrap(placePiece(state, {
+      playerId: CASH1981, assetId: 'great people/artist', x: 40, y: 300,
+    }))
+    expect(sizeOf(withArtist)).toBe(4)
+
+    const blockaded = unwrap(placePiece(withArtist, {
+      playerId: KARANDRAS1, assetId: 'figures/bluearmy', x: 40, y: 300,
+    }))
+    expect(sizeOf(blockaded)).toBe(2)
+    expect(toPlayerView(blockaded, CASH1981).you?.stats.cultureHandSize).toBe(2)
+    expect(toPlayerView(blockaded, ITCHI).opponents.find((opponent) => opponent.playerId === CASH1981)?.stats.cultureHandSize).toBe(2)
+
+    const army = blockaded.board.pieces.at(-1)
+    if (army === undefined) throw new Error('the army should be on the board')
+    const unblocked = unwrap(removePiece(blockaded, { playerId: KARANDRAS1, pieceId: army.id }))
+    expect(sizeOf(unblocked)).toBe(4)
+  })
+
+  it('keeps Valmiki usable while at least one tracked Artist or Thinker token is free', () => {
+    const state = withBlockadeColors(withValmiki(firstCivGame(), false))
+    let next = unwrap(placePiece(state, {
+      playerId: CASH1981, assetId: 'great people/artist', x: 40, y: 300,
+    }))
+    next = unwrap(placePiece(next, {
+      playerId: CASH1981, assetId: 'great people/artist', x: 140, y: 300,
+    }))
+    next = unwrap(placePiece(next, {
+      playerId: KARANDRAS1, assetId: 'figures/bluearmy', x: 40, y: 300,
+    }))
+
+    expect(sizeOf(next)).toBe(4)
+
+    next = unwrap(placePiece(next, {
+      playerId: KARANDRAS1, assetId: 'figures/bluearmy', x: 140, y: 300,
+    }))
+    expect(sizeOf(next)).toBe(2)
+  })
+
+  it('does not reveal hidden Valmiki through Artist or Thinker blockade state', () => {
+    let state = withBlockadeColors(withValmiki(firstCivGame(), true))
+    state = unwrap(placePiece(state, {
+      playerId: CASH1981, assetId: 'great people/artist', x: 40, y: 300,
+    }))
+    state = unwrap(placePiece(state, {
+      playerId: KARANDRAS1, assetId: 'figures/bluearmy', x: 40, y: 300,
+    }))
+
+    expect(sizeOf(state)).toBe(2)
+    expect(toPlayerView(state, CASH1981).you?.stats.cultureHandSize).toBe(2)
+    expect(toPlayerView(state, ITCHI).opponents.find((opponent) => opponent.playerId === CASH1981)?.stats.cultureHandSize).toBe(2)
   })
 
   it('takes Valmiki\'s +2 away again when the card is discarded', () => {

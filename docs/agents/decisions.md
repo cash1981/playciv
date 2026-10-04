@@ -4636,3 +4636,19 @@ expansions.
 
 - A metropolis occupies two adjacent city-center squares along its long axis and has ten outskirts squares: the union of each center's eight neighbors, excluding both centers. Rotation 0/180 uses the horizontal axis; 90/270 uses the vertical axis. Its visual center sits on the boundary between those two center squares; the map-cell calculation floors to the eastern/southern square, so the pair is `[anchor−1, anchor]` on the long axis.
 - Shared city ownership, blockade, Bank coins and Great Person outskirts coins all use this footprint. Scout-held coin tracking remains manual because the board does not record the scout-gathering state.
+
+## 2026-10-04: the Shipyard is drawn at the size of the other buildings
+
+- The board draws a piece at the size in `board-assets.json`, which for buildings was the source
+  image size. The Shipyard art is 108 px, a quarter larger than the other buildings (82 to 87 px),
+  so it looked too big on the map. `tools/board-assets.ps1` now caps a building's longer side at
+  87 px (same pattern as the relic and disaster caps), which changes only the Shipyard to 87 x 87.
+- `board-assets.json` says "do not edit by hand", but the source art (`Civilization/Moderator`) is
+  not on every machine, so that one entry was edited to the value the tool now writes. A
+  regeneration gives the same file.
+- Pieces already on a board keep the size they were placed with. A Shipyard placed before this
+  change stays large until it is removed and placed again.
+## 2026-10-04: Valmiki follows Artist or Thinker blockade (issue #253 B1)
+
+- A revealed Valmiki adds +2 culture hand size only while the Great Person ability is usable under the existing blockade policy. If a player has one or more tracked Artist or Thinker tokens on the map and every one is blockaded, the bonus is suppressed; it returns when any tracked token becomes unblocked.
+- Preserve issue #241's compatibility behavior: no tracked token does not imply a blockade, because token locations need not be tracked. Hidden Valmiki still contributes nothing for either owner or opponents. The value is derived from the public board each time, so moves, removal, undo and replay need no stored flag.

@@ -167,6 +167,15 @@ describe('the manifest', () => {
     expect(disasters.every((asset) => asset.id === asset.path.replace(/\.png$/, ''))).toBe(true)
   })
 
+  it('draws every building at about the same size, the Shipyard included', () => {
+    const buildings = BOARD_ASSETS.filter((asset) => asset.category === 'building')
+    expect(buildings.length).toBeGreaterThan(0)
+    // The Shipyard source art is 108 px, a quarter larger than the others, so the
+    // longer side is capped at 87 (the board draws this size).
+    expect(buildings.every((asset) => Math.max(asset.width, asset.height) <= 87)).toBe(true)
+    expect(findBoardAsset('buildings/shipyard')).toMatchObject({ width: 87, height: 87 })
+  })
+
   it('has the five neutral city-states', () => {
     const cityStates = BOARD_ASSETS.filter((asset) => asset.category === 'citystate')
     expect(cityStates).toHaveLength(5)
