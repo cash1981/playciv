@@ -532,8 +532,8 @@
       "category": "building",
       "path": "buildings/shipyard.png",
       "label": "Shipyard",
-      "width": 108,
-      "height": 108
+      "width": 87,
+      "height": 87
     },
     {
       "id": "buildings/temple",
