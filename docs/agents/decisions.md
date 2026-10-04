@@ -4521,6 +4521,65 @@ question for the human.
   no revision, seals the newest one, and that the next revision is a keyframe that carries
   the move. The deploy order is unchanged, with this run in the place of the switch.
 
+## 2026-10-04: an enemy figure blockades a building or Great Person (issue #241)
+
+The human asked for buildings and Great Persons to be disabled when an enemy army or
+scout stands on them, with the General's combat bonus dropping by 4 and the coins of
+Builder, Merchant and Humanitarian following the token. This is the base game blockade
+rule (rulebook p. 27, "A square may be blockaded even if it contains a building or a great
+person"; FAQ 2.0 p. 2 and p. 5), not a new rule, and it has nothing to do with the
+expansions.
+
+- **Derived, not stored.** `blockade.ts` computes everything from the board each time it
+  is read, like the combat bonus (#197). Undo, redo, replay and old games therefore work
+  with no migration. A piece is blockaded when a `figure` of another colour stands in the
+  same map square; the player areas and the culture track never blockade.
+- **Owner of a building or Great Person.** The colour of the city (not a city-state) in the
+  same square or the 8 squares around it, the outskirts. If cities of more than one colour
+  are around, or none, the colour of the `placedBy` player. The white army counts as the
+  Russian player's colour; with no Russia player it is an enemy of everyone, with a Russia
+  player that has no colour it blockades nobody.
+- **The Great Person card.** Per FAQ 2.0 p. 5 a card ability works as long as at least one
+  token of its type is not blockaded. The card is marked disabled (struck through, tagged
+  "Blockaded") only when the player has tokens of that type on the map and all of them are
+  blockaded. A type with no token on the map is not marked, because players need not track
+  tokens. Hence **no random-disable button**: the issue first asked for one, but which
+  token is blockaded is a fact on the board. `discardRandomGreatPerson` is unchanged. The
+  list of types is `view.you.blockadedGreatPersonTypes`, built from the public board and the
+  viewer's own colour, never from the hand, and it is not in `opponents`.
+- **Combat.** A Barracks, Shipyard, Military Dock, Academy or General adds nothing while a
+  figure of another colour than its `placedBy` player stands in its square (a General is 4).
+  The attribution stays `placedBy`, as in #197, so a player's own scout never switches off
+  their own building. The board marker uses the city colour owner instead, so on a piece
+  placed by one player inside another colour's outskirts the board can show a struck-through
+  piece whose combat bonus does not move, or the other way round. Both go back to agreeing
+  when the piece is in the outskirts of its placer's own city, which is the normal case.
+- **Coins.** The "Great People" counter is derived: one coin for each Builder, Merchant and
+  Humanitarian token that stands in the outskirts of one of the owner's cities and is not
+  blockaded. A token in a player area or off the map gives nothing, and a removed token
+  takes its coin with it. The row is read-only, has no printed limit, and
+  `setCoinSource` refuses it with `COIN_SOURCE_NOT_EDITABLE` (400). The old manual value is
+  ignored on read, so a game where someone typed 1 there shows 0 until a token is on the
+  map. The same applies to the standings of games that are already over, which are recomputed
+  from the state on every listing; the rating rows already written are unchanged.
+  `coinOnReveal('greatPeople')` is now 0 because the row has no limit.
+- **Marker, not lock.** A blockaded card keeps its buttons; the board piece is greyed with
+  a diagonal strike and a tooltip.
+- **Wonders (added at the human's request, same PR).** A wonder marker on a map square is
+  blockaded by an enemy figure in its square, like a building. Its owner is the player in
+  `ownerId` (assigned in the Wonders panel); a wonder with no `ownerId` falls back to the
+  city colour, then `placedBy`, which decides the board marker only: the three effects
+  below need an explicit owner. A wonder in the shared Wonders area or a player area is
+  never blockaded, since those are not map squares. Effects that exist in the engine and now
+  stop: Statue of Zeus (+6 combat), Cristo Redentor (+4 culture hand size), and the Panama
+  Canal counter, which shows 0 while blockaded and keeps its stored value for when the figure
+  leaves (FAQ 2.0 p. 4). The Coins tab shows a "blockaded" tag on that cell and no +/-
+  buttons. The Internet's coin-limit bonus needs the wonder in the Wonders area, so it can
+  never be blockaded. Culture produced by a wonder marker and the other wonder abilities are
+  not computed by this game, so there is nothing to switch off. The Wonders panel does not
+  show the state.
+- **Not done.** Production, trade and culture of blockaded squares are not computed from
+  the board in this game.
 ## 2026-10-04: disaster markers in the board Pieces palette
 
 - The four Moderator disaster images (`drought`, `forest`, `grassland`, `water`) are public board assets in their own **Disasters** category. They use the normal board-piece placement and drag behavior, with no per-piece supply cap or new disaster rules. A distinct category keeps them findable without treating them as game buildings in supply accounting.

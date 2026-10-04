@@ -9,6 +9,8 @@
  * system behind them, since the old status sheet was typed in by hand.
  */
 
+import { blockadeCheckFor } from './blockade.js'
+import type { BoardPiece } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
 /** Building asset ids that add to the combat bonus, and by how much. */
@@ -35,17 +37,32 @@ const STATUE_OF_ZEUS_BONUS = 6
  * A player's combat bonus. Buildings and generals are attributed by `placedBy`
  * (see `buildingCountOf` in `state.ts` for why); the Statue of Zeus counts only
  * for its explicit owner, wherever the piece sits (Egypt's starting wonder is
- * owned but lives in Egypt's own area, not the shared Wonders area).
+ * owned but lives in Egypt's own area, not the shared Wonders area). A building
+ * or general adds nothing while a figure of another colour than the player's
+ * own stands in its square (issue #241, the blockade rule; see `blockade.ts`),
+ * and so does the Statue of Zeus. That is judged against the colour of the
+ * player it is attributed to, so a player's own figure never switches off
+ * their own piece.
  */
 export function combatBonusOf(state: GameState, player: Playerhand): number {
   let bonus = 0
+  const colour = player.color?.toLowerCase()
+  const check = colour === undefined ? undefined : blockadeCheckFor(state)
+  const switchedOff = (piece: BoardPiece): boolean =>
+    colour !== undefined && check !== undefined && check(piece, colour)
 
   for (const piece of state.board.pieces) {
     if (piece.placedBy === player.playerId) {
-      bonus += BUILDING_BONUS[piece.assetId] ?? 0
-      if (piece.assetId === GENERAL_ASSET_ID) bonus += GENERAL_BONUS
+      const value =
+        (BUILDING_BONUS[piece.assetId] ?? 0) + (piece.assetId === GENERAL_ASSET_ID ? GENERAL_BONUS : 0)
+      if (value > 0 && !switchedOff(piece)) bonus += value
     }
-    if (piece.assetId === STATUE_OF_ZEUS_ASSET_ID && piece.ownerId === player.playerId) {
+    // A blockaded wonder's ability cannot be used (base rulebook p. 27).
+    if (
+      piece.assetId === STATUE_OF_ZEUS_ASSET_ID &&
+      piece.ownerId === player.playerId &&
+      !switchedOff(piece)
+    ) {
       bonus += STATUE_OF_ZEUS_BONUS
     }
   }

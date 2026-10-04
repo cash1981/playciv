@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { createGame, cultureCellCenter, findBoardAsset, joinGame, leaderAssetId } from '@civ/engine'
+import { createGame, cultureCellCenter, findBoardAsset, joinGame, leaderAssetId, mapTop } from '@civ/engine'
 import type { GameState } from '@civ/engine'
 
 import { legacyRatedGame } from '../src/migrate/legacy-rating.js'
@@ -190,6 +190,49 @@ it('uses the sum of player status coin counters for fresh-game placement', () =>
     { username: 'Alice', rank: 1 },
     { username: 'Bob', rank: 2 },
     { username: 'Carol', rank: 3 },
+  ])
+})
+
+it('counts the Great People coins from the board, not the stored counter (issue #241)', () => {
+  const base = finishedGameWithCultureMarkers(0, 0)
+  const square = (assetId: string, id: string, placedBy: string, column: number, row: number) => {
+    const asset = findBoardAsset(assetId)
+    if (asset === undefined) throw new Error(`asset ${assetId} missing`)
+    return {
+      id, assetId, path: asset.path, label: asset.label, category: asset.category,
+      x: column * base.board.squareSize + (base.board.squareSize - asset.width) / 2,
+      y: mapTop(base.board) + row * base.board.squareSize + (base.board.squareSize - asset.height) / 2,
+      width: asset.width, height: asset.height, rotation: 0 as const, placedBy,
+    }
+  }
+  const game = {
+    ...base,
+    board: {
+      ...base.board,
+      pieces: [
+        ...base.board.pieces,
+        square('cities/greencity2', 'carol-city', 'c', 5, 5),
+        square('great people/merchant', 'carol-merchant', 'c', 6, 5),
+      ],
+    },
+    // Bob's typed counter is ignored; Carol's merchant counts without any counter.
+    players: base.players.map((player) => player.playerId === 'b'
+      ? { ...player, stats: { ...player.stats, coinSources: { ...player.stats.coinSources, greatPeople: 3 } } }
+      : player),
+  }
+  expect(resultFromGame(game)?.participants).toEqual([
+    { username: 'Alice', rank: 1 },
+    { username: 'Carol', rank: 2 },
+    { username: 'Bob', rank: 3 },
+  ])
+
+  // An enemy army in the merchant's square takes the coin away again.
+  const army = square('figures/bluearmy', 'bob-army', 'b', 6, 5)
+  const blockaded = { ...game, board: { ...game.board, pieces: [...game.board.pieces, army] } }
+  expect(resultFromGame(blockaded)?.participants).toEqual([
+    { username: 'Alice', rank: 1 },
+    { username: 'Bob', rank: 2 },
+    { username: 'Carol', rank: 2 },
   ])
 })
 
