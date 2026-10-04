@@ -32,7 +32,6 @@ import {
   appendInfoLog,
   appendItemLog,
   appendLog,
-  appendPublicLog,
   appendRandomDiscardLog,
   createLogTexts,
 } from '../log.js'
@@ -43,14 +42,12 @@ import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
 import type { GameState, Playerhand, PlayerStats } from '../state.js'
 import {
-  activeTurnStatus,
   findPlayer,
   hasUserAccess,
   isCombatHandSizeValue,
   isMovementValue,
   withPlayer,
 } from '../state.js'
-import { TURN_PHASE_LABEL } from '../turn.js'
 
 import { placeUnchecked } from './board.js'
 import { draw, drawWonderToBoard } from './draw.js'
@@ -918,101 +915,6 @@ export function discardRandomGreatPerson(
   }
 
   return ok(appendRandomDiscardLog(next, player.username, player.playerId, discarded))
-}
-
-// ---------------------------------------------------------------------------
-// Turns
-// ---------------------------------------------------------------------------
-
-/**
- * Java: `PlayerAction.endTurn`.
- *
- * A warning, ported as it is: Java does not care who calls. It finds the
- * player who HAS the turn and passes it on, so one player can end another
- * player's turn. The authorisation lived in the resource layer.
- *
- * Java's other branch, an index-based variant for games made before
- * `playernumber` existed, is not ported. New games always have playernumber.
- */
-export interface EndTurnActor {
-  readonly playerId: string
-  readonly username: string
-}
-
-/**
- * New in the port, no Java counterpart: a "System" log line naming the newly
- * active player and the phase they should continue with, so the log (and, via
- * `notifications.turnEnded`, the "it's your turn" email) always says what to
- * do next rather than just who is up.
- */
-function activeTurnLogMessage(state: GameState): string | undefined {
-  const status = activeTurnStatus(state)
-  if (status === null) return undefined
-  return `Turn ${status.turnNumber} - it is now ${status.username}'s turn (${TURN_PHASE_LABEL[status.phase]} phase)`
-}
-
-// `_actor` is accepted (and passed by the route) but never read: Java's
-// endTurn does not care who calls, and membership is gated at the route.
-export function endTurn(state: GameState, _actor?: EndTurnActor): ActionResult {
-  const firstPlayer = state.players[0]
-
-  // Java kept a username/index fallback for games created before playernumber
-  // was introduced. MongoDB still contains such games, but old `pbf` games are
-  // never loaded as GameState (they are read-only — see the mongodb decision),
-  // so this branch only ever sees an unstarted new game, where no player has a
-  // playernumber yet. There is nothing to advance by index; report that plainly
-  // instead of guessing at a next player.
-  if ((firstPlayer?.playernumber ?? 0) <= 0) {
-    return err({ kind: 'GAME_NOT_STARTED' })
-  }
-
-  const current = state.players.find((player) => player.yourTurn)
-  if (current === undefined) return err({ kind: 'GAME_NOT_STARTED' })
-
-  const nextNumber = current.playernumber + 1
-  const firstNumberedPlayer = state.players.find((player) => player.playernumber === 1)
-  const nextPlayer =
-    state.players.find((player) => player.playernumber === nextNumber) ?? firstNumberedPlayer
-
-  if (nextPlayer === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId: '' })
-
-  const next: GameState = {
-    ...state,
-    players: state.players.map((player) => {
-      if (player.playerId === nextPlayer.playerId) return { ...player, yourTurn: true }
-      if (player.playerId === current.playerId) return { ...player, yourTurn: false }
-      return player
-    }),
-  }
-  const message = activeTurnLogMessage(next)
-  return ok(message === undefined ? next : appendInfoLog(next, message))
-}
-
-/**
- * Java: `PlayerAction.takeTurnButton` — takes the turn from anyone. It existed
- * to keep things moving when a player went missing.
- */
-export function takeTurn(state: GameState, playerId: string): ActionResult {
-  const access = requireAccess(state, playerId)
-  if (!access.ok) return access
-  const player = access.value
-
-  const next: GameState = {
-    ...state,
-    players: state.players.map((candidate) => ({
-      ...candidate,
-      yourTurn: candidate.playerId === playerId,
-    })),
-  }
-
-  const withLog = appendPublicLog(next, player.username, playerId, 'took turn button')
-  const message = activeTurnLogMessage(withLog)
-  return ok(message === undefined ? withLog : appendInfoLog(withLog, message))
-}
-
-/** Java: `PlayerAction.isYourTurn` — a plain read, with no throwing. */
-export function isYourTurn(state: GameState, playerId: string): boolean {
-  return findPlayer(state, playerId)?.yourTurn ?? false
 }
 
 /** Java: `PlayerAction.saveNote` — a private note, never in any public log. */

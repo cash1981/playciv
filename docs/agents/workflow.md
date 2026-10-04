@@ -125,9 +125,9 @@ The orchestrator drives it:
 
 4. Record anything worth keeping in `decisions.md`.
 
-In Claude this is the `/review-gate` skill; the `reviewer` and `rules-checker`
-subagents are in `.claude/agents/`. In OpenCode the `coder`, `reviewer` and
-`rules-checker` agents are in `.opencode/agents/`, and the `/review-gate` skill
+In Claude this is the `/review-gate` skill; the `coder` and `reviewer`
+subagents are in `.claude/agents/`. In OpenCode the `coder` and `reviewer`
+agents are in `.opencode/agents/`, and the `/review-gate` skill
 runs as before. In Codex, do the same by hand: generate the diff, open a
 separate conversation on a stronger model with the diff and the brief, and paste
 its report back.

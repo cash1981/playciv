@@ -351,13 +351,12 @@ export function movePieceUnchecked(
 }
 
 /**
- * Chat orders (issue #215): the start player is whoever's area holds the marker,
- * so a manual move can change it. Says so in the public log and remembers it as
- * the last known start player, for when the marker is later left outside every
- * area. Nothing at all when chat orders is off or another piece moved.
+ * The start player is whoever's area holds the marker, so a manual move can
+ * change it. Says so in the public log and remembers it as the last known start
+ * player, for when the marker is later left outside every area. Nothing at all
+ * when another piece moved.
  */
 function announceStartPlayer(before: GameState, after: GameState, pieceId: string): GameState {
-  if (!after.chatOrders) return after
   if (after.board.pieces.find((piece) => piece.id === pieceId)?.assetId !== START_PLAYER_ID) {
     return after
   }

@@ -3,7 +3,8 @@
  *
  * A turn has five phases. Each phase holds the current order and the history
  * of the versions its owner has *revealed*, so the players can see what was
- * published before. Saving never creates a version.
+ * published before. An order is published when it is posted, and every posted
+ * version is kept.
  *
  * `TurnKey.java` is not ported. It was an attempt at a composite key for
  * `publicTurns`, but Java could not get Jackson to serialise the map and ended
@@ -115,26 +116,6 @@ export function compareJavaStrings(a: string, b: string): number {
   return 0
 }
 
-/** Java: `compareTo` sorted on turn number, then username. */
-export function compareTurns(a: PlayerTurn, b: PlayerTurn): number {
-  return a.turnNumber - b.turnNumber || compareJavaStrings(a.username, b.username)
-}
-
-/**
- * Sets the order for one phase.
- *
- * Saving never creates a history version — only `revealTurnOrder` does — so
- * this no longer touches `history`.
- */
-export function withOrder(turn: PlayerTurn, phase: TurnPhase, order: string): PlayerTurn {
-  return {
-    ...turn,
-    orders: { ...turn.orders, [phase]: order },
-    // A changed order must be explicitly published again.
-    revealed: { ...turn.revealed, [phase]: false },
-  }
-}
-
 const isVersion = (entry: unknown): entry is TurnOrderVersion =>
   typeof entry === 'object' &&
   entry !== null &&
@@ -165,7 +146,7 @@ export function migratePlayerTurn(turn: PlayerTurn): PlayerTurn {
   return {
     ...turn,
     revealed,
-    // Turns saved before chat orders existed: a phase counts as done when it
+    // Turns saved before the done markers existed: a phase counts as done when it
     // was published, the same rule that backfills `revealed` above.
     done: Object.fromEntries(
       TURN_PHASES.map((phase) => [phase, turn.done?.[phase] ?? revealed[phase]]),
@@ -201,32 +182,6 @@ export function publicTurn(turn: PlayerTurn): PlayerTurn {
  */
 export function publicTurnKey(turn: PlayerTurn): string {
   return `${turn.turnNumber}${turn.username}`
-}
-
-/** Java: `PlayerTurn.endTurn()` bumped the turn number. */
-export function nextTurnNumber(turn: PlayerTurn): number {
-  return turn.turnNumber + 1
-}
-
-/**
- * New in the port, no Java counterpart. The phase a player should currently be
- * working on: the first phase of their given turn not yet revealed, or `SOT`
- * once every phase of that turn has been revealed (they are between rounds,
- * waiting to start the next one). A missing turn (nothing saved yet) is also
- * `SOT`. Never `null`, so a caller always has something concrete to point a
- * player at.
- *
- * Reads only the `revealed` flags, which are already public (`publicTurn`
- * masks order text, not these booleans), so this is safe to expose to anyone.
- *
- * A flag missing from a legacy, not-yet-migrated `revealed` map is treated as
- * revealed (blocking only on an explicit `false`), the same rule
- * `activeTurnStatus` uses to decide a turn is fully done — so the two never
- * disagree about whether a round is complete.
- */
-export function currentPhaseStatus(turn: PlayerTurn | undefined): TurnPhase {
-  if (turn === undefined) return 'SOT'
-  return TURN_PHASES.find((phase) => turn.revealed[phase] === false) ?? 'SOT'
 }
 
 // ---------------------------------------------------------------------------
@@ -275,7 +230,7 @@ export const bySeat = (players: readonly Playerhand[]): readonly Playerhand[] =>
  *
  * The current turn is the lowest one that some active player has not finished
  * (Research not marked done), counting from `chatOrdersStartTurn`. It is that
- * baseline (1 in a game that never played classic) when nobody has anything
+ * baseline (1 in a game that never used the old baton) when nobody has anything
  * yet, and it moves on by itself once the last player marks Research done.
  */
 export function turnStatus(state: GameState): TurnStatus {
@@ -379,7 +334,7 @@ export function startPlayerName(state: GameState, turnNumber: number): string | 
 }
 
 /**
- * Who "has the turn" when chat orders are on. There is no baton: it is the
+ * Who "has the turn". There is no baton: it is the
  * first player, in seat order starting from the start player, who has not
  * marked the earliest open phase done. The earliest open phase is the first one
  * some active player has not marked done in the current turn.
@@ -406,7 +361,18 @@ export function turnHolder(state: GameState, startPlayerNumber?: number): Player
   return ordered.find((player) => !isDone(turnOf(player, currentTurn), earliest))
 }
 
-/** One published version of a phase's order, as the classic Turn orders panel showed it. */
+/**
+ * Whether the game has started, that is, `startIfAllPlayers` has run. `yourTurn`
+ * stays as stored data for this reason: nobody has it until the table is full,
+ * then the first player gets it and nothing moves it any more (there is no baton).
+ * A withdrawn hand counts too, so a game whose first player has left is still
+ * started. A game that has not started takes no orders and has no active turn.
+ */
+export function gameHasStarted(state: GameState): boolean {
+  return [...state.players, ...state.withdrawnPlayers].some((player) => player.yourTurn)
+}
+
+/** One published version of a phase's order. */
 export interface PublicOrderVersion {
   readonly username: string
   readonly turnNumber: number
@@ -422,10 +388,10 @@ export interface PublicOrderVersion {
  * Every revealed version of every order, oldest first, read from the public copy
  * only (`publicTurns`), never from a player's own turns: a draft that was never
  * revealed is masked there and has no history entry, so it cannot be returned by
- * accident. Chat orders copies these into the timeline when it is first switched
- * on. A version without a usable `at` is left out rather than given a made-up
- * time. Orders revealed before versions were kept (old saves) have none and are
- * not returned.
+ * accident. The server copies these into the timeline when it migrates a game
+ * from the old Turn orders panel. A version without a usable `at` is left out
+ * rather than given a made-up time. Orders revealed before versions were kept (old
+ * saves) have none and are not returned here; `publicOrdersWithoutVersions` has them.
  */
 export function publicOrderVersions(state: GameState): readonly PublicOrderVersion[] {
   const versions = Object.values(state.publicTurns).flatMap((turn) =>
@@ -437,7 +403,11 @@ export function publicOrderVersions(state: GameState): readonly PublicOrderVersi
       ),
     ),
   )
-  return [...versions].sort(
+  return sortVersions(versions)
+}
+
+const sortVersions = (versions: readonly PublicOrderVersion[]): readonly PublicOrderVersion[] =>
+  [...versions].sort(
     (a, b) =>
       Date.parse(a.at) - Date.parse(b.at) ||
       a.turnNumber - b.turnNumber ||
@@ -445,4 +415,159 @@ export function publicOrderVersions(state: GameState): readonly PublicOrderVersi
       compareJavaStrings(a.username, b.username) ||
       a.index - b.index,
   )
+
+const usableTime = (at: string | null | undefined): at is string =>
+  typeof at === 'string' && !Number.isNaN(Date.parse(at))
+
+/** Used when neither the reveal log nor the game says when an old reveal happened. */
+const EPOCH = '1970-01-01T00:00:00.000Z'
+
+const revealKey = (turnNumber: number, username: string, label: string): string =>
+  `${turnNumber}\u0000${username}\u0000${label}`.toLowerCase()
+
+/**
+ * Finds `turn N - <user> revealed <phase label> phase` anywhere in a lowercased line; the lookahead
+ * lets matches overlap. The phase labels are interpolated unescaped, so they must stay plain letters
+ * and spaces (or be escaped first if a label ever gets a regex character).
+ */
+const REVEAL_LINE = new RegExp(
+  `(?=turn (\\d+) - (.+?) revealed (${Object.values(TURN_PHASE_LABEL).map((label) => label.toLowerCase()).join('|')}) phase)`,
+  'g',
+)
+
+/**
+ * The time of the newest reveal log line with a usable `createdAt`, per turn, user
+ * and phase label (all lowercased). One pass over the log, each line lowercased once.
+ */
+function revealLineTimes(state: GameState): ReadonlyMap<string, string> {
+  const times = new Map<string, string>()
+  for (let index = state.log.length - 1; index >= 0; index -= 1) {
+    const entry = state.log[index]
+    if (entry === undefined || !usableTime(entry.createdAt)) continue
+    for (const match of entry.publicLog.toLowerCase().matchAll(REVEAL_LINE)) {
+      const [, turn, user, label] = match
+      if (turn === undefined || user === undefined || label === undefined) continue
+      const key = `${turn}\u0000${user}\u0000${label}`
+      if (!times.has(key)) times.set(key, entry.createdAt)
+    }
+  }
+  return times
+}
+
+/**
+ * Orders that were revealed before versions were kept: a phase of a public turn
+ * that is revealed, holds text, and has an empty history (`migratePlayerTurn`
+ * drops the bare strings old saves kept there, so the text survives only in
+ * `publicTurns[key].orders[phase]`). Each becomes one version, so the migration
+ * can put it in the timeline. `publicOrderVersions` does not return these and
+ * keeps its meaning.
+ *
+ * `at` comes from the reveal's own log line, `Turn N - <user> revealed <phase>
+ * phase`, taking the newest match with a usable time because the text shown is the
+ * last one revealed. With no such line it is the game's `createdAt`, and when that
+ * is unusable too, the epoch `1970-01-01T00:00:00.000Z`: a stored time is never
+ * invented from the clock.
+ *
+ * Only `publicTurns` is read, never a player's own turns, so an unrevealed draft
+ * (blank or masked in the public copy) cannot be returned. Oldest first, in the
+ * order `publicOrderVersions` uses.
+ */
+export function publicOrdersWithoutVersions(state: GameState): readonly PublicOrderVersion[] {
+  const fallback = usableTime(state.createdAt) ? state.createdAt : EPOCH
+  // Built on the first phase that qualifies, so a game with no such order never reads its log
+  let revealedAtByKey: ReadonlyMap<string, string> | undefined
+  const revealedAt = (username: string, turnNumber: number, phase: TurnPhase): string => {
+    revealedAtByKey ??= revealLineTimes(state)
+    return revealedAtByKey.get(revealKey(turnNumber, username, TURN_PHASE_LABEL[phase])) ?? fallback
+  }
+  const versions = Object.values(state.publicTurns).flatMap((turn) =>
+    TURN_PHASES.flatMap((phase): readonly PublicOrderVersion[] => {
+      const markdown = turn.orders[phase] ?? ''
+      if (turn.revealed?.[phase] !== true || markdown.trim() === '' || (turn.history?.[phase] ?? []).length > 0) {
+        return []
+      }
+      return [
+        {
+          username: turn.username,
+          turnNumber: turn.turnNumber,
+          phase,
+          markdown,
+          at: revealedAt(turn.username, turn.turnNumber, phase),
+          index: 0,
+        },
+      ]
+    }),
+  )
+  return sortVersions(versions)
+}
+
+/** One order a player wrote in the old Turn orders panel and never published. */
+export interface UnpublishedDraft {
+  readonly playerId: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+  readonly markdown: string
+}
+
+/**
+ * Every draft that was never published, in player, turn and phase order: a
+ * non-blank `orders[phase]` while `revealed[phase]` is not true. This reads the
+ * players' own turns, so it is private data. It is for the migration only, and
+ * its result must go nowhere but back into the owner's own `gamenote`.
+ */
+export function unpublishedDrafts(state: GameState): readonly UnpublishedDraft[] {
+  return [...state.players, ...state.withdrawnPlayers].flatMap((player) =>
+    [...player.playerTurns]
+      .sort((a, b) => a.turnNumber - b.turnNumber)
+      .flatMap((turn) =>
+        TURN_PHASES.flatMap((phase): readonly UnpublishedDraft[] => {
+          const markdown = (turn.orders[phase] ?? '').trim()
+          return markdown === '' || turn.revealed[phase] === true
+            ? []
+            : [{ playerId: player.playerId, turnNumber: turn.turnNumber, phase, markdown }]
+        }),
+      ),
+  )
+}
+
+const draftSection = (draft: UnpublishedDraft): string =>
+  `### Turn ${draft.turnNumber}, ${TURN_PHASE_LABEL[draft.phase]} (unpublished draft)\n\n${draft.markdown}`
+
+/**
+ * The drafts `draftsToPrivateNote` would add: those whose section the owner's note
+ * does not already hold, word for word. The migration reports this count, so a
+ * second run says nothing is left to move.
+ */
+export function pendingDrafts(state: GameState): readonly UnpublishedDraft[] {
+  const noteOf = new Map(
+    [...state.players, ...state.withdrawnPlayers].map((player) => [player.playerId, player.gamenote ?? ''] as const),
+  )
+  return unpublishedDrafts(state).filter((draft) => !(noteOf.get(draft.playerId) ?? '').includes(draftSection(draft)))
+}
+
+/**
+ * Moves the unpublished drafts of the old Turn orders panel into their owners'
+ * private note (`gamenote`), which is what the private tab of the timeline shows.
+ * Each draft becomes a markdown section headed `### Turn N, <phase> (unpublished
+ * draft)`, added after whatever the note already says and separated by a blank
+ * line. A section the note already holds, word for word, is not added again, so a
+ * second run changes nothing. `publicTurns` and the players' own turns are left
+ * alone: nothing another player sees changes.
+ */
+export function draftsToPrivateNote(state: GameState): GameState {
+  const drafts = pendingDrafts(state)
+  if (drafts.length === 0) return state
+  const withNote = (player: Playerhand): Playerhand => {
+    const note = player.gamenote ?? ''
+    const sections = drafts
+      .filter((draft) => draft.playerId === player.playerId)
+      .map(draftSection)
+    if (sections.length === 0) return player
+    return { ...player, gamenote: [note.trimEnd(), ...sections].filter((part) => part !== '').join('\n\n') }
+  }
+  return {
+    ...state,
+    players: state.players.map(withNote),
+    withdrawnPlayers: state.withdrawnPlayers.map(withNote),
+  }
 }

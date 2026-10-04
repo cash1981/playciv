@@ -35,7 +35,7 @@ section.
 Severities:
 
 - **critical** — hidden information leaks, data loss, a rule that contradicts
-  the Java reference, or a security hole.
+  the rulebooks or the existing tests, or a security hole.
 - **major** — wrong behaviour a player would notice, a broken invariant, a test
   that passes by luck.
 - **minor** — works, but will cause trouble: a missing edge case, a brittle
@@ -47,7 +47,7 @@ Short, factual. Only mention what is actually wrong.
 
 - Engine purity (no clock, no randomness, no mutation of input):
 - Hidden information (nothing new in a projection without a test):
-- Java reference (deliberate differences recorded):
+- Behaviour changes (recorded in decisions.md):
 - TypeScript (no `!`, `import type`, `.js` specifiers):
 - Tests (fail when something real breaks):
 

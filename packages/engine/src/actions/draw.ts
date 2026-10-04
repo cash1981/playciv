@@ -47,24 +47,16 @@ function requirePlayer(
   return ok(player)
 }
 
-/** Java: `BaseAction.checkYourTurn`. */
-function requireYourTurn(player: Playerhand): Result<Playerhand, EngineError> {
-  if (!player.yourTurn) return err({ kind: 'NOT_YOUR_TURN', playerId: player.playerId })
-  return ok(player)
-}
-
 /**
- * Chat orders (issue #215) have no baton, so "your turn" is `turnHolder`. Anyone
- * else is refused with `NOT_YOUR_TURN` unless the caller has been warned and
- * confirmed (`confirmedOutOfTurn`). With chat orders off this is exactly
- * {@link requireYourTurn}.
+ * There is no baton, so "your turn" is `turnHolder`. Anyone else is refused with
+ * `NOT_YOUR_TURN` unless the caller has been warned and confirmed
+ * (`confirmedOutOfTurn`).
  */
 function requireTurn(
   state: GameState,
   player: Playerhand,
   confirmedOutOfTurn: boolean | undefined,
 ): Result<Playerhand, EngineError> {
-  if (!state.chatOrders) return requireYourTurn(player)
   if (turnHolder(state)?.playerId === player.playerId) return ok(player)
   if (confirmedOutOfTurn === true) return ok(player)
   return err({ kind: 'NOT_YOUR_TURN', playerId: player.playerId })
@@ -73,10 +65,7 @@ function requireTurn(
 export interface DrawInput {
   readonly playerId: string
   readonly sheetName: SheetName
-  /**
-   * Chat orders only: the player was warned that it is not their turn and
-   * chose to draw anyway. Ignored when chat orders are off.
-   */
+  /** The player was warned that it is not their turn and chose to draw anyway. */
   readonly confirmedOutOfTurn?: boolean
 }
 

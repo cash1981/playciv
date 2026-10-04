@@ -56,12 +56,8 @@ Use the Agent tool with `subagent_type: "reviewer"`. Give it:
 - the path to the task brief, `docs/agents/tasks/<slug>.md`,
 - the verification output from step 1, verbatim.
 
-If the change touches game rules, the deck, log texts or a projection, also
-spawn `rules-checker` with the same diff. Run them in the same message so they
-work in parallel.
-
-Both are read-only. Neither can fix what it finds, which is the point: every
-finding reaches you.
+The reviewer is read-only. It cannot fix what it finds, which is the point:
+every finding reaches you.
 
 ## 4. Decide
 
@@ -93,8 +89,8 @@ Regardless of the reviewer's verdict, do not approve when:
 
 - a projection carries another player's hand, private log, or unrevealed cards,
   and no test proves otherwise;
-- the change encodes an FFG rule that is not in the old system;
-- it "fixes" old-system behaviour without recording the deviation in
-  `docs/agents/decisions.md` and `README.md`;
+- the change encodes an FFG rule that is in neither the rulebooks nor the code;
+- it changes a rule or a visible choice without recording it in
+  `docs/agents/decisions.md` (and `README.md` when a player would notice);
 - a test was deleted or loosened to make the suite pass;
 - the engine gained a clock, a random number, I/O, or a `throw`.

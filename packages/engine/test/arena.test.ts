@@ -20,7 +20,6 @@ import {
 } from '../src/actions/arena.js'
 import { placePiece } from '../src/actions/board.js'
 import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
-import { endTurn } from '../src/actions/player.js'
 import { isUnit } from '../src/item.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -50,24 +49,19 @@ function withBattlehand(
 
 /**
  * Same as `withBattlehand`, but adds to an already-built state without
- * resetting it — passing the turn to `playerId` and back, since `draw`
- * requires it to be the drawing player's turn.
+ * resetting it. The draw is confirmed out of turn, since only the start player
+ * holds the turn in a fresh game.
  */
 function addBattlehand(
   state: GameState,
   playerId: string,
   count: number = 3,
 ): GameState {
-  const holder = state.players.find((p) => p.yourTurn)!.playerId
-  let next = unwrap(endTurn(state))
+  let next = state
   for (let i = 0; i < count; i++) {
-    next = unwrap(draw(next, { playerId, sheetName: 'INFANTRY' }))
+    next = unwrap(draw(next, { playerId, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
   }
-  next = unwrap(drawUnitsForBattle(next, { playerId, numberOfDraws: count }))
-  while (findPlayer(next, holder)!.yourTurn !== true) {
-    next = unwrap(endTurn(next))
-  }
-  return next
+  return unwrap(drawUnitsForBattle(next, { playerId, numberOfDraws: count }))
 }
 
 // ---------------------------------------------------------------------------

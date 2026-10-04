@@ -36,7 +36,6 @@ export function statusFor(error: EngineError): number {
       return 412
     // Java: 409 Conflict — there is no current turn to end yet
     case 'GAME_NOT_STARTED':
-    case 'CHAT_ORDERS_OFF':
       return 409
     // The client asked for a piece that is not in the manifest
     case 'BOARD_ASSET_NOT_FOUND':

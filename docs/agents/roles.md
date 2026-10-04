@@ -9,20 +9,18 @@ code is right.
 | **Orchestrator** | strong (Opus) | yes | yes |
 | **Coder** | cheap (Sonnet, or Haiku for mechanical work) | yes, inside claimed paths | no |
 | **Reviewer** | strong (Opus) | **no** | no |
-| **Rules checker** | strong (Opus) | **no** | no |
 
 The orchestrator is the session you are talking to. The roles are defined once
 per agent host and spawned with that host's subagent tool:
 
-- Claude Code reads `.claude/agents/`: `coder`, `reviewer` and `rules-checker`.
-- OpenCode reads `.opencode/agents/`: `coder`, `reviewer` and `rules-checker`.
+- Claude Code reads `.claude/agents/`: `coder` and `reviewer`.
+- OpenCode reads `.opencode/agents/`: `coder` and `reviewer`.
   The reviewer is read-only, exactly as the Claude one is: it reports and the
   orchestrator decides. Everything below about *why* the reviewer is read-only
   applies to it.
 
 The model names in the table above are the Claude ones. The rule is the split,
-not the vendor: the coder runs on a cheaper model, the reviewer and rules
-checker on a stronger one that cannot write. OpenCode keeps all three halves of
+not the vendor: the coder runs on a cheaper model, the reviewer on a stronger one that cannot write. OpenCode keeps both halves of
 that split.
 
 ## Why reviewers cannot write
@@ -95,17 +93,6 @@ tests that pass by luck, and anything that contradicts `conventions.md`.
 Returns a structured report — see `templates/review-report.md`. Every finding
 carries a severity and a concrete failure case, so the orchestrator can judge
 it rather than take it on faith.
-
-### `rules-checker`
-
-The specialist. Reads the change against the old system — `old-civ-rest` and,
-for logic that lived in the client, `old-civ-web` — and answers one question:
-does this match what the old system did? Used whenever a change touches game
-rules, the deck, the log texts, or a projection.
-
-It is separate from `reviewer` because it is a different kind of reading —
-cross-referencing the old backend and client, not judging TypeScript — and
-because it is worth running on its own when a change is small but rule-bearing.
 
 ## Cost
 

@@ -1,15 +1,15 @@
 /**
- * Chat orders (issue #215), slice 1: the admin switch, the order / done /
- * undone routes, the paged timeline and the chat row kinds. New in the port, so
- * there is no Java counterpart.
+ * Chat orders (issue #215), slice 1: the order / done / undone routes, the paged
+ * timeline and the chat row kinds. New in the port, so there is no Java
+ * counterpart. Since the single chat it is the only mode.
  */
 
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { PlayerView } from '@civ/engine'
-import { createPlayerTurn } from '@civ/engine'
+import type { GameState, PlayerView } from '@civ/engine'
+import { createPlayerTurn, migrateGameState } from '@civ/engine'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { App } from '../src/app.js'
@@ -21,6 +21,7 @@ import type { ChatMessage } from '../src/store/types.js'
 import { createD1Adapter } from './d1-sqlite-adapter.js'
 import { bearer, inject } from './helpers.js'
 import { readMigrations } from './migrations.js'
+import { savedOrder } from './saved-orders.js'
 
 let app: App
 let repo: JsonFileRepository
@@ -51,7 +52,7 @@ async function registerAdmin(username: string): Promise<string> {
 
 interface Started {
   readonly gameId: string
-  /** Seat 1: it also holds the classic baton at the start, and is the turn holder once chat orders are on. */
+  /** Seat 1, the turn holder at the start. */
   readonly seat1: string
   readonly seat2: string
   readonly name1: string
@@ -94,20 +95,14 @@ const post = (token: string, url: string, payload: unknown = {}) =>
 
 const get = (token: string, url: string) => inject(app, { method: 'GET', url, headers: bearer(token) })
 
-async function chatOn(game: Started): Promise<void> {
-  const admin = await registerAdmin(`admin-${game.gameId.slice(0, 6)}`)
-  const response = await post(admin, `/api/admin/games/${game.gameId}/chat-orders`, { enabled: true })
-  expect(response.status).toBe(200)
-}
-
 interface Timeline {
   readonly messages: readonly ChatMessage[]
   readonly hasMore: boolean
 }
 
-/** The opt-in paged shape; `extra` is more query string, such as `&before=<id>`. */
-const timeline = async (token: string, gameId: string, extra = ''): Promise<Timeline> =>
-  (await get(token, `/api/games/${gameId}/chat?paged=1${extra}`)).json<Timeline>()
+/** One page of the timeline; `before` is the id of the oldest row held. */
+const timeline = async (token: string, gameId: string, before?: string): Promise<Timeline> =>
+  (await get(token, `/api/games/${gameId}/chat${before === undefined ? '' : `?before=${before}`}`)).json<Timeline>()
 
 const row = (id: string, gameId: string, over: Partial<ChatMessage> = {}): ChatMessage => ({
   id,
@@ -121,48 +116,9 @@ const row = (id: string, gameId: string, over: Partial<ChatMessage> = {}): ChatM
   ...over,
 })
 
-describe('the admin switch', () => {
-  it('an admin turns it on and off, and the view shows it', async () => {
-    const game = await startedGame('switch')
-    const admin = await registerAdmin('switch-admin')
-
-    const on = await post(admin, `/api/admin/games/${game.gameId}/chat-orders`, { enabled: true })
-    expect(on.status).toBe(200)
-    expect((await repo.findGame(game.gameId))?.chatOrders).toBe(true)
-    const view = (await get(game.seat2, `/api/games/${game.gameId}/state`)).json<PlayerView>()
-    expect((await view).chatOrders).toBe(true)
-
-    const off = await post(admin, `/api/admin/games/${game.gameId}/chat-orders`, { enabled: false })
-    expect(off.status).toBe(200)
-    expect((await repo.findGame(game.gameId))?.chatOrders).toBe(false)
-  })
-
-  it('a non-admin, even a player in the game, gets 403 and nothing changes', async () => {
-    const game = await startedGame('switch-403')
-    const response = await post(game.seat1, `/api/admin/games/${game.gameId}/chat-orders`, { enabled: true })
-    expect(response.status).toBe(403)
-    expect(JSON.parse(response.body)).toMatchObject({ error: 'ADMIN_REQUIRED' })
-    expect((await repo.findGame(game.gameId))?.chatOrders).toBe(false)
-  })
-
-  it('needs a login, a boolean and an existing game', async () => {
-    const game = await startedGame('switch-bad')
-    const admin = await registerAdmin('switch-bad-admin')
-    expect((await inject(app, { method: 'POST', url: `/api/admin/games/${game.gameId}/chat-orders`, payload: { enabled: true } })).status).toBe(401)
-    expect((await post(admin, `/api/admin/games/${game.gameId}/chat-orders`, { enabled: 'yes' })).status).toBe(400)
-    expect((await post(admin, '/api/admin/games/missing/chat-orders', { enabled: true })).status).toBe(404)
-  })
-
-  it('a new game has it off', async () => {
-    const game = await startedGame('default-off')
-    expect((await repo.findGame(game.gameId))?.chatOrders).toBe(false)
-  })
-})
-
 describe('posting an order', () => {
   it('writes the engine state and an order row together', async () => {
     const game = await startedGame('order')
-    await chatOn(game)
 
     const response = await post(game.seat2, `/api/games/${game.gameId}/turns/order`, { phase: 'movement', markdown: 'A6 to A5' })
     expect(response.status).toBe(200)
@@ -181,7 +137,6 @@ describe('posting an order', () => {
 
   it('two orders for the same phase: both in history, the newest is the order, both in the timeline', async () => {
     const game = await startedGame('two-orders')
-    await chatOn(game)
     for (const markdown of ['first plan', 'second plan']) {
       const response = await post(game.seat1, `/api/games/${game.gameId}/turns/order`, { phase: 'SOT', markdown, turnNumber: 1 })
       expect(response.status).toBe(200)
@@ -193,15 +148,10 @@ describe('posting an order', () => {
 
     const page = await timeline(game.seat2, game.gameId)
     expect(page.messages.map((message) => message.message)).toEqual(['first plan', 'second plan'])
-    // The classic Turn orders panel reads the same data
-    const publicTurns = await get(game.seat2, `/api/games/${game.gameId}/turns/public`)
-    expect(publicTurns.body).toContain('second plan')
-    expect(publicTurns.body).toContain('first plan')
   })
 
   it('defaults to the current turn and validates its input', async () => {
     const game = await startedGame('order-input')
-    await chatOn(game)
     const url = `/api/games/${game.gameId}/turns/order`
     expect((await post(game.seat1, url, { phase: 'nonsense', markdown: 'x' })).status).toBe(400)
     expect((await post(game.seat1, url, { phase: 'SOT' })).status).toBe(400)
@@ -220,7 +170,6 @@ describe('posting an order', () => {
 
   it('a stranger is refused and leaves no row behind', async () => {
     const game = await startedGame('order-stranger')
-    await chatOn(game)
     const stranger = await register('order-stranger-x')
     const response = await post(stranger, `/api/games/${game.gameId}/turns/order`, { phase: 'SOT', markdown: 'hi' })
     expect(response.status).toBe(403)
@@ -231,7 +180,6 @@ describe('posting an order', () => {
 describe('marking phases done and not done', () => {
   it('marks several phases at once, writes one system row, and the view follows', async () => {
     const game = await startedGame('done')
-    await chatOn(game)
 
     const response = await post(game.seat1, `/api/games/${game.gameId}/turns/done`, { phase: 'CM' })
     expect(response.status).toBe(200)
@@ -256,7 +204,6 @@ describe('marking phases done and not done', () => {
 
   it('marking again changes nothing and writes no second row', async () => {
     const game = await startedGame('done-twice')
-    await chatOn(game)
     const url = `/api/games/${game.gameId}/turns/done`
     await post(game.seat1, url, { phase: 'TRADE' })
     const revBefore = (await repo.findGame(game.gameId))?.rev
@@ -268,7 +215,6 @@ describe('marking phases done and not done', () => {
 
   it('unmarks one phase without touching later ones, and writes a system row', async () => {
     const game = await startedGame('undone')
-    await chatOn(game)
     await post(game.seat2, `/api/games/${game.gameId}/turns/done`, { phase: 'MOVEMENT', turnNumber: 1 })
 
     const response = await post(game.seat2, `/api/games/${game.gameId}/turns/undone`, { phase: 'trade', turnNumber: 1 })
@@ -282,7 +228,6 @@ describe('marking phases done and not done', () => {
 
   it('unmarking in a turn the player has nothing in is a 404', async () => {
     const game = await startedGame('undone-404')
-    await chatOn(game)
     const response = await post(game.seat1, `/api/games/${game.gameId}/turns/undone`, { phase: 'SOT', turnNumber: 3 })
     expect(response.status).toBe(404)
     expect(await repo.chatFor(game.gameId)).toEqual([])
@@ -290,42 +235,109 @@ describe('marking phases done and not done', () => {
 
   it('does not need to be the players turn', async () => {
     const game = await startedGame('done-any-time')
-    await chatOn(game)
     // Seat 2 has neither the baton nor the turn, and can still mark
     const response = await post(game.seat2, `/api/games/${game.gameId}/turns/done`, { phase: 'SOT' })
     expect(response.status).toBe(200)
   })
 })
 
-describe('the routes need chat orders switched on', () => {
-  it('order, done and undone answer 409 CHAT_ORDERS_OFF and write nothing', async () => {
-    const game = await startedGame('gate')
-    const revision = (await loadGame(game.gameId)).rev
-    for (const [path, payload] of [
-      ['turns/order', { phase: 'SOT', markdown: 'x' }],
-      ['turns/done', { phase: 'SOT' }],
-      ['turns/undone', { phase: 'SOT', turnNumber: 1 }],
-    ] as const) {
-      const response = await post(game.seat1, `/api/games/${game.gameId}/${path}`, payload)
+describe('a game that has not started', () => {
+  /** A table of four with one player in it. */
+  async function lobby(name: string): Promise<{ gameId: string; creator: string }> {
+    const creator = await register(`${name}-a`)
+    const created = await inject(app, {
+      method: 'POST',
+      url: '/api/games',
+      headers: bearer(creator),
+      payload: { name, numOfPlayers: 4 },
+    })
+    expect(created.status).toBe(201)
+    return { gameId: (await created.json() as { id: string }).id, creator }
+  }
+
+  const join = async (token: string, gameId: string) =>
+    post(token, `/api/games/${gameId}/join`)
+
+  it('takes no order and no done marker, and writes no board marker, turn row or chat row', async () => {
+    const table = await lobby('lobby')
+    const before = await loadGame(table.gameId)
+    expect(before.players).toHaveLength(1)
+    const rows = (await repo.chatFor(table.gameId)).length
+
+    const attempts = [
+      post(table.creator, `/api/games/${table.gameId}/turns/order`, { phase: 'SOT', markdown: 'too early' }),
+      post(table.creator, `/api/games/${table.gameId}/turns/done`, { phase: 'SOT' }),
+      post(table.creator, `/api/games/${table.gameId}/turns/undone`, { phase: 'SOT', turnNumber: 1 }),
+    ]
+    for (const response of await Promise.all(attempts)) {
       expect(response.status).toBe(409)
-      expect(JSON.parse(response.body)).toMatchObject({ error: 'CHAT_ORDERS_OFF' })
+      expect(response.body).toContain('GAME_NOT_STARTED')
     }
-    expect(await repo.chatFor(game.gameId)).toEqual([])
-    expect((await loadGame(game.gameId)).rev).toBe(revision)
+
+    const after = await loadGame(table.gameId)
+    expect(after).toEqual(before)
+    expect(after.board).toEqual(before.board)
+    expect(after.players[0]?.playerTurns).toEqual([])
+    expect(after.publicTurns).toEqual({})
+    expect((await repo.chatFor(table.gameId)).length).toBe(rows)
+    expect(JSON.stringify(await timeline(table.creator, table.gameId))).not.toContain('too early')
   })
 
-  it('the classic update and reveal routes still work with it off', async () => {
-    const game = await startedGame('classic-routes')
-    const update = await post(game.seat1, `/api/games/${game.gameId}/turns/update`, { turnNumber: 1, phase: 'SOT', order: 'classic' })
-    expect(update.status).toBe(200)
-    const reveal = await post(game.seat1, `/api/games/${game.gameId}/turns/reveal`, { turnNumber: 1, phase: 'SOT' })
-    expect(reveal.status).toBe(200)
-    expect((await get(game.seat2, `/api/games/${game.gameId}/turns/public`)).body).toContain('classic')
+  it('has no active turn in the game view, whoever asks', async () => {
+    const table = await lobby('lobby-view')
+    const second = await register('lobby-view-b')
+    expect((await join(second, table.gameId)).status).toBe(200)
+
+    for (const token of [table.creator, second]) {
+      const view = await (await get(token, `/api/games/${table.gameId}`)).json<PlayerView>()
+      expect(view.activeTurn).toBeNull()
+    }
+    expect((await inject(app, { url: `/api/games/${table.gameId}` })).body).toContain('"activeTurn":null')
   })
 
-  it('once it is on, the default turn comes from the baseline set when it was switched on', async () => {
+  it('starts the first turn as usual when the table fills', async () => {
+    const table = await lobby('lobby-fills')
+    for (const suffix of ['b', 'c', 'd']) {
+      expect((await join(await register(`lobby-fills-${suffix}`), table.gameId)).status).toBe(200)
+    }
+    const view = await (await get(table.creator, `/api/games/${table.gameId}`)).json<PlayerView>()
+    expect(view.activeTurn).toMatchObject({ turnNumber: 1, phase: 'SOT' })
+    expect((await loadGame(table.gameId)).players.some((player) => player.yourTurn)).toBe(true)
+
+    const posted = await post(table.creator, `/api/games/${table.gameId}/turns/order`, { phase: 'SOT', markdown: 'first order' })
+
+    expect(posted.status).toBe(200)
+    expect((await repo.chatFor(table.gameId)).filter((entry) => entry.kind === 'order').map((entry) => entry.message)).toEqual(['first order'])
+  })
+})
+
+describe('a game adopted from the old view', () => {
+  it('has no route left for the old Turn orders panel', async () => {
+    const game = await startedGame('no-classic-routes')
+    for (const [method, route] of [
+      ['POST', 'turns/update'],
+      ['POST', 'turns/reveal'],
+      ['POST', 'turns/lock'],
+      ['GET', 'turns/public'],
+      ['GET', 'turns/mine'],
+      ['POST', 'endturn'],
+      ['POST', 'taketurn'],
+    ] as const) {
+      const response = await inject(app, {
+        method,
+        url: `/api/games/${game.gameId}/${route}`,
+        headers: bearer(game.seat1),
+        ...(method === 'POST' ? { payload: { turnNumber: 1, phase: 'SOT', order: 'x' } } : {}),
+      })
+      expect(response.status, `${method} ${route}`).toBe(404)
+    }
+    // Nothing was written by any of them
+    expect((await loadGame(game.gameId)).players.flatMap((player) => player.playerTurns)).toEqual([])
+  })
+
+  it('a game adopted from the old view uses its baseline as the default turn', async () => {
     const game = await startedGame('baseline')
-    // Turn 4 is played classically by both, then chat orders is switched on
+    // Turn 4 was played with the old view by both, and the game is saved as it was then
     const base = await loadGame(game.gameId)
     let played = base
     for (const player of base.players) {
@@ -347,8 +359,8 @@ describe('the routes need chat orders switched on', () => {
         ),
       }
     }
-    await repo.saveGame(played)
-    await chatOn(game)
+    // The stores migrate a game when they read it from disk; do the same here
+    await repo.saveGame(migrateGameState({ ...played, chatOrders: false } as unknown as GameState))
     expect((await loadGame(game.gameId)).chatOrdersStartTurn).toBe(5)
 
     const response = await post(game.seat1, `/api/games/${game.gameId}/turns/order`, { phase: 'SOT', markdown: 'turn five' })
@@ -358,9 +370,8 @@ describe('the routes need chat orders switched on', () => {
 })
 
 describe('an ended game', () => {
-  it('refuses orders and done markers for players and still lets an admin act', async () => {
+  it('refuses orders and done markers for players', async () => {
     const game = await startedGame('ended')
-    await chatOn(game)
     await post(game.seat1, `/api/games/${game.gameId}/turns/done`, { phase: 'SOT' })
     // Seats are shuffled, so seat 1 is not necessarily the creator; an admin can always end a game
     const admin = await registerAdmin('ended-admin')
@@ -380,70 +391,28 @@ describe('an ended game', () => {
     }
     expect((await repo.findGame(game.gameId))?.rev).toBe(revision)
     expect(await repo.chatFor(game.gameId)).toHaveLength(rowsBefore)
-
-    // The admin role can still switch the setting
-    expect((await post(admin, `/api/admin/games/${game.gameId}/chat-orders`, { enabled: false })).status).toBe(200)
   })
 })
 
-describe('GET /chat with chat orders off', () => {
-  it('is the plain array it has always been, with only plain chat in it', async () => {
-    const game = await startedGame('classic-chat')
-    await post(game.seat1, `/api/games/${game.gameId}/chat`, { message: 'hello' })
-    // Rows a game with chat orders on would have written, present while it is off
-    await repo.appendChat(row('o1', game.gameId, { kind: 'order', turnNumber: 1, phase: 'SOT', message: 'an order' }))
-    await repo.appendChat(row('s1', game.gameId, { kind: 'system', turnNumber: 1, phase: 'SOT', message: 'a system line' }))
-
-    const response = await get(game.seat2, `/api/games/${game.gameId}/chat`)
-    const body = await response.json<Record<string, unknown>[]>()
-    expect(Array.isArray(body)).toBe(true)
-    expect(body).toHaveLength(1)
-    expect(Object.keys(body[0] ?? {})).toEqual(['id', 'gameId', 'username', 'message', 'createdAt'])
-    expect(body[0]).toMatchObject({ message: 'hello', username: game.name1 })
-  })
-
-  it('switching chat orders off shows the chat again and loses no rows', async () => {
-    const game = await startedGame('roundtrip')
-    await chatOn(game)
-    await post(game.seat1, `/api/games/${game.gameId}/chat`, { message: 'talk' })
-    await post(game.seat1, `/api/games/${game.gameId}/turns/order`, { phase: 'SOT', markdown: 'order' })
-    const admin = await registerAdmin('roundtrip-admin')
-    await post(admin, `/api/admin/games/${game.gameId}/chat-orders`, { enabled: false })
-    expect(await (await get(game.seat2, `/api/games/${game.gameId}/chat`)).json<{ message: string }[]>()).toHaveLength(1)
-    await post(admin, `/api/admin/games/${game.gameId}/chat-orders`, { enabled: true })
-    expect((await timeline(game.seat2, game.gameId)).messages.map((message) => message.message)).toEqual(['talk', 'order'])
-  })
-})
-
-describe('GET /chat with chat orders on', () => {
-  it('stays the plain array of chat rows unless a page is asked for, so the live ChatPanel keeps working', async () => {
+describe('GET /chat', () => {
+  it('answers a page with all three kinds of row', async () => {
     const game = await startedGame('opt-in')
-    await chatOn(game)
     await post(game.seat1, `/api/games/${game.gameId}/chat`, { message: 'talk' })
     await post(game.seat1, `/api/games/${game.gameId}/turns/order`, { phase: 'SOT', markdown: 'an order' })
     await post(game.seat1, `/api/games/${game.gameId}/turns/done`, { phase: 'SOT' })
 
-    const body = await (await get(game.seat2, `/api/games/${game.gameId}/chat`)).json<Record<string, unknown>[]>()
-    expect(Array.isArray(body)).toBe(true)
-    expect(body).toHaveLength(1)
-    expect(Object.keys(body[0] ?? {})).toEqual(['id', 'gameId', 'username', 'message', 'createdAt'])
-    // paged=0 or anything but 1 is not an opt-in
-    expect(Array.isArray(await (await get(game.seat2, `/api/games/${game.gameId}/chat?paged=0`)).json())).toBe(true)
-    // and the page has all three kinds
-    expect((await timeline(game.seat2, game.gameId)).messages.map((message) => message.kind)).toEqual(['chat', 'order', 'system'])
+    const page = await (await get(game.seat2, `/api/games/${game.gameId}/chat`)).json<Timeline>()
+    expect(Array.isArray(page)).toBe(false)
+    expect(page.messages.map((message) => message.kind)).toEqual(['chat', 'order', 'system'])
   })
 
-  it('a game with chat orders off ignores paged=1 and answers the plain array', async () => {
-    const game = await startedGame('paged-off')
-    await post(game.seat1, `/api/games/${game.gameId}/chat`, { message: 'talk' })
-    const body = await (await get(game.seat2, `/api/games/${game.gameId}/chat?paged=1`)).json<unknown[]>()
-    expect(Array.isArray(body)).toBe(true)
-    expect(body).toHaveLength(1)
+  it('answers an unknown game with 404', async () => {
+    const reader = await register('chat-404')
+    expect((await get(reader, '/api/games/missing/chat')).status).toBe(404)
   })
 
   it('answers a page with hasMore, and a chat row is kind chat with no tags', async () => {
     const game = await startedGame('page-shape')
-    await chatOn(game)
     const posted = await post(game.seat1, `/api/games/${game.gameId}/chat`, { message: 'hi' })
     expect(await posted.json()).toMatchObject({ kind: 'chat', turnNumber: null, phase: null })
 
@@ -455,7 +424,6 @@ describe('GET /chat with chat orders on', () => {
 
   it('returns the whole current turn, and before= returns the previous turn', async () => {
     const game = await startedGame('paging')
-    await chatOn(game)
     // Turn 1: 40 rows, turn 2: 45 rows, all far more than the 30 minimum
     for (let index = 0; index < 40; index += 1) {
       await repo.appendChat(row(`t1-${index}`, game.gameId, { kind: 'order', turnNumber: 1, phase: 'SOT' }))
@@ -477,22 +445,18 @@ describe('GET /chat with chat orders on', () => {
 
     const first = current.messages[0]?.id
     if (first === undefined) throw new Error('the current turn has no rows')
-    // `before` alone is enough to ask for the paged shape
-    const previous = await timeline(game.seat1, game.gameId, `&before=${first}`)
-    const beforeOnly = await get(game.seat1, `/api/games/${game.gameId}/chat?before=${first}`)
-    expect(JSON.parse(beforeOnly.body)).toEqual(JSON.parse(JSON.stringify(previous)))
+    const previous = await timeline(game.seat1, game.gameId, first)
     // 40 seeded rows plus the two done rows
     expect(previous.messages).toHaveLength(42)
     expect(previous.messages.every((message) => message.turnNumber === 1)).toBe(true)
     expect(previous.hasMore).toBe(false)
 
-    const missing = await get(game.seat1, `/api/games/${game.gameId}/chat?paged=1&before=nope`)
+    const missing = await get(game.seat1, `/api/games/${game.gameId}/chat?before=nope`)
     expect(missing.status).toBe(400)
   })
 
   it('a young turn still gets at least the 30 newest rows', async () => {
     const game = await startedGame('min-page')
-    await chatOn(game)
     for (let index = 0; index < 50; index += 1) {
       await repo.appendChat(row(`old-${index}`, game.gameId))
     }
@@ -596,9 +560,8 @@ describe('chat row kinds in storage', () => {
 })
 
 describe('out-of-turn draws through the API', () => {
-  it('with chat orders on, the non-holder needs confirmedOutOfTurn and the holder does not', async () => {
+  it('the non-holder needs confirmedOutOfTurn and the holder does not', async () => {
     const game = await startedGame('draws-on')
-    await chatOn(game)
     const url = `/api/games/${game.gameId}/draw/CIV`
 
     const refused = await post(game.seat2, url)
@@ -607,34 +570,27 @@ describe('out-of-turn draws through the API', () => {
     expect((await post(game.seat2, url, { confirmedOutOfTurn: 'true' })).status).toBe(403)
     expect((await post(game.seat2, url, { confirmedOutOfTurn: true })).status).toBe(200)
 
-    // Seat 1 is the holder, whether or not it also has the classic baton
-    expect((await post(game.seat1, url)).status).toBe(200)
-  })
-
-  it('with chat orders off it is refused as before, confirmation or not', async () => {
-    const game = await startedGame('draws-off')
-    const url = `/api/games/${game.gameId}/draw/CIV`
-    expect((await post(game.seat2, url, { confirmedOutOfTurn: true })).status).toBe(403)
-    expect((await post(game.seat2, url)).status).toBe(403)
+    // Seat 1 is the holder, whatever `yourTurn` says
     expect((await post(game.seat1, url)).status).toBe(200)
   })
 
   it('a wonder draw follows the same rule', async () => {
     const game = await startedGame('wonder-on')
-    await chatOn(game)
     const url = `/api/games/${game.gameId}/draw/ANCIENT_WONDERS`
     expect((await post(game.seat2, url)).status).toBe(403)
     expect((await post(game.seat2, url, { confirmedOutOfTurn: true })).status).toBe(200)
   })
 })
 
-describe('hidden information with chat orders on', () => {
+describe('hidden information', () => {
   it('an opponent sees flags and published orders but not the private log, note or an unpublished draft', async () => {
     const game = await startedGame('leak')
-    await chatOn(game)
     await post(game.seat1, `/api/games/${game.gameId}/draw/CULTURE_1`)
     await post(game.seat1, `/api/games/${game.gameId}/note`, { note: 'NOTE-SECRET' })
-    await post(game.seat1, `/api/games/${game.gameId}/turns/update`, { turnNumber: 1, phase: 'CM', order: 'DRAFT-SECRET' })
+    // An unpublished draft of the old Turn orders panel, as a game saved before the single chat holds it
+    const seat1Id = (await loadGame(game.gameId)).players.find((player) => player.username === game.name1)?.playerId
+    if (seat1Id === undefined) throw new Error('seat 1 missing')
+    await repo.saveGame(savedOrder(await loadGame(game.gameId), seat1Id, 1, 'CM', 'DRAFT-SECRET'))
     await post(game.seat1, `/api/games/${game.gameId}/turns/order`, { phase: 'SOT', markdown: 'public order' })
     await post(game.seat1, `/api/games/${game.gameId}/turns/done`, { phase: 'SOT' })
 
@@ -647,12 +603,13 @@ describe('hidden information with chat orders on', () => {
     expect(seen.body).not.toContain('DRAFT-SECRET')
     expect(seen.body).not.toContain(privateLog)
     const view = JSON.parse(seen.body) as PlayerView
-    expect(view.chatOrders).toBe(true)
     expect(view.activeTurn?.waitingFor?.length).toBeGreaterThan(0)
-    expect(seen.body).toContain('public order')
+    // A posted order reaches the others through the timeline, not through the view
+    expect(seen.body).not.toContain('public order')
 
     // Neither does the timeline carry them
     const page = await timeline(game.seat2, game.gameId)
+    expect(page.messages.map((message) => message.message)).toContain('public order')
     expect(JSON.stringify(page)).not.toContain('NOTE-SECRET')
     expect(JSON.stringify(page)).not.toContain('DRAFT-SECRET')
     expect(JSON.stringify(page)).not.toContain(privateLog)

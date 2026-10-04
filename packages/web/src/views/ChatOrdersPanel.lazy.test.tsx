@@ -36,7 +36,7 @@ describe('when the Markdown chunk cannot be loaded', () => {
       ],
       hasMore: false,
     })
-    const view = { chatOrders: true, you: null, opponents: [], activeTurn: null } as unknown as PlayerView
+    const view = { you: null, opponents: [], activeTurn: null } as unknown as PlayerView
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await act(async () => {

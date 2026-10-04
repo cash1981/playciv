@@ -8,6 +8,8 @@ import type {
   BroadcastResultDto,
   CleanupCandidateDto,
   CleanupPreviewDto,
+  MigrateChatGameDto,
+  MigrateChatPreviewDto,
   PlayerDto,
 } from '../lib/api.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
@@ -444,6 +446,8 @@ export function AdminView({
       />
 
       <FinishedGameCleanupPanel onUnauthorized={onUnauthorized} />
+
+      <MigrateChatPanel onUnauthorized={onUnauthorized} />
     </>
   )
 }
@@ -965,6 +969,195 @@ function FinishedGameCleanupPanel({
             </button>
           </div>
         </>
+      )}
+    </section>
+  )
+}
+
+/** What the migration confirmation says it does, and what it never does. */
+const MIGRATE_CHAT_EFFECT =
+  'Public orders are copied into the chat and orders timeline, and an unpublished draft is ' +
+  'added to its owner\'s private note, so nothing private reaches anyone else. Running it again ' +
+  'changes nothing for games that are done.'
+
+const countOf = (count: number, one: string, many: string): string =>
+  `${count} ${count === 1 ? one : many}`
+
+/**
+ * "Move old games to the single chat": copies the old Turn orders panel data of
+ * games that still have it into the timeline. The dry run is read when the admin
+ * asks for it, and again after each run. The server spends a limited number of
+ * database calls per request, so a run may need pressing more than once; the panel
+ * says how many games are left.
+ */
+function MigrateChatPanel({
+  onUnauthorized,
+}: {
+  readonly onUnauthorized: () => void
+}): React.JSX.Element {
+  const [preview, setPreview] = useState<MigrateChatPreviewDto | null>(null)
+  const [working, setWorking] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  /** Runs one action, reporting a failure here and a lapsed session to the app. */
+  async function act(action: () => Promise<void>): Promise<void> {
+    setWorking(true)
+    setError(null)
+    try {
+      await action()
+    } catch (caught) {
+      if (isUnauthorized(caught)) return onUnauthorized()
+      setError(errorMessage(caught))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  async function load(): Promise<void> {
+    setNotice(null)
+    await act(async () => {
+      setPreview(await api.migrateChatPreview())
+    })
+  }
+
+  async function migrateOne(game: MigrateChatGameDto): Promise<void> {
+    if (working) return
+    if (
+      !window.confirm(
+        `Move ${game.name} to the single chat? ${countOf(game.orderRows, 'order', 'orders')} will be copied ` +
+          `into the timeline and ${countOf(game.drafts, 'unpublished draft', 'unpublished drafts')} added to private notes. ` +
+          MIGRATE_CHAT_EFFECT,
+      )
+    ) {
+      return
+    }
+    await run(game)
+  }
+
+  async function migrateAll(): Promise<void> {
+    if (working || preview === null || (preview.games.length === 0 && preview.unchecked === 0)) return
+    const question =
+      preview.games.length === 0
+        ? `Check ${countOf(preview.unchecked, 'game', 'games')} that ${preview.unchecked === 1 ? 'was' : 'were'} not checked yet and move what is missing? ` +
+          `Each press handles a limited number of games; press again while some remain. ${MIGRATE_CHAT_EFFECT}`
+        : `Move ${countOf(preview.games.length, 'game', 'games')} to the single chat? ` +
+          `${countOf(preview.totalOrderRows, 'order', 'orders')} will be copied into the timeline and ` +
+          `${countOf(preview.totalDrafts, 'unpublished draft', 'unpublished drafts')} added to private notes. ` +
+          `Each press handles a limited number of games; press again while some remain. ${MIGRATE_CHAT_EFFECT}`
+    if (!window.confirm(question)) {
+      return
+    }
+    await run(undefined)
+  }
+
+  /** One game, or every game that has not been moved when `game` is left out. */
+  async function run(game?: MigrateChatGameDto): Promise<void> {
+    setNotice(null)
+    await act(async () => {
+      const result = await api.migrateChat(game?.id)
+      const left =
+        result.remaining > 0
+          ? game === undefined
+            ? ` ${countOf(result.remaining, 'game is', 'games are')} left; press "Move all" again.`
+            : ` ${game.name} is not fully moved yet; press "Move" on ${game.name} again.`
+          : ' Nothing is left to move.'
+      setNotice(
+        `Moved ${countOf(result.games.length, 'game', 'games')}: ` +
+          `${countOf(result.totalOrderRows, 'order', 'orders')} copied, ` +
+          `${countOf(result.totalDrafts, 'draft', 'drafts')} added to private notes.` +
+          (result.skipped > 0
+            ? ` ${countOf(result.skipped, 'game was', 'games were')} skipped because ${result.skipped === 1 ? 'it' : 'they'} changed meanwhile.`
+            : '') +
+          (result.partial !== null
+            ? ` Game ${result.partial} was only partly copied; the rest follows on the next press.`
+            : '') +
+          left,
+      )
+      // Refresh from the server rather than subtracting here: it is the source of the numbers.
+      setPreview(await api.migrateChatPreview())
+    })
+  }
+
+  return (
+    <section className="panel">
+      <h2>Move old games to the single chat</h2>
+      <p className="muted">
+        Every game opens as one chat and orders timeline. A game saved before that still has its
+        orders in the old Turn orders panel, and its database rows have not been copied. This
+        copies the public orders into the timeline, finished games included, and appends an
+        unpublished draft to its owner&apos;s private note. Orders that were never published are
+        not shown to anyone else. A game is moved once, and the run is safe to repeat.
+      </p>
+      {error !== null && <div className="error">{error}</div>}
+      {notice !== null && <div className="notice">{notice}</div>}
+
+      <div className="row">
+        <button disabled={working} onClick={() => void load()}>
+          {preview === null ? 'Show what can be moved' : 'Refresh'}
+        </button>
+      </div>
+
+      {preview !== null && preview.games.length === 0 && preview.unchecked === 0 && (
+        <p className="muted">Every game has been moved to the single chat.</p>
+      )}
+      {preview !== null && preview.unchecked > 0 && (
+        <p className="muted">
+          {countOf(preview.unchecked, 'more game was', 'more games were')} not checked, run the move again.
+        </p>
+      )}
+      {preview !== null && preview.games.length > 0 && (
+        <>
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Game</th>
+                  <th>Orders to copy</th>
+                  <th>Drafts to move</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {preview.games.map((game) => (
+                  <tr key={game.id}>
+                    <td>
+                      {game.name}
+                      {!game.active && <span className="tag">ended</span>}
+                    </td>
+                    <td>{game.orderRows}</td>
+                    <td>{game.drafts}</td>
+                    <td>
+                      <button
+                        className="small"
+                        disabled={working}
+                        aria-label={`Move ${game.name}`}
+                        onClick={() => void migrateOne(game)}
+                      >
+                        Move
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>Total</td>
+                  <td>{preview.totalOrderRows}</td>
+                  <td>{preview.totalDrafts}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
+      )}
+      {preview !== null && (preview.games.length > 0 || preview.unchecked > 0) && (
+        <div className="row">
+          <button className="danger" disabled={working} onClick={() => void migrateAll()}>
+            Move all
+          </button>
+        </div>
       )}
     </section>
   )

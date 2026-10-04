@@ -209,7 +209,7 @@ export function withdrawFromGame(state: GameState, playerId: string): ActionResu
     withdrawnPlayers: [...next.withdrawnPlayers, player],
   }
 
-  // The player may have been the one holding the turn back; chat orders then rolls over
+  // The player may have been the one holding the turn back; the turn then rolls over
   return ok(startMissingTurns(appendPublicLog(next, player.username, playerId, 'withdrew from game'), undefined, undefined))
 }
 

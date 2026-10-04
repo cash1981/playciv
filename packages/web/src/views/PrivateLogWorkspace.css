@@ -1,0 +1,85 @@
+.private-log-copy {
+  margin: 0 0 0.7rem;
+}
+
+.private-log-phase {
+  margin-top: 0.8rem;
+  padding: 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.private-log-phase[data-save-status='unsaved'] {
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.private-log-phase[data-save-status='saving'] {
+  border-color: var(--accent);
+}
+
+.private-log-phase[data-save-status='failed'] {
+  border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+
+.private-log-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.private-log-heading h3 {
+  margin: 0;
+}
+
+.save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.save-status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.save-status-unsaved {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.save-status-unsaved .save-status-dot {
+  background: var(--warn);
+}
+
+.save-status-saving .save-status-dot {
+  background: var(--accent);
+  animation: save-pulse 0.9s ease-in-out infinite alternate;
+}
+
+.save-status-saved .save-status-dot {
+  background: var(--good);
+}
+
+.save-status-failed {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.save-status-failed .save-status-dot {
+  background: var(--bad);
+}
+
+@keyframes save-pulse {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}

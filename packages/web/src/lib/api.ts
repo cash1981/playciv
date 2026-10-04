@@ -19,7 +19,6 @@ import type {
   Item,
   PlayerStatKey,
   PlayerStats,
-  PlayerTurn,
   PlayerView,
   RevealedEntry,
   SheetName,
@@ -45,7 +44,6 @@ export type {
   Item,
   PlayerStatKey,
   PlayerStats,
-  PlayerTurn,
   PlayerView,
   RevealedEntry,
   SheetName,
@@ -162,6 +160,37 @@ export interface CleanupResultDto {
   readonly remaining: number
 }
 
+/** One game the single chat migration would move: counts only, never any order or note text. */
+export interface MigrateChatGameDto {
+  readonly id: string
+  readonly name: string
+  /** Public order versions to write into the timeline. */
+  readonly orderRows: number
+  /** Unpublished drafts to append to their owners' private notes. */
+  readonly drafts: number
+}
+
+export interface MigrateChatPreviewDto {
+  readonly games: readonly (MigrateChatGameDto & { readonly active: boolean })[]
+  readonly totalOrderRows: number
+  readonly totalDrafts: number
+  /** Games the dry run left unchecked to stay within its budget of reads; they are not in `games`. */
+  readonly unchecked: number
+}
+
+export interface MigrateChatResultDto {
+  /** The games moved by this request. */
+  readonly games: readonly MigrateChatGameDto[]
+  readonly totalOrderRows: number
+  readonly totalDrafts: number
+  /** Games that changed while they were being moved; the next request tries them again. */
+  readonly skipped: number
+  /** The game the request ran out of budget in, if any: its rows stay and the next request goes on. */
+  readonly partial: string | null
+  /** Games still to move; 0 when the job is done. */
+  readonly remaining: number
+}
+
 export interface BroadcastRunDto {
   readonly ran: boolean
   readonly sent: number
@@ -221,12 +250,12 @@ export interface ChatMessageDto {
   readonly createdAt: string
 }
 
-/** What a timeline row is (chat orders, issue #215). */
+/** What a timeline row is (issue #215). */
 export type ChatKind = 'chat' | 'order' | 'system'
 
 /**
- * A row of the chat orders timeline. Plain `ChatMessageDto` is what the classic
- * chat and the lobby answer; the timeline adds the kind and the turn tag.
+ * A row of the chat and orders timeline. Plain `ChatMessageDto` is what the lobby
+ * answers; the timeline adds the kind and the turn tag.
  */
 export interface TimelineMessageDto extends ChatMessageDto {
   readonly kind: ChatKind
@@ -235,7 +264,7 @@ export interface TimelineMessageDto extends ChatMessageDto {
   readonly phase: TurnPhase | null
 }
 
-/** `GET /chat?paged=1`: rows oldest first, and whether older ones exist. */
+/** `GET /chat`: rows oldest first, and whether older ones exist. */
 export interface ChatPageDto {
   readonly messages: readonly TimelineMessageDto[]
   readonly hasMore: boolean
@@ -269,7 +298,6 @@ export interface GameRevisionView extends GameRevisionSummary {
   readonly availableTechs: readonly TechItem[]
   readonly revealedTechs: readonly RevealedTechsDto[]
   readonly socialPolicies: readonly SocialPolicyItem[]
-  readonly publicTurns: readonly PlayerTurn[]
   readonly revealed: readonly RevealedEntry[]
   readonly publicLog: readonly LogEntryDto[]
   readonly privateLog: readonly LogEntryDto[]
@@ -399,7 +427,7 @@ async function send<T>(
     // Only a GET is retried. That is safe because every GET the client makes
     // is idempotent — the one side effect, the revisions route's baseline
     // `ensureGameRevision`, is itself guarded and idempotent — while the game's
-    // own actions are not: a retried `endTurn` or `draw` could apply twice.
+    // own actions are not: a retried `draw` could apply twice.
     const retryable =
       method === 'GET' && RETRYABLE_STATUSES.has(response.status) && attempt < RETRY_DELAYS_MS.length
     if (retryable) {
@@ -509,6 +537,11 @@ export const api = {
   /** Cleans one finished game, or the largest ones when `gameId` is left out. */
   cleanFinishedGames: (gameId?: string) =>
     post<CleanupResultDto>('/api/admin/games/cleanup', gameId === undefined ? {} : { gameId }),
+  /** The dry run: games that have not been moved to the single chat yet. */
+  migrateChatPreview: () => get<MigrateChatPreviewDto>('/api/admin/games/migrate-chat'),
+  /** Moves every game that has not been moved, or only `gameId`. Repeat while `remaining` is above 0. */
+  migrateChat: (gameId?: string) =>
+    post<MigrateChatResultDto>('/api/admin/games/migrate-chat', gameId === undefined ? {} : { gameId }),
   /** Public: the server route needs no bearer token. */
   highscore: () => get<HighscoreResult>('/api/highscore'),
   publicGames: () => get<PublicGameSummary[]>('/api/public/games'),
@@ -535,8 +568,8 @@ export const api = {
   revealed: (gameId: string, page: number, size: number) =>
     get<RevealedPage>(`/api/games/${gameId}/revealed?page=${page}&size=${size}`),
 
-  // `confirmedOutOfTurn` is sent only after the player answered yes to the chat
-  // orders warning (issue #215); wonders go through this route as well.
+  // `confirmedOutOfTurn` is sent only after the player answered yes to the
+  // out-of-turn warning (issue #215); wonders go through this route as well.
   draw: (gameId: string, sheetName: SheetName, confirmedOutOfTurn?: boolean) =>
     post<PlayerView>(
       `/api/games/${gameId}/draw/${sheetName}`,
@@ -639,15 +672,7 @@ export const api = {
       targetPlayerId,
     }),
 
-  endTurn: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/endturn`),
-  takeTurn: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/taketurn`),
-  publicTurns: (gameId: string) => get<PlayerTurn[]>(`/api/games/${gameId}/turns/public`),
-  myTurns: (gameId: string) => get<PlayerTurn[]>(`/api/games/${gameId}/turns/mine`),
-  updateTurn: (gameId: string, turnNumber: number, phase: string, order: string) =>
-    post<PlayerView>(`/api/games/${gameId}/turns/update`, { turnNumber, phase, order }),
-  revealTurnOrder: (gameId: string, turnNumber: number, phase: string) =>
-    post<PlayerView>(`/api/games/${gameId}/turns/reveal`, { turnNumber, phase }),
-  // Chat orders (issue #215). The turn defaults to the current one on the server.
+  // Orders and done marks (issue #215). The turn defaults to the current one on the server.
   postOrder: (gameId: string, phase: TurnPhase, markdown: string, turnNumber?: number) =>
     post<PlayerView>(`/api/games/${gameId}/turns/order`, {
       phase,
@@ -664,8 +689,6 @@ export const api = {
       phase,
       ...(turnNumber === undefined ? {} : { turnNumber }),
     }),
-  lockTurn: (gameId: string, turnNumber: number, locked: boolean) =>
-    post<PlayerView>(`/api/games/${gameId}/turns/lock`, { turnNumber, locked }),
   saveNote: (gameId: string, note: string) => post<PlayerView>(`/api/games/${gameId}/note`, { note }),
   // Shared bookkeeping: any member may set any player's stat (issue #43).
   setPlayerStat: (
@@ -725,16 +748,11 @@ export const api = {
   undoBoard: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/board/undo`),
   redoBoard: (gameId: string) => post<PlayerView>(`/api/games/${gameId}/board/redo`),
 
-  chat: (gameId: string) => get<ChatMessageDto[]>(`/api/games/${gameId}/chat`),
-  /** Chat orders: the current turn, or the turn before `before` (a message id). */
+  /** The timeline: the current turn, or the turn before `before` (a message id). */
   chatPage: (gameId: string, before?: string) =>
     get<ChatPageDto>(
-      `/api/games/${gameId}/chat?paged=1${before === undefined ? '' : `&before=${encodeURIComponent(before)}`}`,
+      `/api/games/${gameId}/chat${before === undefined ? '' : `?before=${encodeURIComponent(before)}`}`,
     ),
   sendChat: (gameId: string, message: string) =>
     post<ChatMessageDto>(`/api/games/${gameId}/chat`, { message }),
-
-  /** Admin only (issue #215). */
-  setChatOrders: (gameId: string, enabled: boolean) =>
-    post<PlayerView>(`/api/admin/games/${gameId}/chat-orders`, { enabled }),
 }

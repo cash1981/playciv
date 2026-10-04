@@ -19,9 +19,8 @@ import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
 import type { WaitingFor } from './turn.js'
 import {
-  currentPhaseStatus,
+  gameHasStarted,
   startPlayerName,
-  TURN_PHASES,
   turnHolder,
   turnStatus,
 } from './turn.js'
@@ -254,41 +253,44 @@ export interface GameState {
    */
   readonly wondersDealt: boolean
   /**
-   * Chat orders (issue #215): one timeline for chat and turn orders, with
-   * players marking phases done. Off by default and switched only by an admin.
-   * Turning it off again loses nothing, because the data is the same either way.
-   */
-  readonly chatOrders: boolean
-  /**
-   * Chat orders: the first turn `turnStatus` looks at. Every turn below it
-   * counts as finished for everybody. Set when chat orders is switched on to
-   * the turn the game has reached at that moment, read from every player's
-   * records and not only the baton holder's, so a game with turns already played
-   * classically does not start over at turn 1, and a player who never wrote an
-   * early turn cannot hold the current turn back. 1 by default.
+   * The first turn `turnStatus` looks at. Every turn below it counts as finished
+   * for everybody. A game that was played with the old baton gets it set to the
+   * turn it had reached when it was migrated (`migrateGameState`), read from
+   * every player's records and not only the baton holder's, so it does not start
+   * over at turn 1 and a player who never wrote an early turn cannot hold the
+   * current turn back. 1 by default.
    */
   readonly chatOrdersStartTurn: number
   /**
-   * Chat orders: the start player the engine last put in place (the marker
-   * moving to them at the start of a turn, or chat orders being switched on), by
-   * player id. It is only the fallback of `startPlayerOf`, used when the marker
-   * is missing or lies outside every player's area. Public. Null until then.
+   * The start player the engine last put in place (the marker moving to them at
+   * the start of a turn, or a game being migrated from the old baton), by player
+   * id. It is only the fallback of `startPlayerOf`, used when the marker is
+   * missing or lies outside every player's area. Public. Null until then.
    */
   readonly startPlayerId: string | null
   /**
-   * Chat orders: who started each turn, turn number to username, so the title
-   * of an old turn stays right after the marker has moved on. Also the guard
-   * that stops a turn from being started twice. Public. Empty until chat orders
-   * is switched on.
+   * Who started each turn, turn number to username, so the title of an old turn
+   * stays right after the marker has moved on. Also the guard that stops a turn
+   * from being started twice. Public. Empty until the first turn is started.
    */
   readonly turnStarters: Readonly<Record<number, string>>
   /**
-   * Chat orders: the classic turn orders have been copied into the timeline.
-   * Set the first time chat orders is switched on and never cleared, so
-   * switching it off and on again copies nothing twice. The copy itself is the
-   * server's job (the timeline is its store). Public, but not in the view.
+   * The public turn orders of the old baton view have been copied into the
+   * timeline. True for a game created by this code, and set by the server's
+   * migration (`/api/admin/games/migrate-chat`) for an older one, so nothing is
+   * copied twice. The copy itself is the server's job (the timeline is its
+   * store). Public, but not in the view.
    */
   readonly legacyOrdersCopied: boolean
+  /**
+   * The orders revealed before versions were stored have been copied into the
+   * timeline. True for a game created by this code, false for a loaded game
+   * that lacks it, and set by the server's migration
+   * (`/api/admin/games/migrate-chat`) once such a game has nothing left to copy,
+   * so a finished game is not read again on every run. Public, but not in the
+   * view.
+   */
+  readonly legacyRevealsCopied: boolean
   /**
    * The currently active battle, or null if no battle is in progress.
    * At most one battle may be active per game at a time.
@@ -310,17 +312,11 @@ export function findPlayer(state: GameState, playerId: string): Playerhand | und
   return state.players.find((player) => player.playerId === playerId)
 }
 
-/** Java: `PBF.getNameOfUsersTurn()`. */
-export function nameOfPlayersTurn(state: GameState): string {
-  return state.players.find((player) => player.yourTurn)?.username ?? ''
-}
-
 /**
  * New in the port, no Java counterpart. Who is on turn, and which phase of
- * their turn they should be working on — see `currentPhaseStatus`. `null`
- * when nobody is on turn yet (game not started). Derived only from public
- * `revealed` flags, never order text, so it is safe in `PlayerView` for every
- * viewer, not just the active player.
+ * their turn they should be working on. Derived only from public `done` flags
+ * and the start marker, never order text, so it is safe in `PlayerView` for
+ * every viewer, not just the active player.
  */
 export interface ActiveTurnStatus {
   readonly playerId: string
@@ -328,41 +324,21 @@ export interface ActiveTurnStatus {
   readonly turnNumber: number
   readonly phase: TurnPhase
   /**
-   * Chat orders only: everybody who has not finished the current turn and the
-   * phase they are on. Absent when chat orders are off, so the classic shape is
-   * unchanged. Public, derived from the `done` flags.
+   * Everybody who has not finished the current turn and the phase they are on.
+   * Public, derived from the `done` flags.
    */
-  readonly waitingFor?: readonly WaitingFor[]
-  /**
-   * Chat orders only: the username of whoever started this turn, `null` when
-   * there is nobody. Absent when chat orders are off. Public.
-   */
-  readonly startPlayer?: string | null
-}
-
-export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
-  if (state.chatOrders) return chatOrdersActiveTurn(state)
-  const current = state.players.find((player) => player.yourTurn)
-  if (current === undefined) return null
-
-  const latest = current.playerTurns.reduce<PlayerTurn | undefined>(
-    (best, turn) => (best === undefined || turn.turnNumber > best.turnNumber ? turn : best),
-    undefined,
-  )
-  const phase = currentPhaseStatus(latest)
-  // Same rule as `currentPhaseStatus`: a missing `revealed` flag blocks
-  // nothing, only an explicit `false` does.
-  const roundDone = latest !== undefined && TURN_PHASES.every((candidate) => latest.revealed[candidate] !== false)
-  const turnNumber = latest === undefined ? 1 : roundDone ? latest.turnNumber + 1 : latest.turnNumber
-
-  return { playerId: current.playerId, username: current.username, turnNumber, phase }
+  readonly waitingFor: readonly WaitingFor[]
+  /** The username of whoever started this turn, `null` when there is nobody. Public. */
+  readonly startPlayer: string | null
 }
 
 /**
- * With chat orders on there is no baton: the turn belongs to `turnHolder`, and
- * the turn number and phase come from `turnStatus`.
+ * There is no baton: the turn belongs to `turnHolder`, and the turn number and
+ * phase come from `turnStatus`. `null` when there are no active players, and while
+ * the game has not started (`gameHasStarted`): a lobby has no turn yet.
  */
-function chatOrdersActiveTurn(state: GameState): ActiveTurnStatus | null {
+export function activeTurnStatus(state: GameState): ActiveTurnStatus | null {
+  if (!gameHasStarted(state)) return null
   const holder = turnHolder(state)
   if (holder === undefined) return null
   const status = turnStatus(state)
@@ -551,11 +527,6 @@ export interface OpaquePlayerhand {
    * "blank" tech card, so the name is stripped in `opaque()` below.
    */
   readonly pyramidPlacements: readonly PublicPyramidPlacement[]
-  /**
-   * Public turn-order copies. `gamenote` and `playerTurns` are private and do
-   * not appear here.
-   */
-  readonly publicTurns: readonly PlayerTurn[]
   /** The status board (issue #43) is public, unlike the rest of the hand. */
   readonly stats: PlayerStats
   readonly government: Government
@@ -589,9 +560,6 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     revealedTechs: player.techsChosen.filter((tech) => !tech.hidden),
     revealedSocialPolicies: player.socialPolicies.filter((policy) => !policy.hidden),
     pyramidPlacements: player.pyramidPlacements.map((placement) => ({ slot: placement.slot })),
-    publicTurns: Object.values(state.publicTurns).filter(
-      (turn) => turn.username === player.username,
-    ),
     stats: {
       ...player.stats,
       combat: combatBonusOf(state, player),
@@ -642,8 +610,6 @@ export interface PlayerView {
   readonly winner: string | null
   readonly numberOfItemsInDeck: number
   readonly numberOfDiscardedItems: number
-  /** Chat orders (issue #215) are switched on for this game. */
-  readonly chatOrders: boolean
   readonly you: PlayerViewSelf | null
   readonly opponents: readonly OpaquePlayerhand[]
   /** Whose turn it is and which phase they should be working on. */
@@ -723,7 +689,6 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     winner: state.winner,
     numberOfItemsInDeck: state.items.length,
     numberOfDiscardedItems: state.discardedItems.length,
-    chatOrders: state.chatOrders,
     you,
     opponents: state.players
       .filter((player) => player.playerId !== viewerId)

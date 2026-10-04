@@ -595,24 +595,27 @@ describe('StatusPanel turn tag', () => {
       .filter((row) => row.querySelector('.tag.turn') !== null)
       .map((row) => row.querySelector('strong')?.textContent ?? '')
 
-  it('follows the baton without chat orders', () => {
-    render(<StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />)
-    expect(rowsWithTurnTag()).toEqual(['Alice'])
-  })
-
-  it('follows the active turn with chat orders, not the baton (issue #215)', () => {
-    // Alice still holds the baton, but the timeline says Bob is up
+  it('follows the active turn, not the stored yourTurn flag', () => {
+    // Alice is still flagged yourTurn in the data, but the active turn is Bob's
     const view = {
       ...memberView,
-      chatOrders: true,
       activeTurn: { playerId: 'player-them', username: 'Bob', turnNumber: 2, phase: 'SOT' },
     } as unknown as PlayerView
     render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
     expect(rowsWithTurnTag()).toEqual(['Bob'])
   })
 
-  it('tags nobody when chat orders has no one up', () => {
-    const view = { ...memberView, chatOrders: true, activeTurn: null } as unknown as PlayerView
+  it('tags the viewer when the active turn is theirs', () => {
+    const view = {
+      ...memberView,
+      activeTurn: { playerId: 'player-me', username: 'Alice', turnNumber: 2, phase: 'SOT' },
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+    expect(rowsWithTurnTag()).toEqual(['Alice'])
+  })
+
+  it('tags nobody when no one is up', () => {
+    const view = { ...memberView, activeTurn: null } as unknown as PlayerView
     render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
     expect(rowsWithTurnTag()).toEqual([])
   })
