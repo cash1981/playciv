@@ -69,3 +69,14 @@ Add optional, backward-compatible coin-token data to wonder board pieces, migrat
 ## Open questions
 
 None. Panama tokens are treated as belonging to the physical wonder, matching the rules' wording; for legacy data, the currently assigned owner's counter is the only unambiguous balance to migrate.
+
+
+## Follow-up scope: A3/A4
+
+This continuation completes issue #253 A3 and A4 on top of A1/A2 in PR #254.
+
+- Derive one coin per Bank only when its board location has a unique nearby city owner matching the player and the Bank is not blockaded. `placedBy` alone does not prove Bank ownership. Keep the existing Sheet row available for coin sources whose ownership/placement cannot be derived (including scout transfers and incomplete maps).
+- Derive Adam Smith's separate +1 coin only while the Great Person card is revealed/in hand and its matching Merchant/Explorer type remains usable under the existing all-tokens-blockaded policy. Do not replace or merge this with Merchant token coins; hidden cards add no public coin.
+- Add atomic Democracy tech and Printing Press coin purchase actions. Each checks a revealed matching tech, sufficient trade/culture, effective coin capacity (including Internet), and once-per-player-per-turn usage. Debit and coin grant commit together; a failed action changes neither.
+- Reuse the saved player turn keyed by its turn number for usage markers. Do not infer timing from piece movement or card reveal. Preserve manual counter editing for correction; the new purchase action is restricted to the current City Management turn and its CM phase not being marked done.
+- Cover actions through the engine, Hono routes and Coins UI. Keep payment/use details public, as these are shared status-board actions.
