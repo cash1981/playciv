@@ -1378,3 +1378,80 @@ describe('relic outline', () => {
     cleanup()
   })
 })
+
+describe('blockaded pieces (issue #241)', () => {
+  it('draws a blockaded piece greyed and struck through, with text for screen readers and a tooltip (issue #241)', () => {
+    const blockaded = piece('buildings/academy', 'academy-blockaded')
+    const free = piece('buildings/barracks', 'barracks-free')
+
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [blockaded, free] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        blockadedPieceIds={['academy-blockaded']}
+        run={async () => undefined}
+      />,
+    )
+
+    const struck = container.querySelector('[data-piece-id="academy-blockaded"]')
+    const other = container.querySelector('[data-piece-id="barracks-free"]')
+    expect(struck?.classList.contains('board-piece-blockaded')).toBe(true)
+    expect(struck?.getAttribute('title')).toContain('Blockaded by an enemy figure')
+    // Not colour alone: the accessible name says so too.
+    expect(struck?.getAttribute('alt')).toBe('Academy, blockaded')
+    expect(container.querySelectorAll('.board-piece-strike')).toHaveLength(1)
+    expect(container.querySelector('.board-piece-strike')?.getAttribute('aria-hidden')).toBe('true')
+
+    expect(other?.classList.contains('board-piece-blockaded')).toBe(false)
+    expect(other?.getAttribute('title')).not.toContain('Blockaded')
+    expect(other?.getAttribute('alt')).toBe('Academy')
+    cleanup()
+  })
+
+  it('draws a blockaded wonder like any other blockaded piece', () => {
+    const zeus = findBoardAsset('wonders/statueofzeus')
+    if (zeus === undefined) throw new Error('statue of zeus missing from manifest')
+    const wonder: BoardPiece = {
+      ...piece('wonders/statueofzeus', 'zeus-1'),
+      path: zeus.path,
+      label: zeus.label,
+      category: 'wonder',
+      ownerId: 'player-me',
+    }
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [wonder] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        blockadedPieceIds={['zeus-1']}
+        run={async () => undefined}
+      />,
+    )
+    const image = container.querySelector('[data-piece-id="zeus-1"]')
+    expect(image?.classList.contains('board-piece-blockaded')).toBe(true)
+    expect(image?.getAttribute('title')).toContain('Blockaded by an enemy figure')
+    expect(container.querySelectorAll('.board-piece-strike')).toHaveLength(1)
+    cleanup()
+  })
+
+  it('draws no blockade marks when the view has no blockaded pieces', () => {
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...createBoard(), pieces: [piece('buildings/academy', 'academy-1')] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        run={async () => undefined}
+      />,
+    )
+    expect(container.querySelector('.board-piece-blockaded')).toBeNull()
+    expect(container.querySelector('.board-piece-strike')).toBeNull()
+    cleanup()
+  })
+})

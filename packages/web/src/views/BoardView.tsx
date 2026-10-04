@@ -18,7 +18,7 @@
  * live or historical board. Live board undo and redo remain available.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   AREA_LABEL_HEIGHT,
@@ -60,6 +60,8 @@ interface Props {
   readonly youId?: string | null
   /** Only the Russian player is offered the white army (issue #204). */
   readonly viewerIsRussia?: boolean
+  /** Buildings and Great Persons an enemy figure stands on (issue #241); drawn greyed and struck through. */
+  readonly blockadedPieceIds?: readonly string[]
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
 }
 
@@ -270,6 +272,7 @@ export function BoardView({
   readOnly = false,
   youId = null,
   viewerIsRussia = false,
+  blockadedPieceIds = [],
   run,
 }: Props): React.JSX.Element {
   const [assets, setAssets] = useState<readonly BoardAsset[]>([])
@@ -851,36 +854,52 @@ export function BoardView({
                 const x = dragging ? (dragPosition as { x: number }).x : piece.x
                 const y = dragging ? (dragPosition as { y: number }).y : piece.y
 
+                const blockaded = blockadedPieceIds.includes(piece.id)
+
                 return (
-                  <img
-                    key={piece.id}
-                    data-piece-id={piece.id}
-                    className={`board-piece${piece.category === 'relic' ? ' board-piece-relic' : ''}${piece.id === selectedId ? ' selected' : ''}`}
-                    src={assetUrl(piece.path)}
-                    alt={piece.label}
-                    title={`${piece.label} · ${locationOf(board, areas, piece)}`}
-                    draggable={false}
-                    style={{
-                      left: x * zoom,
-                      top: y * zoom,
-                      width: piece.width * zoom,
-                      height: piece.height * zoom,
-                      ...(piece.rotation !== 0
-                        ? { transform: `rotate(${piece.rotation}deg)` }
-                        : {}),
-                      ...(readOnly ? { cursor: 'default' } : {}),
-                    }}
-                    onPointerDown={(event) => {
-                      if (pendingAsset === null && !surfaceOwnsTap(piece, event.pointerType)) {
-                        event.stopPropagation()
-                      }
-                      onPiecePointerDown(event, piece)
-                    }}
-                    onPointerMove={onPiecePointerMove}
-                    onPointerUp={onPiecePointerUp}
-                    onPointerCancel={onPiecePointerCancel}
-                    onLostPointerCapture={onPiecePointerCancel}
-                  />
+                  <Fragment key={piece.id}>
+                    <img
+                      data-piece-id={piece.id}
+                      className={`board-piece${piece.category === 'relic' ? ' board-piece-relic' : ''}${blockaded ? ' board-piece-blockaded' : ''}${piece.id === selectedId ? ' selected' : ''}`}
+                      src={assetUrl(piece.path)}
+                      alt={blockaded ? `${piece.label}, blockaded` : piece.label}
+                      title={`${piece.label} · ${locationOf(board, areas, piece)}${blockaded ? ' · Blockaded by an enemy figure' : ''}`}
+                      draggable={false}
+                      style={{
+                        left: x * zoom,
+                        top: y * zoom,
+                        width: piece.width * zoom,
+                        height: piece.height * zoom,
+                        ...(piece.rotation !== 0
+                          ? { transform: `rotate(${piece.rotation}deg)` }
+                          : {}),
+                        ...(readOnly ? { cursor: 'default' } : {}),
+                      }}
+                      onPointerDown={(event) => {
+                        if (pendingAsset === null && !surfaceOwnsTap(piece, event.pointerType)) {
+                          event.stopPropagation()
+                        }
+                        onPiecePointerDown(event, piece)
+                      }}
+                      onPointerMove={onPiecePointerMove}
+                      onPointerUp={onPiecePointerUp}
+                      onPointerCancel={onPiecePointerCancel}
+                      onLostPointerCapture={onPiecePointerCancel}
+                    />
+                    {blockaded && (
+                      // The strike-through is a picture of the same fact the alt text and title state.
+                      <span
+                        aria-hidden="true"
+                        className="board-piece-strike"
+                        style={{
+                          left: x * zoom,
+                          top: y * zoom,
+                          width: piece.width * zoom,
+                          height: piece.height * zoom,
+                        }}
+                      />
+                    )}
+                  </Fragment>
                 )
               })}
             </div>

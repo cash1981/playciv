@@ -19,7 +19,15 @@
  * name → source mapping the engine and the client share, and the three
  * reducers that invalidate a source reset its counter instead of leaving a
  * hidden value behind. See `docs/agents/tasks/issue-158-valid-coins.md`.
+ *
+ * Issue #241: the Great People counter is derived. It is worked out from the
+ * Builder, Merchant and Humanitarian tokens on the board by
+ * {@link coinSourcesOf}, so the stored value is ignored on read. The Panama
+ * Canal row is shown as 0 while an enemy figure blockades the wonder.
  */
+
+import { greatPersonCoinsOf, isOwnWonderBlockaded } from './blockade.js'
+import type { GameState, Playerhand } from './state.js'
 
 export interface CoinSource {
   readonly key: string
@@ -53,10 +61,14 @@ export const COIN_SOURCES = [
   { key: 'computers', label: 'Computers (IV)', help: '1 coin', max: 1 },
   { key: 'bank', label: 'Bank (Building)', help: '1 coin', max: 1 },
   { key: 'democracyGovernment', label: 'Democracy (Govt)', help: '1 coin', max: 1 },
-  // The human asked for the "50% chance of providing 1 coin" text to go
-  // (issue #158): the source needs no explanation, and the Coins tab only
-  // shows it while it is real anyway.
-  { key: 'greatPeople', label: 'Great People', help: '', max: 1 },
+  // Derived from the board (issue #241), so it is read-only and has no printed
+  // limit: three tokens in three cities give 3. `setCoinSource` refuses it.
+  {
+    key: 'greatPeople',
+    label: 'Great People',
+    help: "Builder, Merchant and Humanitarian on the map in your cities' outskirts",
+    max: null,
+  },
   { key: 'terrain', label: 'Terrain', help: 'Some terrain spots provide 1 coin', max: 1 },
   {
     key: 'panamaCanal',
@@ -176,6 +188,22 @@ export function withCoinSource(
  */
 export function findCoinSource(key: string): CoinSource | undefined {
   return BY_KEY.get(key)
+}
+
+const PANAMA_CANAL_ASSET_ID = 'wonders/panamacanal'
+
+/**
+ * A player's counters with the derived rows filled in from the board (issue
+ * #241). Use this wherever the counters are read. The stored `greatPeople`
+ * value is ignored. The Panama Canal's coins stay on the card while an enemy
+ * figure blockades the wonder but are not counted (FAQ 2.0 p. 4), so the row
+ * reads 0 until it is released; the stored value is not touched.
+ */
+export function coinSourcesOf(state: GameState, player: Playerhand): CoinSources {
+  const panamaCanal = isOwnWonderBlockaded(state, player, PANAMA_CANAL_ASSET_ID)
+    ? 0
+    : player.stats.coinSources.panamaCanal
+  return { ...player.stats.coinSources, greatPeople: greatPersonCoinsOf(state, player), panamaCanal }
 }
 
 /** What a player's counters add up to — the total the status table shows. */

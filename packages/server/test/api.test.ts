@@ -2622,6 +2622,20 @@ describe('player stats (#43)', () => {
     expect((await rejected.json() as { error: string }).error).toBe('UNKNOWN_COIN_SOURCE')
   })
 
+  it('refuses to set the Great People row, which is derived from the board', async () => {
+    const { gameId, starter } = await startedGame('CoinsDerived')
+    const { other } = await ids(gameId, starter)
+
+    const rejected = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/coin`,
+      headers: bearer(starter),
+      payload: { source: 'greatPeople', value: 1 },
+    })
+    expect(rejected.status).toBe(400)
+    expect((await rejected.json() as { error: string }).error).toBe('COIN_SOURCE_NOT_EDITABLE')
+  })
+
   it('refuses a non-member on the coin route too', async () => {
     const { gameId, starter } = await startedGame('CoinsGuard')
     const { other } = await ids(gameId, starter)

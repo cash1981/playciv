@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { placePiece, setWonderOwner } from '../src/actions/board.js'
+import { placePiece, removePiece, setWonderOwner } from '../src/actions/board.js'
 import { chooseTech, discardItem, revealItem, revealTech, setPlayerStat } from '../src/actions/player.js'
 import { isInWondersArea, wondersArea } from '../src/board.js'
 import { cultureHandSizeOf } from '../src/culture-hand.js'
@@ -16,7 +16,7 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { DEFAULT_PLAYER_STATS, findPlayer, toPlayerView } from '../src/state.js'
 
-import { CASH1981, ITCHI, firstCivGame } from './fixture.js'
+import { CASH1981, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 function sizeOf(state: GameState): number {
   const player = findPlayer(state, CASH1981)
@@ -204,6 +204,28 @@ describe('cultureHandSizeOf', () => {
       playerId: CASH1981, assetId: 'wonders/cristoredentor', x: 40, y: 300, ownerId: CASH1981,
     }))
     expect(sizeOf(placed)).toBe(6)
+  })
+
+  it('stops giving the Cristo Redentor +4 while an enemy figure blockades it, and gives it back after', () => {
+    // The fixture makes everyone Red; Cash is Red and Karandras Blue.
+    const fixture = firstCivGame()
+    const state = {
+      ...fixture,
+      players: fixture.players.map((p) => (p.playerId === KARANDRAS1 ? { ...p, color: 'Blue' } : p)),
+    }
+    const wonder = unwrap(placePiece(state, {
+      playerId: CASH1981, assetId: 'wonders/cristoredentor', x: 40, y: 300, ownerId: CASH1981,
+    }))
+    expect(sizeOf(wonder)).toBe(6)
+
+    const withArmy = unwrap(placePiece(wonder, { playerId: KARANDRAS1, assetId: 'figures/bluearmy', x: 40, y: 300 }))
+    const army = withArmy.board.pieces.at(-1)
+    if (army === undefined) throw new Error('the army should be on the board')
+    expect(sizeOf(withArmy)).toBe(2)
+    expect(toPlayerView(withArmy, ITCHI).opponents.find((o) => o.playerId === CASH1981)?.stats.cultureHandSize).toBe(2)
+
+    const released = unwrap(removePiece(withArmy, { playerId: KARANDRAS1, pieceId: army.id }))
+    expect(sizeOf(released)).toBe(6)
   })
 
   it('adds every source together', () => {

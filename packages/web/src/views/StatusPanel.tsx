@@ -77,6 +77,20 @@ function wonderOwners(view: PlayerView, assetId: string): ReadonlySet<string> {
   )
 }
 
+/**
+ * Owners of a wonder that an enemy figure blockades (issue #241). Read off the
+ * public `blockadedPieceIds`, so it depends on the board alone.
+ */
+function blockadedWonderOwners(view: PlayerView, assetId: string): ReadonlySet<string> {
+  const blockaded = new Set(view.blockadedPieceIds ?? [])
+  return new Set(
+    view.board.pieces
+      .filter((piece) => piece.assetId === assetId && blockaded.has(piece.id))
+      .map((piece) => piece.ownerId)
+      .filter((owner): owner is string => owner != null),
+  )
+}
+
 type Section = 'status' | 'coins'
 
 const SECTIONS = [
@@ -210,6 +224,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
             rows={rows}
             internetOwners={wonderOwners(view, 'wonders/internet')}
             panamaOwners={wonderOwners(view, 'wonders/panamacanal')}
+            panamaBlockaded={blockadedWonderOwners(view, 'wonders/panamacanal')}
             busy={busy}
             readOnly={readOnly}
             run={run}
@@ -409,13 +424,16 @@ function availableCoinSources(
  * row with no cell at all is not drawn. A counter that still holds coins stays
  * visible even when its source is no longer valid, so a value can never be
  * hidden and impossible to lower. A final Total row repeats each player's sum,
- * the same number the Status table's Coins column shows.
+ * the same number the Status table's Coins column shows. The Great People row
+ * is the exception: the engine derives it from the tokens on the board, so it
+ * shows the number and has no buttons.
  */
 function CoinSection({
   gameId,
   rows,
   internetOwners,
   panamaOwners,
+  panamaBlockaded,
   busy,
   readOnly,
   run,
@@ -424,6 +442,8 @@ function CoinSection({
   readonly rows: readonly Row[]
   readonly internetOwners: ReadonlySet<string>
   readonly panamaOwners: ReadonlySet<string>
+  /** Owners whose Panama Canal is blockaded: the engine shows its coins as 0 until it is released. */
+  readonly panamaBlockaded: ReadonlySet<string>
   readonly busy: boolean
   readonly readOnly: boolean
   readonly run: Run
@@ -433,7 +453,9 @@ function CoinSection({
     rows.map((row) => [row.playerId, availableCoinSources(row, panamaOwners)] as const),
   )
   const renders = (row: Row, key: CoinSourceKey): boolean =>
-    available.get(row.playerId)?.has(key) === true || row.stats.coinSources[key] > 0
+    available.get(row.playerId)?.has(key) === true ||
+    row.stats.coinSources[key] > 0 ||
+    (key === 'panamaCanal' && panamaBlockaded.has(row.playerId))
   const sources = COIN_SOURCES.filter((source) => rows.some((row) => renders(row, source.key)))
   return (
     <div className="scroll-x">
@@ -459,12 +481,37 @@ function CoinSection({
               <th scope="row">
                 <span className="coin-source">
                   <span>{source.label}</span>
-                  {source.help !== '' && <span className="muted">{source.help}</span>}
+                  {source.help.length > 0 && <span className="muted">{source.help}</span>}
                 </span>
               </th>
               {rows.map((row) => (
                 <td key={row.playerId} className="status-group-start">
-                  {renders(row, source.key) && (
+                  {renders(row, source.key) && source.key === 'greatPeople' && (
+                    // Derived from the tokens on the board (issue #241), so no buttons.
+                    <span className="coin-counter">
+                      <span className="coin-value" aria-label={`${row.username} ${source.label}`}>
+                        {row.stats.coinSources[source.key]}
+                      </span>
+                    </span>
+                  )}
+                  {renders(row, source.key) && source.key === 'panamaCanal' && panamaBlockaded.has(row.playerId) && (
+                    // The coins stay on the card but are not counted while it is blockaded
+                    // (FAQ 2.0 p. 4), so the cell reads 0 whatever number is stored.
+                    <span className="coin-counter">
+                      <span className="coin-value" aria-label={`${row.username} ${source.label}`}>
+                        0
+                      </span>
+                      <span
+                        className="tag blockaded"
+                        title="The Panama Canal is blockaded by an enemy figure: its coins are not counted until it is released"
+                      >
+                        blockaded
+                      </span>
+                    </span>
+                  )}
+                  {renders(row, source.key) &&
+                    source.key !== 'greatPeople' &&
+                    !(source.key === 'panamaCanal' && panamaBlockaded.has(row.playerId)) && (
                     <CoinCounter
                       label={`${row.username} ${source.label}`}
                       value={row.stats.coinSources[source.key]}

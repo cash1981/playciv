@@ -637,6 +637,74 @@ describe('HandItem: place a Great Person in the tech pyramid (#168 follow-up)', 
   })
 })
 
+describe('a Great Person card whose tokens are blockaded (issue #241)', () => {
+  const general: Item = {
+    ...base,
+    id: 'gp-general',
+    sheetName: 'GREAT_PERSON',
+    kind: 'greatperson',
+    name: 'Sun Tzu',
+    type: 'General',
+  }
+
+  it('shows a Blockaded tag and a struck-through card, and keeps the card usable', () => {
+    const { container } = render(
+      <HandItem item={general} gameId="g" busy={false} run={run} opponents={[]} blockaded />,
+    )
+    expect(screen.getByText('Blockaded')).toBeTruthy()
+    expect(container.querySelector('li.card.card-blockaded')).not.toBeNull()
+    // A marker, not a lock: discarding is still offered.
+    expect(screen.getByRole('button', { name: 'Discard' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('shows nothing extra on a card that is not blockaded', () => {
+    const { container } = render(
+      <HandItem item={general} gameId="g" busy={false} run={run} opponents={[]} />,
+    )
+    expect(screen.queryByText('Blockaded')).toBeNull()
+    expect(container.querySelector('.card-blockaded')).toBeNull()
+  })
+
+  it('marks only the cards whose type is in the viewer’s blockaded types', async () => {
+    localStorage.setItem('civ.autoRefresh', 'false')
+    const scientist: Item = { ...general, id: 'gp-sci', name: 'Marie Curie', type: 'Scientist' }
+    const view = {
+      rev: 1,
+      name: 'Blockade hand test',
+      active: true,
+      winner: null,
+      activeTurn: null,
+      you: { items: [general, scientist], blockadedGreatPersonTypes: ['General'] },
+      opponents: [],
+      board: {},
+      boardAreas: [],
+      blockadedPieceIds: [],
+      numOfPlayers: 2,
+      battle: null,
+      battleSummary: [],
+    } as unknown as PlayerView
+    vi.spyOn(api, 'game').mockResolvedValue(view)
+    vi.spyOn(api, 'revisions').mockResolvedValue([])
+
+    render(
+      <GameView
+        gameId="game-1"
+        player={{ username: 'viewer' } as unknown as PlayerDto}
+        onUnauthorized={vi.fn()}
+        onDeleted={vi.fn()}
+        onWithdrawn={vi.fn()}
+        onEnded={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByText(/Sun Tzu/)).toBeTruthy())
+    const hand = screen.getByRole('heading', { name: 'Your hand (2)' }).closest('section')
+    expect(hand?.querySelectorAll('.card-blockaded')).toHaveLength(1)
+    expect(hand?.querySelector('.card-blockaded')?.textContent).toContain('Sun Tzu')
+    expect(hand?.querySelectorAll('.tag.blockaded')).toHaveLength(1)
+  })
+})
+
 describe('the game page (issue #215)', () => {
   const chatSeat = (username: string, playernumber: number, overrides: Record<string, unknown> = {}) =>
     seat(username, { playernumber, ...overrides })

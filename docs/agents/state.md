@@ -19,6 +19,14 @@ _Last updated: 2026-10-04 (issue #244 wonder deactivation)_
 
 ## Done
 - **Issue #244: disabling a wonder preserves the piece and turns off its owner bonuses.** The Wonders panel clears ownership instead of deleting the board piece; it remains on the board and can be reassigned. Culture-token behavior is out of scope per the human. `pnpm -r typecheck`, all 1,856 tests and `pnpm -r build` pass; review approved by sol. Interactive browser check not done because the local store had no game. See `decisions.md`, 2026-10-04. Brief: `tasks/issue-244-removing-wonder.md`.
+- **Blockade: an enemy figure disables a building or Great Person (issue #241, branch `fix/great-person-disable`).**
+  Derived from the board (`engine/src/blockade.ts`): a blockaded piece is greyed and struck
+  through, adds nothing to the combat bonus, and a Great Person card is marked when every
+  token of its type is blockaded. The Great People coin counter is now derived (1 per
+  unblockaded Builder, Merchant or Humanitarian in the outskirts of an own city), read-only,
+  and the old manual value is ignored. Wonders are included (Statue of Zeus, Cristo Redentor, Panama Canal stop while blockaded). No random-disable button.
+  Not checked in a real browser yet. Brief: `tasks/great-person-disable.md`; see
+  `decisions.md`, 2026-10-04.
 - **Disaster markers in Pieces.** The four `Moderator/disasters` assets appear in a Disasters palette category and use generic board-piece placement, without disaster rules or supply caps. `pnpm -r typecheck`, all 1,856 tests and `pnpm -r build` pass; review approved by sol. Interactive browser drag was not checked because the local store had no game. See `decisions.md`, 2026-10-04. Brief: `tasks/disasters.md`.
 - **Delta storage for game revisions, and an admin compaction** (issue #238, phases 1
   and 2). A saved state is a keyframe (full) or a delta against the state before it, a

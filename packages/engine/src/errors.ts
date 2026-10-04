@@ -97,6 +97,8 @@ export type EngineError =
   | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number | string }
   /** `setCoinSource` got a source key outside the reference sheet's rows */
   | { readonly kind: 'UNKNOWN_COIN_SOURCE'; readonly source: string }
+  /** `setCoinSource` (issue #241) was asked to set a row the engine derives from the board (Great People) */
+  | { readonly kind: 'COIN_SOURCE_NOT_EDITABLE'; readonly source: string }
   /**
    * `setCoinSource` got a value the source does not allow: not a whole number,
    * negative, or above the printed limit (`max` is `null` when unlimited).
@@ -207,6 +209,8 @@ export function describeError(error: EngineError): string {
       return `Player stat must be a whole number of zero or more, got ${error.value}`
     case 'UNKNOWN_COIN_SOURCE':
       return `Unknown coin source: ${error.source}`
+    case 'COIN_SOURCE_NOT_EDITABLE':
+      return `The ${error.source} coin source is calculated from the board and cannot be edited`
     case 'INVALID_COIN_VALUE':
       return error.max === null
         ? `Coin count must be a whole number of zero or more, got ${error.value}`

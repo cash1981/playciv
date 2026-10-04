@@ -7,7 +7,8 @@
  * since the old status sheet was typed in by hand.
  */
 
-import { totalCoins } from './coins.js'
+import { isOwnWonderBlockaded } from './blockade.js'
+import { coinSourcesOf, totalCoins } from './coins.js'
 import type { GameState, Playerhand } from './state.js'
 
 /** What every player holds before any card raises it, and the floor. */
@@ -30,7 +31,7 @@ const VALMIKI_BONUS = 2
 /**
  * Cristo Redentor, a Modern Wonder: "Your culture hand size is increased by 4."
  * Like the Statue of Zeus for combat, it counts only for its explicit owner,
- * wherever the piece sits. The board is public, so this reveals nothing.
+ * wherever the piece sits, and stops while an enemy figure blockades it. The board is public, so this reveals nothing.
  */
 const CRISTO_REDENTOR_ASSET_ID = 'wonders/cristoredentor'
 const CRISTO_REDENTOR_BONUS = 4
@@ -46,7 +47,8 @@ const EFTA_BONUS = 1
  * revealed, so the number can never show another player what is still hidden.
  * Valmiki's +2 goes again when the card is discarded, because it then leaves the
  * player's items. The coin total, the EftA investment and the wonders on the
- * board are public already.
+ * board are public already. The coin total includes the derived Great People
+ * coins (issue #241), which follow the blockade.
  */
 export function cultureHandSizeOf(state: GameState, player: Playerhand): number {
   let size = BASE_CULTURE_HAND_SIZE
@@ -55,7 +57,7 @@ export function cultureHandSizeOf(state: GameState, player: Playerhand): number 
     if (tech.hidden) continue
     size += TECH_BONUS.get(tech.name) ?? 0
     if (tech.name === COMPUTERS) {
-      size += Math.floor(Math.max(totalCoins(player.stats.coinSources), 0) / COINS_PER_COMPUTERS_CARD)
+      size += Math.floor(Math.max(totalCoins(coinSourcesOf(state, player)), 0) / COINS_PER_COMPUTERS_CARD)
     }
   }
 
@@ -69,7 +71,10 @@ export function cultureHandSizeOf(state: GameState, player: Playerhand): number 
   const cristoRedentor = state.board.pieces.some(
     (piece) => piece.assetId === CRISTO_REDENTOR_ASSET_ID && piece.ownerId === player.playerId,
   )
-  if (cristoRedentor) size += CRISTO_REDENTOR_BONUS
+  // A blockaded wonder's ability cannot be used (base rulebook p. 27, issue #241).
+  if (cristoRedentor && !isOwnWonderBlockaded(state, player, CRISTO_REDENTOR_ASSET_ID)) {
+    size += CRISTO_REDENTOR_BONUS
+  }
 
   return Math.max(size, BASE_CULTURE_HAND_SIZE)
 }

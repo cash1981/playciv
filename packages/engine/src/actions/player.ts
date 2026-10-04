@@ -1185,6 +1185,12 @@ export function setCoinSource(state: GameState, input: SetCoinSourceInput): Acti
     return err({ kind: 'UNKNOWN_COIN_SOURCE', source: input.source })
   }
 
+  // Great People is derived from the tokens on the board (issue #241), so a
+  // typed value would only be ignored on read; refuse it instead.
+  if (source.key === 'greatPeople') {
+    return err({ kind: 'COIN_SOURCE_NOT_EDITABLE', source: source.key })
+  }
+
   const techCoinSources = new Set(['codeOfLaws', 'pottery', 'democracy', 'printingPress'])
   const ownsInternet = state.board.pieces.some(
     (piece) =>
