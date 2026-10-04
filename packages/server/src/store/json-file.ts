@@ -15,8 +15,22 @@ import { dirname } from 'node:path'
 import type { GameState, HighscoreResult } from '@civ/engine'
 import { migrateGameState } from '@civ/engine'
 
+import type { RevisionCodec } from '../revision-delta.js'
+import { defaultRevisionCodec } from '../revision-delta.js'
 import { ratedHighscore, resultFromGame } from './rating.js'
-
+import type { RevisionEncoding, RevisionKind, RevisionTail } from './revision-chain.js'
+import type { CompactionRow } from './revision-chain.js'
+import {
+  chainBase,
+  compactChunk,
+  encodeRevision,
+  firstBrokenRevision,
+  netRemovableBytes,
+  planCompaction,
+  rebuildState,
+  summarizeCompaction,
+  utf8Length,
+} from './revision-chain.js'
 import { normalizeChatMessage } from './types.js'
 import type {
   BroadcastCounts,
@@ -29,6 +43,9 @@ import type {
   GameRevisionMetadata,
   PlayerUpdate,
   Repository,
+  RevisionCompaction,
+  RevisionCompactionUsage,
+  SaveGameOptions,
   StoredBroadcast,
   StoredBroadcastRecipient,
   StoredChatRow,
@@ -46,13 +63,40 @@ interface Snapshot {
   readonly games: readonly GameState[]
   /** Old files hold rows without `kind` and the tags; `load` fills them in. */
   readonly chat: readonly StoredChatRow[]
-  readonly revisions?: readonly GameRevision[]
+  readonly revisions?: readonly StoredRevisionFile[]
   /** Per player and game: when they were last emailed and last opened it. */
   readonly gameMail?: Readonly<Record<string, GameMailStamps>>
   readonly highscore?: HighscoreResult
   /** The admin broadcast queue; recipients keep the order they were queued in. */
   readonly broadcasts?: readonly StoredBroadcast[]
   readonly broadcastRecipients?: readonly StoredBroadcastRecipient[]
+}
+
+/**
+ * A revision row as it is kept: the metadata of a `GameRevision`, and a `state`
+ * that is the full state for a keyframe or the delta for a delta (issue #238),
+ * the same two forms the D1 table holds.
+ */
+interface StoredRevision extends Omit<GameRevision, 'state'> {
+  readonly kind: RevisionKind
+  /** The keyframe the row's chain starts from; `null` for a row from before delta storage. */
+  readonly baseRevision: number | null
+  /** The live game moved on after this row without a new revision being recorded. */
+  readonly sealed: boolean
+  readonly state: unknown
+}
+
+/** A file written before delta storage has plain `GameRevision` rows. */
+type StoredRevisionFile = Omit<StoredRevision, 'kind' | 'baseRevision' | 'sealed'> &
+  Partial<Pick<StoredRevision, 'kind' | 'baseRevision' | 'sealed'>>
+
+function toCompactionRow(row: StoredRevision): CompactionRow {
+  return {
+    revision: row.revision,
+    kind: row.kind,
+    baseRevision: row.baseRevision,
+    bytes: utf8Length(JSON.stringify(row.state)),
+  }
 }
 
 /** ISO timestamps; either may be missing until the event first happens. */
@@ -66,12 +110,14 @@ export interface JsonFileRepositoryOptions {
   readonly filePath: string | null
   /** Milliseconds to wait before writing, so a burst of changes is one write. */
   readonly debounceMs?: number
+  /** How revisions are diffed and rebuilt. A seam for tests; the default is the real codec. */
+  readonly codec?: RevisionCodec
 }
 
 export class JsonFileRepository implements Repository {
   private readonly players = new Map<string, StoredPlayer>()
   private readonly games = new Map<string, GameState>()
-  private readonly revisions = new Map<string, GameRevision>()
+  private readonly revisions = new Map<string, StoredRevision>()
   private readonly gameMail = new Map<string, GameMailStamps>()
   private readonly broadcasts = new Map<string, StoredBroadcast>()
   private readonly broadcastRecipients = new Map<string, StoredBroadcastRecipient>()
@@ -81,12 +127,14 @@ export class JsonFileRepository implements Repository {
 
   private readonly filePath: string | null
   private readonly debounceMs: number
+  private readonly codec: RevisionCodec
   private timer: NodeJS.Timeout | undefined
   private writing: Promise<void> = Promise.resolve()
 
   constructor(options: JsonFileRepositoryOptions) {
     this.filePath = options.filePath
     this.debounceMs = options.debounceMs ?? 250
+    this.codec = options.codec ?? defaultRevisionCodec
   }
 
   /** Reads an existing file when there is one. Called once at startup. */
@@ -116,10 +164,23 @@ export class JsonFileRepository implements Repository {
     if (normalizedPlayers) this.scheduleWrite()
     // Games saved before a field existed must be filled in before use
     for (const game of snapshot.games) this.games.set(game.id, migrateGameState(game))
+    const fromOldFile = new Set<string>()
     for (const revision of snapshot.revisions ?? []) {
-      const migrated = { ...revision, state: migrateGameState(revision.state) }
-      this.revisions.set(this.revisionKey(revision.gameId, revision.revision), migrated)
+      const kind: RevisionKind = revision.kind === 'delta' ? 'delta' : 'full'
+      if (revision.kind === undefined) fromOldFile.add(revision.gameId)
+      const row: StoredRevision = {
+        ...revision,
+        kind,
+        baseRevision: revision.baseRevision ?? null,
+        sealed: revision.sealed === true,
+        // Only a keyframe is a game state; a delta is not migrated.
+        state: kind === 'full' ? migrateGameState(revision.state as GameState) : revision.state,
+      }
+      this.revisions.set(this.revisionKey(revision.gameId, revision.revision), row)
     }
+    // Like migration 0006 for D1: what wrote an old file did not track changes the
+    // history does not record, so the next revision of each of its games is a keyframe.
+    for (const gameId of fromOldFile) this.sealNewest(gameId)
     // Rows saved before chat orders (issue #215) have no kind or tags
     this.chat = snapshot.chat.map(normalizeChatMessage)
     this.highscoreCache = snapshot.highscore
@@ -185,13 +246,20 @@ export class JsonFileRepository implements Repository {
   async saveGame(game: GameState): Promise<void> {
     if (!game.active || this.games.get(game.id)?.active === false) this.invalidateHighscore()
     this.games.set(game.id, game)
+    // Replaced wholesale: the newest revision no longer describes the game.
+    this.sealNewest(game.id)
     this.scheduleWrite()
   }
 
-  async saveGameIfRevision(game: GameState, expectedRevision: number): Promise<boolean> {
+  async saveGameIfRevision(
+    game: GameState,
+    expectedRevision: number,
+    options: SaveGameOptions = {},
+  ): Promise<boolean> {
     if (this.games.get(game.id)?.rev !== expectedRevision) return false
     if (!game.active || this.games.get(game.id)?.active === false) this.invalidateHighscore()
     this.games.set(game.id, game)
+    if (options.notesOnly !== true) this.sealNewest(game.id)
     this.scheduleWrite()
     return true
   }
@@ -200,6 +268,7 @@ export class JsonFileRepository implements Repository {
     game: GameState,
     revision: GameRevision,
     expectedRevision: number | null,
+    previous?: GameState,
   ): Promise<boolean> {
     const current = this.games.get(game.id)
     const revisionKey = this.revisionKey(revision.gameId, revision.revision)
@@ -211,7 +280,11 @@ export class JsonFileRepository implements Repository {
     }
     if (!game.active || current?.active === false) this.invalidateHighscore()
     this.games.set(game.id, game)
-    this.revisions.set(revisionKey, revision)
+    const encoding =
+      expectedRevision === null || previous === undefined
+        ? undefined
+        : this.encodeRevision(revision, previous)
+    this.revisions.set(revisionKey, this.toRow(revision, encoding))
     this.scheduleWrite()
     return true
   }
@@ -223,33 +296,78 @@ export class JsonFileRepository implements Repository {
     if (this.games.get(revision.gameId)?.rev !== expectedRevision) return false
     if ([...this.revisions.values()].some((entry) => entry.gameId === revision.gameId)) return true
     const key = this.revisionKey(revision.gameId, revision.revision)
-    this.revisions.set(key, revision)
+    this.revisions.set(key, this.toRow(revision, undefined))
     this.scheduleWrite()
     return true
   }
 
   async listGameRevisions(gameId: string): Promise<readonly GameRevision[]> {
-    return [...this.revisions.values()]
-      .filter((revision) => revision.gameId === gameId)
-      .sort((left, right) => left.revision - right.revision)
+    const revisions: GameRevision[] = []
+    let current: GameState | undefined
+    let keyframe: number | undefined
+    for (const row of this.rowsOf(gameId)) {
+      if (row.kind === 'full') {
+        keyframe = row.revision
+        current = row.state as GameState
+      } else {
+        const applied =
+          current === undefined || row.baseRevision !== keyframe
+            ? undefined
+            : this.codec.apply(current, row.state)
+        if (applied === undefined || !applied.ok) {
+          throw new Error(`Revision ${row.revision} of game ${gameId} cannot be rebuilt`)
+        }
+        current = applied.value as GameState
+      }
+      revisions.push(this.toGameRevision(row, current))
+    }
+    return revisions
   }
 
   async listGameRevisionSummaries(gameId: string): Promise<readonly GameRevisionMetadata[]> {
     // In memory there is nothing to save by dropping `state`, but the method
     // exists so both stores answer the history route the same way.
-    return (await this.listGameRevisions(gameId)).map((revision) => ({
-      gameId: revision.gameId,
-      revision: revision.revision,
-      createdAt: revision.createdAt,
-      actor: revision.actor,
-      publicDescription: revision.publicDescription,
-      privateDescriptions: revision.privateDescriptions,
-      logIds: revision.logIds,
+    return this.rowsOf(gameId).map((row) => ({
+      gameId: row.gameId,
+      revision: row.revision,
+      createdAt: row.createdAt,
+      actor: row.actor,
+      publicDescription: row.publicDescription,
+      privateDescriptions: row.privateDescriptions,
+      logIds: row.logIds,
     }))
   }
 
   async findGameRevision(gameId: string, revision: number): Promise<GameRevision | undefined> {
-    return this.revisions.get(this.revisionKey(gameId, revision))
+    const row = this.revisions.get(this.revisionKey(gameId, revision))
+    if (row === undefined) return undefined
+    const state = await this.rebuildRow(gameId, revision)
+    if (state === undefined) throw new Error(`Revision ${revision} of game ${gameId} cannot be rebuilt`)
+    return this.toGameRevision(row, state)
+  }
+
+  /**
+   * The full state of one revision: the nearest keyframe at or below it and every
+   * row up to it, applied in order. `undefined` when the chain does not hold
+   * together.
+   */
+  private async rebuildRow(gameId: string, revision: number): Promise<GameState | undefined> {
+    const rows = this.rowsOf(gameId)
+    const index = rows.findIndex((row) => row.revision === revision)
+    if (index < 0) return undefined
+    let start = index
+    while (start > 0 && rows[start]?.kind !== 'full') start -= 1
+    const rebuilt = rebuildState(
+      rows.slice(start, index + 1).map((entry) => ({
+        revision: entry.revision,
+        kind: entry.kind,
+        baseRevision: entry.baseRevision,
+        payload: entry.state,
+      })),
+      this.codec,
+      (state) => state,
+    )
+    return rebuilt.ok ? rebuilt.state : undefined
   }
 
   async findGame(id: string): Promise<GameState | undefined> {
@@ -286,19 +404,20 @@ export class JsonFileRepository implements Repository {
     const usage: FinishedGameRevisionUsage[] = []
     for (const game of this.games.values()) {
       if (game.active || (gameId !== undefined && game.id !== gameId)) continue
-      const revisions = [...this.revisions.values()].filter((entry) => entry.gameId === game.id)
-      const newest = revisions.reduce((max, entry) => Math.max(max, entry.revision), -1)
-      const removable = revisions.filter((entry) => entry.revision < newest)
+      const rows = this.rowsOf(game.id)
+      const newest = rows.at(-1)
+      const removable = rows.filter((entry) => entry.revision < (newest?.revision ?? -1))
+      // D1 sums the stored JSON text; this is the same text's size.
+      const bytes = (row: StoredRevision) => utf8Length(JSON.stringify(row.state))
+      const keyframe = newest === undefined ? undefined : rows.find((row) => row.revision === chainBase(newest))
+      const growth =
+        newest?.kind === 'delta' && keyframe !== undefined ? bytes(keyframe) - bytes(newest) : 0
       usage.push({
         gameId: game.id,
         name: game.name,
-        revisions: revisions.length,
+        revisions: rows.length,
         removableRevisions: removable.length,
-        // D1 sums the stored JSON text; this is the same text's size.
-        removableBytes: removable.reduce(
-          (sum, entry) => sum + Buffer.byteLength(JSON.stringify(entry.state), 'utf8'),
-          0,
-        ),
+        removableBytes: netRemovableBytes(removable.reduce((sum, row) => sum + bytes(row), 0), growth),
       })
     }
     return usage.sort(
@@ -311,16 +430,123 @@ export class JsonFileRepository implements Repository {
     const game = this.games.get(gameId)
     if (game === undefined) return { status: 'not-found' }
     if (game.active) return { status: 'active' }
-    const revisions = [...this.revisions.entries()].filter(([, entry]) => entry.gameId === gameId)
-    const newest = revisions.reduce((max, [, entry]) => Math.max(max, entry.revision), -1)
+    const rows = this.rowsOf(gameId)
+    const newest = rows.at(-1)
+    if (newest === undefined) return { status: 'cleaned', removed: 0 }
+
+    if (newest.kind === 'delta') {
+      // The newest revision would not survive losing its chain: keep it as a keyframe.
+      const rebuilt = await this.rebuildRow(gameId, newest.revision)
+      if (rebuilt === undefined) return { status: 'changed' }
+      this.revisions.set(this.revisionKey(gameId, newest.revision), {
+        ...newest,
+        kind: 'full',
+        baseRevision: newest.revision,
+        // Whether the live game moved past this row is not a matter of how the row is stored.
+        sealed: newest.sealed,
+        state: rebuilt,
+      })
+    }
     let removed = 0
-    for (const [key, entry] of revisions) {
-      if (entry.revision >= newest) continue
-      this.revisions.delete(key)
+    for (const row of rows) {
+      if (row.revision >= newest.revision) continue
+      this.revisions.delete(this.revisionKey(gameId, row.revision))
       removed += 1
     }
-    if (removed > 0) this.scheduleWrite()
+    this.scheduleWrite()
     return { status: 'cleaned', removed }
+  }
+
+  async revisionCompactionUsage(gameId?: string): Promise<readonly RevisionCompactionUsage[]> {
+    return [...this.games.values()]
+      .filter((game) => gameId === undefined || game.id === gameId)
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((game) => {
+        const rows = this.rowsOf(game.id)
+        return {
+          gameId: game.id,
+          name: game.name,
+          active: game.active,
+          revisions: rows.length,
+          ...summarizeCompaction(rows.map(toCompactionRow)),
+        }
+      })
+  }
+
+  async compactGameRevisions(
+    gameId: string,
+    maxRevisions: number,
+    maxBytes = Number.POSITIVE_INFINITY,
+  ): Promise<RevisionCompaction> {
+    if (!this.games.has(gameId)) return { status: 'not-found' }
+    const rows = this.rowsOf(gameId)
+    const plan = planCompaction(rows.map(toCompactionRow), maxRevisions, maxBytes)
+    if (plan.todo.length === 0) {
+      return {
+        status: 'compacted',
+        converted: 0,
+        keyframes: 0,
+        freedBytes: 0,
+        handledBytes: 0,
+        handledRows: 0,
+        remaining: plan.remaining,
+      }
+    }
+
+    let previousState: GameState | undefined
+    if (plan.previous !== undefined) {
+      previousState = await this.rebuildRow(gameId, plan.previous)
+      if (previousState === undefined) {
+        return { status: 'mismatch', revision: plan.previous, handledBytes: plan.bytes, handledRows: plan.todo.length }
+      }
+    }
+    const outcome = compactChunk({
+      plan,
+      previousState,
+      // Rows are kept migrated already (`load`), so these are the states a read gives.
+      states: plan.todo.map((revision) => {
+        const row = rows.find((entry) => entry.revision === revision) as StoredRevision
+        return { revision, state: row.state as GameState, bytes: utf8Length(JSON.stringify(row.state)) }
+      }),
+      codec: this.codec,
+    })
+    if (!outcome.ok) {
+      return { status: 'mismatch', revision: outcome.revision, handledBytes: plan.bytes, handledRows: plan.todo.length }
+    }
+
+    let converted = 0
+    let keyframes = 0
+    let freedBytes = 0
+    for (const step of outcome.steps) {
+      const row = rows.find((entry) => entry.revision === step.revision) as StoredRevision
+      if (step.kind === 'delta') {
+        this.revisions.set(this.revisionKey(gameId, step.revision), {
+          ...row,
+          kind: 'delta',
+          baseRevision: step.baseRevision,
+          state: JSON.parse(step.json) as unknown,
+        })
+        converted += 1
+        freedBytes += step.savedBytes
+      } else {
+        this.revisions.set(this.revisionKey(gameId, step.revision), { ...row, baseRevision: step.revision })
+        keyframes += 1
+      }
+    }
+    const broken = firstBrokenRevision(this.rowsOf(gameId).map(toCompactionRow))
+    if (broken !== undefined) {
+      return { status: 'mismatch', revision: broken, handledBytes: plan.bytes, handledRows: plan.todo.length }
+    }
+    this.scheduleWrite()
+    return {
+      status: 'compacted',
+      converted,
+      keyframes,
+      freedBytes,
+      handledBytes: plan.bytes,
+      handledRows: plan.todo.length,
+      remaining: plan.remaining,
+    }
   }
 
   async appendChat(message: StoredChatRow): Promise<void> {
@@ -614,5 +840,67 @@ export class JsonFileRepository implements Repository {
 
   private revisionKey(gameId: string, revision: number): string {
     return `${gameId}:${revision}`
+  }
+
+  /** A game's rows, oldest first. */
+  private rowsOf(gameId: string): StoredRevision[] {
+    return [...this.revisions.values()]
+      .filter((row) => row.gameId === gameId)
+      .sort((left, right) => left.revision - right.revision)
+  }
+
+  private sealNewest(gameId: string): void {
+    const newest = this.rowsOf(gameId).at(-1)
+    if (newest === undefined || newest.sealed) return
+    this.revisions.set(this.revisionKey(gameId, newest.revision), { ...newest, sealed: true })
+  }
+
+  /** Same decision as D1: a delta only against a safe, unsealed chain that is not yet K rows long. */
+  private encodeRevision(revision: GameRevision, previous: GameState): RevisionEncoding | undefined {
+    const newest = this.rowsOf(revision.gameId).at(-1)
+    if (newest === undefined) return undefined
+    const base = chainBase(newest)
+    const tail: RevisionTail = {
+      revision: newest.revision,
+      baseRevision: base,
+      sealed: newest.sealed,
+      chainRows: this.rowsOf(revision.gameId).filter((row) => row.revision >= base).length,
+    }
+    return encodeRevision({
+      revision: revision.revision,
+      state: revision.state,
+      previous,
+      tail,
+      codec: this.codec,
+      // What a keyframe of this revision would take; D1 uses its chain's keyframe.
+      fullBytes: () => utf8Length(JSON.stringify(revision.state)),
+    })
+  }
+
+  private toRow(revision: GameRevision, encoding: RevisionEncoding | undefined): StoredRevision {
+    const { state, ...metadata } = revision
+    if (encoding === undefined || encoding.kind === 'full') {
+      return { ...metadata, kind: 'full', baseRevision: revision.revision, sealed: false, state }
+    }
+    return {
+      ...metadata,
+      kind: 'delta',
+      baseRevision: encoding.baseRevision,
+      sealed: false,
+      state: JSON.parse(encoding.json) as unknown,
+    }
+  }
+
+  private toGameRevision(row: StoredRevision, state: GameState): GameRevision {
+    return {
+      gameId: row.gameId,
+      revision: row.revision,
+      createdAt: row.createdAt,
+      actor: row.actor,
+      publicDescription: row.publicDescription,
+      privateDescriptions: row.privateDescriptions,
+      logIds: row.logIds,
+      state,
+    }
   }
 }

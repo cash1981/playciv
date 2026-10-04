@@ -50,11 +50,43 @@ function readExclude(body: Record<string, unknown>): string[] | undefined | 'inv
 }
 
 /**
- * Games one cleanup request handles: one guarded delete each. The free plan allows
- * 50 subrequests per request and a run costs about 2 per game (the delete and, when
- * it removed nothing, a read) plus a few, so keep this below roughly 23.
+ * Games one cleanup request handles. The free plan allows 50 subrequests per
+ * request. A game costs 2 when its newest revision is a keyframe (read the game,
+ * delete) and 3 when it is a delta (read the game, rebuild the newest revision,
+ * one batch that rewrites it and deletes the rest). Worst case 12 * 3 = 36, plus
+ * the listing and the admin check, stays well under 50.
  */
-const CLEANUP_GAMES_PER_REQUEST = 20
+const CLEANUP_GAMES_PER_REQUEST = 12
+
+/**
+ * What one compaction request may chew on. A conversion parses two states of up
+ * to about 420 KB, diffs them and compares the rebuilt one with the original, and
+ * a Worker on the free plan has about 10 ms of CPU per request. That work grows
+ * with the size of the states, not the number of rows: measured on Node it is
+ * about 4.4 ms per MB of state text, so 1 MB per request is about 5 ms there, 2
+ * rows of the largest states or 11 of the smallest. See decisions.md (2026-10-03,
+ * delta storage). The row cap only bounds the size of the batch.
+ *
+ * The budget is spent by every game a request visits, whatever it answers: a game
+ * that fails its check still parsed its states, and the store reports those bytes.
+ * A game is entered only while the budget left covers the least it can do (its
+ * first row, twice when the state before it is rebuilt); the first game of a
+ * request is always entered, or a game with huge states could never be compacted.
+ * So a request parses at most the budget, except when a single first chunk is
+ * larger than it by itself.
+ */
+export const COMPACT_BYTES_PER_REQUEST = 1_000_000
+export const COMPACT_REVISIONS_PER_REQUEST = 40
+
+/**
+ * Games one compaction request visits. A game costs at most 6 subrequests (does it
+ * exist, its rows, the state before the first conversion, the old rows, one batch,
+ * and a re-read of the rows only when the batch did not apply as planned), taking
+ * `db.batch()` as one subrequest however many statements it holds. The listing
+ * (2) and the admin check (1) come on top: 5 games is at most 33 of the 50 the
+ * free plan allows.
+ */
+const COMPACT_GAMES_PER_REQUEST = 5
 
 /**
  * What one migrate-chat request may spend on the database, counted in calls: a
@@ -411,8 +443,11 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
         // longer finished): skip it, so the report of the games already cleaned
         // is not thrown away. A named game gets its own error.
         if (gameId === undefined) continue
-        return result.status === 'not-found'
-          ? sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${game.gameId}`)
+        if (result.status === 'not-found') {
+          return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${game.gameId}`)
+        }
+        return result.status === 'changed'
+          ? sendError(c, 409, 'GAME_CHANGED', 'The game changed while it was cleaned up; try again')
           : sendError(
               c,
               409,
@@ -432,6 +467,111 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       totalRevisions: sum(games.map((game) => game.removedRevisions)),
       totalBytes: sum(games.map((game) => game.removedBytes)),
       remaining: gameId === undefined ? targets.length - batch.length : 0,
+    })
+  })
+
+  /**
+   * The dry run of the revision compaction (issue #238, phase 2): per game, how
+   * many revisions it has, how many are still full states from before delta
+   * storage and roughly what compacting them frees. Counts and names only; no
+   * state, and never a stored delta, leaves the repository.
+   */
+  app.get('/api/admin/games/revisions/compact', admin, async (c) => {
+    const usage = (await context.repo.revisionCompactionUsage()).filter(
+      (game) => game.fullRevisions > 0,
+    )
+    return c.json({
+      games: usage.map((game) => ({
+        id: game.gameId,
+        name: game.name,
+        active: game.active,
+        revisions: game.revisions,
+        fullRevisions: game.fullRevisions,
+        freeableBytes: game.freeableBytes,
+      })),
+      totalRevisions: sum(usage.map((game) => game.fullRevisions)),
+      totalBytes: sum(usage.map((game) => game.freeableBytes)),
+    })
+  })
+
+  /**
+   * Turns the full-state revisions of one game (`gameId`) or of the games with
+   * the most to gain into delta chains, as many as fit in
+   * `COMPACT_BYTES_PER_REQUEST` of state text per request, and says how many games still have work left so the
+   * admin can press again. Every conversion is rebuilt and compared with the
+   * original before anything is written; a game that fails the check is left as
+   * it was and reported with the revision where it went wrong. A running game is
+   * safe: its newest revision is never touched.
+   */
+  app.post('/api/admin/games/revisions/compact', admin, async (c) => {
+    // A body that is not an object is refused rather than read as "every game".
+    const parsed: unknown = await c.req.json().catch(() => undefined)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'Send a JSON object, with gameId to compact one game')
+    }
+    const gameId = asRecord(parsed)['gameId']
+    if (gameId !== undefined && (typeof gameId !== 'string' || gameId.trim() === '')) {
+      return sendError(c, 400, 'BAD_REQUEST', 'gameId must be a non-empty string')
+    }
+
+    const listed = await context.repo.revisionCompactionUsage(gameId)
+    const targets =
+      gameId === undefined
+        ? [...listed].filter((game) => game.fullRevisions > 0).sort(
+            (left, right) => right.freeableBytes - left.freeableBytes || left.gameId.localeCompare(right.gameId),
+          )
+        : listed
+    if (gameId !== undefined && targets.length === 0) {
+      return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    }
+
+    type GameReport =
+      | { id: string; name: string; status: 'compacted'; converted: number; keyframes: number; freedBytes: number; remaining: number }
+      | { id: string; name: string; status: 'mismatch'; revision: number }
+    const games: GameReport[] = []
+    let revisionBudget = COMPACT_REVISIONS_PER_REQUEST
+    let byteBudget = COMPACT_BYTES_PER_REQUEST
+    let visited = 0
+    let remainingGames = 0
+    let remainingRevisions = 0
+    for (const game of targets) {
+      const affordable = visited === 0 || (revisionBudget > 0 && byteBudget >= game.nextChunkBytes)
+      if (!affordable || visited >= COMPACT_GAMES_PER_REQUEST) {
+        remainingGames += game.fullRevisions > 0 ? 1 : 0
+        remainingRevisions += game.fullRevisions
+        continue
+      }
+      visited += 1
+      const result = await context.repo.compactGameRevisions(game.gameId, revisionBudget, byteBudget)
+      if (result.status === 'not-found') continue
+      // Every answer spent some of the request, a failed check included.
+      revisionBudget -= result.handledRows
+      byteBudget -= result.handledBytes
+      if (result.status === 'mismatch') {
+        games.push({ id: game.gameId, name: game.name, status: 'mismatch', revision: result.revision })
+        remainingGames += 1
+        remainingRevisions += game.fullRevisions
+        continue
+      }
+      games.push({
+        id: game.gameId,
+        name: game.name,
+        status: 'compacted',
+        converted: result.converted,
+        keyframes: result.keyframes,
+        freedBytes: result.freedBytes,
+        remaining: result.remaining,
+      })
+      remainingGames += result.remaining > 0 ? 1 : 0
+      remainingRevisions += result.remaining
+    }
+    const compacted = games.flatMap((game) => (game.status === 'compacted' ? [game] : []))
+    return c.json({
+      games,
+      totalConverted: sum(compacted.map((game) => game.converted)),
+      totalBytes: sum(compacted.map((game) => game.freedBytes)),
+      remaining: remainingGames,
+      remainingRevisions,
     })
   })
 

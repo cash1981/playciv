@@ -3,7 +3,7 @@
  * game, and wrapping the engine `Result` in an HTTP response.
  */
 
-import type { EngineError, GameState, PlayerView } from '@civ/engine'
+import type { EngineError, GameState, PlayerView, Playerhand } from '@civ/engine'
 import { toPlayerView } from '@civ/engine'
 import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
@@ -12,6 +12,7 @@ import type { ResetTokenSigner, TokenSigner } from './auth.js'
 import { newId } from './auth.js'
 import { sendEngineError, sendError } from './errors.js'
 import type { Notifications } from './notifications.js'
+import { sameJson } from './revision-delta.js'
 import type { GameRevision, Repository, StoredPlayer } from './store/types.js'
 
 export interface AppContext {
@@ -129,6 +130,31 @@ export function stampLog(state: GameState, now: string): GameState {
   }
 }
 
+/**
+ * What a revision stores of a game: private planning notes are deliberately
+ * outside revision capture, so both the active and the withdrawn hands are
+ * blanked. A player whose note is already empty keeps their object, so a state
+ * and the one before it still share it (which is what makes diffing them cheap).
+ */
+export function revisionSnapshot(state: GameState): GameState {
+  const blank = (player: Playerhand): Playerhand =>
+    player.gamenote === '' ? player : { ...player, gamenote: '' }
+  return {
+    ...state,
+    players: state.players.map(blank),
+    withdrawnPlayers: state.withdrawnPlayers.map(blank),
+  }
+}
+
+/**
+ * Whether two live states differ only in private notes (and `rev`), the one kind
+ * of unrecorded change a delta against the newest revision does not need to know
+ * about: revision snapshots blank the notes anyway.
+ */
+export function differOnlyInNotes(before: GameState, after: GameState): boolean {
+  return sameJson({ ...revisionSnapshot(before), rev: 0 }, { ...revisionSnapshot(after), rev: 0 })
+}
+
 export function createGameRevision(
   before: GameState | undefined,
   state: GameState,
@@ -162,13 +188,7 @@ export function createGameRevision(
     publicDescription,
     privateDescriptions,
     logIds: entries.map((entry) => entry.id),
-    // Private planning notes are deliberately outside revision capture. Blank
-    // both active and withdrawn hands before the immutable snapshot is stored.
-    state: {
-      ...state,
-      players: state.players.map((player) => ({ ...player, gamenote: '' })),
-      withdrawnPlayers: state.withdrawnPlayers.map((player) => ({ ...player, gamenote: '' })),
-    },
+    state: revisionSnapshot(state),
   }
 }
 
@@ -250,7 +270,11 @@ export async function applyToGame(
   const stamped = stampLog({ ...result.value, rev: game.rev + 1 }, now)
 
   if (options.record === false) {
-    const saved = await context.repo.saveGameIfRevision(stamped, game.rev)
+    // A note leaves the chain of revisions alone; anything else this path saves
+    // (an admin setting) makes the next revision a keyframe.
+    const saved = await context.repo.saveGameIfRevision(stamped, game.rev, {
+      notesOnly: differOnlyInNotes(game, stamped),
+    })
     if (!saved) {
       return sendError(
         c,
@@ -284,6 +308,9 @@ export async function applyToGame(
         options.publicDescription?.({ before: game, after: stamped }),
       ),
       game.rev,
+      // The live game before the action is the newest revision's state (notes
+      // blanked), so the store can keep the revision as a small delta.
+      revisionSnapshot(game),
     )
     if (!saved) {
       return sendError(

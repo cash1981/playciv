@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { api } from '../lib/api.js'
@@ -8,6 +8,8 @@ import type {
   BroadcastResultDto,
   CleanupCandidateDto,
   CleanupPreviewDto,
+  CompactCandidateDto,
+  CompactPreviewDto,
   MigrateChatGameDto,
   MigrateChatPreviewDto,
   PlayerDto,
@@ -448,6 +450,8 @@ export function AdminView({
       <FinishedGameCleanupPanel onUnauthorized={onUnauthorized} />
 
       <MigrateChatPanel onUnauthorized={onUnauthorized} />
+
+      <RevisionCompactionPanel onUnauthorized={onUnauthorized} />
     </>
   )
 }
@@ -1158,6 +1162,239 @@ function MigrateChatPanel({
             Move all
           </button>
         </div>
+      )}
+    </section>
+  )
+}
+
+/** A safety stop for the "keep pressing" loop of the compaction; far more than any database needs. */
+const COMPACT_MAX_REQUESTS = 2000
+
+/** What each compaction confirmation says: nothing is lost, and the owner's safety net comes first. */
+const COMPACT_REASSURANCE =
+  'The saved states are rebuilt and checked against the originals before anything is replaced, ' +
+  'so every game reads the same afterwards. A game that is still running keeps its newest saved state untouched.'
+
+/**
+ * "Compact revision history": turns the old full copies of the game state, one per
+ * move, into small differences. Nothing about the games changes for the players.
+ * The server does a limited amount per request, so a press keeps asking until the
+ * server says nothing is left, a game fails its check, or a request makes no
+ * progress. The dry run is read when the admin asks, and again when a run ends.
+ */
+function RevisionCompactionPanel({
+  onUnauthorized,
+}: {
+  readonly onUnauthorized: () => void
+}): React.JSX.Element {
+  const [preview, setPreview] = useState<CompactPreviewDto | null>(null)
+  const [working, setWorking] = useState(false)
+  const [progress, setProgress] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [problems, setProblems] = useState<readonly string[]>([])
+  const [error, setError] = useState<string | null>(null)
+  // A run in flight must stop asking when the page is left.
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
+  /** Runs one action, reporting a failure here and a lapsed session to the app. */
+  async function act(action: () => Promise<void>): Promise<void> {
+    setWorking(true)
+    setError(null)
+    try {
+      await action()
+    } catch (caught) {
+      if (isUnauthorized(caught)) return onUnauthorized()
+      setError(errorMessage(caught))
+    } finally {
+      if (mounted.current) {
+        setWorking(false)
+        setProgress(null)
+      }
+    }
+  }
+
+  async function load(): Promise<void> {
+    setNotice(null)
+    setProblems([])
+    await act(async () => {
+      setPreview(await api.compactPreview())
+    })
+  }
+
+  async function compactOne(game: CompactCandidateDto): Promise<void> {
+    if (working) return
+    if (
+      !window.confirm(
+        `Compact ${game.name}? ${game.fullRevisions} of its ${game.revisions} saved states ` +
+          `(about ${formatMegabytes(game.freeableBytes)} to free) will be replaced by small differences. ` +
+          `It takes several requests; they follow one another by themselves. ${COMPACT_REASSURANCE}`,
+      )
+    ) {
+      return
+    }
+    await run(game.id)
+  }
+
+  async function compactAll(): Promise<void> {
+    if (working || preview === null || preview.games.length === 0) return
+    if (
+      !window.confirm(
+        `Compact ${preview.games.length} ${preview.games.length === 1 ? 'game' : 'games'}? ` +
+          `${preview.totalRevisions} saved states (about ${formatMegabytes(preview.totalBytes)} to free) ` +
+          `will be replaced by small differences. It takes many requests; they follow one another by ` +
+          `themselves, and it can be stopped by leaving this page. ${COMPACT_REASSURANCE}`,
+      )
+    ) {
+      return
+    }
+    await run(undefined)
+  }
+
+  async function run(gameId: string | undefined): Promise<void> {
+    setNotice(null)
+    setProblems([])
+    await act(async () => {
+      let handled = 0
+      let freed = 0
+      let requests = 0
+      const failed: string[] = []
+      let remaining = 0
+      let stoppedWithoutProgress = false
+      while (mounted.current && requests < COMPACT_MAX_REQUESTS) {
+        const result = await api.compactRevisions(gameId)
+        requests += 1
+        let step = 0
+        for (const game of result.games) {
+          if (game.status === 'compacted') {
+            step += game.converted + game.keyframes
+          } else {
+            const text = `${game.name}: saved state ${game.revision} did not check out, so the game was left as it was.`
+            if (!failed.includes(text)) failed.push(text)
+          }
+        }
+        handled += step
+        freed += result.totalBytes
+        remaining = result.remainingRevisions
+        if (mounted.current) {
+          setProgress(`Compacted ${handled} saved states so far; ${remaining} left.`)
+        }
+        if (result.remaining === 0) break
+        if (step === 0) {
+          // Only games that fail their check are left: asking again would change nothing.
+          stoppedWithoutProgress = true
+          break
+        }
+      }
+      if (!mounted.current) return
+      setProblems(failed)
+      setNotice(
+        `Compacted ${handled} saved states (about ${formatMegabytes(freed)} freed) in ${requests} ` +
+          `${requests === 1 ? 'request' : 'requests'}.` +
+          (stoppedWithoutProgress
+            ? failed.length > 0
+              ? ` ${remaining} saved states could not be compacted; see below.`
+              : // Nothing failed and nothing moved: another press (or tab) got there first.
+                ` Nothing was compacted by this press; ${remaining} saved states are left, and you can press again.`
+            : remaining > 0
+              ? ` ${remaining} saved states are left; press again to continue.`
+              : ''),
+      )
+      // Refresh from the server rather than subtracting here: it is the source of the numbers.
+      const refreshed = await api.compactPreview()
+      if (mounted.current) setPreview(refreshed)
+    })
+  }
+
+  return (
+    <section className="panel">
+      <h2>Compact revision history</h2>
+      <p className="muted">
+        Until now every move saved a complete copy of the game, about 400 KB each. New moves are
+        saved as small differences instead; this converts the old copies the same way. Replay,
+        history and the games themselves read exactly as before. Running games are compacted too,
+        except their newest saved state. Do not start this without a restore point: take a D1 Time
+        Travel bookmark first (<code>wrangler d1 time-travel info playciv</code>), and restore to
+        it if anything looks wrong. The database may not report a smaller size at once, because D1
+        reuses the freed space.
+      </p>
+      {error !== null && <div className="error">{error}</div>}
+      {progress !== null && <div className="notice">{progress}</div>}
+      {notice !== null && <div className="notice">{notice}</div>}
+      {problems.length > 0 && (
+        <div className="error">
+          {problems.map((problem) => (
+            <div key={problem}>{problem}</div>
+          ))}
+        </div>
+      )}
+
+      <div className="row">
+        <button disabled={working} onClick={() => void load()}>
+          {preview === null ? 'Show what can be compacted' : 'Refresh'}
+        </button>
+      </div>
+
+      {preview !== null && preview.games.length === 0 && (
+        <p className="muted">No game has old saved states left to compact.</p>
+      )}
+      {preview !== null && preview.games.length > 0 && (
+        <>
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Game</th>
+                  <th>Full saved states</th>
+                  <th>Would free</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {preview.games.map((game) => (
+                  <tr key={game.id}>
+                    <td>
+                      {game.name}
+                      {game.active ? ' (running)' : ''}
+                    </td>
+                    <td>
+                      {game.fullRevisions} of {game.revisions}
+                    </td>
+                    <td>{formatMegabytes(game.freeableBytes)}</td>
+                    <td>
+                      <button
+                        className="small"
+                        disabled={working}
+                        aria-label={`Compact ${game.name}`}
+                        onClick={() => void compactOne(game)}
+                      >
+                        Compact
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>Total</td>
+                  <td>{preview.totalRevisions}</td>
+                  <td>{formatMegabytes(preview.totalBytes)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div className="row">
+            <button className="danger" disabled={working} onClick={() => void compactAll()}>
+              Compact all
+            </button>
+          </div>
+        </>
       )}
     </section>
   )

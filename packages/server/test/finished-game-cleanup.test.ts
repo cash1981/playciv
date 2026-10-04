@@ -182,18 +182,18 @@ describe('admin cleanup of finished games', () => {
     expect(await repo.listGameRevisions(done.id)).toHaveLength(3)
   })
 
-  it('the all-games run handles at most 20 games per request and reports what remains', async () => {
+  it('the all-games run handles at most 12 games per request and reports what remains', async () => {
     const admin = await makeAdmin('boss')
     for (let index = 0; index < 22; index++) await seed(`Game ${String(index).padStart(2, '0')}`, 2, true)
     await seed('Running', 3, false)
 
     const first = await (await clean(admin)).json<CleanupAnswer>()
-    expect(first.games).toHaveLength(20)
-    expect(first.totalRevisions).toBe(20)
-    expect(first.remaining).toBe(2)
+    expect(first.games).toHaveLength(12)
+    expect(first.totalRevisions).toBe(12)
+    expect(first.remaining).toBe(10)
 
     const second = await (await clean(admin)).json<CleanupAnswer>()
-    expect(second.games).toHaveLength(2)
+    expect(second.games).toHaveLength(10)
     expect(second.remaining).toBe(0)
 
     const third = await (await clean(admin)).json<CleanupAnswer>()
@@ -206,7 +206,7 @@ describe('admin cleanup of finished games', () => {
 })
 
 describe('an all-games run when a game changes after the listing', () => {
-  it.each(['not-found', 'active'] as const)(
+  it.each(['not-found', 'active', 'changed'] as const)(
     'skips a game that answers %s and still reports the others',
     async (status) => {
       const admin = await makeAdmin('boss')
@@ -232,7 +232,8 @@ describe('an all-games run when a game changes after the listing', () => {
 
       // A named game still gets its own error.
       const named = await clean(admin, { gameId: vanishing.id })
-      expect(named.status).toBe(status === 'active' ? 409 : 404)
+      expect(named.status).toBe(status === 'not-found' ? 404 : 409)
+      if (status === 'changed') expect((await named.json<{ error: string }>()).error).toBe('GAME_CHANGED')
     },
   )
 })

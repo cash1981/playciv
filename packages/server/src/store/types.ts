@@ -88,7 +88,11 @@ export function normalizeChatMessage(row: StoredChatRow): ChatMessage {
   }
 }
 
-/** One immutable full-state checkpoint. Raw snapshots never leave the repository layer. */
+/**
+ * One immutable full-state checkpoint. Raw snapshots never leave the repository
+ * layer. Storage may keep a revision as a delta against the one before it
+ * (issue #238); `findGameRevision` and the lists always give the full `state`.
+ */
 export interface GameRevision {
   readonly gameId: string
   readonly revision: number
@@ -107,6 +111,11 @@ export interface GameRevision {
  */
 export type GameRevisionMetadata = Omit<GameRevision, 'state'>
 
+export interface SaveGameOptions {
+  /** The change is a private note only, which no revision snapshot carries. */
+  readonly notesOnly?: boolean
+}
+
 /**
  * What the admin cleanup of a finished game would remove (everything but the
  * newest revision), counted without loading any snapshot.
@@ -120,10 +129,68 @@ export interface FinishedGameRevisionUsage {
   readonly removableBytes: number
 }
 
-/** `active` and `not-found` remove nothing; a finished game with one revision is `cleaned` with `removed: 0`. */
+/**
+ * `active`, `not-found` and `changed` remove nothing; a finished game with one
+ * revision is `cleaned` with `removed: 0`. `changed` means the game or its
+ * history moved while the cleanup rebuilt the newest revision (an admin acted on
+ * a finished game, or another run got there first); nothing was written and
+ * trying again is safe.
+ */
 export type FinishedGameCleanup =
   | { readonly status: 'cleaned'; readonly removed: number }
   | { readonly status: 'active' }
+  | { readonly status: 'not-found' }
+  | { readonly status: 'changed' }
+
+/**
+ * What compacting one game's revision history would do (issue #238, phase 2),
+ * counted from the rows without loading a state.
+ */
+export interface RevisionCompactionUsage {
+  readonly gameId: string
+  readonly name: string
+  readonly active: boolean
+  readonly revisions: number
+  /**
+   * Rows still stored as a full state from before delta storage that a
+   * compaction would look at. The newest revision is not one of them: it is never
+   * touched, so that a game being played is not disturbed.
+   */
+  readonly fullRevisions: number
+  /** An estimate, in bytes: each row that becomes a delta is counted at a typical delta size. */
+  readonly freeableBytes: number
+  /**
+   * What the next request would at least have to parse: the first row to handle,
+   * counted twice when the state before it must be rebuilt. The caller's byte
+   * budget decides from it whether another game is worth entering.
+   */
+  readonly nextChunkBytes: number
+}
+
+/**
+ * The result of one compaction request for one game. `mismatch` names the first
+ * revision whose rebuilt state differed from the stored one: nothing of that
+ * request was written. `remaining` is what is left for another request.
+ */
+export type RevisionCompaction =
+  | {
+      readonly status: 'compacted'
+      readonly converted: number
+      readonly keyframes: number
+      readonly freedBytes: number
+      /** The state text parsed for this request, for the caller's budget. */
+      readonly handledBytes: number
+      /** The rows looked at, for the caller's row budget. */
+      readonly handledRows: number
+      readonly remaining: number
+    }
+  | {
+      readonly status: 'mismatch'
+      readonly revision: number
+      /** What was parsed before the check failed: a failing game still spent its share. */
+      readonly handledBytes: number
+      readonly handledRows: number
+    }
   | { readonly status: 'not-found' }
 
 export type BroadcastStatus = 'active' | 'done' | 'cancelled'
@@ -169,17 +236,39 @@ export interface Repository {
   updatePlayer(id: string, changes: PlayerUpdate): Promise<StoredPlayer | undefined>
   deletePlayer(id: string): Promise<boolean>
 
+  /** Overwrites the live game. The next revision of the game is a keyframe. */
   saveGame(game: GameState): Promise<void>
-  /** Saves a non-revisioned change only while the live game is unchanged. */
-  saveGameIfRevision(game: GameState, expectedRevision: number): Promise<boolean>
+  /**
+   * Saves a non-revisioned change only while the live game is unchanged. Unless
+   * `options.notesOnly` says the change touches nothing but private notes (which
+   * revision snapshots blank), the next revision is stored as a keyframe: the
+   * live game then differs from the newest revision in a way a delta against it
+   * would not carry.
+   */
+  saveGameIfRevision(
+    game: GameState,
+    expectedRevision: number,
+    options?: SaveGameOptions,
+  ): Promise<boolean>
   /**
    * Saves the live game and matching checkpoint only when the stored game is
    * still at `expectedRevision`. `null` means that the game must not exist.
+   *
+   * `previous` is the snapshot of the newest stored revision, which the caller
+   * already holds: the live game before the action, notes blanked
+   * (`revisionSnapshot`). With it the checkpoint can be stored as a delta; without
+   * it, or whenever a delta would not be safe, it is a keyframe. The store
+   * checks the delta before writing (it must give the new state back) and the
+   * chain at write time (the newest row and its keyframe are still the ones the
+   * delta was made for), but it cannot check that `previous` really is what is
+   * stored: that is the contract with the caller, kept by `saveGameIfRevision`
+   * sealing the chain after any change that a revision would not record.
    */
   saveGameWithRevision(
     game: GameState,
     revision: GameRevision,
     expectedRevision: number | null,
+    previous?: GameState,
   ): Promise<boolean>
   /**
    * Adds a baseline only while the live game still exists at
@@ -208,11 +297,33 @@ export interface Repository {
   finishedGameRevisionUsage(gameId?: string): Promise<readonly FinishedGameRevisionUsage[]>
   /**
    * Removes every revision of a finished game except the newest, which keeps the
-   * history view and "Live" a snapshot to read. Refuses a running or unknown
-   * game and touches nothing but that game's `game_revision` rows. Safe to
-   * repeat: a second call removes 0.
+   * history view and "Live" a snapshot to read. When the newest is a delta it is
+   * first rewritten as a keyframe (it would not survive losing its chain), in the
+   * same atomic step as the delete. Refuses a running or unknown game and
+   * touches nothing but that game's `game_revision` rows. Safe to repeat: a
+   * second call removes 0.
    */
   deleteOldGameRevisions(gameId: string): Promise<FinishedGameCleanup>
+  /**
+   * Every game with how many of its revisions are still full states from before
+   * delta storage and roughly what turning them into deltas frees. `gameId`
+   * narrows it to one game. Reads sizes only, never a state.
+   */
+  revisionCompactionUsage(gameId?: string): Promise<readonly RevisionCompactionUsage[]>
+  /**
+   * Converts up to `maxRevisions` of a game's oldest full-state revisions, and no
+   * more than about `maxBytes` of state text (at least one row), into a delta
+   * chain (keeping a keyframe every K rows). Each conversion is rebuilt
+   * from the new representation and compared with the original before anything
+   * is written; the first mismatch writes nothing and answers `mismatch`. The
+   * newest revision and any row a delta hangs on are left alone, so a game that
+   * is being played is safe. Repeating it changes nothing once it is done.
+   */
+  compactGameRevisions(
+    gameId: string,
+    maxRevisions: number,
+    maxBytes?: number,
+  ): Promise<RevisionCompaction>
 
   /** Plain chat may leave out `kind` and the tags; they are stored as `chat` and `null`. */
   appendChat(message: StoredChatRow): Promise<void>
