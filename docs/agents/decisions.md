@@ -4621,3 +4621,7 @@ expansions.
   regeneration gives the same file.
 - Pieces already on a board keep the size they were placed with. A Shipyard placed before this
   change stays large until it is removed and placed again.
+## 2026-10-04: Valmiki follows Artist or Thinker blockade (issue #253 B1)
+
+- A revealed Valmiki adds +2 culture hand size only while the Great Person ability is usable under the existing blockade policy. If a player has one or more tracked Artist or Thinker tokens on the map and every one is blockaded, the bonus is suppressed; it returns when any tracked token becomes unblocked.
+- Preserve issue #241's compatibility behavior: no tracked token does not imply a blockade, because token locations need not be tracked. Hidden Valmiki still contributes nothing for either owner or opponents. The value is derived from the public board each time, so moves, removal, undo and replay need no stored flag.

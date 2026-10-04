@@ -7,7 +7,7 @@
  * since the old status sheet was typed in by hand.
  */
 
-import { isOwnWonderBlockaded } from './blockade.js'
+import { blockadedGreatPersonTypes, isOwnWonderBlockaded } from './blockade.js'
 import { coinSourcesOf, totalCoins } from './coins.js'
 import type { GameState, Playerhand } from './state.js'
 
@@ -64,7 +64,12 @@ export function cultureHandSizeOf(state: GameState, player: Playerhand): number 
   const valmiki = player.items.some(
     (item) => item.kind === 'greatperson' && item.name === VALMIKI && !item.hidden,
   )
-  if (valmiki) size += VALMIKI_BONUS
+  // Like the other Great Person abilities, a tracked Artist or Thinker token
+  // keeps Valmiki usable unless every such token is blockaded. With no tracked
+  // token, retain the existing compatibility behavior (issue #241).
+  if (valmiki && !blockadedGreatPersonTypes(state, player).includes('Artist or Thinker')) {
+    size += VALMIKI_BONUS
+  }
 
   if (player.stats.efta >= 1) size += EFTA_BONUS
 
