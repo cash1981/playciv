@@ -74,6 +74,16 @@ function hasVersionlessOrders(game: GameState): boolean {
   return publicOrdersWithoutVersions(game).length > 0
 }
 
+/**
+ * A game already marked moved that may still lack the orders revealed before
+ * versions were kept: not yet marked as checked (`legacyRevealsCopied`) and it has
+ * such orders. The mark is what takes a game out of the set for good; the orders
+ * alone cannot, because they stay in the state after they are copied.
+ */
+function needsRevealCopy(game: GameState): boolean {
+  return game.legacyRevealsCopied !== true && hasVersionlessOrders(game)
+}
+
 function sum(values: readonly number[]): number {
   return values.reduce((total, value) => total + value, 0)
 }
@@ -432,12 +442,14 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
    * owners' private notes. Counts and names only, nothing is written and no order
    * or draft text leaves. For a game that has not been moved the row count is every
    * public version, so a game that an earlier request copied partly shows its full
-   * count. A game that is already marked moved is listed only when it has orders
-   * revealed before versions were kept (an older copy read only the versions) that
-   * are not in its timeline yet; its count is the rows that would be written and it
-   * has no drafts to move. That costs one read of the game's chat, so at most
-   * `MIGRATE_CALLS_PER_REQUEST` such games are read and `unchecked` says how many
-   * were left out of the list for that reason.
+   * count. A game that is already marked moved is listed only when it is not marked
+   * `legacyRevealsCopied` and has orders revealed before versions were kept (an
+   * older copy read only the versions) that are not in its timeline yet; its count
+   * is the rows that would be written and it has no drafts to move. That costs one
+   * read of the game's chat, so at most `MIGRATE_CALLS_PER_REQUEST` such games are
+   * read and `unchecked` says how many were left out of the list for that reason.
+   * A game of that kind with no row missing is not listed; the real run only marks
+   * it done. Games leave the list as the runs process them.
    */
   app.get('/api/admin/games/migrate-chat', admin, async (c) => {
     const rows: { id: string; name: string; active: boolean; orderRows: number; drafts: number }[] = []
@@ -454,7 +466,7 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
         })
         continue
       }
-      if (!hasVersionlessOrders(game)) continue
+      if (!needsRevealCopy(game)) continue
       if (reads >= MIGRATE_CALLS_PER_REQUEST) {
         unchecked += 1
         continue
@@ -480,9 +492,12 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
    * being moved is skipped (its rows stay and are not written twice), and a run
    * stops when the request's budget of database calls is spent; `remaining` says
    * how many games are still left, so run it again. A game already marked moved is
-   * only visited when it has orders revealed before versions were kept: the rows
-   * still missing from its timeline are written and nothing else (its drafts, its
-   * flag and its revision stay), and a visit that writes nothing is not reported.
+   * only visited when it is not marked `legacyRevealsCopied` and has orders revealed
+   * before versions were kept: the rows still missing from its timeline are
+   * written, and when they are all there one guarded save sets `legacyRevealsCopied`
+   * and nothing else (its drafts and its other flag stay), so the game is not
+   * visited again. A visit that writes no row is not reported. An unmoved game's
+   * save sets `legacyRevealsCopied` too.
    */
   app.post('/api/admin/games/migrate-chat', admin, async (c) => {
     // A body that is not an object is refused rather than read as "every game".
@@ -503,12 +518,12 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
       // Real work first, so the reads that only check a moved game cannot starve it
       targets = [
         ...all.filter((game) => !game.legacyOrdersCopied),
-        ...all.filter((game) => game.legacyOrdersCopied === true && hasVersionlessOrders(game)),
+        ...all.filter((game) => game.legacyOrdersCopied === true && needsRevealCopy(game)),
       ]
     } else {
       const game = await context.repo.findGame(gameId)
       if (game === undefined) return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
-      targets = !game.legacyOrdersCopied || hasVersionlessOrders(game) ? [game] : []
+      targets = !game.legacyOrdersCopied || needsRevealCopy(game) ? [game] : []
     }
 
     const games: { id: string; name: string; orderRows: number; drafts: number }[] = []
@@ -517,20 +532,7 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
     let partial: string | undefined
     let budget = MIGRATE_CALLS_PER_REQUEST
     for (const game of targets) {
-      if (game.legacyOrdersCopied === true) {
-        // Moved before: copy only the rows still missing. No draft, no save, no flag.
-        // The read of the chat and room for at least one row
-        if (budget < 2) break
-        const extra = await copyLegacyOrders(context.repo, game.id, game, budget - 1)
-        budget -= 1 + extra.written
-        if (!extra.complete) {
-          partial = game.id
-          break
-        }
-        if (extra.written === 0) checked += 1
-        else games.push({ id: game.id, name: game.name, orderRows: extra.written, drafts: 0 })
-        continue
-      }
+      const moved = game.legacyOrdersCopied === true
       // The read of the chat and the save, and room for at least one row
       if (budget < 3) break
       const copy = await copyLegacyOrders(context.repo, game.id, game, budget - 2)
@@ -540,12 +542,11 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
         partial = game.id
         break
       }
-      // The same guarded save as a note: only while nobody has changed the game
-      const migrated: GameState = {
-        ...draftsToPrivateNote(game),
-        legacyOrdersCopied: true,
-        rev: game.rev + 1,
-      }
+      // The same guarded save as a note: only while nobody has changed the game. A
+      // game moved before gets only its reveals mark, no draft and no other flag.
+      const migrated: GameState = moved
+        ? { ...game, legacyRevealsCopied: true, rev: game.rev + 1 }
+        : { ...draftsToPrivateNote(game), legacyOrdersCopied: true, legacyRevealsCopied: true, rev: game.rev + 1 }
       budget -= 1
       if (!(await context.repo.saveGameIfRevision(migrated, game.rev))) {
         if (gameId !== undefined) {
@@ -554,7 +555,12 @@ export function registerAdminRoutes(app: App, context: AppContext): void {
         skipped += 1
         continue
       }
-      games.push({ id: game.id, name: game.name, orderRows: copy.written, drafts: pendingDrafts(game).length })
+      if (moved && copy.written === 0) {
+        // Only marked done: nothing was written, so there is nothing to report
+        checked += 1
+        continue
+      }
+      games.push({ id: game.id, name: game.name, orderRows: copy.written, drafts: moved ? 0 : pendingDrafts(game).length })
     }
     return c.json({
       games,
