@@ -13,7 +13,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 import type { GameState, HighscoreResult } from '@civ/engine'
-import { migrateGameState } from '@civ/engine'
+import { gameHasStarted, migrateGameState } from '@civ/engine'
 
 import type { RevisionCodec } from '../revision-delta.js'
 import { defaultRevisionCodec } from '../revision-delta.js'
@@ -46,6 +46,7 @@ import type {
   RevisionCompaction,
   RevisionCompactionUsage,
   SaveGameOptions,
+  TurnReminderCandidate,
   StoredBroadcast,
   StoredBroadcastRecipient,
   StoredChatRow,
@@ -57,7 +58,14 @@ type SnapshotPlayer = Omit<StoredPlayer, 'role' | 'disabled'> & {
   readonly role?: UserRole
   readonly disabled?: boolean
 }
+interface GameActivity {
+  readonly version: number
+  readonly activityAt: number
+  readonly remindedVersion?: number
+  readonly checkedAt?: number
+}
 interface Snapshot {
+  readonly activity?: Readonly<Record<string, GameActivity>>
   readonly version: 1
   readonly players: readonly SnapshotPlayer[]
   readonly games: readonly GameState[]
@@ -110,12 +118,16 @@ export interface JsonFileRepositoryOptions {
   readonly filePath: string | null
   /** Milliseconds to wait before writing, so a burst of changes is one write. */
   readonly debounceMs?: number
+  /** Injectable clock for timestamps of saved game changes. */
+  readonly now?: () => Date
   /** How revisions are diffed and rebuilt. A seam for tests; the default is the real codec. */
   readonly codec?: RevisionCodec
 }
 
 export class JsonFileRepository implements Repository {
   private readonly players = new Map<string, StoredPlayer>()
+  private readonly activity = new Map<string, GameActivity>()
+  private readonly now: () => Date
   private readonly games = new Map<string, GameState>()
   private readonly revisions = new Map<string, StoredRevision>()
   private readonly gameMail = new Map<string, GameMailStamps>()
@@ -132,6 +144,7 @@ export class JsonFileRepository implements Repository {
   private writing: Promise<void> = Promise.resolve()
 
   constructor(options: JsonFileRepositoryOptions) {
+    this.now = options.now ?? (() => new Date())
     this.filePath = options.filePath
     this.debounceMs = options.debounceMs ?? 250
     this.codec = options.codec ?? defaultRevisionCodec
@@ -151,6 +164,7 @@ export class JsonFileRepository implements Repository {
     }
 
     const snapshot = JSON.parse(raw) as Snapshot
+    for (const [id, activity] of Object.entries(snapshot.activity ?? {})) this.activity.set(id, activity)
     let normalizedPlayers = false
     for (const player of snapshot.players) {
       normalizedPlayers ||= player.role === undefined || player.disabled === undefined
@@ -243,8 +257,67 @@ export class JsonFileRepository implements Repository {
     return deleted
   }
 
+  private recordActivity(game: GameState): void {
+    if (JSON.stringify(this.games.get(game.id)) === JSON.stringify(game)) return
+    this.activity.set(game.id, {
+      version: (this.activity.get(game.id)?.version ?? 0) + 1,
+      activityAt: this.now().getTime(),
+    })
+  }
+
+  async releaseTurnReminder(candidate: TurnReminderCandidate): Promise<void> {
+    const activity = this.activity.get(candidate.gameId)
+    if (activity?.version !== candidate.version || activity.activityAt !== candidate.activityAt ||
+      activity.remindedVersion !== candidate.version) return
+    const { remindedVersion: _remindedVersion, ...rest } = activity
+    this.activity.set(candidate.gameId, rest)
+    this.scheduleWrite()
+    await this.flush()
+  }
+
+  async idleTurnCandidates(now: Date, waitMs: number, limit: number): Promise<readonly TurnReminderCandidate[]> {
+    const eligible: TurnReminderCandidate[] = []
+    for (const game of this.games.values()) {
+      if (!game.active || !gameHasStarted(game)) continue
+      let activity = this.activity.get(game.id)
+      if (activity === undefined) {
+        activity = { version: 0, activityAt: now.getTime() }
+        this.activity.set(game.id, activity)
+        this.scheduleWrite()
+      }
+      if (activity.activityAt < now.getTime() - waitMs && activity.remindedVersion !== activity.version) {
+        eligible.push({ gameId: game.id, version: activity.version, activityAt: activity.activityAt })
+      }
+    }
+    eligible.sort((a, b) => (this.activity.get(a.gameId)?.checkedAt ?? 0) -
+      (this.activity.get(b.gameId)?.checkedAt ?? 0) || a.gameId.localeCompare(b.gameId))
+    const candidates = eligible.slice(0, limit)
+    for (const candidate of candidates) {
+      const activity = this.activity.get(candidate.gameId)
+      if (activity !== undefined) this.activity.set(candidate.gameId, { ...activity, checkedAt: now.getTime() })
+    }
+    this.scheduleWrite()
+    return candidates
+  }
+
+  async claimTurnReminder(candidate: TurnReminderCandidate, playerId: string, expectedEmail: string, now: Date, waitMs: number): Promise<boolean> {
+    const activity = this.activity.get(candidate.gameId)
+    const game = this.games.get(candidate.gameId)
+    const player = this.players.get(playerId)
+    if (game?.active !== true || activity === undefined || activity.version !== candidate.version ||
+      activity.activityAt !== candidate.activityAt || activity.remindedVersion === activity.version ||
+      activity.activityAt >= now.getTime() - waitMs || player === undefined || player.disabled === true ||
+      player.disableEmail === true || player.email !== expectedEmail || !player.email?.trim()) return false
+    this.activity.set(candidate.gameId, { ...activity, remindedVersion: activity.version })
+    this.scheduleWrite()
+    // Persist the claim before contacting a provider, so a restart cannot resend.
+    await this.flush()
+    return true
+  }
+
   async saveGame(game: GameState): Promise<void> {
     if (!game.active || this.games.get(game.id)?.active === false) this.invalidateHighscore()
+    this.recordActivity(game)
     this.games.set(game.id, game)
     // Replaced wholesale: the newest revision no longer describes the game.
     this.sealNewest(game.id)
@@ -258,6 +331,7 @@ export class JsonFileRepository implements Repository {
   ): Promise<boolean> {
     if (this.games.get(game.id)?.rev !== expectedRevision) return false
     if (!game.active || this.games.get(game.id)?.active === false) this.invalidateHighscore()
+    this.recordActivity(game)
     this.games.set(game.id, game)
     if (options.notesOnly !== true) this.sealNewest(game.id)
     this.scheduleWrite()
@@ -279,6 +353,7 @@ export class JsonFileRepository implements Repository {
       return false
     }
     if (!game.active || current?.active === false) this.invalidateHighscore()
+    this.recordActivity(game)
     this.games.set(game.id, game)
     const encoding =
       expectedRevision === null || previous === undefined
@@ -383,6 +458,7 @@ export class JsonFileRepository implements Repository {
   }
 
   async deleteGame(id: string): Promise<boolean> {
+    this.activity.delete(id)
     const deleted = this.games.delete(id)
     // Like D1, drop the mail stamps whether or not the game row existed.
     for (const key of this.gameMail.keys()) {
@@ -818,6 +894,7 @@ export class JsonFileRepository implements Repository {
       version: 1,
       players: [...this.players.values()],
       games: [...this.games.values()],
+      activity: Object.fromEntries(this.activity),
       chat: this.chat,
       revisions: [...this.revisions.values()],
       gameMail: Object.fromEntries(this.gameMail),

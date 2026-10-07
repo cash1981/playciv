@@ -12,29 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### turn-reminders
-
-- **Owner:** Codex
-- **Branch:** `codex/turn-reminders`
-- **Brief:** `docs/agents/tasks/turn-reminders.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/server/src/store/types.ts`
-  - `packages/server/src/store/d1.ts`
-  - `packages/server/src/store/json-file.ts`
-  - `packages/server/src/turn-reminders.ts`
-  - `packages/server/src/lib.ts`
-  - `packages/server/test/turn-reminders.test.ts`
-  - `packages/server/test/d1-adapter.ts`
-  - `packages/worker/src/index.ts`
-  - `packages/worker/migrations/0007_turn_reminders.sql`
-  - `wrangler.jsonc`
-  - `README.md`
-  - `docs/agents/tasks/turn-reminders.md`
-  - `docs/agents/state.md`
-  - `docs/agents/decisions.md`
-- **Notes:** Daily reminders, no engine or UI changes.
-
+_Nothing._
 
 ---
 

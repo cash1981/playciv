@@ -6,18 +6,19 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-04 (building terrain warning, issue #255)_
+_Last updated: 2026-10-07 (daily idle turn reminders)_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing - 891 engine, 593 server, 528 web on `feat/building-terrain` (merged with main) (an intermittent `StatusPanel` timeout under full-run load is tracked under "Known problems") |
+| `pnpm -r test` | passing — 895 engine, 627 server, 528 web (2,050 total) on `codex/turn-reminders` |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Daily idle turn reminders.** A separate 16:00 UTC Worker cron emails the current holder after more than 72 hours without a saved state change; one reminder per unchanged state, mail preferences and exact-address race checks, conservative legacy baseline, durable claims and safe provider retries. Migration `0007` must precede deployment. Review approved with zero findings after fixing a stale-address race; all typechecks, 2,050 tests and builds pass. Local Wrangler migration and Worker dry run pass; not deployed or sent to real players. Brief: `tasks/turn-reminders.md`; see `decisions.md`, 2026-10-07.
 - **Building terrain warning (issue #255, branch `feat/building-terrain`).** Placing or moving a
   building, wonder or Great Person onto the wrong terrain asks first ("A Library is meant for grassland, but this square
   is forest. Place it anyway?"); OK places it, the server never refuses. New

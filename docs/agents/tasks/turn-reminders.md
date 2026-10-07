@@ -3,7 +3,7 @@
 - **Slug:** `turn-reminders`
 - **Branch:** `codex/turn-reminders`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -15,7 +15,7 @@ The human requested a daily cron that detects three days without an action or st
 
 ## Scope
 
-In: existing Cloudflare daily cron, durable idle tracking and duplicate prevention, current turnHolder semantics, mail preferences, both repositories and tests.
+In: Cloudflare daily cron, durable idle tracking and duplicate prevention, current turnHolder semantics, mail preferences, both repositories and tests.
 Out: UI, engine rules, deployment and sending development emails to real players.
 
 ## Reference
@@ -24,7 +24,7 @@ Current turnHolder/activeTurnStatus and existing transactional notifications. Th
 
 ## Approach
 
-Extend the existing 17:00 UTC cron. Keep idle and reminder data on the server, outside projections. Use persisted action timestamps when reliable, otherwise conservatively start tracking at first observation. Guard claims against concurrent cron runs and live state changes. Bound queries/provider work for Cloudflare. Preserve existing broadcast work and its separate error handling.
+Add a separate 16:00 UTC reminder cron and preserve the existing 17:00 UTC broadcast cron, so their invocation budgets are independent. Keep idle and reminder data on the server, outside projections. Use persisted action timestamps when reliable, otherwise conservatively start tracking at first observation. Guard claims against concurrent cron runs and live state changes. Bound queries/provider work for Cloudflare. Preserve existing broadcast work and its separate error handling.
 
 ## Claimed paths
 
@@ -44,3 +44,16 @@ See the turn-reminders task-board claim.
 ## Open questions
 
 None. Default to one reminder per unchanged waiting state to avoid daily duplicate mail.
+
+
+## Verification and review
+
+`pnpm -r typecheck && pnpm -r test && pnpm -r build` passed: 895 engine,
+627 server and 528 web tests (2,050 total). Wrangler applied every migration,
+including `0007`, to a fresh local D1 database; Worker deployment dry run passed.
+No production deployment or real email sending was performed.
+
+Sol read-only review approved round two with zero findings. Round one found
+that a concurrent email-address change could send to a stale address; both
+repositories now bind the expected address atomically and both-store sender
+regression tests cover the race. Orchestrator approved the final implementation.

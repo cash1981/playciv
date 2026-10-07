@@ -21,6 +21,7 @@ import {
   createResendMailer,
   noopMailer,
   runDailyBroadcast,
+  runDailyTurnReminders,
 } from '@civ/server'
 
 interface Env {
@@ -85,12 +86,23 @@ export default {
     return app.fetch(request, env, ctx)
   },
   /**
-   * The daily cron (`0 17 * * *`, wrangler.jsonc): sends the next batch of the
+   * Separate daily crons keep each job within its D1/provider budget.
+   * At 16:00 UTC remind idle turn holders; at 17:00 send the next batch of the
    * queued admin broadcast. It builds the same repository and mailer as
    * `fetch`; there is no request to carry them, so nothing else is shared.
    * `runDailyBroadcast` catches and logs its own errors.
    */
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    if (controller.cron === '0 16 * * *') {
+      const result = await runDailyTurnReminders({
+        repo: new D1Repository(env.DB),
+        mailer: buildMailer(env),
+        enabled: Boolean(env.RESEND_API_KEY?.trim()),
+        ...(env.APP_ORIGIN !== undefined ? { appOrigin: env.APP_ORIGIN } : {}),
+      }, new Date(controller.scheduledTime))
+      console.log('Daily turn reminders', result)
+      return
+    }
     const notifications = createNotifications({
       repo: new D1Repository(env.DB),
       mailer: buildMailer(env),
