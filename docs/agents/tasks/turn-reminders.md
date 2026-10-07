@@ -57,3 +57,11 @@ Sol read-only review approved round two with zero findings. Round one found
 that a concurrent email-address change could send to a stale address; both
 repositories now bind the expected address atomically and both-store sender
 regression tests cover the race. Orchestrator approved the final implementation.
+
+
+## CodeQL follow-up
+
+PR #267 flagged the unanchored trailing-slash regex in appOrigin normalization
+for polynomial runtime. Replace it with a backward character scan and one
+slice, preserving the existing URL behavior with linear runtime. Re-run all
+workspace checks, read-only review and the GitHub CodeQL check before completion.
