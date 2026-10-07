@@ -65,3 +65,7 @@ PR #267 flagged the unanchored trailing-slash regex in appOrigin normalization
 for polynomial runtime. Replace it with a backward character scan and one
 slice, preserving the existing URL behavior with linear runtime. Re-run all
 workspace checks, read-only review and the GitHub CodeQL check before completion.
+
+The follow-up passed all workspace typechecks, 2,050 tests and builds. Sol
+read-only review approved with zero findings. GitHub CodeQL is checked after
+pushing the follow-up to the same PR.

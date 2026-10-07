@@ -12,18 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### turn-reminders-codeql
-
-- **Owner:** Codex
-- **Branch:** `codex/turn-reminders`
-- **Brief:** `docs/agents/tasks/turn-reminders.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/server/src/turn-reminders.ts`
-  - `docs/agents/tasks/turn-reminders.md`
-  - `docs/agents/state.md`
-- **Notes:** Fix PR #267 CodeQL polynomial trailing-slash regex finding.
-
+_Nothing._
 
 ---
 

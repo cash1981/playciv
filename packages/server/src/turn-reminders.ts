@@ -31,7 +31,10 @@ export async function runDailyTurnReminders(config: TurnReminderConfig, now: Dat
   let sent = 0
   let failed = 0
   if (!config.enabled) return { checked, claimed, sent, failed }
-  const origin = (config.appOrigin ?? DEFAULT_APP_ORIGIN).replace(/\/+$/, '')
+  const configuredOrigin = config.appOrigin ?? DEFAULT_APP_ORIGIN
+  let originEnd = configuredOrigin.length
+  while (originEnd > 0 && configuredOrigin[originEnd - 1] === '/') originEnd -= 1
+  const origin = configuredOrigin.slice(0, originEnd)
   const sleep = config.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
   try {
     const candidates = await config.repo.idleTurnCandidates(now, TURN_REMINDER_WAIT_MS, TURN_REMINDER_SCAN_LIMIT)
