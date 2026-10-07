@@ -144,9 +144,8 @@ export interface InitiateBattleInput {
 /**
  * Starts a battle. The initiator is always the attacker.
  *
- * For barbarians: the system draws 3 barbarian units automatically (exactly as
- * `drawBarbarians` does, but for the player to the initiator's left). That
- * player is the barbarian controller.
+ * For barbarians: the player to the initiator's left controls their existing
+ * barbarian hand, or draws 3 units automatically when they have none.
  *
  * The battle turn opens with the defender (issue #71) — the initiator called
  * the fight, so the side being called out gets to react first.
@@ -175,11 +174,12 @@ export function initiateBattle(
     const left = playerToLeft(state, input.initiatorId)
     if (left === undefined) return err({ kind: 'GAME_NOT_STARTED' })
 
-    // Draw 3 barbarian units for the left-side player (their existing barbarian
-    // mechanics — they play those units into the arena).
-    const drawn = drawBarbarians(state, left.playerId)
-    if (!drawn.ok) return drawn
-    current = drawn.value
+    // The controller may have prepared their hand before the attacker started.
+    if (left.barbarians.length === 0) {
+      const drawn = drawBarbarians(state, left.playerId)
+      if (!drawn.ok) return drawn
+      current = drawn.value
+    }
 
     const [battleId, rng2] = nextId(current.rng)
     current = { ...current, rng: rng2 }

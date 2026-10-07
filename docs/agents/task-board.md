@@ -12,25 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### barbarian-draw
-
-- **Owner:** Codex
-- **Branch:** `codex/barbarian-draw`
-- **Brief:** `docs/agents/tasks/barbarian-draw.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/actions/arena.ts`
-  - `packages/engine/test/arena.test.ts`
-  - `packages/server/src/routes/play.ts`
-  - `packages/server/test/barbarian-draw.test.ts`
-  - `packages/web/src/lib/api.ts`
-  - `packages/web/src/views/GameView.tsx`
-  - `packages/web/src/views/BattlePanel.test.tsx`
-  - `README.md`
-  - `docs/agents/tasks/barbarian-draw.md`
-  - `docs/agents/decisions.md`
-  - `docs/agents/state.md`
-- **Notes:** Restore independent barbarian drawing; reuse pre-drawn controller hand.
+_No live claims._
 
 
 ---
@@ -65,7 +47,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | chat-orders |
-| `packages/web/src/lib/api.ts` | barbarian-draw |
+| `packages/web/src/lib/api.ts` | free |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.

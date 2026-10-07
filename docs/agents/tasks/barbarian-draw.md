@@ -3,7 +3,7 @@
 - **Slug:** `barbarian-draw`
 - **Branch:** `codex/barbarian-draw`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
@@ -58,3 +58,13 @@ See task-board claim.
 ## Open questions
 
 None. Preserve automatic drawing for existing users while adding independent pre-drawing.
+
+## Verification
+
+Full workspace typecheck, test (897 engine, 636 server, 534 web; 2,067 total)
+and build passed after rebasing onto main including PR #267. Read-only Sol
+review has zero findings; the rules check records the requested manual-draw
+and prepared-hand reuse behavior without changing card selection. Orchestrator
+approved. A local browser with fake accounts confirmed out-of-turn own drawing,
+disabled duplicate draws, original cards retained when the attacker starts,
+and placement available to the left controller. No production deployment.

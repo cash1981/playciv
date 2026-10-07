@@ -13,6 +13,7 @@ import {
   discardItem,
   discardRandomGreatPerson,
   draw,
+  drawBarbarians,
   drawUnitsForBattle,
   drawWonder,
   endBattle,
@@ -235,6 +236,25 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
   app.post('/api/games/:gameId/battle/end', auth, async (c) => {
     const gameId = c.req.param('gameId')
     return applyToGame(context, c, gameId, (state) => endBattle(state, currentPlayer(c).id))
+  })
+
+  app.post('/api/games/:gameId/battle/barbarians', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const clientRev = typeof body['rev'] === 'number' ? body['rev'] : undefined
+    if (clientRev === undefined || !Number.isInteger(clientRev) || clientRev < 0) {
+      return sendError(c, 400, 'BAD_REQUEST', 'rev must be a non-negative integer')
+    }
+    const playerId = currentPlayer(c).id
+    return applyToGame(context, c, gameId, (state) => {
+      if (!state.players.some((player) => player.playerId === playerId)) {
+        return { ok: false, error: { kind: 'NO_ACCESS', playerId } }
+      }
+      if (state.battle !== null) {
+        return { ok: false, error: { kind: 'BATTLE_ALREADY_ACTIVE' } }
+      }
+      return drawBarbarians(state, playerId)
+    }, clientRev)
   })
 
   app.post('/api/games/:gameId/battle/barbarians/discard', auth, async (c) => {
