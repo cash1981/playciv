@@ -9,6 +9,7 @@ import { BattlePanel, type Run } from './GameView.js'
 
 vi.mock('../lib/api.js', () => ({
   api: {
+    drawBarbarians: vi.fn(),
     placeUnitInArena: vi.fn(),
     moveArenaUnit: vi.fn(),
     setArenaUnitStat: vi.fn(),
@@ -278,5 +279,35 @@ describe('BattlePanel mobile placement', () => {
     dispatchPointer('pointerup', 7, true, 30)
     expect(vi.mocked(api.moveArenaUnit)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(api.moveArenaUnit)).toHaveBeenCalledWith('game', 'arena-1', 1, 4)
+  })
+})
+
+
+describe('BattlePanel independent barbarian draw', () => {
+  afterEach(() => cleanup())
+  beforeEach(() => vi.clearAllMocks())
+
+  const idleView = { ...view, battle: null } as PlayerView
+
+  it('draws its own barbarians with the current game revision before a battle exists', () => {
+    const { getByText } = render(<BattlePanel gameId="game" busy={false} run={run} view={idleView} />)
+    fireEvent.click(getByText('Battle'))
+    fireEvent.click(getByText('Draw barbarians'))
+    expect(api.drawBarbarians).toHaveBeenCalledWith('game', 4)
+  })
+
+  it.each([
+    ['busy or read-only', idleView, true],
+    ['spectator', { ...idleView, you: null }, false],
+    ['existing barbarian hand', { ...idleView, you: { ...idleView.you, barbarians: [infantry] } }, false],
+    ['barbarians placed in an arena', { ...idleView, you: { ...idleView.you, barbarians: [{ ...infantry, inBattle: true }] } }, false],
+    ['active battle', view, false],
+  ] as const)('disables drawing for %s', (_reason, disabledView, busy) => {
+    const { getByText } = render(<BattlePanel gameId="game" busy={busy} run={run} view={disabledView as PlayerView} />)
+    fireEvent.click(getByText('Battle'))
+    const button = getByText('Draw barbarians') as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(api.drawBarbarians).not.toHaveBeenCalled()
   })
 })

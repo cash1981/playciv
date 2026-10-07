@@ -4698,3 +4698,27 @@ players were emailed and no production deployment was performed.
 Verification: all workspace typechecks, 2,050 tests (895 engine, 627 server,
 528 web) and builds passed. Local Wrangler D1 migrations and Worker dry run
 passed. Sol review round two had zero findings; the orchestrator approved.
+
+## 2026-10-07 — Let the left player draw barbarians independently
+
+The human requested a Draw barbarians button so a player does not have to wait
+for the opponent to select Barbarians and start the arena. This intentionally
+supersedes issue #79's removal of the standalone draw button. Any active game
+member can draw their own barbarian hand before an arena starts, regardless
+of whose phase turn it is. The authenticated account determines the hand;
+there is no arbitrary target player parameter.
+
+Manual drawing uses the existing pure drawBarbarians reducer and its existing
+three-unit selection, reshuffle/fallback behavior, log and duplicate guard.
+The new endpoint accepts the optimistic revision, and refuses an active arena
+so a fresh hand cannot replace cards already referenced by that arena. The
+button is disabled with existing barbarians, an active arena or read-only/busy
+view and is unavailable to spectators.
+
+initiateBattle now reuses the left-side controller's pre-drawn hand; it still
+draws automatically when the hand is empty. This also supersedes the old
+known limitation where holding barbarians caused initiation to fail. The
+initiator is still the attacker, the next active player by stored seat order
+controls barbarians, and the defender still opens the arena turn. All members
+already had permission to initiate their own battle; that remains true. No
+new FFG rule, random source, projection field or migration is introduced.

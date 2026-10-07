@@ -12,7 +12,8 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_Nothing._
+_No live claims._
+
 
 ---
 
@@ -46,7 +47,7 @@ at a time. Claim them by name.
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
 | `packages/engine/src/state.ts` (`PlayerView` shape) | chat-orders |
-| `packages/web/src/lib/api.ts` | chat-orders |
+| `packages/web/src/lib/api.ts` | free |
 
 The last two are listed because almost every feature wants to touch them, which
 makes them the most likely collision in the repo.

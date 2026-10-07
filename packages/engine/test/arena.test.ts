@@ -19,7 +19,7 @@ import {
   setArenaUnitStat,
 } from '../src/actions/arena.js'
 import { placePiece } from '../src/actions/board.js'
-import { draw, drawUnitsForBattle } from '../src/actions/draw.js'
+import { draw, drawBarbarians, drawUnitsForBattle } from '../src/actions/draw.js'
 import { isUnit } from '../src/item.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -1126,6 +1126,30 @@ describe('endBattleTurn', () => {
 // ---------------------------------------------------------------------------
 
 describe('initiateBattle with barbarians', () => {
+  it('reuses the left player prepared hand without drawing or mutating the input', () => {
+    const before = unwrap(drawBarbarians(firstCivGame(), KARANDRAS1))
+    const snapshot = JSON.stringify(before)
+    const prepared = findPlayer(before, KARANDRAS1)?.barbarians
+    const after = unwrap(initiateBattle(before, { initiatorId: CASH1981, opponentId: 'barbarians' }))
+    expect(findPlayer(after, KARANDRAS1)?.barbarians).toEqual(prepared)
+    expect(after.items).toEqual(before.items)
+    expect(after.log).toHaveLength(before.log.length + 1)
+    expect(after.battle?.defender).toEqual({ kind: 'barbarians', playerId: KARANDRAS1 })
+    expect(after.battle?.turn).toBe('defender')
+    expect(JSON.stringify(before)).toBe(snapshot)
+    const serialized = JSON.stringify(toPlayerView(after, CASH1981))
+    for (const unit of prepared ?? []) expect(serialized).not.toContain(unit.id)
+  })
+
+  it('uses the left controller hand and leaves another player prepared hand untouched', () => {
+    const before = unwrap(drawBarbarians(firstCivGame(), ITCHI))
+    const otherHand = findPlayer(before, ITCHI)?.barbarians
+    const after = unwrap(initiateBattle(before, { initiatorId: CASH1981, opponentId: 'barbarians' }))
+    expect(after.battle?.defender.playerId).toBe(KARANDRAS1)
+    expect(findPlayer(after, KARANDRAS1)?.barbarians).toHaveLength(3)
+    expect(findPlayer(after, ITCHI)?.barbarians).toEqual(otherHand)
+  })
+
   it('sets up a player-vs-barbarians battle and draws 3 units for the left player', () => {
     const state = unwrap(
       initiateBattle(firstCivGame(), { initiatorId: CASH1981, opponentId: 'barbarians' }),

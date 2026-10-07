@@ -466,6 +466,15 @@ parse time, plus a migration for games saved with the old value. See
 `username + " drew " + " - " + …`. The texts are comparable data and the old
 tests match on them.
 
+**Players can draw their own barbarians.** The Battle panel's "Draw barbarians"
+button lets any game member draw their own three-unit barbarian hand before
+an arena starts, without waiting for the attacker to select Barbarians.
+Starting a barbarian battle reuses the left-side controller's existing hand;
+when that hand is empty it still draws automatically. Existing hands, active
+arenas and stale revisions prevent another manual draw. Hidden cards remain
+private until played or discarded. This restores manual drawing at the human's
+request; see `docs/agents/decisions.md`, 2026-10-07.
+
 **A unit revealed "from their battlehand" now actually shows as public.**
 `DrawAction.revealAndDiscardBattlehand`'s `revealUnitConsumer` only built the
 log message (`" reveals " + names + " from their battlehand"`); it never
