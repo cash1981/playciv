@@ -226,7 +226,21 @@ export interface StoredBroadcastRecipient {
 
 export type BroadcastCounts = Readonly<Record<BroadcastRecipientStatus, number>>
 
+/** Server-only change marker; never part of GameState or a client projection. */
+export interface TurnReminderCandidate {
+  readonly gameId: string
+  readonly version: number
+  readonly activityAt: number
+}
+
 export interface Repository {
+  /** Releases only a definite rejected attempt, and never a newer state claim. */
+  releaseTurnReminder(candidate: TurnReminderCandidate): Promise<void>
+  /** Bounded, fair scan; legacy games begin their idle clock on first observation. */
+  idleTurnCandidates(now: Date, waitMs: number, limit: number): Promise<readonly TurnReminderCandidate[]>
+  /** Claims once per unchanged state, guarded against writes and changed account preferences. */
+  claimTurnReminder(candidate: TurnReminderCandidate, playerId: string, expectedEmail: string, now: Date, waitMs: number): Promise<boolean>
+
   createPlayer(player: StoredPlayer): Promise<void>
   findPlayerById(id: string): Promise<StoredPlayer | undefined>
   findPlayerByUsername(username: string): Promise<StoredPlayer | undefined>

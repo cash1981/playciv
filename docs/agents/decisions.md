@@ -4652,3 +4652,49 @@ expansions.
 
 - A revealed Valmiki adds +2 culture hand size only while the Great Person ability is usable under the existing blockade policy. If a player has one or more tracked Artist or Thinker tokens on the map and every one is blockaded, the bonus is suppressed; it returns when any tracked token becomes unblocked.
 - Preserve issue #241's compatibility behavior: no tracked token does not imply a blockade, because token locations need not be tracked. Hidden Valmiki still contributes nothing for either owner or opponents. The value is derived from the public board each time, so moves, removal, undo and replay need no stored flag.
+
+
+## 2026-10-07 — Daily reminders for idle turns
+
+The human requested a daily email to the player currently expected to act when
+there has been no action and the game state is unchanged for more than three
+days. The Worker now has a separate 16:00 UTC cron for reminders; the existing
+17:00 UTC admin broadcast cron remains independent so each has its own
+Cloudflare query and provider budget. This follows Cloudflare's UTC cron
+semantics and D1's 50-query free invocation limit.
+
+Migration `0007_turn_reminders.sql` adds server-only activity and reminder
+columns to `game`. SQLite triggers atomically timestamp actual saved state
+changes, including notes and nonrevisioned admin changes; the JSON repository
+keeps equivalent metadata with an injectable clock. Reads and opening the game
+do not reset inactivity. Historic games without a reliable timestamp start
+tracking at first observation instead of treating incomplete logs as evidence
+of three days of inactivity.
+
+The current `activeTurnStatus` determines the recipient. Only started active
+games with a holder can send. A run checks at most nine due games, rotates its
+scan past ineligible accounts, and claims each activity version atomically
+against the current game, account preferences and the expected recipient
+address. A concurrent address change prevents sending to the stale address. Disabled accounts,
+unsubscribed players and missing addresses are excluded. Reminder emails
+contain the public game name, obligation, game link and unsubscribe link;
+reminder metadata is absent from every game projection. Reminders bypass the
+ordinary game-open notification hold, since visiting without acting must not
+suppress this reminder. Missing mail configuration skips tracking and claims.
+
+A successful send is not repeated until another saved state change. A definite
+provider rejection releases the same-version claim for a later daily retry;
+quota/authentication/global provider rejections also stop further sends that
+run. An ambiguous timeout or network error keeps the claim because the mail
+may already have been delivered. Claims are persisted before the provider
+call, favoring duplicate prevention if a run crashes between claiming and
+sending. No engine rule or projection changes.
+
+Deployment requires applying migration `0007` before deploying the Worker.
+Implementation tests use fake mailers and local SQLite/JSON stores; no live
+players were emailed and no production deployment was performed.
+
+
+Verification: all workspace typechecks, 2,050 tests (895 engine, 627 server,
+528 web) and builds passed. Local Wrangler D1 migrations and Worker dry run
+passed. Sol review round two had zero findings; the orchestrator approved.

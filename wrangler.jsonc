@@ -27,7 +27,7 @@
   // free plan allows 100 mails a day shared with the game mails, so a batch is
   // 50. Changing a trigger needs a deploy.
   "triggers": {
-    "crons": ["0 17 * * *"]
+    "crons": ["0 16 * * *", "0 17 * * *"]
   },
   "assets": {
     // Built by `pnpm run build` (packages/web). Served for every non-/api path,

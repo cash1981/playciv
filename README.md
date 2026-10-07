@@ -311,7 +311,8 @@ guarded statements or one `batch()`, which D1 runs atomically:
 Tables: `player`, `game`, `game_revision`, `chat` (`game_id IS NULL` is lobby,
 live from now on), `game_mail` (when each player was last emailed about a
 game and last opened it), `broadcast` + `broadcast_recipient` (the admin
-broadcast queue, migration `0005_broadcast_queue.sql`), `email_sent` (imported, no longer read), and `pbf` + `pbf_doc` (the old games,
+broadcast queue, migration `0005_broadcast_queue.sql`), server-only activity and
+reminder columns on `game` (migration `0007_turn_reminders.sql`), `email_sent` (imported, no longer read), and `pbf` + `pbf_doc` (the old games,
 read-only: a highscore source plus the full document, chunked because one
 document can exceed D1's ~100 KB per-statement limit, kept for future
 statistics such as the most-researched tech). The old `chat`, `gamelog` and
@@ -643,6 +644,21 @@ Several old behaviours were corrected on purpose:
   wait. It is per player and per game. The game-ended and game-deleted mails are
   final and always go out, battle turn mails are not held, and spectators or
   admins opening a game do not count. D1 needs migration `0004_game_mail.sql`.
+
+- **Daily idle-turn reminders.** A separate daily Worker cron at 16:00 UTC
+  (`0 16 * * *`) reminds the current turn holder after more than 72 hours
+  without a saved game change. Opening the game does not reset the wait;
+  any saved change, including a private note or an admin change, does.
+  One reminder is allowed per unchanged state, independently of the
+  game-open mail hold. Finished games and tables that have not started are
+  skipped, and disabled accounts, unsubscribe preferences and missing addresses
+  are respected. Old games with no activity timestamp start their wait when
+  first observed. Deploy migration `0007_turn_reminders.sql` before deploying
+  the Worker. The separate invocation keeps reminders out of the broadcast
+  job's query and provider budget.
+  Each run checks at most nine due games and rotates past ineligible accounts.
+  Provider rejections are retried on a later day; ambiguous network failures
+  keep the claim because the email may already have arrived.
 
 - The unsubscribe link rides on **every** mail (Java's it-is-your-turn mail
   carried none), and it points at the **recipient's** id — Java passed the

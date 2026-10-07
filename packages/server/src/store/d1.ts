@@ -49,6 +49,7 @@ import type {
   RevisionCompaction,
   RevisionCompactionUsage,
   SaveGameOptions,
+  TurnReminderCandidate,
   StoredBroadcast,
   StoredBroadcastRecipient,
   StoredChatRow,
@@ -319,6 +320,41 @@ export class D1Repository implements Repository {
   // ---------------------------------------------------------------------
   // Games and revisions
   // ---------------------------------------------------------------------
+
+  async releaseTurnReminder(candidate: TurnReminderCandidate): Promise<void> {
+    await this.db.prepare(`UPDATE game SET reminder_version = NULL
+      WHERE id = ? AND activity_version = ? AND activity_at_ms = ? AND reminder_version = ?`)
+      .bind(candidate.gameId, candidate.version, candidate.activityAt, candidate.version).run()
+  }
+
+  async idleTurnCandidates(now: Date, waitMs: number, limit: number): Promise<readonly TurnReminderCandidate[]> {
+    const started = `EXISTS (SELECT 1 FROM json_each(game.state, '$.players') p
+      WHERE json_extract(p.value, '$.yourTurn') = 1)
+      OR EXISTS (SELECT 1 FROM json_each(game.state, '$.withdrawnPlayers') p
+      WHERE json_extract(p.value, '$.yourTurn') = 1)`
+    await this.db.prepare(`UPDATE game SET activity_at_ms = ? WHERE id IN
+      (SELECT id FROM game WHERE active = 1 AND activity_at_ms IS NULL AND (${started}) LIMIT 100)`)
+      .bind(now.getTime()).run()
+    const rows = await this.db.prepare(`UPDATE game SET reminder_checked_at_ms = ? WHERE id IN
+      (SELECT id FROM game WHERE active = 1 AND activity_at_ms < ?
+       AND (reminder_version IS NULL OR reminder_version <> activity_version)
+       AND (${started}) ORDER BY reminder_checked_at_ms ASC, id ASC LIMIT ?)
+      RETURNING id, activity_version, activity_at_ms`)
+      .bind(now.getTime(), now.getTime() - waitMs, limit).all<{
+        id: string; activity_version: number; activity_at_ms: number
+      }>()
+    return rows.results.map((row) => ({ gameId: row.id, version: row.activity_version, activityAt: row.activity_at_ms }))
+  }
+
+  async claimTurnReminder(candidate: TurnReminderCandidate, playerId: string, expectedEmail: string, now: Date, waitMs: number): Promise<boolean> {
+    const result = await this.db.prepare(`UPDATE game SET reminder_version = activity_version
+      WHERE id = ? AND active = 1 AND activity_version = ? AND activity_at_ms = ?
+      AND activity_at_ms < ? AND (reminder_version IS NULL OR reminder_version <> activity_version)
+      AND EXISTS (SELECT 1 FROM player WHERE id = ? AND disabled = 0 AND disable_email = 0
+        AND email = ? AND TRIM(email) <> '')`)
+      .bind(candidate.gameId, candidate.version, candidate.activityAt, now.getTime() - waitMs, playerId, expectedEmail).run()
+    return changes(result) > 0
+  }
 
   async saveGame(game: GameState): Promise<void> {
     // The game is replaced wholesale, so the newest revision no longer describes
