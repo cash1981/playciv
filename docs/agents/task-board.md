@@ -12,18 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### undo-end-battle
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `feat/undo-end-battle`
-- **Brief:** `docs/agents/tasks/undo-end-battle.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/actions/arena.ts`, `state.ts`, `errors.ts`, `create-game.ts`, `migrate.ts`, `index.ts`
-  - `packages/engine/test/arena.test.ts`
-  - `packages/server/src/routes/arena.ts`, `packages/server/test/api.test.ts`
-  - `packages/web/src/views/GameView.tsx`, `GameView.test.tsx`, `packages/web/src/lib/api.ts`
-- **Notes:** `api.ts` is a shared resource; only the one new endpoint is added.
+_No live claims._
 
 
 ---

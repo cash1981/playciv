@@ -3,7 +3,7 @@
 - **Slug:** `undo-end-battle`
 - **Branch:** `feat/undo-end-battle`
 - **Owner:** Claude (Sonnet 5.5)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
