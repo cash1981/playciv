@@ -151,7 +151,8 @@ export interface InitiateBattleInput {
  * the fight, so the side being called out gets to react first.
  *
  * Errors if a battle is already active, or if the initiator names themselves
- * as the opponent.
+ * as the opponent. Clears `endedBattle`: a new battle closes the window for
+ * undoing the previous one.
  */
 export function initiateBattle(
   state: GameState,
@@ -201,6 +202,7 @@ export function initiateBattle(
         arena: [],
         departedUnits: [],
       },
+      endedBattle: null,
     })
   }
 
@@ -229,6 +231,7 @@ export function initiateBattle(
       arena: [],
       departedUnits: [],
     },
+    endedBattle: null,
   })
 }
 
@@ -859,7 +862,99 @@ export function endBattleAction(
       : `ends the battle — ${outcome.winner.label} won with ${outcome.winnerScore} HP vs ${outcome.loserScore} HP`,
   )
 
-  return ok({ ...nextState, battle: null })
+  // Keep the battle as it stood so its ender can undo an accidental press. The
+  // log line above carries no unit names, and the snapshot never reaches a view.
+  return ok({
+    ...nextState,
+    battle: null,
+    endedBattle: { battle, endedBy: input.playerId },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// undoEndBattle
+// ---------------------------------------------------------------------------
+
+export interface UndoEndBattleInput {
+  readonly playerId: string
+}
+
+/** Sets `inBattle` on an arena unit's source card, if the card is still there. */
+function lockArenaUnitCard(
+  state: GameState,
+  arenaUnit: ArenaUnit,
+  ownerSide: BattleSide,
+): GameState {
+  const owner = findPlayer(state, ownerSide.playerId)
+  if (owner === undefined) return state
+
+  if (ownerSide.kind === 'barbarians') {
+    return withPlayer(state, {
+      ...owner,
+      barbarians: owner.barbarians.map((u) =>
+        u.id === arenaUnit.unit.id ? { ...u, inBattle: true } : u,
+      ),
+    })
+  }
+  return withPlayer(state, {
+    ...owner,
+    battlehand: owner.battlehand.map((u) =>
+      u.id === arenaUnit.unit.id ? { ...u, inBattle: true } : u,
+    ),
+    items: owner.items.map((it) =>
+      it.id === arenaUnit.unit.id ? ({ ...it, inBattle: true } as typeof it) : it,
+    ),
+  })
+}
+
+/**
+ * Brings back the battle that "End battle" just discarded, for the player who
+ * pressed it. No vote: the human decided the ender alone may take it back.
+ *
+ * Available until a new battle is initiated; other game actions do not expire
+ * it. Only the battle comes back: the arena, the turn and `inBattle` on the
+ * source cards. A card discarded or removed in between is simply skipped, and
+ * the arena unit keeps its own snapshot of it.
+ *
+ * Like the other arena log lines it never sets `item` on the entry —
+ * `initiateUndo` treats any entry with an `item` as undoable (see
+ * `appendRollingArenaLog`). The earlier "ends the battle" line stays.
+ *
+ * Errors: a battle is already active (`BATTLE_ALREADY_ACTIVE`), nothing was
+ * ended (`NO_BATTLE_ACTIVE`), or the caller is not who ended it
+ * (`NOT_IN_THIS_BATTLE`).
+ */
+export function undoEndBattle(
+  state: GameState,
+  input: UndoEndBattleInput,
+): ActionResult {
+  const found = requireAccess(state, input.playerId)
+  if (!found.ok) return found
+  const player = found.value
+
+  if (state.battle !== null) return err({ kind: 'BATTLE_ALREADY_ACTIVE' })
+  const ended = state.endedBattle
+  if (ended === null) return err({ kind: 'NO_BATTLE_ACTIVE' })
+  if (ended.endedBy !== input.playerId) {
+    return err({ kind: 'NOT_IN_THIS_BATTLE', playerId: input.playerId })
+  }
+
+  const battle = ended.battle
+  let nextState = state
+  for (const arenaUnit of [...battle.arena, ...battle.departedUnits]) {
+    const ownerSide =
+      arenaUnit.side === 'attacker' ? battle.attacker : battle.defender
+    nextState = lockArenaUnitCard(nextState, arenaUnit, ownerSide)
+  }
+
+  nextState = appendPublicLog(
+    nextState,
+    player.username,
+    player.playerId,
+    'undoes ending the battle',
+  )
+
+  return ok({ ...nextState, battle, endedBattle: null })
 }
 
 // ---------------------------------------------------------------------------
