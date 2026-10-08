@@ -1104,6 +1104,10 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
   }, [])
   const rev = view.rev ?? 0
   const myId = view.you?.playerId ?? ''
+  // Only who ended the last battle is sent, and only while it can be undone.
+  const battleUndo = view.battleUndo ?? null
+  const battleEnderName =
+    view.opponents.find((o) => o.playerId === battleUndo?.endedBy)?.username ?? 'another player'
 
   const [opponentId, setOpponentId] = useState('')
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null)
@@ -1429,6 +1433,29 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               Start battle
             </button>
           </div>
+        </div>
+      )}
+
+      {/* — Ended battle: the place where the arena was — */}
+      {battle === null && battleUndo !== null && (
+        <div
+          className="row battle-ended-banner"
+          role="status"
+          style={{ marginTop: '1rem', alignItems: 'center', gap: '1rem' }}
+        >
+          <span>
+            Battle ended{battleUndo.endedBy === myId ? '' : ` by ${battleEnderName}`}
+          </span>
+          <span style={{ flex: 1 }} />
+          {myId !== '' && battleUndo.endedBy === myId && (
+            <button
+              className="small"
+              disabled={busy}
+              onClick={() => runBattleAction(() => api.undoEndBattle(gameId, rev))}
+            >
+              Undo
+            </button>
+          )}
         </div>
       )}
 

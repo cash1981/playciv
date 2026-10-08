@@ -681,6 +681,8 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/battle/arena/turn/end`, { rev }),
   endBattleArena: (gameId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/end`, { rev }),
+  undoEndBattle: (gameId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/end/undo`, { rev }),
 
   availableTechs: (gameId: string) => get<TechItem[]>(`/api/games/${gameId}/techs/available`),
   revealedTechs: (gameId: string) => get<RevealedTechsDto[]>(`/api/games/${gameId}/techs/revealed`),
