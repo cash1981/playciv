@@ -19,6 +19,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Brief:** `docs/agents/tasks/undici-security.md`
 - **Status:** in review
 - **Claimed paths:**
+  - `pnpm-workspace.yaml`
   - `pnpm-lock.yaml`
   - `docs/agents/task-board.md`
   - `docs/agents/tasks/undici-security.md`
