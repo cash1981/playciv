@@ -328,7 +328,7 @@ export function migrateGameState(state: GameState): GameState {
     // copying the old ones later would duplicate those posted there. A save
     // without the flag from before chat orders existed has not been copied.
     legacyOrdersCopied: older.legacyOrdersCopied ?? chatOrders === true,
-    // Not known to be copied until the server's migration has checked the game
+    // A loaded save that lacks the flag is treated as not checked (the admin tool that checked it is gone)
     legacyRevealsCopied: older.legacyRevealsCopied ?? false,
     turnStarters: older.turnStarters ?? {},
   }

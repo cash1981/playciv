@@ -2,8 +2,8 @@
  * Orders as the old Turn orders panel left them in a saved game. Nothing in the
  * engine writes a draft or publishes a phase that way any more, but games saved
  * before the single chat still hold data of that shape (`orders`, `revealed`,
- * `done`, `history` and the masked public copy), and the migration and the
- * timeline read it. These tests build that data directly.
+ * `done`, `history` and the masked public copy), and the load-time adoption and
+ * the timeline read it. These tests build that data directly.
  */
 
 import type { GameState } from '../src/state.js'
