@@ -249,7 +249,10 @@ describe('advancing', () => {
     const done = advance(ready, 'req-1')
     expect(cultureMarkerLevelOf(done, CASH1981)).toBe(3)
     expect(handItem(done, card?.id ?? '')).toBeDefined()
-    expect(done.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toContain('drew 1 Great Person card')
+    // Since the markers: the line names the marker type taken, not the card (assisted-gp.test.ts)
+    expect(done.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toMatch(
+      /^cash1981 advanced on the culture track to space 3 and took a [a-z]+ great person marker into reserve$/,
+    )
   })
 
   it('a level 2 event draws from the culture II deck and a level 3 from the culture III deck', () => {
