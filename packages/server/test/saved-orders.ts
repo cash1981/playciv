@@ -2,8 +2,8 @@
  * Orders as the old Turn orders panel left them in a saved game. Nothing in the
  * engine writes a draft or publishes a phase that way any more, but games saved
  * before the single chat still hold data of that shape (`orders`, `revealed`,
- * `done`, `history` and the masked public copy), and the migration route reads
- * it. These tests build that data directly. The same helper is in the engine's
+ * `done`, `history` and the masked public copy), and the load-time adoption
+ * reads it. These tests build that data directly. The same helper is in the engine's
  * tests; the packages cannot share test files.
  */
 
