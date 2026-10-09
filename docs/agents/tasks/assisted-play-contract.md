@@ -3,7 +3,7 @@
 - **Slug:** `assisted-play-contract`
 - **Branch:** `feat/assisted-play-contract`
 - **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
-- **Status:** draft
+- **Status:** in progress
 - **Issue:** [#260](https://github.com/cash1981/playciv/issues/260), children #261, #262, #266
 
 ## Goal
@@ -179,13 +179,20 @@ Answered by the human:
   area, back to stock automatically, for every resource kind.
 - Ownership of a resource piece: the player area its centre lies in.
 - Undo: the existing vote.
+- Use limit: "Alle kort kan kun brukes en gang per tur bortsett fra healing som
+  vi ikke har støtte for nå." One use per card per turn.
+- The culture ladder (recorded for the next slice, not built here): steps 1-2
+  Level 1 culture event, 3 Great Person, 4-6 Level 1, 7 Great Person, 8-11
+  Level 2, 12 Great Person, 13-14 Level 2, 15-17 Level 3, 18 Great Person, 19-21
+  Level 3 where step 21, the Culture Victory panel, wins the game. Matches
+  `CULTURE_VICTORY_STEP = 21`. The cost per step and the draw/keep modifiers are
+  still unknown.
 
 Still open, none blocks starting:
 
-1. **Several incense at once.** Each token spent is one use of Chivalry (so two
-   tokens, two uses), because the token is what limits it. If the rulebook caps
-   Chivalry at one use per turn, the usage key becomes once per turn. The
-   rulebooks are not in this checkout. Please confirm.
+1. ~~Several incense at once.~~ Answered: every card can be used once per turn
+   (healing excepted, not supported). The usage key is `card:<tech>` per turn, so
+   one incense is spent per turn however many the player holds.
 2. **A resource piece in two players' areas** cannot happen by centre, but a
    piece outside every area is ignored, never taken.
 3. **Hut resources and the Hut tile name.** The hut names are `Incense`,
