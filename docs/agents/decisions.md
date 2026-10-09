@@ -165,6 +165,36 @@ Source: `engine/src/assisted.ts`, `culture-track.ts`, `server/src/routes/play.ts
 tests. Not built: Great Person abilities that need a map marker, killing
 markers, map tile 16a, free advances, hand limit, Build (#264), offers (#265).
 
+## City production
+
+Issue #250 slice A and a first part of #264. `cityProductionsOf` in
+`engine/src/city-production.ts` estimates each city's production from the board
+and revealed cards only, so every viewer gets the same figures; `cities` is in the
+public view of every player. It is an estimate, never a complete count, and a number
+typed by hand (`BoardPiece.productionOverride`, any player in the game may set it,
+0 to 99, undone by board Undo) always wins.
+
+- Outskirts production: forest 2, mountain 1, everything else 0 (the human; forest
+  2 is also the base rules p. 26 example). A building replaces every icon on its
+  square (base rules p. 16) and gives the production in `building-data.ts`, the
+  human's table (also trade, culture, coin, cost and combat bonus, for the Build
+  part). Enemy figures blockade a square. A wonder or great person square counts 0
+  and is named in the notes, because their icons are not in the data.
+- Added to every city: Infrastructure (`stats.infra`, at most 3), Despotism +1,
+  Chichen Itza +3 (owned, not blockaded), Susan B. Anthony +2 (revealed, her type
+  not fully blockaded), Military Science +1 per 3 coins (revealed). A Building
+  Program marker on a city centre shows a second figure that doubles only the
+  outskirts (Wisdom and Warfare p. 7). Communism, Urban Development, the Great
+  Lighthouse, scouts sending a square elsewhere and one-turn cards are named in the
+  notes, not computed. A square in two of the player's own cities counts for each
+  and says so (cities may not overlap when built, so this is old data).
+- A city piece off the map is not listed, so the status board's city count can
+  be higher than the Cities panel.
+
+Source: `engine/src/city-production.ts`, `building-data.ts`, `blockade.ts`
+(`cityFootprintsOf`), `actions/board.ts` (`setCityProductionOverride`),
+`web/src/views/CitiesPanel.tsx` and the `city-production*` tests.
+
 ## Accounts, mail and ratings
 
 Legacy SHA-1 accounts upgrade to scrypt on successful login. Password reset

@@ -3,7 +3,7 @@
 - **Slug:** `city-production`
 - **Branch:** `feat/city-production`, branched from `feat/assisted-play-contract` (PR #271)
 - **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
-- **Status:** draft
+- **Status:** in review (ready for the human to test)
 - **Issue:** [#250](https://github.com/cash1981/playciv/issues/250) slice A and a first part of slice B, a foundation for [#264](https://github.com/cash1981/playciv/issues/264)
 
 This branch is merged into `feat/assisted-play-contract`, and pushed there, only when the human says it is ready.
@@ -166,4 +166,10 @@ derived public value goes.
 
 ## Handover
 
-(to be filled in when done)
+Typecheck, 1205 engine, 681 server and 679 web tests and the build pass; two
+read-only review rounds found nothing above a nit. Checked in a browser: a capital
+with a Workshop and a Building Program marker (estimate 10, 19 with the program),
+override set and cleared, the opponent sees it read only, no horizontal overflow at
+390 and 320 px. Not checked against real D1. The Barracks / Academy trade value (2) is
+confirmed by the human. Open: the Build button, figures, units and other city
+actions are not built; terrain icons beyond forest and mountain are not in the data.

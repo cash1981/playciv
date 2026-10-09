@@ -31,7 +31,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** Claude (Sonnet 5.5)
 - **Branch:** `feat/city-production`, from `feat/assisted-play-contract`; merged there only when the human says ready
 - **Brief:** `docs/agents/tasks/city-production.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
   - `packages/engine/src/city-production.ts`, `building-data.ts`, `blockade.ts`, `board.ts`, `state.ts`, `index.ts`, `migrate.ts`, `errors.ts`, `actions/board.ts`
   - `packages/engine/test/city-production*.test.ts`, `hidden-info.test.ts`

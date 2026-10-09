@@ -115,6 +115,15 @@ describe('CitiesPanel', () => {
     expect(screen.queryByText(/Building Program/)).toBeNull()
   })
 
+  it('shows no doubled figure for a Building Program city that is set by hand', () => {
+    renderPanel(viewOf([city({ buildingProgram: true, withBuildingProgram: 17, override: 11, effective: 11 })]))
+    expect(
+      screen.getByText('Building Program in place. The figure above is set by hand, so no doubled figure is shown.'),
+    ).toBeTruthy()
+    expect(screen.queryByText(/17/)).toBeNull()
+    expect(screen.queryByText(/if this city produces now/)).toBeNull()
+  })
+
   it('lists the squares, modifiers and notes under "How it is counted"', () => {
     renderPanel(viewOf([city()]))
     const details = screen.getByText('How it is counted').closest('details') as HTMLElement
@@ -152,6 +161,33 @@ describe('CitiesPanel', () => {
     expect(screen.getByText('No cities on the map.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Cities (0)' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Carol' })).toBeNull()
+  })
+})
+
+describe('CitiesPanel, title', () => {
+  it('reads "0 yours" for a player without a city while an opponent has one', () => {
+    renderPanel(viewOf([], [city()]))
+    expect(screen.getByRole('button', { name: 'Cities (0 yours)' })).toBeTruthy()
+  })
+
+  it('keeps the plain count when the player has a city, or nobody does', () => {
+    renderPanel(viewOf([city()], [city({ pieceId: 'c3' })]))
+    expect(screen.getByRole('button', { name: 'Cities (1)' })).toBeTruthy()
+  })
+
+  it('counts the opponents’ cities for a spectator, never "yours"', () => {
+    renderPanel(viewOf(null, []), { readOnly: true })
+    expect(screen.getByRole('button', { name: 'Cities (0)' })).toBeTruthy()
+  })
+
+  it('copes with an opponent whose view carries no cities field', () => {
+    const view = {
+      you: { playerId: 'me', username: 'Alice', cities: [] },
+      opponents: [{ playerId: 'them', username: 'Bob' }],
+    } as unknown as PlayerView
+    renderPanel(view)
+    expect(screen.getByRole('button', { name: 'Cities (0)' })).toBeTruthy()
+    expect(screen.getByText('No cities on the map.')).toBeTruthy()
   })
 })
 

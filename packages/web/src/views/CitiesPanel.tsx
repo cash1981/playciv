@@ -15,9 +15,9 @@ import { MAX_PRODUCTION_OVERRIDE } from '@civ/engine'
 
 import type { CityProduction, PlayerView } from '../lib/api.js'
 import { api } from '../lib/api.js'
-import './CitiesPanel.css'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import type { Run } from './GameView.js'
+import './CitiesPanel.css'
 
 /** The data mixes "forest" (terrain) and "Workshop" (a building's label); show both the same way. */
 function capitalise(text: string): string {
@@ -25,7 +25,7 @@ function capitalise(text: string): string {
 }
 
 /** A whole number from 0 to the engine's cap, or `null` for anything else (empty, negative, fractional, too big). */
-export function parseProduction(typed: string): number | null {
+function parseProduction(typed: string): number | null {
   const trimmed = typed.trim()
   if (!/^\d+$/.test(trimmed)) return null
   const parsed = Number(trimmed)
@@ -46,13 +46,16 @@ export function CitiesPanel({
   readonly run: Run
 }): React.JSX.Element {
   const own = view.you?.cities ?? []
-  const others = view.opponents.filter((opponent) => opponent.cities.length > 0)
+  const others = view.opponents.filter((opponent) => (opponent.cities ?? []).length > 0)
   const nobodyHasCities = own.length === 0 && others.length === 0
   // A spectator has no cities of their own, so the title counts the ones on the map.
-  const count = view.you === null ? others.reduce((total, opponent) => total + opponent.cities.length, 0) : own.length
+  const count =
+    view.you === null ? others.reduce((total, opponent) => total + (opponent.cities ?? []).length, 0) : own.length
+  // A player with no city of their own, while others have some, would otherwise read as a map without cities.
+  const titleCount = view.you !== null && own.length === 0 && others.length > 0 ? `${count} yours` : String(count)
 
   return (
-    <CollapsiblePanel id="cities" title={`Cities (${count})`} defaultOpen={false}>
+    <CollapsiblePanel id="cities" title={`Cities (${titleCount})`} defaultOpen={false}>
       <p className="muted">Cities that are not on the map are not listed.</p>
       {nobodyHasCities && <p className="muted">No cities on the map.</p>}
 
@@ -78,7 +81,7 @@ export function CitiesPanel({
         <div key={opponent.playerId} className="cities-group">
           <h3 className="cities-owner">{opponent.username}</h3>
           <ul className="cities-list">
-            {opponent.cities.map((city) => (
+            {(opponent.cities ?? []).map((city) => (
               <CityCard
                 key={city.pieceId}
                 city={city}
@@ -128,7 +131,9 @@ function CityCard({
 
       {city.buildingProgram && city.withBuildingProgram !== null && (
         <p className="city-program">
-          Building Program in place: {city.withBuildingProgram} if this city produces now
+          {city.override === null
+            ? `Building Program in place: ${city.withBuildingProgram} if this city produces now`
+            : 'Building Program in place. The figure above is set by hand, so no doubled figure is shown.'}
         </p>
       )}
 
@@ -168,7 +173,7 @@ function CityArithmetic({ city }: { readonly city: CityProduction }): React.JSX.
             <li key={modifier.label}>
               {`${modifier.label}: +${modifier.amount}`}
               {!modifier.applied && <span className="city-flag"> (switched off)</span>}
-              {modifier.note !== null && <span className="muted city-note"> {modifier.note}</span>}
+              {modifier.note !== null && <span className="muted"> {modifier.note}</span>}
             </li>
           ))}
         </ul>
