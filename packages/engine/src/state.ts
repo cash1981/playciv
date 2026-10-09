@@ -280,15 +280,16 @@ export interface GameState {
   readonly turnStarters: Readonly<Record<number, string>>
   /**
    * The public turn orders of the old baton view have been copied into the
-   * timeline. True for a game created by this code. Nothing sets it any more; it
-   * is kept only so that old saves load as before. Public, but not in the view.
+   * timeline. True for a game created by this code. Nothing changes it after a game
+   * is loaded; `migrateGameState` still derives it for a save that lacks it, so
+   * that old saves load as before. Public, but not in the view.
    */
   readonly legacyOrdersCopied: boolean
   /**
    * The orders revealed before versions were stored have been copied into the
    * timeline. True for a game created by this code, false for a loaded game
-   * that lacks it. Nothing sets it any more; it is kept only so that old saves
-   * load as before. Public, but not in the view.
+   * that lacks it. Nothing changes it after a game is loaded; it is kept only so
+   * that old saves load as before. Public, but not in the view.
    */
   readonly legacyRevealsCopied: boolean
   /**

@@ -18,6 +18,7 @@ _Last updated: 2026-10-07 (independent barbarian drawing)_
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Removed the move-to-single-chat admin tool.** The human has moved every game, so the admin panel, `GET`/`POST /api/admin/games/migrate-chat`, `server/src/legacy-orders.ts`, the engine helpers only it used (`publicOrderVersions`, `publicOrdersWithoutVersions`, `unpublishedDrafts`, `pendingDrafts`, `draftsToPrivateNote`) and their tests are gone. The flags `legacyOrdersCopied` and `legacyRevealsCopied` and load-time adoption stay, so old saves load as before. Typechecks, 877 engine, 522 web and 604 server tests and builds pass. Brief: `tasks/remove-migrate-chat.md`; see `decisions.md`, 2026-10-09.
 - **Independent barbarian drawing.** Any active member can draw their own barbarian hand before the arena starts, even out of turn. Barbarian battle initiation reuses the left controller's prepared hand, with automatic drawing as fallback. Privacy, duplicate/stale guards and active-arena protection tested. Typechecks, all 2,067 tests and builds pass; read-only review has zero findings and rules differences are documented. Local browser verified drawing, disabled duplicate button, hand reuse and controller placement. Brief: `tasks/barbarian-draw.md`; see `decisions.md`, 2026-10-07.
 - **Daily idle turn reminders.** A separate 16:00 UTC Worker cron emails the current holder after more than 72 hours without a saved state change; one reminder per unchanged state, mail preferences and exact-address race checks, conservative legacy baseline, durable claims and safe provider retries. Migration `0007` must precede deployment. Review approved with zero findings after fixing a stale-address race; all typechecks, 2,050 tests and builds pass. Local Wrangler migration and Worker dry run pass. CodeQL follow-up replaces trailing-slash regex normalization with a linear character scan; all 2,050 tests and review pass. Not deployed or sent to real players. Brief: `tasks/turn-reminders.md`; see `decisions.md`, 2026-10-07.
 - **Building terrain warning (issue #255, branch `feat/building-terrain`).** Placing or moving a
@@ -64,9 +65,7 @@ _Last updated: 2026-10-07 (independent barbarian drawing)_
   No switch, no Turn orders or Chat panel, no End turn or Take the turn button; every
   game, running or finished, uses the chat and orders timeline. `chatOrders` is gone
   from `GameState` and `PlayerView`, a saved classic game is adopted when it is loaded,
-  and the admin page has "Move old games to the single chat" (`GET`/`POST
-  /api/admin/games/migrate-chat`) for the database rows, which also moves an
-  unpublished draft into its owner's private note. A finished game is titled with its
+  and the admin page had "Move old games to the single chat" for the database rows (removed 2026-10-09, see below). A finished game is titled with its
   winner and its replay bar shows only who won (stored joined winner lines too). A game that has not started takes no orders and has no active turn, and orders revealed before versions were kept are copied by the migration, also for games already marked moved (decisions.md, 2026-10-04). The old Turn orders routes, engine
   actions and the per-phase mail are removed; the stored order data and `yourTurn` stay.
   Known gap, not fixed: revealing a civilization at game start draws through `draw`,

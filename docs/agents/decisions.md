@@ -4722,3 +4722,24 @@ initiator is still the attacker, the next active player by stored seat order
 controls barbarians, and the defender still opens the arena turn. All members
 already had permission to initiate their own battle; that remains true. No
 new FFG rule, random source, projection field or migration is introduced.
+
+## 2026-10-09 — Remove the move-to-single-chat admin tool
+
+The human has finished moving every game to the single chat and asked for the
+admin panel and its code to go. Removed: the panel "Move old games to the single
+chat", `GET`/`POST /api/admin/games/migrate-chat`, the web API client calls,
+`server/src/legacy-orders.ts`, and the engine functions only that route used
+(`publicOrderVersions`, `publicOrdersWithoutVersions`, `unpublishedDrafts`,
+`pendingDrafts`, `draftsToPrivateNote`), with their tests.
+
+Kept on purpose, at the human's choice of scope: the stored flags
+`legacyOrdersCopied` and `legacyRevealsCopied` in `GameState`, `create-game.ts`
+and `migrate.ts`, and load-time adoption of a classic game. Nothing sets the
+flags any more, but removing them would touch how old saves load for no gain.
+The earlier entries on the tool (2026-10-03, 2026-10-04) stay as history.
+
+The delta revision test that used the migration run as its "admin write without
+a revision" now makes the same kind of save directly through
+`saveGameIfRevision`, and still checks that no revision is added, the newest one
+is sealed and the next revision is a keyframe. Brief: `tasks/remove-migrate-chat.md`.
+

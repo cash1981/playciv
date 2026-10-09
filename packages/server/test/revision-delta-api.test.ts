@@ -259,7 +259,7 @@ describe.each(backends)('revision history of a played game: %s', (_name, create)
     // the newest revision is an unsealed delta; the unrecorded write is what is under test.
     expect((await post(alice.token, `/api/games/${gameId}/players/${alice.id}/stat`, { stat: 'trade', value: 2 })).status).toBe(200)
     const before = await harness.rows(gameId)
-    expect(before.at(-1)).toMatchObject({ sealed: false })
+    expect(before.at(-1)).toMatchObject({ kind: 'delta', sealed: false })
     const live = (await harness.repo.findGame(gameId)) as GameState
     const renamed = `${live.name} (changed by an admin)`
     expect(await harness.repo.saveGameIfRevision({ ...live, rev: live.rev + 1, name: renamed }, live.rev)).toBe(true)
