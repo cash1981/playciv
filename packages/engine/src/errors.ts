@@ -77,6 +77,10 @@ export type EngineError =
   | { readonly kind: 'BOARD_ASSET_RUSSIA_ONLY'; readonly assetId: string }
   | { readonly kind: 'BOARD_PIECE_NOT_FOUND'; readonly pieceId: string }
   | { readonly kind: 'UNKNOWN_WONDER_OWNER'; readonly playerId: string }
+  /** `setCityProductionOverride` was pointed at a piece that is not a city. */
+  | { readonly kind: 'PIECE_NOT_A_CITY'; readonly pieceId: string }
+  /** `setCityProductionOverride` got something other than a whole number from 0 to 99 (or `null` to clear). */
+  | { readonly kind: 'INVALID_PRODUCTION_OVERRIDE'; readonly value: number }
   /** The board history is empty, so there is nothing to take back */
   | { readonly kind: 'NOTHING_TO_UNDO_ON_BOARD' }
   /** The board's last change belongs to someone else, not the caller */
@@ -222,6 +226,10 @@ export function describeError(error: EngineError): string {
       return `No piece on the board with id ${error.pieceId}`
     case 'UNKNOWN_WONDER_OWNER':
       return `No player in this game with id ${error.playerId}`
+    case 'PIECE_NOT_A_CITY':
+      return `Piece ${error.pieceId} is not a city`
+    case 'INVALID_PRODUCTION_OVERRIDE':
+      return `Production must be a whole number between 0 and 99, got ${error.value}`
     case 'NOTHING_TO_UNDO_ON_BOARD':
       return 'There is no board change to undo'
     case 'BOARD_UNDO_NOT_YOURS':

@@ -54,7 +54,8 @@ const COIN_TOKEN_IDS: ReadonlySet<string> = new Set([
 /** Russia's civilization card is named in the plural, like the other civs. */
 const RUSSIA_CIV = 'Russians'
 
-interface Cell {
+/** A map square as column and row numbers, zero based from the map's top left corner. */
+export interface Cell {
   readonly column: number
   readonly row: number
 }
@@ -78,6 +79,9 @@ function cellOf(board: Board, piece: BoardPiece): Cell | null {
     row: Math.floor((piece.y + piece.height / 2 - mapTop(board)) / board.squareSize),
   }
 }
+
+/** `cellOf` under a name that suits the package's public surface. */
+export const mapCellOf = cellOf
 
 const keyOf = (cell: Cell): string => `${cell.column},${cell.row}`
 
@@ -199,7 +203,11 @@ class BlockadeIndex {
   hasEnemyFigure(piece: BoardPiece, color: string): boolean {
     const cell = cellOf(this.state.board, piece)
     if (cell === null) return false
+    return this.hasEnemyFigureAt(cell, color)
+  }
 
+  /** The same question for a square, whether or not a piece stands in it. */
+  hasEnemyFigureAt(cell: Cell, color: string): boolean {
     for (const figure of this.figureColors.get(keyOf(cell)) ?? []) {
       if (figure === 'white') {
         // The white army is the Russian player's extra army. Without a Russia
@@ -274,6 +282,45 @@ export function blockadeCheckFor(
 ): (piece: BoardPiece, colour: string) => boolean {
   const index = new BlockadeIndex(state)
   return (piece, colour) => index.hasEnemyFigure(piece, colour)
+}
+
+/**
+ * One of a player's city pieces with the squares it covers: the centre square
+ * (two for a metropolis, whichever way it lies) and the outskirts, which never
+ * include a centre. Production reads it; the footprint arithmetic is the same
+ * as the blockade's, so the two cannot disagree about which squares a city owns.
+ */
+export interface CityFootprintView {
+  readonly piece: BoardPiece
+  readonly centers: readonly Cell[]
+  readonly outskirts: readonly Cell[]
+  /** Whether a figure that is no friend of the city's colour stands in `cell` (white army and Russia included). */
+  readonly hasEnemyFigureAt: (cell: Cell) => boolean
+}
+
+/**
+ * The cities of one colour on the map, in board order. `color` is lower case,
+ * as `pieceColorOf` gives it. A city piece that is off the map is left out.
+ */
+export function cityFootprintsOf(
+  state: Pick<GameState, 'board' | 'players'>,
+  color: string,
+): readonly CityFootprintView[] {
+  const index = new BlockadeIndex(state)
+  const views: CityFootprintView[] = []
+  for (const piece of state.board.pieces) {
+    if (piece.category !== 'city' || pieceColorOf(piece) !== color) continue
+    const footprint = cityFootprint(state.board, piece, color)
+    if (footprint === undefined) continue
+    const centerKeys = new Set(footprint.centers.map(keyOf))
+    views.push({
+      piece,
+      centers: footprint.centers,
+      outskirts: footprint.cells.filter((cell) => !centerKeys.has(keyOf(cell))),
+      hasEnemyFigureAt: (cell) => index.hasEnemyFigureAt(cell, color),
+    })
+  }
+  return views
 }
 
 /**

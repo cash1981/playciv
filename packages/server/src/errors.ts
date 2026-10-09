@@ -46,6 +46,8 @@ export function statusFor(error: EngineError): number {
     case 'UNKNOWN_COIN_SOURCE':
     case 'COIN_SOURCE_NOT_EDITABLE':
     case 'INVALID_COIN_VALUE':
+    case 'PIECE_NOT_A_CITY':
+    case 'INVALID_PRODUCTION_OVERRIDE':
     case 'UNKNOWN_GOVERNMENT':
     case 'INVALID_ARENA_STAT_VALUE':
     case 'CANNOT_BATTLE_YOURSELF':

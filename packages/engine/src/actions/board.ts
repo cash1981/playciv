@@ -542,6 +542,45 @@ export function setWonderCoinTokens(
   }))
 }
 
+/** The largest production a player may type in for a city. */
+export const MAX_PRODUCTION_OVERRIDE = 99
+
+/**
+ * Sets, or with `null` removes, the production a player typed in for a city. A
+ * typed number wins over the estimate (`cityProductionsOf`), because the map data
+ * does not hold every icon. Any player in the game may do it, like other board
+ * edits, and it is undone and replayed like them. Setting the value a city
+ * already has changes nothing and is not recorded.
+ */
+export function setCityProductionOverride(
+  state: GameState,
+  input: PieceInput & { readonly value: number | null },
+): ActionResult {
+  const denied = requireAccess(state, input.playerId)
+  if (denied !== undefined) return err(denied)
+  if (
+    input.value !== null &&
+    (!Number.isInteger(input.value) || input.value < 0 || input.value > MAX_PRODUCTION_OVERRIDE)
+  ) {
+    return err({ kind: 'INVALID_PRODUCTION_OVERRIDE', value: input.value })
+  }
+  const piece = findPiece(state.board, input.pieceId)
+  if (piece === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+  if (piece.category !== 'city') return err({ kind: 'PIECE_NOT_A_CITY', pieceId: input.pieceId })
+  const from = piece.productionOverride ?? null
+  if (from === input.value) return ok(state)
+  const change: BoardChange = { kind: 'productionOverride', pieceId: piece.id, from, to: input.value }
+  const to = input.value
+  return ok(record(input, {
+    state,
+    pieces: applyChange(state.board.pieces, change),
+    change,
+    description: to === null
+      ? `removed the typed production of ${piece.label} at ${locationOf(state.board, areasFor(state), piece)}`
+      : `set the production of ${piece.label} at ${locationOf(state.board, areasFor(state), piece)} to ${to}`,
+  }))
+}
+
 // ---------------------------------------------------------------------------
 // Removing
 // ---------------------------------------------------------------------------

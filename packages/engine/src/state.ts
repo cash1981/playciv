@@ -14,6 +14,8 @@ import type { Board, BoardArea, BoardPiece } from './board.js'
 import { boardAreas } from './board.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
+import type { CityProduction } from './city-production.js'
+import { cityProductionsOf } from './city-production.js'
 import { BASE_CULTURE_HAND_SIZE, cultureHandSizeOf } from './culture-hand.js'
 import type { CoinSources } from './coins.js'
 import { EMPTY_COIN_SOURCES, coinSourcesOf } from './coins.js'
@@ -720,6 +722,12 @@ export interface OpaquePlayerhand {
   readonly cultureMarkerLevel: number | null
   readonly cityCount: number
   readonly buildingCount: number
+  /**
+   * Each city's production estimate with its arithmetic. Derived from the public
+   * board and from revealed cards only (see `city-production.ts`), so an opponent
+   * gets the same figures a spectator would.
+   */
+  readonly cities: readonly CityProduction[]
 }
 
 function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
@@ -751,6 +759,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     cultureMarkerLevel: cultureMarkerLevelOf(state, player.playerId),
     cityCount: cityCountOf(state, player.playerId),
     buildingCount: buildingCountOf(state, player.playerId),
+    cities: cityProductionsOf(state, player),
   }
 }
 
@@ -785,6 +794,8 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
   readonly cultureMarkerLevel: number | null
   readonly cityCount: number
   readonly buildingCount: number
+  /** The viewer's cities, as `OpaquePlayerhand.cities` gives them for everybody. */
+  readonly cities: readonly CityProduction[]
   /**
    * The Great Person card types the viewer cannot use for now (issue #241): they
    * have tokens of the type on the map and every one is blockaded. Derived from
@@ -909,6 +920,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           cultureMarkerLevel: cultureMarkerLevelOf(state, viewerId),
           cityCount: cityCountOf(state, viewerId),
           buildingCount: buildingCountOf(state, viewerId),
+          cities: cityProductionsOf(state, player),
           blockadedGreatPersonTypes: blockadedGreatPersonTypes(state, player),
           availableActions: availableActionsFor(state, viewerId),
           pendingRewards: pendingRewardViews(player),
