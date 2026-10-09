@@ -67,6 +67,9 @@ import {
 } from '../context.js'
 import { sendError } from '../errors.js'
 
+/** What a client may use as a `requestId`: 1 to 64 characters of a small safe set. */
+const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/
+
 /** Looks up the sheet name and answers 400 when there is no such sheet. */
 function parseSheetName(
   c: Context<{ Variables: Variables }>,
@@ -753,6 +756,14 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     if (requestId === undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'requestId is required')
     }
+    if (!REQUEST_ID.test(requestId)) {
+      return sendError(
+        c,
+        400,
+        'BAD_REQUEST',
+        'requestId must be 1 to 64 characters: letters, digits and . _ : -',
+      )
+    }
     const clientRev = optionalNumber(body, 'rev')
     if (body['rev'] !== undefined && (clientRev === undefined || !Number.isInteger(clientRev) || clientRev < 0)) {
       return sendError(c, 400, 'BAD_REQUEST', 'rev must be a non-negative integer')
@@ -770,7 +781,8 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
           at: new Date().toISOString(),
         }),
       clientRev,
-      { description: `${actor.username} used ${action}` },
+      // A requestId that is already recorded answers with the same state: no new revision
+      { description: `${actor.username} used ${action}`, skipSaveWhenUnchanged: true },
     )
   })
 

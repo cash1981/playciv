@@ -81,6 +81,11 @@ export type EngineError =
   | { readonly kind: 'NOTHING_TO_UNDO_ON_BOARD' }
   /** The board's last change belongs to someone else, not the caller */
   | { readonly kind: 'BOARD_UNDO_NOT_YOURS' }
+  /**
+   * The board's last change is the removal of a piece an assisted action spent.
+   * Only the undo vote on that action's log line may put it back.
+   */
+  | { readonly kind: 'BOARD_UNDO_ASSISTED' }
   /** Nothing has been undone since the last board change, so there is nothing to redo */
   | { readonly kind: 'NOTHING_TO_REDO_ON_BOARD' }
   /** The game has not started: there is no player to the left of the caller yet (barbarians) */
@@ -216,6 +221,8 @@ export function describeError(error: EngineError): string {
       return 'There is no board change to undo'
     case 'BOARD_UNDO_NOT_YOURS':
       return 'The last board change was made by someone else'
+    case 'BOARD_UNDO_ASSISTED':
+      return 'The last board change was made by an assisted action. Ask for an undo vote on its log line instead'
     case 'NOTHING_TO_REDO_ON_BOARD':
       return 'There is no undone board change to redo'
     case 'GAME_NOT_STARTED':

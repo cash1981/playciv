@@ -232,6 +232,7 @@ describe('spendResource', () => {
     ['Iron', 'resources/iron'],
     ['Silk', 'resources/silk'],
     ['Wheat', 'resources/wheat'],
+    // No Uranium here: board-assets.json has no `resources/uranium`, so Uranium is hut-only
   ] as const)('takes a %s piece from the own area off the board', (name, assetId) => {
     const { state, piece } = withPieceInArea(firstCivGame(), assetId)
     const spent = unwrap(spendResource(state, CASH1981, name))

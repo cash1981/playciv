@@ -223,6 +223,13 @@ export interface ApplyToGameOptions {
    */
   readonly publicDescription?: (info: ApplyToGameInfo) => string | undefined
   readonly after?: (info: ApplyToGameInfo) => Promise<void> | void
+  /**
+   * When the action answers with the very state it was given, nothing changed:
+   * skip the save, keep `rev` and the history as they are, and answer with the
+   * current projection. For a retry that the engine recognises as already done.
+   * Off by default, so no other route changes.
+   */
+  readonly skipSaveWhenUnchanged?: boolean
 }
 
 /** An ended game is read-only for everyone except the admin role. */
@@ -260,8 +267,14 @@ export async function applyToGame(
 
   // A game saved before public item numbers were keyed has an empty key. Give
   // it a random one before anything is logged, or the numbers stay guessable.
-  const result = action(game.logSecret === '' ? { ...game, logSecret: newId() } : game)
+  // The object the action gets, so "unchanged" can be told by identity below
+  const given = game.logSecret === '' ? { ...game, logSecret: newId() } : game
+  const result = action(given)
   if (!result.ok) return sendEngineError(c, result.error)
+
+  if (options.skipSaveWhenUnchanged === true && result.value === given) {
+    return c.json(toPlayerView(game, currentPlayer(c).id))
+  }
 
   // Private notes do not create replay checkpoints, but they still advance the
   // optimistic-concurrency token. Otherwise a note and a shared transition

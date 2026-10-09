@@ -138,6 +138,45 @@ describe('POST /api/games/:gameId/actions', () => {
     expect((await repo.findGame(table.gameId))?.log.filter((entry) => entry.assistedActionId === 'req-1')).toHaveLength(1)
   })
 
+  it('a retry with a known requestId stores nothing: same rev, same revisions, same log', async () => {
+    const table = await chivalryTable('RetryStore')
+    const first = await (await chivalry(table, 'req-1', (await view(table.gameId, table.starter)).rev)).json<View>()
+    const stored = await repo.findGame(table.gameId)
+    const revisionsBefore = (await repo.listGameRevisions(table.gameId)).length
+
+    const retry = await chivalry(table, 'req-1', first.rev)
+
+    expect(retry.status).toBe(200)
+    const again = await retry.json<View>()
+    expect(again.rev).toBe(first.rev)
+    expect(again.you?.stats.culture).toBe(5)
+    const after = await repo.findGame(table.gameId)
+    expect(after?.rev).toBe(first.rev)
+    expect(after?.log).toEqual(stored?.log)
+    expect(after?.assistedActions).toEqual(stored?.assistedActions)
+    expect((await repo.listGameRevisions(table.gameId)).length).toBe(revisionsBefore)
+    // The next real write still goes through on that revision
+    const logId = again.assistedActions[0]?.logId as string
+    const next = await post(table.other, `/api/games/${table.gameId}/undo/${logId}`, {})
+    expect(next.status).toBe(200)
+    expect((await next.json<View>()).rev).toBe(first.rev + 1)
+  })
+
+  it('the same requestId from two tabs at once, on the same rev, has one effect', async () => {
+    const table = await chivalryTable('SameId')
+    const rev = (await view(table.gameId, table.starter)).rev
+
+    const [a, b] = await Promise.all([chivalry(table, 'tab-1', rev), chivalry(table, 'tab-1', rev)])
+
+    // One saves; the other either lost the race on the revision or found the id recorded
+    expect([a.status, b.status].sort()).toEqual([200, 409])
+    const stored = await repo.findGame(table.gameId)
+    expect(stored?.assistedActions).toHaveLength(1)
+    expect(stored?.log.filter((entry) => entry.assistedActionId === 'tab-1')).toHaveLength(1)
+    expect(stored?.players.find((player) => player.playerId === table.starterId)?.stats.culture).toBe(5)
+    expect(incensePieces(stored)).toHaveLength(0)
+  })
+
   it('a second press with a new requestId is a 409 and spends nothing', async () => {
     const table = await chivalryTable('Twice')
     // A second incense piece, so only the once per turn limit can stop it
@@ -202,6 +241,26 @@ describe('POST /api/games/:gameId/actions', () => {
     expect((await post(table.starter, url, { action: 'chivalry', requestId: 'x', rev: -1 })).status).toBe(400)
     expect((await inject(app, { method: 'POST', url, payload: { action: 'chivalry', requestId: 'x' } })).status).toBe(401)
     expect((await repo.findGame(table.gameId))?.assistedActions).toEqual([])
+  })
+
+  it('accepts a requestId of 1 to 64 characters from [A-Za-z0-9._:-] and refuses anything else', async () => {
+    const table = await chivalryTable('RequestId')
+    const url = `/api/games/${table.gameId}/actions`
+    const rev = (await view(table.gameId, table.starter)).rev
+    const bad = ['x'.repeat(65), 'has space', 'semi;colon', 'slash/id', 'quote"', 'åre', 'new\nline', ' lead']
+    for (const requestId of bad) {
+      const response = await post(table.starter, url, { action: 'chivalry', requestId, rev })
+      expect(response.status, requestId).toBe(400)
+      expect(await response.json()).toMatchObject({ error: 'BAD_REQUEST' })
+    }
+    expect((await post(table.starter, url, { action: 'chivalry', requestId: 7, rev })).status).toBe(400)
+    expect((await repo.findGame(table.gameId))?.assistedActions).toEqual([])
+
+    // The longest and the widest allowed id both work
+    const id = `${'a'.repeat(30)}.${'B'.repeat(10)}_:-9${'z'.repeat(19)}`
+    expect(id).toHaveLength(64)
+    expect((await post(table.starter, url, { action: 'chivalry', requestId: id, rev })).status).toBe(200)
+    expect((await repo.findGame(table.gameId))?.assistedActions[0]?.id).toBe(id)
   })
 
   it('works without a rev, for a caller that does not track revisions', async () => {
@@ -390,25 +449,73 @@ describe('undo over HTTP', () => {
   })
 })
 
-describe('the public log offers the undo to the actor only', () => {
-  it('canUndo is true for the actor on the applied line and false for others and after the undo', async () => {
+describe('the public log offers the undo to every player in the game', () => {
+  it('canUndo is true for any player on the applied line, false for others outside the game and after the undo', async () => {
     const table = await chivalryTable('LogUndo')
     expect((await chivalry(table, 'req-1', (await view(table.gameId, table.starter)).rev)).status).toBe(200)
-    const logOf = async (token: string) => {
-      const response = await inject(app, { url: `/api/games/${table.gameId}/log/public`, headers: bearer(token) })
-      const lines = await response.json<readonly { assistedActionId?: string; canUndo?: boolean }[]>()
-      return lines.filter((line) => line.assistedActionId === 'req-1')
+    const spectator = await register('logundo-spectator')
+    type Line = { assistedActionId?: string; canUndo?: boolean }
+    const logOf = async (token?: string) => {
+      const response = await inject(app, {
+        url: `/api/games/${table.gameId}/log/public`,
+        ...(token === undefined ? {} : { headers: bearer(token) }),
+      })
+      return (await response.json<readonly Line[]>()).filter((line) => line.assistedActionId === 'req-1')
     }
 
+    // Anyone at the table can ask: the actor and the other player
     expect((await logOf(table.starter))[0]?.canUndo).toBe(true)
-    expect((await logOf(table.other))[0]?.canUndo).toBe(false)
-    const anonymous = await inject(app, { url: `/api/games/${table.gameId}/log/public` })
-    expect((await anonymous.json<readonly { assistedActionId?: string; canUndo?: boolean }[]>())
-      .find((line) => line.assistedActionId === 'req-1')?.canUndo).toBe(false)
+    expect((await logOf(table.other))[0]?.canUndo).toBe(true)
+    // A logged-in user who is not in the game, and a viewer with no account
+    expect((await logOf(spectator))[0]?.canUndo).toBe(false)
+    expect((await logOf())[0]?.canUndo).toBe(false)
 
+    // Once the vote has been asked for, no second request is offered
     const logId = (await view(table.gameId, table.other)).assistedActions[0]?.logId as string
-    await post(table.starter, `/api/games/${table.gameId}/undo/${logId}`, {})
-    await post(table.other, `/api/games/${table.gameId}/undo/${logId}/vote`, { vote: true })
+    expect((await post(table.other, `/api/games/${table.gameId}/undo/${logId}`, {})).status).toBe(200)
     expect((await logOf(table.starter))[0]?.canUndo).toBe(false)
+    expect((await logOf(table.other))[0]?.canUndo).toBe(false)
+
+    // And not after the undo has gone through
+    await post(table.starter, `/api/games/${table.gameId}/undo/${logId}/vote`, { vote: true })
+    for (const token of [table.starter, table.other, spectator, undefined]) {
+      expect((await logOf(token))[0]?.canUndo).toBe(false)
+    }
+  })
+})
+
+describe('the board history and the replay', () => {
+  it('the board Undo cannot take back the spent piece, and answers 409', async () => {
+    const table = await chivalryTable('BoardUndo')
+    expect((await chivalry(table, 'req-1', (await view(table.gameId, table.starter)).rev)).status).toBe(200)
+    const before = await repo.findGame(table.gameId)
+
+    const refused = await post(table.starter, `/api/games/${table.gameId}/board/undo`, {})
+
+    expect(refused.status).toBe(409)
+    expect(await refused.json()).toMatchObject({ error: 'BOARD_UNDO_ASSISTED' })
+    const after = await repo.findGame(table.gameId)
+    expect(after?.rev).toBe(before?.rev)
+    expect(incensePieces(after)).toHaveLength(0)
+    expect(after?.players.find((player) => player.playerId === table.starterId)?.stats.culture).toBe(5)
+  })
+
+  it('a replayed revision shows no ready button, though the live state has one', async () => {
+    const table = await chivalryTable('Replay')
+    const ready = await view(table.gameId, table.starter)
+    expect(ready.you?.availableActions?.find((entry) => entry.action === 'chivalry')?.status).toBe('ready')
+    expect((await chivalry(table, 'req-1', ready.rev)).status).toBe(200)
+
+    const past = await inject(app, {
+      url: `/api/games/${table.gameId}/revisions/${ready.rev}`,
+      headers: bearer(table.starter),
+    })
+
+    expect(past.status).toBe(200)
+    const replay = await past.json<{ view: View }>()
+    // It is the state before the press, so the piece is still on the board ...
+    expect(replay.view.board.pieces.some((piece) => piece.assetId === 'resources/incense')).toBe(true)
+    // ... and still no button
+    expect(replay.view.you?.availableActions).toEqual([])
   })
 })

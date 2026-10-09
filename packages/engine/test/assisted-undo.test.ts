@@ -6,10 +6,12 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { redoLastBoardChange, removePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { chooseTech, purchaseCoin, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
+import { describeError } from '../src/errors.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
@@ -249,5 +251,79 @@ describe('undoing a purchase', () => {
     const line = bought.log.at(-1)
     if (line === undefined) throw new Error('no line')
     expect(unwrapErr(initiateUndo(bought, { logId: line.id, playerId: CASH1981 })).kind).toBe('NOTHING_TO_UNDO')
+  })
+})
+
+describe('the board history and an assisted spend', () => {
+  it('the board Undo refuses to put back the piece Chivalry spent, and changes nothing', () => {
+    const { state, pieceId } = afterPiece()
+    const snapshot = JSON.stringify(state)
+
+    const refused = unwrapErr(undoLastBoardChange(state, CASH1981))
+
+    expect(refused).toEqual({ kind: 'BOARD_UNDO_ASSISTED' })
+    expect(describeError(refused)).toContain('assisted action')
+    expect(JSON.stringify(state)).toBe(snapshot)
+    expect(state.board.pieces.some((piece) => piece.id === pieceId)).toBe(false)
+    expect(player(state).stats.culture).toBe(5)
+    // Nothing was moved onto the redo stack either
+    expect(unwrapErr(redoLastBoardChange(state, CASH1981)).kind).toBe('NOTHING_TO_REDO_ON_BOARD')
+  })
+
+  it('another player still gets the old refusal, not the assisted one', () => {
+    const { state } = afterPiece()
+    expect(unwrapErr(undoLastBoardChange(state, KARANDRAS1)).kind).toBe('BOARD_UNDO_NOT_YOURS')
+  })
+
+  it('works as normal after the vote has undone the action, and redo stays consistent', () => {
+    const { state, pieceId, logId } = afterPiece()
+    const undone = allVoteYes(unwrap(initiateUndo(state, { logId, playerId: CASH1981 })), logId)
+    expect(undone.board.pieces.some((piece) => piece.id === pieceId)).toBe(true)
+
+    // The piece the vote put back is the actor's own last change: take it off again
+    const off = unwrap(undoLastBoardChange(undone, CASH1981))
+    expect(off.board.pieces.some((piece) => piece.id === pieceId)).toBe(false)
+    // And the old removal is an ordinary entry now, because its action is undone
+    const back = unwrap(undoLastBoardChange(off, CASH1981))
+    expect(back.board.pieces.some((piece) => piece.id === pieceId)).toBe(true)
+    expect(player(back).stats.culture).toBe(0)
+
+    const redone = unwrap(redoLastBoardChange(unwrap(redoLastBoardChange(back, CASH1981)), CASH1981))
+    expect(redone.board.pieces.some((piece) => piece.id === pieceId)).toBe(true)
+    expect(redone.board.history.length).toBe(undone.board.history.length)
+  })
+
+  it('a second press with the same piece is refused again, and only that entry', () => {
+    const { state, logId } = afterPiece()
+    const undone = allVoteYes(unwrap(initiateUndo(state, { logId, playerId: CASH1981 })), logId)
+    const again = press(undone, 'req-2')
+    expect(unwrapErr(undoLastBoardChange(again, CASH1981)).kind).toBe('BOARD_UNDO_ASSISTED')
+  })
+
+  it('a hut spend leaves the piece on the board, so the board Undo is not touched', () => {
+    const { state, pieceId } = afterHut()
+    // The last board change is the actor placing the piece, which stays theirs to undo
+    const undone = unwrap(undoLastBoardChange(state, CASH1981))
+    expect(undone.board.pieces.some((piece) => piece.id === pieceId)).toBe(false)
+  })
+
+  it('an ordinary removal by the same player is still undoable', () => {
+    const { state, piece } = withPieceInArea(chivalryTurn(), 'resources/incense')
+    const removed = unwrap(removePiece(state, { playerId: CASH1981, pieceId: piece.id }))
+    const back = unwrap(undoLastBoardChange(removed, CASH1981))
+    expect(back.board.pieces.some((candidate) => candidate.id === piece.id)).toBe(true)
+  })
+
+  it('counts the reversal line in the board history, so stepping through shows it', () => {
+    const { state, pieceId, logId } = afterPiece()
+    const undone = allVoteYes(unwrap(initiateUndo(state, { logId, playerId: CASH1981 })), logId)
+
+    const last = undone.board.history.at(-1)
+    expect(last?.change).toMatchObject({ kind: 'place', piece: { id: pieceId } })
+    expect(undone.log.at(-1)?.publicLog).toContain('was undone')
+    expect(last?.logLength).toBe(undone.log.length)
+    // The invariant replay relies on: never decreasing along the history
+    const lengths = undone.board.history.map((entry) => entry.logLength)
+    expect(lengths).toEqual([...lengths].sort((a, b) => a - b))
   })
 })

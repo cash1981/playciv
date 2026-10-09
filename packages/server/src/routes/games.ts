@@ -208,12 +208,17 @@ function revisionSummary(revision: GameRevisionMetadata) {
   }
 }
 
+/**
+ * A past state as the viewer may read it. Their private note is blanked, and so
+ * are their button states: they were computed against a state that is gone, and
+ * a ready button in a replay would be a press on the wrong game.
+ */
 function projectedRevision(revision: GameRevision, viewerId: string) {
   const state = revision.state
   const projected = toPlayerView(state, viewerId)
   const view = projected.you === null
     ? projected
-    : { ...projected, you: { ...projected.you, gamenote: '' } }
+    : { ...projected, you: { ...projected.you, gamenote: '', availableActions: [] } }
   return {
     ...revisionSummary(revision),
     view,
@@ -534,8 +539,8 @@ export function registerGameRoutes(app: App, context: AppContext): void {
               message: entry.publicLog,
               createdAt: entry.createdAt,
               hasUndo: entry.undo !== null,
-              // Only the player who used a card may ask to take it back, as with an item
-              // today; the vote itself is everyone's. The line stays after an undo.
+              // Any player in the game may ask to take it back, which starts the vote;
+              // a spectator or an anonymous viewer may not. The line stays after an undo.
               ...(entry.assistedActionId === undefined
                 ? {}
                 : {
@@ -543,7 +548,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
                     canUndo:
                       assisted !== undefined &&
                       assisted.status === 'applied' &&
-                      assisted.playerId === viewerId &&
+                      state.players.some((player) => player.playerId === viewerId) &&
                       entry.undo === null,
                   }),
             }

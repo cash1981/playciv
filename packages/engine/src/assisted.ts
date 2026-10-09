@@ -11,6 +11,16 @@
  * What an action did is recorded in `GameState.assistedActions`, keyed on the
  * client's `requestId`. A repeated `requestId` changes nothing, and the once
  * per turn limit is the usage key on the player's `PlayerTurn.usedActions`.
+ *
+ * Import cycle, on purpose: `state.ts` builds the projection from this file, this
+ * file removes board pieces through `actions/board.ts`, and that file uses
+ * `state.ts` again. It is safe because this file imports only types from
+ * `state.ts` (erased at build time) and uses nothing from `actions/board.ts` or
+ * `state.ts` while the module loads, only inside functions that run later. A
+ * top-level use of a `state.ts` value here, or a top-level call into
+ * `actions/board.ts`, would run before the cycle has finished loading and throw
+ * on an uninitialised binding. Keep it that way: no value imports from
+ * `state.ts`, and nothing computed at load time from the board actions.
  */
 
 import { removePiece } from './actions/board.js'
@@ -51,16 +61,23 @@ const withPlayerHand = (state: GameState, player: Playerhand): GameState => ({
   ),
 })
 
-export interface AssistedAvailability {
-  readonly status: AssistedStatus
+/** Why an action cannot be pressed: every status except `ready`. */
+export interface BlockedAvailability {
+  readonly status: Exclude<AssistedStatus, 'ready'>
   readonly reason: string
 }
 
-type Rejection = Extract<EngineError, { kind: 'ASSISTED_ACTION_REJECTED' }>['status']
+/** Whether an action can be pressed now. A union, so `status !== 'ready'` narrows to the reason it is blocked. */
+export type AssistedAvailability =
+  | { readonly status: 'ready'; readonly reason: string }
+  | BlockedAvailability
 
 const READY: AssistedAvailability = { status: 'ready', reason: 'Ready to use.' }
 
-const blocked = (status: Exclude<AssistedStatus, 'ready'>, reason: string): AssistedAvailability => ({
+const blocked = (
+  status: BlockedAvailability['status'],
+  reason: string,
+): BlockedAvailability => ({
   status,
   reason,
 })
@@ -317,15 +334,15 @@ interface AssistedActionDefinition {
   ): Result<Reversed, EngineError>
 }
 
-const rejected = (action: string, availability: AssistedAvailability): EngineError => ({
+const rejected = (action: string, availability: BlockedAvailability): EngineError => ({
   kind: 'ASSISTED_ACTION_REJECTED',
   action,
-  status: availability.status as Rejection,
+  status: availability.status,
   reason: availability.reason,
 })
 
 /** The tech must be chosen, and revealed because a hidden one is private. */
-function techBlock(player: Playerhand, techName: string): AssistedAvailability | undefined {
+function techBlock(player: Playerhand, techName: string): BlockedAvailability | undefined {
   const tech = player.techsChosen.find((candidate) => candidate.name === techName)
   if (tech === undefined) return blocked('not-owned', `You do not have ${techName}.`)
   if (tech.hidden) return blocked('unavailable', `Reveal ${techName} before using it.`)
@@ -415,6 +432,8 @@ type CoinPurchaseRejection = Extract<
   EngineError,
   { kind: 'COIN_PURCHASE_REJECTED' }
 >['reason']
+/** What can stop a purchase once the tech is known to be revealed. */
+type OpenPurchaseRejection = Exclude<CoinPurchaseRejection, 'TECH_NOT_REVEALED'>
 
 interface CoinPurchaseTerms {
   readonly techName: string
@@ -449,6 +468,20 @@ function planCoinPurchase(
   if (!player.techsChosen.some((tech) => tech.name === terms.techName && !tech.hidden)) {
     return err('TECH_NOT_REVEALED')
   }
+  return planOpenCoinPurchase(state, player, source)
+}
+
+/**
+ * The checks after the tech is known to be revealed. Split out so the
+ * availability, which has already handled an unrevealed tech with its own
+ * wording, matches on reasons that can actually occur.
+ */
+function planOpenCoinPurchase(
+  state: GameState,
+  player: Playerhand,
+  source: CoinPurchaseSource,
+): Result<CoinPurchasePlan, OpenPurchaseRejection> {
+  const terms = COIN_PURCHASES[source]
   const turn = openCityManagementTurn(state, player)
   if (turn === undefined) return err('PHASE_CLOSED')
   if (turn.usedActions.includes(coinUsageKey(source))) return err('ALREADY_USED')
@@ -512,7 +545,7 @@ function coinPurchase(source: CoinPurchaseSource): AssistedActionDefinition {
       if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
       const tech = techBlock(player, terms.techName)
       if (tech !== undefined) return tech
-      const plan = planCoinPurchase(state, player, source)
+      const plan = planOpenCoinPurchase(state, player, source)
       if (plan.ok) {
         return { status: 'ready', reason: `Spend ${terms.paidWith} to add 1 coin to ${terms.techName}.` }
       }
@@ -525,8 +558,6 @@ function coinPurchase(source: CoinPurchaseSource): AssistedActionDefinition {
           return blocked('needs-resource', `You need ${terms.paidWith} for this purchase.`)
         case 'AT_CAPACITY':
           return blocked('unavailable', `${terms.techName} is already at its coin capacity.`)
-        case 'TECH_NOT_REVEALED':
-          return blocked('unavailable', `Reveal ${terms.techName} before using it.`)
       }
     },
 
@@ -738,11 +769,22 @@ export function reverseAssistedAction(
       candidate.id === record.id ? { ...candidate, status: 'undone' as const } : candidate,
     ),
   }
-  return ok(
-    appendLog(marked, {
-      username: 'System',
-      publicLog: `System: ${reversed.value.text}`,
-      createdAt: at ?? null,
-    }),
-  )
+  const logged = appendLog(marked, {
+    username: 'System',
+    publicLog: `System: ${reversed.value.text}`,
+    createdAt: at ?? null,
+  })
+  // A board change the reversal made was recorded before this line existed: count
+  // the line in, so stepping through the history shows it with the change (the
+  // same as the start player line in `actions/board.ts`).
+  if (logged.board.history.length === state.board.history.length) return ok(logged)
+  const last = logged.board.history.at(-1)
+  if (last === undefined) return ok(logged)
+  return ok({
+    ...logged,
+    board: {
+      ...logged.board,
+      history: [...logged.board.history.slice(0, -1), { ...last, logLength: logged.log.length }],
+    },
+  })
 }

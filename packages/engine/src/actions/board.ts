@@ -571,6 +571,27 @@ export function removePiece(state: GameState, input: PieceInput): ActionResult {
 // ---------------------------------------------------------------------------
 
 /**
+ * Whether a board change is the removal of a resource piece that an assisted
+ * action, still applied, spent. That removal is the cost of the action, so only
+ * the undo vote on the action's log line may put the piece back; the board's own
+ * Undo would return it and keep what the action gave. Once the action is undone
+ * the old history entry is an ordinary one again.
+ *
+ * Reads the records directly instead of importing `assisted.ts`, which imports
+ * this file.
+ */
+function isAssistedSpend(state: GameState, change: BoardChange): boolean {
+  if (change.kind !== 'remove') return false
+  return state.assistedActions.some(
+    (record) =>
+      record.status === 'applied' &&
+      'spent' in record.effect &&
+      record.effect.spent.kind === 'piece' &&
+      record.effect.spent.piece.id === change.piece.id,
+  )
+}
+
+/**
  * Takes back the board's last change, but only the player's own.
  *
  * Everyone may move everything on this shared board, but Undo is scoped to
@@ -590,6 +611,7 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
   const last = state.board.history.at(-1)
   if (last === undefined) return err({ kind: 'NOTHING_TO_UNDO_ON_BOARD' })
   if (last.playerId !== playerId) return err({ kind: 'BOARD_UNDO_NOT_YOURS' })
+  if (isAssistedSpend(state, last.change)) return err({ kind: 'BOARD_UNDO_ASSISTED' })
 
   return ok(
     withBoard(state, {

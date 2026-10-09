@@ -60,17 +60,7 @@ const isAssistedEntry = (entry: GameLogEntry): boolean =>
 export function initiateUndo(state: GameState, input: InitiateUndoInput): ActionResult {
   const entry = findLogEntry(state, input.logId)
   if (entry === undefined) return err({ kind: 'LOG_ENTRY_NOT_FOUND', logId: input.logId })
-  if (entry.item === null && !isAssistedEntry(entry)) {
-    return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
-  }
-  // Checked before the vote itself so a second undo says why, not only "already asked"
-  const record = assistedRecordOf(state, entry)
-  if (isAssistedEntry(entry)) {
-    if (record === undefined) return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
-    if (record.status === 'undone') {
-      return err({ kind: 'ASSISTED_ACTION_ALREADY_UNDONE', logId: input.logId })
-    }
-  }
+  if (entry.item === null) return initiateAssistedUndo(state, entry, input)
   if (entry.undo !== null) {
     return err({ kind: 'UNDO_ALREADY_INITIATED', logId: input.logId })
   }
@@ -84,18 +74,6 @@ export function initiateUndo(state: GameState, input: InitiateUndoInput): Action
     undo: createUndo(state.numOfPlayers, input.playerId),
   })
 
-  if (entry.item === null) {
-    // Only an assisted entry gets here, and its record was found above
-    return ok(
-      appendAssistedUndoRequestLog(
-        next,
-        player.username,
-        input.playerId,
-        record === undefined ? 'an action' : assistedSubject(state, record),
-      ),
-    )
-  }
-
   return ok(
     appendUndoRequestLog(
       next,
@@ -106,6 +84,39 @@ export function initiateUndo(state: GameState, input: InitiateUndoInput): Action
       entry.username,
       (entry.item.ownerId ?? entry.playerId) === input.playerId,
     ),
+  )
+}
+
+/**
+ * Starts the vote on a line that has no item. Only a line that reports a
+ * recorded assisted action can be undone; any other line has nothing to undo.
+ * The already-undone check comes before the already-asked one so a second undo
+ * says why, not only "already asked".
+ */
+function initiateAssistedUndo(
+  state: GameState,
+  entry: GameLogEntry,
+  input: InitiateUndoInput,
+): ActionResult {
+  const record = assistedRecordOf(state, entry)
+  if (record === undefined) return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
+  if (record.status === 'undone') {
+    return err({ kind: 'ASSISTED_ACTION_ALREADY_UNDONE', logId: input.logId })
+  }
+  if (entry.undo !== null) {
+    return err({ kind: 'UNDO_ALREADY_INITIATED', logId: input.logId })
+  }
+  if (!hasUserAccess(state, input.playerId)) {
+    return err({ kind: 'PLAYER_NOT_FOUND', playerId: input.playerId })
+  }
+
+  const player = findPlayer(state, input.playerId) as Playerhand
+  const next = withLogEntry(state, {
+    ...entry,
+    undo: createUndo(state.numOfPlayers, input.playerId),
+  })
+  return ok(
+    appendAssistedUndoRequestLog(next, player.username, input.playerId, assistedSubject(state, record)),
   )
 }
 
