@@ -12,11 +12,19 @@
  * no item, so an undo of one could never be started. The branch is not ported.
  */
 
+import { assistedRecordOf, assistedSubject, reverseAssistedAction } from '../assisted.js'
 import { techCoinSource, withCoinSource } from '../coins.js'
 import type { EngineError } from '../errors.js'
 import type { Item, TechItem } from '../item.js'
 import { itemName } from '../item.js'
-import { appendUndoLog, appendUndoRequestLog, appendVoteLog, publicItemSubject } from '../log.js'
+import {
+  appendAssistedUndoRequestLog,
+  appendAssistedVoteLog,
+  appendUndoLog,
+  appendUndoRequestLog,
+  appendVoteLog,
+  publicItemSubject,
+} from '../log.js'
 import { shuffle } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
@@ -39,13 +47,30 @@ export interface InitiateUndoInput {
 }
 
 /**
+ * A line with no item that reports an assisted action can be undone too. The
+ * item still wins when both are there, so every existing entry behaves as before.
+ */
+const isAssistedEntry = (entry: GameLogEntry): boolean =>
+  entry.item === null && entry.assistedActionId !== undefined
+
+/**
  * Java: `UndoAction.initiateUndo` — starts a vote. Whoever asks for the undo
  * has voted yes the moment the vote is created.
  */
 export function initiateUndo(state: GameState, input: InitiateUndoInput): ActionResult {
   const entry = findLogEntry(state, input.logId)
   if (entry === undefined) return err({ kind: 'LOG_ENTRY_NOT_FOUND', logId: input.logId })
-  if (entry.item === null) return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
+  if (entry.item === null && !isAssistedEntry(entry)) {
+    return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
+  }
+  // Checked before the vote itself so a second undo says why, not only "already asked"
+  const record = assistedRecordOf(state, entry)
+  if (isAssistedEntry(entry)) {
+    if (record === undefined) return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
+    if (record.status === 'undone') {
+      return err({ kind: 'ASSISTED_ACTION_ALREADY_UNDONE', logId: input.logId })
+    }
+  }
   if (entry.undo !== null) {
     return err({ kind: 'UNDO_ALREADY_INITIATED', logId: input.logId })
   }
@@ -58,6 +83,18 @@ export function initiateUndo(state: GameState, input: InitiateUndoInput): Action
     ...entry,
     undo: createUndo(state.numOfPlayers, input.playerId),
   })
+
+  if (entry.item === null) {
+    // Only an assisted entry gets here, and its record was found above
+    return ok(
+      appendAssistedUndoRequestLog(
+        next,
+        player.username,
+        input.playerId,
+        record === undefined ? 'an action' : assistedSubject(state, record),
+      ),
+    )
+  }
 
   return ok(
     appendUndoRequestLog(
@@ -76,6 +113,8 @@ export interface VoteInput {
   readonly logId: string
   readonly playerId: string
   readonly vote: boolean
+  /** ISO timestamp for what an accepted assisted undo writes. The engine itself stays pure. */
+  readonly at?: string
 }
 
 /**
@@ -90,10 +129,14 @@ export function vote(state: GameState, input: VoteInput): ActionResult {
   const entry = findLogEntry(state, input.logId)
   if (entry === undefined) return err({ kind: 'LOG_ENTRY_NOT_FOUND', logId: input.logId })
   if (entry.undo === null) return err({ kind: 'UNDO_NOT_INITIATED', logId: input.logId })
-  if (entry.item === null) return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
+  if (entry.item === null && !isAssistedEntry(entry)) {
+    return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
+  }
 
   const voter = findPlayer(state, input.playerId)
   if (voter === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId: input.playerId })
+
+  if (entry.item === null) return voteOnAssisted(state, entry, input, voter)
 
   const undo = castVote(entry.undo, input.playerId, input.vote)
   const result = resultOfVotes(undo)
@@ -117,6 +160,39 @@ export function vote(state: GameState, input: VoteInput): ActionResult {
   if (ownerId === null) return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
 
   return putItemBack(next, ownerId, entry.item, entry.logType)
+}
+
+/**
+ * The vote on an assisted action's line. Same unanimity and the same single no
+ * as an item vote; the lines name the action as its own line did, and a passed
+ * vote runs the reversal instead of putting an item back.
+ */
+function voteOnAssisted(
+  state: GameState,
+  entry: GameLogEntry,
+  input: VoteInput,
+  voter: Playerhand,
+): ActionResult {
+  const record = assistedRecordOf(state, entry)
+  if (entry.undo === null || record === undefined) {
+    return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
+  }
+  if (record.status === 'undone') {
+    return err({ kind: 'ASSISTED_ACTION_ALREADY_UNDONE', logId: input.logId })
+  }
+
+  const undo = castVote(entry.undo, input.playerId, input.vote)
+  const accepted = resultOfVotes(undo) === true
+
+  const next = appendAssistedVoteLog(
+    withLogEntry(state, { ...entry, undo: { ...undo, done: accepted } }),
+    voter.username,
+    input.playerId,
+    assistedSubject(state, record),
+    input.vote,
+  )
+  if (!accepted) return ok(next)
+  return reverseAssistedAction(next, record.id, input.at)
 }
 
 /**

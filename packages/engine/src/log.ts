@@ -254,6 +254,8 @@ interface AppendOptions {
   readonly playerId?: string
   /** ISO timestamp, supplied by the caller since the engine stays pure. */
   readonly createdAt?: string | null
+  /** Marks the line as the report of an assisted action, see `GameLogEntry`. */
+  readonly assistedActionId?: string
 }
 
 /** Appends one log entry and returns the new state. */
@@ -269,6 +271,7 @@ export function appendLog(state: GameState, options: AppendOptions): GameState {
     playerId: options.playerId ?? null,
     undo: null,
     createdAt: options.createdAt ?? null,
+    ...(options.assistedActionId === undefined ? {} : { assistedActionId: options.assistedActionId }),
   }
   return { ...state, rng, log: [...state.log, entry] }
 }
@@ -344,6 +347,43 @@ export function appendVoteLog(
     playerId,
     logType: 'VOTE',
     publicLog: `${username} has voted ${vote ? 'yes' : 'no'} to undo ${itemPublicName} with item number ${itemNumber}`,
+  })
+}
+
+/**
+ * The undo request for an assisted action, which has no item. `subject` is the
+ * public description of the action ("Chivalry used by cash1981"), so the line
+ * says no more than the action's own line did.
+ */
+export function appendAssistedUndoRequestLog(
+  state: GameState,
+  username: string,
+  playerId: string,
+  subject: string,
+): GameState {
+  const text = `${username} has requested undo of ${subject}`
+  return appendLog(state, {
+    username,
+    logType: 'UNDO',
+    playerId,
+    privateLog: text,
+    publicLog: text,
+  })
+}
+
+/** The vote line for an assisted action, see {@link appendAssistedUndoRequestLog}. */
+export function appendAssistedVoteLog(
+  state: GameState,
+  username: string,
+  playerId: string,
+  subject: string,
+  vote: boolean,
+): GameState {
+  return appendLog(state, {
+    username,
+    playerId,
+    logType: 'VOTE',
+    publicLog: `${username} has voted ${vote ? 'yes' : 'no'} to undo ${subject}`,
   })
 }
 

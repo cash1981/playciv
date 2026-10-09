@@ -10,7 +10,7 @@
 import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement } from './item.js'
 import { isUnit } from './item.js'
 import type { Rng } from './random.js'
-import type { Board, BoardArea } from './board.js'
+import type { Board, BoardArea, BoardPiece } from './board.js'
 import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
@@ -28,6 +28,7 @@ import {
 import type { Undo } from './undo.js'
 import type { Battle, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
+import { availableActionsFor, publicAssistedActions } from './assisted.js'
 
 export type GameType = 'WAW'
 
@@ -206,6 +207,87 @@ export interface GameLogEntry {
   readonly undo: Undo | null
   /** ISO timestamp assigned by the server when this entry is persisted. */
   readonly createdAt: string | null
+  /**
+   * The `requestId` of the assisted action this line reports (see
+   * `AssistedActionRecord`). It makes the line a target for the undo vote even
+   * though it carries no item.
+   */
+  readonly assistedActionId?: string
+}
+
+/** The assisted actions the game can perform for a player. See `assisted.ts`. */
+export type AssistedActionKind = 'chivalry' | 'democracy' | 'printingPress'
+
+/** Why a player can or cannot press an assisted action right now. */
+export type AssistedStatus =
+  | 'ready'
+  | 'used'
+  | 'needs-resource'
+  | 'wrong-phase'
+  | 'not-owned'
+  | 'unavailable'
+
+/**
+ * The resource token an action spent, exactly, so an undo puts back the same
+ * one: a hut from the hand (moved to `discardedItems`), or the board piece that
+ * was removed, with its position.
+ */
+export type SpentResource =
+  | { readonly kind: 'hut'; readonly resource: string; readonly itemId: string }
+  | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece }
+
+/** What an action changed, enough to reverse it. Server side only, never in a view. */
+export type AssistedEffect =
+  | { readonly kind: 'chivalry'; readonly culture: number; readonly spent: SpentResource }
+  | {
+      readonly kind: 'coinPurchase'
+      readonly source: 'democracy' | 'printingPress'
+      readonly resource: 'trade' | 'culture'
+      readonly cost: number
+    }
+
+/**
+ * One applied assisted action. `id` is the client's `requestId`, which is what
+ * makes a retry, a refresh or a second tab harmless. `phase` and `turnNumber`
+ * stay on the record so a later "reopen phase" can find what belongs to it.
+ */
+export interface AssistedActionRecord {
+  readonly id: string
+  readonly kind: AssistedActionKind
+  readonly playerId: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+  /** The key written to the player's `PlayerTurn.usedActions`. */
+  readonly usageKey: string
+  readonly at: string | null
+  /** The public log line the action wrote. */
+  readonly logId: string
+  readonly status: 'applied' | 'undone'
+  readonly effect: AssistedEffect
+}
+
+/** One entry of `PlayerView.you.availableActions`: the viewer's own button state. */
+export interface AvailableAction {
+  readonly action: AssistedActionKind
+  readonly label: string
+  readonly status: AssistedStatus
+  /** A readable sentence, also when `status` is `ready`. */
+  readonly reason: string
+}
+
+/** An assisted action as everybody may read it. No effect, no hut or piece identity. */
+export interface PublicAssistedAction {
+  readonly id: string
+  readonly kind: AssistedActionKind
+  readonly label: string
+  readonly playerId: string
+  readonly username: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+  readonly status: 'applied' | 'undone'
+  /** The public log line, as it was written. */
+  readonly text: string
+  readonly logId: string
 }
 
 export interface GameState {
@@ -237,6 +319,11 @@ export interface GameState {
    */
   readonly publicTurns: Readonly<Record<string, PlayerTurn>>
   readonly log: readonly GameLogEntry[]
+  /**
+   * Every assisted action performed, with what it spent and gained. The
+   * `effect` inside is for undo only and is never part of a projection.
+   */
+  readonly assistedActions: readonly AssistedActionRecord[]
   /** The board and the pieces on it. Every player sees the whole board. */
   readonly board: Board
   readonly rng: Rng
@@ -574,6 +661,8 @@ export interface PublicLogEntry {
   readonly username: string
   readonly logType: LogType | null
   readonly publicLog: string
+  /** Present on the line of an assisted action, so anyone can ask to undo it. */
+  readonly assistedActionId?: string
 }
 
 export function toPublicLog(entry: GameLogEntry): PublicLogEntry {
@@ -582,6 +671,7 @@ export function toPublicLog(entry: GameLogEntry): PublicLogEntry {
     username: entry.username,
     logType: entry.logType,
     publicLog: entry.publicLog,
+    ...(entry.assistedActionId === undefined ? {} : { assistedActionId: entry.assistedActionId }),
   }
 }
 
@@ -597,6 +687,12 @@ export interface PlayerViewSelf extends Playerhand {
    * of `OpaquePlayerhand`.
    */
   readonly blockadedGreatPersonTypes: readonly string[]
+  /**
+   * What the viewer can press right now, one entry per assisted action. Only
+   * ever built for the viewer's own player: it depends on their hand and on
+   * the resource tokens they hold, so nobody else gets it.
+   */
+  readonly availableActions: readonly AvailableAction[]
 }
 
 /**
@@ -628,6 +724,8 @@ export interface PlayerView {
    */
   readonly blockadedPieceIds: readonly string[]
   readonly log: readonly (PublicLogEntry | GameLogEntry)[]
+  /** Assisted actions already performed, public summary only. */
+  readonly assistedActions: readonly PublicAssistedAction[]
   /**
    * The active battle, or null. The arena is fully public — both sides see all
    * units once placed. Units NOT in the arena remain subject to existing
@@ -688,6 +786,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           cityCount: cityCountOf(state, viewerId),
           buildingCount: buildingCountOf(state, viewerId),
           blockadedGreatPersonTypes: blockadedGreatPersonTypes(state, player),
+          availableActions: availableActionsFor(state, viewerId),
         }
   return {
     id: state.id,
@@ -710,6 +809,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     log: state.log.map((entry) =>
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),
+    assistedActions: publicAssistedActions(state),
     battle: state.battle,
     battleSummary: battleSummaries(state),
     rev: state.rev,

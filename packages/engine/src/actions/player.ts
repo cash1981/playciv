@@ -18,12 +18,12 @@ import {
 import {
   activeWonderOwnerIds,
   coinOnReveal,
-  coinSourcesOf,
   findCoinSource,
   socialPolicyCoinSource,
   techCoinSource,
   withCoinSource,
 } from '../coins.js'
+import { applyCoinPurchase } from '../assisted.js'
 import { blockadedPieceIds } from '../blockade.js'
 import type { EngineError } from '../errors.js'
 import type { Government } from '../government.js'
@@ -50,7 +50,6 @@ import {
   isMovementValue,
   withPlayer,
 } from '../state.js'
-import { publicTurn, publicTurnKey, sameTurn, turnStatus } from '../turn.js'
 
 import { placeUnchecked, setWonderCoinTokens } from './board.js'
 import { draw, drawWonderToBoard } from './draw.js'
@@ -1184,72 +1183,12 @@ export interface PurchaseCoinInput {
 export function purchaseCoin(state: GameState, input: PurchaseCoinInput): ActionResult {
   const access = requireAccess(state, input.playerId)
   if (!access.ok) return access
-  const player = access.value
-  const source = input.source
-  const techName = source === 'democracy' ? 'Democracy' : 'Printing Press'
-  const resource = source === 'democracy' ? 'trade' : 'culture'
-  const cost = source === 'democracy' ? 6 : 5
-  const usageKey = `coin-purchase:${source}`
-  const reject = (reason: Extract<EngineError, { kind: 'COIN_PURCHASE_REJECTED' }>['reason']): ActionResult =>
-    err({ kind: 'COIN_PURCHASE_REJECTED', source, reason })
-
-  if (!player.techsChosen.some((tech) => tech.name === techName && !tech.hidden)) {
-    return reject('TECH_NOT_REVEALED')
-  }
-
-  const turnNumber = turnStatus(state).currentTurn
-  const existingTurn = player.playerTurns.find((turn) => turn.turnNumber === turnNumber)
-  if (
-    existingTurn === undefined ||
-    !existingTurn.done.SOT ||
-    !existingTurn.done.TRADE ||
-    existingTurn.done.CM ||
-    existingTurn.done.MOVEMENT ||
-    existingTurn.done.RESEARCH
-  ) {
-    return reject('PHASE_CLOSED')
-  }
-  if (existingTurn.usedActions.includes(usageKey)) return reject('ALREADY_USED')
-
-  if (player.stats[resource] < cost) return reject('INSUFFICIENT_RESOURCES')
-
-  const sourceKey = source
-  const current = coinSourcesOf(state, player)[sourceKey]
-  const coinSource = findCoinSource(sourceKey)
-  if (coinSource === undefined) return reject('AT_CAPACITY')
-  const blockadedIds = blockadedPieceIds(state)
-  const internetOwners = activeWonderOwnerIds(state.board.pieces, 'wonders/internet', blockadedIds)
-  const max = coinSource.max === null
-    ? null
-    : coinSource.max + (internetOwners.has(player.playerId) ? 2 : 0)
-  if (max !== null && current >= max) return reject('AT_CAPACITY')
-
-  const updatedTurn = {
-    ...existingTurn,
-    usedActions: [...existingTurn.usedActions, usageKey],
-  }
-  const playerTurns = player.playerTurns.map((turn) => sameTurn(turn, updatedTurn) ? updatedTurn : turn)
-  const key = publicTurnKey(updatedTurn)
-  const next: GameState = {
-    ...withPlayer(state, {
-      ...player,
-      playerTurns,
-      stats: {
-        ...player.stats,
-        [resource]: player.stats[resource] - cost,
-        coinSources: withCoinSource(player.stats.coinSources, sourceKey, current + 1),
-      },
-    }),
-    publicTurns: { ...state.publicTurns, [key]: publicTurn(updatedTurn) },
-  }
-  const paidFor = source === 'democracy' ? '6 trade' : '5 culture'
-  return ok(appendLog(next, {
-    username: player.username,
-    playerId: player.playerId,
-    publicLog: `${player.username} spent ${paidFor} to add 1 coin to ${techName}`,
-    privateLog: '',
-    createdAt: input.at ?? null,
-  }))
+  // The check, the payment and the log line live in `assisted.ts`, where the
+  // registry's Democracy and Printing Press entries use the same code.
+  const applied = applyCoinPurchase(state, access.value, input.source, {
+    ...(input.at === undefined ? {} : { at: input.at }),
+  })
+  return applied.ok ? ok(applied.value.state) : applied
 }
 
 /**

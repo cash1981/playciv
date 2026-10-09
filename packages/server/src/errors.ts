@@ -60,6 +60,11 @@ export function statusFor(error: EngineError): number {
       return 409
     case 'COIN_PURCHASE_REJECTED':
       return error.reason === 'ALREADY_USED' ? 409 : 400
+    // Out of uses is a conflict, like a coin purchase; everything else is a bad request
+    case 'ASSISTED_ACTION_REJECTED':
+      return error.status === 'used' ? 409 : 400
+    case 'ASSISTED_ACTION_ALREADY_UNDONE':
+      return 409
     case 'NO_BATTLE_ACTIVE':
     case 'ARENA_UNIT_NOT_FOUND':
       return 404

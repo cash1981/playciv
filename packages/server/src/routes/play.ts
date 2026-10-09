@@ -19,10 +19,12 @@ import {
   endBattle,
   findSheetName,
   initiateUndo,
+  isAssistedActionKind,
   loot,
   markPhasesDone,
   placeGreatPersonInPyramid,
   postOrder,
+  performAssistedAction,
   playerPutsItemBackInDeck,
   playersActiveUndos,
   remainingTechsForPlayer,
@@ -734,6 +736,44 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     )
   })
 
+  /**
+   * One route for every assisted action (#260). `requestId` makes a retry or a
+   * second tab harmless; `rev` is the revision the client saw, so a stale tab
+   * gets the usual 409 before anything runs. The old `/coin-purchase` route
+   * stays and shares the engine code.
+   */
+  app.post('/api/games/:gameId/actions', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const action = requireString(body, 'action')
+    if (action === undefined || !isAssistedActionKind(action)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'action must be a known assisted action')
+    }
+    const requestId = requireString(body, 'requestId')
+    if (requestId === undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'requestId is required')
+    }
+    const clientRev = optionalNumber(body, 'rev')
+    if (body['rev'] !== undefined && (clientRev === undefined || !Number.isInteger(clientRev) || clientRev < 0)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'rev must be a non-negative integer')
+    }
+    const actor = currentPlayer(c)
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) =>
+        performAssistedAction(state, {
+          playerId: actor.id,
+          action,
+          requestId,
+          at: new Date().toISOString(),
+        }),
+      clientRev,
+      { description: `${actor.username} used ${action}` },
+    )
+  })
+
   /** Shared government bookkeeping, parallel to the numeric status values. */
   app.post('/api/games/:gameId/players/:targetPlayerId/government', auth, async (c) => {
     const gameId = c.req.param('gameId')
@@ -772,7 +812,12 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     const value = asRecord(await c.req.json().catch(() => ({})))['vote']
 
     return applyToGame(context, c, gameId, (state) =>
-      vote(state, { logId, playerId: currentPlayer(c).id, vote: value === true }),
+      vote(state, {
+        logId,
+        playerId: currentPlayer(c).id,
+        vote: value === true,
+        at: new Date().toISOString(),
+      }),
     )
   })
 

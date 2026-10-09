@@ -110,6 +110,19 @@ export type EngineError =
       readonly source: 'democracy' | 'printingPress'
       readonly reason: 'TECH_NOT_REVEALED' | 'PHASE_CLOSED' | 'ALREADY_USED' | 'INSUFFICIENT_RESOURCES' | 'AT_CAPACITY'
     }
+  /**
+   * An assisted action could not be performed. `status` is the same word the
+   * projection shows (`used`, `needs-resource`, `wrong-phase`, `not-owned`,
+   * `unavailable`) and `reason` is the sentence for the player.
+   */
+  | {
+      readonly kind: 'ASSISTED_ACTION_REJECTED'
+      readonly action: string
+      readonly status: 'used' | 'needs-resource' | 'wrong-phase' | 'not-owned' | 'unavailable'
+      readonly reason: string
+    }
+  /** The assisted action behind this log line has already been undone. */
+  | { readonly kind: 'ASSISTED_ACTION_ALREADY_UNDONE'; readonly logId: string }
   /** `setPlayerGovernment` got a value outside the Wisdom and Warfare cards. */
   | { readonly kind: 'UNKNOWN_GOVERNMENT'; readonly government: string }
   /** A battle is already active — only one at a time is allowed */
@@ -229,6 +242,10 @@ export function describeError(error: EngineError): string {
         INSUFFICIENT_RESOURCES: 'You do not have enough trade or culture for this purchase.',
         AT_CAPACITY: 'This coin source is already at its capacity.',
       }[error.reason]
+    case 'ASSISTED_ACTION_REJECTED':
+      return error.reason
+    case 'ASSISTED_ACTION_ALREADY_UNDONE':
+      return 'This action has already been undone'
     case 'UNKNOWN_GOVERNMENT':
       return `Unknown government: ${error.government}`
     case 'BATTLE_ALREADY_ACTIVE':
