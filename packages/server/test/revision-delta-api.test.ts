@@ -251,31 +251,28 @@ describe.each(backends)('revision history of a played game: %s', (_name, create)
     }
   })
 
-  it('moving a game to the single chat saves it without a revision, and the next revision is a keyframe that carries it', async () => {
+  it('a save without a revision seals the newest one, and the next revision is a keyframe that carries it', async () => {
     const { gameId, alice } = await play()
-    const adminAccount = await register('delta-boss')
-    await harness.repo.updatePlayer(adminAccount.id, { role: 'admin' })
 
-    // An old game that has not been moved yet. The write seals the newest revision, so
-    // one ordinary action follows before the move: the move itself is what is under test.
-    const live = (await harness.repo.findGame(gameId)) as GameState
-    await harness.repo.saveGame({ ...live, rev: live.rev + 1, legacyOrdersCopied: false, legacyRevealsCopied: false })
+    // No route saves a game without a revision any more, so the stand-in is a direct write of a
+    // changed name (as revision-delta-storage.test.ts does). One ordinary action comes first, so
+    // the newest revision is an unsealed delta; the unrecorded write is what is under test.
     expect((await post(alice.token, `/api/games/${gameId}/players/${alice.id}/stat`, { stat: 'trade', value: 2 })).status).toBe(200)
     const before = await harness.rows(gameId)
     expect(before.at(-1)).toMatchObject({ sealed: false })
-
-    const moved = await post(adminAccount.token, '/api/admin/games/migrate-chat', { gameId })
-    expect(moved.status).toBe(200)
-    // The move is not a game action, so it adds no revision, and it seals the newest one.
+    const live = (await harness.repo.findGame(gameId)) as GameState
+    const renamed = `${live.name} (changed by an admin)`
+    expect(await harness.repo.saveGameIfRevision({ ...live, rev: live.rev + 1, name: renamed }, live.rev)).toBe(true)
+    // It is not a game action, so it adds no revision, and it seals the newest one.
     expect(await harness.rows(gameId)).toEqual([...before.slice(0, -1), { ...before.at(-1), sealed: true }])
 
     expect((await post(alice.token, `/api/games/${gameId}/players/${alice.id}/stat`, { stat: 'trade', value: 3 })).status).toBe(200)
     const after = await harness.rows(gameId)
     expect(after).toHaveLength(before.length + 1)
     const newest = after.at(-1)
-    // A delta against the old newest revision would have lost the move.
+    // A delta against the old newest revision would have lost the rename.
     expect(newest).toMatchObject({ kind: 'full', sealed: false })
-    expect((await harness.repo.findGameRevision(gameId, newest?.revision ?? 0))?.state.legacyOrdersCopied).toBe(true)
-    expect((await harness.repo.findGameRevision(gameId, before.at(-1)?.revision ?? 0))?.state.legacyOrdersCopied).toBe(false)
+    expect((await harness.repo.findGameRevision(gameId, newest?.revision ?? 0))?.state.name).toBe(renamed)
+    expect((await harness.repo.findGameRevision(gameId, before.at(-1)?.revision ?? 0))?.state.name).toBe(live.name)
   })
 })
