@@ -12,6 +12,19 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### assisted-gp-tokens
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/assisted-gp-tokens` (from `feat/assisted-play-contract`; merged there only when the human says so)
+- **Brief:** `docs/agents/tasks/assisted-gp-tokens.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/assisted.ts`, `culture-track.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/board.ts`
+  - `packages/server/src/routes/play.ts`
+  - `packages/web/src/views/AssistedActions.tsx`
+  - `docs/agents/decisions.md`, `state.md`, `README.md`
+- **Notes:** the claim of `assisted-play-contract` above stays until PR #271 is merged.
+
 ### assisted-play-contract
 
 - **Owner:** Claude (Sonnet 5.5)
