@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { TechItem } from '@civ/engine'
@@ -243,6 +244,77 @@ describe('AssistedActionButton requests', () => {
     })
 
     expect(perform.mock.calls[1]![2]).not.toBe(perform.mock.calls[0]![2])
+  })
+
+  it.each([
+    [500, 'INTERNAL'],
+    [502, 'BAD_GATEWAY'],
+    [503, 'UNAVAILABLE'],
+    [504, 'GATEWAY_TIMEOUT'],
+    [408, 'REQUEST_TIMEOUT'],
+    [429, 'TOO_MANY_REQUESTS'],
+  ])('a %i answer does not prove the write was not applied, so the retry reuses the id', async (status, code) => {
+    const perform = vi
+      .spyOn(api, 'performAction')
+      .mockRejectedValueOnce(new ApiError(status, code, 'failed'))
+      .mockResolvedValue({} as PlayerView)
+    renderPanel(viewWith([READY]))
+    const button = screen.getByRole('button', { name: 'Use Chivalry' })
+
+    fireEvent.click(button)
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      fireEvent.click(button)
+      expect(perform.mock.calls.length).toBeGreaterThan(1)
+    })
+
+    expect(perform.mock.calls[1]![2]).toBe(perform.mock.calls[0]![2])
+  })
+
+  it('a kept id is dropped once the projection shows that action as applied', async () => {
+    const perform = vi
+      .spyOn(api, 'performAction')
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue({} as PlayerView)
+    const { rerender } = renderPanel(viewWith([advance('ready', 'Advance.')]))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    const lostId = perform.mock.calls[0]![2]
+    // The response was lost, but the write landed: its record carries the same id.
+    const landed = {
+      ...viewWith([advance('ready', 'Advance.')], 6),
+      assistedActions: [{ id: lostId, kind: 'cultureAdvance' }],
+    } as unknown as PlayerView
+    rerender(<AssistedActionsPanel gameId="game-1" view={landed} busy={false} readOnly={false} run={run} />)
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
+      expect(perform.mock.calls.length).toBeGreaterThan(1)
+    })
+
+    expect(perform.mock.calls[1]![2]).not.toBe(lostId)
+  })
+
+  it('a kept id stays while the projection does not show it', async () => {
+    const perform = vi
+      .spyOn(api, 'performAction')
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue({} as PlayerView)
+    const { rerender } = renderPanel(viewWith([advance('ready', 'Advance.')]))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    const other = {
+      ...viewWith([advance('ready', 'Advance.')], 6),
+      assistedActions: [{ id: 'some-other-id', kind: 'cultureAdvance' }],
+    } as unknown as PlayerView
+    rerender(<AssistedActionsPanel gameId="game-1" view={other} busy={false} readOnly={false} run={run} />)
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
+      expect(perform.mock.calls.length).toBeGreaterThan(1)
+    })
+
+    expect(perform.mock.calls[1]![2]).toBe(perform.mock.calls[0]![2])
   })
 
   it('a network failure keeps the request id, and the retry reuses it', async () => {
@@ -496,6 +568,15 @@ describe('the Advance culture button', () => {
     expect(perform).not.toHaveBeenCalled()
   })
 
+  it('does not repeat the action name above its own button text', () => {
+    const { container } = renderPanel(viewWith([advance('ready', READY_REASON), READY]))
+
+    const names = Array.from(container.querySelectorAll('.assisted-name')).map((node) => node.textContent)
+    // The card keeps its name line; the advance row is named by its button.
+    expect(names).toEqual(['Chivalry'])
+    expect(screen.getByRole('button', { name: 'Advance culture' })).toBeTruthy()
+  })
+
   it('sends one request with a new id, and a second press after a success sends another id', async () => {
     const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
     renderPanel(viewWith([advance('ready', READY_REASON)], 8))
@@ -530,6 +611,8 @@ describe('the pending card choice', () => {
   })
 
   it('shows the same candidates again when the page is loaded afresh from the projection', () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    const choose = vi.spyOn(api, 'chooseReward').mockResolvedValue({} as PlayerView)
     const view = viewWithRewards([reward()])
     const first = renderPanel(view)
     const before = first.container.textContent
@@ -539,6 +622,9 @@ describe('the pending card choice', () => {
 
     expect(second.container.textContent).toBe(before)
     expect(screen.getAllByRole('button', { name: /Keep this card/ })).toHaveLength(2)
+    // Showing the choice again draws and sends nothing.
+    expect(perform).not.toHaveBeenCalled()
+    expect(choose).not.toHaveBeenCalled()
   })
 
   it('says Great Person tokens are still handled by hand for a Great Person reward', () => {
@@ -659,16 +745,113 @@ describe('the pending card choice', () => {
     expect(choose.mock.calls[1]![3]).toBe(choose.mock.calls[0]![3])
   })
 
-  it('has no choice for a spectator, and no active button while the game is read-only', () => {
-    const { container } = renderPanel({ ...spectatorView, pendingRewards: [reward()] } as unknown as PlayerView)
-    expect(container.textContent).toBe('')
-    cleanup()
+  it('renders no panel for a spectator, who has no you', () => {
+    const { container } = renderPanel(spectatorView, { readOnly: true })
 
+    expect(container.textContent).toBe('')
+    expect(screen.queryByText('Choose a card to keep')).toBeNull()
+  })
+
+  it('shows the viewer\'s own candidates with disabled Keep buttons while the game is read-only', () => {
     const choose = vi.spyOn(api, 'chooseReward').mockResolvedValue({} as PlayerView)
     renderPanel(viewWithRewards([reward()]), { readOnly: true })
-    const button = screen.getByRole('button', { name: /Keep this card.*Library Fire/ }) as HTMLButtonElement
-    expect(button.disabled).toBe(true)
-    fireEvent.click(button)
+
+    const buttons = screen.getAllByRole('button', { name: /Keep this card/ }) as HTMLButtonElement[]
+    expect(buttons).toHaveLength(2)
+    expect(buttons.every((button) => button.disabled)).toBe(true)
+    fireEvent.click(buttons[0]!)
     expect(choose).not.toHaveBeenCalled()
+  })
+
+  it('disables the Keep buttons while another write is busy', () => {
+    const choose = vi.spyOn(api, 'chooseReward').mockResolvedValue({} as PlayerView)
+    renderPanel(viewWithRewards([reward()]), { busy: true })
+
+    const buttons = screen.getAllByRole('button', { name: /Keep this card/ }) as HTMLButtonElement[]
+    expect(buttons.every((button) => button.disabled)).toBe(true)
+    fireEvent.click(buttons[0]!)
+    expect(choose).not.toHaveBeenCalled()
+  })
+
+  it('renders no cards, and does not throw, when the reward has no candidates list', () => {
+    const odd = { ...reward(), candidates: undefined } as unknown as Reward
+    renderPanel(viewWithRewards([odd]))
+
+    expect(screen.getByRole('heading', { name: 'Choose a card to keep' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Keep this card/ })).toBeNull()
+  })
+
+  it('a 503 keeps the id: the retry of the same card reuses it', async () => {
+    const choose = vi
+      .spyOn(api, 'chooseReward')
+      .mockRejectedValueOnce(new ApiError(503, 'UNAVAILABLE', 'error code: 1102'))
+      .mockResolvedValue({} as PlayerView)
+    renderPanel(viewWithRewards([reward()]))
+    const button = screen.getByRole('button', { name: /Keep this card.*Library Fire/ })
+
+    fireEvent.click(button)
+    await waitFor(() => expect(choose).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      fireEvent.click(button)
+      expect(choose.mock.calls.length).toBeGreaterThan(1)
+    })
+
+    expect(choose.mock.calls[1]![3]).toBe(choose.mock.calls[0]![3])
+  })
+
+  it('names the waiting choice in the panel title, so a collapsed panel does not hide it', () => {
+    renderPanel(viewWithRewards([reward()]))
+    expect(screen.getByRole('heading', { name: 'Your actions (1 choice waiting)' })).toBeTruthy()
+    cleanup()
+
+    renderPanel(viewWithRewards([reward('event', 'adv-1'), reward('greatPerson', 'adv-2')]))
+    expect(screen.getByRole('heading', { name: 'Your actions (2 choices waiting)' })).toBeTruthy()
+    cleanup()
+
+    renderPanel(viewWith([READY]))
+    expect(screen.getByRole('heading', { name: 'Your actions' })).toBeTruthy()
+  })
+
+  it('shows the waiting choice in the title also when the panel is collapsed', () => {
+    localStorage.setItem('civ.panel.actions', 'false')
+    renderPanel(viewWithRewards([reward()]))
+
+    const toggle = screen.getByRole('button', { name: /Your actions \(1 choice waiting\)/ })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('moves focus into the panel after a successful choice, when the cards are gone', async () => {
+    vi.spyOn(api, 'chooseReward').mockResolvedValue({} as PlayerView)
+    function Harness(): React.JSX.Element {
+      const [view, setView] = useState(viewWithRewards([reward()], [advance('ready', 'Advance.')]))
+      // Like GameView: the action, then a reload that no longer has the choice.
+      const reloading: Run = async (action) => {
+        await action()
+        setView(viewWith([advance('ready', 'Advance.')], 6))
+      }
+      return <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={reloading} />
+    }
+    const { container } = render(<Harness />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Keep this card.*Library Fire/ }))
+
+    await waitFor(() => expect(screen.queryByText('Choose a card to keep')).toBeNull())
+    await waitFor(() => {
+      const panel = container.querySelector('.collapsible-panel')!
+      expect(panel.contains(document.activeElement)).toBe(true)
+      expect(document.activeElement).not.toBe(document.body)
+    })
+  })
+
+  it('keeps focus where it is after a failed choice', async () => {
+    vi.spyOn(api, 'chooseReward').mockRejectedValue(new ApiError(400, 'ACTION_NOT_AVAILABLE', 'no'))
+    renderPanel(viewWithRewards([reward()]))
+    const button = screen.getByRole('button', { name: /Keep this card.*Library Fire/ })
+    button.focus()
+
+    fireEvent.click(button)
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false))
+
+    expect(document.activeElement).toBe(button)
   })
 })

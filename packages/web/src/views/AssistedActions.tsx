@@ -11,7 +11,7 @@
  * press does.
  */
 
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { itemName } from '@civ/engine'
@@ -38,13 +38,23 @@ const STATUS_TEXT: Readonly<Record<Status, string>> = {
 /**
  * A request id per press. It is kept while the outcome is unknown, so a double
  * click or a retry of the same press sends the same id and the server does the
- * action once. It is freed as soon as the client got a definitive answer: a
- * success, or an HTTP error (the server processed the request and did not apply
- * it, so the next press is a new one). Only a failure with no HTTP response at
- * all (network down, lost response) keeps it. Kept at module level, keyed on
- * game, viewer and action, so the panel and the dialog share it, a remount
- * (closing the dialog) does not lose it, and another account in the same tab
- * never reuses it.
+ * action once. It is freed in three cases:
+ *
+ * - the press succeeded;
+ * - the server answered with a status that means it decided not to apply the
+ *   write: below 500, except 408 (request timeout) and 429 (too many requests),
+ *   which say nothing about whether the write was applied (see
+ *   {@link serverDeclined});
+ * - the projection shows the action as applied: the kept id is the `id` of a
+ *   record in `view.assistedActions`, so the press landed even though its
+ *   response was lost, and the next press is a new one (see
+ *   {@link dropLandedId}).
+ *
+ * It is kept for 500 and above (a gateway, or Cloudflare's resource limit, can
+ * answer after the Worker applied the write) and for a failure with no response
+ * at all (network down, lost response). Kept at module level, keyed on game,
+ * viewer and action, so the panel and the dialog share it, a remount (closing the
+ * dialog) does not lose it, and another account in the same tab never reuses it.
  */
 const pendingRequestIds = new Map<string, string>()
 const inFlight = new Set<string>()
@@ -64,32 +74,57 @@ function newRequestId(): string {
 }
 
 /**
+ * True when the status proves the server decided not to apply the write. A 5xx
+ * does not: it can come from a gateway after the Worker did the work. 408 and 429
+ * are 4xx but come from the edge or a limiter, not from the game's own decision.
+ */
+function serverDeclined(status: unknown): boolean {
+  return typeof status === 'number' && status < 500 && status !== 408 && status !== 429
+}
+
+/**
+ * The kept id is the `id` of an applied action in the projection: the press
+ * landed. Forget the id, so the next press (a second culture advance, say) is a
+ * new request and not an idempotent replay of the first.
+ */
+function dropLandedId(key: string, view: PlayerView | undefined): void {
+  const kept = pendingRequestIds.get(key)
+  if (kept !== undefined && view?.assistedActions?.some((record) => record.id === kept)) {
+    pendingRequestIds.delete(key)
+  }
+}
+
+/**
  * One press, with its kept request id. `key` says which press it is: the same key
  * while the outcome is unknown reuses the id, a settled one gets a new id.
+ * Resolves to true when the request succeeded.
  */
 function pressOnce(
   key: string,
   run: Run,
   send: (requestId: string) => Promise<PlayerView>,
-): Promise<void> {
+  view?: PlayerView,
+): Promise<boolean> {
   // A second click before the first has settled is the same press.
-  if (inFlight.has(key)) return Promise.resolve()
+  if (inFlight.has(key)) return Promise.resolve(false)
+  dropLandedId(key, view)
   const requestId = pendingRequestIds.get(key) ?? newRequestId()
   pendingRequestIds.set(key, requestId)
   inFlight.add(key)
-  const settle = (): void => {
+  let succeeded = false
+  const settle = (): boolean => {
     inFlight.delete(key)
+    return succeeded
   }
   return run(async () => {
     try {
       const result = await send(requestId)
+      succeeded = true
       pendingRequestIds.delete(key)
       return result
     } catch (caught) {
-      // An HTTP status means the server answered and did not apply the request,
-      // so the id is spent. With no response the outcome is unknown, and the
-      // same id makes the retry safe.
-      if (caught instanceof ApiError && typeof caught.status === 'number') {
+      // See the comment on pendingRequestIds for which failures spend the id.
+      if (caught instanceof ApiError && serverDeclined(caught.status)) {
         pendingRequestIds.delete(key)
       }
       throw caught
@@ -145,8 +180,11 @@ export function AssistedActionButton({
   const playerId = view.you.playerId
 
   const press = (): void => {
-    void pressOnce(`${gameId}:${playerId}:${action}`, run, (requestId) =>
-      api.performAction(gameId, action, requestId, rev),
+    void pressOnce(
+      `${gameId}:${playerId}:${action}`,
+      run,
+      (requestId) => api.performAction(gameId, action, requestId, rev),
+      view,
     )
   }
 
@@ -196,38 +234,58 @@ export function AssistedActionsPanel({
     (candidate) => candidate.status !== 'not-owned',
   )
   // Only the viewer's own projection has the field; a replayed view has it blank.
+  const waiting = view.you?.pendingRewards?.length ?? 0
   const pending = view.you?.pendingRewards?.[0]
+  // After a successful Keep the choice unmounts and focus would fall to the page.
+  const bodyRef = useRef<HTMLDivElement>(null)
   if (view.you === null || (actions.length === 0 && pending === undefined)) return null
+  // A collapsed panel must not hide the choice, so the title says it is waiting.
+  const title =
+    waiting > 0
+      ? `Your actions (${waiting} ${waiting === 1 ? 'choice' : 'choices'} waiting)`
+      : 'Your actions'
   return (
-    <CollapsiblePanel id="actions" title="Your actions" defaultOpen>
-      {actions.length > 0 && (
-        <ul className="assisted-actions">
-          {actions.map((candidate) => (
-            <li key={candidate.action}>
-              <span className="assisted-name">{candidate.label}</span>
-              <AssistedActionButton
-                action={candidate.action}
-                gameId={gameId}
-                view={view}
-                busy={busy}
-                readOnly={readOnly}
-                run={run}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-      {pending !== undefined && (
-        <RewardChoice
-          gameId={gameId}
-          playerId={view.you.playerId}
-          rev={view.rev}
-          reward={pending}
-          busy={busy}
-          readOnly={readOnly}
-          run={run}
-        />
-      )}
+    <CollapsiblePanel id="actions" title={title} defaultOpen>
+      <div
+        ref={bodyRef}
+        className="assisted-panel-body"
+        tabIndex={-1}
+        role="group"
+        aria-label="Your actions"
+      >
+        {actions.length > 0 && (
+          <ul className="assisted-actions">
+            {actions.map((candidate) => (
+              <li key={candidate.action}>
+                {/* A button with its own text (Advance culture) names the row itself. */}
+                {BUTTON_TEXT[candidate.action] === undefined && (
+                  <span className="assisted-name">{candidate.label}</span>
+                )}
+                <AssistedActionButton
+                  action={candidate.action}
+                  gameId={gameId}
+                  view={view}
+                  busy={busy}
+                  readOnly={readOnly}
+                  run={run}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        {pending !== undefined && (
+          <RewardChoice
+            gameId={gameId}
+            playerId={view.you.playerId}
+            rev={view.rev}
+            reward={pending}
+            busy={busy}
+            readOnly={readOnly}
+            run={run}
+            onKept={() => bodyRef.current?.focus()}
+          />
+        )}
+      </div>
     </CollapsiblePanel>
   )
 }
@@ -240,6 +298,8 @@ interface RewardChoiceProps {
   readonly busy: boolean
   readonly readOnly: boolean
   readonly run: Run
+  /** Called after a successful choice, when this section is about to go away. */
+  readonly onKept: () => void
 }
 
 /**
@@ -257,6 +317,7 @@ function RewardChoice({
   busy,
   readOnly,
   run,
+  onKept,
 }: RewardChoiceProps): React.JSX.Element {
   const [sending, setSending] = useState(false)
   const keep = (itemId: string): void => {
@@ -274,7 +335,10 @@ function RewardChoice({
     }
     pressOnce(`${rewardKey}:${itemId}`, run, (requestId) =>
       api.chooseReward(gameId, reward.id, itemId, requestId, rev),
-    ).then(settle, settle)
+    ).then((kept) => {
+      settle()
+      if (kept) onKept()
+    }, settle)
   }
   const disabled = busy || readOnly || sending
   return (
@@ -287,7 +351,7 @@ function RewardChoice({
         {reward.kind === 'greatPerson' && ' Great Person tokens are still handled by hand.'}
       </p>
       <ul className="card-grid small assisted-reward-cards">
-        {reward.candidates.map((item) => (
+        {(reward.candidates ?? []).map((item) => (
           <ItemCard key={item.id} item={item}>
             <button
               type="button"

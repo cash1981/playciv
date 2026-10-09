@@ -4917,4 +4917,13 @@ Corrections and consequences for the culture advance, after review:
   section's level, and the Great Person extras for Organized Religion and the
   Greeks come from the human's ruling of 2026-10-09; no rulebook is in this checkout.
   Mysticism's extra card, and Ecology, are the printed card texts.
+- "Your actions" is now shown to every player of a running game, also one with no
+  assisted cards, because the culture advance belongs to nobody's card: outside City
+  Management it reads "Not now" with its reason. This is deliberate so players can
+  find the button; hiding the row outside the phase is a one line filter if it
+  turns out to be noise.
+- A request id is kept after any answer that does not prove the write was refused
+  (no answer, 408, 429 and every 5xx), because a gateway error can come after the
+  server committed. It is also dropped as soon as the projection shows a record
+  with that id, so the next press of a repeatable action is a real second press.
 

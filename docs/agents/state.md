@@ -13,7 +13,7 @@ _Last updated: 2026-10-09 (assisted actions, first slice)_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 1076 engine, 648 server, 580 web (2,304 total) on `feat/assisted-play-contract` |
+| `pnpm -r test` | passing — 1076 engine, 648 server, 597 web (2,321 total) on `feat/assisted-play-contract` |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
