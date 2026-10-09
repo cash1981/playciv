@@ -216,7 +216,10 @@ export interface GameLogEntry {
 }
 
 /** The assisted actions the game can perform for a player. See `assisted.ts`. */
-export type AssistedActionKind = 'chivalry' | 'democracy' | 'printingPress'
+export type AssistedActionKind = CultureCardKind | 'democracy' | 'printingPress'
+
+/** The cards that spend a resource token for culture: "Incense, City Management: gain N culture". */
+export type CultureCardKind = 'chivalry' | 'currency' | 'metalCasting'
 
 /** Why a player can or cannot press an assisted action right now. */
 export type AssistedStatus =
@@ -238,7 +241,7 @@ export type SpentResource =
 
 /** What an action changed, enough to reverse it. Server side only, never in a view. */
 export type AssistedEffect =
-  | { readonly kind: 'chivalry'; readonly culture: number; readonly spent: SpentResource }
+  | { readonly kind: CultureCardKind; readonly culture: number; readonly spent: SpentResource }
   | {
       readonly kind: 'coinPurchase'
       readonly source: 'democracy' | 'printingPress'

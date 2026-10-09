@@ -39,10 +39,18 @@ const press = (state: GameState, requestId: string, action: 'chivalry' | 'democr
   performAssistedAction(state, { playerId: CASH1981, action, requestId })
 
 describe('the registry', () => {
-  it('lists Chivalry, Democracy and Printing Press', () => {
-    expect([...ASSISTED_ACTION_KINDS].sort()).toEqual(['chivalry', 'democracy', 'printingPress'])
+  it('lists the incense cards, Democracy and Printing Press', () => {
+    expect([...ASSISTED_ACTION_KINDS].sort()).toEqual([
+      'chivalry',
+      'currency',
+      'democracy',
+      'metalCasting',
+      'printingPress',
+    ])
     expect(isAssistedActionKind('chivalry')).toBe(true)
-    expect(isAssistedActionKind('currency')).toBe(false)
+    // Registered since the Currency and Metal Casting slice; Wheat and Silk are not
+    expect(isAssistedActionKind('currency')).toBe(true)
+    expect(isAssistedActionKind('wheat')).toBe(false)
     expect(isAssistedActionKind(7)).toBe(false)
   })
 

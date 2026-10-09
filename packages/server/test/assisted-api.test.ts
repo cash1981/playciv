@@ -231,7 +231,7 @@ describe('POST /api/games/:gameId/actions', () => {
     const url = `/api/games/${table.gameId}/actions`
     const rev = (await view(table.gameId, table.starter)).rev
 
-    const unknown = await post(table.starter, url, { action: 'currency', requestId: 'x', rev })
+    const unknown = await post(table.starter, url, { action: 'wheat', requestId: 'x', rev })
     expect(unknown.status).toBe(400)
     expect(await unknown.json()).toMatchObject({ error: 'BAD_REQUEST' })
     expect((await post(table.starter, url, { requestId: 'x', rev })).status).toBe(400)

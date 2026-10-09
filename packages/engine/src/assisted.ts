@@ -39,6 +39,7 @@ import type {
   AssistedEffect,
   AssistedStatus,
   AvailableAction,
+  CultureCardKind,
   GameLogEntry,
   GameState,
   Playerhand,
@@ -322,6 +323,8 @@ interface ApplyContext {
 
 interface AssistedActionDefinition {
   readonly kind: AssistedActionKind
+  /** The tech card this action belongs to, as the tech dialog names it. */
+  readonly techName: string
   readonly label: string
   readonly usageKey: string
   availability(state: GameState, playerId: string): AssistedAvailability
@@ -351,78 +354,102 @@ function techBlock(player: Playerhand, techName: string): BlockedAvailability | 
 
 const PHASE_REASON = 'Only available during your open City Management phase.'
 
-// -- Chivalry ---------------------------------------------------------------
+// -- Incense cards: Chivalry, Currency, Metal Casting -----------------------
 
-const CHIVALRY_CULTURE = 5
-const CHIVALRY_RESOURCE = 'Incense'
+/**
+ * The cards that read "Incense, City Management: gain N culture". One row each,
+ * and one definition built from it, so a fourth card of the kind is a table
+ * entry and not a copy of the code. Each card has its own usage key, so Currency
+ * and Chivalry can both be used in the same turn, each once, each spending its
+ * own Incense.
+ */
+interface ResourceCultureCard {
+  readonly kind: CultureCardKind
+  readonly techName: string
+  readonly resource: string
+  readonly culture: number
+}
 
-const chivalry: AssistedActionDefinition = {
-  kind: 'chivalry',
-  label: 'Chivalry',
-  usageKey: 'card:Chivalry',
+const RESOURCE_CULTURE_CARDS: readonly ResourceCultureCard[] = [
+  { kind: 'chivalry', techName: 'Chivalry', resource: 'Incense', culture: 5 },
+  { kind: 'currency', techName: 'Currency', resource: 'Incense', culture: 3 },
+  { kind: 'metalCasting', techName: 'Metal Casting', resource: 'Incense', culture: 7 },
+]
 
-  availability(state, playerId) {
-    const player = playerOf(state, playerId)
-    if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
-    const tech = techBlock(player, 'Chivalry')
-    if (tech !== undefined) return tech
-    const turn = openCityManagementTurn(state, player)
-    if (turn === undefined) return blocked('wrong-phase', PHASE_REASON)
-    if (turn.usedActions.includes(chivalry.usageKey)) {
-      return blocked('used', 'Chivalry has already been used this turn.')
-    }
-    if (findResourceToken(state, playerId, CHIVALRY_RESOURCE) === undefined) {
-      return blocked(
-        'needs-resource',
-        'You need an Incense token: an Incense hut in your hand or an Incense piece in your player area.',
+function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinition {
+  const usageKey = `card:${card.techName}`
+  return {
+    kind: card.kind,
+    techName: card.techName,
+    label: card.techName,
+    usageKey,
+
+    availability(state, playerId) {
+      const player = playerOf(state, playerId)
+      if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
+      const tech = techBlock(player, card.techName)
+      if (tech !== undefined) return tech
+      const turn = openCityManagementTurn(state, player)
+      if (turn === undefined) return blocked('wrong-phase', PHASE_REASON)
+      if (turn.usedActions.includes(usageKey)) {
+        return blocked('used', `${card.techName} has already been used this turn.`)
+      }
+      if (findResourceToken(state, playerId, card.resource) === undefined) {
+        return blocked(
+          'needs-resource',
+          `You need an ${card.resource} token: an ${card.resource} hut in your hand or an ${card.resource} piece in your player area.`,
+        )
+      }
+      return READY
+    },
+
+    apply(state, player, context) {
+      const turn = openCityManagementTurn(state, player)
+      const spend = spendResource(state, player.playerId, card.resource, context.at)
+      if (turn === undefined || !spend.ok) {
+        return err(
+          rejected(
+            card.kind,
+            blocked('needs-resource', `You need an ${card.resource} token to use ${card.techName}.`),
+          ),
+        )
+      }
+      const afterSpend = spend.value.state
+      const paying = playerOf(afterSpend, player.playerId) ?? player
+      const stats = { ...paying.stats, culture: paying.stats.culture + card.culture }
+      const used = useTurnAction(afterSpend, paying, turn, usageKey, stats)
+      const logged = appendLog(used, {
+        username: player.username,
+        playerId: player.playerId,
+        publicLog: `${player.username} used ${card.techName}: spent 1 ${card.resource} and gained ${card.culture} culture`,
+        privateLog: '',
+        createdAt: context.at ?? null,
+        assistedActionId: context.requestId,
+      })
+      return ok({
+        state: logged,
+        effect: { kind: card.kind, culture: card.culture, spent: spend.value.spent },
+        logId: lastLogId(logged),
+      })
+    },
+
+    reverse(state, player, record, at) {
+      const effect = record.effect
+      if (effect.kind !== card.kind) return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+      const stats = { ...player.stats, culture: Math.max(0, player.stats.culture - effect.culture) }
+      const returned = returnResource(
+        withPlayerHand(state, { ...player, stats }),
+        { ...player, stats },
+        effect.spent,
+        at,
       )
-    }
-    return READY
-  },
-
-  apply(state, player, context) {
-    const turn = openCityManagementTurn(state, player)
-    const spend = spendResource(state, player.playerId, CHIVALRY_RESOURCE, context.at)
-    if (turn === undefined || !spend.ok) {
-      return err(
-        rejected('chivalry', blocked('needs-resource', 'You need an Incense token to use Chivalry.')),
-      )
-    }
-    const afterSpend = spend.value.state
-    const paying = playerOf(afterSpend, player.playerId) ?? player
-    const stats = { ...paying.stats, culture: paying.stats.culture + CHIVALRY_CULTURE }
-    const used = useTurnAction(afterSpend, paying, turn, chivalry.usageKey, stats)
-    const logged = appendLog(used, {
-      username: player.username,
-      playerId: player.playerId,
-      publicLog: `${player.username} used Chivalry: spent 1 ${CHIVALRY_RESOURCE} and gained ${CHIVALRY_CULTURE} culture`,
-      privateLog: '',
-      createdAt: context.at ?? null,
-      assistedActionId: context.requestId,
-    })
-    return ok({
-      state: logged,
-      effect: { kind: 'chivalry', culture: CHIVALRY_CULTURE, spent: spend.value.spent },
-      logId: lastLogId(logged),
-    })
-  },
-
-  reverse(state, player, record, at) {
-    const effect = record.effect
-    if (effect.kind !== 'chivalry') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
-    const stats = { ...player.stats, culture: Math.max(0, player.stats.culture - effect.culture) }
-    const returned = returnResource(
-      withPlayerHand(state, { ...player, stats }),
-      { ...player, stats },
-      effect.spent,
-      at,
-    )
-    if (!returned.ok) return returned
-    return ok({
-      state: returned.value,
-      text: `${player.username}'s Chivalry was undone: ${effect.culture} culture removed and the ${effect.spent.resource} token returned`,
-    })
-  },
+      if (!returned.ok) return returned
+      return ok({
+        state: returned.value,
+        text: `${player.username}'s ${card.techName} was undone: ${effect.culture} culture removed and the ${effect.spent.resource} token returned`,
+      })
+    },
+  }
 }
 
 // -- Democracy and Printing Press -------------------------------------------
@@ -537,6 +564,7 @@ function coinPurchase(source: CoinPurchaseSource): AssistedActionDefinition {
   const terms = COIN_PURCHASES[source]
   const definition: AssistedActionDefinition = {
     kind: source,
+    techName: terms.techName,
     label: terms.techName,
     usageKey: coinUsageKey(source),
 
@@ -594,13 +622,22 @@ function coinPurchase(source: CoinPurchaseSource): AssistedActionDefinition {
 
 /** Every assisted action, in the order the projection lists them. */
 export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
-  chivalry,
+  ...RESOURCE_CULTURE_CARDS.map(resourceCultureCard),
   coinPurchase('democracy'),
   coinPurchase('printingPress'),
 ]
 
 export const ASSISTED_ACTION_KINDS: readonly AssistedActionKind[] = ASSISTED_ACTIONS.map(
   (definition) => definition.kind,
+)
+
+/**
+ * Which assisted action belongs to which tech card, by the tech's name. The tech
+ * dialog uses it to show the button for any registered card, so a new card needs
+ * no change in the web code.
+ */
+export const ASSISTED_TECH_ACTIONS: ReadonlyMap<string, AssistedActionKind> = new Map(
+  ASSISTED_ACTIONS.map((definition) => [definition.techName, definition.kind]),
 )
 
 export function isAssistedActionKind(value: unknown): value is AssistedActionKind {

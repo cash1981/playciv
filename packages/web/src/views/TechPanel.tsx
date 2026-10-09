@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { ASSISTED_TECH_ACTIONS } from '@civ/engine'
 import type { TechItem } from '@civ/engine'
 
 import { errorMessage } from '../App.js'
@@ -165,6 +166,7 @@ export function TechPanel({
     })),
   ]
   const active = tabs.find((tab) => tab.playerId === selectedPlayerId) ?? tabs[0]
+  const assistedAction = detailTech === null ? undefined : ASSISTED_TECH_ACTIONS.get(detailTech.name)
 
   return (
     <CollapsiblePanel id="techs" title="Techs">
@@ -236,10 +238,10 @@ export function TechPanel({
             not enforce its effects.
           </p>
           {/* The same component and the same state as "Your actions"; own pyramid only. */}
-          {detailCanRemove && detailTech.name === 'Chivalry' && (
+          {detailCanRemove && assistedAction !== undefined && (
             <div className="row">
               <AssistedActionButton
-                action="chivalry"
+                action={assistedAction}
                 gameId={gameId}
                 view={view}
                 busy={busy}
