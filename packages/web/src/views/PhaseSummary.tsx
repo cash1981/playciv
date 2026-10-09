@@ -42,6 +42,7 @@ export function viewerPhaseText(view: PlayerView): string | null {
 export function waitingText(view: PlayerView): string | null {
   const turn = view.activeTurn
   if (turn === null) return null
+  // Defensive: the engine clears the active turn once nobody is waited for. Mirrors `turnTitle` in ChatOrdersPanel.
   if (turn.waitingFor.length === 0) return 'Everyone is done'
   const others = turn.waitingFor.filter((entry) => entry.username !== view.you?.username)
   if (others.length === 0) return ''

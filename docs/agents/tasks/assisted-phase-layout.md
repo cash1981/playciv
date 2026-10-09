@@ -75,7 +75,7 @@ fetched, so the text is the spec):
 
 ## Claimed paths
 
-- `packages/web/src/views/GameView.tsx`, `PhaseSummary.tsx` (new), `PhaseSummary.css`
+- `packages/web/src/views/GameView.tsx`, `FaqView.tsx` (one sentence), `PhaseSummary.tsx` (new), `PhaseSummary.css`
   (new) and tests, `packages/web/src/styles.css`, `BoardView.tsx` and its CSS only
   for the palette position
 - `docs/agents/decisions.md`, `state.md`

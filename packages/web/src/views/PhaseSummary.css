@@ -41,6 +41,7 @@
 }
 
 .phase-summary-resources {
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 0.2rem 0.9rem;

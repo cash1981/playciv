@@ -49,8 +49,9 @@ export function FaqView(): React.JSX.Element {
 
         <CollapsiblePanel id="faq-board" title="How do I add a new map?" defaultOpen={false}>
           <p className="faq-answer">
-            The board is at the top of the game page. Choose a category in the <strong>Pieces</strong>{' '}
-            palette, then drag a piece onto the map or into a player area. Dropping in a player
+            The board sits near the top of the game page, with the <strong>Pieces</strong> palette
+            just below it. Choose a category in the palette, then drag a piece onto the map or into
+            a player area, or tap the piece and then tap the map. Dropping in a player
             area tidies pieces into the next available slot; dropping on the map keeps the exact
             position. Everyone in the game can see and move the pieces.
           </p>

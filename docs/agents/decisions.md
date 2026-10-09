@@ -4969,3 +4969,37 @@ Fortune p. 11 to 12), read from the PDFs in `packages/web/public/help/`.
 - Not built: markers on the map as a condition for a card's ability (#252 slice B),
   killing markers and the random discard of excess cards, a Place button.
 
+## 2026-10-10 — The game page: phase summary, shortcuts and a board-first order
+
+Part of #260 (#261's first slice). The human asked for the layout after the
+Great Person markers; the screenshots in the issue could not be fetched, so the
+issue text is the spec. Web only; no rule, engine or server change.
+
+- **A phase summary** sits in the header panel: the round, the viewer's own phase
+  ("You: city management (3 of 5)" or "all phases done"), who is waited for, culture,
+  trade and the coin total, and a link to a waiting card choice. It reads only the
+  projection the viewer already has (the public waiting list and their own stats and
+  pending choices), so nothing new reaches another player; a spectator sees the
+  round and who is waited for. It is hidden for an ended game, resources included,
+  like the turn chips and the progress strip. "Remaining city actions" is not shown:
+  cities are not modelled yet (#264).
+- **Shortcuts** (Board, Your cards, Tech tree, Chat, History) scroll the panel into
+  view and focus it; smooth scrolling is off when the user prefers reduced motion;
+  a collapsed panel is scrolled to but not forced open. The labels follow the issue;
+  the panels keep their titles ("Your hand", "Techs", "Log").
+- **The page order** is now: header and summary, Your actions, the board, Your
+  cards, Draw, the tech tree, the chat and orders timeline, the opponents' hands,
+  battle, social policies, status, wonders, the log and the revealed feed. This
+  **supersedes the paragraph of 2026-09-22 (Atlas) that moved the Log and Chat to
+  directly under the board** at the human's request: #260's design puts Your cards
+  there instead. The composition test that pinned the old order was replaced on
+  purpose.
+- **The Pieces palette is below the board at every width** instead of beside it on
+  wide screens, because the issue says no side panel may narrow the board. **The
+  human has not confirmed this.** Consequence: on a tall desktop board the palette
+  and the upper part of the map are rarely on screen together, so a mouse drag
+  from the palette relies on the browser scrolling while dragging; tapping a piece
+  and then the map works at any size. It is reversible in `styles.css` (`.board-layout`).
+  Cheap mitigations if it hurts: a sticky palette, or a lower maximum height for the
+  board on desktop.
+

@@ -877,6 +877,7 @@ describe('the game page (issue #215)', () => {
         expect(screen.queryByText('Alice won')).toBeNull()
         expect(screen.getByText('ended')).toBeTruthy()
         expect(screen.queryByRole('list', { name: 'Turn progress' })).toBeNull()
+        expect(screen.queryByRole('group', { name: 'Phase summary' })).toBeNull()
       })
 
       it('says the game ended when nobody won, with no second tag saying the same', async () => {

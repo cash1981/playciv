@@ -70,7 +70,7 @@ describe('PhaseSummary: the round and the viewer\'s phase', () => {
     expect(screen.getByText('Waiting for bob (movement)')).toBeTruthy()
   })
 
-  it('says everyone is done when nobody is waited for', () => {
+  it('defensively says everyone is done for an empty waiting list on an active turn', () => {
     render(<PhaseSummary view={viewOf({ waitingFor: [] })} />)
     expect(screen.getByText('You: all phases done')).toBeTruthy()
     expect(screen.getByText('Everyone is done')).toBeTruthy()
@@ -177,7 +177,7 @@ describe('PhaseSummary: a card choice waiting', () => {
     expect(screen.getByRole('button', { name: '2 card choices waiting' })).toBeTruthy()
   })
 
-  it('shows none for a viewer whose projection has no pending list, as in a replayed revision', () => {
+  it('shows none for a viewer whose projection has no pendingRewards field', () => {
     const view = viewOf({ waitingFor: [] })
     const { pendingRewards: _dropped, ...you } = view.you as unknown as Record<string, unknown>
     render(<PhaseSummary view={{ ...view, you } as unknown as PlayerView} />)
