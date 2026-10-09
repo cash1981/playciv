@@ -24,6 +24,7 @@ import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
+import { PageShortcuts, PhaseSummary } from './PhaseSummary.js'
 import { RevealedPanel } from './RevealedPanel.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
@@ -526,6 +527,7 @@ export function GameView({
           />
         </div>
 
+        {!ended && <PhaseSummary view={displayedView} />}
         {!ended && <TurnStatusStrip view={displayedView} />}
 
         {you === null && (
@@ -533,6 +535,8 @@ export function GameView({
             <span className="muted">Watching (not a player)</span>
           </div>
         )}
+
+        <PageShortcuts chat={player !== null} />
       </div>
 
       <GlobalReplayBar
@@ -554,7 +558,16 @@ export function GameView({
 
       {error !== null && <div className="error">{error}</div>}
 
-      {/* The board sits above everything else */}
+      {/* The page runs: header and summary, Your actions, the board, Your cards,
+          then the rest. The board has the whole content width at every size. */}
+      <AssistedActionsPanel
+        gameId={gameId}
+        view={displayedView}
+        busy={interactionBusy}
+        readOnly={displayedView.you === null || replaying || locked}
+        run={run}
+      />
+
       <BoardView
         gameId={gameId}
         board={displayedView.board}
@@ -569,15 +582,10 @@ export function GameView({
       />
 
       <div className="panel-stack">
-        {/* Draw is the first panel after the board, then the chat and orders timeline and the log. */}
-        <AssistedActionsPanel
-          gameId={gameId}
-          view={displayedView}
-          busy={interactionBusy}
-          readOnly={displayedView.you === null || replaying || locked}
-          run={run}
-        />
+        {/* Your cards sit directly under the board; the log and the revealed feed are last. */}
+        <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <DrawPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
+        <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         {/* The chat routes need a signed-in player */}
         {player !== null && (
           <ChatOrdersPanel
@@ -592,18 +600,8 @@ export function GameView({
             authors={chatAuthors}
           />
         )}
-        <LogPanel
-          gameId={gameId}
-          busy={busy || locked}
-          readOnly={replaying || locked}
-          run={run}
-          reloadCount={reloadCount}
-          historical={historical}
-        />
-        <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <OpponentHandPanel opponents={displayedView.opponents} />
         <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
-        <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         <SocialPolicyPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         <StatusPanel
           gameId={gameId}
@@ -618,6 +616,14 @@ export function GameView({
           busy={interactionBusy}
           readOnly={displayedView.you === null || replaying || locked}
           run={run}
+        />
+        <LogPanel
+          gameId={gameId}
+          busy={busy || locked}
+          readOnly={replaying || locked}
+          run={run}
+          reloadCount={reloadCount}
+          historical={historical}
         />
         <RevealedPanel gameId={gameId} reloadCount={reloadCount} historical={historical} />
       </div>

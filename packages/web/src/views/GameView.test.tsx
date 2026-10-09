@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Item } from '@civ/engine'
 
@@ -9,6 +9,7 @@ import { useIsBusy } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, PlayerDto, PlayerView } from '../lib/api.js'
 import type { GameMenuActions } from './Navigation.js'
+import { BOARD_PANEL_ID } from './PhaseSummary.js'
 import {
   AUTO_REFRESH_MS,
   BattlePanel,
@@ -24,7 +25,7 @@ import {
 
 vi.mock('./BoardView.js', () => ({
   BoardView: ({ viewerIsRussia }: { viewerIsRussia?: boolean }) => (
-    <div data-testid="board" data-viewer-is-russia={String(viewerIsRussia)} />
+    <section id={BOARD_PANEL_ID} tabIndex={-1} data-testid="board" data-viewer-is-russia={String(viewerIsRussia)} />
   ),
 }))
 // Only the panel is replaced; the helpers GameView uses stay real
@@ -204,52 +205,126 @@ const run = async (action: () => Promise<unknown>): Promise<void> => {
   await action()
 }
 
+const orderView = (overrides: Record<string, unknown> = {}): PlayerView =>
+  ({
+    rev: 1,
+    name: 'Panel order test',
+    active: true,
+    winner: null,
+    activeTurn: null,
+    you: null,
+    opponents: [],
+    board: {},
+    boardAreas: [],
+    numOfPlayers: 2,
+    battle: null,
+    battleSummary: [],
+    ...overrides,
+  }) as unknown as PlayerView
+
+const renderOrder = async (view: PlayerView, player: PlayerDto | null = { username: 'viewer' } as unknown as PlayerDto) => {
+  localStorage.setItem('civ.autoRefresh', 'false')
+  vi.spyOn(api, 'game').mockResolvedValue(view)
+  vi.spyOn(api, 'revisions').mockResolvedValue([])
+  const rendered = render(
+    <GameView
+      gameId="game-1"
+      player={player}
+      onUnauthorized={vi.fn()}
+      onDeleted={vi.fn()}
+      onWithdrawn={vi.fn()}
+      onEnded={vi.fn()}
+    />,
+  )
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Draw' })).toBeTruthy())
+  return rendered
+}
+
+/** The page top to bottom: each panel heading, and the board, after the header's own title. */
+const pageOrder = (container: HTMLElement): string[] =>
+  Array.from(container.querySelectorAll('h1, h2, [data-testid="board"]'))
+    .slice(1)
+    // A collapsible heading ends with its open or closed sign
+    .map((element) => (element.getAttribute('data-testid') === 'board' ? 'Board' : (element.textContent ?? '').replace(/[−+]$/, '')))
+
 describe('primary game panel order', () => {
-  it('shows Draw immediately after the board, then the chat and orders timeline, then the Log', async () => {
-    localStorage.setItem('civ.autoRefresh', 'false')
-    const view = {
-      rev: 1,
-      name: 'Panel order test',
-      active: true,
-      winner: null,
-      activeTurn: null,
-      you: null,
-      opponents: [],
-      board: {},
-      boardAreas: [],
-      numOfPlayers: 2,
-      battle: null,
-      battleSummary: [],
-    } as unknown as PlayerView
-    vi.spyOn(api, 'game').mockResolvedValue(view)
-    vi.spyOn(api, 'revisions').mockResolvedValue([])
+  // Changed on purpose (#260): the board no longer follows the header directly.
+  // It was header, board, Draw, Chat and orders, Log, Your hand, and so on.
+  it('runs Your actions, the board, Your cards, Draw, the tech tree, chat, the rest, then the log and the revealed feed', async () => {
+    const view = orderView({
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        items: [],
+        pendingRewards: [],
+        availableActions: [{ action: 'cultureAdvance', label: 'Culture', status: 'ready', reason: 'Ready' }],
+      },
+    })
+    const { container } = await renderOrder(view)
 
-    const { container } = render(
-      <GameView
-        gameId="game-1"
-        player={{ username: 'viewer' } as unknown as PlayerDto}
-        onUnauthorized={vi.fn()}
-        onDeleted={vi.fn()}
-        onWithdrawn={vi.fn()}
-        onEnded={vi.fn()}
-      />,
-    )
+    expect(pageOrder(container)).toEqual([
+      'Your actions',
+      'Board',
+      'Your hand (0)',
+      'Draw',
+      'Techs',
+      'Chat and orders',
+      "Other players' hands",
+      'Battle',
+      'Social policy',
+      'Player status',
+      'Wonders',
+      'Log',
+      'Revealed',
+    ])
+  })
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Draw' })).toBeTruthy())
-
+  it('has Your cards directly under the board, and no Your actions panel when there is nothing to show', async () => {
+    const { container } = await renderOrder(orderView())
     const board = screen.getByTestId('board')
     const panelStack = container.querySelector('.panel-stack')
-    const draw = screen.getByRole('heading', { name: 'Draw' }).closest('section')
-    const log = screen.getByRole('heading', { name: 'Log' }).closest('section')
-    const timeline = screen.getByRole('heading', { name: 'Chat and orders' }).closest('section')
     const hand = screen.getByRole('heading', { name: 'Your hand (0)' }).closest('section')
 
     expect(board.nextElementSibling).toBe(panelStack)
-    expect(panelStack?.children[0]).toBe(draw)
-    // The timeline comes right after Draw (issue #206), then the log
-    expect(panelStack?.children[1]).toBe(timeline)
-    expect(panelStack?.children[2]).toBe(log)
-    expect(panelStack?.children[3]).toBe(hand)
+    expect(panelStack?.children[0]).toBe(hand)
+    expect(screen.queryByRole('heading', { name: 'Your actions' })).toBeNull()
+  })
+
+  it('leaves the chat panel out for a spectator without an account, and its shortcut with it', async () => {
+    const { container } = await renderOrder(orderView(), null)
+    expect(pageOrder(container)).not.toContain('Chat and orders')
+    expect(screen.getByRole('navigation', { name: 'Go to' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Chat' })).toBeNull()
+  })
+})
+
+describe('game page shortcuts', () => {
+  const scrolled: Element[] = []
+
+  beforeEach(() => {
+    scrolled.length = 0
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this)
+    }
+  })
+
+  afterEach(() => {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+  })
+
+  it('scrolls the board into view and focuses it', async () => {
+    await renderOrder(orderView())
+    fireEvent.click(screen.getByRole('button', { name: 'Board' }))
+    expect(scrolled).toEqual([screen.getByTestId('board')])
+    expect(document.activeElement).toBe(screen.getByTestId('board'))
+  })
+
+  it('scrolls Your cards into view and focuses its heading button', async () => {
+    await renderOrder(orderView())
+    fireEvent.click(screen.getByRole('button', { name: 'Your cards' }))
+    const heading = screen.getByRole('heading', { name: 'Your hand (0)' })
+    expect(scrolled).toEqual([heading.closest('section')])
+    expect(document.activeElement).toBe(heading.querySelector('button'))
   })
 })
 

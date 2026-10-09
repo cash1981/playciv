@@ -772,10 +772,13 @@ ul.list > li:last-child {
   grid-column: 1 / -1;
 }
 
+/* The board takes the full content width at every size, and the piece palette
+   goes below it. One column also means a zoomed board can never push the page
+   wider than the window (#260). */
 .board-layout {
   display: flex;
+  flex-direction: column;
   gap: 1rem;
-  align-items: flex-start;
   margin-top: 0.6rem;
 }
 
@@ -798,7 +801,7 @@ ul.list > li:last-child {
 }
 
 .board-scroll {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   /* Bounded so a zoomed board scrolls inside this box instead of growing the
      page — without a height cap, `overflow: auto` never triggers vertically. */
@@ -1132,11 +1135,6 @@ ul.list > li:last-child {
   flex: 1 1 5rem;
 }
 
-.board-palette {
-  width: 18rem;
-  flex: none;
-}
-
 .palette-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
@@ -1213,17 +1211,8 @@ ul.list > li:last-child {
 }
 
 @media (max-width: 700px) {
-  .board-layout {
-    flex-direction: column;
-  }
-
   .board-scroll {
-    width: 100%;
     max-height: 65vh;
-  }
-
-  .board-palette {
-    width: 100%;
   }
 
   .palette-grid {
@@ -1434,14 +1423,6 @@ ul.history > li {
   .center form label > select,
   .center form label > textarea {
     margin-top: 0.2rem;
-  }
-
-  .board-layout {
-    flex-direction: column;
-  }
-
-  .board-palette {
-    width: 100%;
   }
 }
 
@@ -2236,45 +2217,17 @@ ul.history > li {
 }
 
 /* --- Landscape phones (issue #176) -----------------------------------------
-   A real bug, found by measuring a 812x375 viewport rather than guessing from
-   the human's screenshot: `.board-layout` switches to `flex-direction: column`
-   below `max-width: 900px` (a rule further up), stacking `.board-scroll`
-   above `.board-palette`. In that column direction the two become cross-axis
-   (horizontal) items, and `.board-layout`'s own `align-items: flex-start`
-   (also further up) leaves their width at fit-content instead of stretching
-   them to the container — so each sized itself off its own wide inline-styled
-   content (the zoomed board frame, the palette grid) instead of the space
-   actually available, overflowing the page horizontally by about 80px in
-   that test. The `max-width: 700px` block further down already gives both
-   `width: 100%` for exactly this reason; it just stops one breakpoint too
-   early; a landscape phone (700-930px wide, so past that cutoff) fell
-   through the gap. This is the real mechanism behind "the map draws over the
-   blue background" — not a z-index/overlap bug, a plain width overflow.
-   Closing the gap at the *same* `max-width: 900px` the column-stacking
-   itself uses (not editing that protected rule, a fresh one beside it) fixes
-   it at every width that can stack, landscape phone or not.
-
-   Every rule above this point otherwise keys its compact/mobile treatment
-   off viewport *width* alone (600/700/900px). A phone in landscape is wide
-   but short (roughly 350-430px tall), so it still fell through to the
-   desktop-height rules in a viewport that is actually cramped:
-   `.board-scroll`'s default `max-height: 80vh` ate most of a short
-   viewport, squeezing the topbar and the game header into a sliver. This
-   second block keys off *height* instead, so a short landscape viewport
-   gets the same reclaiming of vertical space regardless of its width.
-   `width: 100%` on `.app` mirrors the same declaration in the
-   `max-width: 600px` block further down, so nothing narrower than the
-   viewport is left unfilled there either. */
-@media (max-width: 900px) {
-  .board-scroll {
-    width: 100%;
-  }
-
-  .board-palette {
-    width: 100%;
-  }
-}
-
+   Rules above key their compact treatment off viewport *width* alone
+   (600/700/900px). A phone in landscape is wide but short (roughly 350-430px
+   tall), so it still fell through to the desktop-height rules in a viewport
+   that is actually cramped: `.board-scroll`'s default `max-height: 80vh` ate
+   most of a short viewport, squeezing the topbar and the game header into a
+   sliver. This block keys off *height* instead, so a short landscape viewport
+   gets the same reclaiming of vertical space regardless of its width. The board
+   and palette are one column at every width, so only the height changes here.
+   `width: 100%` on `.app` mirrors the same declaration in the `max-width: 600px`
+   block further down, so nothing narrower than the viewport is left unfilled
+   there either. */
 @media (max-height: 500px) and (orientation: landscape) {
   .app {
     width: 100%;
@@ -2286,17 +2239,8 @@ ul.history > li {
     margin-bottom: 0.5rem;
   }
 
-  .board-layout {
-    flex-direction: column;
-  }
-
   .board-scroll {
-    width: 100%;
     max-height: 55vh;
-  }
-
-  .board-palette {
-    width: 100%;
   }
 }
 

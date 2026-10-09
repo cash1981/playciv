@@ -25,7 +25,7 @@ describe('mobile site styles', () => {
     expect(mobileStyles).toContain('min-height: 2.75rem')
   })
 
-  it('stacks and fills the board in short landscape viewports above 900px wide', () => {
+  it('trims the board in short landscape viewports above 900px wide', () => {
     expect(mobileStyles).toContain(`@media (max-height: 500px) and (orientation: landscape) {
   .app {
     width: 100%;
@@ -37,19 +37,18 @@ describe('mobile site styles', () => {
     margin-bottom: 0.5rem;
   }
 
-  .board-layout {
-    flex-direction: column;
-  }
-
   .board-scroll {
-    width: 100%;
     max-height: 55vh;
   }
-
-  .board-palette {
-    width: 100%;
-  }
 }`)
+  })
+
+  it('puts the board palette below the board at every width, with no side by side rule left (#260)', () => {
+    expect(mobileStyles).toMatch(/\.board-layout \{\n  display: flex;\n  flex-direction: column;/)
+    // The palette has no width of its own, so it is as wide as the board
+    expect(mobileStyles).not.toContain('.board-palette')
+    // One column everywhere: no media query switches the direction again
+    expect(mobileStyles.match(/\.board-layout/g)).toHaveLength(1)
   })
 
   it('keeps the global spinner fixed, click-through and larger on touch screens (issue #225)', () => {

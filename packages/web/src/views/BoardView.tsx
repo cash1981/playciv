@@ -11,6 +11,7 @@
  *
  * Interaction:
  *   palette to board   tap/select/place on touch, plus HTML5 drag and drop
+ *                      (the palette sits below the board at every width)
  *   piece on board     tap to select and arm (map tiles are selected only), then tap
  *                      the board to move; or drag; or the Move button, then tap
  *
@@ -50,6 +51,7 @@ import type { Board, BoardArea, BoardAsset, BoardPiece } from '@civ/engine'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
+import { BOARD_PANEL_ID } from './PhaseSummary.js'
 
 interface Props {
   readonly gameId: string
@@ -715,9 +717,9 @@ export function BoardView({
   }
 
   return (
-    <section className="panel board-panel">
+    <section id={BOARD_PANEL_ID} className="panel board-panel" tabIndex={-1} aria-labelledby={`${BOARD_PANEL_ID}-heading`}>
       <div className="row">
-        <h2 style={{ margin: 0 }}>Civilization Boardgame</h2>
+        <h2 id={`${BOARD_PANEL_ID}-heading`} style={{ margin: 0 }}>Civilization Boardgame</h2>
         <span style={{ flex: 1 }} />
         <label style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <span className="muted">Zoom</span>
