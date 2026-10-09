@@ -24,21 +24,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/server/src/routes/play.ts`, `packages/server/test/assisted*.test.ts`
   - `packages/web/src/views/AssistedActions.tsx`, `TechPanel.tsx`, `GameView.tsx`, `PhaseSummary.tsx`, `BoardView.tsx`, `styles.css`, `FaqView.tsx` and tests
   - `docs/agents/decisions.md`, `state.md`, `README.md`
-- **Notes:** parts 1 to 4 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout). The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
-
-### city-production
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `feat/city-production`, from `feat/assisted-play-contract`; merged there only when the human says ready
-- **Brief:** `docs/agents/tasks/city-production.md`
-- **Status:** in review
-- **Claimed paths:**
-  - `packages/engine/src/city-production.ts`, `building-data.ts`, `blockade.ts`, `board.ts`, `state.ts`, `index.ts`, `migrate.ts`, `errors.ts`, `actions/board.ts`
-  - `packages/engine/test/city-production*.test.ts`, `hidden-info.test.ts`
-  - `packages/server/src/routes/board.ts`, `packages/server/test/city-production*.test.ts`
-  - `packages/web/src/lib/api.ts`, `views/CitiesPanel.tsx`, its css and tests, `GameView.tsx`, `FaqView.tsx`
-  - `docs/agents/decisions.md`, `state.md`
-- **Notes:** several paths overlap the `assisted-play-contract` claim above; both are the same owner and this branch is sequenced after it.
+- **Notes:** parts 1 to 5 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout, city production). The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
 
 ---
 
