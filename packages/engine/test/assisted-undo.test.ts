@@ -293,6 +293,46 @@ describe('the board history and an assisted spend', () => {
     expect(redone.board.history.length).toBe(undone.board.history.length)
   })
 
+  it('an assisted spend freezes the earlier board undos until the vote reverses it, then they walk back one step each', () => {
+    // An ordinary change first (an iron piece), then the incense piece, then the spend
+    const first = withPieceInArea(chivalryTurn(), 'resources/iron')
+    const second = withPieceInArea(first.state, 'resources/incense')
+    const spent = press(second.state, 'req-1')
+    const logId = logIdOf(spent, 'req-1')
+    const hasPiece = (state: GameState, pieceId: string): boolean =>
+      state.board.pieces.some((piece) => piece.id === pieceId)
+    expect(spent.board.history.map((entry) => entry.change.kind)).toEqual(['place', 'place', 'remove'])
+
+    // Frozen: the spend is the last change, and nothing earlier can be reached past it
+    expect(unwrapErr(undoLastBoardChange(spent, CASH1981))).toEqual({ kind: 'BOARD_UNDO_ASSISTED' })
+    expect(hasPiece(spent, first.piece.id)).toBe(true)
+
+    const undone = allVoteYes(unwrap(initiateUndo(spent, { logId, playerId: CASH1981 })), logId)
+    expect(hasPiece(undone, second.piece.id)).toBe(true)
+    expect(undone.board.history.map((entry) => entry.change.kind)).toEqual(['place', 'place', 'remove', 'place'])
+
+    // Step 1: the piece restore the vote made comes off again
+    const step1 = unwrap(undoLastBoardChange(undone, CASH1981))
+    expect(step1.board.history).toHaveLength(3)
+    expect(hasPiece(step1, second.piece.id)).toBe(false)
+    expect(hasPiece(step1, first.piece.id)).toBe(true)
+    // Step 2: the old spend is an ordinary entry now, so the piece comes back
+    const step2 = unwrap(undoLastBoardChange(step1, CASH1981))
+    expect(step2.board.history).toHaveLength(2)
+    expect(hasPiece(step2, second.piece.id)).toBe(true)
+    expect(hasPiece(step2, first.piece.id)).toBe(true)
+    // Step 3: the incense placement
+    const step3 = unwrap(undoLastBoardChange(step2, CASH1981))
+    expect(step3.board.history).toHaveLength(1)
+    expect(hasPiece(step3, second.piece.id)).toBe(false)
+    expect(hasPiece(step3, first.piece.id)).toBe(true)
+    // Step 4: the earlier ordinary change
+    const step4 = unwrap(undoLastBoardChange(step3, CASH1981))
+    expect(step4.board.history).toHaveLength(0)
+    expect(hasPiece(step4, first.piece.id)).toBe(false)
+    expect(unwrapErr(undoLastBoardChange(step4, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+  })
+
   it('a second press with the same piece is refused again, and only that entry', () => {
     const { state, logId } = afterPiece()
     const undone = allVoteYes(unwrap(initiateUndo(state, { logId, playerId: CASH1981 })), logId)

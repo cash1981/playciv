@@ -16,7 +16,7 @@ import type { ReactNode } from 'react'
 
 import type { AssistedActionKind } from '@civ/engine'
 
-import { api } from '../lib/api.js'
+import { ApiError, api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import type { Run } from './GameView.js'
@@ -34,11 +34,15 @@ const STATUS_TEXT: Readonly<Record<Status, string>> = {
 }
 
 /**
- * A request id per press. It is kept until the request succeeds, so a double
+ * A request id per press. It is kept while the outcome is unknown, so a double
  * click or a retry of the same press sends the same id and the server does the
- * action once; the next press after a success gets a new one. Kept at module
- * level, keyed on game and action, so the panel and the dialog share it and a
- * remount (closing the dialog) does not lose it.
+ * action once. It is freed as soon as the client got a definitive answer: a
+ * success, or an HTTP error (the server processed the request and did not apply
+ * it, so the next press is a new one). Only a failure with no HTTP response at
+ * all (network down, lost response) keeps it. Kept at module level, keyed on
+ * game, viewer and action, so the panel and the dialog share it, a remount
+ * (closing the dialog) does not lose it, and another account in the same tab
+ * never reuses it.
  */
 const pendingRequestIds = new Map<string, string>()
 const inFlight = new Set<string>()
@@ -97,9 +101,10 @@ export function AssistedActionButton({
   const ready = state.status === 'ready'
   const showReason = detail === 'full' || !ready
   const rev = view.rev
+  const playerId = view.you.playerId
 
   const press = (): void => {
-    const key = `${gameId}:${action}`
+    const key = `${gameId}:${playerId}:${action}`
     // A second click before the first has settled is the same press.
     if (inFlight.has(key)) return
     const requestId = pendingRequestIds.get(key) ?? newRequestId()
@@ -109,11 +114,19 @@ export function AssistedActionButton({
       inFlight.delete(key)
     }
     void run(async () => {
-      const result = await api.performAction(gameId, action, requestId, rev)
-      // Only a success frees the id. After a failure the outcome may be unknown
-      // (a lost response), and the same id makes the retry safe.
-      pendingRequestIds.delete(key)
-      return result
+      try {
+        const result = await api.performAction(gameId, action, requestId, rev)
+        pendingRequestIds.delete(key)
+        return result
+      } catch (caught) {
+        // An HTTP status means the server answered and did not apply the request,
+        // so the id is spent. With no response the outcome is unknown, and the
+        // same id makes the retry safe.
+        if (caught instanceof ApiError && typeof caught.status === 'number') {
+          pendingRequestIds.delete(key)
+        }
+        throw caught
+      }
     }).then(settle, settle)
   }
 

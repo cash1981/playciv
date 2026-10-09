@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { TechItem } from '@civ/engine'
 
-import { api } from '../lib/api.js'
+import { ApiError, api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { AssistedActionButton, AssistedActionsPanel, resetPendingRequestIds } from './AssistedActions.js'
 import type { Run } from './GameView.js'
@@ -48,11 +48,16 @@ const tech = (name: string): TechItem => ({
   type: null,
 })
 
-function viewWith(actions: readonly Action[], rev = 5, techsChosen: readonly TechItem[] = []): PlayerView {
+function viewWith(
+  actions: readonly Action[],
+  rev = 5,
+  techsChosen: readonly TechItem[] = [],
+  playerId = 'me',
+): PlayerView {
   return {
     rev,
     you: {
-      playerId: 'me',
+      playerId,
       username: 'Alice',
       color: 'Red',
       civilization: { name: 'Rome' },
@@ -217,6 +222,74 @@ describe('AssistedActionButton requests', () => {
       expect(perform.mock.calls.length).toBeGreaterThan(2)
     })
     expect(perform.mock.calls[2]![2]).not.toBe(perform.mock.calls[1]![2])
+  })
+
+  it.each([
+    [409, 'STALE_REVISION'],
+    [400, 'ACTION_NOT_AVAILABLE'],
+  ])('a %i answer frees the request id, so the next press is a new one', async (status, code) => {
+    const perform = vi
+      .spyOn(api, 'performAction')
+      .mockRejectedValueOnce(new ApiError(status, code, 'refused'))
+      .mockResolvedValue({} as PlayerView)
+    renderPanel(viewWith([READY]))
+    const button = screen.getByRole('button', { name: 'Use Chivalry' })
+
+    fireEvent.click(button)
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      fireEvent.click(button)
+      expect(perform.mock.calls.length).toBeGreaterThan(1)
+    })
+
+    expect(perform.mock.calls[1]![2]).not.toBe(perform.mock.calls[0]![2])
+  })
+
+  it('a network failure keeps the request id, and the retry reuses it', async () => {
+    const perform = vi
+      .spyOn(api, 'performAction')
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValue({} as PlayerView)
+    renderPanel(viewWith([READY]))
+    const button = screen.getByRole('button', { name: 'Use Chivalry' })
+
+    for (const calls of [1, 2, 3]) {
+      await waitFor(() => {
+        fireEvent.click(button)
+        expect(perform.mock.calls.length).toBeGreaterThanOrEqual(calls)
+      })
+    }
+
+    expect(perform.mock.calls).toHaveLength(3)
+    expect(perform.mock.calls[1]![2]).toBe(perform.mock.calls[0]![2])
+    expect(perform.mock.calls[2]![2]).toBe(perform.mock.calls[0]![2])
+  })
+
+  it('a different viewer in the same tab gets a different id for the same game and action', async () => {
+    const perform = vi
+      .spyOn(api, 'performAction')
+      .mockRejectedValue(new TypeError('Failed to fetch'))
+    const { rerender } = renderPanel(viewWith([READY], 5, [], 'alice-id'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use Chivalry' }))
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    // The first press is unsettled in outcome, so its id is still kept for alice-id.
+    rerender(
+      <AssistedActionsPanel
+        gameId="game-1"
+        view={viewWith([READY], 5, [], 'bob-id')}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Use Chivalry' }))
+      expect(perform.mock.calls.length).toBeGreaterThan(1)
+    })
+
+    expect(perform.mock.calls[1]![2]).not.toBe(perform.mock.calls[0]![2])
   })
 
   it('uses the revision of the render it was pressed in, so a retry after a reload is not stale', async () => {

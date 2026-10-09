@@ -4767,7 +4767,9 @@ key freed, the record marked `undone`, and a new "System:" line; the original
 line stays. Any player can ask, as `initiateUndo` always allowed; the public
 log marks such a line with `canUndo` for every player in the game. The board's
 own undo refuses to put a spent piece back, otherwise it would reverse half the
-action without a vote.
+action without a vote. Because the board undo only pops the top of its stack,
+this also freezes the same player's earlier board changes until the vote
+reverses the action.
 
 Consequences accepted on purpose:
 

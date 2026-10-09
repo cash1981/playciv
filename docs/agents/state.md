@@ -6,18 +6,31 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-07 (independent barbarian drawing)_
+_Last updated: 2026-10-09 (assisted actions, first slice)_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 897 engine, 636 server, 534 web (2,067 total) on `codex/barbarian-draw` |
+| `pnpm -r test` | passing — 951 engine, 657 server, 563 web (2,171 total) on `feat/assisted-play-contract` |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Assisted actions: the shared contract, with Chivalry (branch `feat/assisted-play-contract`, issue #260, first slice).**
+  A registry in `engine/src/assisted.ts` computes what a player can do and why not
+  (`PlayerView.you.availableActions`), and one route, `POST /api/games/:gameId/actions`
+  (`{action, requestId, rev}`), applies it. Chivalry (+5 culture, spends an incense: a hut
+  in hand first, else the piece in the player's own area, back to stock) and the Democracy
+  and Printing Press purchases use it; each card is once per turn. Applied actions are
+  recorded in `GameState.assistedActions`, retries are idempotent, and the existing
+  everyone-votes undo also reverses them (new "System:" line, original kept; the board's own
+  undo refuses to put the spent piece back). Web: a "Your actions" panel, the same button in
+  the tech dialog and the Status panel, and "Ask for undo" on the public log. Not in this
+  slice: the culture advance (cost per step and draw/keep rules unknown; the ladder is in
+  `decisions.md`), reopening a phase, building, offers. Not run against the real D1.
+  Brief: `tasks/assisted-play-contract.md`; see `decisions.md`, 2026-10-09.
 - **Independent barbarian drawing.** Any active member can draw their own barbarian hand before the arena starts, even out of turn. Barbarian battle initiation reuses the left controller's prepared hand, with automatic drawing as fallback. Privacy, duplicate/stale guards and active-arena protection tested. Typechecks, all 2,067 tests and builds pass; read-only review has zero findings and rules differences are documented. Local browser verified drawing, disabled duplicate button, hand reuse and controller placement. Brief: `tasks/barbarian-draw.md`; see `decisions.md`, 2026-10-07.
 - **Daily idle turn reminders.** A separate 16:00 UTC Worker cron emails the current holder after more than 72 hours without a saved state change; one reminder per unchanged state, mail preferences and exact-address race checks, conservative legacy baseline, durable claims and safe provider retries. Migration `0007` must precede deployment. Review approved with zero findings after fixing a stale-address race; all typechecks, 2,050 tests and builds pass. Local Wrangler migration and Worker dry run pass. CodeQL follow-up replaces trailing-slash regex normalization with a linear character scan; all 2,050 tests and review pass. Not deployed or sent to real players. Brief: `tasks/turn-reminders.md`; see `decisions.md`, 2026-10-07.
 - **Building terrain warning (issue #255, branch `feat/building-terrain`).** Placing or moving a

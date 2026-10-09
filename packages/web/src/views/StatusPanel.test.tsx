@@ -449,6 +449,67 @@ describe('StatusPanel Coins section', () => {
     expect(perform).not.toHaveBeenCalled()
   })
 
+  const printingPressAction = (
+    status: 'ready' | 'wrong-phase' | 'needs-resource' | 'used',
+    reason: string,
+  ) => ({ action: 'printingPress' as const, label: 'Printing Press', status, reason })
+
+  it('buys a Printing Press coin from the viewer\'s own row through performAction, with the revision it saw', async () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue(memberView)
+    const base = coinView({}, { techs: ['Printing Press'] })
+    const view = {
+      ...base,
+      rev: 9,
+      you: {
+        ...base.you!,
+        availableActions: [printingPressAction('ready', 'Spend 5 culture to add 1 coin to Printing Press.')],
+      },
+      // Bob holds it too, so a button on his row would show up as a second one
+      opponents: [
+        {
+          ...memberView.opponents[0]!,
+          revealedTechs: [{ name: 'Printing Press', hidden: false }],
+        },
+      ],
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+    const buttons = screen.getAllByRole('button', { name: 'Spend 5 culture' })
+    expect(buttons).toHaveLength(1)
+    fireEvent.click(buttons[0]!)
+
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    expect(perform).toHaveBeenCalledWith('game-1', 'printingPress', expect.any(String), 9)
+  })
+
+  it('offers no Printing Press purchase on another player\'s row', () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue(memberView)
+    const base = coinView()
+    const view = {
+      ...base,
+      you: {
+        ...base.you!,
+        // Even a ready action for the viewer must not put a button on Bob's row
+        availableActions: [printingPressAction('ready', 'Spend 5 culture to add 1 coin to Printing Press.')],
+      },
+      opponents: [
+        {
+          ...memberView.opponents[0]!,
+          revealedTechs: [{ name: 'Printing Press', hidden: false }],
+        },
+      ],
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+
+    // Bob's counter is there, so the source row renders, but without the purchase
+    expect(screen.getByRole('button', { name: 'Increase Bob Printing Press (II)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Spend 5 culture' })).toBeNull()
+    expect(perform).not.toHaveBeenCalled()
+  })
+
   it('offers Panama Canal to its owner wherever the wonder is displayed', () => {
     render(
       <StatusPanel

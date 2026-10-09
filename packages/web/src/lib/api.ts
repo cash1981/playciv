@@ -773,8 +773,6 @@ export const api = {
    */
   performAction: (gameId: string, action: AssistedActionKind, requestId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/actions`, { action, requestId, rev }),
-  purchaseCoin: (gameId: string, source: 'democracy' | 'printingPress') =>
-    post<PlayerView>(`/api/games/${gameId}/coin-purchase`, { source }),
   setPlayerGovernment: (
     gameId: string,
     targetPlayerId: string,
