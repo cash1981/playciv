@@ -1,60 +1,34 @@
-# docs/agents
+# Agent documentation
 
-The working memory of this project. `AGENTS.md` in the root is the entry point;
-this folder holds everything it links to.
+Keep the default reading small and current. Start with `AGENTS.md`, `state.md`
+and `task-board.md`; use the other files only when the task needs them.
 
-It exists so that an agent starting a session does not have to read the
-codebase to work out what is going on. Two files are **live** and change often;
-the rest are stable and only change when the project does.
+| File | Purpose and maintenance |
+| --- | --- |
+| [state.md](state.md) | Current orientation, ideally under 80 lines; no delivery ledger or stale test totals. |
+| [task-board.md](task-board.md) | Active path claims and explicitly queued work; clear ownership on release. |
+| [repo-map.md](repo-map.md) | Find relevant packages/files without reading the whole codebase. |
+| [conventions.md](conventions.md) | Coding and privacy rules. |
+| [workflow.md](workflow.md) | One canonical workflow for every host. |
+| [roles.md](roles.md) | Author, orchestrator and independent reviewer responsibilities. |
+| [decisions.md](decisions.md) | Current rationale and compatibility requirements, organized by topic. |
+| [limitations.md](limitations.md) | Concrete limitations and unverified risks; not an automatic work queue. |
+| [tasks/README.md](tasks/README.md) | Active brief lifecycle and historical citation redirects. |
+| [templates/](templates/) | Brief and review-report formats. |
+| [../history/README.md](../history/README.md) | Retrieve retired documents from Git when history is needed. |
 
-## The files
+## Keeping it useful
 
-| File | Kind | What it is for |
-| --- | --- | --- |
-| `repo-map.md` | stable | What every folder and package is and does. Read once per session. |
-| `conventions.md` | stable | The coding rules, in detail, with the reasoning. |
-| `workflow.md` | stable | Branch, review gate, pull request. The process. |
-| `roles.md` | stable | The agent roles, which model each uses, and what each may write. |
-| `task-board.md` | **live** | Who is working on what, and which paths they have claimed. |
-| `state.md` | **live** | Where the project stands: done, in progress, next, known problems. |
-| `decisions.md` | append-only | Why things are the way they are. Never rewritten. |
-| `tasks/` | per task | One brief per feature: goal, scope, acceptance criteria. |
-| `templates/` | stable | Templates for a task brief and a review report. |
-
-## How they fit together
-
-```
-                   AGENTS.md  ──────────────┐
-                       │                    │  (CLAUDE.md imports it)
-        ┌──────────────┼──────────────┐     │
-        ▼              ▼              ▼     ▼
-   repo-map.md   conventions.md   workflow.md
-                                       │
-                          ┌────────────┴────────────┐
-                          ▼                         ▼
-                    task-board.md              tasks/<slug>.md
-                     (who, where)               (what, why, done when)
-                          │                         │
-                          └───────────┬─────────────┘
-                                      ▼
-                                  state.md
-                             (the running summary)
-                                      │
-                                      ▼
-                                decisions.md
-                            (what we learned, forever)
-```
-
-## Rules for editing these files
-
-- **`task-board.md` and `state.md` are shared.** Edit only your own entry.
-  Rewriting someone else's block loses their work and causes merge conflicts.
-- **`decisions.md` is append-only.** Add at the bottom, never reword what is
-  already there. That keeps merges trivial and history honest.
-- **Keep them short.** These files are read at the start of every session, by
-  every agent. A `state.md` that has grown to 300 lines costs real money on
-  every run. Prune finished work into one line; move the detail to
-  `decisions.md` if it is worth keeping at all.
-- **Stale is worse than missing.** A task board that says someone is working on
-  a file when they are not will cause another agent to sit on its hands. Release
-  your claim when you stop.
+- Put a fact in one place and link to it. README describes the product; code and
+  tests define current behavior; decisions explain important reasons.
+- Update or replace a superseded current decision in place, noting why and
+  linking its replacement. Git preserves the original; do not append contradictory
+  instructions indefinitely.
+- Keep task briefs while work is active or under review. After merge, preserve
+  durable decisions and unresolved requirements in the appropriate current
+  document, then retire the brief in a subsequent change. Keep an explicitly
+  historical redirect only if source/tests/data still cite that path.
+- Unchecked historical acceptance criteria are not proof that work is pending.
+  Verify against merged code before adding an item to the queue.
+- Model selection and tool permissions belong in host adapters. Shared workflow
+  must not assume Windows, a specific preview tool or a particular cloud machine.

@@ -5,22 +5,26 @@ description: Run the review cycle on the current feature branch — verify, hand
 
 # Review gate
 
-The reviewer for every Codex review gate must be Sol (`gpt-6-sol`). Spawn the
-reviewer with that model. Do not use Terra as the default reviewer. If Sol is
-unavailable, stop and report the blocker instead of silently substituting a
-weaker reviewer.
+Follow the review gate in `docs/agents/workflow.md` and reviewer boundaries in
+`docs/agents/roles.md`. Run it after the first implementation, then repeat after
+fixes until nothing above a nit remains. Record any accepted nit. The
+orchestrator approves based on evidence; the implementer does not self-review.
 
-The check between "the code is written" and "the code is merged". The coder
-never approves its own work: it is written on a cheaper model and read by a
-stronger one that cannot write.
+Run the required typecheck, tests and build in the actual environment. Resolve
+failures before the gate. Give the read-only reviewer the complete proposed
+diff (including uncommitted changes), the active brief, actual check output and
+previous findings. Store any diff file outside the checkout. Split a large diff
+by area so every part is reviewed.
 
-You are the orchestrator here. **You approve, not the reviewer.** Its report is
-evidence; disagree with it when you have reason.
+For Codex, use Sol (`gpt-6-sol`) for the reviewer, not Terra. If Sol is
+unavailable, report the blocker rather than silently substituting a weaker
+reviewer. For rules, deck, log or projection changes, also use the configured
+read-only `rules-checker` when available; otherwise report the missing check.
 
-Run the gate **after the first implementation**, not once at the end, and run it
-**to zero findings**: fix what it reports and review the new diff again, until a
-round has nothing above a nit. A nit you choose to leave is recorded in the
-verdict so the choice is visible.
+Check each finding against the code, have the implementer fix confirmed issues,
+and review the updated diff again. After three unsuccessful rounds, escalate
+the implementation to a stronger available model rather than repeating the same
+approach. Do not silently change configured reviewer models or permissions.
 
 ## 1. Verify first
 
