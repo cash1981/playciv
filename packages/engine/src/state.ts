@@ -170,12 +170,13 @@ export interface Playerhand {
  * `candidateIds.length` cards, keeps `keep` of them and discards the rest.
  */
 export interface PendingReward {
-  /** The `requestId` of the advance that drew them. */
+  /** The `requestId` of the advance or the Great Person gain that drew them. */
   readonly id: string
   readonly kind: CultureSpaceKind
-  readonly level: CultureLevel
-  /** The space the marker moved to. */
-  readonly step: number
+  /** The section of the track, or `null` for a Great Person gained with the button. */
+  readonly level: CultureLevel | null
+  /** The space the marker moved to, or `null` for a Great Person gained with the button. */
+  readonly step: number | null
   /** Ids of the drawn cards, which are in the player's hand until the choice is made. */
   readonly candidateIds: readonly string[]
   readonly keep: 1
@@ -185,8 +186,8 @@ export interface PendingReward {
 export interface PendingRewardView {
   readonly id: string
   readonly kind: CultureSpaceKind
-  readonly level: CultureLevel
-  readonly step: number
+  readonly level: CultureLevel | null
+  readonly step: number | null
   readonly candidates: readonly Item[]
   readonly keep: 1
 }
@@ -256,6 +257,7 @@ export type AssistedActionKind =
   | 'democracy'
   | 'printingPress'
   | 'cultureAdvance'
+  | 'gainGreatPerson'
   | 'chooseReward'
 
 /** The cards that spend a resource token for culture: "Incense, City Management: gain N culture". */
@@ -278,6 +280,18 @@ export type AssistedStatus =
 export type SpentResource =
   | { readonly kind: 'hut'; readonly resource: string; readonly itemId: string }
   | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece }
+
+/**
+ * The Great Person marker a gain put in the player's area: which piece, where it
+ * landed and the board history entry that placed it. An undo removes exactly this
+ * piece, and refuses when it has left the owner's area.
+ */
+export interface GreatPersonMarker {
+  readonly assetId: string
+  readonly pieceId: string
+  readonly position: { readonly x: number; readonly y: number }
+  readonly historyId: string
+}
 
 /** What an action changed, enough to reverse it. Server side only, never in a view. */
 export type AssistedEffect =
@@ -307,6 +321,23 @@ export type AssistedEffect =
       readonly drawn: readonly string[]
       /** The card kept, or `null` while the choice is still pending. */
       readonly kept: string | null
+      /**
+       * Great Person space only (absent on a culture event and on records saved
+       * before the markers existed): the faceup cards discarded because no marker of
+       * their type was left, and the marker taken once a card is kept.
+       */
+      readonly rejected?: readonly string[]
+      readonly marker?: GreatPersonMarker | null
+    }
+  | {
+      readonly kind: 'gainGreatPerson'
+      readonly sheetName: SheetName
+      /** The valid cards the player got, in draw order. */
+      readonly drawn: readonly string[]
+      /** The faceup cards discarded because no marker of their type was left. */
+      readonly rejected: readonly string[]
+      readonly kept: string | null
+      readonly marker: GreatPersonMarker | null
     }
   | {
       readonly kind: 'chooseReward'

@@ -12,11 +12,11 @@ says it is ready.
 
 ## Goal
 
-Gaining a Great Person is one flow: draw the card, take the matching marker, keep
-the card secret, let the player put the marker on the map or leave it next to their
-sheet (the rulebook calls that "reserve"). The culture advance onto a Great Person
-space uses it, and a "Gain Great Person" button covers every other way of gaining
-one (Philosophy, the Americans, and so on).
+Gaining a Great Person through the culture advance takes the matching marker too:
+draw only valid cards, keep the card secret in "Your hand" (the way the existing
+Draw button already puts it there), and put the marker next to the player's sheet
+(the rulebook calls that "reserve") for them to place on the map. The existing Draw
+buttons stay exactly as they are and cover every other way of gaining one.
 
 ## Why
 
@@ -59,9 +59,9 @@ owner by player area in the resource spending of the same file.
 
 **In:**
 
-- A pure `gainGreatPerson` step used by both the culture advance (Great Person
-  space) and a new registry action `gainGreatPerson` ("Gain Great Person",
-  repeatable, any phase, vote undo). It draws until it has the needed number of
+- A pure `gainGreatPerson` step used by the culture advance (Great Person space),
+  reusing the existing draw code to move a card into the hand. (The human: the
+  Draw buttons stay and already put the card in "Your hand", so no new button.) It draws until it has the needed number of
   valid cards (1, plus 1 for Organized Religion, plus 1 for the Greeks; the same
   counts as `rewardDrawCount`), where valid means the card's marker type has supply
   left. An invalid draw goes to the discard pile and a public line names it (the
@@ -83,8 +83,7 @@ owner by player area in the resource spending of the same file.
 - Hidden information: the card identity never reaches another viewer; the marker
   type does (it is a board piece). Rejected cards are public by the rulebook; the
   candidates of a pending choice are not. Tests at engine and server level.
-- Web: the "Gain Great Person" button in "Your actions" with its reason, the same
-  private choice UI as today (the "token step is still by hand" sentence goes away
+- Web: the same private choice UI as today (the "token step is still by hand" sentence goes away
   because the token is now taken), and the marker visible in the player's area.
 - Manual paths stay untouched, with a test that proves it: a player can still draw a
   Great Person with the Draw button, move or remove the marker, and edit counters
@@ -118,8 +117,7 @@ owner by player area in the resource spending of the same file.
 - [ ] Greeks and Organized Religion give up to three valid cards to choose between;
       the choice is private and survives a refresh; keeping one takes its marker; the
       others are discarded.
-- [ ] "Gain Great Person" does the same outside a culture advance, any phase, with
-      idempotency by request id and a vote undo.
+- [ ] The existing Draw button for a Great Person behaves exactly as before.
 - [ ] Undo removes the marker, restores the cards, and refuses (vote open) when the
       marker was moved out of the owner's area.
 - [ ] The board Undo cannot undo the marker placement alone.
@@ -128,7 +126,7 @@ owner by player area in the resource spending of the same file.
 - [ ] Manual Draw, marker moves, counters and culture marker moves still work after.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass (suites run one
       at a time).
-- [ ] Verified in the browser: a Great Person space advance and the button.
+- [ ] Verified in the browser: a Great Person space advance.
 
 ## Open questions
 
