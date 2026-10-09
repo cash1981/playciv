@@ -12,6 +12,17 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### assisted-phase-layout
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/assisted-phase-layout` (from `feat/assisted-gp-tokens`; merged into the PR branch only when the human says so)
+- **Brief:** `docs/agents/tasks/assisted-phase-layout.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/web/src/views/GameView.tsx`, `PhaseSummary.tsx`, `PhaseSummary.css`, `BoardView.tsx`, `packages/web/src/styles.css`
+  - `docs/agents/decisions.md`, `state.md`
+- **Notes:** web only, no engine or server change.
+
 ### assisted-gp-tokens
 
 - **Owner:** Claude (Sonnet 5.5)
