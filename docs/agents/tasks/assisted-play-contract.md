@@ -150,7 +150,8 @@ overføres tilbake til stock automatisk. Dette gjelder alle type ressurser."
       the piece stays. With only the piece, the piece goes. With neither:
       `needs-resource`, nothing changes.
 - [ ] Same `requestId` twice, or two parallel requests: one effect. A second
-      press with a new `requestId` uses the next token, or fails when none is left.
+      press with a new `requestId` in the same turn is refused (`ALREADY_USED`) and spends
+      nothing, because every card is once per turn.
 - [ ] A stale `rev` gives 409 and changes nothing.
 - [ ] Wrong phase (CM done, SOT or Trade open), tech unrevealed, another
       player's tech: refused with a readable reason, no partial state.

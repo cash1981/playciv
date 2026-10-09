@@ -4722,3 +4722,69 @@ initiator is still the attacker, the next active player by stored seat order
 controls barbarians, and the defender still opens the arena turn. All members
 already had permission to initiate their own battle; that remains true. No
 new FFG rule, random source, projection field or migration is introduced.
+
+## 2026-10-09 — Assisted actions: one contract, Chivalry first, today's undo vote
+
+Issue #260 asks the game to explain what a player can do and to do the
+bookkeeping for them. The first slice builds the contract the later actions
+will use and puts Chivalry through it. Nothing the game does today is removed:
+chat, free-form orders, manual counters, the item undo vote and the board's
+own undo all stay.
+
+**The contract.** `packages/engine/src/assisted.ts` holds a registry. Each
+action has an availability check (`ready`, `used`, `needs-resource`,
+`wrong-phase`, `not-owned`, `unavailable`, always with a readable reason) and
+one `apply`. The Status panel, the "Your actions" panel and the tech dialog all
+read the same `PlayerView.you.availableActions` and call the same route,
+`POST /api/games/:gameId/actions` with `{action, requestId, rev}`. Chivalry,
+Democracy and Printing Press are registered; the old `/coin-purchase` route and
+`purchaseCoin` behave as before and share the registry's check.
+
+**Once per turn.** The human: every card can be used once per turn, healing
+excepted (not supported). The usage key is `card:<tech>` on the player's
+`PlayerTurn.usedActions`. A second press in the same turn is refused whatever
+`requestId` it carries; holding two incense does not give two uses.
+
+**Identity.** Each applied action is recorded in `GameState.assistedActions`
+under the client's `requestId`. The same id again, from the same player and
+action, is a no-op that stores nothing. `rev` goes to the existing optimistic
+check, so a stale tab gets 409. An id is 1 to 64 characters of `[A-Za-z0-9._:-]`.
+
+**Resources.** The human: a hut in the hand is used first; otherwise the
+resource piece lying in the player's own area, which goes back to the stock
+automatically. This holds for every resource kind. An owner is the area that
+holds the piece's centre, the way the start player marker is read, so no
+owner is stored. A spent hut goes to `discardedItems` like a discarded hut, so
+the Revealed/Discarded panel names it; the public line does not say whether a
+hut or a piece was used, but the panel and an untouched board make it
+inferable. Accepted.
+
+**Undo keeps today's rules.** The human: the same undo rules as today. The
+vote (everyone votes, one no refuses, public request and vote lines) now also
+accepts a log line written by an assisted action, which has no item. A passed
+vote reverses the action: culture and the exact hut or piece back, the usage
+key freed, the record marked `undone`, and a new "System:" line; the original
+line stays. Any player can ask, as `initiateUndo` always allowed; the public
+log marks such a line with `canUndo` for every player in the game. The board's
+own undo refuses to put a spent piece back, otherwise it would reverse half the
+action without a vote.
+
+Consequences accepted on purpose:
+
+- A reversal puts the piece back without checking the supply limit, so a vote
+  that has passed cannot fail halfway. If someone placed another piece of that
+  resource in the meantime, the board can show one more than the box holds.
+- If a reversal cannot find its hut (in neither the discard pile nor the deck),
+  the vote returns an error and stays open, as an item undo does today.
+- Culture is taken back down to zero at the lowest, in case the counter was
+  edited by hand after the press.
+- A replay view shows no available actions.
+
+**Not in this slice.** The culture advance. The human gave the ladder (steps
+1-2 Level 1, 3 Great Person, 4-6 Level 1, 7 Great Person, 8-11 Level 2, 12 Great
+Person, 13-14 Level 2, 15-17 Level 3, 18 Great Person, 19-21 Level 3, step 21
+being Culture Victory), but the cost per step and the draw/keep modifiers are
+not known, and #248 and #252 have not landed. Reopening a phase, building and
+offers are separate issues (#266, #264, #265). Not run against the real D1; no
+migration is needed because `assistedActions` defaults to an empty list.
+
