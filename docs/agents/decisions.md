@@ -165,6 +165,21 @@ Source: `engine/src/assisted.ts`, `culture-track.ts`, `server/src/routes/play.ts
 tests. Not built: Great Person abilities that need a map marker, killing
 markers, map tile 16a, free advances, hand limit, Build (#264), offers (#265).
 
+## Trade offers (#265)
+
+Trade negotiation stays in the game conversation, but an offer is an explicit
+state record rather than ordinary chat text. Terms are free prose and are never
+parsed or executed: accepting records an agreement only, so players still use
+the existing legal trade-window controls to settle resources. The public view
+shows the two participants, terms, turn/phase context and lifecycle status; it
+does not expose request ids or any effect data. Only the intended sender or
+recipient may perform each transition, and revision checks plus request ids make
+retries and competing writes deterministic. Pending offers expire when a later
+turn is observed; accepted offers are never expired.
+
+Source: `packages/engine/src/trade-offers.ts`, `state.ts`, the trade-offer routes
+in `packages/server/src/routes/games.ts`, and the chat panel/API tests.
+
 ## City production
 
 Issue #250 slice A and a first part of #264. `cityProductionsOf` in

@@ -820,4 +820,15 @@ export const api = {
     ),
   sendChat: (gameId: string, message: string) =>
     post<ChatMessageDto>(`/api/games/${gameId}/chat`, { message }),
+  sendTradeOffer: (gameId: string, recipientId: string, terms: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/trade-offers`, { recipientId, terms, requestId, rev }),
+  transitionTradeOffer: (
+    gameId: string,
+    offerId: string,
+    action: 'accept' | 'decline' | 'withdraw',
+    requestId: string,
+    rev: number,
+  ) => post<PlayerView>(`/api/games/${gameId}/trade-offers/${offerId}/${action}`, { requestId, rev }),
+  counterTradeOffer: (gameId: string, offerId: string, terms: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/trade-offers/${offerId}/counter`, { terms, requestId, rev }),
 }

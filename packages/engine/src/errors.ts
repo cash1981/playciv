@@ -155,6 +155,13 @@ export type EngineError =
   | { readonly kind: 'CANNOT_BATTLE_YOURSELF'; readonly playerId: string }
   /** That position is already occupied on this side */
   | { readonly kind: 'ARENA_POSITION_OCCUPIED' }
+  | { readonly kind: 'INVALID_TRADE_OFFER_TERMS'; readonly length: number }
+  | { readonly kind: 'TRADE_OFFER_REQUEST_REUSED'; readonly requestId: string }
+  | { readonly kind: 'TRADE_OFFER_RECIPIENT_NOT_FOUND'; readonly playerId: string }
+  | { readonly kind: 'TRADE_OFFER_SELF' }
+  | { readonly kind: 'TRADE_OFFER_NOT_FOUND'; readonly offerId: string }
+  | { readonly kind: 'TRADE_OFFER_NOT_PENDING'; readonly offerId: string }
+  | { readonly kind: 'TRADE_OFFER_NOT_ALLOWED'; readonly offerId: string }
 
 export function describeError(error: EngineError): string {
   switch (error.kind) {
@@ -286,5 +293,19 @@ export function describeError(error: EngineError): string {
       return 'You cannot initiate a battle against yourself'
     case 'ARENA_POSITION_OCCUPIED':
       return 'That position is already occupied on this side'
+    case 'INVALID_TRADE_OFFER_TERMS':
+      return `Trade offer terms must contain 1 to 2,000 characters (got ${error.length})`
+    case 'TRADE_OFFER_REQUEST_REUSED':
+      return 'This trade-offer request id belongs to another offer'
+    case 'TRADE_OFFER_RECIPIENT_NOT_FOUND':
+      return 'The selected recipient is not a player in this game'
+    case 'TRADE_OFFER_SELF':
+      return 'Choose another player as the recipient'
+    case 'TRADE_OFFER_NOT_FOUND':
+      return 'Trade offer not found'
+    case 'TRADE_OFFER_NOT_PENDING':
+      return 'This trade offer is no longer pending'
+    case 'TRADE_OFFER_NOT_ALLOWED':
+      return 'You are not allowed to perform that action on this trade offer'
   }
 }

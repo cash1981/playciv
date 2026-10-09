@@ -14,6 +14,9 @@ import {
   revealedTechsForAllPlayers,
   toPlayerView,
   turnStatus,
+  counterTradeOffer,
+  createTradeOffer,
+  transitionTradeOffer,
   withdrawFromGame,
 } from '@civ/engine'
 
@@ -603,6 +606,63 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       return sendError(c, 400, 'BAD_REQUEST', 'before is not a message in this game')
     }
     return c.json(page)
+  })
+
+  // -------------------------------------------------------------------------
+  // Trade offers (issue #265). Terms stay opaque text: accepting records an
+  // agreement only and never changes inventory.
+  // -------------------------------------------------------------------------
+
+  app.post('/api/games/:gameId/trade-offers', auth, async (c) => {
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const recipientId = requireString(body, 'recipientId')
+    const terms = requireString(body, 'terms')
+    const requestId = requireString(body, 'requestId')
+    const rev = body['rev']
+    if (recipientId === undefined || terms === undefined || requestId === undefined || typeof rev !== 'number' || !Number.isInteger(rev) || rev < 0) {
+      return sendError(c, 400, 'BAD_REQUEST', 'recipientId, terms, requestId and a non-negative integer rev are required')
+    }
+    return applyToGame(context, c, c.req.param('gameId'), (state) => createTradeOffer(state, {
+      senderId: currentPlayer(c).id,
+      recipientId,
+      terms,
+      requestId,
+      at: new Date().toISOString(),
+    }), rev, { skipSaveWhenUnchanged: true })
+  })
+
+  app.post('/api/games/:gameId/trade-offers/:offerId/counter', auth, async (c) => {
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const terms = requireString(body, 'terms')
+    const requestId = requireString(body, 'requestId')
+    const rev = body['rev']
+    if (terms === undefined || requestId === undefined || typeof rev !== 'number' || !Number.isInteger(rev) || rev < 0) {
+      return sendError(c, 400, 'BAD_REQUEST', 'terms, requestId and a non-negative integer rev are required')
+    }
+    return applyToGame(context, c, c.req.param('gameId'), (state) => counterTradeOffer(state, {
+      actorId: currentPlayer(c).id,
+      offerId: c.req.param('offerId'),
+      terms,
+      requestId,
+      at: new Date().toISOString(),
+    }), rev, { skipSaveWhenUnchanged: true })
+  })
+
+  app.post('/api/games/:gameId/trade-offers/:offerId/:action', auth, async (c) => {
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const requestId = requireString(body, 'requestId')
+    const rev = body['rev']
+    const action = c.req.param('action')
+    if (requestId === undefined || typeof rev !== 'number' || !Number.isInteger(rev) || rev < 0 || (action !== 'accept' && action !== 'decline' && action !== 'withdraw')) {
+      return sendError(c, 400, 'BAD_REQUEST', 'requestId, a valid action and a non-negative integer rev are required')
+    }
+    return applyToGame(context, c, c.req.param('gameId'), (state) => transitionTradeOffer(state, {
+      actorId: currentPlayer(c).id,
+      offerId: c.req.param('offerId'),
+      action,
+      requestId,
+      at: new Date().toISOString(),
+    }), rev, { skipSaveWhenUnchanged: true })
   })
 
   app.post('/api/games/:gameId/chat', auth, async (c) => {

@@ -62,6 +62,17 @@ export function statusFor(error: EngineError): number {
       return 409
     case 'COIN_PURCHASE_REJECTED':
       return error.reason === 'ALREADY_USED' ? 409 : 400
+    case 'TRADE_OFFER_REQUEST_REUSED':
+    case 'TRADE_OFFER_NOT_PENDING':
+      return 409
+    case 'INVALID_TRADE_OFFER_TERMS':
+    case 'TRADE_OFFER_SELF':
+      return 400
+    case 'TRADE_OFFER_RECIPIENT_NOT_FOUND':
+    case 'TRADE_OFFER_NOT_FOUND':
+      return 404
+    case 'TRADE_OFFER_NOT_ALLOWED':
+      return 403
     // Out of uses is a conflict, like a coin purchase; everything else is a bad request
     case 'ASSISTED_ACTION_REJECTED':
       return error.status === 'used' ? 409 : 400
