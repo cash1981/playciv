@@ -12,7 +12,19 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_No live claims._
+### assisted-play-contract
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/assisted-play-contract` (one PR, #271, by the human's choice; later parts are committed here)
+- **Brief:** `docs/agents/tasks/assisted-play-contract.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/turn.ts`
+  - `packages/engine/test/assisted*.test.ts`
+  - `packages/server/src/routes/play.ts`, `packages/server/test/assisted*.test.ts`
+  - `packages/web/src/views/AssistedActions.tsx`, `TechPanel.tsx`, `GameView.tsx` and tests
+  - `docs/agents/decisions.md`, `state.md`, `README.md`
+- **Notes:** part 2: Currency and Metal Casting through the registry, then the culture advance.
 
 
 ---
