@@ -12,7 +12,19 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_No live claims._
+### agent-docs-cleanup
+
+- **Owner:** Codex
+- **Branch:** `chore/agent-docs-cleanup`
+- **Brief:** `docs/agents/tasks/agent-docs-cleanup.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `AGENTS.md`, `CLAUDE.md`, `README.md`
+  - `docs/agents/`, `docs/history/`
+  - `.agents/skills/feature/`, `.agents/skills/review-gate/`
+  - `.claude/skills/feature/`, `.claude/skills/review-gate/`
+  - `.claude/agents/`, `.opencode/agents/`
+- **Notes:** Documentation only; review historical briefs and decisions, reduce required reading, and preserve current constraints.
 
 
 ---
