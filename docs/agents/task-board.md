@@ -14,7 +14,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 _No live claims._
 
-
 ---
 
 ## Format
@@ -46,7 +45,7 @@ at a time. Claim them by name.
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
-| `packages/engine/src/state.ts` (`PlayerView` shape) | chat-orders |
+| `packages/engine/src/state.ts` (`PlayerView` shape) | free |
 | `packages/web/src/lib/api.ts` | free |
 
 The last two are listed because almost every feature wants to touch them, which
@@ -59,5 +58,4 @@ makes them the most likely collision in the repo.
 Work that is ready to start, most useful first. Taking one means moving it to
 "Live claims".
 
-_Nothing queued._ `public-landing` shipped as issue #38's `LandingView`;
-`anonymous-readonly` shipped as issues #81/#82.
+_Nothing queued._

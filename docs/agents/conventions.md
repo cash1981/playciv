@@ -14,8 +14,9 @@ see where something came from.
   choice, it also goes in `decisions.md`, and in "Known differences" or
   "Deliberate improvements" in `README.md` if a player would notice.
 - Never change behaviour silently as a side effect of a refactor.
-- Older entries in `decisions.md` and ported tests still mention the Java
-  source. They stay as history; do not rewrite them.
+- Current `decisions.md` is organized by topic. Replace superseded guidance
+  rather than accumulating contradictory entries; preserve why current behavior
+  matters. Historical versions are retrievable via `docs/history/README.md`.
 
 **Do not invent FFG rules.** The culture track is a marker with no rules
 attached because the project never had any for it. If a rule is needed and is
@@ -96,11 +97,8 @@ commit messages, these documents. The conversation with the human is Norwegian.
   subject cannot.
 - Commit often; a commit should be one coherent change.
 - Never commit on `main`. See `workflow.md`.
-- Co-author trailer for agent-written commits:
-
-```
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
-```
+- If adding a co-author trailer, identify the actual contributor. Do not stamp
+  every agent's work with another host's model identity.
 
 ## Generated files
 
