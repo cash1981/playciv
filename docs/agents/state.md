@@ -6,18 +6,19 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-09 (removed the move-to-single-chat admin tool)_
+_Last updated: 2026-10-09 (undo End battle)_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 877 engine, 604 server, 522 web (2,003 total) on `chore/remove-migrate-chat` |
+| `pnpm -r test` | passing — 895 engine, 608 server, 528 web (2,031 total) on `feat/undo-end-battle` |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
 ## Done
+- **Undo End battle.** The player who pressed End battle gets an Undo banner where the arena was, until a new battle starts; no vote. The ended battle is stored as `endedBattle` and the view exposes `battleUndo.endedBy` only. Typechecks, 895 engine, 528 web and 608 server tests and builds pass after merging main; read-only review found only missing docs, now added. Not checked in a browser. Brief: `tasks/undo-end-battle.md`; see `decisions.md`, 2026-10-08.
 - **Removed the move-to-single-chat admin tool.** The human has moved every game, so the admin panel, `GET`/`POST /api/admin/games/migrate-chat`, `server/src/legacy-orders.ts`, the engine helpers only it used (`publicOrderVersions`, `publicOrdersWithoutVersions`, `unpublishedDrafts`, `pendingDrafts`, `draftsToPrivateNote`) and their tests are gone. The flags `legacyOrdersCopied` and `legacyRevealsCopied` and load-time adoption stay, so old saves load as before. Typechecks, 877 engine, 522 web and 604 server tests and builds pass. Brief: `tasks/remove-migrate-chat.md`; see `decisions.md`, 2026-10-09.
 - **Independent barbarian drawing.** Any active member can draw their own barbarian hand before the arena starts, even out of turn. Barbarian battle initiation reuses the left controller's prepared hand, with automatic drawing as fallback. Privacy, duplicate/stale guards and active-arena protection tested. Typechecks, all 2,067 tests and builds pass; read-only review has zero findings and rules differences are documented. Local browser verified drawing, disabled duplicate button, hand reuse and controller placement. Brief: `tasks/barbarian-draw.md`; see `decisions.md`, 2026-10-07.
 - **Daily idle turn reminders.** A separate 16:00 UTC Worker cron emails the current holder after more than 72 hours without a saved state change; one reminder per unchanged state, mail preferences and exact-address race checks, conservative legacy baseline, durable claims and safe provider retries. Migration `0007` must precede deployment. Review approved with zero findings after fixing a stale-address race; all typechecks, 2,050 tests and builds pass. Local Wrangler migration and Worker dry run pass. CodeQL follow-up replaces trailing-slash regex normalization with a linear character scan; all 2,050 tests and review pass. Not deployed or sent to real players. Brief: `tasks/turn-reminders.md`; see `decisions.md`, 2026-10-07.

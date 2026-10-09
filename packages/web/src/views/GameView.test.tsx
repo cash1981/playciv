@@ -11,6 +11,7 @@ import type { GameRevisionSummary, PlayerDto, PlayerView } from '../lib/api.js'
 import type { GameMenuActions } from './Navigation.js'
 import {
   AUTO_REFRESH_MS,
+  BattlePanel,
   GameView,
   activePlayerOf,
   chatAuthorsOf,
@@ -890,5 +891,69 @@ describe('the game page (issue #215)', () => {
       await renderGame(chatView('Bob'))
       expect(screen.getByText('It is not your turn. You will be asked before you draw.')).toBeTruthy()
     })
+  })
+})
+
+describe('the ended-battle banner', () => {
+  const endedView = (youId: string | null, battleUndo: unknown = { endedBy: 'me' }): PlayerView =>
+    ({
+      rev: 7,
+      you: youId === null ? null : { playerId: youId, battlehand: [], barbarians: [], items: [] },
+      opponents: [{ playerId: 'other', username: 'Karandras1' }],
+      battle: null,
+      battleUndo,
+      battleSummary: [],
+    }) as unknown as PlayerView
+
+  const renderPanel = (view: PlayerView, busy = false) => {
+    const result = render(<BattlePanel gameId="game-1" busy={busy} run={run} view={view} />)
+    fireEvent.click(result.getByText('Battle'))
+    return result
+  }
+
+  it('shows after End battle, with an Undo button for the player who ended it', () => {
+    const undo = vi.spyOn(api, 'undoEndBattle').mockResolvedValue(endedView('me', null))
+    const { container, getByText } = renderPanel(endedView('me'))
+
+    const banner = container.querySelector('.battle-ended-banner')
+    expect(banner?.textContent).toContain('Battle ended')
+    fireEvent.click(getByText('Undo'))
+    // The current revision goes with it, like every other arena action
+    expect(undo).toHaveBeenCalledWith('game-1', 7)
+  })
+
+  it('shows to everyone else too, but without an Undo button', () => {
+    const { container, queryByText } = renderPanel(endedView('other', { endedBy: 'me' }))
+    expect(container.querySelector('.battle-ended-banner')?.textContent).toContain('Battle ended')
+    expect(queryByText('Undo')).toBeNull()
+  })
+
+  it('names the player who ended it for the others, and offers a spectator no Undo', () => {
+    const { container, queryByText } = renderPanel(endedView(null, { endedBy: 'other' }))
+    expect(container.querySelector('.battle-ended-banner')?.textContent).toContain('by Karandras1')
+    expect(queryByText('Undo')).toBeNull()
+  })
+
+  it('is absent when there is nothing to undo', () => {
+    const { container } = renderPanel(endedView('me', null))
+    expect(container.querySelector('.battle-ended-banner')).toBeNull()
+  })
+
+  it('is absent while a battle is running', () => {
+    const running = {
+      ...endedView('me'),
+      battle: {
+        attacker: { playerId: 'me', kind: 'player' },
+        defender: { playerId: 'other', kind: 'player' },
+        turn: 'attacker', arena: [], departedUnits: [],
+      },
+    } as unknown as PlayerView
+    const { container } = renderPanel(running)
+    expect(container.querySelector('.battle-ended-banner')).toBeNull()
+  })
+
+  it('does not offer Undo while another action is running', () => {
+    const { getByText } = renderPanel(endedView('me'), true)
+    expect((getByText('Undo') as HTMLButtonElement).disabled).toBe(true)
   })
 })

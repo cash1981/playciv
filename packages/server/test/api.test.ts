@@ -2048,6 +2048,171 @@ describe('arena place and rotate', () => {
   })
 })
 
+describe('undo end battle', () => {
+  /** Two players, one placed unit, battle initiated by `starter` and ended by them. */
+  async function endedBattle(name: string) {
+    const { gameId, starter, waiting } = await startedGame(name)
+    await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/INFANTRY`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    const battlehand = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/draw`,
+      headers: bearer(starter),
+      payload: { numberOfUnits: 1 },
+    })
+    const battlehandView = await battlehand.json() as {
+      rev: number
+      you: { playerId: string; battlehand: { id: string; attack: number; health: number }[] }
+    }
+    const unit = battlehandView.you.battlehand[0]!
+
+    const waitingView = await inject(app, {
+      method: 'GET',
+      url: `/api/games/${gameId}`,
+      headers: bearer(waiting),
+    })
+    const waitingId = (await waitingView.json() as { you: { playerId: string } }).you.playerId
+
+    const initiated = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/initiate`,
+      headers: bearer(starter),
+      payload: { opponentId: waitingId, rev: battlehandView.rev },
+    })
+    const initiatedView = await initiated.json() as { rev: number }
+    const placed = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/place`,
+      headers: bearer(starter),
+      payload: { unitId: unit.id, side: 'attacker', position: 0, attack: unit.attack, health: unit.health, rev: initiatedView.rev },
+    })
+    const placedView = await placed.json() as { rev: number; battle: { id: string; arena: { id: string }[] } }
+    const ended = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end`,
+      headers: bearer(starter),
+      payload: { rev: placedView.rev },
+    })
+    expect(ended.status).toBe(200)
+    const endedView = await ended.json() as { rev: number }
+    return {
+      gameId, starter, waiting, waitingId, unit,
+      starterId: battlehandView.you.playerId,
+      battleId: placedView.battle.id,
+      arenaUnitId: placedView.battle.arena[0]!.id,
+      endedRev: endedView.rev,
+    }
+  }
+
+  it('the player who ended the battle gets it back, and everyone sees only who ended it meanwhile', async () => {
+    const game = await endedBattle('Undo-end')
+
+    for (const token of [game.starter, game.waiting]) {
+      const view = await inject(app, {
+        method: 'GET',
+        url: `/api/games/${game.gameId}`,
+        headers: bearer(token),
+      })
+      const text = await view.text()
+      const json = JSON.parse(text) as { battle: unknown; battleUndo: unknown }
+      expect(json.battle).toBeNull()
+      expect(json.battleUndo).toEqual({ endedBy: game.starterId })
+      // Nothing of the discarded arena is sent
+      expect(text).not.toContain(game.battleId)
+      expect(text).not.toContain(game.arenaUnitId)
+    }
+
+    const undone = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${game.gameId}/battle/arena/end/undo`,
+      headers: bearer(game.starter),
+      payload: { rev: game.endedRev },
+    })
+    expect(undone.status).toBe(200)
+    const undoneView = await undone.json() as {
+      rev: number
+      battle: { id: string; arena: { id: string }[] }
+      battleUndo: unknown
+      you: { battlehand: { id: string; inBattle: boolean }[] }
+    }
+    expect(undoneView.battle.id).toBe(game.battleId)
+    expect(undoneView.battle.arena.map((u) => u.id)).toEqual([game.arenaUnitId])
+    expect(undoneView.battleUndo).toBeNull()
+    expect(undoneView.you.battlehand.find((u) => u.id === game.unit.id)?.inBattle).toBe(true)
+    expect(undoneView.rev).toBe(game.endedRev + 1)
+  })
+
+  it('another player cannot undo it, and nothing changes', async () => {
+    const game = await endedBattle('Undo-end-other')
+
+    const refused = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${game.gameId}/battle/arena/end/undo`,
+      headers: bearer(game.waiting),
+      payload: { rev: game.endedRev },
+    })
+    expect(refused.status).toBe(403)
+
+    const view = await inject(app, {
+      method: 'GET',
+      url: `/api/games/${game.gameId}`,
+      headers: bearer(game.starter),
+    })
+    const after = await view.json() as { rev: number; battle: unknown; battleUndo: unknown }
+    expect(after.rev).toBe(game.endedRev)
+    expect(after.battle).toBeNull()
+    expect(after.battleUndo).toEqual({ endedBy: game.starterId })
+  })
+
+  it('is refused with a stale rev, and once a new battle has started', async () => {
+    const game = await endedBattle('Undo-end-late')
+
+    const stale = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${game.gameId}/battle/arena/end/undo`,
+      headers: bearer(game.starter),
+      payload: { rev: game.endedRev - 1 },
+    })
+    expect(stale.status).toBe(409)
+    expect((await stale.json() as { error: string }).error).toBe('CONFLICT')
+
+    const initiated = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${game.gameId}/battle/arena/initiate`,
+      headers: bearer(game.waiting),
+      payload: { opponentId: game.starterId, rev: game.endedRev },
+    })
+    expect(initiated.status).toBe(200)
+    const initiatedView = await initiated.json() as { rev: number; battleUndo: unknown }
+    expect(initiatedView.battleUndo).toBeNull()
+
+    const late = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${game.gameId}/battle/arena/end/undo`,
+      headers: bearer(game.starter),
+      payload: { rev: initiatedView.rev },
+    })
+    expect(late.status).toBe(409)
+    expect((await late.json() as { error: string }).error).toBe('BATTLE_ALREADY_ACTIVE')
+  })
+
+  it('answers 404 when no battle has been ended', async () => {
+    const { gameId, starter } = await startedGame('Undo-end-none')
+    const response = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/battle/arena/end/undo`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(response.status).toBe(404)
+    expect((await response.json() as { error: string }).error).toBe('NO_BATTLE_ACTIVE')
+  })
+})
+
 /** A whole round through the API, as a smoke test for the entire stack. */
 describe('a whole round', () => {
   it('four players play through setup, draws, turns and an undo', async () => {

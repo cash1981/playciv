@@ -298,11 +298,26 @@ export interface GameState {
    */
   readonly battle: Battle | null
   /**
+   * The battle most recently ended with "End battle", kept so the player who
+   * ended it can undo an accidental press. `null` when there is nothing to
+   * undo. Cleared when a new battle is initiated; no other action expires it.
+   * Never sent to a client: the view only carries `endedBy` (`battleUndo`).
+   */
+  readonly endedBattle: EndedBattle | null
+  /**
    * Monotonically increasing revision counter. Incremented by `applyToGame`
    * on every write. Used to detect concurrent edits: the server returns 409
    * if the client's `rev` does not match the stored one.
    */
   readonly rev: number
+}
+
+/** A battle that was ended and can still be brought back by `endedBy`. */
+export interface EndedBattle {
+  /** The battle exactly as it stood when it was ended, arena included. */
+  readonly battle: Battle
+  /** The player who pressed End battle, and the only one who may undo it. */
+  readonly endedBy: string
 }
 
 // ---------------------------------------------------------------------------
@@ -632,6 +647,11 @@ export interface PlayerView {
    */
   readonly battle: Battle | null
   /**
+   * Set while the ended battle can still be undone. Only who ended it is
+   * exposed; the arena snapshot itself stays in the game state.
+   */
+  readonly battleUndo: { readonly endedBy: string } | null
+  /**
    * Per-side totals derived from the arena. Empty when no battle is active.
    * Derived rather than stored so it cannot drift out of step.
    */
@@ -708,6 +728,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),
     battle: state.battle,
+    battleUndo: state.endedBattle === null ? null : { endedBy: state.endedBattle.endedBy },
     battleSummary: battleSummaries(state),
     rev: state.rev,
   }

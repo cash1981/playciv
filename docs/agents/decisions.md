@@ -4723,6 +4723,31 @@ controls barbarians, and the defender still opens the arena turn. All members
 already had permission to initiate their own battle; that remains true. No
 new FFG rule, random source, projection field or migration is introduced.
 
+## 2026-10-08 — Undo for End battle
+
+A mis-click on End battle discarded the arena with no way back. The human's
+decisions: undo needs no vote, only the player who pressed End battle may undo,
+and it is only the battle part that is undoable. HP and winner info may stay in
+the log. If ending a battle would reveal a unit in the log, that unit must be
+left out. It does not today, and a test now pins it.
+
+`endBattleAction` keeps the battle it removes as `GameState.endedBattle`
+(`{ battle, endedBy }`). `undoEndBattle` restores it and locks the source cards
+of `arena` and `departedUnits` again, skipping any card that has since gone. The
+window stays open until `initiateBattle` clears it; other game actions do not
+expire it. A new battle makes the old snapshot unreachable, so there is never
+more than one. The undo log line has no `item`, so it cannot be reached through
+`initiateUndo`.
+
+The projection exposes `battleUndo: { endedBy }` only. The snapshot itself never
+leaves the server; a test covers four viewers including a spectator. Existing
+error kinds are reused (`NO_BATTLE_ACTIVE`, `BATTLE_ALREADY_ACTIVE`,
+`NOT_IN_THIS_BATTLE`) instead of adding one, so the opponent who tries to undo
+through a direct API call gets a slightly off message; the button is not shown
+to them. The route is `POST /api/games/:gameId/battle/arena/end/undo`. Old saves
+load with `endedBattle: null`. The no-arena fallback in `endBattleAction` is not
+undoable. Brief: `tasks/undo-end-battle.md`.
+
 ## 2026-10-09 — Remove the move-to-single-chat admin tool
 
 The human has finished moving every game to the single chat and asked for the

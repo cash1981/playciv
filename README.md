@@ -496,6 +496,14 @@ card of the same type — an unacceptable trade for retrofitting old data. See
 
 ## Deliberate improvements
 
+**A battle can be un-ended.** Ending a battle used to be final, so a mis-click
+threw the arena away. Now the player who pressed End battle gets an Undo button
+where the arena was, which brings back the same arena, turn and units and locks
+the unit cards again. No vote: only the player who ended it may undo, and the
+button stays until a new battle is started. Nothing new is revealed when a
+battle ends; the arena was already public and the end writes no unit names to
+the log. See `docs/agents/decisions.md`, 2026-10-08.
+
 **The hand has no heading per kind.** The hand keeps the old client's order
 (civilizations, items, great persons, units, tiles, culture cards, huts,
 villages), but the cards flow in one grid instead of one section per kind, so
