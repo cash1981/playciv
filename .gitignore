@@ -4,6 +4,9 @@
 
 # Referansemateriale: store binærfiler (PDF/ODP/PPTX/PNG) + mongo-dump
 /Civilization/
+/Moderator
+.wrangler
+.dev.vars
 
 node_modules/
 dist/
