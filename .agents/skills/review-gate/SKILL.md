@@ -5,7 +5,7 @@ description: Run the review cycle on the current feature branch — verify, hand
 
 # Review gate
 
-The reviewer for every Codex review gate must be Sol (`gpt-5.6-sol`). Spawn the
+The reviewer for every Codex review gate must be Sol (`gpt-6-sol`). Spawn the
 reviewer with that model. Do not use Terra as the default reviewer. If Sol is
 unavailable, stop and report the blocker instead of silently substituting a
 weaker reviewer.
@@ -55,7 +55,7 @@ shallow everywhere instead of sharp somewhere.
 
 ## 3. Spawn the reviewer
 
-Use the reviewer agent with model `gpt-5.6-sol`. Give it:
+Use the reviewer agent with model `gpt-6-sol`. Give it:
 
 - the path to the diff,
 - the path to the task brief, `docs/agents/tasks/<slug>.md`,
