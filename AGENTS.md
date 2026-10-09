@@ -1,108 +1,63 @@
-# AGENTS.md
+# Agent instructions
 
-Entry point for every coding agent working in this repository — Claude Code,
-Codex, or a human reading over their shoulder. Claude reads it through
-`CLAUDE.md`, which imports this file; Codex reads it directly.
+Read this file, [current state](docs/agents/state.md) and
+[active claims](docs/agents/task-board.md) at session start. Then read only the
+brief, source, tests and reference sections needed for the task. Do not load all
+of `docs/agents/`, all task briefs or historical logs into every session.
 
-**Read this file in full. Then read only what the task needs** — the point of
-`docs/agents/` is that you should never have to re-read the codebase to find
-your bearings.
+## Project and invariants
 
-## What this project is
+Playciv implements *Sid Meier's Civilization: The Board Game* with *Fame and
+Fortune* and *Wisdom and Warfare*. [README.md](README.md) describes the product.
 
-A rewrite of the play-by-forum engine for *Sid Meier's Civilization: The Board
-Game* (Fantasy Flight), with the *Fame and Fortune* and *Wisdom and Warfare*
-expansions. It replaced two dead repositories, `old-civ-rest` (Java 8 /
-Dropwizard / MongoDB) and `old-civ-web` (AngularJS 1). Both are gitignored and
-may still be on the human's disk; they can be read when a question needs them,
-but they are no longer the specification.
+1. **Current code and tests are the reference.** Old Java/Angular repositories
+   and retired briefs explain history; they do not specify current behavior.
+   Record intentional rule or visible behavior changes in the relevant section
+   of [decisions.md](docs/agents/decisions.md), with a regression test.
+2. **Do not invent FFG rules.** Consult the relevant rulebooks, current code and
+   tests. Rulebooks in `Civilization/` are untracked and may be absent. Ask for
+   genuinely missing rules; do not infer them from a superseded implementation.
+3. **The engine is pure.** Reducers return `Result<GameState, EngineError>`;
+   no exceptions, clock, unseeded randomness, I/O or mutation of input state.
+4. **Keep hidden information private.** Changes to projections need tests
+   showing that hands, private notes/logs and unrevealed cards cannot leak.
+5. **TypeScript strict; English in repository files.** Conversation with the
+   human is Norwegian. Follow [conventions.md](docs/agents/conventions.md).
 
-`README.md` is the human-facing description of the product. This file and
-`docs/agents/` are about how we work on it.
+## Working on a change
 
-## The five rules that never bend
+- Inspect `git status`, recent history and the relevant diff before editing.
+  Fetch `origin` when available; reconcile changes without overwriting others'
+  files or local commits. See [workflow.md](docs/agents/workflow.md).
+- Claim paths in `task-board.md` and write a concise active task brief. Resolve
+  overlapping live claims before editing. Do not revive an old task from an
+  unchecked checkbox or stale status in Git history.
+- Use a feature branch. In a shared checkout, use a dedicated worktree. An
+  already isolated cloud task may use its existing checkout on a feature branch;
+  another worktree is unnecessary unless requested. Never commit on `main`.
+- Read-only review is independent of the author. Fix findings and repeat until
+  none above a nit remains; the orchestrator decides approval. Role boundaries
+  and host adapters are in [roles.md](docs/agents/roles.md).
+- Verify from the repository root and report actual results:
 
-1. **The current code and its tests are the reference.** The new system has
-   long since replaced the old one, and players rely on how it behaves now.
-   Change behaviour on purpose, with a test, and write the reason down in
-   `docs/agents/decisions.md` when a rule or a visible choice changes. The old
-   repositories are for looking something up, not for deciding what is right.
-2. **Do not invent FFG rules.** If a rule is unclear, read the rulebooks in
-   `Civilization/`, then the existing code and its tests. The old repositories
-   can help as a last lookup. If it is still unclear, stop and ask the human.
-   Guessing a board game rule and encoding it is worse than leaving it
-   undone.
-3. **The engine is pure.** Every reducer is
-   `(state, input) => Result<GameState, EngineError>`. No exceptions, no
-   `Date.now()`, no `Math.random()`, no I/O. Time and randomness are passed in.
-4. **Hidden information must not leak.** A player's hand, private log and
-   unrevealed techs never reach another client. Anything added to a projection
-   needs a test proving it does not leak.
-5. **TypeScript strict, and English throughout.** Code, comments, tests, UI
-   strings, commit messages and these docs are in English. Conversation with
-   the human is in Norwegian.
+  ```bash
+  pnpm -r typecheck && pnpm -r test && pnpm -r build
+  ```
 
-## Where to look
+  Check visible behavior in a browser when relevant and available; disclose
+  checks not performed. Documentation changes also need link/path checks.
+- Keep current state short, update only relevant current decisions, and release
+  claims. Put test totals and delivery details in the PR, not a growing Done log.
+  The human merges; do not merge or force-push `main`.
 
-| You need | Read |
+## Read on demand
+
+| Need | Reference |
 | --- | --- |
-| What each folder and package is for | `docs/agents/repo-map.md` |
-| The coding rules in detail | `docs/agents/conventions.md` |
-| How a change gets from idea to merged | `docs/agents/workflow.md` |
-| Who does what, and who may write | `docs/agents/roles.md` |
-| What is being worked on right now | `docs/agents/task-board.md` |
-| Where the project currently stands | `docs/agents/state.md` |
-| Why something is the way it is | `docs/agents/decisions.md` |
-
-Start any session by reading `state.md` and `task-board.md`. They are short and
-kept current on purpose, so two agents can work at once without reading the
-same 20 files.
-
-## Check the git history first — always
-
-Several agents (Claude, Codex/Luna, Terra, and the human) commit to this
-repository, often on the same branch and often between your turns. **Before you
-plan or touch anything, read what has already happened.** The docs can lag; the
-git history cannot.
-
-```bash
-git fetch origin --prune
-git log --oneline -20 --all --decorate     # what landed, on which branch
-git status                                   # your branch, uncommitted work
-git log --oneline origin/main..HEAD          # commits on your branch not yet on main
-```
-
-Then reconcile: if `main` moved, rebase your branch onto it
-(`git rebase origin/main`) before you add to it, so you build on the latest and
-your eventual diff stays clean. If another agent has committed to the branch you
-are on, read those commits before writing — do not assume the code is where you
-last left it. A file changed on disk since you read it is a signal that someone
-else has been here.
-
-## Before you touch anything
-
-1. **Read the git history** (above). Know what the other agents have done.
-2. **Claim your work** in `docs/agents/task-board.md`, listing the paths you
-   will edit. If another live claim already lists a path you need, stop and
-   negotiate rather than editing it.
-3. **Work in a dedicated git worktree on a feature branch**, never on `main` or
-   the shared checkout. See `workflow.md`. This is required because multiple
-   agents and the human may work on the repository at the same time.
-4. **Every change passes a read-only review, run to zero findings.** After the
-   first implementation — not only before the pull request — put the diff
-   through the read-only `reviewer` role; fix what it reports and run it again
-   until a round has nothing above a nit. Code is written by the coder role and
-   checked by a reviewer role that has no write access. The orchestrator — the
-   main agent, or the human — is the only one who can approve. See `roles.md`
-   and `workflow.md`.
-
-## Before you finish
-
-Run all three, and report the real output:
-
-```bash
-pnpm -r typecheck && pnpm -r test && pnpm -r build
-```
-
-Then update `state.md` and release your claim on the task board. A task that
-leaves those stale has not been finished.
+| Package and source locations | [repo-map.md](docs/agents/repo-map.md) |
+| Coding conventions | [conventions.md](docs/agents/conventions.md) |
+| Branch, review and PR procedure | [workflow.md](docs/agents/workflow.md) |
+| Role boundaries | [roles.md](docs/agents/roles.md) |
+| Current rationale and compatibility | [decisions.md](docs/agents/decisions.md) — relevant topic only |
+| Known limitations | [limitations.md](docs/agents/limitations.md) — relevant topic only |
+| Historical briefs and decisions | [Git history guide](docs/history/README.md) — explicit historical questions only |

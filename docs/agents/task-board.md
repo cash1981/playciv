@@ -12,20 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### agent-docs-cleanup
-
-- **Owner:** Codex
-- **Branch:** `chore/agent-docs-cleanup`
-- **Brief:** `docs/agents/tasks/agent-docs-cleanup.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `AGENTS.md`, `CLAUDE.md`, `README.md`
-  - `docs/agents/`, `docs/history/`
-  - `.agents/skills/feature/`, `.agents/skills/review-gate/`
-  - `.claude/skills/feature/`, `.claude/skills/review-gate/`
-  - `.claude/agents/`, `.opencode/agents/`
-- **Notes:** Documentation only; review historical briefs and decisions, reduce required reading, and preserve current constraints.
-
+_No live claims._
 
 ---
 
@@ -58,7 +45,7 @@ at a time. Claim them by name.
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
-| `packages/engine/src/state.ts` (`PlayerView` shape) | chat-orders |
+| `packages/engine/src/state.ts` (`PlayerView` shape) | free |
 | `packages/web/src/lib/api.ts` | free |
 
 The last two are listed because almost every feature wants to touch them, which
@@ -71,5 +58,4 @@ makes them the most likely collision in the repo.
 Work that is ready to start, most useful first. Taking one means moving it to
 "Live claims".
 
-_Nothing queued._ `public-landing` shipped as issue #38's `LandingView`;
-`anonymous-readonly` shipped as issues #81/#82.
+_Nothing queued._

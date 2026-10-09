@@ -5,94 +5,24 @@ description: Start, resume or finish a feature — branch, task claim, brief and
 
 # Feature
 
-Manages the lifecycle of one feature: the branch, the claim on the task board,
-the brief, and the pull request. The process it follows is
-`docs/agents/workflow.md`; this is the automation of it.
+Follow `AGENTS.md` and the canonical lifecycle in `docs/agents/workflow.md`;
+roles and write boundaries are in `docs/agents/roles.md`.
 
-Argument: a slug (`tech-tree`), or one of `next`, `status`, `finish`.
+Argument: a task slug, `next`, `status`, or `finish`.
 
-## Start
+- **Start/resume:** inspect current history and claims, read or create the active
+  brief, and claim the required paths. Follow the workflow's checkout isolation
+  rule, including its already-isolated cloud exception. Do not switch branches
+  in a shared checkout. An already-authorized request does not need another
+  approval merely because its brief is new. Resolve only questions that block
+  useful progress; implement within the authorized scope.
+- **Status:** report current claims, queue, branch and working-tree status.
+- **Finish:** require the workflow's verification and independent read-only
+  review, fix findings and review again. Keep `state.md` bounded to current
+  facts and `decisions.md` to current durable rationale. Retire completed briefs
+  using `docs/history/README.md`; release your claim, commit, push and open a PR
+  through the available GitHub tooling. Report the actual PR link and check
+  results. The human merges; never merge or force-push `main`.
 
-Given a slug, or `next` to take the top of the queue in
-`docs/agents/task-board.md`.
-
-1. **Check the board.** Read `docs/agents/task-board.md`. If the slug already
-   has a live claim owned by someone else, stop and say so — do not take it.
-2. **Check the brief.** `docs/agents/tasks/<slug>.md` should exist. If it does
-   not, write one from `docs/agents/templates/task-brief.md` and show it to the
-   human before starting work. A brief is what the reviewer checks against;
-   without one a review can only check style.
-3. **Read the brief's open questions.** If any would materially change the
-   work, ask the human now rather than guessing.
-4. **Branch.**
-
-   ```bash
-   git checkout main && git pull && git checkout -b feat/<slug>
-   ```
-
-   If the branch exists already, check it out and rebase on `main`.
-5. **Claim it.** Add a block to "Live claims" in the task board with the owner,
-   branch, brief, status `in progress`, and the paths from the brief. Commit
-   that on its own so the claim is visible immediately.
-6. Check the "Shared resources" table. If the brief touches one, set its owner
-   there too.
-
-Then do the work — directly, or by spawning the `coder` agent with the brief.
-
-## Status
-
-Read `docs/agents/task-board.md` and `docs/agents/state.md` and report: what is
-claimed, by whom, what is queued, and whether the working tree is clean and on
-a feature branch. Nothing else; this is a cheap orientation command.
-
-## Finish
-
-Only after `/review-gate` has been approved. If it has not, say so and stop.
-
-1. **Verify once more**, and report the real output:
-
-   ```bash
-   pnpm -r typecheck && pnpm -r test && pnpm -r build
-   ```
-
-2. **Update `docs/agents/state.md`:** move the task to "Done" as one line, and
-   add anything that belongs under "Known problems".
-3. **Append to `docs/agents/decisions.md`** if the work settled something worth
-   keeping — a deviation from Java, a design choice with consequences. Append
-   at the bottom; never reword what is there.
-4. **Release the claim:** remove the block from "Live claims" and free any
-   shared resources it held.
-5. **Commit and push:**
-
-   ```bash
-   git push -u origin feat/<slug>
-   ```
-
-6. **Open the pull request.** `gh` is on the PATH; use it:
-
-   ```bash
-   gh pr create --base main --head feat/<slug> --title "<title>" \
-     --body-file <file>
-   ```
-
-   If `gh` is ever unavailable, give the human the link instead:
-   `https://github.com/cash1981/playciv/compare/main...feat/<slug>?expand=1`.
-
-   Draft the PR body for them to paste: what changed, why, what was verified
-   with the real numbers, what was deliberately left out, and a link to the
-   brief.
-
-7. **Release the local worktree after the PR link is supplied.** The human
-   needs to be able to check out the feature branch for testing, so remove the
-   dedicated worktree once the working tree is clean. Run this from another
-   checkout (never from inside the worktree being removed):
-
-   ```bash
-   git worktree remove <feature-worktree>
-   ```
-
-   This removes only the local checkout; keep the feature branch and its remote
-   branch. Do not use `--force` for routine PR cleanup.
-
-**The human merges.** Never merge to `main`, never force-push `main`. If the PR
-needs changes, push more commits to the branch.
+Use the actual shell, tools and credentials provided by the session. Report a
+missing capability honestly instead of assuming a particular OS or CLI exists.

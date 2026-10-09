@@ -28,9 +28,9 @@ particular way, quote them — the exact wording usually carries a constraint.
 ## Reference
 
 What the current code, the rulebooks or an earlier decision say about this.
-`decisions.md`, the code and tests it touches, `Civilization/`. If there is no
-reference — the feature is new — say so plainly, because that is the signal to
-ask the human rather than invent.
+Link the relevant current decision topic, source/tests and rulebook section.
+Do not load retired briefs by default. State genuinely unresolved rules or
+requirements; an already authorized feature does not need another approval.
 
 ## Approach
 
@@ -53,5 +53,11 @@ Checkable statements. The reviewer reads these.
 
 ## Open questions
 
-Anything needing the human. **If a question would change the work materially,
-ask before starting**, do not guess and carry on.
+List genuinely blocking unknown requirements; continue independent work while
+asking for the missing information. Do not invent rules.
+
+## Handover
+
+Record actual validation and remaining limits for the open PR. After merge,
+retain durable rationale in current decisions and retire this brief in a
+subsequent change; see `tasks/README.md`.

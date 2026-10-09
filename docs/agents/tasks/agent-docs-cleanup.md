@@ -3,7 +3,7 @@
 - **Slug:** `agent-docs-cleanup`
 - **Branch:** `chore/agent-docs-cleanup`
 - **Owner:** Codex
-- **Status:** in progress
+- **Status:** ready for review
 
 ## Goal
 
@@ -28,20 +28,42 @@ policy so completed tasks do not accumulate again.
 
 ## Claimed paths
 
-See the `agent-docs-cleanup` entry in `../task-board.md`.
+- `AGENTS.md`, `CLAUDE.md`, `README.md`
+- `docs/agents/`, `docs/history/`
+- `.agents/skills/feature/`, `.agents/skills/review-gate/`
+- `.claude/skills/feature/`, `.claude/skills/review-gate/`
+- `.claude/agents/`, `.opencode/agents/`, `.codex/agents/`
 
 ## Acceptance criteria
 
-- [ ] Every pre-existing task brief and the full state/decision logs are reviewed.
-- [ ] Startup documents are concise and describe current behavior and workflow.
-- [ ] Historical plans cannot be mistaken for active requirements.
-- [ ] Durable constraints and unresolved work remain discoverable.
-- [ ] A documented Git path retrieves retired material.
-- [ ] Links and paths affected by the cleanup resolve.
-- [ ] No application source, tests, manifests or lockfiles change.
-- [ ] Typecheck, all tests and builds pass; an independent review has no findings.
+- [x] Every pre-existing task brief and the full state/decision logs are reviewed.
+- [x] Startup documents are concise and describe current behavior and workflow.
+- [x] Historical plans cannot be mistaken for active requirements.
+- [x] Durable constraints and unresolved work remain discoverable.
+- [x] A documented Git path retrieves retired material.
+- [x] Links and paths affected by the cleanup resolve.
+- [x] No application source, tests, manifests or lockfiles change.
+- [x] Typecheck, all tests and builds pass; an independent review has no findings.
 
 ## Open questions
 
 None blocking the documentation cleanup. Unconfirmed feature/deployment status
 must be reported as unconfirmed, not silently marked complete.
+
+## Validation and review
+
+- `pnpm -r typecheck`: passed.
+- `pnpm -r test`: 2,031 passed (895 engine, 608 server, 528 web).
+- `pnpm -r build`: passed.
+- Local Markdown links/anchors and quoted repository paths checked; all eleven
+  historical redirects resolve to the original Git blobs; three Codex TOML
+  adapters parse; `git diff --check` passed.
+- Independent Sol reviews covered workflow/adapters, task retirement, and current
+  reference accuracy. Reference review restored five important qualifications:
+  game-chat permissions, public artwork rationale, legacy board shapes, Egypt's
+  forward-only wonder deal, and wonders retained in legacy hands. All three
+  final reviews have zero remaining findings; orchestrator approved.
+- No application source, tests, generated data, manifests or lockfiles changed.
+  No browser or production checks were needed for this documentation change.
+- Path claim released. Retain this brief during PR review, then retire it using
+  the documented lifecycle after merge.
