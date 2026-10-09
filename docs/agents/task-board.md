@@ -12,30 +12,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### assisted-phase-layout
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `feat/assisted-phase-layout` (from `feat/assisted-gp-tokens`; merged into the PR branch only when the human says so)
-- **Brief:** `docs/agents/tasks/assisted-phase-layout.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/GameView.tsx`, `PhaseSummary.tsx`, `PhaseSummary.css`, `BoardView.tsx`, `packages/web/src/styles.css`
-  - `docs/agents/decisions.md`, `state.md`
-- **Notes:** web only, no engine or server change.
-
-### assisted-gp-tokens
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `feat/assisted-gp-tokens` (from `feat/assisted-play-contract`; merged there only when the human says so)
-- **Brief:** `docs/agents/tasks/assisted-gp-tokens.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/engine/src/assisted.ts`, `culture-track.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/board.ts`
-  - `packages/server/src/routes/play.ts`
-  - `packages/web/src/views/AssistedActions.tsx`
-  - `docs/agents/decisions.md`, `state.md`, `README.md`
-- **Notes:** the claim of `assisted-play-contract` above stays until PR #271 is merged.
-
 ### assisted-play-contract
 
 - **Owner:** Claude (Sonnet 5.5)
@@ -46,9 +22,9 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/engine/src/assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/turn.ts`
   - `packages/engine/test/assisted*.test.ts`
   - `packages/server/src/routes/play.ts`, `packages/server/test/assisted*.test.ts`
-  - `packages/web/src/views/AssistedActions.tsx`, `TechPanel.tsx`, `GameView.tsx` and tests
+  - `packages/web/src/views/AssistedActions.tsx`, `TechPanel.tsx`, `GameView.tsx`, `PhaseSummary.tsx`, `BoardView.tsx`, `styles.css`, `FaqView.tsx` and tests
   - `docs/agents/decisions.md`, `state.md`, `README.md`
-- **Notes:** part 2: Currency and Metal Casting through the registry, then the culture advance.
+- **Notes:** parts 1 to 4 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout). The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
 
 
 ---

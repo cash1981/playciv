@@ -13,7 +13,7 @@ _Last updated: 2026-10-09 (assisted actions, first slice)_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 1120 engine, 660 server, 630 web (2,410 total) on `feat/assisted-phase-layout` |
+| `pnpm -r test` | passing — 1140 engine, 667 server, 644 web (2,451 total) on `feat/assisted-play-contract` |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -40,12 +40,11 @@ _Last updated: 2026-10-09 (assisted actions, first slice)_
   a refresh. Undo is the same vote. Great Person tokens (#252), map tile 16a, free advances and
   hand limit enforcement are not built; the City Management phase for the advance is an unconfirmed
   assumption. See `decisions.md`, 2026-10-09 (later).
-  Part 3 (branch `feat/assisted-gp-tokens`, not yet merged into the PR branch): a Great Person space
+  Part 3 (merged into this branch from `feat/assisted-gp-tokens`): a Great Person space
   of the culture advance draws only valid cards (marker supply), offers more with the Greeks and
   Organized Religion, and takes the matching marker into the player's area; the Draw buttons are
   unchanged. See `decisions.md`, 2026-10-10.
-  Part 4 (branch `feat/assisted-phase-layout`, from the Great Person branch, not yet merged into the PR
-  branch): a phase summary in the game header (round, your phase, who is waited for, culture, trade,
+  Part 4 (merged from `feat/assisted-phase-layout`): a phase summary in the game header (round, your phase, who is waited for, culture, trade,
   coins, a waiting card choice), shortcuts to Board, Your cards, Tech tree, Chat and History, a
   board-first page order with Your cards directly under the board, and the piece palette below the
   board at every width (the human has not confirmed that). Web only. See `decisions.md`, 2026-10-10.
