@@ -1,113 +1,73 @@
 # Roles
 
-Four roles, three of them agents. The split exists to spend tokens where they
-buy something: cheap models write code, expensive models decide whether the
-code is right.
+The orchestrator defines scope and judges evidence; implementation and review
+remain separate. Host adapters contain the actual model/tool configuration.
+Keep shared rules here so Claude, Codex and OpenCode do not drift apart.
 
-| Role | Model | May write | Spawns others |
-| --- | --- | --- | --- |
-| **Orchestrator** | strong (Opus) | yes | yes |
-| **Coder** | cheap (Sonnet, or Haiku for mechanical work) | yes, inside claimed paths | no |
-| **Reviewer** | strong (Opus) | **no** | no |
+| Role | Responsibility | May change files? |
+| --- | --- | --- |
+| Orchestrator | Scope, claims, decisions, verification evidence, review approval and PR | Yes |
+| Coder | Implement the assigned brief within claimed paths | Yes |
+| Reviewer | Independently check the diff and report findings | No |
+| Rules-checker, where configured | Check relevant rules, deck/log/projection changes | No |
 
-The orchestrator is the session you are talking to. The roles are defined once
-per agent host and spawned with that host's subagent tool:
+## Coder
 
-- Claude Code reads `.claude/agents/`: `coder` and `reviewer`.
-- OpenCode reads `.opencode/agents/`: `coder` and `reviewer`.
-  The reviewer is read-only, exactly as the Claude one is: it reports and the
-  orchestrator decides. Everything below about *why* the reviewer is read-only
-  applies to it.
+Read the active brief and relevant conventions, then implement on the supplied
+feature branch/isolated checkout. Report a required scope expansion before
+editing unclaimed paths. Preserve engine purity and hidden-information tests.
+Run required verification and report actual output, limitations and departures
+from the brief. Do not weaken tests, invent rules, approve your own work, merge,
+force-push or open a PR; the orchestrator handles the handover.
 
-The model names in the table above are the Claude ones. The rule is the split,
-not the vendor: the coder runs on a cheaper model, the reviewer on a stronger one that cannot write. OpenCode keeps both halves of
-that split.
+Use the host's configured cheaper implementation model when suitable; decisions
+and uncertain requirements belong with the orchestrator. If repeated failed
+rounds justify escalation, use a stronger available implementation model while
+preserving independent review.
 
-## Why reviewers cannot write
+## Reviewer
 
-A reviewer with an Edit tool will fix what it finds. That sounds helpful and is
-not:
+Read the complete proposed diff and brief. Inspect relevant surrounding files
+when needed; do not read every historical task. Use the supplied verification
+results. Do not write, edit, run commands or fix findings. Native host adapters
+restrict tools where supported; instructions are not a claim that every host
+provides the same permission controls.
 
-- The finding never reaches the orchestrator, so nobody decides whether the fix
-  was the right one.
-- The cheap coder never learns it was wrong, so it makes the same mistake next
-  time.
-- Two agents end up editing the same files, which is exactly what the task
-  board exists to prevent.
-- A silent fix inside a review looks, in the diff, like something the coder
-  wrote and the reviewer approved. It was neither.
+Prioritize:
 
-So the reviewer roles have `Read`, `Grep` and `Glob` and nothing else. No
-`Write`, no `Edit`, no `Bash`. They read a diff and return a verdict; the
-orchestrator acts on it. In OpenCode the same two roles additionally allow
-`external_directory`, because the diff is written outside the repository; a
-broad deny ahead of the allows still covers edit, shell and subagent.
+1. Hidden-information leaks and missing projection tests.
+2. Incorrect behavior, unrecorded behavior changes and invented game rules.
+3. Engine impurity, mutation and invalid error handling.
+4. Tests that miss the intended regression or pass by luck.
+5. Acceptance criteria, current conventions, and misleading documentation.
 
-They have no Bash either, so they cannot run the tests. That is on purpose: the
-orchestrator runs the tests and hands over the real output. A reviewer that runs
-its own commands can also write files through them.
+Return [the review report](templates/review-report.md): verdict, concrete
+findings with file/line and failure case, uncertainty, and checks you could not
+perform. Distinguish a defect from a suspicion or nit. On another round, verify
+that prior findings were resolved.
 
-## The gate
+## Rules-checker
 
-**Only the orchestrator approves.** Work continues past a review only on an
-explicit approval, and the orchestrator is expected to disagree with the
-reviewer when it has reason to — the report is evidence, not a verdict.
+When the host configures this role, compare a relevant rules/deck/log/projection
+change with current code/tests, current decisions and the applicable rulebook.
+Cite files/lines or pages. Old Java is optional historical evidence, not the
+specification. Report unsupported rules and unavailable sources explicitly;
+do not guess or modify files. This supplements general review.
 
-**The review runs after the first implementation, and it runs to zero
-findings.** It is not a single pass saved for the pull request: fix what the
-reviewer reports, review the new diff, and repeat until a round has nothing
-above a nit. A nit left in place is written down in the verdict, so the choice
-is visible. See `workflow.md`.
+## Orchestrator and approval
 
-```
-coder ──▶ orchestrator verifies ──▶ reviewer reads diff ──▶ report
-                  ▲                                           │
-                  │                                           ▼
-                  └────── changes needed ◀──── orchestrator decides
-                                                              │
-                                                          approved
-                                                              ▼
-                                                             PR
-```
+Judge each finding against evidence and have the implementer fix real issues.
+Review after the first implementation and repeat until nothing above a nit
+remains. Explicitly approve the result; the reviewer's verdict is input, not
+permission to merge. Record accepted nits and material limitations in the PR.
+The human merges. Follow [workflow.md](workflow.md) for the full lifecycle.
 
-## The agents
+## Host adapters
 
-### `coder`
+- Claude: `.claude/agents/` and `.claude/skills/`.
+- Codex: `.codex/agents/` and `.agents/skills/`.
+- OpenCode: `.opencode/agents/`, using the shared skill procedure where supported.
 
-Writes the code. Gets: the task brief, the claimed paths, the conventions.
-
-Told explicitly to stay inside its claimed paths, to run the verification
-commands, and to report failures rather than working around them. It does not
-get the Agent tool — no recursive spawning.
-
-Use Haiku for mechanical work (renames, moving code, applying a decided
-pattern) and Sonnet for anything needing judgement. Change the `model` line in
-`.claude/agents/coder.md`.
-
-### `reviewer`
-
-Reads a diff and the brief it was meant to satisfy, and reports. Looks for:
-correctness against the brief, hidden-information leaks, purity violations,
-tests that pass by luck, and anything that contradicts `conventions.md`.
-
-Returns a structured report — see `templates/review-report.md`. Every finding
-carries a severity and a concrete failure case, so the orchestrator can judge
-it rather than take it on faith.
-
-## Cost
-
-The reason for the split: a feature might be 80% mechanical. Writing that on a
-cheap model and checking it on an expensive one costs a fraction of writing it
-all on the expensive one, and the check is where the expensive model earns its
-keep.
-
-Two things keep it from going wrong:
-
-- The reviewer sees the **diff**, not the whole repo, so the expensive pass is
-  small.
-- The orchestrator runs the tests, so the reviewer is not paying to discover
-  what a test run already proved.
-
-If the cheap model needs three rounds on the same task, stop and do it on the
-strong model — the review loop still runs, it just runs on the new coder. Three
-rejected rounds cost more than one good pass.
+Preserve configured model and tool restrictions. Codex's review-gate adapter
+requires Sol (`gpt-5.6-sol`); do not silently substitute another model. No shared
+document should assume a particular shell, installed browser tool or OS.

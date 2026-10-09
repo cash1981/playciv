@@ -1,182 +1,116 @@
 # Workflow
 
-How a change gets from an idea to `main`. The shape is the same whether the
-work is done by Claude, by Codex, or by hand.
+This is the shared procedure. Host-specific skills adapt tools and models;
+they do not duplicate the process or change repository rules.
 
-```
-  read history ──▶ claim ──▶ branch ──▶ code ──▶ verify ──▶ review gate ──▶ approve ──▶ PR ──▶ human merges
-       │             │         ▲                      │
-       │             │         └──── rejected ────────┘
-       │             └── released when the branch is merged or abandoned
-       └── every turn, because other agents commit between yours
-```
+## 1. Inspect and claim
 
-## 0. Read the git history
-
-Do this every time, before anything else — several agents commit here, often
-between your turns, and the docs can lag behind the commits.
+Read `AGENTS.md`, current state and active claims. Inspect the working tree and
+recent Git history, fetching current references when network access permits:
 
 ```bash
+git status --short
 git fetch origin --prune
 git log --oneline -20 --all --decorate
-git status
 git log --oneline origin/main..HEAD
 ```
 
-If `main` has moved, rebase your branch onto it before adding more, so your diff
-stays clean:
+Check for intervening changes before editing; preserve other people's work.
+Reconcile with `origin/main` before publishing, without resetting local work or
+rebasing someone else's shared branch. Report unavailable remote checks.
+
+Claim paths in `task-board.md`; resolve a conflicting live claim before editing.
+Write a short `tasks/<slug>.md` from the template, scoped to the user's request.
+An already authorized task does not need another approval of its brief. Ask
+only about genuinely unresolved requirements that affect the result.
+
+## 2. Isolate the work
+
+Use a feature branch (`feat/`, `fix/`, `chore/` or `refactor/`). Never commit on
+`main`. For shared local checkouts, create a dedicated worktree:
 
 ```bash
-git rebase origin/main
+git worktree add ../civ-<slug> -b chore/<slug> origin/main
 ```
 
-If another agent has committed to the branch you are picking up, read those
-commits first — the code is not where you last left it. A file reported as
-changed on disk since you read it means someone else has edited it; re-read
-before you write.
+In an already isolated cloud task, use its existing checkout on a feature
+branch; do not create another worktree unless requested. Each concurrent writer
+needs its own checkout or explicitly disjoint claimed paths. Read-only reviewers
+can inspect the author's checkout. Claude's writable agent isolation should be
+`worktree` when writers could otherwise share a checkout.
 
-## 1. Claim the work
+Commit the claim and brief so collaborators can discover the scope. Do not
+switch the user's shared checkout to `main` as part of a helper skill.
 
-Add a block to `task-board.md` before editing anything. List the paths you will
-touch. This is the only thing standing between two parallel agents and a mess.
+## 3. Implement and verify
 
-If a live claim already lists a path you need:
+Stay inside the claim. Apply the relevant conventions; record material behavior
+changes and their rationale in the current decision topic. Use the configured
+coder for implementation; the orchestrator owns scope and decisions. Report
+missing tools, data or genuinely unclear rules without guessing.
 
-- **Do not edit it.** Not even "just one line".
-- Either pick different work, or ask the orchestrator to sequence the two tasks.
-
-Claims are by path, not by feature, because that is what actually collides.
-
-## 2. Branch and worktree
-
-Never commit on `main` or in the shared checkout. Every agent must use a
-dedicated git worktree so simultaneous agents and the human cannot overwrite
-each other's working files. One branch per feature:
-
-```bash
-git fetch origin --prune
-git worktree add ../civ-<slug> -b feat/<slug> origin/main
-cd ../civ-<slug>
-```
-
-Prefixes: `feat/` for features, `fix/` for defects, `chore/` for tooling and
-docs, `refactor/` for changes with no behaviour difference.
-
-Claude's Agent tool must use `isolation: "worktree"`; Codex agents must create
-and work inside an equivalent git worktree. Before merging, fetch `origin` and
-rebase the feature branch onto the current `origin/main` in its worktree.
-
-## 3. Code
-
-Write a task brief in `docs/agents/tasks/<slug>.md` first, from the template.
-It costs a minute and it is what the reviewer checks against — a reviewer with
-no statement of intent can only check style.
-
-Then implement. Small commits. Stay inside the paths you claimed.
-
-## 4. Verify
-
-Run all three and keep the output. This is not optional and the result is
-reported honestly, including failures:
+From the repository root, run:
 
 ```bash
 pnpm -r typecheck && pnpm -r test && pnpm -r build
 ```
 
-If the change is visible in the browser, check it there too and say what you
-saw. "It should work" is not verification.
+Preserve command exit codes and report actual results. Never delete tests or
+weaken assertions to hide a failure. Check visible changes in a browser when
+available; say what was observed and what could not be checked. For docs,
+validate changed links, paths and examples against the current repository.
+Reuse still-valid check results; rerun affected checks after meaningful changes.
 
-## 5. The review gate
+## 4. Independent review
 
-**The coder never merges its own work.** Code is written by the `coder` role on
-a cheaper model; it is checked by a `reviewer` role on a stronger model that
-**cannot write**. See `roles.md` for why.
+Run review after the first implementation and verification, and repeat after
+fixes until no finding above a nit remains. The author does not self-review.
+The [roles](roles.md) define the read-only reviewer and orchestrator boundaries.
 
-**Run the gate after the first implementation, and run it to zero findings.**
-It is not a single pass saved up for the pull request. As soon as the first
-implementation is verified, review it; fix every finding the orchestrator judges
-real; review the new diff again. Repeat until a round reports nothing above a
-nit. A nit the orchestrator chooses to leave is not a finding, but it is written
-down in the verdict so the choice is visible.
-
-The orchestrator drives it:
-
-1. Write the diff somewhere outside the repo, so the reviewer can read it
-   without the repo being polluted:
-
-   ```bash
-   git diff main...HEAD > "$SCRATCH/review-<slug>.diff"
-   ```
-
-2. Spawn the reviewer with: the diff path, the task brief path, and the
-   verification output. On a later round, hand it the previous round's findings
-   too. The reviewer returns a report; it has no way to write one, which is the
-   point.
-
-3. Read the report. Then decide:
-
-   - **Approved** — nothing above a nit remains; go to step 6.
-   - **Changes needed** — hand the findings back to the coder and repeat from
-     step 1 with the new diff. Do not fix them yourself in passing; the loop is
-     what keeps the cheap model honest.
-
-   The orchestrator is the only role that can approve. A reviewer saying
-   "looks good" is an input to that decision, not the decision.
-
-4. Record anything worth keeping in `decisions.md`.
-
-In Claude this is the `/review-gate` skill; the `coder` and `reviewer`
-subagents are in `.claude/agents/`. In OpenCode the `coder` and `reviewer`
-agents are in `.opencode/agents/`, and the `/review-gate` skill
-runs as before. In Codex, do the same by hand: generate the diff, open a
-separate conversation on a stronger model with the diff and the brief, and paste
-its report back.
-
-## 6. Pull request
+Give the reviewer the active brief, the complete proposed diff, real check
+output and previous findings. Capture both committed and working-tree edits;
+include new files rather than omitting them from review. For example, after
+staging the intended files, write a diff outside the checkout:
 
 ```bash
-git push -u origin feat/<slug>
+git diff --cached origin/main > /tmp/review-<slug>.diff
 ```
 
-`gh` is on the PATH, so open the pull request with the CLI:
+Use a suitable scratch location on the current host. Split large diffs by area
+without leaving deletions or new files unreviewed. Host adapters specify reviewer
+models and any additional rules check. Do not silently substitute a weaker
+configured reviewer or claim a review that did not run.
 
-```bash
-gh pr create --base main --head feat/<slug> --title "<title>" --body-file <file>
-```
+The reviewer returns findings with concrete failure cases. The orchestrator
+checks each finding, directs corrections, and explicitly approves when only
+accepted nits remain. Document accepted nits in the review/PR, not an expanding
+permanent transcript. A reported blocker is not approval.
 
-If `gh` is ever unavailable, the push output prints a link that opens the pull
-request form, or use
-`https://github.com/cash1981/playciv/compare/main...feat/<slug>?expand=1`.
+## 5. Close out and propose a PR
 
-The PR body should say what changed, why, what was verified, and what was
-deliberately left out. Link the task brief.
+- Update current state only when orientation or limitations changed. Do not
+  append a Done ledger, historical branch status or old test totals.
+- Update current decision topics with durable rationale. Retain unresolved
+  constraints in `limitations.md` or explicitly queued work, not buried in an
+  obsolete brief. Git preserves superseded versions.
+- Mark the brief as ready for review, include actual validation, and release
+  the path claim and resource ownership when implementation stops. Keep the
+  brief while the PR is open; after merge it can be retired in a later change.
+- Commit and push the feature branch. Create a PR with the problem, result,
+  validation and material limits. Use `gh pr create --body-file <file>` when
+  available; if blocked, keep the branch and prepared body and report the
+  precise blocker. A compare link is not a created PR.
+- **The human merges.** Never merge or force-push `main`.
 
-**The human merges.** No agent merges to `main`, and no agent force-pushes
-`main`. If a PR needs changes, push more commits to the branch.
+After supplying the PR link and ensuring a dedicated local worktree is clean,
+remove only that disposable worktree from another checkout if it is no longer
+needed. Keep the feature branch and remote branch. Do not remove a managed
+cloud task's primary checkout or use `--force` to discard local files.
 
-## 7. Close out
+## Brief lifecycle
 
-- Update `state.md`: move the task from "in progress" to "done", one line.
-- Release the claim in `task-board.md`.
-- After the PR/compare link has been supplied and the working tree is clean,
-  remove the dedicated local worktree from another checkout with
-  `git worktree remove <feature-worktree>`. This removes only the checkout;
-  keep the local and remote feature branches so the human can check out the
-  branch for testing. Do not use `--force` for routine cleanup.
-
-A task that leaves the board or the state file stale is not finished, because
-the next agent will act on what those files say.
-
-## Parallel work, practically
-
-- **Claims are by path.** Two agents in `packages/web/src/views/` are fine if
-  they are in different files, and a disaster if they are not.
-- **`decisions.md` is append-only.** Add at the bottom. Two agents appending
-  different blocks merge cleanly; two agents rewording the same paragraph do
-  not.
-- **`state.md` and `task-board.md`: edit your own block only.**
-- **Generated files are a shared resource.** `board-assets.json` and the
-  artwork folders are rewritten wholesale by the generators. Only one task at a
-  time may own them; claim them explicitly.
-- **Rebase, do not merge, while a branch is in flight.** `git rebase main`
-  keeps the history readable and the diff honest.
+`tasks/` is for active/reviewable work. Remove a completed brief after preserving
+its durable decisions and concrete unresolved requirements. Source-cited retired
+paths may remain as short historical redirects; never leave obsolete acceptance
+criteria looking actionable. See [tasks/README.md](tasks/README.md) and
+[history retrieval](../history/README.md).

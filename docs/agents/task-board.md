@@ -26,7 +26,6 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `docs/agents/decisions.md`, `state.md`, `README.md`
 - **Notes:** parts 1 to 4 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout). The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
 
-
 ---
 
 ## Format
@@ -71,5 +70,4 @@ makes them the most likely collision in the repo.
 Work that is ready to start, most useful first. Taking one means moving it to
 "Live claims".
 
-_Nothing queued._ `public-landing` shipped as issue #38's `LandingView`;
-`anonymous-readonly` shipped as issues #81/#82.
+_Nothing queued._

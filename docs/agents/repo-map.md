@@ -1,16 +1,18 @@
 # Repo map
 
-What every folder is and does. Read this once at the start of a session; it
-saves opening files just to find out where things live.
+Use the relevant section to locate code for the current task. This is an
+on-demand map, not additional required startup reading.
 
 ## Top level
 
 | Path | In git | What it is |
 | --- | --- | --- |
-| `packages/` | yes | The application: three workspace packages, below. |
+| `packages/` | yes | The application: four workspace packages, below. |
 | `tools/` | yes | PowerShell generators that turn source material into data the app ships. Not part of the build; run by hand when the source material changes. |
 | `docs/agents/` | yes | This folder. How we work, and where things stand. |
 | `.claude/` | yes | Claude Code agent definitions, skills and the dev-server launch config. |
+| `.codex/`, `.agents/skills/` | yes | Codex role adapters and feature/review skills. |
+| `docs/history/` | yes | Instructions for retrieving retired documentation from Git. |
 | `.opencode/` | yes | OpenCode agent definitions for the `coder` and `reviewer` roles under `agents/`. The reviewer is read-only, as in `.claude/agents/`; Skills load from `.claude/skills/`. |
 | `old-civ-rest/` | **no** | The dead Java 8 / Dropwizard / MongoDB backend. No longer the specification; read it when a question needs it, never change it. |
 | `old-civ-web/` | **no** | The dead AngularJS 1 client. No longer the specification; useful for how the UI used to present things, and the card artwork. |
@@ -30,7 +32,7 @@ the seed held in state. This is where the game lives.
 | `src/item.ts` | The `Item` discriminated union and everything about cards: names, images, reveal rules, equality. |
 | `src/state.ts` | `GameState`, `Playerhand`, and the projections `toPlayerView` / `toPublicLog` that decide what a viewer may see. |
 | `src/board.ts` | Board geometry: squares, the culture track, player areas, map-tile slots, the asset manifest, history replay. |
-| `src/actions/` | The reducers, one file per Java action class: `draw`, `player`, `undo`, `turn`, `game`, `board`. |
+| `src/actions/` | Game, draw, player, turn, board, arena and undo reducers. |
 | `src/log.ts` | Log entries and the public/private text pair. |
 | `src/gamedata.ts` | Reads the converted spreadsheet into the deck. Port of `ItemReader.java`. |
 | `src/random.ts` | Seeded PRNG and a shuffle that matches `Collections.shuffle`. |
@@ -100,11 +102,14 @@ gitignored reference folders present.
 ## Commands
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
+pnpm --filter @civ/engine build    # workspace exports needed on a clean checkout
 pnpm --filter @civ/server dev      # API on 8787
 pnpm --filter @civ/web dev         # client on 5173, proxies /api
 pnpm -r typecheck && pnpm -r test && pnpm -r build
 ```
 
-Node and pnpm are not on the default PATH on this machine; prepend
-`C:\Program Files\nodejs` when calling them from PowerShell.
+Use Node >=24 and the pnpm version from root `package.json`. `.node-version`
+still lists 22; the manifest requirement is needed for the current dependencies
+and SQLite-backed repository tests. Use the installed tools and shell for the
+actual environment; cloud startup instructions belong in environment settings.

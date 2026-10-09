@@ -16,10 +16,11 @@ That is gone and has not been ported; the board now lives in this codebase.
 
 ## Running the app
 
-Needs Node 20 or newer, and pnpm.
+Needs Node 24 or newer and pnpm 11.24.0, as pinned in `package.json`.
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
+pnpm --filter @civ/engine build
 ```
 
 Start the API in one terminal:
@@ -47,8 +48,14 @@ Set `TOKEN_SECRET` before starting the server if logins should survive a
 restart. Without it a random secret is made on every start.
 
 ```bash
+pnpm -r typecheck
 pnpm -r test
+pnpm -r build
 ```
+
+See [AGENTS.md](AGENTS.md) for agent workflow and
+[current decisions](docs/agents/decisions.md) for enduring constraints.
+[Historical documentation](docs/history/README.md) is reference material, not an active backlog.
 
 ## Packages
 
@@ -69,23 +76,9 @@ Randomness lives in the state as a seed (`state.rng`), so a game can be
 reproduced and replayed. Java used `Collections.shuffle` against a global
 source.
 
-| File | Ported from |
-| --- | --- |
-| `src/sheet-name.ts` | `SheetName.java` |
-| `src/item.ts` | `Item` and the subtypes `Civ`, `Unit`, `Tech`, `Wonder`, `Hut`, `Village`, … |
-| `src/state.ts` | `PBF.java`, `Playerhand.java` |
-| `src/log.ts` | `GameLog.java`, `GameLogAction.java` |
-| `src/gamedata.ts` | `excel/ItemReader.java`, without Apache POI |
-| `src/create-game.ts` | `PBFTestAction.createNewGame` |
-| `src/turn.ts` | `PlayerTurn.java` (and `TurnKey.java`, which never worked) |
-| `src/undo.ts` | `Undo.java` |
-| `src/actions/draw.ts` | `action/DrawAction.java` |
-| `src/actions/player.ts` | `action/PlayerAction.java` |
-| `src/actions/undo.ts` | `action/UndoAction.java` |
-| `src/actions/turn.ts` | `action/TurnAction.java` |
-| `src/actions/game.ts` | the game part of `action/GameAction.java` |
-| `src/board.ts` + `src/actions/board.ts` | new — replaces the Google slide behind `mapLink` |
-| `src/random.ts` | replaces `Collections.shuffle` and `RandomUtils` |
+The engine separates state and projections (`src/state.ts`), game data, board
+geometry and action reducers. Legacy Java sources explain unchanged behavior;
+current decisions and tests document deliberate differences.
 
 ### `packages/server`
 
@@ -107,8 +100,8 @@ Java counterpart: `resource/*` and `application/*` under Dropwizard.
 
 The server holds no game rules. Every route loads the state, calls one pure
 function from the engine, saves the result and answers with
-`toPlayerView(state, you)`. A route therefore cannot leak someone else's hand
-even if it wanted to.
+`toPlayerView(state, you)`. Routes must preserve this projection boundary;
+privacy tests cover public and historical responses.
 
 Environment variables: `PORT` (8787), `HOST`, `DATA_FILE`, `TOKEN_SECRET`,
 `CORS_ORIGIN`. The Node server always uses the JSON file; production's D1 and
@@ -116,9 +109,9 @@ mail secrets live in the Cloudflare dashboard (see [Storage](#storage-d1-in-prod
 
 ### `packages/web`
 
-React and Vite. Replaces the AngularJS app in `old-civ-web`. Deliberately plain
-— the artwork comes later. It covers login, the game list, and the game page
-with hand, draws, battle, technology, social policy, the chat and orders
+React and Vite. Replaces the AngularJS app in `old-civ-web`, with card
+artwork, a virtual board and light/dark themes. It covers login, the game list,
+and the game page with hand, draws, battle, technology, social policy, the chat and orders
 timeline, log and undo voting.
 
 The client imports its types from `@civ/engine`, so it cannot drift out of step
@@ -133,10 +126,14 @@ Coffee button beside it.
 At the top of the game page sits an interactive board that replaces the Google
 Presentation slide `PBF.mapLink` used to point at.
 
-The geometry comes from `Civilization/Moderator/4v4 Map Template.pptx`: 16 × 16
-squares labelled A–P and 1–16, made of 4 × 4 map tiles of 375 × 375 pixels. That
-gives a square of 94 pixels, which is exactly the size of the city, building and
-city-state pieces in the same folder.
+New-game geometry uses 94-pixel squares and 4 × 4 map tiles, based on
+`Civilization/Moderator/4v4 Map Template.pptx`. Two players use a 16 × 8 map;
+three use a ten-tile stepped pyramid within 16 × 16; four use the full
+16 × 16 rectangle; five use a 22-tile, 28 × 18 map with a central hole.
+Playable slots and starting positions are defined in
+`packages/engine/src/board.ts`. Some pre-shape saves deliberately retain the
+old rectangle to avoid moving existing pieces; see
+[legacy layout limitations](docs/agents/limitations.md#game-behavior).
 
 Pieces are placed at **free pixel coordinates**, not locked to squares. That is
 how the PowerPoint template was used, and it is what makes it possible to stack
@@ -150,7 +147,7 @@ piece selected, the arrow keys nudge it a small step in that direction — the
 step is a constant number of screen pixels, converted by the current zoom
 level, so it looks the same size at any zoom (issue #193).
 
-The palette has twelve categories, generated from the images on disk. Buildings
+The palette has thirteen categories, generated from the images on disk. Buildings
 and resources use finite physical supplies: the physical building counts are
 read from the reference sheet, wheat, iron, silk and incense are each limited by
 the player count, and each Great Person type has three board pieces. Each colour
@@ -170,8 +167,9 @@ separate Great Person card deck remains a hand/draw mechanic.
 | Markers | 7 | coin, culture, caravan, fortification, wound, first player, building program |
 | Cities | 30 | capital/city/metropolis, with and without walls, per colour |
 | City-states | 5 | the five neutral city-states (cs1–cs5) |
-| Buildings | 15 | market, temple, library, … |
+| Buildings | 16 | market, temple, library, … |
 | Relics | 5 | the five relic markers, one of each per game |
+| Disasters | 4 | manually placed markers, without automated disaster rules |
 | Great People | 6 | artist, builder, general, humanitarian, merchant, scientist |
 | Starting tiles | 16 | one per civilization |
 | Map tiles | 28 | exploration tiles 1–27, plus the back |
@@ -197,15 +195,16 @@ piece by exactly the requested step, whether that piece sits in an area or on a
 map tile slot, rather than being tidied or re-snapped (issue #193) — only a
 pointer drag tidies or snaps.
 
-Wonders are the one card kind that never enters a hand. The wonders drawn at the
-start of a game (and any drawn later from the draw menu) are placed in the
-Wonders area and named in the public log, rather than kept secret in a hand —
-they were never giftable or hidden bookkeeping the way ordinary cards are. Once
+Current setup/draw routes place wonders on the board and name them in the
+public log; normal draws use the shared Wonders area. Wonders are not giftable.
+Older saves can still retain wonder cards in a hand; migration preserves them
+rather than moving them to the board. Once
 every seat's civilization is revealed, the game deals 4 ancient wonders into
-the Wonders area — 3 ancient and 1 medieval instead, if Egypt is in the game,
-since Egypt's own starting wonder is placed directly in Egypt's own player
-area rather than the Wonders area, and is owned by Egypt from the moment it is
-placed (issue #172).
+the Wonders area — 3 ancient and 1 medieval instead, if Egypt owns its starting
+wonder. Egypt's starting wonder is placed directly in Egypt's player area and
+is owned from the moment it is placed (issue #172). This setup correction is
+forward-only: some older saves with Egypt already revealed do not receive the
+shared deal retroactively; see [legacy setup limitations](docs/agents/limitations.md#game-behavior).
 
 Areas are geometry, not state: the server computes them in `toPlayerView` and
 sends them along as `boardAreas`, so client and server cannot disagree about
@@ -223,10 +222,12 @@ shows which way up it belongs.
 Two things happen on their own:
 
 **The starting tile of a civilization** is laid out when the player reveals
-their civ card. Player 1 gets the top left slot (A1–D4), 2 the top right, 3 the
-bottom right and 4 the bottom left, and the tile is turned so the arrow points
-inwards. In the image files the arrow points down — checked against `japan.jpg`
-and `germany.png` — so the rotations are 0°, 90°, 180° and 270° around the edge.
+their civ card, using the saved board's starting slots in player-number order.
+Four-player slots run clockwise from the top left; two-player slots are
+opposite corners; three- and five-player layouts have their own starts.
+The artwork arrow points up, and initial rotations turn it toward the middle.
+The two-player arrows face each other along the long axis. Players may rotate
+the tiles freely afterwards.
 
 **A drawn exploration tile** lands in the first free 4 × 4 slot. The system does
 not know which area the player is exploring, so this is a convenience and not a
@@ -245,8 +246,8 @@ send any string at all as an image reference.
 ### History, undo and replay
 
 Every change to the board is recorded. Dragging a piece, placing one from the
-palette, rotating it, bringing it to front or sending it to back, removing it,
-clearing the board — each becomes one entry in `board.history` with who did it,
+palette, rotating it, bringing it to front or sending it to back, or removing
+it — each becomes one entry in `board.history` with who did it,
 when, a readable description ("cash1981 moved Red army from E4 to H8") and the
 semantic operation itself.
 
@@ -270,8 +271,8 @@ Recording the operation rather than a snapshot is what makes the rest work:
 
 Board moves are deliberately **not** written to the game log. A turn consists of
 many small adjustments and the log would drown; the board history is the record,
-and it is shown as its own list next to the board where each entry can be
-clicked to jump there.
+while the game's revision bar replays saved game states. The removed Clear board
+action remains supported only when replaying historical board operations.
 
 Games saved before the history existed get one synthetic `place` entry per piece
 at load time (`src/migrate.ts`), so replay is exact for them too.
@@ -279,8 +280,8 @@ at load time (`src/migrate.ts`), so replay is exact for them too.
 ## Storage: D1 in production, a JSON file locally
 
 `packages/server/src/store/types.ts` defines a `Repository` with two
-implementations. Local development (`pnpm dev`) always uses the JSON file;
-production runs on the Cloudflare Worker against D1 (issue #72).
+implementations. Local development (`pnpm --filter @civ/server dev`) uses the
+JSON file; production runs on the Cloudflare Worker against D1 (issue #72).
 
 **`JsonFileRepository`** keeps everything in `Map`s in memory and mirrors it to
 `packages/server/data/civ.json` after each change — debounced, and atomically
@@ -291,9 +292,9 @@ survive a restart. Delete the file to reset everything.
 binding. The schema is hybrid: flat columns for the fields the app queries and
 indexes, and a JSON payload for the rest of each document — the `Repository`
 boundary always reads and writes a whole game, so the state itself is not
-normalised. `packages/worker/migrations/0001_initial.sql` is the single source
-of truth; the repository tests apply that same file to an in-memory SQLite
-database through Node's `node:sqlite`, so no live database is needed.
+normalised. The ordered SQL migrations in `packages/worker/migrations/` define
+the schema; repository tests apply them to in-memory SQLite through Node's `node:sqlite`,
+so no live database is needed.
 
 D1 has no interactive transactions, so the compare-and-set writes are single
 guarded statements or one `batch()`, which D1 runs atomically:
@@ -421,8 +422,9 @@ game, only to act in one.
 
 ## Known differences from Java
 
-The old tests are the reference. Wherever Java and an expectation disagreed,
-Java won.
+The original port used Java behavior and its tests as the reference. Later
+intentional changes are documented in [current decisions](docs/agents/decisions.md)
+and tests; removed behavior should not be restored from old plans.
 
 **Reshuffle does not collect from the players' hands.**
 `DrawAction.reshuffleItems` only puts back what is in `pbf.discardedItems`, and
@@ -450,7 +452,7 @@ have not been tidied.
 **Social policy images are lower-cased.** Java's `SocialPolicy.getImage()` kept
 the name's case; here they are lower-cased to match the *Wisdom and Warfare*
 artwork under `Civilization/WaW/`, which is all lower case. See
-`docs/agents/decisions.md`. The `Expansionsim` spreadsheet typo is kept in the
+[Historical artwork notes](docs/history/README.md). The `Expansionsim` spreadsheet typo is kept in the
 data; only the on-disk file is aliased.
 
 **One social policy flipside is corrected, unlike the `Expansionsim` typo
@@ -460,7 +462,7 @@ symmetric, and unlike `Expansionsim` this typo changed rejection behaviour
 (issue #175: `Military Tradition` stayed choosable after `Pacifism`, when the
 two are opposite sides of one physical card). Corrected in `gamedata.ts` at
 parse time, plus a migration for games saved with the old value. See
-`docs/agents/decisions.md`, 2026-09-25.
+[board and bookkeeping decisions](docs/agents/decisions.md#board-and-manual-bookkeeping).
 
 **Double spaces in the log are kept.** Java wrote
 `username + " drew " + " - " + …`. The texts are comparable data and the old
@@ -473,7 +475,7 @@ Starting a barbarian battle reuses the left-side controller's existing hand;
 when that hand is empty it still draws automatically. Existing hands, active
 arenas and stale revisions prevent another manual draw. Hidden cards remain
 private until played or discarded. This restores manual drawing at the human's
-request; see `docs/agents/decisions.md`, 2026-10-07.
+request; see [arena decisions](docs/agents/decisions.md#arena-and-card-handling).
 
 **A unit revealed "from their battlehand" now actually shows as public.**
 `DrawAction.revealAndDiscardBattlehand`'s `revealUnitConsumer` only built the
@@ -492,7 +494,7 @@ stuck in this state from before the fix keeps it hidden, because only the old
 log's free-text unit names survive for it, not a reliable item reference, and
 guessing from a name risked revealing a *different*, never-actually-named
 card of the same type — an unacceptable trade for retrofitting old data. See
-`docs/agents/decisions.md`, 2026-09-25.
+[privacy and migration constraints](docs/agents/decisions.md#privacy-projections-and-logs).
 
 ## Deliberate improvements
 
@@ -502,13 +504,13 @@ where the arena was, which brings back the same arena, turn and units and locks
 the unit cards again. No vote: only the player who ended it may undo, and the
 button stays until a new battle is started. Nothing new is revealed when a
 battle ends; the arena was already public and the end writes no unit names to
-the log. See `docs/agents/decisions.md`, 2026-10-08.
+the log. See [arena decisions](docs/agents/decisions.md#arena-and-card-handling).
 
 **The hand has no heading per kind.** The hand keeps the old client's order
 (civilizations, items, great persons, units, tiles, culture cards, huts,
 villages), but the cards flow in one grid instead of one section per kind, so
 short groups do not leave empty space. `useritems.html` rendered a heading per
-kind. See `docs/agents/decisions.md`, 2026-09-29.
+kind. See [historical interface decisions](docs/history/README.md).
 
 **Cards can be used with a button.** A player with Chivalry, Democracy or
 Printing Press sees a "Your actions" panel, and the same button in the card's
@@ -531,7 +533,7 @@ player's hand, grouped by player and category. Spectators see the same counts.
 The server projects category totals only; it sends no item identity or card
 artwork through this view. Java and the old client showed only the owner's own
 hand, so this is a requested extension rather than a ported display. See
-`docs/agents/decisions.md`.
+[privacy decisions](docs/agents/decisions.md#privacy-projections-and-logs).
 
 **Social policies are revealed like technologies.** Java stored a chosen policy
 in the player's hand hidden and never revealed it; the port adds
@@ -540,7 +542,7 @@ their own tab of the Social policy panel (issue #140), the same way
 `revealedTechsForAllPlayers` has always shown technologies. A hidden policy
 stays private — only its count is public — and a revealed one is also named in
 the public log. The Techs and Social policy panels each have one tab per player,
-labelled with the username and the player's colour. See `docs/agents/decisions.md`.
+labelled with the username and the player's colour. See [privacy decisions](docs/agents/decisions.md#privacy-projections-and-logs).
 
 **The password reset link is a signed, expiring token.** Java emailed
 `/api/auth/verify/{playerId}` and stored the pending password in plaintext on
@@ -550,7 +552,7 @@ of the new password: nothing is stored, the plaintext is never persisted, and an
 unknown email answers 200 so accounts cannot be enumerated. The reset mail also
 ignores the unsubscribe flag and carries no unsubscribe link, because
 unsubscribing from game mail must not lock a user out of their own account. See
-`docs/agents/decisions.md`.
+[account decisions](docs/agents/decisions.md#accounts-mail-and-ratings).
 
 **A player status board instead of a shared spreadsheet.** The old app embedded
 a per-game Google Sheet that players kept by hand. That is now an in-app "Player
@@ -595,8 +597,8 @@ counters remain editable for correction. During a player's open City Management
 phase, the Democracy and Printing Press buttons spend 6 trade or 5 culture for
 one coin each, once per turn. Wonders in play are listed with an
 assignable owner wherever the piece currently sits on the board, until it is
-removed entirely — not only while it sits in the shared Wonders area, which
-still governs *The Internet*'s and the Panama Canal's coin allowances above.
+removed entirely. Active wonder bonuses depend on explicit ownership and
+blockade, not on remaining in the shared Wonders area.
 A game saved with the old single coin number loses it: the human
 chose that the counters replace it. Movement is the one value written as an
 expression rather than a plain integer:
@@ -611,8 +613,9 @@ the status panel, and each change is written to the public log. New and migrated
 players default to Despotism; choosing Romans, Russians or Japanese sets the
 documented Republic, Communism or Feudalism starting exception respectively.
 The panel also shows the text of all eight *Wisdom and Warfare* government cards
-as a reference. Their effects are not enforced by the engine: unlocks, Anarchy,
-change timing and card effects remain table-managed rules.
+as a reference. Some effects are automated, including combat modifiers, the
+Democracy coin and Anarchy's Organized Religion coin handling. Unlocks, change
+timing and other effects remain table-managed unless explicitly implemented.
 
 **A stable `id` per item instance.** Java identified items by value equality
 (`@EqualsAndHashCode` on name/description/type), which meant two identical
@@ -621,7 +624,7 @@ wrong instance. Every item now has an opaque id. `itemNumber` is kept for log
 compatibility, and its starting offset is still random per game so the number
 does not give the card away (techs and social policies are the exception, since
 their numbers are in the public catalogue; their log lines use a keyed number
-instead, see `decisions.md`, 2026-09-30). `itemValueEquals` is still there where the Java
+instead, see [privacy decisions](docs/agents/decisions.md#privacy-projections-and-logs)). `itemValueEquals` is still there where the Java
 semantics are needed.
 
 **Space Flight is not a singleton.** Java had `Tech.SPACE_FLIGHT` as a static
@@ -647,9 +650,6 @@ bar shows the public description only.
 on the list from Mongo, and `getAllPublicTurns` stripped history by changing the
 stored objects. Both were pure projections in the port, and `getAllPublicTurns` is
 gone with the old Turn orders panel.
-
-**`addNewTurn` saves.** Java forgot `pbfCollection.updateById`, so the new turn
-disappeared on the next read.
 
 **Social-policy choices get fresh log numbers.** Java built a new object with
 only name and flipside, which gave `itemNumber` 0. Each choice now receives a
@@ -717,7 +717,7 @@ at all. Java mailed every account ("A new game by the name X was just
 created!"); issue #30 ported it behind `MAIL_BROADCAST_NEW_GAMES`, and the owner
 retired it outright, so no switch can bring it back. The remaining sends are
 still bounded by a five-second timeout so a slow provider cannot hold up an
-already-committed game action. See `docs/agents/decisions.md`.
+already-committed game action. See [mail decisions](docs/agents/decisions.md#accounts-mail-and-ratings).
 
 **The footer carries PayPal and Buy Me a Coffee.** Issue #77 restored the old
 site-wide footer — the copyright line, the Apache 2.0 link and the exact
@@ -727,7 +727,7 @@ is a plain image link to the owner's page, not Buy Me a Coffee's JavaScript
 widget, and it has no counterpart in the old footer. The old footer also carried
 a Patreon button and its `becomePatronButton.bundle.js` script; those are
 dropped on purpose (the owner's decision), so no Patreon code runs on the page.
-See `docs/agents/decisions.md`.
+See [historical interface decisions](docs/history/README.md).
 
 **The signup security question is enforced on the server too.** The old
 registration form's fixed question — "What is China's starting tech?", answered
@@ -737,7 +737,7 @@ it; the Java backend had no check at all. Issue #40 restores the question in the
 register form and enforces the same answer server-side, so a bot cannot register
 without it. The comparison is the old one — `toUpperCase()` on the raw value, no
 trimming — and it is a speed bump, not a security boundary: no captcha, rate
-limit or rotating question. See `docs/agents/decisions.md`.
+limit or rotating question. See [account decisions](docs/agents/decisions.md#accounts-mail-and-ratings).
 
 **The game-list search and sort span both tabs.** `old-civ-web`'s `list.html`
 put the search box and "Show my games" inside the Active Games tab only, and its
@@ -751,7 +751,7 @@ column, and a numeric column opens **descending** on the first click where
 from the rewrite, not the old client, and the Active games table now puts its
 **Action** column first so the buttons are reachable on a narrow screen without
 scrolling sideways (the old client had Action last; the Finished table has no
-Action column). See `docs/agents/decisions.md`.
+Action column). See [historical interface decisions](docs/history/README.md).
 
 **The admin broadcast is reachable, with a Markdown body.** The old
 `GameAction.sendMailToAll` existed but was dead: its only endpoint,
@@ -782,12 +782,12 @@ because the mail may have been delivered; such rows keep the queue open until th
 owner releases them (after checking Resend's log) or cancels. **Deploy order for the queue:** apply migration
 `0005` to D1 (`wrangler d1 migrations apply playciv --remote`), then deploy the
 Worker; the cron only exists after a deploy, and its first run should be watched in the
-Worker's logs. See `docs/agents/decisions.md`.
+Worker's logs. See [mail decisions](docs/agents/decisions.md#accounts-mail-and-ratings).
 
-**The admin page can clean up finished games.** The database keeps a full saved
-state after every move, only so a game can be replayed step by step, and that is
-most of its size. "Clean up finished games" shows, as a dry run, which finished
-games have such states and how many MB would go, and removes all of them except the
+**The admin page can clean up finished games.** The database keeps revision
+history so a game can be replayed step by step. Revisions use keyframes and
+deltas, as described below. "Clean up finished games" shows, as a dry run, which
+finished games have such states and how many MB would go, and removes all of them except the
 newest, one game at a time or 12 at a time with "Clean up all" (press it
 again while it says games are left). When the newest state is itself stored as a
 difference (see below) it is written back as a full state in the same step. The final board, the log, the chat, the
@@ -795,7 +795,7 @@ highscore and the ratings stay as they were; running games are never touched. A
 cleaned game's history bar has a single entry. D1 may not report a smaller database
 at once, because freed pages are reused, so the size in `wrangler d1 info` might not
 drop. D1's free plan also has a daily limit on rows written, so a very large backlog may need to be cleaned over several days if a press fails partway; each game's delete is independent, so nothing is left half done. There is no undo in the app: restore with D1 Time Travel
-(`wrangler d1 time-travel info playciv`). See `docs/agents/decisions.md`.
+(`wrangler d1 time-travel info playciv`). See [revision-chain constraints](docs/agents/decisions.md#saves-migrations-and-revision-chains).
 
 **Game history is stored as differences, and the admin page can compact the old
 history.** A move used to save a complete copy of the game, 200 to 420 KB, which
@@ -823,7 +823,7 @@ possible before a game has written its second state after the deploy (the old co
 read a delta); after that, roll forward or restore the Time Travel bookmark. The old
 stop-gap SQL that deletes the oldest states of a game would break a delta chain, and a
 single revision row deleted or edited by hand can make a chain rebuild wrong without any
-error: never touch revision rows outside the app; use the admin cleanup instead. See `docs/agents/decisions.md`.
+error: never touch revision rows outside the app; use the admin cleanup instead. See [revision-chain constraints](docs/agents/decisions.md#saves-migrations-and-revision-chains).
 
 **Only Tradable cards can be given away.** The hand's "Give" control was drawn
 on every card, but `tradeToPlayer` only ever accepted Java's `Tradable` set
@@ -831,7 +831,7 @@ on every card, but `tradeToPlayer` only ever accepted Java's `Tradable` set
 The control is now shown only for the Tradable cards, so Great Person, Civ,
 City-state, units, wonders, tiles, techs and social policies no longer offer a
 button that cannot work. The old AngularJS client likewise drew "Send to Player"
-only on the Tradable cards. See `docs/agents/decisions.md`.
+only on the Tradable cards. See [card-handling decisions](docs/agents/decisions.md#arena-and-card-handling).
 
 **The board palette enforces finite physical supplies.** The old system tracked
 board pieces in a Google Sheet and enforced no limits; issue #49 asked for the
@@ -841,7 +841,7 @@ reference sheet (upgrade families share one pool), wheat, iron, silk and incense
 are capped at the player count, and each Great Person type has three board
 pieces. Huts and Villages are deliberately **not** capped: they are collected
 during play, not dealt at setup, so the player-count limit does not apply to
-them (issue #116). See `docs/agents/decisions.md`.
+them (issue #116). See [historical supply decisions](docs/history/README.md).
 
 **A player may remove any of their own techs, at any time.** The old backend's
 `removeTech` only worked on a hidden tech, and never on the starting tech. Here
@@ -849,7 +849,7 @@ a hidden, a revealed and the starting tech can all be removed from the tech's
 detail dialog, and the tech can then be chosen again (a re-chosen tech is hidden
 until revealed). The coin counter the tech fed is reset. The log line names a
 revealed tech publicly and says only "a hidden technology" for a hidden one;
-both keep the item number. See `docs/agents/decisions.md`.
+both keep the item number. See [historical technology decisions](docs/history/README.md).
 
 **A player may freely reposition their own tech pyramid.** Neither the old
 backend nor the old client had any notion of this — it exists so a player can
@@ -860,7 +860,7 @@ its trigger condition. The player manages both entirely themselves: nothing
 is validated beyond ownership, and neither a move nor a placement is logged.
 A placed Great Person's identity stays private to its owner — only the row it
 occupies is public, matching the printed "facedown... blank tech card" text.
-See `docs/agents/decisions.md`.
+See [board and privacy decisions](docs/agents/decisions.md#board-and-manual-bookkeeping).
 
 **A discarded barbarian unit shows "Barbarians" rather than no owner at all.**
 `DrawAction.discardBarbarians` deliberately nulls a barbarian unit's owner
@@ -872,7 +872,7 @@ faithful — but the new Revealed/Discarded panel (issue #51) shows a "by
 &lt;username&gt;" tag for every other row, so a barbarian's row stood out as
 looking broken rather than intentionally unowned. `revealedFeed` now labels
 it `'Barbarians'`; `playerId` itself stays `null` — no player identity is
-invented. See `docs/agents/decisions.md`, 2026-09-25.
+invented. See [historical card-display decisions](docs/history/README.md).
 
 **One chat and orders timeline, for every game (issue #215).** New, with no
 old-system counterpart, and the only view: there is no switch and no separate
@@ -890,42 +890,36 @@ one seat clockwise as a normal, undoable board change and the timeline gets a tu
 divider. The new turn holder is mailed, and an order is mailed like a chat message.
 The private log is a Private tab and is only its owner's.
 
-Games that were saved with the old Turn orders panel open as a single chat. The
-game itself is adopted when it is loaded, and the admin page moves the database
-rows (see below), so the public orders of the old panel appear in the timeline and
-an unpublished draft is added to its owner's private log. See
-`docs/agents/decisions.md`, 2026-09-29, 2026-10-01 and 2026-10-03, and
-`docs/agents/tasks/chat-orders.md` and `docs/agents/tasks/single-chat.md`.
+Games saved with the old Turn orders panel still use load-time adoption for
+compatibility. The one-off admin migration that copied old public orders into
+chat and unpublished drafts into private notes was removed after completion.
+See [save compatibility decisions](docs/agents/decisions.md#saves-migrations-and-revision-chains).
 
-**The admin tool that moved old games to the single chat is gone.** Every game has been moved, so the panel, its two routes and the code behind them were removed. A classic game that somehow turns up is still adopted when it is loaded. See `docs/agents/decisions.md`, 2026-10-09.
+## Scope limits
 
-## Deferred
-
-- **Card artwork.** The hand is shown as text. `itemImage()` in the engine
-  already gives the filenames under `Civilization/Moderator/`.
-- **Tournaments** — `TournamentAction` still needs a proper data layer.
-- **`AdminAction`** — swap a user in a game, delete games.
-- **Real time.** The client refetches after every action; there is no websocket.
-  `todo.txt` in old-civ-rest wanted one for chat.
+- **Tournaments.** The old tournament collection has not been ported.
+- **Real time.** The client refetches after actions and offers 10-second
+  auto-refresh polling; there is no websocket.
 
 ### Security
 
 Authentication is at development level: scrypt-hashed passwords and HMAC-signed
-bearer tokens that cannot be revoked before they expire. Java used unsalted SHA-1
+bearer tokens without individual token revocation. Disabling an account
+blocks its authenticated requests. Java used unsalted SHA-1
 and HTTP Basic, so this is an improvement, but it has not been reviewed for
 production.
 
-### Needs a decision
+### Known setup limitation
 
-`revealItem` for a civilization draws starting units through `DrawAction.draw`,
-which requires that it is the turn of that player. The consequence in Java is
-that only the player whose turn it is can reveal a civilization — the other
-three get 403 during setup. It looks like a bug, but is ported as is because
-Java is the reference and no old test covers it. Documented in
-`test/player-action.test.ts`, the test "a player whose turn it is not cannot
-reveal a civilization".
+Revealing a civilization can fail with `NOT_YOUR_TURN` when its starting units
+are drawn for a player who is not the turn holder. `revealItem` calls the
+turn-gated `draw` action without an out-of-turn override. This current
+limitation is covered by the test "a player whose turn it is not cannot reveal
+a civilization" in `packages/engine/test/player-action.test.ts`; it is not a
+rule to preserve. See [known limitations](docs/agents/limitations.md).
 
 Reference material — rulebooks, maps in ODP/PPTX, card artwork and a copy of the
 Mongo database — lives in `Civilization/`, which is outside git.
 
-**Board geometry is new.** The old Java system stored a Google Presentation link instead of board dimensions, so ours is a fresh choice. Two-player games use a 16 × 8 board (A–P, 1–8) — full width, half height; three- to five-player games use the full 16 × 16 board (A–P, 1–16). (Issue #17 originally asked for a smaller two-player map; the exact size was settled with the product owner as 16 × 8.)
+Board geometry is new to the rewrite; current player-count layouts are
+described in [The board](#the-board).
