@@ -566,6 +566,63 @@ describe('notes', () => {
     expect(squaresOf(first as CityProduction)).toContainEqual(['C2', 'forest', 2])
     expect(squaresOf(second as CityProduction)).toContainEqual(['C2', 'forest', 2])
   })
+
+  it('a square that is another city’s centre is not shared, only overlapping outskirts are', () => {
+    // B2 and C2 side by side. Each is in the other's outskirts but is a centre, so it is
+    // counted once, by the city whose outskirts it is in. B1, C1, B3 and C3 are outskirts of both.
+    const state = put(scene(), CASH1981, 'cities/redcity2', 2, 1)
+    const [first, second] = citiesOf(state)
+    const sharedNote = (city: CityProduction | undefined): string | undefined =>
+      city?.notes.find((note) => note.includes('another of your cities'))
+    expect(sharedNote(first)).toBe('B1, B3, C1 and C3 also belong to another of your cities. They count for each city.')
+    expect(sharedNote(second)).toBe('B1, B3, C1 and C3 also belong to another of your cities. They count for each city.')
+    expect(sharedNote(first)).not.toContain('C2')
+    expect(sharedNote(second)).not.toContain('B2')
+  })
+
+  it('two cities whose outskirts share one square say so in the singular', () => {
+    // B2 and D4: only C3 lies in the outskirts of both.
+    const state = put(scene(), CASH1981, 'cities/redcity2', 3, 3)
+    const [first, second] = citiesOf(state)
+    const expected = 'C3 also belongs to another of your cities. It counts for each city.'
+    expect(first?.notes).toContain(expected)
+    expect(second?.notes).toContain(expected)
+  })
+
+  it('cities with no common outskirts square carry no shared note', () => {
+    const state = put(scene(), CASH1981, 'cities/redcity2', 5, 1)
+    for (const city of citiesOf(state)) {
+      expect(city.notes.some((note) => note.includes('another of your cities'))).toBe(false)
+    }
+  })
+
+  it('a square with more than one building is named in the singular and the plural', () => {
+    const one = put(put(scene(), CASH1981, 'buildings/workshop', 2, 1), CASH1981, 'buildings/temple', 2, 1)
+    expect(only(one).notes).toContain('C2 holds more than one building. Only the one with most production counts.')
+
+    const two = put(put(one, CASH1981, 'buildings/workshop', 2, 2), CASH1981, 'buildings/temple', 2, 2)
+    expect(only(two).notes).toContain('C2 and C3 hold more than one building. Only the one with most production counts.')
+  })
+
+  it('a wonder or great person square is named in the singular and the plural', () => {
+    const one = put(scene(), CASH1981, 'wonders/pyramids', 2, 2)
+    expect(only(one).notes).toContain('C3 holds a wonder or a great person. Their icons are not in the data and count as 0.')
+
+    const two = put(one, CASH1981, 'great people/general', 2, 1)
+    expect(only(two).notes).toContain('C2 and C3 hold a wonder or a great person. Their icons are not in the data and count as 0.')
+  })
+
+  it('a square with a building and a wonder is counted from the building and left out of the wonder note', () => {
+    const state = put(put(scene(), CASH1981, 'buildings/workshop', 2, 1), CASH1981, 'wonders/pyramids', 2, 1)
+    const city = only(state)
+    expect(squaresOf(city)).toContainEqual(['C2', 'Workshop', 3])
+    expect(city.notes.some((note) => note.includes('wonder or a great person'))).toBe(false)
+
+    // A different square with only the wonder is still named, and C2 stays out of that note.
+    const both = only(put(state, CASH1981, 'wonders/pyramids', 2, 2))
+    const note = both.notes.find((entry) => entry.includes('wonder or a great person'))
+    expect(note).toBe('C3 holds a wonder or a great person. Their icons are not in the data and count as 0.')
+  })
 })
 
 describe('which cities are whose', () => {

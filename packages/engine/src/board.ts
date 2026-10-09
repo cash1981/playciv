@@ -905,6 +905,20 @@ export function clampToBoard(
 }
 
 /**
+ * Whether map square (column, row) lies on a playable slot. False for the hole
+ * and the outside of a stepped board, where no slot covers the square.
+ */
+export function isMapCell(board: Board, column: number, row: number): boolean {
+  return board.slots.some(
+    (slot) =>
+      column >= slot.x &&
+      column < slot.x + TILE_SQUARES &&
+      row >= slot.y &&
+      row < slot.y + TILE_SQUARES,
+  )
+}
+
+/**
  * The square a piece sits in, by its centre. `null` when off the map — which
  * includes the hole and the outside of a stepped board, where no slot covers
  * the square.
@@ -912,14 +926,7 @@ export function clampToBoard(
 export function squareOf(board: Board, piece: BoardPiece): string | null {
   const column = Math.floor((piece.x + piece.width / 2) / board.squareSize)
   const row = Math.floor((piece.y + piece.height / 2 - mapTop(board)) / board.squareSize)
-  const onSlot = board.slots.some(
-    (slot) =>
-      column >= slot.x &&
-      column < slot.x + TILE_SQUARES &&
-      row >= slot.y &&
-      row < slot.y + TILE_SQUARES,
-  )
-  if (!onSlot) return null
+  if (!isMapCell(board, column, row)) return null
   return `${columnLabel(column)}${row + 1}`
 }
 

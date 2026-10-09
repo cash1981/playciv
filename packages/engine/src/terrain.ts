@@ -12,7 +12,7 @@
 
 import tileTerrain from '../data/tile-terrain.json' with { type: 'json' }
 
-import { TILE_SQUARES, findBoardAsset, mapTop } from './board.js'
+import { TILE_SQUARES, findBoardAsset, isMapCell, mapTop } from './board.js'
 import type { Board, BoardAssetCategory, BoardPiece } from './board.js'
 
 export const TERRAINS = ['water', 'grassland', 'forest', 'mountain', 'desert'] as const
@@ -65,14 +65,7 @@ function printedSquare(
 export function terrainAt(board: Board, x: number, y: number): Terrain | null {
   const column = Math.floor(x / board.squareSize)
   const row = Math.floor((y - mapTop(board)) / board.squareSize)
-  const onSlot = board.slots.some(
-    (slot) =>
-      column >= slot.x &&
-      column < slot.x + TILE_SQUARES &&
-      row >= slot.y &&
-      row < slot.y + TILE_SQUARES,
-  )
-  if (!onSlot) return null
+  if (!isMapCell(board, column, row)) return null
 
   // The list is the stacking order, so the last match is on top (no findLast in ES2022).
   const tile = [...board.pieces]

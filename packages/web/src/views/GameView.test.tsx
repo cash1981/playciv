@@ -273,6 +273,7 @@ describe('primary game panel order', () => {
       'Battle',
       'Social policy',
       'Player status',
+      'Cities (0)',
       'Wonders',
       'Log',
       'Revealed',
@@ -336,6 +337,7 @@ const seat = (
   username,
   color: null,
   civilization: null,
+  cities: [],
   ...overrides,
 })
 

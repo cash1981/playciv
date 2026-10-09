@@ -16,7 +16,7 @@
 import { buildingDataOf } from './building-data.js'
 import { cityFootprintsOf, blockadedGreatPersonTypes, isOwnWonderBlockaded, mapCellOf } from './blockade.js'
 import type { Cell } from './blockade.js'
-import { TILE_SQUARES, columnLabel, mapTop, squareOf } from './board.js'
+import { columnLabel, isMapCell, mapTop, squareOf } from './board.js'
 import type { Board, BoardPiece } from './board.js'
 import { coinSourcesOf, totalCoins } from './coins.js'
 import type { GameState, Playerhand } from './state.js'
@@ -89,16 +89,6 @@ const COINS_PER_MILITARY_SCIENCE_POINT = 3
 const sameCell = (a: Cell, b: Cell): boolean => a.column === b.column && a.row === b.row
 
 const squareLabel = (cell: Cell): string => `${columnLabel(cell.column)}${cell.row + 1}`
-
-/** Whether the square lies on a playable slot. A city at the edge has outskirts off the map, which are not squares at all. */
-const isOnMap = (board: Board, cell: Cell): boolean =>
-  board.slots.some(
-    (slot) =>
-      cell.column >= slot.x &&
-      cell.column < slot.x + TILE_SQUARES &&
-      cell.row >= slot.y &&
-      cell.row < slot.y + TILE_SQUARES,
-  )
 
 const terrainOfCell = (board: Board, cell: Cell): Terrain | null =>
   terrainAt(
@@ -230,11 +220,13 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
     const otherOwn = footprints.filter((other) => other.piece.id !== piece.id)
 
     for (const cell of outskirts) {
-      if (!isOnMap(board, cell)) continue
+      // A city at the edge has outskirts off the map, which are not squares at all.
+      if (!isMapCell(board, cell.column, cell.row)) continue
       const square = squareLabel(cell)
       const blockaded = footprint.hasEnemyFigureAt(cell)
-      // Counted for each city, as old data may overlap; the note says so.
-      if (otherOwn.some((other) => [...other.centers, ...other.outskirts].some((c) => sameCell(c, cell)))) {
+      // Counted for each city, as old data may overlap; the note says so. Another city's
+      // centre is not a shared square: the centre is not outskirts, so only this city counts it.
+      if (otherOwn.some((other) => other.outskirts.some((c) => sameCell(c, cell)))) {
         sharedSquares.push(square)
       }
 
@@ -245,7 +237,6 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
       })
       const buildings = here.filter((other) => other.category === 'building')
       const hasWonderOrPerson = here.some((other) => other.category !== 'building')
-      if (hasWonderOrPerson) wonderOrPersonSquares.push(square)
 
       if (buildings.length > 0) {
         // A building replaces every icon the square had (base rules p. 16).
@@ -267,6 +258,8 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
       }
 
       if (hasWonderOrPerson) {
+        // Only here: a square with a building was counted from the building's table row.
+        wonderOrPersonSquares.push(square)
         const wonder = here.some((other) => other.category === 'wonder')
         detail.push({ square, source: wonder ? 'wonder' : 'great person', amount: 0, blockaded })
         continue
@@ -300,10 +293,17 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
     }
     if (unknownBuilding) notes.push('A building in the outskirts is not in the building table and counts as 0.')
     if (doubleBuildingSquares.length > 0) {
-      notes.push(`${listSquares(doubleBuildingSquares)} hold more than one building. Only the one with most production counts.`)
+      const one = doubleBuildingSquares.length === 1
+      notes.push(
+        `${listSquares(doubleBuildingSquares)} ${one ? 'holds' : 'hold'} more than one building. Only the one with most production counts.`,
+      )
     }
     if (sharedSquares.length > 0) {
-      notes.push(`${listSquares(sharedSquares)} also belong to another of your cities. They count for each city.`)
+      notes.push(
+        sharedSquares.length === 1
+          ? `${listSquares(sharedSquares)} also belongs to another of your cities. It counts for each city.`
+          : `${listSquares(sharedSquares)} also belong to another of your cities. They count for each city.`,
+      )
     }
     notes.push(...playerNotes)
 

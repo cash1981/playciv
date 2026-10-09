@@ -80,6 +80,18 @@ export function FaqView(): React.JSX.Element {
             board and its assets are part of the game page.
           </p>
         </CollapsiblePanel>
+
+        <CollapsiblePanel
+          id="faq-cities"
+          title="What does the Cities panel show?"
+          defaultOpen={false}
+        >
+          <p className="faq-answer">
+            The Cities panel estimates how much production each city on the map has, and
+            shows how the number was counted. The estimate is not a complete count, because the
+            map data does not hold every icon, and a number you type in by hand always wins.
+          </p>
+        </CollapsiblePanel>
       </div>
     </main>
   )

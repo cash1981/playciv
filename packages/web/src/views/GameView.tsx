@@ -18,6 +18,7 @@ import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, Pl
 
 import { AssistedActionsPanel } from './AssistedActions.js'
 import { BoardView } from './BoardView.js'
+import { CitiesPanel } from './CitiesPanel.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
 import { ItemCard } from './ItemCard.js'
@@ -604,6 +605,13 @@ export function GameView({
         <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <SocialPolicyPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         <StatusPanel
+          gameId={gameId}
+          view={displayedView}
+          busy={interactionBusy}
+          readOnly={displayedView.you === null || replaying || locked}
+          run={run}
+        />
+        <CitiesPanel
           gameId={gameId}
           view={displayedView}
           busy={interactionBusy}

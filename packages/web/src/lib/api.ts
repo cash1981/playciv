@@ -14,10 +14,13 @@ import type {
   BoardAsset,
   BoardHistoryEntry,
   BoardPiece,
+  CityModifier,
+  CityProduction,
   CoinSourceKey,
   HighscoreResult,
   Government,
   Item,
+  OutskirtsSquare,
   PlayerStatKey,
   PlayerStats,
   PlayerView,
@@ -40,10 +43,13 @@ export type {
   BoardAsset,
   BoardHistoryEntry,
   BoardPiece,
+  CityModifier,
+  CityProduction,
   CoinSourceKey,
   HighscoreResult,
   Government,
   Item,
+  OutskirtsSquare,
   PlayerStatKey,
   PlayerStats,
   PlayerView,
@@ -790,6 +796,9 @@ export const api = {
     }),
   setWonderOwner: (gameId: string, pieceId: string, ownerId: string | null) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/owner`, { ownerId }),
+  /** The production typed in for a city; `null` goes back to the estimate. */
+  setCityProduction: (gameId: string, pieceId: string, production: number | null) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/production`, { production }),
   rotatePiece: (gameId: string, pieceId: string, rotation?: number) =>
     post<PlayerView>(
       `/api/games/${gameId}/board/pieces/${pieceId}/rotate`,

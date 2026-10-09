@@ -72,7 +72,7 @@ interface CityFootprint {
  * playable slot); it only gives the numbers instead of the label, so the eight
  * neighbours of a city can be found.
  */
-function cellOf(board: Board, piece: BoardPiece): Cell | null {
+export function mapCellOf(board: Board, piece: BoardPiece): Cell | null {
   if (squareOf(board, piece) === null) return null
   return {
     column: Math.floor((piece.x + piece.width / 2) / board.squareSize),
@@ -80,14 +80,11 @@ function cellOf(board: Board, piece: BoardPiece): Cell | null {
   }
 }
 
-/** `cellOf` under a name that suits the package's public surface. */
-export const mapCellOf = cellOf
-
 const keyOf = (cell: Cell): string => `${cell.column},${cell.row}`
 
 /** The metropolis marker spans two city squares along its long axis. */
 function cityFootprint(board: Board, piece: BoardPiece, color: string): CityFootprint | undefined {
-  const anchor = cellOf(board, piece)
+  const anchor = mapCellOf(board, piece)
   if (anchor === null) return undefined
   const isMetropolis = piece.assetId.includes('metropolis')
   const isVertical = piece.rotation === 90 || piece.rotation === 270
@@ -126,7 +123,7 @@ class BlockadeIndex {
     const cities: CityFootprint[] = []
     for (const piece of state.board.pieces) {
       if (piece.category !== 'city' && piece.category !== 'figure') continue
-      const cell = cellOf(state.board, piece)
+      const cell = mapCellOf(state.board, piece)
       if (cell === null) continue
       const color = pieceColorOf(piece)
       if (piece.category === 'city') {
@@ -174,7 +171,7 @@ class BlockadeIndex {
         .find((player) => player.playerId === piece.ownerId)
         ?.color?.toLowerCase()
     }
-    const cell = cellOf(this.state.board, piece)
+    const cell = mapCellOf(this.state.board, piece)
     if (cell !== null) {
       const around = this.cityColorsAround(cell)
       if (around.size === 1) return [...around][0]
@@ -187,7 +184,7 @@ class BlockadeIndex {
 
   /** A building's city owner without the placedBy fallback. */
   cityOwnerColor(piece: BoardPiece): string | undefined {
-    const cell = cellOf(this.state.board, piece)
+    const cell = mapCellOf(this.state.board, piece)
     if (cell === null) return undefined
     if (this.isCityCenter(cell)) return undefined
     const around = this.cityColorsAround(cell)
@@ -201,7 +198,7 @@ class BlockadeIndex {
 
   /** Whether a figure that is no friend of `color` stands in the piece's map square. */
   hasEnemyFigure(piece: BoardPiece, color: string): boolean {
-    const cell = cellOf(this.state.board, piece)
+    const cell = mapCellOf(this.state.board, piece)
     if (cell === null) return false
     return this.hasEnemyFigureAt(cell, color)
   }
@@ -375,7 +372,7 @@ export function blockadedGreatPersonTypes(
     const tokens = state.board.pieces.filter(
       (piece) =>
         piece.assetId === assetId &&
-        cellOf(state.board, piece) !== null &&
+        mapCellOf(state.board, piece) !== null &&
         index.ownerColor(piece) === colour,
     )
     return tokens.length > 0 && tokens.every((piece) => index.isBlockaded(piece))
@@ -399,7 +396,7 @@ export function greatPersonCoinsOf(
   let coins = 0
   for (const piece of state.board.pieces) {
     if (!COIN_TOKEN_IDS.has(piece.assetId)) continue
-    const cell = cellOf(state.board, piece)
+    const cell = mapCellOf(state.board, piece)
     if (cell === null) continue
     if (index.isCityCenter(cell)) continue
     if (!index.cityColorsAround(cell).has(colour)) continue
