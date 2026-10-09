@@ -102,7 +102,8 @@ export function LogPanel({ gameId, busy, run, reloadCount, historical = null, re
             )}
             <span>{entry.message}</span>{' '}
             {entry.hasUndo && <span className="tag">undo pending</span>}
-            {tab === 'private' && entry.canUndo === true && (
+            {/* The server sets canUndo on the public log only for a line an assisted action wrote. */}
+            {entry.canUndo === true && (
               <button
                 className="small"
                 disabled={busy || readOnly}

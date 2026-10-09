@@ -206,6 +206,17 @@ describe('api timeline and admin calls (issue #215)', () => {
     expect(lastCall(third).path).toBe('/api/games/g1/turns/undone')
   })
 
+  it('posts an assisted action with its request id and the revision the client saw', async () => {
+    const fetchMock = respondWith(200, '{}')
+
+    await api.performAction('g1', 'chivalry', 'req-1', 9)
+
+    expect(lastCall(fetchMock)).toEqual({
+      path: '/api/games/g1/actions',
+      body: { action: 'chivalry', requestId: 'req-1', rev: 9 },
+    })
+  })
+
   it('adds confirmedOutOfTurn to a draw only when it is true', async () => {
     const plain = respondWith(200, '{}')
     await api.draw('g1', 'CIV')

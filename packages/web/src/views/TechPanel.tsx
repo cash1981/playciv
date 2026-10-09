@@ -27,6 +27,7 @@ import type { TechItem } from '@civ/engine'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { GameRevisionView, PlayerView } from '../lib/api.js'
+import { AssistedActionButton } from './AssistedActions.js'
 import { TechTree } from './TechTree.js'
 import type { TechTreePlacement, TechTreeTech } from './TechTree.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
@@ -234,6 +235,19 @@ export function TechPanel({
             Card text is shown for reference only; the engine records the chosen tech but does
             not enforce its effects.
           </p>
+          {/* The same component and the same state as "Your actions"; own pyramid only. */}
+          {detailCanRemove && detailTech.name === 'Chivalry' && (
+            <div className="row">
+              <AssistedActionButton
+                action="chivalry"
+                gameId={gameId}
+                view={view}
+                busy={busy}
+                readOnly={historical !== null}
+                run={run}
+              />
+            </div>
+          )}
           {detailCanRemove && (
             <div className="row">
               <button

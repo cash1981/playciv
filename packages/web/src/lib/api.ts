@@ -8,6 +8,7 @@
 
 import type {
   ActiveTurnStatus,
+  AssistedActionKind,
   Board,
   BoardArea,
   BoardAsset,
@@ -33,6 +34,7 @@ import { beginActivity } from './activity.js'
 
 export type {
   ActiveTurnStatus,
+  AssistedActionKind,
   Board,
   BoardArea,
   BoardAsset,
@@ -287,6 +289,8 @@ export interface LogEntryDto {
   readonly createdAt?: string | null
   readonly hasUndo: boolean
   readonly canUndo?: boolean
+  /** Set on a line an assisted action wrote; the undo vote can target it (#260). */
+  readonly assistedActionId?: string
 }
 
 export interface ChatMessageDto {
@@ -762,6 +766,13 @@ export const api = {
     value: number,
   ) =>
     post<PlayerView>(`/api/games/${gameId}/players/${targetPlayerId}/coin`, { source, value }),
+  /**
+   * One assisted action (#260). `requestId` is chosen by the caller and kept until
+   * the request settles, so a retry cannot do the action twice; `rev` is the
+   * revision the caller saw, so a stale tab gets the usual 409.
+   */
+  performAction: (gameId: string, action: AssistedActionKind, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, { action, requestId, rev }),
   purchaseCoin: (gameId: string, source: 'democracy' | 'printingPress') =>
     post<PlayerView>(`/api/games/${gameId}/coin-purchase`, { source }),
   setPlayerGovernment: (

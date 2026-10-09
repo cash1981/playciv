@@ -16,6 +16,7 @@ import { useActivity } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
 
+import { AssistedActionsPanel } from './AssistedActions.js'
 import { BoardView } from './BoardView.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
@@ -569,6 +570,13 @@ export function GameView({
 
       <div className="panel-stack">
         {/* Draw is the first panel after the board, then the chat and orders timeline and the log. */}
+        <AssistedActionsPanel
+          gameId={gameId}
+          view={displayedView}
+          busy={interactionBusy}
+          readOnly={displayedView.you === null || replaying || locked}
+          run={run}
+        />
         <DrawPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         {/* The chat routes need a signed-in player */}
         {player !== null && (
