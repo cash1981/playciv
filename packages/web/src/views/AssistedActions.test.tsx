@@ -104,7 +104,6 @@ describe('AssistedActionsPanel', () => {
   })
 
   it.each([
-    ['used', 'Used', 'Chivalry has already been used this turn.'],
     [
       'needs-resource',
       'Needs resource',
@@ -404,6 +403,164 @@ describe('AssistedActionButton requests', () => {
 
     expect(screen.getByRole('button', { name: 'Spend 6 trade' })).toBeTruthy()
     expect(screen.queryByText(/Spend 6 trade to add/)).toBeNull()
+  })
+})
+
+describe('a card that was already used this turn', () => {
+  const USED = chivalry(
+    'used',
+    'Chivalry has already been used this turn. The rules allow it once per turn; you will be asked to confirm before using it again.',
+  )
+  const QUESTION =
+    'You have already used Chivalry this turn. The rules allow it once per turn. Use it again?'
+  const useButton = () => screen.getByRole('button', { name: 'Use Chivalry' }) as HTMLButtonElement
+
+  it('keeps its button pressable, with the Used tag and the reason on the page', () => {
+    renderPanel(viewWith([USED]))
+
+    expect(useButton().disabled).toBe(false)
+    expect(screen.getByText('Used')).toBeTruthy()
+    const reason = screen.getByText(USED.reason)
+    expect(useButton().getAttribute('aria-describedby')).toBe(reason.id)
+  })
+
+  it('is still disabled while another write runs or the game is read-only', () => {
+    renderPanel(viewWith([USED]), { busy: true })
+    expect(useButton().disabled).toBe(true)
+    cleanup()
+    renderPanel(viewWith([USED]), { readOnly: true })
+    expect(useButton().disabled).toBe(true)
+  })
+
+  it('asks a question that names the card, and sends nothing when the player cancels', () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderPanel(viewWith([USED]))
+
+    fireEvent.click(useButton())
+
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(confirm).toHaveBeenCalledWith(QUESTION)
+    expect(perform).not.toHaveBeenCalled()
+  })
+
+  it('sends confirmedRepeat after a yes, with the game, the action, an id and the revision', async () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderPanel(viewWith([USED], 12))
+
+    fireEvent.click(useButton())
+
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    const [gameId, action, requestId, rev, confirmedRepeat] = perform.mock.calls[0]!
+    expect([gameId, action, rev, confirmedRepeat]).toEqual(['game-1', 'chivalry', 12, true])
+    expect(requestId.length).toBeGreaterThan(8)
+  })
+
+  it('never asks, and never sends the flag, for a ready card', async () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm')
+    renderPanel(viewWith([READY]))
+
+    fireEvent.click(useButton())
+
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    expect(confirm).not.toHaveBeenCalled()
+    expect(perform.mock.calls[0]).toHaveLength(4)
+  })
+
+  it('uses a new request id for the confirmed press after the first use succeeded', async () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { rerender } = renderPanel(viewWith([READY], 5))
+    fireEvent.click(useButton())
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+
+    // The first use landed: the next view says used
+    rerender(
+      <AssistedActionsPanel gameId="game-1" view={viewWith([USED], 6)} busy={false} readOnly={false} run={run} />,
+    )
+    await waitFor(() => {
+      fireEvent.click(useButton())
+      expect(perform.mock.calls.length).toBeGreaterThan(1)
+    })
+
+    expect(perform.mock.calls[1]![2]).not.toBe(perform.mock.calls[0]![2])
+    expect(perform.mock.calls[1]![3]).toBe(6)
+    expect(perform.mock.calls[1]![4]).toBe(true)
+    expect(perform.mock.calls[0]).toHaveLength(4)
+  })
+
+  it('a cancel neither consumes nor changes a kept request id', async () => {
+    const perform = vi
+      .spyOn(api, 'performAction')
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true)
+    const { rerender } = renderPanel(viewWith([READY], 5))
+    fireEvent.click(useButton())
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    const kept = perform.mock.calls[0]![2]
+
+    // The response was lost; the view now says used (without the record of the kept id here)
+    rerender(
+      <AssistedActionsPanel gameId="game-1" view={viewWith([USED], 6)} busy={false} readOnly={false} run={run} />,
+    )
+    // Wait until the failed press has settled, then cancel the question once
+    await waitFor(() => {
+      fireEvent.click(useButton())
+      expect(confirm).toHaveBeenCalledTimes(1)
+    })
+    expect(perform).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(useButton())
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(2))
+    expect(perform.mock.calls[1]![2]).toBe(kept)
+    expect(perform.mock.calls[1]![4]).toBe(true)
+  })
+
+  it('a second click while the confirmed press is on its way neither asks again nor sends again', async () => {
+    let finish: (view: PlayerView) => void = () => {}
+    const perform = vi
+      .spyOn(api, 'performAction')
+      .mockReturnValue(new Promise<PlayerView>((resolve) => (finish = resolve)))
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    // The real run marks the page busy; this one does not, so the guard in the component is what is tested
+    renderPanel(viewWith([USED]))
+
+    fireEvent.click(useButton())
+    fireEvent.click(useButton())
+    finish({} as PlayerView)
+
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    expect(confirm).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['needs-resource', 'You need an Incense token.'],
+    ['wrong-phase', 'Only available during your open City Management phase.'],
+    ['not-owned', 'You do not have Chivalry.'],
+    ['unavailable', 'Reveal Chivalry before using it.'],
+  ] as const)('a %s card stays disabled, never asks and never sends', (status, reason) => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm')
+    // The panel hides not-owned rows, so the button is rendered alone
+    render(
+      <AssistedActionButton
+        action="chivalry"
+        gameId="game-1"
+        view={viewWith([chivalry(status, reason)])}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    const button = useButton()
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(confirm).not.toHaveBeenCalled()
+    expect(perform).not.toHaveBeenCalled()
   })
 })
 

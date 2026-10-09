@@ -768,6 +768,12 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     if (body['rev'] !== undefined && (clientRev === undefined || !Number.isInteger(clientRev) || clientRev < 0)) {
       return sendError(c, 400, 'BAD_REQUEST', 'rev must be a non-negative integer')
     }
+    // `confirmedRepeat` is the player's yes to "use it again?". It must be a real boolean:
+    // a string such as "true" is refused, the same as for `confirmedOutOfTurn` elsewhere.
+    if (body['confirmedRepeat'] !== undefined && typeof body['confirmedRepeat'] !== 'boolean') {
+      return sendError(c, 400, 'BAD_REQUEST', 'confirmedRepeat must be a boolean')
+    }
+    const confirmedRepeat = body['confirmedRepeat'] === true
     // Only `chooseReward` carries a payload, and then both ids are required; the other actions take none
     let payload: { readonly rewardId: string; readonly itemId: string } | undefined
     if (action === 'chooseReward') {
@@ -797,6 +803,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
           requestId,
           at: new Date().toISOString(),
           ...(payload === undefined ? {} : { payload }),
+          ...(confirmedRepeat ? { confirmedRepeat } : {}),
         }),
       clientRev,
       // A requestId that is already recorded answers with the same state: no new revision

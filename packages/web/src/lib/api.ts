@@ -735,9 +735,23 @@ export const api = {
    * One assisted action (#260). `requestId` is chosen by the caller and kept until
    * the request settles, so a retry cannot do the action twice; `rev` is the
    * revision the caller saw, so a stale tab gets the usual 409.
+   * `confirmedRepeat` is sent only after the player answered yes to "use it
+   * again?" for a card already used this turn; the server refuses a second use
+   * without it, as `draw` does without `confirmedOutOfTurn`.
    */
-  performAction: (gameId: string, action: AssistedActionKind, requestId: string, rev: number) =>
-    post<PlayerView>(`/api/games/${gameId}/actions`, { action, requestId, rev }),
+  performAction: (
+    gameId: string,
+    action: AssistedActionKind,
+    requestId: string,
+    rev: number,
+    confirmedRepeat?: boolean,
+  ) =>
+    post<PlayerView>(
+      `/api/games/${gameId}/actions`,
+      confirmedRepeat === true
+        ? { action, requestId, rev, confirmedRepeat: true }
+        : { action, requestId, rev },
+    ),
   /**
    * The card choice after a culture advance: the same route as `performAction`,
    * with the reward and the card to keep. The request id is kept like any other.

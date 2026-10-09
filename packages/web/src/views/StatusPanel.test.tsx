@@ -8,6 +8,7 @@ import type { CoinSources, Government } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
+import { resetPendingRequestIds } from './AssistedActions.js'
 import type { Run } from './GameView.js'
 import { StatusPanel } from './StatusPanel.js'
 
@@ -447,6 +448,31 @@ describe('StatusPanel Coins section', () => {
     expect(screen.getByText('Only available during your open City Management phase.')).toBeTruthy()
     fireEvent.click(button)
     expect(perform).not.toHaveBeenCalled()
+  })
+
+  it('a Democracy purchase already made this turn stays pressable, asks first and sends confirmedRepeat after a yes', async () => {
+    resetPendingRequestIds()
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue(memberView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const view = democracyView(
+      democracyAction('used', 'Democracy has already been used this turn. You will be asked to confirm.'),
+    )
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+    const button = screen.getByRole('button', { name: 'Spend 6 trade' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    expect(screen.getByText('Democracy has already been used this turn. You will be asked to confirm.')).toBeTruthy()
+
+    fireEvent.click(button)
+    expect(confirm).toHaveBeenCalledWith(
+      'You have already used Democracy this turn. The rules allow it once per turn. Use it again?',
+    )
+    expect(perform).not.toHaveBeenCalled()
+
+    fireEvent.click(button)
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    expect(perform).toHaveBeenCalledWith('game-1', 'democracy', expect.any(String), 7, true)
   })
 
   const printingPressAction = (

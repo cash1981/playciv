@@ -352,6 +352,12 @@ export interface AssistedActionRecord {
   readonly logId: string
   readonly status: 'applied' | 'undone'
   readonly effect: AssistedEffect
+  /**
+   * Set when the card had already been used this turn and the player confirmed
+   * using it again. The record then shares the first use's `usageKey`, which is
+   * freed only when no applied record holds it any more.
+   */
+  readonly confirmedRepeat?: boolean
 }
 
 /** One entry of `PlayerView.you.availableActions`: the viewer's own button state. */
@@ -376,6 +382,8 @@ export interface PublicAssistedAction {
   /** The public log line, as it was written. */
   readonly text: string
   readonly logId: string
+  /** Present, and true, for a use the player confirmed after the card was used this turn. Not secret. */
+  readonly confirmedRepeat?: boolean
 }
 
 export interface GameState {

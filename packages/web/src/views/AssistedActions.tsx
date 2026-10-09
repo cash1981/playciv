@@ -155,9 +155,19 @@ interface ButtonProps {
 }
 
 /**
+ * What the player is asked before a card that was used this turn is used again.
+ * Some Great Persons and culture cards allow it and are not built, so the player
+ * is the override, the way the Draw button asks first when it is not your turn.
+ */
+export const usedAgainQuestion = (label: string): string =>
+  `You have already used ${label} this turn. The rules allow it once per turn. Use it again?`
+
+/**
  * One button for one assisted action. Renders nothing for a spectator or when
- * the viewer has no state for the action. Disabled unless the status is `ready`,
- * and then the reason is on the page as text, not only in a tooltip.
+ * the viewer has no state for the action. Disabled unless the status is `ready`
+ * or `used`, and then the reason is on the page as text, not only in a tooltip.
+ * A `used` card stays pressable: a press asks first and sends `confirmedRepeat`
+ * only after a yes.
  */
 export function AssistedActionButton({
   action,
@@ -175,15 +185,26 @@ export function AssistedActionButton({
   if (view.you === null || state === undefined) return null
 
   const ready = state.status === 'ready'
+  const used = state.status === 'used'
   const showReason = detail === 'full' || !ready
   const rev = view.rev
   const playerId = view.you.playerId
 
   const press = (): void => {
+    const key = `${gameId}:${playerId}:${action}`
+    if (used) {
+      // A press already on its way is the same press: do not ask a second time.
+      if (inFlight.has(key)) return
+      // Cancelling asks nothing of the server and leaves any kept request id as it is.
+      if (!window.confirm(usedAgainQuestion(state.label))) return
+    }
     void pressOnce(
-      `${gameId}:${playerId}:${action}`,
+      key,
       run,
-      (requestId) => api.performAction(gameId, action, requestId, rev),
+      (requestId) =>
+        used
+          ? api.performAction(gameId, action, requestId, rev, true)
+          : api.performAction(gameId, action, requestId, rev),
       view,
     )
   }
@@ -193,7 +214,7 @@ export function AssistedActionButton({
       <button
         type="button"
         className={className}
-        disabled={busy || readOnly || !ready}
+        disabled={busy || readOnly || !(ready || used)}
         aria-describedby={showReason ? reasonId : undefined}
         onClick={press}
       >

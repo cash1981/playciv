@@ -101,6 +101,41 @@ describe('the assisted action button in the tech dialog', () => {
     expect(screen.getByRole('dialog').textContent).toContain('You need an Incense token.')
   })
 
+  it('keeps a used card\'s button pressable in the dialog, and asks before sending confirmedRepeat', async () => {
+    const used = viewOf([tech('Currency')])
+    const withUsed = {
+      ...used,
+      you: {
+        ...used.you!,
+        availableActions: [
+          action('currency', 'Currency', 'used', 'Currency has already been used this turn. You will be asked to confirm.'),
+        ],
+      },
+    } as unknown as PlayerView
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue(withUsed)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    renderPanel(withUsed)
+
+    fireEvent.click(await screen.findByText('Currency'))
+
+    const dialog = screen.getByRole('dialog')
+    const button = screen.getByRole('button', { name: 'Use Currency' }) as HTMLButtonElement
+    expect(dialog.contains(button)).toBe(true)
+    expect(button.disabled).toBe(false)
+    expect(dialog.textContent).toContain('Used')
+    expect(dialog.textContent).toContain('Currency has already been used this turn.')
+
+    fireEvent.click(button)
+    expect(confirm).toHaveBeenCalledWith(
+      'You have already used Currency this turn. The rules allow it once per turn. Use it again?',
+    )
+    expect(perform).not.toHaveBeenCalled()
+
+    fireEvent.click(button)
+    expect(perform).toHaveBeenCalledTimes(1)
+    expect(perform).toHaveBeenCalledWith('game-1', 'currency', expect.any(String), 7, true)
+  })
+
   it('shows no assisted button for a tech without an action', async () => {
     renderPanel(viewOf([tech('Writing')]))
 

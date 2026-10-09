@@ -149,7 +149,11 @@ function useTurnAction(
   usageKey: string,
   stats: PlayerStats,
 ): GameState {
-  const updatedTurn = { ...turn, usedActions: [...turn.usedActions, usageKey] }
+  // A confirmed repeat finds the key already there: it is never written twice, so
+  // one undo of the key's last holder frees it (see `reverseAssistedAction`).
+  const updatedTurn = turn.usedActions.includes(usageKey)
+    ? turn
+    : { ...turn, usedActions: [...turn.usedActions, usageKey] }
   const playerTurns = player.playerTurns.map((candidate) =>
     sameTurn(candidate, updatedTurn) ? updatedTurn : candidate,
   )
@@ -352,6 +356,11 @@ interface ApplyContext {
   readonly at: string | undefined
   /** Only `chooseReward` reads it; every other action ignores it. */
   readonly payload: ChooseRewardPayload | undefined
+  /**
+   * True when the action was `used` this turn and the player confirmed using it
+   * again. It pays and applies as a first use; only the log line says so.
+   */
+  readonly confirmedRepeat: boolean
 }
 
 type AssistedActionDefinition = {
@@ -395,6 +404,13 @@ function techBlock(player: Playerhand, techName: string): BlockedAvailability | 
   return undefined
 }
 
+/** Added to the public line of a use the player confirmed after the card was used. */
+const REPEAT_NOTE = ' (used again, confirmed by the player)'
+
+/** The reason for `used`: it still blocks a plain press, but the player can override it. */
+const usedReason = (label: string): string =>
+  `${label} has already been used this turn. The rules allow it once per turn; you will be asked to confirm before using it again.`
+
 const PHASE_REASON = 'Only available during your open City Management phase.'
 
 // -- Incense cards: Chivalry, Currency, Metal Casting -----------------------
@@ -436,7 +452,7 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
       const turn = openCityManagementTurn(state, player)
       if (turn === undefined) return blocked('wrong-phase', PHASE_REASON)
       if (turn.usedActions.includes(usageKey)) {
-        return blocked('used', `${card.techName} has already been used this turn.`)
+        return blocked('used', usedReason(card.techName))
       }
       if (findResourceToken(state, playerId, card.resource) === undefined) {
         return blocked(
@@ -465,7 +481,9 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
       const logged = appendLog(used, {
         username: player.username,
         playerId: player.playerId,
-        publicLog: `${player.username} used ${card.techName}: spent 1 ${card.resource} and gained ${card.culture} culture`,
+        publicLog:
+          `${player.username} used ${card.techName}: spent 1 ${card.resource} and gained ${card.culture} culture` +
+          (context.confirmedRepeat ? REPEAT_NOTE : ''),
         privateLog: '',
         createdAt: context.at ?? null,
         assistedActionId: context.requestId,
@@ -534,12 +552,13 @@ function planCoinPurchase(
   state: GameState,
   player: Playerhand,
   source: CoinPurchaseSource,
+  allowRepeat = false,
 ): Result<CoinPurchasePlan, CoinPurchaseRejection> {
   const terms = COIN_PURCHASES[source]
   if (!player.techsChosen.some((tech) => tech.name === terms.techName && !tech.hidden)) {
     return err('TECH_NOT_REVEALED')
   }
-  return planOpenCoinPurchase(state, player, source)
+  return planOpenCoinPurchase(state, player, source, allowRepeat)
 }
 
 /**
@@ -551,11 +570,12 @@ function planOpenCoinPurchase(
   state: GameState,
   player: Playerhand,
   source: CoinPurchaseSource,
+  allowRepeat = false,
 ): Result<CoinPurchasePlan, OpenPurchaseRejection> {
   const terms = COIN_PURCHASES[source]
   const turn = openCityManagementTurn(state, player)
   if (turn === undefined) return err('PHASE_CLOSED')
-  if (turn.usedActions.includes(coinUsageKey(source))) return err('ALREADY_USED')
+  if (!allowRepeat && turn.usedActions.includes(coinUsageKey(source))) return err('ALREADY_USED')
   if (player.stats[terms.resource] < terms.cost) return err('INSUFFICIENT_RESOURCES')
 
   const current = coinSourcesOf(state, player)[source]
@@ -581,10 +601,15 @@ export function applyCoinPurchase(
   state: GameState,
   player: Playerhand,
   source: CoinPurchaseSource,
-  options: { readonly at?: string; readonly requestId?: string } = {},
+  options: {
+    readonly at?: string
+    readonly requestId?: string
+    /** The player confirmed using it again; only the assisted route passes it. */
+    readonly confirmedRepeat?: boolean
+  } = {},
 ): Result<{ readonly state: GameState; readonly logId: string }, EngineError> {
   const terms = COIN_PURCHASES[source]
-  const plan = planCoinPurchase(state, player, source)
+  const plan = planCoinPurchase(state, player, source, options.confirmedRepeat === true)
   if (!plan.ok) return err({ kind: 'COIN_PURCHASE_REJECTED', source, reason: plan.error })
 
   const stats: PlayerStats = {
@@ -596,7 +621,9 @@ export function applyCoinPurchase(
   const logged = appendLog(used, {
     username: player.username,
     playerId: player.playerId,
-    publicLog: `${player.username} spent ${terms.paidWith} to add 1 coin to ${terms.techName}`,
+    publicLog:
+      `${player.username} spent ${terms.paidWith} to add 1 coin to ${terms.techName}` +
+      (options.confirmedRepeat === true ? REPEAT_NOTE : ''),
     privateLog: '',
     createdAt: options.at ?? null,
     ...(options.requestId === undefined ? {} : { assistedActionId: options.requestId }),
@@ -626,7 +653,7 @@ function coinPurchase(source: CoinPurchaseSource): AssistedActionDefinition {
         case 'PHASE_CLOSED':
           return blocked('wrong-phase', PHASE_REASON)
         case 'ALREADY_USED':
-          return blocked('used', `${terms.techName} has already been used this turn.`)
+          return blocked('used', usedReason(terms.techName))
         case 'INSUFFICIENT_RESOURCES':
           return blocked('needs-resource', `You need ${terms.paidWith} for this purchase.`)
         case 'AT_CAPACITY':
@@ -637,6 +664,7 @@ function coinPurchase(source: CoinPurchaseSource): AssistedActionDefinition {
     apply(state, player, context) {
       const applied = applyCoinPurchase(state, player, source, {
         requestId: context.requestId,
+        confirmedRepeat: context.confirmedRepeat,
         ...(context.at === undefined ? {} : { at: context.at }),
       })
       if (!applied.ok) return applied
@@ -1605,6 +1633,7 @@ export function publicAssistedActions(state: GameState): readonly PublicAssisted
     status: record.status,
     text: state.log.find((entry) => entry.id === record.logId)?.publicLog ?? '',
     logId: record.logId,
+    ...(record.confirmedRepeat === true ? { confirmedRepeat: true } : {}),
   }))
 }
 
@@ -1621,6 +1650,11 @@ export interface PerformAssistedActionInput {
   readonly at?: string
   /** What `chooseReward` needs: which reward and which card. Other actions take none. */
   readonly payload?: ChooseRewardPayload
+  /**
+   * The player answered yes to "you have already used this, use it again?". It
+   * lifts exactly one refusal, `used`; every other refusal stands.
+   */
+  readonly confirmedRepeat?: boolean
 }
 
 /**
@@ -1650,12 +1684,17 @@ export function performAssistedAction(
   }
 
   const availability = definition.availability(state, input.playerId)
-  if (availability.status !== 'ready') return err(rejected(input.action, availability))
+  // Some Great Persons and culture cards allow a second use and are not built, so
+  // the player may override `used` and nothing else. The reducers re-check the
+  // rest (resource, capacity, cost) when they apply.
+  const repeat = availability.status === 'used' && input.confirmedRepeat === true
+  if (availability.status !== 'ready' && !repeat) return err(rejected(input.action, availability))
 
   const applied = definition.apply(state, player, {
     requestId: input.requestId,
     at: input.at,
     payload: input.payload,
+    confirmedRepeat: repeat,
   })
   if (!applied.ok) return applied
 
@@ -1672,6 +1711,7 @@ export function performAssistedAction(
     logId: applied.value.logId,
     status: 'applied',
     effect: applied.value.effect,
+    ...(repeat ? { confirmedRepeat: true } : {}),
   }
   return ok({ ...applied.value.state, assistedActions: [...applied.value.state.assistedActions, record] })
 }
@@ -1723,17 +1763,26 @@ export function reverseAssistedAction(
   if (!reversed.ok) return reversed
 
   const current = playerOf(reversed.value.state, record.playerId) ?? player
-  const freed =
-    record.usageKey === null
-      ? reversed.value.state
-      : freeTurnAction(reversed.value.state, current, record.turnNumber, record.usageKey)
   const marked: GameState = {
-    ...freed,
-    assistedActions: freed.assistedActions.map((candidate) =>
+    ...reversed.value.state,
+    assistedActions: reversed.value.state.assistedActions.map((candidate) =>
       candidate.id === record.id ? { ...candidate, status: 'undone' as const } : candidate,
     ),
   }
-  const logged = appendLog(marked, {
+  // A confirmed repeat shares the first use's key, so the key is freed only when no
+  // other applied record of this player and turn still holds it.
+  const stillHeld = marked.assistedActions.some(
+    (candidate) =>
+      candidate.status === 'applied' &&
+      candidate.playerId === record.playerId &&
+      candidate.turnNumber === record.turnNumber &&
+      candidate.usageKey === record.usageKey,
+  )
+  const freed =
+    record.usageKey === null || stillHeld
+      ? marked
+      : freeTurnAction(marked, current, record.turnNumber, record.usageKey)
+  const logged = appendLog(freed, {
     username: 'System',
     publicLog: `System: ${reversed.value.text}`,
     createdAt: at ?? null,

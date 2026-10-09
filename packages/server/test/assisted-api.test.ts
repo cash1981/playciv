@@ -519,3 +519,125 @@ describe('the board history and the replay', () => {
     expect(replay.view.you?.availableActions).toEqual([])
   })
 })
+
+describe('using a card again after the player confirmed it', () => {
+  /** Chivalry used once, and a second incense piece waiting in the area, so only the once per turn rule is in the way. */
+  async function usedOnce(name: string): Promise<{ table: Table; rev: number }> {
+    const table = await chivalryTable(name)
+    const mine = await view(table.gameId, table.starter)
+    const area = mine.boardAreas.find((candidate) => candidate.playerId === table.starterId)
+    await post(table.starter, `/api/games/${table.gameId}/board/pieces`, {
+      assetId: 'resources/incense', x: (area?.x ?? 0) + 20, y: (area?.y ?? 0) + 80,
+    })
+    const ready = await view(table.gameId, table.starter)
+    expect((await chivalry(table, 'req-1', ready.rev)).status).toBe(200)
+    return { table, rev: ready.rev + 1 }
+  }
+  const again = (table: Table, rev: number, confirmedRepeat: unknown) =>
+    post(table.starter, `/api/games/${table.gameId}/actions`, {
+      action: 'chivalry', requestId: 'req-2', rev, confirmedRepeat,
+    })
+
+  it('applies a second use when confirmedRepeat is true, with the line and the record saying so', async () => {
+    const { table, rev } = await usedOnce('RepeatYes')
+
+    const response = await again(table, rev, true)
+
+    expect(response.status).toBe(200)
+    const after = await response.json<View & { assistedActions: readonly { id: string; confirmedRepeat?: boolean; text: string }[] }>()
+    expect(after.you?.stats.culture).toBe(10)
+    expect(after.assistedActions.map((record) => record.id)).toEqual(['req-1', 'req-2'])
+    expect(after.assistedActions[1]?.confirmedRepeat).toBe(true)
+    expect(after.assistedActions[1]?.text).toContain('used again, confirmed by the player')
+    expect(after.assistedActions[0]?.confirmedRepeat).toBeUndefined()
+    expect(after.you?.availableActions?.find((entry) => entry.action === 'chivalry')?.status).toBe('used')
+    const stored = await repo.findGame(table.gameId)
+    expect(incensePieces(stored)).toHaveLength(0)
+    expect(stored?.players.find((player) => player.playerId === table.starterId)?.playerTurns[0]?.usedActions).toEqual([
+      'card:Chivalry',
+    ])
+  })
+
+  it('stays a 409 without the flag, and with the flag set to false', async () => {
+    const { table, rev } = await usedOnce('RepeatNo')
+
+    const without = await post(table.starter, `/api/games/${table.gameId}/actions`, {
+      action: 'chivalry', requestId: 'req-2', rev,
+    })
+    expect(without.status).toBe(409)
+    expect(await without.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    expect((await again(table, rev, false)).status).toBe(409)
+    expect(incensePieces(await repo.findGame(table.gameId))).toHaveLength(1)
+  })
+
+  it('answers 400 for a confirmedRepeat that is not a boolean, and changes nothing', async () => {
+    const { table, rev } = await usedOnce('RepeatBad')
+    for (const value of ['true', 1, 'yes', null, {}]) {
+      const response = await again(table, rev, value)
+      expect(response.status).toBe(400)
+      expect(await response.json()).toMatchObject({ error: 'BAD_REQUEST' })
+    }
+    const stored = await repo.findGame(table.gameId)
+    expect(stored?.assistedActions).toHaveLength(1)
+    expect(incensePieces(stored)).toHaveLength(1)
+  })
+
+  it('does not lift any other refusal: no token left is still a 409', async () => {
+    const table = await chivalryTable('RepeatEmpty')
+    const rev = (await view(table.gameId, table.starter)).rev
+    expect((await chivalry(table, 'req-1', rev)).status).toBe(200)
+
+    const response = await again(table, rev + 1, true)
+
+    expect(response.status).toBe(400)
+    expect((await response.json<{ message: string }>()).message).toContain('Incense')
+    expect((await repo.findGame(table.gameId))?.assistedActions).toHaveLength(1)
+  })
+
+  it('the old coin-purchase route has no override', async () => {
+    const table = await chivalryTable('RepeatLegacy', { piece: false })
+    for (const [url, payload] of [
+      [`/api/games/${table.gameId}/techs/choose`, { name: 'Democracy' }],
+      [`/api/games/${table.gameId}/techs/reveal`, { name: 'Democracy' }],
+      [`/api/games/${table.gameId}/players/${table.starterId}/stat`, { stat: 'trade', value: 12 }],
+    ] as const) {
+      expect((await post(table.starter, url, payload)).status).toBe(200)
+    }
+    expect((await post(table.starter, `/api/games/${table.gameId}/coin-purchase`, { source: 'democracy' })).status).toBe(200)
+
+    const second = await post(table.starter, `/api/games/${table.gameId}/coin-purchase`, {
+      source: 'democracy', confirmedRepeat: true,
+    })
+
+    expect(second.status).toBe(409)
+  })
+
+  it('an undo of the repeat leaves the card used for the first use', async () => {
+    const { table, rev } = await usedOnce('RepeatUndo')
+    const done = await (await again(table, rev, true)).json<View>()
+    const logId = done.assistedActions[1]?.logId as string
+    expect((await post(table.other, `/api/games/${table.gameId}/undo/${logId}`, {})).status).toBe(200)
+
+    const voted = await post(table.starter, `/api/games/${table.gameId}/undo/${logId}/vote`, { vote: true })
+
+    expect(voted.status).toBe(200)
+    const after = await voted.json<View>()
+    expect(after.you?.stats.culture).toBe(5)
+    expect(after.assistedActions.map((record) => record.status)).toEqual(['applied', 'undone'])
+    expect(after.you?.availableActions?.find((entry) => entry.action === 'chivalry')?.status).toBe('used')
+  })
+
+  it('another player sees the repeat flag and no effect data', async () => {
+    const { table, rev } = await usedOnce('RepeatLeak')
+    await again(table, rev, true)
+
+    const theirs = await inject(app, { url: `/api/games/${table.gameId}`, headers: bearer(table.other) })
+    const text = JSON.stringify(await theirs.json())
+
+    expect(text).toContain('"confirmedRepeat":true')
+    expect(text).not.toContain('"effect"')
+    expect(text).not.toContain('usageKey')
+    expect(text).not.toContain('card:Chivalry')
+    expect(text).not.toContain('has already been used this turn')
+  })
+})

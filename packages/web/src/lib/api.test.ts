@@ -217,6 +217,23 @@ describe('api timeline and admin calls (issue #215)', () => {
     })
   })
 
+  it('adds confirmedRepeat to an assisted action only when it is true', async () => {
+    const plain = respondWith(200, '{}')
+    await api.performAction('g1', 'chivalry', 'req-1', 9)
+    expect(lastCall(plain).body).toEqual({ action: 'chivalry', requestId: 'req-1', rev: 9 })
+
+    const declined = respondWith(200, '{}')
+    await api.performAction('g1', 'chivalry', 'req-1', 9, false)
+    expect(lastCall(declined).body).toEqual({ action: 'chivalry', requestId: 'req-1', rev: 9 })
+
+    const confirmed = respondWith(200, '{}')
+    await api.performAction('g1', 'chivalry', 'req-2', 10, true)
+    expect(lastCall(confirmed)).toEqual({
+      path: '/api/games/g1/actions',
+      body: { action: 'chivalry', requestId: 'req-2', rev: 10, confirmedRepeat: true },
+    })
+  })
+
   it('adds confirmedOutOfTurn to a draw only when it is true', async () => {
     const plain = respondWith(200, '{}')
     await api.draw('g1', 'CIV')
