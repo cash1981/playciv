@@ -12,6 +12,19 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### assisted-play-contract
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/assisted-play-contract`
+- **Brief:** `docs/agents/tasks/assisted-play-contract.md`
+- **Status:** claimed
+- **Claimed paths:**
+  - `packages/engine/src/assisted.ts`, `state.ts`, `migrate.ts`, `index.ts`, `errors.ts`, `log.ts`, `actions/player.ts`, `actions/undo.ts`
+  - `packages/server/src/routes/play.ts`, `errors.ts`
+  - `packages/web/src/lib/api.ts`, `views/AssistedActions.tsx`, `GameView.tsx`, `TechPanel.tsx`, `StatusPanel.tsx`, `LogPanel.tsx`
+  - `docs/agents/decisions.md`, `state.md`, `README.md`
+- **Notes:** issue #260, first slice. Draft brief, waiting for the human's go.
+
 _No live claims._
 
 
@@ -46,7 +59,7 @@ at a time. Claim them by name.
 | `packages/engine/data/board-assets.json` and `packages/web/public/board/` | free |
 | `packages/web/public/items/` | free |
 | `packages/engine/data/gamedata-faf-waw.json` | free |
-| `packages/engine/src/state.ts` (`PlayerView` shape) | chat-orders |
+| `packages/engine/src/state.ts` (`PlayerView` shape) | assisted-play-contract |
 | `packages/web/src/lib/api.ts` | free |
 
 The last two are listed because almost every feature wants to touch them, which
