@@ -768,6 +768,23 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     if (body['rev'] !== undefined && (clientRev === undefined || !Number.isInteger(clientRev) || clientRev < 0)) {
       return sendError(c, 400, 'BAD_REQUEST', 'rev must be a non-negative integer')
     }
+    // Only `chooseReward` carries a payload, and then both ids are required; the other actions take none
+    let payload: { readonly rewardId: string; readonly itemId: string } | undefined
+    if (action === 'chooseReward') {
+      const rewardId = requireString(body, 'rewardId')
+      const itemId = requireString(body, 'itemId')
+      if (rewardId === undefined || itemId === undefined || !REQUEST_ID.test(rewardId) || !REQUEST_ID.test(itemId)) {
+        return sendError(
+          c,
+          400,
+          'BAD_REQUEST',
+          'rewardId and itemId are required: 1 to 64 characters, letters, digits and . _ : -',
+        )
+      }
+      payload = { rewardId, itemId }
+    } else if (body['rewardId'] !== undefined || body['itemId'] !== undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'rewardId and itemId only belong to chooseReward')
+    }
     const actor = currentPlayer(c)
     return applyToGame(
       context,
@@ -779,6 +796,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
           action,
           requestId,
           at: new Date().toISOString(),
+          ...(payload === undefined ? {} : { payload }),
         }),
       clientRev,
       // A requestId that is already recorded answers with the same state: no new revision

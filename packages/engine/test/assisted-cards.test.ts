@@ -76,6 +76,7 @@ describe('the registry and the tech map', () => {
   it('lists the three incense cards next to Democracy and Printing Press', () => {
     expect([...ASSISTED_ACTION_KINDS].sort()).toEqual([
       'chivalry',
+      'cultureAdvance',
       'currency',
       'democracy',
       'metalCasting',

@@ -11,7 +11,7 @@ import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacem
 import { isUnit } from './item.js'
 import type { Rng } from './random.js'
 import type { Board, BoardArea, BoardPiece } from './board.js'
-import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
+import { boardAreas } from './board.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
 import { BASE_CULTURE_HAND_SIZE, cultureHandSizeOf } from './culture-hand.js'
@@ -29,6 +29,9 @@ import type { Undo } from './undo.js'
 import type { Battle, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
 import { availableActionsFor, publicAssistedActions } from './assisted.js'
+import { cultureMarkerOf } from './culture-track.js'
+import type { CultureLevel, CultureSpaceKind } from './culture-track.js'
+import type { SheetName } from './sheet-name.js'
 
 export type GameType = 'WAW'
 
@@ -154,6 +157,38 @@ export interface Playerhand {
   readonly stats: PlayerStats
   /** Public shared bookkeeping for the civilization's current government. */
   readonly government: Government
+  /**
+   * Card choices waiting for the owner after a culture advance. Private: the
+   * candidates are in the hand, hidden, and only the owner's projection carries
+   * this list. Stored in the state, so a refresh resumes the choice and never draws again.
+   */
+  readonly pendingRewards: readonly PendingReward[]
+}
+
+/**
+ * A reward of a culture advance that still has to be resolved: the player drew
+ * `candidateIds.length` cards, keeps `keep` of them and discards the rest.
+ */
+export interface PendingReward {
+  /** The `requestId` of the advance that drew them. */
+  readonly id: string
+  readonly kind: CultureSpaceKind
+  readonly level: CultureLevel
+  /** The space the marker moved to. */
+  readonly step: number
+  /** Ids of the drawn cards, which are in the player's hand until the choice is made. */
+  readonly candidateIds: readonly string[]
+  readonly keep: 1
+}
+
+/** A pending reward in the owner's projection, with the candidate cards in the clear. */
+export interface PendingRewardView {
+  readonly id: string
+  readonly kind: CultureSpaceKind
+  readonly level: CultureLevel
+  readonly step: number
+  readonly candidates: readonly Item[]
+  readonly keep: 1
 }
 
 /** Java: `GameLog.LogType`. */
@@ -216,7 +251,12 @@ export interface GameLogEntry {
 }
 
 /** The assisted actions the game can perform for a player. See `assisted.ts`. */
-export type AssistedActionKind = CultureCardKind | 'democracy' | 'printingPress'
+export type AssistedActionKind =
+  | CultureCardKind
+  | 'democracy'
+  | 'printingPress'
+  | 'cultureAdvance'
+  | 'chooseReward'
 
 /** The cards that spend a resource token for culture: "Incense, City Management: gain N culture". */
 export type CultureCardKind = 'chivalry' | 'currency' | 'metalCasting'
@@ -248,6 +288,31 @@ export type AssistedEffect =
       readonly resource: 'trade' | 'culture'
       readonly cost: number
     }
+  | {
+      readonly kind: 'cultureAdvance'
+      readonly fromStep: number
+      readonly toStep: number
+      /** What was paid, after the discounts. */
+      readonly culture: number
+      readonly trade: number
+      /** The leader piece that moved, where it was and where it went, and the board history entry of the move. */
+      readonly markerPieceId: string
+      readonly markerFrom: { readonly x: number; readonly y: number }
+      readonly markerTo: { readonly x: number; readonly y: number }
+      readonly historyId: string
+      readonly reward: CultureSpaceKind
+      readonly level: CultureLevel
+      readonly sheetName: SheetName
+      /** Every card drawn, in draw order. */
+      readonly drawn: readonly string[]
+      /** The card kept, or `null` while the choice is still pending. */
+      readonly kept: string | null
+    }
+  | {
+      readonly kind: 'chooseReward'
+      readonly rewardId: string
+      readonly itemId: string
+    }
 
 /**
  * One applied assisted action. `id` is the client's `requestId`, which is what
@@ -260,8 +325,8 @@ export interface AssistedActionRecord {
   readonly playerId: string
   readonly turnNumber: number
   readonly phase: TurnPhase
-  /** The key written to the player's `PlayerTurn.usedActions`. */
-  readonly usageKey: string
+  /** The key written to the player's `PlayerTurn.usedActions`, or `null` for a repeatable action. */
+  readonly usageKey: string | null
   readonly at: string | null
   /** The public log line the action wrote. */
   readonly logId: string
@@ -507,17 +572,8 @@ export function withPlayer(state: GameState, player: Playerhand): GameState {
  */
 export function cultureMarkerLevelOf(state: GameState, playerId: string): number | null {
   const player = findPlayer(state, playerId)
-  if (player === undefined || player.civilization === null || player.color === null) {
-    return null
-  }
-
-  const assetId = leaderAssetId(player.civilization.name, player.color)
-  if (assetId === undefined) return null
-
-  const piece = state.board.pieces.find((candidate) => candidate.assetId === assetId)
-  if (piece === undefined) return null
-
-  return cultureStepOf(state.board, piece)
+  if (player === undefined) return null
+  return cultureMarkerOf(state, player)?.step ?? null
 }
 
 /**
@@ -691,7 +747,13 @@ export function toPublicLog(entry: GameLogEntry): PublicLogEntry {
 }
 
 /** The viewer's own hand, plus the same derived board numbers opponents get. */
-export interface PlayerViewSelf extends Playerhand {
+export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
+  /**
+   * The card choices waiting for the viewer, each with its candidate cards.
+   * Only ever the viewer's own: an opponent or a spectator gets no such field,
+   * not even a count.
+   */
+  readonly pendingRewards: readonly PendingRewardView[]
   readonly cultureMarkerLevel: number | null
   readonly cityCount: number
   readonly buildingCount: number
@@ -795,6 +857,17 @@ export function battleSummaries(state: GameState): readonly BattleSideSummary[] 
   })
 }
 
+/** The viewer's pending rewards with the candidate cards looked up in their hand. */
+function pendingRewardViews(player: Playerhand): readonly PendingRewardView[] {
+  return player.pendingRewards.map(({ candidateIds, ...reward }) => ({
+    ...reward,
+    candidates: candidateIds.flatMap((id) => {
+      const item = player.items.find((candidate) => candidate.id === id)
+      return item === undefined ? [] : [item]
+    }),
+  }))
+}
+
 export function toPlayerView(state: GameState, viewerId: string): PlayerView {
   const player = findPlayer(state, viewerId)
   const you: PlayerViewSelf | null =
@@ -807,6 +880,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           buildingCount: buildingCountOf(state, viewerId),
           blockadedGreatPersonTypes: blockadedGreatPersonTypes(state, player),
           availableActions: availableActionsFor(state, viewerId),
+          pendingRewards: pendingRewardViews(player),
         }
   return {
     id: state.id,

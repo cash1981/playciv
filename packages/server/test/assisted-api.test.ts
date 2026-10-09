@@ -374,7 +374,7 @@ describe('what other clients receive', () => {
 
     const otherView = await asOther.json<View>()
     // Their own button state, which says they do not have Chivalry
-    expect(otherView.you?.availableActions?.every((entry) => entry.status === 'not-owned')).toBe(true)
+    expect(otherView.you?.availableActions?.filter((entry) => entry.action !== 'cultureAdvance').every((entry) => entry.status === 'not-owned')).toBe(true)
     for (const response of [asOther, asSpectator, anonymous]) {
       expect(response.status).toBe(200)
       expect(response.body).not.toContain(hut.id)

@@ -64,6 +64,7 @@ export function statusFor(error: EngineError): number {
     case 'ASSISTED_ACTION_REJECTED':
       return error.status === 'used' ? 409 : 400
     case 'ASSISTED_ACTION_ALREADY_UNDONE':
+    case 'ASSISTED_UNDO_BLOCKED':
     case 'BOARD_UNDO_ASSISTED':
       return 409
     case 'NO_BATTLE_ACTIVE':

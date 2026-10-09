@@ -128,6 +128,11 @@ export type EngineError =
     }
   /** The assisted action behind this log line has already been undone. */
   | { readonly kind: 'ASSISTED_ACTION_ALREADY_UNDONE'; readonly logId: string }
+  /**
+   * The undo vote on an assisted action passed but the board no longer allows the
+   * reversal (the culture marker has been moved since). Nothing is changed.
+   */
+  | { readonly kind: 'ASSISTED_UNDO_BLOCKED'; readonly logId: string; readonly reason: string }
   /** `setPlayerGovernment` got a value outside the Wisdom and Warfare cards. */
   | { readonly kind: 'UNKNOWN_GOVERNMENT'; readonly government: string }
   /** A battle is already active — only one at a time is allowed */
@@ -253,6 +258,8 @@ export function describeError(error: EngineError): string {
       return error.reason
     case 'ASSISTED_ACTION_ALREADY_UNDONE':
       return 'This action has already been undone'
+    case 'ASSISTED_UNDO_BLOCKED':
+      return error.reason
     case 'UNKNOWN_GOVERNMENT':
       return `Unknown government: ${error.government}`
     case 'BATTLE_ALREADY_ACTIVE':

@@ -23,16 +23,36 @@
  * `state.ts`, and nothing computed at load time from the board actions.
  */
 
-import { removePiece } from './actions/board.js'
+import { movePieceUnchecked, removePiece } from './actions/board.js'
+import { reshuffleItems } from './actions/draw.js'
 import { blockadedPieceIds } from './blockade.js'
-import { areaAt, boardAreas, locationOf, playerAreas } from './board.js'
+import {
+  CULTURE_VICTORY_STEP,
+  areaAt,
+  boardAreas,
+  cultureCellCenter,
+  cultureStepOf,
+  locationOf,
+  playerAreas,
+} from './board.js'
 import type { BoardPiece } from './board.js'
 import { activeWonderOwnerIds, coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
+import {
+  cultureAdvanceCost,
+  cultureMarkerOf,
+  cultureSpaceAt,
+  rewardDrawCount,
+} from './culture-track.js'
+import type { CultureAdvanceCost, CultureMarker, CultureSpace } from './culture-track.js'
 import type { EngineError } from './errors.js'
+import { itemName } from './item.js'
+import type { Item } from './item.js'
 import { appendLog } from './log.js'
-import { nextId } from './random.js'
+import { nextId, shuffle } from './random.js'
 import type { Result } from './result.js'
 import { err, ok } from './result.js'
+import { SHEET_LABEL } from './sheet-name.js'
+import type { SheetName } from './sheet-name.js'
 import type {
   AssistedActionKind,
   AssistedActionRecord,
@@ -42,13 +62,14 @@ import type {
   CultureCardKind,
   GameLogEntry,
   GameState,
+  PendingReward,
   Playerhand,
   PlayerStats,
   PublicAssistedAction,
   SpentResource,
 } from './state.js'
 import { publicTurn, publicTurnKey, sameTurn, turnStatus } from './turn.js'
-import type { PlayerTurn } from './turn.js'
+import type { PlayerTurn, TurnPhase } from './turn.js'
 
 // These two read the player list directly, so this module does not need the
 // value exports of `state.ts`, which in turn builds the projection from here.
@@ -316,17 +337,38 @@ interface Reversed {
   readonly text: string
 }
 
+/** What `chooseReward` carries: which pending reward and which of its cards to keep. */
+export interface ChooseRewardPayload {
+  readonly rewardId: string
+  readonly itemId: string
+}
+
 interface ApplyContext {
   readonly requestId: string
   readonly at: string | undefined
+  /** Only `chooseReward` reads it; every other action ignores it. */
+  readonly payload: ChooseRewardPayload | undefined
 }
 
-interface AssistedActionDefinition {
+/**
+ * How often an action can be done. Once per turn (the default for a card) writes
+ * its `usageKey` on the turn; a repeatable action, such as the culture advance,
+ * has no key, is never `used`, and each press needs its own `requestId`.
+ */
+type AssistedUsage =
+  | { readonly repeatable: false; readonly usageKey: string }
+  | { readonly repeatable: true; readonly usageKey: null }
+
+type AssistedActionDefinition = {
   readonly kind: AssistedActionKind
-  /** The tech card this action belongs to, as the tech dialog names it. */
-  readonly techName: string
+  /** The tech card this action belongs to, as the tech dialog names it. `null` for an action that is not a card. */
+  readonly techName: string | null
   readonly label: string
-  readonly usageKey: string
+  /**
+   * Whether it is an entry of `availableActions`, a button. `chooseReward` is
+   * not: it answers a choice the viewer already has and carries a payload.
+   */
+  readonly button: boolean
   availability(state: GameState, playerId: string): AssistedAvailability
   apply(state: GameState, player: Playerhand, context: ApplyContext): Result<Applied, EngineError>
   reverse(
@@ -335,7 +377,7 @@ interface AssistedActionDefinition {
     record: AssistedActionRecord,
     at: string | null,
   ): Result<Reversed, EngineError>
-}
+} & AssistedUsage
 
 const rejected = (action: string, availability: BlockedAvailability): EngineError => ({
   kind: 'ASSISTED_ACTION_REJECTED',
@@ -382,6 +424,8 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
     kind: card.kind,
     techName: card.techName,
     label: card.techName,
+    button: true,
+    repeatable: false,
     usageKey,
 
     availability(state, playerId) {
@@ -566,6 +610,8 @@ function coinPurchase(source: CoinPurchaseSource): AssistedActionDefinition {
     kind: source,
     techName: terms.techName,
     label: terms.techName,
+    button: true,
+    repeatable: false,
     usageKey: coinUsageKey(source),
 
     availability(state, playerId) {
@@ -620,16 +666,425 @@ function coinPurchase(source: CoinPurchaseSource): AssistedActionDefinition {
   return definition
 }
 
+// -- The culture advance and its reward ---------------------------------------
+
+const ROMAN = ['', 'I', 'II', 'III'] as const
+
+/** "space 8 (culture II event)" or "space 7 (Great Person)". */
+function describeSpace(space: CultureSpace): string {
+  const what = space.kind === 'event' ? `culture ${ROMAN[space.level]} event` : 'Great Person'
+  return `space ${space.step} (${what})`
+}
+
+/** "5 culture and 3 trade", "3 culture", or "nothing" when a discount took it all. */
+function describeCost(cost: CultureAdvanceCost): string {
+  const parts = [
+    ...(cost.culture > 0 ? [`${cost.culture} culture`] : []),
+    ...(cost.trade > 0 ? [`${cost.trade} trade`] : []),
+  ]
+  return parts.length === 0 ? 'nothing' : parts.join(' and ')
+}
+
+/** The deck a space draws from: its level's culture deck, or the Great Person deck. */
+function rewardSheet(space: CultureSpace): SheetName {
+  if (space.kind === 'greatPerson') return 'GREAT_PERSON'
+  return space.level === 1 ? 'CULTURE_1' : space.level === 2 ? 'CULTURE_2' : 'CULTURE_3'
+}
+
+/** "culture II" or "Great Person", as the public line names the cards. */
+function rewardLabel(space: Pick<CultureSpace, 'kind' | 'level'>): string {
+  return space.kind === 'event' ? `culture ${ROMAN[space.level]}` : 'Great Person'
+}
+
+const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`
+
+interface AdvancePlan {
+  readonly marker: CultureMarker
+  readonly to: CultureSpace
+  readonly cost: CultureAdvanceCost
+  readonly count: number
+  readonly sheetName: SheetName
+}
+
+/**
+ * Whether the player can advance now, and onto what. The order of the checks is
+ * the order the reasons are given in: phase, the marker, the end of the track, a
+ * choice still waiting, the price, and last the deck, so the reason that comes
+ * first is the one the player can do something about first.
+ */
+function planAdvance(state: GameState, player: Playerhand): Result<AdvancePlan, BlockedAvailability> {
+  if (openCityManagementTurn(state, player) === undefined) return err(blocked('wrong-phase', PHASE_REASON))
+  const marker = cultureMarkerOf(state, player)
+  if (marker === undefined) {
+    return err(blocked('unavailable', 'Your leader marker is not on the culture track.'))
+  }
+  const to = cultureSpaceAt(marker.step + 1)
+  if (to === undefined) {
+    return err(blocked('unavailable', 'Your marker is already on the Culture Victory space.'))
+  }
+
+  const cost = cultureAdvanceCost(state, player, to.step)
+  const where = `Advance to ${describeSpace(to)}: ${describeCost(cost)}.`
+  if (player.pendingRewards.length > 0) {
+    return err(blocked('unavailable', `${where} Choose the card to keep from your last advance first.`))
+  }
+
+  const lackingCulture = Math.max(0, cost.culture - player.stats.culture)
+  const lackingTrade = Math.max(0, cost.trade - player.stats.trade)
+  if (lackingCulture > 0 || lackingTrade > 0) {
+    return err(
+      blocked(
+        'needs-resource',
+        `${where} You are missing ${describeCost({ culture: lackingCulture, trade: lackingTrade })}.`,
+      ),
+    )
+  }
+
+  const sheetName = rewardSheet(to)
+  const cardsLeft = [...state.items, ...state.discardedItems].some((item) => item.sheetName === sheetName)
+  if (!cardsLeft) {
+    return err(blocked('unavailable', `${where} There are no ${SHEET_LABEL[sheetName]} cards left to draw.`))
+  }
+
+  return ok({ marker, to, cost, count: rewardDrawCount(state, player, to.kind), sheetName })
+}
+
+/**
+ * Takes up to `count` cards of one sheet off the deck, the way the Draw button
+ * takes the first of the sheet and reshuffles the discards when the deck has none
+ * of it. Without an item log line per card: a line carrying the item would make
+ * the old item undo a way to take back one card of the choice. Fewer cards than
+ * asked for is fine once the first one is drawn (there is nothing left to draw);
+ * not even one is the reshuffle's own error.
+ */
+function drawCandidates(
+  state: GameState,
+  sheetName: SheetName,
+  count: number,
+): Result<{ readonly state: GameState; readonly items: readonly Item[] }, EngineError> {
+  let current = state
+  const items: Item[] = []
+  for (let drawn = 0; drawn < count; drawn += 1) {
+    let index = current.items.findIndex((item) => item.sheetName === sheetName)
+    if (index < 0) {
+      const reshuffled = reshuffleItems(current, sheetName)
+      if (!reshuffled.ok) {
+        if (items.length === 0) return reshuffled
+        break
+      }
+      current = reshuffled.value
+      index = current.items.findIndex((item) => item.sheetName === sheetName)
+    }
+    const item = current.items[index]
+    if (item === undefined) break
+    items.push(item)
+    current = { ...current, items: [...current.items.slice(0, index), ...current.items.slice(index + 1)] }
+  }
+  return ok({ state: current, items })
+}
+
+/** Two shuffles of the deck, as an item undo does (`shuffleDeckTwice` in `actions/undo.ts`). */
+function shuffleDeckTwice(state: GameState): GameState {
+  const [once, afterFirst] = shuffle(state.items, state.rng)
+  const [twice, rng] = shuffle(once, afterFirst)
+  return { ...state, items: twice, rng }
+}
+
+const cultureAdvance: AssistedActionDefinition = {
+  kind: 'cultureAdvance',
+  techName: null,
+  label: 'Culture advance',
+  button: true,
+  repeatable: true,
+  usageKey: null,
+
+  availability(state, playerId) {
+    const player = playerOf(state, playerId)
+    if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
+    const plan = planAdvance(state, player)
+    if (!plan.ok) return plan.error
+    return {
+      status: 'ready',
+      reason: `Advance to ${describeSpace(plan.value.to)}: ${describeCost(plan.value.cost)}.`,
+    }
+  },
+
+  apply(state, player, context) {
+    const plan = planAdvance(state, player)
+    if (!plan.ok) return err(rejected('cultureAdvance', plan.error))
+    const { marker, to, cost, count, sheetName } = plan.value
+    const failed = (reason: string): EngineError =>
+      rejected('cultureAdvance', blocked('unavailable', reason))
+    const at = context.at === undefined ? {} : { at: context.at }
+
+    // The marker moves exactly one space, through the board's own move so the
+    // history records it. Only the horizontal position changes, so it keeps its lane.
+    const target = cultureCellCenter(state.board, to.step)
+    const moved = movePieceUnchecked(state, {
+      playerId: player.playerId,
+      pieceId: marker.piece.id,
+      x: Math.round(target.x - marker.piece.width / 2),
+      y: marker.piece.y,
+      snap: false,
+      ...at,
+    })
+    const move = moved?.board.history.at(-1)
+    const placed = moved?.board.pieces.find((piece) => piece.id === marker.piece.id)
+    if (moved === undefined || move === undefined || placed === undefined) {
+      return err(failed('Your leader marker could not be moved.'))
+    }
+    if (cultureStepOf(moved.board, placed) !== to.step) {
+      return err(failed('Your leader marker could not be moved onto that space.'))
+    }
+
+    const drawn = drawCandidates(moved, sheetName, count)
+    if (!drawn.ok) return drawn
+    const candidates = drawn.value.items.map((item): Item => ({ ...item, ownerId: player.playerId, hidden: true }))
+
+    const paying = playerOf(drawn.value.state, player.playerId) ?? player
+    const resolved = candidates.length === 1
+    const reward: PendingReward = {
+      id: context.requestId,
+      kind: to.kind,
+      level: to.level,
+      step: to.step,
+      candidateIds: candidates.map((item) => item.id),
+      keep: 1,
+    }
+    const paid = withPlayerHand(drawn.value.state, {
+      ...paying,
+      stats: {
+        ...paying.stats,
+        culture: paying.stats.culture - cost.culture,
+        trade: paying.stats.trade - cost.trade,
+      },
+      items: [...paying.items, ...candidates],
+      pendingRewards: resolved ? paying.pendingRewards : [...paying.pendingRewards, reward],
+    })
+
+    const label = rewardLabel(to)
+    const publicLine = appendLog(paid, {
+      username: player.username,
+      playerId: player.playerId,
+      publicLog:
+        `${player.username} advanced on the culture track to space ${to.step} ` +
+        `and drew ${plural(candidates.length, `${label} card`)}`,
+      privateLog: '',
+      createdAt: context.at ?? null,
+      assistedActionId: context.requestId,
+    })
+    const logId = lastLogId(publicLine)
+    const names = candidates.map(itemName).join(', ')
+    const withPrivate = appendLog(publicLine, {
+      username: player.username,
+      playerId: player.playerId,
+      privateLog: resolved
+        ? `${player.username} drew ${names} (${SHEET_LABEL[sheetName]}) and kept it`
+        : `${player.username} drew ${names} (${SHEET_LABEL[sheetName]}), keeps one`,
+      createdAt: context.at ?? null,
+    })
+    // Reaching the last panel changes nothing else: no winner, no end of the game.
+    const logged =
+      to.step === CULTURE_VICTORY
+        ? appendLog(withPrivate, {
+            username: player.username,
+            playerId: player.playerId,
+            publicLog: `${player.username} has reached the Culture Victory space on the culture track`,
+            createdAt: context.at ?? null,
+          })
+        : withPrivate
+
+    return ok({
+      state: logged,
+      effect: {
+        kind: 'cultureAdvance',
+        fromStep: marker.step,
+        toStep: to.step,
+        culture: cost.culture,
+        trade: cost.trade,
+        markerPieceId: marker.piece.id,
+        markerFrom: { x: marker.piece.x, y: marker.piece.y },
+        markerTo: { x: placed.x, y: placed.y },
+        historyId: move.id,
+        reward: to.kind,
+        level: to.level,
+        sheetName,
+        drawn: reward.candidateIds,
+        kept: resolved ? (reward.candidateIds[0] ?? null) : null,
+      },
+      logId,
+    })
+  },
+
+  reverse(state, player, record, at) {
+    const effect = record.effect
+    if (effect.kind !== 'cultureAdvance') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+    const refused = (reason: string): EngineError => ({
+      kind: 'ASSISTED_UNDO_BLOCKED',
+      logId: record.logId,
+      reason,
+    })
+
+    // Everything is checked before anything is changed, so a refusal leaves the game as it was.
+    const marker = state.board.pieces.find((piece) => piece.id === effect.markerPieceId)
+    if (marker === undefined) {
+      return err(refused('The leader marker is no longer on the board, so the advance cannot be undone.'))
+    }
+    if (cultureStepOf(state.board, marker) !== effect.toStep) {
+      return err(
+        refused(
+          `The leader marker is no longer on space ${effect.toStep}. Move it back, or undo the later advances first.`,
+        ),
+      )
+    }
+
+    const inHand = (id: string): Item | undefined => player.items.find((item) => item.id === id)
+    const inDiscard = (id: string): Item | undefined => state.discardedItems.find((item) => item.id === id)
+    const inDeck = (id: string): boolean => state.items.some((item) => item.id === id)
+    const toDeck: Item[] = []
+    for (const id of effect.drawn) {
+      // A kept card that has left the hand (traded, discarded) cannot be taken back, like a missing hut.
+      const found = id === effect.kept ? inHand(id) : (inDiscard(id) ?? inHand(id))
+      if (found !== undefined) {
+        toDeck.push(found)
+      } else if (!inDeck(id) || id === effect.kept) {
+        return err({ kind: 'ITEM_NOT_FOUND', sheetName: effect.sheetName })
+      }
+    }
+
+    const returnedIds = new Set(toDeck.map((item) => item.id))
+    const withCards: GameState = {
+      ...withPlayerHand(state, {
+        ...player,
+        stats: {
+          ...player.stats,
+          culture: player.stats.culture + effect.culture,
+          trade: player.stats.trade + effect.trade,
+        },
+        items: player.items.filter((item) => !returnedIds.has(item.id)),
+        pendingRewards: player.pendingRewards.filter((reward) => reward.id !== record.id),
+      }),
+      discardedItems: state.discardedItems.filter((item) => !returnedIds.has(item.id)),
+      items: [...state.items, ...toDeck.map((item): Item => ({ ...item, hidden: true, ownerId: null }))],
+    }
+    const deck = toDeck.length === 0 ? withCards : shuffleDeckTwice(withCards)
+
+    const movedBack = movePieceUnchecked(deck, {
+      playerId: record.playerId,
+      pieceId: effect.markerPieceId,
+      x: effect.markerFrom.x,
+      y: effect.markerFrom.y,
+      snap: false,
+      ...(at === null ? {} : { at }),
+    })
+    if (movedBack === undefined) return err(refused('The leader marker could not be moved back.'))
+
+    return ok({
+      state: movedBack,
+      text:
+        `${player.username}'s culture advance was undone: the leader marker is back on space ${effect.fromStep}, ` +
+        `${describeCost(effect)} returned and the drawn cards were put back in the deck`,
+    })
+  },
+}
+
+const chooseReward: AssistedActionDefinition = {
+  kind: 'chooseReward',
+  techName: null,
+  label: 'Choose reward',
+  button: false,
+  repeatable: true,
+  usageKey: null,
+
+  availability(state, playerId) {
+    const player = playerOf(state, playerId)
+    if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
+    if (player.pendingRewards.length === 0) {
+      return blocked('unavailable', 'You have no card choice waiting.')
+    }
+    return { status: 'ready', reason: 'Choose the card to keep.' }
+  },
+
+  apply(state, player, context) {
+    const failed = (reason: string): EngineError =>
+      rejected('chooseReward', blocked('unavailable', reason))
+    const payload = context.payload
+    if (payload === undefined) return err(failed('Say which reward and which card.'))
+
+    const reward = player.pendingRewards.find((candidate) => candidate.id === payload.rewardId)
+    if (reward === undefined) {
+      return err(failed('That card choice is not waiting any more. It may already have been made.'))
+    }
+    if (!reward.candidateIds.includes(payload.itemId)) {
+      return err(failed('That card is not one of the choices.'))
+    }
+    const kept = player.items.find((item) => item.id === payload.itemId)
+    if (kept === undefined) return err(failed('That card is no longer in your hand.'))
+
+    // The others leave the hand for the discard pile, hidden like `discardItem` leaves them.
+    const others = player.items.filter(
+      (item) => item.id !== kept.id && reward.candidateIds.includes(item.id),
+    )
+    const otherIds = new Set(others.map((item) => item.id))
+    const discarded = withPlayerHand(
+      {
+        ...state,
+        discardedItems: [...state.discardedItems, ...others.map((item): Item => ({ ...item, hidden: true }))],
+        assistedActions: state.assistedActions.map((record) =>
+          record.id === reward.id && record.effect.kind === 'cultureAdvance'
+            ? { ...record, effect: { ...record.effect, kept: kept.id } }
+            : record,
+        ),
+      },
+      {
+        ...player,
+        items: player.items.filter((item) => !otherIds.has(item.id)),
+        pendingRewards: player.pendingRewards.filter((candidate) => candidate.id !== reward.id),
+      },
+    )
+
+    const publicLine = appendLog(discarded, {
+      username: player.username,
+      playerId: player.playerId,
+      publicLog: `${player.username} kept a card`,
+      privateLog: '',
+      createdAt: context.at ?? null,
+    })
+    const logId = lastLogId(publicLine)
+    const logged = appendLog(publicLine, {
+      username: player.username,
+      playerId: player.playerId,
+      privateLog:
+        `${player.username} kept ${itemName(kept)}` +
+        (others.length === 0 ? '' : ` and discarded ${others.map(itemName).join(', ')}`),
+      createdAt: context.at ?? null,
+    })
+    return ok({
+      state: logged,
+      effect: { kind: 'chooseReward', rewardId: reward.id, itemId: kept.id },
+      logId,
+    })
+  },
+
+  // Choosing is undone by undoing the advance, whose line is the one the vote targets.
+  reverse(_state, _player, record) {
+    return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+  },
+}
+
 /** Every assisted action, in the order the projection lists them. */
 export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   ...RESOURCE_CULTURE_CARDS.map(resourceCultureCard),
   coinPurchase('democracy'),
   coinPurchase('printingPress'),
+  cultureAdvance,
+  chooseReward,
 ]
 
-export const ASSISTED_ACTION_KINDS: readonly AssistedActionKind[] = ASSISTED_ACTIONS.map(
-  (definition) => definition.kind,
-)
+/** The actions that are buttons, in the order of `availableActions`. `chooseReward` answers a choice and is not one. */
+export const ASSISTED_ACTION_KINDS: readonly AssistedActionKind[] = ASSISTED_ACTIONS.filter(
+  (definition) => definition.button,
+).map((definition) => definition.kind)
 
 /**
  * Which assisted action belongs to which tech card, by the tech's name. The tech
@@ -637,17 +1092,23 @@ export const ASSISTED_ACTION_KINDS: readonly AssistedActionKind[] = ASSISTED_ACT
  * no change in the web code.
  */
 export const ASSISTED_TECH_ACTIONS: ReadonlyMap<string, AssistedActionKind> = new Map(
-  ASSISTED_ACTIONS.map((definition) => [definition.techName, definition.kind]),
+  ASSISTED_ACTIONS.flatMap((definition): [string, AssistedActionKind][] =>
+    definition.techName === null ? [] : [[definition.techName, definition.kind]],
+  ),
 )
 
+/** Any registered action, buttons and `chooseReward` alike: what the route accepts. */
 export function isAssistedActionKind(value: unknown): value is AssistedActionKind {
-  return typeof value === 'string' && (ASSISTED_ACTION_KINDS as readonly string[]).includes(value)
+  return typeof value === 'string' && ASSISTED_ACTIONS.some((definition) => definition.kind === value)
 }
 
 const definitionOf = (kind: AssistedActionKind): AssistedActionDefinition | undefined =>
   ASSISTED_ACTIONS.find((definition) => definition.kind === kind)
 
 const lastLogId = (state: GameState): string => state.log.at(-1)?.id ?? ''
+
+/** The track's last position, the Culture Victory panel. */
+const CULTURE_VICTORY = CULTURE_VICTORY_STEP
 
 // ---------------------------------------------------------------------------
 // Availability and the projection
@@ -672,16 +1133,20 @@ export function assistedAvailability(
  */
 export function availableActionsFor(state: GameState, playerId: string): readonly AvailableAction[] {
   if (playerOf(state, playerId) === undefined) return []
-  return ASSISTED_ACTIONS.map((definition) => ({
+  return ASSISTED_ACTIONS.filter((definition) => definition.button).map((definition) => ({
     action: definition.kind,
     label: definition.label,
     ...definition.availability(state, playerId),
   }))
 }
 
-/** What everyone may read of the actions performed: who, when, the public line. No effect. */
+/**
+ * What everyone may read of the actions performed: who, when, the public line. No
+ * effect. A choice of reward is left out: it is the answer to an advance that is
+ * listed, and its line is not a target for an undo.
+ */
 export function publicAssistedActions(state: GameState): readonly PublicAssistedAction[] {
-  return state.assistedActions.map((record) => ({
+  return state.assistedActions.filter((record) => record.kind !== 'chooseReward').map((record) => ({
     id: record.id,
     kind: record.kind,
     label: definitionOf(record.kind)?.label ?? record.kind,
@@ -706,6 +1171,8 @@ export interface PerformAssistedActionInput {
   readonly requestId: string
   /** ISO timestamp for the log and the board history. The engine itself stays pure. */
   readonly at?: string
+  /** What `chooseReward` needs: which reward and which card. Other actions take none. */
+  readonly payload?: ChooseRewardPayload
 }
 
 /**
@@ -737,16 +1204,21 @@ export function performAssistedAction(
   const availability = definition.availability(state, input.playerId)
   if (availability.status !== 'ready') return err(rejected(input.action, availability))
 
-  const applied = definition.apply(state, player, { requestId: input.requestId, at: input.at })
+  const applied = definition.apply(state, player, {
+    requestId: input.requestId,
+    at: input.at,
+    payload: input.payload,
+  })
   if (!applied.ok) return applied
 
-  const turnNumber = turnStatus(state).currentTurn
+  const status = turnStatus(state)
   const record: AssistedActionRecord = {
     id: input.requestId,
     kind: input.action,
     playerId: input.playerId,
-    turnNumber,
-    phase: 'CM',
+    turnNumber: status.currentTurn,
+    // A reward can be chosen after City Management has closed; every other action needs it open
+    phase: definition.kind === 'chooseReward' ? openPhaseOf(status, input.playerId) : 'CM',
     usageKey: definition.usageKey,
     at: input.at ?? null,
     logId: applied.value.logId,
@@ -755,6 +1227,10 @@ export function performAssistedAction(
   }
   return ok({ ...applied.value.state, assistedActions: [...applied.value.state.assistedActions, record] })
 }
+
+/** The phase the player is working on, for the record of an action that does not need City Management. */
+const openPhaseOf = (status: ReturnType<typeof turnStatus>, playerId: string): TurnPhase =>
+  status.players.find((candidate) => candidate.playerId === playerId)?.phase ?? 'CM'
 
 // ---------------------------------------------------------------------------
 // Undo
@@ -799,7 +1275,10 @@ export function reverseAssistedAction(
   if (!reversed.ok) return reversed
 
   const current = playerOf(reversed.value.state, record.playerId) ?? player
-  const freed = freeTurnAction(reversed.value.state, current, record.turnNumber, record.usageKey)
+  const freed =
+    record.usageKey === null
+      ? reversed.value.state
+      : freeTurnAction(reversed.value.state, current, record.turnNumber, record.usageKey)
   const marked: GameState = {
     ...freed,
     assistedActions: freed.assistedActions.map((candidate) =>

@@ -68,9 +68,11 @@ type MaybeOlder = Omit<
  *  pyramid placements, or its own `socialPolicies` array existed. */
 type MaybeOlderPlayerhand = Omit<
   Playerhand,
-  'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies'
+  'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards'
 > &
-  Partial<Pick<Playerhand, 'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies'>>
+  Partial<
+    Pick<Playerhand, 'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards'>
+  >
 
 /**
  * Fills in the status board and, since issue #102, normalises Movement to its
@@ -116,6 +118,7 @@ const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   government: player.government ?? DEFAULT_GOVERNMENT,
   pyramidPlacements: player.pyramidPlacements ?? [],
   socialPolicies: correctSocialPolicyFlipsides(player.socialPolicies ?? []),
+  pendingRewards: player.pendingRewards ?? [],
 })
 
 /** A board from before the player areas, history, redo stack or shapes existed. */

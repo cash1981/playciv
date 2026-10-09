@@ -124,6 +124,7 @@ export function emptyPlayerhand(player: NewPlayer, playernumber: number): Player
     gamenote: null,
     stats: DEFAULT_PLAYER_STATS,
     government: DEFAULT_GOVERNMENT,
+    pendingRewards: [],
   }
 }
 

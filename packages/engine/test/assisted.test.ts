@@ -42,6 +42,7 @@ describe('the registry', () => {
   it('lists the incense cards, Democracy and Printing Press', () => {
     expect([...ASSISTED_ACTION_KINDS].sort()).toEqual([
       'chivalry',
+      'cultureAdvance',
       'currency',
       'democracy',
       'metalCasting',
@@ -365,7 +366,10 @@ describe('the projection', () => {
       const view = toPlayerView(done, viewerId)
       // Their own state, not the actor's: they hold none of these techs
       expect(view.you?.availableActions).toEqual(availableActionsFor(done, viewerId))
-      expect(view.you?.availableActions.every((entry) => entry.status === 'not-owned')).toBe(true)
+      // The culture advance is not tied to a card: it says why it cannot be done, not "not-owned"
+      expect(
+        view.you?.availableActions.filter((entry) => entry.action !== 'cultureAdvance').every((entry) => entry.status === 'not-owned'),
+      ).toBe(true)
       // The actor appears as an opponent: counts and public numbers, no button state
       const actor = view.opponents.find((entry) => entry.playerId === CASH1981)
       expect(actor).not.toHaveProperty('availableActions')

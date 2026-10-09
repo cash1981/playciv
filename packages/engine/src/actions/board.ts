@@ -15,7 +15,7 @@
  * log would drown.
  */
 
-import type { Board, BoardArea, BoardChange, BoardPiece, Rotation } from '../board.js'
+import type { Board, BoardArea, BoardChange, BoardHistoryEntry, BoardPiece, Rotation } from '../board.js'
 import {
   applyChange,
   areaAt,
@@ -571,24 +571,31 @@ export function removePiece(state: GameState, input: PieceInput): ActionResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Whether a board change is the removal of a resource piece that an assisted
- * action, still applied, spent. That removal is the cost of the action, so only
- * the undo vote on the action's log line may put the piece back; the board's own
- * Undo would return it and keep what the action gave. Once the action is undone
- * the old history entry is an ordinary one again.
+ * Whether a board history entry is part of the price of an assisted action that
+ * is still applied: the removal of the resource piece it spent, or the move of
+ * the culture marker a culture advance made. That change is the cost of the
+ * action, so only the undo vote on the action's log line may take it back; the
+ * board's own Undo would return it and keep what the action gave. Once the
+ * action is undone the old history entry is an ordinary one again.
  *
  * Reads the records directly instead of importing `assisted.ts`, which imports
  * this file.
  */
-function isAssistedSpend(state: GameState, change: BoardChange): boolean {
-  if (change.kind !== 'remove') return false
-  return state.assistedActions.some(
-    (record) =>
-      record.status === 'applied' &&
-      'spent' in record.effect &&
-      record.effect.spent.kind === 'piece' &&
-      record.effect.spent.piece.id === change.piece.id,
-  )
+function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): boolean {
+  const { change } = entry
+  return state.assistedActions.some((record) => {
+    if (record.status !== 'applied') return false
+    const effect = record.effect
+    if (effect.kind === 'cultureAdvance') {
+      return change.kind === 'move' && effect.historyId === entry.id
+    }
+    return (
+      change.kind === 'remove' &&
+      'spent' in effect &&
+      effect.spent.kind === 'piece' &&
+      effect.spent.piece.id === change.piece.id
+    )
+  })
 }
 
 /**
@@ -611,7 +618,7 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
   const last = state.board.history.at(-1)
   if (last === undefined) return err({ kind: 'NOTHING_TO_UNDO_ON_BOARD' })
   if (last.playerId !== playerId) return err({ kind: 'BOARD_UNDO_NOT_YOURS' })
-  if (isAssistedSpend(state, last.change)) return err({ kind: 'BOARD_UNDO_ASSISTED' })
+  if (isAssistedBoardChange(state, last)) return err({ kind: 'BOARD_UNDO_ASSISTED' })
 
   return ok(
     withBoard(state, {

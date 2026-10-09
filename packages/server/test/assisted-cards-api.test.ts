@@ -130,7 +130,8 @@ describe('POST /api/games/:gameId/actions with Currency', () => {
 
     const theirs = await view(table.gameId, table.other)
     expect(theirs.assistedActions).toHaveLength(1)
-    expect(theirs.you?.availableActions?.every((entry) => entry.status === 'not-owned')).toBe(true)
+    // The culture advance is not tied to a card, so it answers with its own reason
+    expect(theirs.you?.availableActions?.filter((entry) => entry.action !== 'cultureAdvance').every((entry) => entry.status === 'not-owned')).toBe(true)
     const json = JSON.stringify(theirs)
     expect(json).not.toContain('"effect"')
     expect(json).not.toContain('card:Currency')
