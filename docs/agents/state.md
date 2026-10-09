@@ -13,7 +13,7 @@ _Last updated: 2026-10-08 (undo End battle)_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 897 engine, 636 server, 534 web (2,067 total) on `codex/barbarian-draw` |
+| `pnpm -r test` | passing — 915 engine, 640 server, 540 web (2,095 total) on `feat/undo-end-battle` |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
