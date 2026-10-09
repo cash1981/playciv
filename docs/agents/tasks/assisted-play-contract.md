@@ -198,3 +198,52 @@ Still open, none blocks starting:
    piece outside every area is ignored, never taken.
 3. **Hut resources and the Hut tile name.** The hut names are `Incense`,
    `Iron`, `Silk`, `Wheat`, `Uranium`; matching is by name, case-insensitive.
+
+
+## Part 2b: the culture advance
+
+The human's rules (2026-10-09), recorded here because this is what the reviewer
+checks against:
+
+- The marker is already on the board and its step is known
+  (`cultureMarkerLevelOf`, 0 is Start, 1 to 21, 21 is the Culture Victory panel).
+  The button moves it one step, to the space after the one it is on.
+- The track is three sections of seven spaces: steps 1 to 7 are level 1, 8 to 14
+  level 2, 15 to 21 level 3. Four of the 21 are Great Person spaces (3, 7, 12,
+  18); every other space is a culture event of the section's level.
+- Cost, by the level of the space moved to (a Great Person space costs what its
+  section costs): level 1 is 3 culture; level 2 is 5 culture and 3 trade; level 3
+  is 7 culture and 6 trade. Endowment for the Arts (`stats.efta` is the number of
+  investments): 2 or more investments take 1 off the culture cost, 4 or more take
+  2 off, at every level, never below 0. Ecology (printed in `techText.ts`: 1 less
+  trade for every 3 coins you possess, `totalCoins`) takes trade off, never below 0.
+  The Ecology line comes from the printed card text, not from the human: say so in
+  `decisions.md`.
+- Reward by destination, never chosen by the player. Culture event space: draw from
+  the deck of that level (`CULTURE_1`, `CULTURE_2`, `CULTURE_3`), 1 card plus 1 extra
+  with Mysticism revealed, keep one, discard the rest. Great Person space: draw
+  Great Person cards the way the existing Draw button does (`draw` takes the first of
+  the sheet and reshuffles the discards when the deck is empty), 1 card plus 1 extra
+  for Organized Religion (a revealed social policy) plus 1 extra for the Greeks
+  civilization; they stack; keep one, discard the rest. The Great Person token and
+  reserve handling is #252 and is not built: the kept card goes to the hand like a
+  normal draw, and the UI says the token step is still manual.
+- The advance can be repeated in a turn (it is not once per turn); each press needs
+  its own requestId. A new advance is refused while a reward choice is pending.
+- Step 21 draws a level 3 culture card like any other event space. Reaching it
+  writes a public line saying the player has reached the Culture Victory space. It
+  does not end the game and does not set a winner: the human says the round can be
+  finished and someone may still win on points; the existing End game stays the way
+  to end the game.
+- Phase: City Management, like the other culture spending. This is an assumption the
+  human has not confirmed; say so in `decisions.md`.
+- Every drawn candidate is private. The choice is stored, so a refresh resumes it
+  and never draws again.
+- Undo is the existing vote on the advance's one public line. A passed vote moves the
+  marker back, gives back culture and trade, and puts the cards back: the kept card
+  from the hand and the discarded candidates from the discard pile go to the deck,
+  which is shuffled the way an item undo does today. If a kept card has left the
+  hand (traded, discarded), the reversal fails the way a missing hut does and the
+  vote stays open.
+- Out: map tile 16a (human: later), free advances (Arabs, Romans), hand limit
+  enforcement (show nothing, enforce nothing), Great Person tokens (#252).
