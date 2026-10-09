@@ -6,14 +6,14 @@ read the codebase to find out what is done.
 Keep it short. One line per finished thing. Detail that is worth keeping goes
 in `decisions.md`; detail that is not goes nowhere.
 
-_Last updated: 2026-10-07 (independent barbarian drawing)_
+_Last updated: 2026-10-09 (removed the move-to-single-chat admin tool)_
 
 ## Health
 
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 897 engine, 636 server, 534 web (2,067 total) on `codex/barbarian-draw` |
+| `pnpm -r test` | passing — 877 engine, 604 server, 522 web (2,003 total) on `chore/remove-migrate-chat` |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
