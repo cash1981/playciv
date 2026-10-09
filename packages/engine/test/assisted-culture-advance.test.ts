@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import { movePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { discardItem } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
-import { initiateUndo, vote } from '../src/actions/undo.js'
+import { initiateUndo, playerPutsItemBackInDeck, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { cultureCellCenter, cultureStepOf } from '../src/board.js'
 import type { Item } from '../src/item.js'
@@ -411,6 +411,65 @@ describe('a choice of reward', () => {
       reason: 'This request id was already used.',
     })
   })
+
+  /** Puts a candidate back in the deck by hand, as the player can at any time. */
+  const putBack = (state: GameState, id: string): GameState => {
+    const card = handItem(state, id) as Item
+    return unwrap(playerPutsItemBackInDeck(state, { playerId: CASH1981, sheetName: card.sheetName, name: itemName(card) }))
+  }
+
+  it('a choice whose candidates have all left the hand does not block the next advance, and is not shown', () => {
+    let stuck = advance(choiceTurn(), 'req-1')
+    for (const id of drawnBy(stuck, 'req-1')) stuck = putBack(stuck, id)
+    stuck = withStats(stuck, { culture: 20, trade: 20 })
+
+    expect(me(stuck).pendingRewards).toHaveLength(1)
+    expect(toPlayerView(stuck, CASH1981).you?.pendingRewards).toEqual([])
+    expect(assistedAvailability(stuck, CASH1981, 'cultureAdvance').status).toBe('ready')
+
+    // The next advance drops the stale entry and leaves only its own
+    const next = advance(stuck, 'req-2')
+    expect(me(next).pendingRewards.map((reward) => reward.id)).toEqual(['req-2'])
+  })
+
+  it('choosing on a reward with no candidate left in the hand clears it instead of failing for good', () => {
+    let stuck = advance(choiceTurn(), 'req-1')
+    const [first] = drawnBy(stuck, 'req-1')
+    for (const id of drawnBy(stuck, 'req-1')) stuck = putBack(stuck, id)
+
+    const cleared = unwrap(choose(stuck, 'req-2', 'req-1', first ?? ''))
+    expect(me(cleared).pendingRewards).toEqual([])
+    expect(cleared.assistedActions.find((record) => record.id === 'req-2')?.effect).toEqual({
+      kind: 'chooseReward',
+      rewardId: 'req-1',
+      itemId: null,
+    })
+    expect(me(cleared).items).toHaveLength(me(stuck).items.length)
+    // Nothing private in the line it wrote
+    const added = cleared.log.slice(stuck.log.length)
+    expect(added).toHaveLength(1)
+    expect(added[0]?.publicLog).toContain('no card left to choose')
+    expect(added[0]?.publicLog).not.toContain(itemName(topCards(choiceTurn(), 'CULTURE_1', 1)[0] as Item))
+  })
+
+  it('a choice with only some candidates gone stays pending, and the rest are still offered and choosable', () => {
+    const pending = advance(choiceTurn(), 'req-1')
+    const [first, second] = drawnBy(pending, 'req-1')
+    const partly = putBack(pending, first ?? '')
+
+    expect(assistedAvailability(partly, CASH1981, 'cultureAdvance')).toMatchObject({
+      status: 'unavailable',
+      reason: expect.stringContaining('Choose the card to keep'),
+    })
+    const offered = toPlayerView(partly, CASH1981).you?.pendingRewards
+    expect(offered).toHaveLength(1)
+    expect(offered?.[0]?.candidates.map((item) => item.id)).toEqual([second])
+
+    const chosen = unwrap(choose(partly, 'req-2', 'req-1', second ?? ''))
+    expect(me(chosen).pendingRewards).toEqual([])
+    expect(handItem(chosen, second ?? '')).toBeDefined()
+    expect(assistedAvailability(withStats(chosen, { culture: 20, trade: 20 }), CASH1981, 'cultureAdvance').status).toBe('ready')
+  })
 })
 
 describe('step 21, the Culture Victory space', () => {
@@ -498,7 +557,7 @@ describe('what the others can see', () => {
     expect(toPlayerView(retried, CASH1981).you?.pendingRewards).toEqual(first.you?.pendingRewards)
   })
 
-  it('after the choice the owner no longer has a pending reward and the discard pile is the only trace', () => {
+  it('after the choice the owner has no pending reward; the discarded candidates are in the public discard pile like any discard', () => {
     const pending = advance(choiceTurn(), 'req-1')
     const [keep] = drawnBy(pending, 'req-1')
     const chosen = unwrap(choose(pending, 'req-2', 'req-1', keep ?? ''))
@@ -689,6 +748,21 @@ describe('the board history and a culture advance', () => {
     const back = unwrap(undoLastBoardChange(undone, CASH1981))
     expect(back.board.history.length).toBe(undone.board.history.length - 1)
     expect(unwrapErr(undoLastBoardChange(advance(advanceTurn(), 'req-1'), CASH1981)).kind).toBe('BOARD_UNDO_ASSISTED')
+  })
+})
+
+describe('the board history line count', () => {
+  it('counts the advance lines in the marker move, so stepping through the history shows them together', () => {
+    const ready = advanceTurn()
+    const done = advance(ready, 'req-1')
+    const move = done.board.history.at(-1)
+    expect(move?.change.kind).toBe('move')
+    const effect = done.assistedActions.find((record) => record.id === 'req-1')?.effect
+    expect(effect?.kind === 'cultureAdvance' && effect.historyId).toBe(move?.id)
+    expect(move?.logLength).toBe(done.log.length)
+    expect(done.log.length).toBeGreaterThan(ready.log.length)
+    const lengths = done.board.history.map((entry) => entry.logLength)
+    expect(lengths).toEqual([...lengths].sort((a, b) => a - b))
   })
 })
 

@@ -28,7 +28,7 @@ import {
 import type { Undo } from './undo.js'
 import type { Battle, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
-import { availableActionsFor, publicAssistedActions } from './assisted.js'
+import { availableActionsFor, livePendingRewards, publicAssistedActions } from './assisted.js'
 import { cultureMarkerOf } from './culture-track.js'
 import type { CultureLevel, CultureSpaceKind } from './culture-track.js'
 import type { SheetName } from './sheet-name.js'
@@ -311,7 +311,8 @@ export type AssistedEffect =
   | {
       readonly kind: 'chooseReward'
       readonly rewardId: string
-      readonly itemId: string
+      /** The card kept, or `null` when no candidate was left in the hand and the choice was only dropped. */
+      readonly itemId: string | null
     }
 
 /**
@@ -857,9 +858,12 @@ export function battleSummaries(state: GameState): readonly BattleSideSummary[] 
   })
 }
 
-/** The viewer's pending rewards with the candidate cards looked up in their hand. */
+/**
+ * The viewer's pending rewards with the candidate cards looked up in their hand.
+ * A reward with no candidate left in the hand is not shown (`livePendingRewards`).
+ */
 function pendingRewardViews(player: Playerhand): readonly PendingRewardView[] {
-  return player.pendingRewards.map(({ candidateIds, ...reward }) => ({
+  return livePendingRewards(player).map(({ candidateIds, ...reward }) => ({
     ...reward,
     candidates: candidateIds.flatMap((id) => {
       const item = player.items.find((candidate) => candidate.id === id)

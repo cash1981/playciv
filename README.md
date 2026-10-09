@@ -516,7 +516,12 @@ detail dialog, that does the bookkeeping for the card: Chivalry spends an
 incense (a hut in hand first, otherwise the piece in the player's own area,
 back to the stock) and adds 5 culture; the two coin cards pay and add a coin.
 Every card is once per turn. The press is recorded, shown in the log, and can be
-taken back with the same everyone-votes undo the game already has. Typing the
+taken back with the same everyone-votes undo the game already has. Currency (3) and Metal Casting (7) work the same way. An **Advance culture** button
+pays the cost of the next space, moves the player's marker one space and delivers
+the reward of that space: a culture event card (two to choose from with Mysticism)
+or a Great Person card (more to choose from with Organized Religion and the
+Greeks). The cards to choose between are private and a refresh shows the same
+ones. Typing the
 same thing in chat or editing the counters by hand still works. See
 `docs/agents/decisions.md`, 2026-10-09.
 

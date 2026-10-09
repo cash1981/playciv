@@ -350,15 +350,6 @@ interface ApplyContext {
   readonly payload: ChooseRewardPayload | undefined
 }
 
-/**
- * How often an action can be done. Once per turn (the default for a card) writes
- * its `usageKey` on the turn; a repeatable action, such as the culture advance,
- * has no key, is never `used`, and each press needs its own `requestId`.
- */
-type AssistedUsage =
-  | { readonly repeatable: false; readonly usageKey: string }
-  | { readonly repeatable: true; readonly usageKey: null }
-
 type AssistedActionDefinition = {
   readonly kind: AssistedActionKind
   /** The tech card this action belongs to, as the tech dialog names it. `null` for an action that is not a card. */
@@ -369,6 +360,12 @@ type AssistedActionDefinition = {
    * not: it answers a choice the viewer already has and carries a payload.
    */
   readonly button: boolean
+  /**
+   * How often it can be done. A key (the default for a card) is written on the
+   * turn and allows it once per turn; `null`, as for the culture advance, means
+   * repeatable: it is never `used`, and each press needs its own `requestId`.
+   */
+  readonly usageKey: string | null
   availability(state: GameState, playerId: string): AssistedAvailability
   apply(state: GameState, player: Playerhand, context: ApplyContext): Result<Applied, EngineError>
   reverse(
@@ -377,7 +374,7 @@ type AssistedActionDefinition = {
     record: AssistedActionRecord,
     at: string | null,
   ): Result<Reversed, EngineError>
-} & AssistedUsage
+}
 
 const rejected = (action: string, availability: BlockedAvailability): EngineError => ({
   kind: 'ASSISTED_ACTION_REJECTED',
@@ -425,7 +422,6 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
     techName: card.techName,
     label: card.techName,
     button: true,
-    repeatable: false,
     usageKey,
 
     availability(state, playerId) {
@@ -611,7 +607,6 @@ function coinPurchase(source: CoinPurchaseSource): AssistedActionDefinition {
     techName: terms.techName,
     label: terms.techName,
     button: true,
-    repeatable: false,
     usageKey: coinUsageKey(source),
 
     availability(state, playerId) {
@@ -698,6 +693,18 @@ function rewardLabel(space: Pick<CultureSpace, 'kind' | 'level'>): string {
 
 const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`
 
+/**
+ * The pending rewards that still have a candidate in the hand. A choice whose
+ * cards have all left (put back in the deck, traded, discarded by hand) has
+ * nothing to choose any more: it blocks nothing and is not shown. Exported for
+ * the projection.
+ */
+export function livePendingRewards(player: Playerhand): readonly PendingReward[] {
+  return player.pendingRewards.filter((reward) =>
+    reward.candidateIds.some((id) => player.items.some((item) => item.id === id)),
+  )
+}
+
 interface AdvancePlan {
   readonly marker: CultureMarker
   readonly to: CultureSpace
@@ -725,7 +732,7 @@ function planAdvance(state: GameState, player: Playerhand): Result<AdvancePlan, 
 
   const cost = cultureAdvanceCost(state, player, to.step)
   const where = `Advance to ${describeSpace(to)}: ${describeCost(cost)}.`
-  if (player.pendingRewards.length > 0) {
+  if (livePendingRewards(player).length > 0) {
     return err(blocked('unavailable', `${where} Choose the card to keep from your last advance first.`))
   }
 
@@ -795,7 +802,6 @@ const cultureAdvance: AssistedActionDefinition = {
   techName: null,
   label: 'Culture advance',
   button: true,
-  repeatable: true,
   usageKey: null,
 
   availability(state, playerId) {
@@ -859,7 +865,10 @@ const cultureAdvance: AssistedActionDefinition = {
         trade: paying.stats.trade - cost.trade,
       },
       items: [...paying.items, ...candidates],
-      pendingRewards: resolved ? paying.pendingRewards : [...paying.pendingRewards, reward],
+      // A choice with no card left in the hand is dropped here, so it cannot pile up
+      pendingRewards: resolved
+        ? livePendingRewards(paying)
+        : [...livePendingRewards(paying), reward],
     })
 
     const label = rewardLabel(to)
@@ -894,8 +903,21 @@ const cultureAdvance: AssistedActionDefinition = {
           })
         : withPrivate
 
+    // The marker move was recorded before the advance lines existed: count them in,
+    // so stepping through the board history shows the move with the advance line
+    // (reverseAssistedAction does the same for its own entry).
+    const counted: GameState = {
+      ...logged,
+      board: {
+        ...logged.board,
+        history: logged.board.history.map((entry) =>
+          entry.id === move.id ? { ...entry, logLength: logged.log.length } : entry,
+        ),
+      },
+    }
+
     return ok({
-      state: logged,
+      state: counted,
       effect: {
         kind: 'cultureAdvance',
         fromStep: marker.step,
@@ -993,7 +1015,6 @@ const chooseReward: AssistedActionDefinition = {
   techName: null,
   label: 'Choose reward',
   button: false,
-  repeatable: true,
   usageKey: null,
 
   availability(state, playerId) {
@@ -1015,13 +1036,36 @@ const chooseReward: AssistedActionDefinition = {
     if (reward === undefined) {
       return err(failed('That card choice is not waiting any more. It may already have been made.'))
     }
+    if (!livePendingRewards(player).includes(reward)) {
+      // Every candidate has left the hand: nothing is left to choose, so the entry
+      // is removed instead of blocking the next advance for good.
+      const cleared = withPlayerHand(state, {
+        ...player,
+        pendingRewards: player.pendingRewards.filter((candidate) => candidate.id !== reward.id),
+      })
+      const line = appendLog(cleared, {
+        username: player.username,
+        playerId: player.playerId,
+        publicLog: `${player.username} had no card left to choose, so the card choice was dropped`,
+        privateLog: '',
+        createdAt: context.at ?? null,
+      })
+      return ok({
+        state: line,
+        effect: { kind: 'chooseReward', rewardId: reward.id, itemId: null },
+        logId: lastLogId(line),
+      })
+    }
     if (!reward.candidateIds.includes(payload.itemId)) {
       return err(failed('That card is not one of the choices.'))
     }
     const kept = player.items.find((item) => item.id === payload.itemId)
     if (kept === undefined) return err(failed('That card is no longer in your hand.'))
 
-    // The others leave the hand for the discard pile, hidden like `discardItem` leaves them.
+    // The others leave the hand for the discard pile, as `discardItem` leaves them
+    // (`hidden: true` is only the stored flag). The discard pile is public: the
+    // revealed and discarded feed lists them by name, attributed to the player,
+    // exactly as for any discard. Only the card kept stays secret.
     const others = player.items.filter(
       (item) => item.id !== kept.id && reward.candidateIds.includes(item.id),
     )

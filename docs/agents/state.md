@@ -13,7 +13,7 @@ _Last updated: 2026-10-09 (assisted actions, first slice)_
 | Check | Status |
 | --- | --- |
 | `pnpm -r typecheck` | passing |
-| `pnpm -r test` | passing — 949 engine, 629 server, 557 web (2,135 total) on `feat/assisted-play-contract` |
+| `pnpm -r test` | passing — 1076 engine, 648 server, 580 web (2,304 total) on `feat/assisted-play-contract` |
 | `pnpm -r build` | passing |
 | `main` pushed to `origin` | yes |
 
@@ -31,6 +31,14 @@ _Last updated: 2026-10-09 (assisted actions, first slice)_
   slice: the culture advance (cost per step and draw/keep rules unknown; the ladder is in
   `decisions.md`), reopening a phase, building, offers. Not run against the real D1.
   Brief: `tasks/assisted-play-contract.md`; see `decisions.md`, 2026-10-09.
+  Part 2 (same branch and PR, by the human's choice): Currency (+3) and Metal Casting (+7) through the
+  registry, tests that reopening a phase keeps usage, and the **culture advance**: one press pays the
+  cost of the next space (3 culture; 5 + 3 trade; 7 + 6 trade; EftA and Ecology discounts), moves
+  the marker, and delivers the reward of the space (culture event; Great Person; Mysticism,
+  Organized Religion and the Greeks add cards to choose from). The choice is private and survives
+  a refresh. Undo is the same vote. Great Person tokens (#252), map tile 16a, free advances and
+  hand limit enforcement are not built; the City Management phase for the advance is an unconfirmed
+  assumption. See `decisions.md`, 2026-10-09 (later).
 - **Undo End battle.** The player who pressed End battle gets an Undo banner where the arena was, until a new battle starts; no vote. The ended battle is stored as `endedBattle` and the view exposes `battleUndo.endedBy` only. Typechecks, 895 engine, 528 web and 608 server tests and builds pass after merging main; read-only review found only missing docs, now added. Not checked in a browser. Brief: `tasks/undo-end-battle.md`; see `decisions.md`, 2026-10-08.
 - **Removed the move-to-single-chat admin tool.** The human has moved every game, so the admin panel, `GET`/`POST /api/admin/games/migrate-chat`, `server/src/legacy-orders.ts`, the engine helpers only it used (`publicOrderVersions`, `publicOrdersWithoutVersions`, `unpublishedDrafts`, `pendingDrafts`, `draftsToPrivateNote`) and their tests are gone. The flags `legacyOrdersCopied` and `legacyRevealsCopied` and load-time adoption stay, so old saves load as before. Typechecks, 877 engine, 522 web and 604 server tests and builds pass. Brief: `tasks/remove-migrate-chat.md`; see `decisions.md`, 2026-10-09.
 - **Independent barbarian drawing.** Any active member can draw their own barbarian hand before the arena starts, even out of turn. Barbarian battle initiation reuses the left controller's prepared hand, with automatic drawing as fallback. Privacy, duplicate/stale guards and active-arena protection tested. Typechecks, all 2,067 tests and builds pass; read-only review has zero findings and rules differences are documented. Local browser verified drawing, disabled duplicate button, hand reuse and controller placement. Brief: `tasks/barbarian-draw.md`; see `decisions.md`, 2026-10-07.

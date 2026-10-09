@@ -185,9 +185,9 @@ Answered by the human:
 - The culture ladder (recorded for the next slice, not built here): steps 1-2
   Level 1 culture event, 3 Great Person, 4-6 Level 1, 7 Great Person, 8-11
   Level 2, 12 Great Person, 13-14 Level 2, 15-17 Level 3, 18 Great Person, 19-21
-  Level 3 where step 21, the Culture Victory panel, wins the game. Matches
-  `CULTURE_VICTORY_STEP = 21`. The cost per step and the draw/keep modifiers are
-  still unknown.
+  Level 3 where step 21 is the Culture Victory panel (it declares a Culture
+  Victory in the log and ends nothing, see Part 2b). Matches
+  `CULTURE_VICTORY_STEP = 21`. The costs and the draw rules came later, see Part 2b.
 
 Still open, none blocks starting:
 

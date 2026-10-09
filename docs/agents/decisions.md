@@ -4827,11 +4827,94 @@ Consequences accepted on purpose:
   edited by hand after the press.
 - A replay view shows no available actions.
 
-**Not in this slice.** The culture advance. The human gave the ladder (steps
-1-2 Level 1, 3 Great Person, 4-6 Level 1, 7 Great Person, 8-11 Level 2, 12 Great
-Person, 13-14 Level 2, 15-17 Level 3, 18 Great Person, 19-21 Level 3, step 21
-being Culture Victory), but the cost per step and the draw/keep modifiers are
-not known, and #248 and #252 have not landed. Reopening a phase, building and
-offers are separate issues (#266, #264, #265). Not run against the real D1; no
-migration is needed because `assistedActions` defaults to an empty list.
+**Not in this slice.** The culture advance, which came in the next entry (the
+human gave the ladder and the costs after this slice was written). Reopening a
+phase, building and offers are separate issues (#266, #264, #265). Not run
+against the real D1; no migration is needed because `assistedActions` defaults
+to an empty list.
+
+## 2026-10-09 (later) — More cards through the contract, and the culture advance
+
+The human asked for everything after the first slice to go into the same pull
+request (#271), so these changes ride on the same branch.
+
+**Currency and Metal Casting** are registered beside Chivalry from one table:
+Incense, City Management, +3 and +7 culture (the printed card text in
+`techText.ts`). Each card has its own use per turn, so Currency and Chivalry can
+both be used in one turn, each spending its own Incense.
+
+**Reopening a phase** already existed (`unmarkPhaseDone`, the human pointed
+this out): it clears the done mark, writes a public line, and leaves the usage
+on the turn untouched. Tests now pin that a reopened phase does not reset a
+used card, does not give the culture again and does not make a request id
+count twice. Nothing was changed there; a reason or a consent step is a
+separate choice that has not been made.
+
+**The culture advance.** One press pays, moves the player's marker one space,
+and delivers the reward that belongs to the space. The human's rules:
+
+- The track is 21 spaces in three sections of seven (levels 1, 2, 3). Four of
+  them are Great Person spaces (3, 7, 12, 18). The rest are culture events of
+  the section's level. Space 21 is the Culture Victory panel and is also a level
+  3 event.
+- Cost by the level of the destination, a Great Person space costing what its
+  section costs (my reading of "7 of each level, 4 of them Great Persons"): level
+  1 is 3 culture; level 2 is 5 culture and 3 trade; level 3 is 7 culture and 6
+  trade. Endowment for the Arts takes 1 off the culture cost from 2
+  investments and 2 off from 4, at every level, never below 0.
+- Ecology (1 less trade for every 3 coins) is applied from the printed card
+  text. The human did not mention it. It is one line in `culture-track.ts` to
+  remove.
+- A culture event draws one card of the level; with Mysticism the player draws
+  two, keeps one and discards the other. A Great Person space draws one card the
+  way the Draw button does, plus one for Organized Religion (a revealed social
+  policy) and one for the Greeks civilization; they stack, one is kept, the
+  rest discarded. The Great Person token and reserve steps (#252) are not
+  built: the card goes to the hand and the screen says the token step is still by
+  hand. Map tile 16a, free advances (Arabs, Romans) and hand limit enforcement
+  are left out.
+- Space 21 draws a level 3 card and writes a public "reached the Culture Victory
+  space" line. It does not end the game and sets no winner, because the human
+  says the round can be finished and someone may still win on points. End game
+  stays the way to end the game.
+- The advance is allowed in City Management, like the other culture spending.
+  **The human has not confirmed this phase.** It is a guard, not a rule: if it is
+  wrong the player is blocked, never given something.
+- It is repeatable (no usage key; every press needs its own request id), and a
+  new advance is refused while a card choice is pending.
+
+**Choosing.** When more than one card was drawn the choice is stored on the
+player (`pendingRewards`) and shown only to them, so a refresh resumes the same
+cards and never draws again; opponents and spectators receive no field, not even
+a count. The drawn cards sit in the hand as hidden items without an item log
+line, so the old item undo cannot take back a single one of them. The discarded
+ones go to the discard pile, which the Revealed/Discarded panel already lists by
+name for every discarded card; that is the same as `discardItem` today.
+
+**Undo** is the existing vote on the advance's one public line. A passed vote
+moves the marker back, gives back the culture and trade, and puts the cards back
+in the deck (the kept one from the hand, the discarded ones from the discard
+pile) and shuffles it the way an item undo does today, which means an undo can
+change what the next draw is, as it can for any draw today. It refuses, and the
+vote stays open, if the marker has since moved off the space the advance put it
+on, or if the kept card has left the hand. The board's own undo refuses to move a
+marker that an advance put there, as it refuses to put a spent resource back.
+
+Corrections and consequences for the culture advance, after review:
+
+- This entry replaces an earlier wording that said space 21 wins the game. It does
+  not: it declares a Culture Victory in the log and ends nothing, as above.
+- The cards a player discards after choosing show in the public Revealed/Discarded
+  panel by name, attributed to the player, because that panel lists every discarded
+  card. The kept card stays private. This is what `discardItem` already does, and a
+  test pins the boundary at `/revealed`.
+- Two presses with different request ids advance twice, which is right for a
+  repeatable action. The revision check on every write is what protects a stale
+  tab.
+- A pending choice whose cards have all left the hand (put back, traded) counts as
+  resolved, so the advance cannot be locked for the rest of the game.
+- Provenance: the costs, the EftA thresholds, the Great Person space costing its
+  section's level, and the Great Person extras for Organized Religion and the
+  Greeks come from the human's ruling of 2026-10-09; no rulebook is in this checkout.
+  Mysticism's extra card, and Ecology, are the printed card texts.
 

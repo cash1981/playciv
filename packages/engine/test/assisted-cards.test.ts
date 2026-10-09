@@ -73,7 +73,7 @@ function touched(state: GameState) {
 }
 
 describe('the registry and the tech map', () => {
-  it('lists the three incense cards next to Democracy and Printing Press', () => {
+  it('lists the three incense cards, Democracy, Printing Press and the culture advance as buttons', () => {
     expect([...ASSISTED_ACTION_KINDS].sort()).toEqual([
       'chivalry',
       'cultureAdvance',

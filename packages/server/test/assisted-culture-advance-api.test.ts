@@ -366,6 +366,8 @@ describe('what other clients receive', () => {
       `/api/games/${table.gameId}/log/private`,
       `/api/games/${table.gameId}/undo/pending`,
       `/api/games/${table.gameId}/revisions`,
+      // The public revealed and discarded feed: the candidates are still hidden in the hand, so none shows
+      `/api/games/${table.gameId}/revealed`,
     ]
     for (const token of [table.other, spectator, undefined]) {
       for (const url of urls) {
@@ -424,6 +426,35 @@ describe('what other clients receive', () => {
     expect(privateLog.body).toContain(`kept ${itemName(candidates[0] as Item)}`)
     const revisions = await inject(app, { url: `/api/games/${table.gameId}/revisions`, headers: bearer(table.other) })
     for (const item of candidates) expect(revisions.body).not.toContain(itemName(item))
+  })
+
+  /**
+   * The accepted boundary, the same as `discardItem` today: a discard is public.
+   * The discarded candidate is listed by name, attributed to the player, in the
+   * public revealed and discarded feed; the card that was kept never is, because
+   * it is still hidden in the hand.
+   */
+  it('after the choice the discarded candidate is in the public discard feed and the kept card is not', async () => {
+    const table = await cultureTable('Feed', { mysticism: true })
+    const pressed = await (await advance(table, 'req-1', (await view(table.gameId, table.starter)).rev)).json<View>()
+    const [kept, discarded] = await storedCandidates(table)
+    if (kept === undefined || discarded === undefined) throw new Error('two candidates expected')
+    // Two cards can share a name, so the feed is checked by card id
+    expect((await choose(table, 'req-2', 'req-1', kept.id, pressed.rev)).status).toBe(200)
+
+    const spectator = await register('feed-spectator')
+    for (const token of [table.other, spectator, undefined]) {
+      const response = await inject(app, {
+        url: `/api/games/${table.gameId}/revealed`,
+        ...(token === undefined ? {} : { headers: bearer(token) }),
+      })
+      expect(response.status).toBe(200)
+      expect(response.body).not.toContain(kept.id)
+      expect(response.body).toContain(discarded.id)
+      const feed = await response.json<{ items: readonly { item: { id: string }; playerId: string | null }[] }>()
+      expect(feed.items.some((entry) => entry.item.id === kept.id)).toBe(false)
+      expect(feed.items.find((entry) => entry.item.id === discarded.id)?.playerId).toBe(table.starterId)
+    }
   })
 })
 
