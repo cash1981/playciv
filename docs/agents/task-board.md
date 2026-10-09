@@ -12,18 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### undici-security
-
-- **Owner:** Codex (GPT-6)
-- **Branch:** `fix/undici-security`
-- **Brief:** `docs/agents/tasks/undici-security.md`
-- **Status:** in review
-- **Claimed paths:**
-  - `pnpm-workspace.yaml`
-  - `pnpm-lock.yaml`
-  - `docs/agents/task-board.md`
-  - `docs/agents/tasks/undici-security.md`
-- **Notes:** Upgrade the transitive `undici` version to the patched release for all open Dependabot alerts.
+_No live claims._
 
 ---
 
