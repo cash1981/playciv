@@ -193,6 +193,24 @@ describe('a confirmed repeat of Democracy', () => {
     expect(player(first).stats.coinSources.democracy).toBe(1)
   })
 
+  it('is still refused when the coin source is full, and spends and records nothing', () => {
+    // Democracy holds at most 4 coins. One ordinary purchase, then confirmed repeats fill it.
+    let state = unwrap(press(democracyTurn(40), 'first', democracy))
+    for (const requestId of ['repeat-1', 'repeat-2', 'repeat-3']) {
+      state = unwrap(press(state, requestId, { ...democracy, confirmedRepeat: true }))
+    }
+    expect(player(state).stats.coinSources.democracy).toBe(4)
+    expect(player(state).stats.trade).toBe(40 - 4 * 6)
+    expect(state.assistedActions).toHaveLength(4)
+
+    // The cap is a refusal the confirmation does not lift, so a fifth coin is refused.
+    const error = unwrapErr(press(state, 'repeat-4', { ...democracy, confirmedRepeat: true }))
+    expect(error).toMatchObject({ kind: 'COIN_PURCHASE_REJECTED', source: 'democracy', reason: 'AT_CAPACITY' })
+    expect(player(state).stats.coinSources.democracy).toBe(4)
+    expect(player(state).stats.trade).toBe(16)
+    expect(state.assistedActions.map((record) => record.id)).toEqual(['first', 'repeat-1', 'repeat-2', 'repeat-3'])
+  })
+
   it('the old coin-purchase reducer still refuses a second use', () => {
     const first = unwrap(press(democracyTurn(12), 'first', democracy))
     expect(unwrapErr(purchaseCoin(first, { playerId: CASH1981, source: 'democracy' }))).toMatchObject({

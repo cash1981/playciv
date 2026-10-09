@@ -23,7 +23,8 @@ _Last updated: 2026-10-09 (assisted actions, first slice)_
   (`PlayerView.you.availableActions`), and one route, `POST /api/games/:gameId/actions`
   (`{action, requestId, rev}`), applies it. Chivalry (+5 culture, spends an incense: a hut
   in hand first, else the piece in the player's own area, back to stock) and the Democracy
-  and Printing Press purchases use it; each card is once per turn. Applied actions are
+  and Printing Press purchases use it; each card is once per turn, and a second use is asked about
+  and allowed on confirmation (`decisions.md`, 2026-10-10, later). Applied actions are
   recorded in `GameState.assistedActions`, retries are idempotent, and the existing
   everyone-votes undo also reverses them (new "System:" line, original kept; the board's own
   undo refuses to put the spent piece back). Web: a "Your actions" panel, the same button in

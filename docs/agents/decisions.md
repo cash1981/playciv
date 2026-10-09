@@ -5003,3 +5003,36 @@ issue text is the spec. Web only; no rule, engine or server change.
   Cheap mitigations if it hurts: a sticky palette, or a lower maximum height for the
   board on desktop.
 
+## 2026-10-10 — A card used once this turn asks before it is used again
+
+The first slice disabled the button of a card that had been used this turn,
+because every card is once per turn. The human changed that: some Great Persons
+and culture cards let a player use a card again, those effects are not built, so
+the player must be able to override. The button now stays pressable, shows the
+"Used" tag and the reason, and asks first ("You have already used <card> this turn.
+The rules allow it once per turn. Use it again?"), the same way the Draw button asks
+when it is not your turn.
+
+- The server refuses an already used card unless the request says
+  `confirmedRepeat: true`; without it the answer is still 409, and a non-boolean is
+  400. The flag lifts only the "already used" refusal: wrong phase, a missing
+  resource, a card the player does not own, a hidden tech and a full coin source
+  are refused whatever the flag says, and a flag on a card that is not used is
+  ignored.
+- A confirmed repeat is applied as a first use (it pays, takes the resource, gives
+  the culture) and its log line ends "(used again, confirmed by the player)". The
+  record carries `confirmedRepeat`, which is public like the line.
+- The usage key is written once. Undo (the usual vote) of the repeat leaves the
+  first use in place; the key is freed only when no other applied record of that
+  player, turn and card holds it, so undoing the first use while the repeat stands
+  keeps the card used.
+- Democracy and Printing Press purchases follow the same rule; the old
+  `/coin-purchase` route does not take the flag and still refuses a second use.
+  A use through that old route writes the key without a record, so if it is later
+  repeated and undone through `/actions` the key is freed while the old use stands,
+  and a further press then buys one more coin without asking. Accepted because the
+  web no longer calls the old route (only a direct API call or a stale client
+  bundle can reach it). Closing it needs a rule that frees the key only when some
+  record of that card and turn is not a confirmed repeat.
+- The culture advance has no usage key and is unaffected.
+

@@ -582,7 +582,7 @@ describe('using a card again after the player confirmed it', () => {
     expect(incensePieces(stored)).toHaveLength(1)
   })
 
-  it('does not lift any other refusal: no token left is still a 409', async () => {
+  it('does not lift any other refusal: no token left is still refused, with a 400', async () => {
     const table = await chivalryTable('RepeatEmpty')
     const rev = (await view(table.gameId, table.starter)).rev
     expect((await chivalry(table, 'req-1', rev)).status).toBe(200)
