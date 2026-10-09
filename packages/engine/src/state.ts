@@ -280,19 +280,15 @@ export interface GameState {
   readonly turnStarters: Readonly<Record<number, string>>
   /**
    * The public turn orders of the old baton view have been copied into the
-   * timeline. True for a game created by this code, and set by the server's
-   * migration (`/api/admin/games/migrate-chat`) for an older one, so nothing is
-   * copied twice. The copy itself is the server's job (the timeline is its
-   * store). Public, but not in the view.
+   * timeline. True for a game created by this code. Nothing sets it any more; it
+   * is kept only so that old saves load as before. Public, but not in the view.
    */
   readonly legacyOrdersCopied: boolean
   /**
    * The orders revealed before versions were stored have been copied into the
    * timeline. True for a game created by this code, false for a loaded game
-   * that lacks it, and set by the server's migration
-   * (`/api/admin/games/migrate-chat`) once such a game has nothing left to copy,
-   * so a finished game is not read again on every run. Public, but not in the
-   * view.
+   * that lacks it. Nothing sets it any more; it is kept only so that old saves
+   * load as before. Public, but not in the view.
    */
   readonly legacyRevealsCopied: boolean
   /**
