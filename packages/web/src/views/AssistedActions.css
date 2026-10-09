@@ -39,3 +39,32 @@ td .assisted-action {
   flex-direction: column;
   align-items: flex-start;
 }
+
+/* The card choice after a culture advance. The cards reuse .card-grid.small,
+   which reflows to one or two columns at 320 px. */
+.assisted-reward {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.assisted-reward-title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.assisted-reward > p {
+  margin: 0 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.assisted-reward-cards {
+  min-width: 0;
+}
+
+.assisted-reward-cards .card {
+  min-width: 0;
+}
+
+.assisted-reward-cards .card-actions button {
+  max-width: 100%;
+}

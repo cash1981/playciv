@@ -738,6 +738,18 @@ export const api = {
    */
   performAction: (gameId: string, action: AssistedActionKind, requestId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/actions`, { action, requestId, rev }),
+  /**
+   * The card choice after a culture advance: the same route as `performAction`,
+   * with the reward and the card to keep. The request id is kept like any other.
+   */
+  chooseReward: (gameId: string, rewardId: string, itemId: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'chooseReward',
+      requestId,
+      rev,
+      rewardId,
+      itemId,
+    }),
   setPlayerGovernment: (
     gameId: string,
     targetPlayerId: string,

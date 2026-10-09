@@ -412,3 +412,263 @@ describe('the same action from two entry points', () => {
     expect(screen.queryByRole('button', { name: 'Use Chivalry' })).toBeNull()
   })
 })
+
+// ---------------------------------------------------------------------------
+// The culture advance and its card choice
+// ---------------------------------------------------------------------------
+
+const advance = (status: Action['status'], reason: string): Action => ({
+  action: 'cultureAdvance',
+  label: 'Culture advance',
+  status,
+  reason,
+})
+
+type Reward = NonNullable<PlayerView['you']>['pendingRewards'][number]
+
+const card = (id: string, name: string, kind: 'cultureII' | 'greatperson' = 'cultureII') =>
+  ({
+    id,
+    name,
+    kind,
+    sheetName: kind === 'cultureII' ? 'CULTURE_2' : 'GREAT_PERSON',
+    level: 2,
+    hidden: false,
+    itemNumber: 7,
+    description: null,
+    used: false,
+    ownerId: 'me',
+    type: null,
+  }) as unknown as Reward['candidates'][number]
+
+const reward = (kind: Reward['kind'] = 'event', id = 'adv-1'): Reward => ({
+  id,
+  kind,
+  level: 2,
+  step: 9,
+  keep: 1,
+  candidates:
+    kind === 'event'
+      ? [card('c1', 'Hanging Gardens Festival'), card('c2', 'Library Fire')]
+      : [card('g1', 'Isaac Newton', 'greatperson'), card('g2', 'Sun Tzu', 'greatperson')],
+})
+
+const viewWithRewards = (
+  rewards: readonly Reward[],
+  actions: readonly Action[] = [],
+  rev = 5,
+): PlayerView => {
+  const base = viewWith(actions, rev)
+  return { ...base, you: { ...base.you!, pendingRewards: rewards } } as PlayerView
+}
+
+describe('the Advance culture button', () => {
+  const READY_REASON = 'Advance to space 9 (culture II event): 5 culture and 3 trade.'
+
+  it('shows when it is the only action in the panel, with its reason as text', () => {
+    renderPanel(viewWith([advance('ready', READY_REASON)]))
+
+    const button = screen.getByRole('button', { name: 'Advance culture' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    expect(screen.getByText(READY_REASON)).toBeTruthy()
+    expect(button.getAttribute('aria-describedby')).toBe(screen.getByText(READY_REASON).id)
+  })
+
+  it.each([
+    ['needs-resource', 'Needs resource', 'Advance to space 9 (culture II event): 5 culture and 3 trade. You are missing 2 culture.'],
+    ['wrong-phase', 'Not now', 'Only available during your open City Management phase.'],
+    [
+      'unavailable',
+      'Unavailable',
+      'Advance to space 9 (culture II event): 5 culture and 3 trade. Choose the card to keep from your last advance first.',
+    ],
+    ['unavailable', 'Unavailable', 'Your leader marker is not on the culture track.'],
+    ['unavailable', 'Unavailable', 'Your marker is already on the Culture Victory space.'],
+  ] as const)('a %s advance cannot be pressed and says why: %s', (status, tag, reason) => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    renderPanel(viewWith([advance(status, reason)]))
+
+    const button = screen.getByRole('button', { name: 'Advance culture' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(screen.getByText(tag)).toBeTruthy()
+    expect(screen.getByText(reason)).toBeTruthy()
+    fireEvent.click(button)
+    expect(perform).not.toHaveBeenCalled()
+  })
+
+  it('sends one request with a new id, and a second press after a success sends another id', async () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    renderPanel(viewWith([advance('ready', READY_REASON)], 8))
+    const button = screen.getByRole('button', { name: 'Advance culture' })
+
+    fireEvent.click(button)
+    fireEvent.click(button)
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    expect(perform.mock.calls[0]!.slice(0, 2)).toEqual(['game-1', 'cultureAdvance'])
+    expect(perform.mock.calls[0]![3]).toBe(8)
+
+    await waitFor(() => {
+      fireEvent.click(button)
+      expect(perform.mock.calls.length).toBeGreaterThan(1)
+    })
+    expect(perform.mock.calls[1]![2]).not.toBe(perform.mock.calls[0]![2])
+  })
+})
+
+describe('the pending card choice', () => {
+  it('shows the candidate cards with their names and one Keep button each', () => {
+    renderPanel(viewWithRewards([reward()]))
+
+    expect(screen.getByRole('heading', { name: 'Choose a card to keep' })).toBeTruthy()
+    expect(screen.getByText('Hanging Gardens Festival')).toBeTruthy()
+    expect(screen.getByText('Library Fire')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Keep this card.*Hanging Gardens Festival/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Keep this card.*Library Fire/ })).toBeTruthy()
+    expect(screen.getByText(/The other cards are discarded/)).toBeTruthy()
+    // A culture event says nothing about Great Person tokens.
+    expect(screen.queryByText(/Great Person tokens/)).toBeNull()
+  })
+
+  it('shows the same candidates again when the page is loaded afresh from the projection', () => {
+    const view = viewWithRewards([reward()])
+    const first = renderPanel(view)
+    const before = first.container.textContent
+    first.unmount()
+    localStorage.setItem('civ.panel.actions', 'true')
+    const second = renderPanel(JSON.parse(JSON.stringify(view)) as PlayerView)
+
+    expect(second.container.textContent).toBe(before)
+    expect(screen.getAllByRole('button', { name: /Keep this card/ })).toHaveLength(2)
+  })
+
+  it('says Great Person tokens are still handled by hand for a Great Person reward', () => {
+    renderPanel(viewWithRewards([reward('greatPerson')]))
+
+    expect(screen.getByText(/Great Person tokens are still handled by hand/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Keep this card.*Isaac Newton/ })).toBeTruthy()
+  })
+
+  it('shows only the first pending reward', () => {
+    renderPanel(viewWithRewards([reward('event', 'adv-1'), reward('greatPerson', 'adv-2')]))
+
+    expect(screen.getByText('Library Fire')).toBeTruthy()
+    expect(screen.queryByText('Isaac Newton')).toBeNull()
+  })
+
+  it('renders no choice for a view without pending rewards, and the panel stays away when nothing else is listed', () => {
+    const { container } = renderPanel(viewWithRewards([]))
+    expect(container.textContent).toBe('')
+    cleanup()
+    renderPanel(viewWith([advance('ready', 'Advance.')]))
+    expect(screen.queryByText('Choose a card to keep')).toBeNull()
+  })
+
+  it('shows the choice even when no action is listed, next to the blocked advance reason', () => {
+    const reason = 'Advance to space 9 (culture II event): 5 culture and 3 trade. Choose the card to keep from your last advance first.'
+    renderPanel(viewWithRewards([reward()], [advance('unavailable', reason)]))
+
+    expect(screen.getByText(reason)).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Advance culture' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('heading', { name: 'Choose a card to keep' })).toBeTruthy()
+  })
+
+  it('sends chooseReward with the game, reward, card, a request id and the revision', async () => {
+    const choose = vi.spyOn(api, 'chooseReward').mockResolvedValue({} as PlayerView)
+    renderPanel(viewWithRewards([reward()], [], 12))
+
+    fireEvent.click(screen.getByRole('button', { name: /Keep this card.*Library Fire/ }))
+
+    await waitFor(() => expect(choose).toHaveBeenCalledTimes(1))
+    const [gameId, rewardId, itemId, requestId, rev] = choose.mock.calls[0]!
+    expect([gameId, rewardId, itemId, rev]).toEqual(['game-1', 'adv-1', 'c2', 12])
+    expect(requestId.length).toBeGreaterThan(8)
+  })
+
+  it('a double click sends one request, also when the second click is on the other card', async () => {
+    let finish: (view: PlayerView) => void = () => {}
+    const choose = vi
+      .spyOn(api, 'chooseReward')
+      .mockReturnValue(new Promise<PlayerView>((resolve) => (finish = resolve)))
+    renderPanel(viewWithRewards([reward()]))
+    const first = screen.getByRole('button', { name: /Keep this card.*Hanging Gardens/ })
+    const second = screen.getByRole('button', { name: /Keep this card.*Library Fire/ })
+
+    fireEvent.click(first)
+    fireEvent.click(first)
+    fireEvent.click(second)
+
+    expect(choose).toHaveBeenCalledTimes(1)
+    // Both buttons are disabled while the request is in flight.
+    expect((first as HTMLButtonElement).disabled).toBe(true)
+    expect((second as HTMLButtonElement).disabled).toBe(true)
+    finish({} as PlayerView)
+    await waitFor(() => expect((first as HTMLButtonElement).disabled).toBe(false))
+  })
+
+  it('a 409 frees the id: the next press of the same card sends a new one', async () => {
+    const choose = vi
+      .spyOn(api, 'chooseReward')
+      .mockRejectedValueOnce(new ApiError(409, 'STALE_REVISION', 'stale'))
+      .mockResolvedValue({} as PlayerView)
+    renderPanel(viewWithRewards([reward()]))
+    const button = screen.getByRole('button', { name: /Keep this card.*Library Fire/ })
+
+    fireEvent.click(button)
+    await waitFor(() => expect(choose).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      fireEvent.click(button)
+      expect(choose.mock.calls.length).toBeGreaterThan(1)
+    })
+
+    expect(choose.mock.calls[1]![3]).not.toBe(choose.mock.calls[0]![3])
+  })
+
+  it('a refused card and then another card are two presses with two ids', async () => {
+    const choose = vi
+      .spyOn(api, 'chooseReward')
+      .mockRejectedValueOnce(new ApiError(400, 'ACTION_NOT_AVAILABLE', 'no'))
+      .mockResolvedValue({} as PlayerView)
+    renderPanel(viewWithRewards([reward()]))
+
+    fireEvent.click(screen.getByRole('button', { name: /Keep this card.*Library Fire/ }))
+    await waitFor(() => expect(choose).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: /Keep this card.*Hanging Gardens/ }))
+      expect(choose.mock.calls.length).toBeGreaterThan(1)
+    })
+
+    expect(choose.mock.calls[1]![2]).toBe('c1')
+    expect(choose.mock.calls[1]![3]).not.toBe(choose.mock.calls[0]![3])
+  })
+
+  it('a lost response (TypeError) keeps the id, and the retry of the same card reuses it', async () => {
+    const choose = vi
+      .spyOn(api, 'chooseReward')
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue({} as PlayerView)
+    renderPanel(viewWithRewards([reward()]))
+    const button = screen.getByRole('button', { name: /Keep this card.*Library Fire/ })
+
+    fireEvent.click(button)
+    await waitFor(() => expect(choose).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      fireEvent.click(button)
+      expect(choose.mock.calls.length).toBeGreaterThan(1)
+    })
+
+    expect(choose.mock.calls[1]![3]).toBe(choose.mock.calls[0]![3])
+  })
+
+  it('has no choice for a spectator, and no active button while the game is read-only', () => {
+    const { container } = renderPanel({ ...spectatorView, pendingRewards: [reward()] } as unknown as PlayerView)
+    expect(container.textContent).toBe('')
+    cleanup()
+
+    const choose = vi.spyOn(api, 'chooseReward').mockResolvedValue({} as PlayerView)
+    renderPanel(viewWithRewards([reward()]), { readOnly: true })
+    const button = screen.getByRole('button', { name: /Keep this card.*Library Fire/ }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(choose).not.toHaveBeenCalled()
+  })
+})
