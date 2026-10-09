@@ -348,7 +348,8 @@ function RewardChoice({
       </h3>
       <p className="muted">
         Keep one of these cards. The other cards are discarded.
-        {reward.kind === 'greatPerson' && ' Great Person tokens are still handled by hand.'}
+        {reward.kind === 'greatPerson' &&
+          ' Keeping a card also puts its marker next to your civilization sheet. Drag it onto the map when you place it.'}
       </p>
       <ul className="card-grid small assisted-reward-cards">
         {(reward.candidates ?? []).map((item) => (

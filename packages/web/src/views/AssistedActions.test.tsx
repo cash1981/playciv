@@ -627,10 +627,13 @@ describe('the pending card choice', () => {
     expect(choose).not.toHaveBeenCalled()
   })
 
-  it('says Great Person tokens are still handled by hand for a Great Person reward', () => {
+  it('says the Great Person marker goes next to the civilization sheet for a Great Person reward', () => {
     renderPanel(viewWithRewards([reward('greatPerson')]))
 
-    expect(screen.getByText(/Great Person tokens are still handled by hand/)).toBeTruthy()
+    expect(
+      screen.getByText(/Keeping a card also puts its marker next to your civilization sheet\. Drag it onto the map when you place it\./),
+    ).toBeTruthy()
+    expect(screen.queryByText(/handled by hand/)).toBeNull()
     expect(screen.getByRole('button', { name: /Keep this card.*Isaac Newton/ })).toBeTruthy()
   })
 
