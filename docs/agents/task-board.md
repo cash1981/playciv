@@ -12,17 +12,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-### remove-migrate-chat
-
-- **Owner:** Claude (Sonnet 5.5)
-- **Branch:** `chore/remove-migrate-chat`
-- **Brief:** `docs/agents/tasks/remove-migrate-chat.md`
-- **Status:** in progress
-- **Claimed paths:**
-  - `packages/web/src/views/AdminView.tsx`, `AdminView.test.tsx`, `packages/web/src/lib/api.ts`, `api.test.ts`
-  - `packages/server/src/routes/admin.ts`, `src/legacy-orders.ts`, `test/chat-orders-legacy.test.ts`, `test/saved-orders.ts`, `test/revision-delta-api.test.ts`
-  - `packages/engine/src/turn.ts`, `index.ts`, `state.ts` (comments), `test/chat-orders-legacy.test.ts`, `test/saved-orders.ts`
-- **Notes:** `api.ts` is a shared resource; only the migrate-chat parts are removed.
+_No live claims._
 
 
 ---

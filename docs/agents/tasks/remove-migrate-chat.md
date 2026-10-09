@@ -3,7 +3,7 @@
 - **Slug:** `remove-migrate-chat`
 - **Branch:** `chore/remove-migrate-chat`
 - **Owner:** Claude (Sonnet 5.5)
-- **Status:** in progress
+- **Status:** done
 
 ## Goal
 
