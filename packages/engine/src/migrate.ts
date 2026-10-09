@@ -38,7 +38,7 @@ const correctSocialPolicyFlipsides = (
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'rev' | 'createdAt' | 'logSecret' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters' | 'legacyOrdersCopied' | 'legacyRevealsCopied' | 'assistedActions'
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'endedBattle' | 'rev' | 'createdAt' | 'logSecret' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters' | 'legacyOrdersCopied' | 'legacyRevealsCopied' | 'assistedActions'
 > & {
     /** The switch that used to choose between the old baton view and chat orders. Gone from `GameState`. */
     readonly chatOrders?: boolean
@@ -51,6 +51,7 @@ type MaybeOlder = Omit<
       | 'publicTurns'
       | 'wondersDealt'
       | 'battle'
+      | 'endedBattle'
       | 'rev'
       | 'createdAt'
       | 'chatOrdersStartTurn'
@@ -195,6 +196,21 @@ function playedTurn(players: readonly Playerhand[]): number {
   return Math.max(baton, finished ? highest + 1 : highest)
 }
 
+/** Backfills what a saved battle lacks: rotation, the undoable kill, departed units. */
+function migrateBattle(battle: MaybeOlderBattle): Battle {
+  return {
+    ...battle,
+    arena: battle.arena.map(
+      (unit: MaybeOlderArenaUnit): ArenaUnit => ({
+        ...unit,
+        rotation: unit.rotation ?? 0,
+        killed: unit.killed ?? false,
+      }),
+    ),
+    departedUnits: battle.departedUnits ?? [],
+  }
+}
+
 export function migrateGameState(state: GameState): GameState {
   const { chatOrders, ...older } = state as MaybeOlder
   const board = older.board as MaybeOlderBoard | undefined
@@ -300,20 +316,13 @@ export function migrateGameState(state: GameState): GameState {
       Object.entries(older.publicTurns ?? {}).map(([key, turn]) => [key, migratePlayerTurn(turn)]),
     ),
     wondersDealt: older.wondersDealt ?? (hasWonder || setupComplete),
-    battle:
-      battle === null || battle === undefined
+    battle: battle === null || battle === undefined ? null : migrateBattle(battle),
+    // Saved before End battle could be undone: nothing to undo. The snapshot is
+    // a whole battle, so it gets the same arena backfills as a live one.
+    endedBattle:
+      older.endedBattle === null || older.endedBattle === undefined
         ? null
-        : {
-            ...battle,
-            arena: battle.arena.map(
-              (unit: MaybeOlderArenaUnit): ArenaUnit => ({
-                ...unit,
-                rotation: unit.rotation ?? 0,
-                killed: unit.killed ?? false,
-              }),
-            ),
-            departedUnits: battle.departedUnits ?? [],
-          },
+        : { ...older.endedBattle, battle: migrateBattle(older.endedBattle.battle as MaybeOlderBattle) },
     rev: older.rev ?? 0,
     chatOrdersStartTurn: older.chatOrdersStartTurn ?? 1,
     startPlayerId: older.startPlayerId ?? null,
@@ -321,7 +330,7 @@ export function migrateGameState(state: GameState): GameState {
     // copying the old ones later would duplicate those posted there. A save
     // without the flag from before chat orders existed has not been copied.
     legacyOrdersCopied: older.legacyOrdersCopied ?? chatOrders === true,
-    // Not known to be copied until the server's migration has checked the game
+    // A loaded save that lacks the flag is treated as not checked (the admin tool that checked it is gone)
     legacyRevealsCopied: older.legacyRevealsCopied ?? false,
     turnStarters: older.turnStarters ?? {},
   }

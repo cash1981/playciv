@@ -496,6 +496,14 @@ card of the same type — an unacceptable trade for retrofitting old data. See
 
 ## Deliberate improvements
 
+**A battle can be un-ended.** Ending a battle used to be final, so a mis-click
+threw the arena away. Now the player who pressed End battle gets an Undo button
+where the arena was, which brings back the same arena, turn and units and locks
+the unit cards again. No vote: only the player who ended it may undo, and the
+button stays until a new battle is started. Nothing new is revealed when a
+battle ends; the arena was already public and the end writes no unit names to
+the log. See `docs/agents/decisions.md`, 2026-10-08.
+
 **The hand has no heading per kind.** The hand keeps the old client's order
 (civilizations, items, great persons, units, tiles, culture cards, huts,
 villages), but the cards flow in one grid instead of one section per kind, so
@@ -802,7 +810,7 @@ migration `0006` to D1 (`wrangler d1 migrations apply playciv --remote`), deploy
 Worker, take a D1 Time Travel bookmark (`wrangler d1 time-travel info playciv`), read the
 dry run, compact one game and look at its history, then "Compact all". Old rows stay valid
 without any conversion, so the migration and the deploy are safe on their own provided no
-"Move old games to the single chat" run (or other non-note admin change) is made between applying `0006`
+non-note admin change is made between applying `0006`
 and deploying the Worker; right after the deploy, run the sealing statement of the
 migration once more (it is idempotent): `wrangler d1 execute playciv --remote --command
 "UPDATE game_revision SET sealed = 1 WHERE revision = (SELECT MAX(r.revision) FROM game_revision r WHERE r.game_id = game_revision.game_id);"`. Run it before anyone plays: a move made between the deploy and the statement is not repaired by it. The first move of each game after the deploy is a keyframe. Rolling the Worker back is only
@@ -884,16 +892,7 @@ an unpublished draft is added to its owner's private log. See
 `docs/agents/decisions.md`, 2026-09-29, 2026-10-01 and 2026-10-03, and
 `docs/agents/tasks/chat-orders.md` and `docs/agents/tasks/single-chat.md`.
 
-**The admin page can move old games to the single chat.** "Move old games to the
-single chat" shows, as a dry run, every game that has not been moved (finished ones
-too), how many public orders would be copied into the timeline and how many
-unpublished drafts would be added to their owners' private logs. "Move all" or a
-single "Move" then does it after a confirmation. Each request spends a limited
-number of database calls, so press again while it says games are left; it also
-reports games skipped because they changed meanwhile and a game that was only
-partly copied, and both are picked up by the next press. A game is moved once and
-a repeat changes nothing. Only public orders go into the timeline: an unpublished
-draft and any private note reach nobody but their owner.
+**The admin tool that moved old games to the single chat is gone.** Every game has been moved, so the panel, its two routes and the code behind them were removed. A classic game that somehow turns up is still adopted when it is loaded. See `docs/agents/decisions.md`, 2026-10-09.
 
 ## Deferred
 

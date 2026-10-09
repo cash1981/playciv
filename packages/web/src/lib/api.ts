@@ -208,37 +208,6 @@ export interface CompactResultDto {
   readonly remainingRevisions: number
 }
 
-/** One game the single chat migration would move: counts only, never any order or note text. */
-export interface MigrateChatGameDto {
-  readonly id: string
-  readonly name: string
-  /** Public order versions to write into the timeline. */
-  readonly orderRows: number
-  /** Unpublished drafts to append to their owners' private notes. */
-  readonly drafts: number
-}
-
-export interface MigrateChatPreviewDto {
-  readonly games: readonly (MigrateChatGameDto & { readonly active: boolean })[]
-  readonly totalOrderRows: number
-  readonly totalDrafts: number
-  /** Games the dry run left unchecked to stay within its budget of reads; they are not in `games`. */
-  readonly unchecked: number
-}
-
-export interface MigrateChatResultDto {
-  /** The games moved by this request. */
-  readonly games: readonly MigrateChatGameDto[]
-  readonly totalOrderRows: number
-  readonly totalDrafts: number
-  /** Games that changed while they were being moved; the next request tries them again. */
-  readonly skipped: number
-  /** The game the request ran out of budget in, if any: its rows stay and the next request goes on. */
-  readonly partial: string | null
-  /** Games still to move; 0 when the job is done. */
-  readonly remaining: number
-}
-
 export interface BroadcastRunDto {
   readonly ran: boolean
   readonly sent: number
@@ -592,12 +561,6 @@ export const api = {
   /** One bounded step of the compaction, for one game or for the games with the most to gain. */
   compactRevisions: (gameId?: string) =>
     post<CompactResultDto>('/api/admin/games/revisions/compact', gameId === undefined ? {} : { gameId }),
-
-  /** The dry run: games that have not been moved to the single chat yet. */
-  migrateChatPreview: () => get<MigrateChatPreviewDto>('/api/admin/games/migrate-chat'),
-  /** Moves every game that has not been moved, or only `gameId`. Repeat while `remaining` is above 0. */
-  migrateChat: (gameId?: string) =>
-    post<MigrateChatResultDto>('/api/admin/games/migrate-chat', gameId === undefined ? {} : { gameId }),
   /** Public: the server route needs no bearer token. */
   highscore: () => get<HighscoreResult>('/api/highscore'),
   publicGames: () => get<PublicGameSummary[]>('/api/public/games'),
@@ -685,6 +648,8 @@ export const api = {
     post<PlayerView>(`/api/games/${gameId}/battle/arena/turn/end`, { rev }),
   endBattleArena: (gameId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/battle/arena/end`, { rev }),
+  undoEndBattle: (gameId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/battle/arena/end/undo`, { rev }),
 
   availableTechs: (gameId: string) => get<TechItem[]>(`/api/games/${gameId}/techs/available`),
   revealedTechs: (gameId: string) => get<RevealedTechsDto[]>(`/api/games/${gameId}/techs/revealed`),

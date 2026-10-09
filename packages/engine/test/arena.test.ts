@@ -17,10 +17,11 @@ import {
   returnArenaUnitToHand,
   rotateArenaUnit,
   setArenaUnitStat,
+  undoEndBattle,
 } from '../src/actions/arena.js'
 import { placePiece } from '../src/actions/board.js'
 import { draw, drawBarbarians, drawUnitsForBattle } from '../src/actions/draw.js'
-import { isUnit } from '../src/item.js'
+import { isUnit, revealAll } from '../src/item.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
@@ -1334,5 +1335,363 @@ describe('hidden information: battle arena', () => {
     for (const item of cashPrivateOnlyItems) {
       expect(viewJson).not.toContain(item.id)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// undoEndBattle
+// ---------------------------------------------------------------------------
+
+describe('undoEndBattle', () => {
+  /**
+   * A player-vs-player battle with one unit per side placed, ended by the
+   * attacker. Returns the state just before and just after pressing End battle.
+   */
+  function endedPvpBattle(): {
+    readonly before: GameState
+    readonly ended: GameState
+    readonly attackerCardId: string
+    readonly defenderCardId: string
+  } {
+    let state = withBattlehand(CASH1981, 2)
+    state = addBattlehand(state, KARANDRAS1, 2)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const attackerCard = findPlayer(state, CASH1981)!.battlehand[0]!
+    const defenderCard = findPlayer(state, KARANDRAS1)!.battlehand[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: attackerCard.id,
+        side: 'attacker',
+        position: 0,
+        attack: attackerCard.attack,
+        health: attackerCard.health,
+      }),
+    )
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: KARANDRAS1,
+        unitId: defenderCard.id,
+        side: 'defender',
+        position: 0,
+        attack: defenderCard.attack,
+        health: defenderCard.health,
+      }),
+    )
+    state = unwrap(endBattleTurn(state, { playerId: KARANDRAS1 }))
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    return { before: state, ended, attackerCardId: attackerCard.id, defenderCardId: defenderCard.id }
+  }
+
+  const cardInBattle = (state: GameState, playerId: string, cardId: string): boolean | undefined =>
+    findPlayer(state, playerId)!.battlehand.find((u) => u.id === cardId)?.inBattle
+
+  it('restores the same arena, turn and units, and locks the source cards again', () => {
+    const { before, ended, attackerCardId, defenderCardId } = endedPvpBattle()
+    expect(ended.battle).toBeNull()
+    expect(cardInBattle(ended, CASH1981, attackerCardId)).toBe(false)
+
+    const restored = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+
+    expect(restored.battle).toEqual(before.battle)
+    expect(restored.battle?.turn).toBe(before.battle?.turn)
+    expect(restored.endedBattle).toBeNull()
+    expect(cardInBattle(restored, CASH1981, attackerCardId)).toBe(true)
+    expect(cardInBattle(restored, KARANDRAS1, defenderCardId)).toBe(true)
+    // inBattle is mirrored on the hand's items, as when a unit is placed
+    const item = findPlayer(restored, CASH1981)!.items.find((i) => i.id === attackerCardId)
+    expect((item as { inBattle?: boolean }).inBattle).toBe(true)
+    // The same players' hands and the rest of the state are back as before
+    expect(findPlayer(restored, CASH1981)!.battlehand).toEqual(
+      findPlayer(before, CASH1981)!.battlehand,
+    )
+    expect(restored.items).toEqual(before.items)
+  })
+
+  it('logs one public line, with no item, and keeps the earlier "ends the battle" line', () => {
+    const { ended } = endedPvpBattle()
+    const restored = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+
+    expect(restored.log).toHaveLength(ended.log.length + 1)
+    expect(restored.log.slice(0, ended.log.length)).toEqual(ended.log)
+    const entry = restored.log[restored.log.length - 1]!
+    expect(entry.publicLog).toBe('cash1981 undoes ending the battle')
+    expect(entry.item).toBeNull()
+  })
+
+  it('does not mutate the state it was given', () => {
+    const { ended } = endedPvpBattle()
+    const snapshot = JSON.stringify(ended)
+    unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    expect(JSON.stringify(ended)).toBe(snapshot)
+  })
+
+  it('can only be done once', () => {
+    const { ended } = endedPvpBattle()
+    const restored = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    expect(unwrapErr(undoEndBattle(restored, { playerId: CASH1981 })).kind).toBe(
+      'BATTLE_ALREADY_ACTIVE',
+    )
+  })
+
+  it('can be ended and undone again', () => {
+    const { ended } = endedPvpBattle()
+    const restored = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    const endedAgain = unwrap(endBattleAction(restored, { playerId: KARANDRAS1 }))
+    // The ender is whoever pressed it last, not the original ender
+    expect(endedAgain.endedBattle?.endedBy).toBe(KARANDRAS1)
+    expect(unwrap(undoEndBattle(endedAgain, { playerId: KARANDRAS1 })).battle).not.toBeNull()
+  })
+
+  it('only the player who ended the battle may undo it, and a refusal changes nothing', () => {
+    const { ended } = endedPvpBattle()
+    const snapshot = JSON.stringify(ended)
+
+    // The other participant
+    expect(unwrapErr(undoEndBattle(ended, { playerId: KARANDRAS1 })).kind).toBe(
+      'NOT_IN_THIS_BATTLE',
+    )
+    // A player who was not in the battle
+    expect(unwrapErr(undoEndBattle(ended, { playerId: ITCHI })).kind).toBe('NOT_IN_THIS_BATTLE')
+    // Someone who is not in the game at all
+    expect(unwrapErr(undoEndBattle(ended, { playerId: 'nobody' })).kind).toBe('PLAYER_NOT_FOUND')
+    expect(JSON.stringify(ended)).toBe(snapshot)
+  })
+
+  it('is refused when no battle has been ended', () => {
+    const state = firstCivGame()
+    expect(unwrapErr(undoEndBattle(state, { playerId: CASH1981 })).kind).toBe('NO_BATTLE_ACTIVE')
+  })
+
+  it('is refused once a new battle has been initiated, and initiating clears the snapshot', () => {
+    const { ended } = endedPvpBattle()
+    expect(ended.endedBattle).not.toBeNull()
+
+    const next = unwrap(initiateBattle(ended, { initiatorId: KARANDRAS1, opponentId: ITCHI }))
+    expect(next.endedBattle).toBeNull()
+    expect(unwrapErr(undoEndBattle(next, { playerId: CASH1981 })).kind).toBe(
+      'BATTLE_ALREADY_ACTIVE',
+    )
+
+    // Even after the new battle is over, the first one cannot come back: the
+    // snapshot is now the second battle's, and belongs to its ender.
+    const nextEnded = unwrap(endBattleAction(next, { playerId: KARANDRAS1 }))
+    expect(unwrapErr(undoEndBattle(nextEnded, { playerId: CASH1981 })).kind).toBe(
+      'NOT_IN_THIS_BATTLE',
+    )
+    expect(unwrap(undoEndBattle(nextEnded, { playerId: KARANDRAS1 })).battle?.id).toBe(
+      next.battle?.id,
+    )
+  })
+
+  it('initiating a barbarian battle clears the snapshot too', () => {
+    const { ended } = endedPvpBattle()
+    const next = unwrap(initiateBattle(ended, { initiatorId: ITCHI, opponentId: 'barbarians' }))
+    expect(next.endedBattle).toBeNull()
+  })
+
+  it('is not expired by other game actions', () => {
+    const { ended } = endedPvpBattle()
+    const later = unwrap(draw(ended, { playerId: ITCHI, sheetName: 'INFANTRY', confirmedOutOfTurn: true }))
+    expect(unwrap(undoEndBattle(later, { playerId: CASH1981 })).battle).not.toBeNull()
+  })
+
+  it('works for a barbarian battle', () => {
+    let state = unwrap(
+      initiateBattle(firstCivGame(), { initiatorId: CASH1981, opponentId: 'barbarians' }),
+    )
+    const controllerId = state.battle!.defender.playerId
+    const barbarian = findPlayer(state, controllerId)!.barbarians[0]!
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: controllerId,
+        unitId: barbarian.id,
+        side: 'defender',
+        position: 0,
+        attack: barbarian.attack,
+        health: barbarian.health,
+      }),
+    )
+    const before = state
+    state = unwrap(endBattleAction(state, { playerId: controllerId }))
+    expect(findPlayer(state, controllerId)!.barbarians.find((u) => u.id === barbarian.id)?.inBattle).toBe(false)
+
+    // The barbarian controller ended it, so only they may undo it
+    expect(unwrapErr(undoEndBattle(state, { playerId: CASH1981 })).kind).toBe('NOT_IN_THIS_BATTLE')
+    const restored = unwrap(undoEndBattle(state, { playerId: controllerId }))
+
+    expect(restored.battle).toEqual(before.battle)
+    expect(restored.battle?.defender.kind).toBe('barbarians')
+    expect(findPlayer(restored, controllerId)!.barbarians.find((u) => u.id === barbarian.id)?.inBattle).toBe(true)
+  })
+
+  it('locks the cards of reinforced-away (departed) units again', () => {
+    let state = withBattlehand(CASH1981, 2)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const [fallen, reinforcement] = findPlayer(state, CASH1981)!.battlehand
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: fallen!.id,
+        side: 'attacker',
+        position: 0,
+        attack: fallen!.attack,
+        health: fallen!.health,
+      }),
+    )
+    state = unwrap(
+      killArenaUnit(state, { playerId: CASH1981, arenaUnitId: state.battle!.arena[0]!.id }),
+    )
+    state = unwrap(
+      placeUnitInArena(state, {
+        playerId: CASH1981,
+        unitId: reinforcement!.id,
+        side: 'attacker',
+        position: 0,
+        attack: reinforcement!.attack,
+        health: reinforcement!.health,
+      }),
+    )
+    expect(state.battle!.departedUnits).toHaveLength(1)
+    const before = state
+
+    state = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    expect(cardInBattle(state, CASH1981, fallen!.id)).toBe(false)
+    const restored = unwrap(undoEndBattle(state, { playerId: CASH1981 }))
+
+    expect(restored.battle).toEqual(before.battle)
+    expect(restored.battle!.departedUnits).toHaveLength(1)
+    expect(cardInBattle(restored, CASH1981, fallen!.id)).toBe(true)
+    expect(cardInBattle(restored, CASH1981, reinforcement!.id)).toBe(true)
+  })
+
+  it('skips a source card that was discarded or removed between end and undo', () => {
+    const { ended, attackerCardId } = endedPvpBattle()
+    const attacker = findPlayer(ended, CASH1981)!
+    // The attacker's card leaves their hand; the defender's player is gone entirely
+    const gone: GameState = {
+      ...ended,
+      players: ended.players
+        .filter((p) => p.playerId !== KARANDRAS1)
+        .map((p) =>
+          p.playerId === CASH1981
+            ? {
+                ...attacker,
+                battlehand: attacker.battlehand.filter((u) => u.id !== attackerCardId),
+                items: attacker.items.filter((i) => i.id !== attackerCardId),
+              }
+            : p,
+        ),
+    }
+
+    const restored = unwrap(undoEndBattle(gone, { playerId: CASH1981 }))
+
+    expect(restored.battle).toEqual(ended.endedBattle!.battle)
+    expect(findPlayer(restored, CASH1981)!.battlehand.some((u) => u.id === attackerCardId)).toBe(false)
+    expect(findPlayer(restored, KARANDRAS1)).toBeUndefined()
+    // The card that was never placed is left alone
+    expect(findPlayer(restored, CASH1981)!.battlehand.every((u) => !u.inBattle)).toBe(true)
+  })
+})
+
+describe('ending a battle and the projection', () => {
+  function endedBattleWithUnits(): {
+    readonly ended: GameState
+    readonly arenaIds: readonly string[]
+    readonly battleId: string
+    readonly unitNames: readonly string[]
+  } {
+    let state = withBattlehand(CASH1981, 2)
+    state = unwrap(initiateBattle(state, { initiatorId: CASH1981, opponentId: KARANDRAS1 }))
+    const cards = findPlayer(state, CASH1981)!.battlehand
+    cards.forEach((card, position) => {
+      state = unwrap(
+        placeUnitInArena(state, {
+          playerId: CASH1981,
+          unitId: card.id,
+          side: 'attacker',
+          position,
+          attack: card.attack,
+          health: card.health,
+        }),
+      )
+    })
+    const battle = state.battle!
+    const ended = unwrap(endBattleAction(state, { playerId: CASH1981 }))
+    return {
+      ended,
+      arenaIds: battle.arena.map((u) => u.id),
+      battleId: battle.id,
+      unitNames: battle.arena.map((u) => revealAll(u.unit)),
+    }
+  }
+
+  it('exposes only who ended the battle, never the snapshot, to any viewer', () => {
+    const { ended, arenaIds, battleId } = endedBattleWithUnits()
+
+    for (const viewer of [CASH1981, KARANDRAS1, ITCHI, 'a-spectator']) {
+      const view = toPlayerView(ended, viewer)
+      expect(view.battle).toBeNull()
+      expect(view.battleUndo).toEqual({ endedBy: CASH1981 })
+      expect(Object.keys(view.battleUndo ?? {})).toEqual(['endedBy'])
+      const json = JSON.stringify(view)
+      expect(json).not.toContain('endedBattle')
+      expect(json).not.toContain(battleId)
+      for (const id of arenaIds) expect(json).not.toContain(id)
+    }
+  })
+
+  it('has no battleUndo before a battle is ended, while one is running, or after a new one starts', () => {
+    expect(toPlayerView(firstCivGame(), CASH1981).battleUndo).toBeNull()
+
+    const { ended } = endedBattleWithUnits()
+    const next = unwrap(initiateBattle(ended, { initiatorId: KARANDRAS1, opponentId: ITCHI }))
+    expect(toPlayerView(next, CASH1981).battleUndo).toBeNull()
+
+    const restored = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    expect(toPlayerView(restored, CASH1981).battleUndo).toBeNull()
+  })
+
+  it('ending a battle logs no unit name, in either log, and carries no item', () => {
+    const { ended, unitNames } = endedBattleWithUnits()
+    expect(unitNames.length).toBeGreaterThan(0)
+
+    const entry = ended.log[ended.log.length - 1]!
+    expect(entry.publicLog).toContain('ends the battle')
+    expect(entry.item).toBeNull()
+    for (const name of unitNames) {
+      expect(entry.publicLog).not.toContain(name)
+      expect(entry.privateLog).not.toContain(name)
+    }
+    const restored = unwrap(undoEndBattle(ended, { playerId: CASH1981 }))
+    const undoEntry = restored.log[restored.log.length - 1]!
+    for (const name of unitNames) {
+      expect(undoEntry.publicLog).not.toContain(name)
+      expect(undoEntry.privateLog).not.toContain(name)
+    }
+  })
+
+  it('an old saved game without endedBattle loads with nothing to undo', () => {
+    const old = { ...firstCivGame() } as Record<string, unknown>
+    delete old['endedBattle']
+    const migrated = migrateGameState(old as unknown as GameState)
+    expect(migrated.endedBattle).toBeNull()
+    expect(toPlayerView(migrated, CASH1981).battleUndo).toBeNull()
+  })
+
+  it('a saved snapshot keeps the arena backfills of a live battle when it migrates', () => {
+    const { ended } = endedBattleWithUnits()
+    const older = JSON.parse(JSON.stringify(ended)) as {
+      endedBattle: { battle: { departedUnits?: unknown; arena: { killed?: unknown; rotation?: unknown }[] } }
+    }
+    delete older.endedBattle.battle.departedUnits
+    for (const unit of older.endedBattle.battle.arena) {
+      delete unit.killed
+      delete unit.rotation
+    }
+    const migrated = migrateGameState(older as unknown as GameState)
+    expect(migrated.endedBattle?.endedBy).toBe(CASH1981)
+    expect(migrated.endedBattle?.battle.departedUnits).toEqual([])
+    expect(migrated.endedBattle?.battle.arena.every((u) => !u.killed && u.rotation === 0)).toBe(true)
   })
 })

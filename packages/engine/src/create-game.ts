@@ -207,6 +207,7 @@ export function createGame(options: CreateGameOptions): GameState {
     legacyRevealsCopied: true,
     turnStarters: {},
     battle: null,
+    endedBattle: null,
     rev: 0,
   }
 }

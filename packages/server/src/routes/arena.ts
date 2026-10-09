@@ -17,6 +17,7 @@ import {
   returnArenaUnitToHand,
   rotateArenaUnit,
   setArenaUnitStat,
+  undoEndBattle,
 } from '@civ/engine'
 
 import type { App } from '../app.js'
@@ -285,6 +286,25 @@ export function registerArenaRoutes(app: App, context: AppContext): void {
       c,
       gameId,
       (state) => endBattleAction(state, { playerId: currentPlayer(c).id }),
+      clientRev,
+    )
+  })
+
+  /**
+   * Take back "End battle". Body: `{ rev: number }`. Only the player who ended
+   * the battle may do it, and only until a new battle is initiated. No mail:
+   * the battle is back where it was, nobody needs telling.
+   */
+  app.post('/api/games/:gameId/battle/arena/end/undo', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const clientRev = optionalNumber(body, 'rev')
+
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) => undoEndBattle(state, { playerId: currentPlayer(c).id }),
       clientRev,
     )
   })
