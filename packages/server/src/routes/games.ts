@@ -521,18 +521,33 @@ export function registerGameRoutes(app: App, context: AppContext): void {
   /** Java: `/{pbfId}/publiclog`. */
   app.get('/api/games/:gameId/log/public', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
-    return readGame(context, c, gameId, (state) =>
+    return readGame(context, c, gameId, (state, viewerId) =>
       newestFirst(
         state.log
           .filter((entry) => entry.publicLog !== '')
-          .map((entry) => ({
-            id: entry.id,
-            username: entry.username,
-            logType: entry.logType,
-            message: entry.publicLog,
-            createdAt: entry.createdAt,
-            hasUndo: entry.undo !== null,
-          })),
+          .map((entry) => {
+            const assisted = state.assistedActions.find((record) => record.id === entry.assistedActionId)
+            return {
+              id: entry.id,
+              username: entry.username,
+              logType: entry.logType,
+              message: entry.publicLog,
+              createdAt: entry.createdAt,
+              hasUndo: entry.undo !== null,
+              // Only the player who used a card may ask to take it back, as with an item
+              // today; the vote itself is everyone's. The line stays after an undo.
+              ...(entry.assistedActionId === undefined
+                ? {}
+                : {
+                    assistedActionId: entry.assistedActionId,
+                    canUndo:
+                      assisted !== undefined &&
+                      assisted.status === 'applied' &&
+                      assisted.playerId === viewerId &&
+                      entry.undo === null,
+                  }),
+            }
+          }),
       ),
     )
   })

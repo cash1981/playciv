@@ -389,3 +389,26 @@ describe('undo over HTTP', () => {
     expect(incensePieces(await repo.findGame(table.gameId))).toHaveLength(0)
   })
 })
+
+describe('the public log offers the undo to the actor only', () => {
+  it('canUndo is true for the actor on the applied line and false for others and after the undo', async () => {
+    const table = await chivalryTable('LogUndo')
+    expect((await chivalry(table, 'req-1', (await view(table.gameId, table.starter)).rev)).status).toBe(200)
+    const logOf = async (token: string) => {
+      const response = await inject(app, { url: `/api/games/${table.gameId}/log/public`, headers: bearer(token) })
+      const lines = await response.json<readonly { assistedActionId?: string; canUndo?: boolean }[]>()
+      return lines.filter((line) => line.assistedActionId === 'req-1')
+    }
+
+    expect((await logOf(table.starter))[0]?.canUndo).toBe(true)
+    expect((await logOf(table.other))[0]?.canUndo).toBe(false)
+    const anonymous = await inject(app, { url: `/api/games/${table.gameId}/log/public` })
+    expect((await anonymous.json<readonly { assistedActionId?: string; canUndo?: boolean }[]>())
+      .find((line) => line.assistedActionId === 'req-1')?.canUndo).toBe(false)
+
+    const logId = (await view(table.gameId, table.other)).assistedActions[0]?.logId as string
+    await post(table.starter, `/api/games/${table.gameId}/undo/${logId}`, {})
+    await post(table.other, `/api/games/${table.gameId}/undo/${logId}/vote`, { vote: true })
+    expect((await logOf(table.starter))[0]?.canUndo).toBe(false)
+  })
+})
