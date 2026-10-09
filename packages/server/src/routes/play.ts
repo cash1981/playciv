@@ -3,9 +3,10 @@
  * drawing, battle, techs, social policy, revealing, trading, turns and undo.
  */
 
-import type { GameState, Government, PlayerStatKey, SheetName } from '@civ/engine'
+import type { AssistedPayload, BuildPayload, GameState, Government, PlayerStatKey, SheetName } from '@civ/engine'
 import {
   ALL_WONDERS,
+  BUILDABLE_BUILDING_IDS,
   CULTURE_CARD,
   chooseSocialPolicy,
   chooseTech,
@@ -69,6 +70,45 @@ import { sendError } from '../errors.js'
 
 /** What a client may use as a `requestId`: 1 to 64 characters of a small safe set. */
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/
+
+const BUILD_FIELDS = ['cityPieceId', 'item', 'target', 'rush'] as const
+
+/** The highest map column or row a request may name; the largest board has 16 squares a side, so this is generous. */
+const MAX_BUILD_COORDINATE = 63
+
+/**
+ * The `build` payload from a request body, or a sentence saying what is wrong
+ * with it. Only the shape is checked here (ids, a known building, whole numbers,
+ * a boolean); whether the city, the building and the square are legal is the
+ * engine's decision, made from the fresh state.
+ */
+function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string {
+  const cityPieceId = requireString(body, 'cityPieceId')
+  if (cityPieceId === undefined || !REQUEST_ID.test(cityPieceId)) {
+    return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+  }
+  const item = asRecord(body['item'])
+  const assetId = item['assetId']
+  if (item['kind'] !== 'building' || typeof assetId !== 'string' || !BUILDABLE_BUILDING_IDS.includes(assetId)) {
+    return 'item must be { kind: "building", assetId } with the asset id of a building that can be built'
+  }
+  const target = asRecord(body['target'])
+  const column = target['column']
+  const row = target['row']
+  const whole = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_BUILD_COORDINATE
+  if (!whole(column) || !whole(row)) {
+    return `target must be { column, row }, whole numbers from 0 to ${MAX_BUILD_COORDINATE}`
+  }
+  const rush = body['rush']
+  if (rush !== undefined && typeof rush !== 'boolean') return 'rush must be a boolean'
+  return {
+    cityPieceId,
+    item: { kind: 'building', assetId },
+    target: { column, row },
+    ...(rush === undefined ? {} : { rush }),
+  }
+}
 
 /** Looks up the sheet name and answers 400 when there is no such sheet. */
 function parseSheetName(
@@ -774,8 +814,8 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       return sendError(c, 400, 'BAD_REQUEST', 'confirmedRepeat must be a boolean')
     }
     const confirmedRepeat = body['confirmedRepeat'] === true
-    // Only `chooseReward` carries a payload, and then both ids are required; the other actions take none
-    let payload: { readonly rewardId: string; readonly itemId: string } | undefined
+    // Only `chooseReward` and `build` carry a payload, each its own; the other actions take none
+    let payload: AssistedPayload | undefined
     if (action === 'chooseReward') {
       const rewardId = requireString(body, 'rewardId')
       const itemId = requireString(body, 'itemId')
@@ -790,6 +830,13 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       payload = { rewardId, itemId }
     } else if (body['rewardId'] !== undefined || body['itemId'] !== undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'rewardId and itemId only belong to chooseReward')
+    }
+    if (action === 'build') {
+      const parsed = parseBuildPayload(body)
+      if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
+      payload = parsed
+    } else if (BUILD_FIELDS.some((field) => body[field] !== undefined)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'cityPieceId, item, target and rush only belong to build')
     }
     const actor = currentPlayer(c)
     return applyToGame(

@@ -612,8 +612,9 @@ export function removePiece(state: GameState, input: PieceInput): ActionResult {
 /**
  * Whether a board history entry is part of an assisted action that is still
  * applied: the removal of the resource piece it spent, the move of the culture
- * marker a culture advance made, or the Great Person marker a culture advance put in the
- * player's area. That change belongs to the action, so only the undo vote on the
+ * marker a culture advance made, the Great Person marker a culture advance put in the
+ * player's area, or the building a build placed and the Building Program marker it
+ * used up. That change belongs to the action, so only the undo vote on the
  * action's log line may take it back; the board's own Undo would return it and keep
  * what the action gave (or take the marker and keep the card). Once the action is
  * undone the old history entry is an ordinary one again.
@@ -626,6 +627,10 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
   return state.assistedActions.some((record) => {
     if (record.status !== 'applied') return false
     const effect = record.effect
+    // A build placed the building and used up the Building Program marker: neither can be taken back alone
+    if (effect.kind === 'build') {
+      return effect.historyId === entry.id || effect.marker?.historyId === entry.id
+    }
     if (change.kind === 'place' && effect.kind === 'cultureAdvance') {
       return effect.marker?.pieceId === change.piece.id
     }

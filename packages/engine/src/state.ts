@@ -16,6 +16,8 @@ import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './bl
 import { combatBonusOf } from './combat-bonus.js'
 import type { CityProduction } from './city-production.js'
 import { cityProductionsOf } from './city-production.js'
+import type { CityBuildOptions } from './build-options.js'
+import { buildOptionsOf } from './build-options.js'
 import { BASE_CULTURE_HAND_SIZE, cultureHandSizeOf } from './culture-hand.js'
 import type { CoinSources } from './coins.js'
 import { EMPTY_COIN_SOURCES, coinSourcesOf } from './coins.js'
@@ -259,6 +261,7 @@ export type AssistedActionKind =
   | 'printingPress'
   | 'cultureAdvance'
   | 'chooseReward'
+  | 'build'
 
 /** The cards that spend a resource token for culture: "Incense, City Management: gain N culture". */
 export type CultureCardKind = 'chivalry' | 'currency' | 'metalCasting'
@@ -334,6 +337,22 @@ export type AssistedEffect =
       readonly rewardId: string
       /** The card kept, or `null` when no candidate was left in the hand and the choice was only dropped. */
       readonly itemId: string | null
+    }
+  | {
+      readonly kind: 'build'
+      readonly cityPieceId: string
+      /** What was built. Figures and units add their own kinds to this union. */
+      readonly item: { readonly kind: 'building'; readonly assetId: string }
+      /** The map square, as numbers from the map's top left corner, and the label the log used. */
+      readonly square: { readonly column: number; readonly row: number; readonly label: string }
+      /** The piece that was placed, where it went and the board history entry that placed it. */
+      readonly pieceId: string
+      readonly position: { readonly x: number; readonly y: number }
+      readonly historyId: string
+      /** The trade paid for the missing production; 0 when the city's production was enough. */
+      readonly trade: number
+      /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
+      readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
     }
 
 /**
@@ -809,6 +828,13 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
    * the resource tokens they hold, so nobody else gets it.
    */
   readonly availableActions: readonly AvailableAction[]
+  /**
+   * What each of the viewer's cities can build now (assisted Build). Derived
+   * from the viewer's revealed techs and trade, so it exists on the own view only:
+   * never on `OpaquePlayerhand`, never for a spectator, and blanked for a replayed
+   * revision.
+   */
+  readonly buildOptions: readonly CityBuildOptions[]
 }
 
 /**
@@ -923,6 +949,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           cities: cityProductionsOf(state, player),
           blockadedGreatPersonTypes: blockadedGreatPersonTypes(state, player),
           availableActions: availableActionsFor(state, viewerId),
+          buildOptions: buildOptionsOf(state, player),
           pendingRewards: pendingRewardViews(player),
         }
   return {

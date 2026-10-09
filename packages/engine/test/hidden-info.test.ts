@@ -8,14 +8,19 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { placePiece } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
 import {
   chooseSocialPolicy,
   chooseTech,
   revealItem,
   revealSocialPolicy,
+  revealTech,
   revealedTechsForAllPlayers,
 } from '../src/actions/player.js'
+import { markPhasesDone } from '../src/actions/turn.js'
+import { performAssistedAction } from '../src/assisted.js'
+import { SQUARE_SIZE, mapTop, slotOrigin } from '../src/board.js'
 import type { CivItem } from '../src/item.js'
 import { itemName, revealAll } from '../src/item.js'
 import { createLogTexts, javaStringHashCode, uniqueItemNumber } from '../src/log.js'
@@ -301,5 +306,108 @@ describe('log texts', () => {
     // The classic collision: "Aa" and "BB" hash the same
     expect(javaStringHashCode('Aa')).toBe(2112)
     expect(javaStringHashCode('BB')).toBe(2112)
+  })
+})
+
+describe('build options', () => {
+  /** Cash is Red with the America tile and a city on B2; Karandras is Blue. City Management is open. */
+  function buildScene(techs: readonly { readonly name: string; readonly reveal: boolean }[]) {
+    let state = firstCivGame()
+    state = {
+      ...state,
+      players: state.players.map((player) => ({
+        ...player,
+        color: player.playerId === CASH1981 ? 'Red' : player.playerId === KARANDRAS1 ? 'Blue' : 'Green',
+      })),
+    }
+    const slot = state.board.slots[0]
+    if (slot === undefined) throw new Error('board has no slots')
+    const [x, y] = slotOrigin(state.board, slot)
+    state = unwrap(placePiece(state, { playerId: CASH1981, assetId: 'tiles/america', x, y }))
+    state = unwrap(
+      placePiece(state, {
+        playerId: CASH1981,
+        assetId: 'cities/redcity2',
+        x: 1 * SQUARE_SIZE + 4,
+        y: mapTop(state.board) + 1 * SQUARE_SIZE + 4,
+      }),
+    )
+    for (const tech of techs) {
+      state = unwrap(chooseTech(state, { playerId: CASH1981, techName: tech.name }))
+      if (tech.reveal) state = unwrap(revealTech(state, { playerId: CASH1981, techName: tech.name }))
+    }
+    return unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'TRADE' }))
+  }
+
+  it('the owner gets the options of their own city', () => {
+    const view = toPlayerView(buildScene([{ name: 'Writing', reveal: true }]), CASH1981)
+    expect(view.you?.buildOptions).toHaveLength(1)
+    expect(view.you?.buildOptions[0]?.choices.map((choice) => choice.assetId)).toEqual(['buildings/library'])
+  })
+
+  it('an opponent and a spectator get no options, and none of the owner\'s are in their view', () => {
+    const state = buildScene([{ name: 'Writing', reveal: true }])
+    const owner = toPlayerView(state, CASH1981)
+    const cityPieceId = owner.you?.buildOptions[0]?.cityPieceId ?? ''
+    expect(cityPieceId).not.toBe('')
+
+    const opponent = toPlayerView(state, KARANDRAS1)
+    // Their own view carries the field, for their own cities (none), and nothing of Cash's
+    expect(opponent.you?.buildOptions).toEqual([])
+    const spectator = toPlayerView(state, 'spectator')
+    expect(spectator.you).toBeNull()
+
+    for (const view of [opponent, spectator]) {
+      const json = JSON.stringify(view)
+      // The city piece id is on the public board, but never beside any option or choice
+      expect(json).not.toContain('"choices"')
+      expect(json).not.toContain('"unavailable"')
+      expect(json).not.toContain('"tradeToPay"')
+      expect(json).not.toContain('Ready to build.')
+    }
+    expect(JSON.stringify(spectator)).not.toContain('buildOptions')
+    // Cash's entry in an opponent's list of players has no such field either
+    const cashAsOpponent = opponent.opponents.find((candidate) => candidate.playerId === CASH1981)
+    expect(cashAsOpponent).toBeDefined()
+    expect(cashAsOpponent).not.toHaveProperty('buildOptions')
+    expect(cashAsOpponent).not.toHaveProperty('choices')
+  })
+
+  it('a tech that is chosen but not revealed unlocks nothing for anyone but the owner, who is told it is hidden', () => {
+    const state = buildScene([{ name: 'Writing', reveal: false }])
+    const owner = toPlayerView(state, CASH1981)
+    expect(owner.you?.buildOptions[0]?.choices).toEqual([])
+    expect(owner.you?.buildOptions[0]?.unavailable.find((entry) => entry.assetId === 'buildings/library')?.reason).toBe(
+      'Needs Writing. Writing is chosen but not revealed yet.',
+    )
+    // Nothing of that sentence or of the building reaches anybody else
+    for (const viewerId of [KARANDRAS1, ITCHI, 'spectator']) {
+      const json = JSON.stringify(toPlayerView(state, viewerId))
+      expect(json).not.toContain('chosen but not revealed')
+      expect(json).not.toContain('Needs Writing')
+      expect(json).not.toContain('buildings/library')
+    }
+  })
+
+  it('a build shows others only its public line, never the effect', () => {
+    let state = buildScene([{ name: 'Writing', reveal: true }])
+    const cityPieceId = toPlayerView(state, CASH1981).you?.buildOptions[0]?.cityPieceId ?? ''
+    state = unwrap(
+      performAssistedAction(state, {
+        playerId: CASH1981,
+        action: 'build',
+        requestId: 'req-1',
+        payload: { cityPieceId, item: { kind: 'building', assetId: 'buildings/library' }, target: { column: 2, row: 1 } },
+      }),
+    )
+    for (const viewerId of [KARANDRAS1, 'spectator']) {
+      const view = toPlayerView(state, viewerId)
+      const json = JSON.stringify(view)
+      expect(json).not.toContain('"effect"')
+      expect(json).not.toContain('buildOptions":[{')
+      expect(view.assistedActions).toEqual([
+        expect.objectContaining({ kind: 'build', label: 'Build', text: 'cash1981 built a Library in City B2 on square C2' }),
+      ])
+    }
   })
 })

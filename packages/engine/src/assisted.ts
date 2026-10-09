@@ -20,12 +20,14 @@
  * top-level use of a `state.ts` value here, or a top-level call into
  * `actions/board.ts`, would run before the cycle has finished loading and throw
  * on an uninitialised binding. Keep it that way: no value imports from
- * `state.ts`, and nothing computed at load time from the board actions.
+ * `state.ts`, and nothing computed at load time from the board actions. The
+ * same goes for `build-options.ts`, which this file calls and which calls
+ * `openCityManagementTurn` back.
  */
 
 import { movePieceUnchecked, placeUnchecked, removePiece } from './actions/board.js'
 import { reshuffleItems } from './actions/draw.js'
-import { GREAT_PERSON_CARD_TYPES, blockadedPieceIds } from './blockade.js'
+import { GREAT_PERSON_CARD_TYPES, blockadedPieceIds, cityFootprintsOf, mapCellOf } from './blockade.js'
 import {
   AREA_LABEL_HEIGHT,
   CULTURE_VICTORY_STEP,
@@ -39,6 +41,14 @@ import {
   remainingBoardAssetCount,
 } from './board.js'
 import type { BoardPiece } from './board.js'
+import {
+  BUILDING_PROGRAM_ASSET_ID,
+  buildOptionsOf,
+  buildSquareRefusal,
+  squareCentre,
+} from './build-options.js'
+import type { BuildPayload } from './build-options.js'
+import { buildingNameOf } from './building-data.js'
 import { activeWonderOwnerIds, coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
 import {
   cultureAdvanceCost,
@@ -351,11 +361,14 @@ export interface ChooseRewardPayload {
   readonly itemId: string
 }
 
+/** What an action may carry: `chooseReward` takes the reward and card, `build` takes the city, item and square. */
+export type AssistedPayload = ChooseRewardPayload | BuildPayload
+
 interface ApplyContext {
   readonly requestId: string
   readonly at: string | undefined
-  /** Only `chooseReward` reads it; every other action ignores it. */
-  readonly payload: ChooseRewardPayload | undefined
+  /** Only `chooseReward` and `build` read it, each its own shape; every other action ignores it. */
+  readonly payload: AssistedPayload | undefined
   /**
    * True when the action was `used` this turn and the player confirmed using it
    * again. It pays and applies as a first use; only the log line says so.
@@ -411,7 +424,7 @@ const REPEAT_NOTE = ' (used again, confirmed by the player)'
 const usedReason = (label: string): string =>
   `${label} has already been used this turn. The rules allow it once per turn; you will be asked to confirm before using it again.`
 
-const PHASE_REASON = 'Only available during your open City Management phase.'
+export const PHASE_REASON = 'Only available during your open City Management phase.'
 
 // -- Incense cards: Chivalry, Currency, Metal Casting -----------------------
 
@@ -1419,6 +1432,201 @@ const cultureAdvance: AssistedActionDefinition = {
   },
 }
 
+// -- Build ---------------------------------------------------------------------
+
+/** "a Library", "an Academy", and "a University": it starts with a vowel but is said with a consonant. */
+const withArticle = (label: string): string => `${/^[aeiou]/i.test(label) && !/^uni/i.test(label) ? 'an' : 'a'} ${label}`
+
+/** The `build` payload, or `undefined` when the payload is another action's or missing. */
+const buildPayloadOf = (payload: AssistedPayload | undefined): BuildPayload | undefined =>
+  payload !== undefined && 'cityPieceId' in payload ? payload : undefined
+
+/**
+ * A city builds a building. Everything is decided from the fresh state: the
+ * options are recomputed for the city and the request must be one of them, so a
+ * square taken, a supply used up, trade spent or a phase closed since the player
+ * looked is refused with the reason. One step places the piece, pays the trade,
+ * uses up the Building Program marker and writes the public line; one undo vote
+ * takes all of it back. Parts 3 and 4 add figure and unit items to `payload.item`.
+ */
+const build: AssistedActionDefinition = {
+  kind: 'build',
+  techName: null,
+  label: 'Build',
+  button: false,
+  usageKey: null,
+
+  availability(state, playerId) {
+    const player = playerOf(state, playerId)
+    if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
+    if (openCityManagementTurn(state, player) === undefined) return blocked('wrong-phase', PHASE_REASON)
+    if (player.color === null || cityFootprintsOf(state, player.color.toLowerCase()).length === 0) {
+      return blocked('unavailable', 'You have no city on the map to build with.')
+    }
+    return { status: 'ready', reason: 'Choose a city, what to build and a square.' }
+  },
+
+  apply(state, player, context) {
+    const failed = (reason: string): EngineError => rejected('build', blocked('unavailable', reason))
+    const payload = buildPayloadOf(context.payload)
+    if (payload === undefined) return err(failed('Say which city, what to build and which square.'))
+    if (payload.item.kind !== 'building') return err(failed('Only buildings can be built for now.'))
+    const { assetId } = payload.item
+    const target = payload.target
+
+    const city = buildOptionsOf(state, player).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
+    if (city === undefined) return err(failed('That city is not yours, or it is no longer on the map.'))
+    if (city.status !== 'ready') return err(rejected('build', blocked('wrong-phase', city.reason)))
+
+    const label = buildingNameOf(assetId) ?? assetId
+    const choice = city.choices.find((candidate) => candidate.assetId === assetId)
+    if (choice === undefined) {
+      const why = city.unavailable.find((candidate) => candidate.assetId === assetId)
+      return err(
+        failed(
+          why === undefined
+            ? `${assetId} is not a building that can be built.`
+            : `${why.label} cannot be built in ${city.label} now. ${why.reason}`,
+        ),
+      )
+    }
+    const square = choice.squares.find(
+      (candidate) => candidate.column === target.column && candidate.row === target.row,
+    )
+    if (square === undefined) {
+      const why = buildSquareRefusal(state, player, city.cityPieceId, assetId, target)
+      return err(failed(`${why ?? 'That square is not one of the legal squares.'} Pick one of the highlighted squares.`))
+    }
+    if (choice.tradeToPay > 0 && payload.rush !== true) {
+      return err(
+        failed(
+          `${label} costs ${choice.cost} and ${city.label} has ${city.production}. Confirm paying ${choice.tradeToPay} trade to build it.`,
+        ),
+      )
+    }
+    const asset = findBoardAsset(assetId)
+    if (asset === undefined) return err(failed(`${label} has no artwork to put on the board.`))
+    const at = context.at === undefined ? {} : { at: context.at }
+
+    // The marker a city with the Building Program must use (Wisdom and Warfare p. 7), found before the piece goes down
+    const centres = new Set(
+      (player.color === null ? [] : cityFootprintsOf(state, player.color.toLowerCase()))
+        .filter((candidate) => candidate.piece.id === city.cityPieceId)
+        .flatMap((candidate) => candidate.centers.map((cell) => `${cell.column},${cell.row}`)),
+    )
+    const marker = state.board.pieces.find((piece) => {
+      if (piece.assetId !== BUILDING_PROGRAM_ASSET_ID) return false
+      const cell = mapCellOf(state.board, piece)
+      return cell !== null && centres.has(`${cell.column},${cell.row}`)
+    })
+
+    const centre = squareCentre(state.board, square)
+    const placed = placeUnchecked(state, {
+      playerId: player.playerId,
+      assetId,
+      x: centre.x - asset.width / 2,
+      y: centre.y - asset.height / 2,
+      ...at,
+    })
+    const entry = placed?.board.history.at(-1)
+    if (placed === undefined || entry === undefined || entry.change.kind !== 'place') {
+      return err(failed(`The ${label} could not be placed.`))
+    }
+    const piece = entry.change.piece
+    const landed = mapCellOf(placed.board, piece)
+    if (landed === null || landed.column !== square.column || landed.row !== square.row) {
+      return err(failed(`The ${label} could not be placed on ${square.label}.`))
+    }
+
+    let board = placed
+    let removal: { readonly piece: BoardPiece; readonly historyId: string } | null = null
+    if (marker !== undefined) {
+      const removed = removePiece(placed, { playerId: player.playerId, pieceId: marker.id, ...at })
+      const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
+      if (!removed.ok || removedEntry === undefined) {
+        return err(failed('The Building Program marker could not be taken off the board.'))
+      }
+      board = removed.value
+      removal = { piece: marker, historyId: removedEntry.id }
+    }
+
+    const paying = playerOf(board, player.playerId) ?? player
+    const paid = withPlayerHand(board, {
+      ...paying,
+      stats: { ...paying.stats, trade: paying.stats.trade - choice.tradeToPay },
+    })
+    const logged = appendLog(paid, {
+      username: player.username,
+      playerId: player.playerId,
+      publicLog:
+        `${player.username} built ${withArticle(label)} in ${city.label} on square ${square.label}` +
+        (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} trade for the missing production` : '') +
+        (removal === null ? '' : ', using up the Building Program marker'),
+      privateLog: '',
+      createdAt: context.at ?? null,
+      assistedActionId: context.requestId,
+    })
+    // The board changes were recorded before the line existed: count it in, as the culture advance does
+    return ok({
+      state: countLinesIn(logged, [entry.id, removal?.historyId]),
+      effect: {
+        kind: 'build',
+        cityPieceId: city.cityPieceId,
+        item: { kind: 'building', assetId },
+        square: { column: square.column, row: square.row, label: square.label },
+        pieceId: piece.id,
+        position: { x: piece.x, y: piece.y },
+        historyId: entry.id,
+        trade: choice.tradeToPay,
+        marker: removal,
+      },
+      logId: lastLogId(logged),
+    })
+  },
+
+  reverse(state, player, record, at) {
+    const effect = record.effect
+    if (effect.kind !== 'build') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+    const refused = (reason: string): EngineError => ({
+      kind: 'ASSISTED_UNDO_BLOCKED',
+      logId: record.logId,
+      reason,
+    })
+    const label = buildingNameOf(effect.item.assetId) ?? effect.item.assetId
+
+    // Everything is checked before anything is changed, so a refusal leaves the game as it was.
+    const piece = state.board.pieces.find((candidate) => candidate.id === effect.pieceId)
+    if (piece === undefined) {
+      return err(refused(`The ${label} is no longer on the board, so the build cannot be undone.`))
+    }
+    const cell = mapCellOf(state.board, piece)
+    if (cell === null || cell.column !== effect.square.column || cell.row !== effect.square.row) {
+      return err(refused(`The ${label} has left ${effect.square.label}. Move it back first.`))
+    }
+
+    const refunded: Playerhand = {
+      ...player,
+      stats: { ...player.stats, trade: player.stats.trade + effect.trade },
+    }
+    const removed = removePiece(withPlayerHand(state, refunded), {
+      playerId: record.playerId,
+      pieceId: effect.pieceId,
+      ...(at === null ? {} : { at }),
+    })
+    if (!removed.ok) return err(refused(`The ${label} could not be taken off the board.`))
+    const restored =
+      effect.marker === null ? removed.value : placeBack(removed.value, refunded, effect.marker.piece, at)
+
+    return ok({
+      state: restored,
+      text:
+        `${player.username}'s ${label} on ${effect.square.label} was undone: the building was removed` +
+        (effect.trade > 0 ? `, ${effect.trade} trade returned` : '') +
+        (effect.marker === null ? '' : ' and the Building Program marker was put back'),
+    })
+  },
+}
+
 const chooseReward: AssistedActionDefinition = {
   kind: 'chooseReward',
   techName: null,
@@ -1438,7 +1646,8 @@ const chooseReward: AssistedActionDefinition = {
   apply(state, player, context) {
     const failed = (reason: string): EngineError =>
       rejected('chooseReward', blocked('unavailable', reason))
-    const payload = context.payload
+    const payload =
+      context.payload !== undefined && 'rewardId' in context.payload ? context.payload : undefined
     if (payload === undefined) return err(failed('Say which reward and which card.'))
 
     const reward = player.pendingRewards.find((candidate) => candidate.id === payload.rewardId)
@@ -1555,6 +1764,7 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   coinPurchase('printingPress'),
   cultureAdvance,
   chooseReward,
+  build,
 ]
 
 /** The actions that are buttons, in the order of `availableActions`. `chooseReward` answers a choice and is not one. */
@@ -1648,8 +1858,8 @@ export interface PerformAssistedActionInput {
   readonly requestId: string
   /** ISO timestamp for the log and the board history. The engine itself stays pure. */
   readonly at?: string
-  /** What `chooseReward` needs: which reward and which card. Other actions take none. */
-  readonly payload?: ChooseRewardPayload
+  /** What `chooseReward` needs (which reward and which card) or `build` needs (which city, item and square). Other actions take none. */
+  readonly payload?: AssistedPayload
   /**
    * The player answered yes to "you have already used this, use it again?". It
    * lifts exactly one refusal, `used`; every other refusal stands.
