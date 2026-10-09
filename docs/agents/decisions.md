@@ -4869,10 +4869,10 @@ and delivers the reward that belongs to the space. The human's rules:
   two, keeps one and discards the other. A Great Person space draws one card the
   way the Draw button does, plus one for Organized Religion (a revealed social
   policy) and one for the Greeks civilization; they stack, one is kept, the
-  rest discarded. The Great Person token and reserve steps (#252) are not
-  built: the card goes to the hand and the screen says the token step is still by
-  hand. Map tile 16a, free advances (Arabs, Romans) and hand limit enforcement
-  are left out.
+  rest discarded. The Great Person marker is taken too; see the entry
+  "Great Person markers on a Great Person space" below (an earlier wording of
+  this entry said the token step stayed by hand). Map tile 16a, free advances
+  (Arabs, Romans) and hand limit enforcement are left out.
 - Space 21 draws a level 3 card and writes a public "reached the Culture Victory
   space" line. It does not end the game and sets no winner, because the human
   says the round can be finished and someone may still win on points. End game
@@ -4926,4 +4926,46 @@ Corrections and consequences for the culture advance, after review:
   (no answer, 408, 429 and every 5xx), because a gateway error can come after the
   server committed. It is also dropped as soon as the projection shows a record
   with that id, so the next press of a repeatable action is a real second press.
+
+## 2026-10-10 — Great Person markers on a Great Person space
+
+The human asked for the Great Person markers next, with two limits: the existing
+Draw buttons stay exactly as they are (a Great Person drawn there still lands in
+"Your hand" and takes no marker), and every manual correction (moving or removing
+a marker, dragging the culture marker, editing culture and trade) keeps working.
+So there is no new "Gain Great Person" button; only the culture advance onto a
+Great Person space takes the marker. The rules are the printed ones (Fame and
+Fortune p. 11 to 12), read from the PDFs in `packages/web/public/help/`.
+
+- A drawn card is valid when its marker type still has supply: three markers per
+  type, counted over every piece of that asset on the board, in an area or on the
+  map. A card of an exhausted type is discarded faceup and another is drawn; that
+  discard is public by the rule, so a public line names the card.
+- If no marker of any type is left the player receives no Great Person, and
+  nothing is drawn. The advance is still paid and the marker still moves. (A first
+  version drained the deck and named every card, which would let everyone work out
+  what is in the hands; review caught it.)
+- The Greeks draw until they have two valid cards to choose between (printed
+  rule); Organized Religion adds one more (the human's ruling), and they stack.
+- Keeping a card takes the matching marker into the player's own area, tidied into
+  the next free slot, through the board history. The card stays hidden in the
+  hand. The public line names the marker type ("merchant", the artwork label; the
+  printed rules call that type industrialist) and never the card. The player drags
+  the marker to the map when they place it, as today; a marker in an area is
+  "reserve" and gives no ability (the existing blockade code already counts only
+  markers on the map).
+- A rejected or discarded card goes to the discard pile, which is reshuffled into
+  the deck when it runs out. The rulebook says the bottom of the deck; this is an
+  approximation, accepted. It is public in the Revealed/Discarded panel.
+- Undo is the existing vote. It refuses, and leaves the vote open, when the marker
+  has been moved out of its owner's area or removed, or when the kept card has left
+  the hand. The board's own undo refuses to undo the marker placement by itself.
+- A card choice that was already pending before this change is resolved the old way
+  (no marker; the player places it by hand), recognised by its record having no
+  list of rejected cards.
+- If the supply of a type runs out while a choice is pending, that card cannot be
+  kept ("No <type> marker is left") and the player chooses another or frees a
+  marker by hand.
+- Not built: markers on the map as a condition for a card's ability (#252 slice B),
+  killing markers and the random discard of excess cards, a Place button.
 

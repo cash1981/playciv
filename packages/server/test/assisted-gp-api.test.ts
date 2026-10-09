@@ -142,6 +142,7 @@ async function gpTable(name: string, options: TableOptions = {}): Promise<Table>
   })
   const rest = state.items.filter((item) => !used.has(item.id))
   const firstGp = rest.findIndex((item) => item.sheetName === 'GREAT_PERSON')
+  if (firstGp < 0) throw new Error('no Great Person card left in the deck')
   state = { ...state, items: [...rest.slice(0, firstGp), ...top, ...rest.slice(firstGp)] }
   await repo.saveGame(state)
   return { gameId, starter, other, starterId, otherId }
@@ -235,17 +236,42 @@ describe('a Great Person space over HTTP', () => {
     expect(ownMarkers(state, table.starterId).map((piece) => piece.assetId)).toEqual(['great people/general'])
   })
 
-  it('with every type exhausted the advance still moves and is paid, and nothing is received', async () => {
+  it('with every type exhausted the advance still moves and is paid, nothing is received and no card is drawn or named', async () => {
     const table = await gpTable('None', { exhausted: [...GREAT_PERSON_CARD_TYPES.map(([assetId]) => assetId)] })
     // Three of each of six kinds on the map is what a full table looks like
+    const before = await stored(table)
+    const deck = before.items.filter((item) => item.sheetName === 'GREAT_PERSON')
+    expect(deck.length).toBeGreaterThan(0)
+
     const response = await advance(table, 'req-1', (await view(table.gameId, table.starter)).rev)
     expect(response.status).toBe(200)
     const after = await response.json<View>()
     expect(after.you?.cultureMarkerLevel).toBe(3)
     expect(after.you?.stats.culture).toBe(97)
     expect(after.you?.items).toEqual([])
-    expect(after.assistedActions[0]?.text).toContain('gained no Great Person')
-    expect(ownMarkers(await stored(table), table.starterId)).toEqual([])
+    expect(after.assistedActions[0]?.text).toMatch(
+      /^.+ advanced on the culture track to space 3 and gained no Great Person, because no marker was available$/,
+    )
+    const state = await stored(table)
+    expect(ownMarkers(state, table.starterId)).toEqual([])
+    // The deck and the discard pile are untouched
+    expect(state.items).toEqual(before.items)
+    expect(state.discardedItems).toEqual(before.discardedItems)
+
+    // No card name or id reaches anyone through the public log or the revealed feed
+    const spectator = await register('none-spectator')
+    for (const token of [table.starter, table.other, spectator, undefined]) {
+      const headers = token === undefined ? {} : { headers: bearer(token) }
+      const log = await inject(app, { url: `/api/games/${table.gameId}/log/public`, ...headers })
+      const feed = await inject(app, { url: `/api/games/${table.gameId}/revealed`, ...headers })
+      for (const card of deck) {
+        expect(log.body).not.toContain(itemName(card))
+        expect(log.body).not.toContain(card.id)
+        expect(feed.body).not.toContain(card.id)
+      }
+      expect(log.body).not.toContain('discarded faceup')
+      expect(log.body.split('gained no Great Person')).toHaveLength(2)
+    }
   })
 })
 

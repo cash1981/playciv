@@ -19,10 +19,13 @@ import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { GREAT_PERSON_CARD_TYPES } from '../src/blockade.js'
 import {
+  AREA_LABEL_HEIGHT,
   areaAt,
+  areaSlotRegion,
   cultureCellCenter,
   findBoardAsset,
   mapTop,
+  nextFreeSlot,
   playerAreas,
   remainingBoardAssetCount,
 } from '../src/board.js'
@@ -252,32 +255,41 @@ describe('a card whose marker type is exhausted', () => {
     }
   })
 
-  it('with every type exhausted nothing is received, and the advance still moves and is paid', () => {
+  it('with every type exhausted nothing is received and nothing is drawn: the deck and the discards stay as they were', () => {
     let state = gpTurn()
     for (const assetId of ALL_MARKERS) state = exhaust(state, assetId)
-    const total = gpDeck(state).length
+    const deckBefore = gpDeck(state)
+    expect(deckBefore.length).toBeGreaterThan(0)
     expect(assistedAvailability(state, CASH1981, 'cultureAdvance').status).toBe('ready')
 
     const done = advance(state, 'req-1')
 
+    // The advance still moves and is paid
     expect(cultureMarkerLevelOf(done, CASH1981)).toBe(3)
     expect(me(done).stats.culture).toBe(97)
     expect(me(done).items).toEqual([])
     expect(me(done).pendingRewards).toEqual([])
     expect(markersInOwnArea(done)).toEqual([])
-    // Every card was drawn once, discarded faceup, and none came back: the draw ended
-    expect(gpDeck(done)).toEqual([])
-    expect(done.discardedItems.filter((item) => item.sheetName === 'GREAT_PERSON')).toHaveLength(total)
-    const lines = publicLines(done).slice(publicLines(state).length)
-    expect(lines).toHaveLength(total + 1)
-    expect(lines.at(-1)).toBe(
-      'cash1981 advanced on the culture track to space 3 and gained no Great Person, because no marker was available',
+    // No marker of any type is left, so no card is drawn: the precondition is not a drain
+    expect(done.items).toEqual(state.items)
+    expect(done.discardedItems).toEqual(state.discardedItems)
+    expect(done.log.filter((entry) => entry.logType === 'SHUFFLE')).toHaveLength(
+      state.log.filter((entry) => entry.logType === 'SHUFFLE').length,
     )
-    expect(effectOf(done, 'req-1')).toMatchObject({ drawn: [], kept: null, marker: null })
-    expect(effectOf(done, 'req-1').rejected).toHaveLength(total)
+    const lines = publicLines(done).slice(publicLines(state).length)
+    expect(lines).toEqual([
+      'cash1981 advanced on the culture track to space 3 and gained no Great Person, because no marker was available',
+    ])
+    // No card name reaches the public log, the discard pile or any viewer
+    const everything = JSON.stringify([done.log.map(toPublicLog), ...[...OTHERS, ''].map((id) => toPlayerView(done, id).log)])
+    for (const card of deckBefore) expect(everything).not.toContain(itemName(card))
+    for (const viewerId of [...OTHERS, '']) {
+      expect(toPlayerView(done, viewerId).numberOfDiscardedItems).toBe(state.discardedItems.length)
+    }
+    expect(effectOf(done, 'req-1')).toMatchObject({ drawn: [], kept: null, marker: null, rejected: [] })
   })
 
-  it('stops cleanly when the deck is empty and the discards hold only unusable cards: one reshuffle, no loop', () => {
+  it('with no marker of any type left and the deck empty, the discards are not reshuffled either', () => {
     let state = gpTurn()
     for (const assetId of ALL_MARKERS) state = exhaust(state, assetId)
     const cards = gpDeck(state)
@@ -287,13 +299,38 @@ describe('a card whose marker type is exhausted', () => {
       discardedItems: [...state.discardedItems, ...cards],
     }
     const done = advance(emptied, 'req-1')
-    expect(done.log.filter((entry) => entry.logType === 'SHUFFLE')).toHaveLength(1)
-    expect(gpDeck(done)).toEqual([])
-    expect(done.discardedItems.filter((item) => item.sheetName === 'GREAT_PERSON')).toHaveLength(cards.length)
+    expect(done.log.filter((entry) => entry.logType === 'SHUFFLE')).toHaveLength(
+      emptied.log.filter((entry) => entry.logType === 'SHUFFLE').length,
+    )
+    expect(done.items).toEqual(emptied.items)
+    expect(done.discardedItems).toEqual(emptied.discardedItems)
     expect(cultureMarkerLevelOf(done, CASH1981)).toBe(3)
   })
 
-  it('with no Great Person card anywhere the advance still moves and is paid', () => {
+  it('residual case: some type has supply but every remaining card is of an exhausted type, so the loop ends cleanly after one reshuffle', () => {
+    // Accepted as rare: the cards drawn on the way are named and discarded faceup, one by one
+    let state = gpTurn()
+    for (const assetId of ALL_MARKERS.filter((id) => id !== 'great people/general')) state = exhaust(state, assetId)
+    const cards = gpDeck(state).filter((card) => typeOf(card) !== GENERAL)
+    const emptied: GameState = {
+      ...state,
+      items: state.items.filter((item) => item.sheetName !== 'GREAT_PERSON'),
+      discardedItems: [...state.discardedItems, ...cards],
+    }
+    const done = advance(emptied, 'req-1')
+    expect(done.log.filter((entry) => entry.logType === 'SHUFFLE')).toHaveLength(
+      emptied.log.filter((entry) => entry.logType === 'SHUFFLE').length + 1,
+    )
+    expect(gpDeck(done)).toEqual([])
+    expect(done.discardedItems.filter((item) => item.sheetName === 'GREAT_PERSON')).toHaveLength(cards.length)
+    expect(cultureMarkerLevelOf(done, CASH1981)).toBe(3)
+    expect(me(done).items).toEqual([])
+    expect(publicLines(done).at(-1)).toBe(
+      'cash1981 advanced on the culture track to space 3 and gained no Great Person, because no Great Person card could be drawn',
+    )
+  })
+
+  it('with no Great Person card anywhere the advance still moves and is paid, and says no card could be drawn', () => {
     const state = gpTurn()
     const none: GameState = {
       ...state,
@@ -303,7 +340,9 @@ describe('a card whose marker type is exhausted', () => {
     const done = advance(none, 'req-1')
     expect(cultureMarkerLevelOf(done, CASH1981)).toBe(3)
     expect(me(done).stats.culture).toBe(97)
-    expect(publicLines(done).at(-1)).toContain('gained no Great Person')
+    expect(publicLines(done).slice(publicLines(none).length)).toEqual([
+      'cash1981 advanced on the culture track to space 3 and gained no Great Person, because no Great Person card could be drawn',
+    ])
   })
 
   it('a card in the discard pile with a marker left is found by the one reshuffle', () => {
@@ -522,14 +561,45 @@ describe('undoing a Great Person advance with the vote', () => {
     expect(cultureMarkerLevelOf(undone, CASH1981)).toBe(2)
   })
 
-  it('a no-result advance is undone without a marker', () => {
+  it('a no-result advance is undone without a marker, and the deck and the discards are as they were', () => {
     let state = gpTurn()
     for (const assetId of ALL_MARKERS) state = exhaust(state, assetId)
     const done = advance(state, 'req-1')
     const undone = undoByVote(done, 'req-1')
-    expect(gpDeck(undone)).toHaveLength(gpDeck(state).length)
-    expect(undone.discardedItems.filter((item) => item.sheetName === 'GREAT_PERSON')).toEqual([])
+    expect(undone.items).toEqual(state.items)
+    expect(undone.discardedItems).toEqual(state.discardedItems)
     expect(cultureMarkerLevelOf(undone, CASH1981)).toBe(2)
+    expect(me(undone).stats.culture).toBe(100)
+  })
+
+  it('a full player area still gets the marker inside the own area, at the fallback point, and the undo works', () => {
+    const ready = withTop(gpTurn(), [SCIENTIST])
+    const area = playerAreas(ready.board, ready.players).find((candidate) => candidate.playerId === CASH1981)
+    if (area === undefined) throw new Error('own area missing')
+    const region = areaSlotRegion(area)
+    const slots =
+      Math.max(1, Math.floor(region.width / ready.board.squareSize)) *
+      Math.max(1, Math.floor(region.height / ready.board.squareSize))
+    // Huts are unlimited and tidy into the next free slot, so this many of them take every slot
+    let full = ready
+    for (let index = 0; index < slots; index += 1) full = withPieceInArea(full, 'resources/hut').state
+    const taken = nextFreeSlot(full.board, area, full.board.pieces, { x: -1, y: -1 })
+    expect(taken).toEqual([-1, -1])
+
+    const done = advance(full, 'req-1')
+
+    const markers = markersInOwnArea(done)
+    expect(markers.map((piece) => piece.assetId)).toEqual(['great people/scientist'])
+    // The fallback point is the one the marker is asked for: just inside the area, under its name
+    expect(markers[0]).toMatchObject({ x: area.x + 20, y: area.y + AREA_LABEL_HEIGHT + 10 })
+    expect(cultureMarkerLevelOf(done, CASH1981)).toBe(3)
+
+    const undone = undoByVote(done, 'req-1')
+    expect(undone.board.pieces.some((candidate) => candidate.id === markers[0]?.id)).toBe(false)
+    expect(markersInOwnArea(undone)).toEqual([])
+    expect(undone.board.pieces).toHaveLength(full.board.pieces.length)
+    expect(cultureMarkerLevelOf(undone, CASH1981)).toBe(2)
+    expect(me(undone).stats.culture).toBe(100)
   })
 
   it('is refused, and the vote stays open, when the marker was moved out of the owner area', () => {

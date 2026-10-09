@@ -844,6 +844,10 @@ function markersLeft(state: GameState, assetId: string): number {
 const markerLabelOf = (assetId: string): string =>
   (findBoardAsset(assetId)?.label ?? 'Great Person').toLowerCase()
 
+/** True while at least one Great Person marker type still has a piece in the supply. */
+const anyMarkerLeft = (state: GameState): boolean =>
+  GREAT_PERSON_CARD_TYPES.some(([assetId]) => markersLeft(state, assetId) > 0)
+
 /** A card is valid while the marker of its type is in the supply. */
 function hasMarkerLeft(state: GameState, item: Item): boolean {
   const assetId = markerAssetIdOf(item)
@@ -933,6 +937,10 @@ interface GreatPersonOrigin {
   readonly step: number
 }
 
+/** The two reasons a Great Person space gives nothing, as the public line ends. */
+const NONE_BECAUSE_NO_MARKER = 'gained no Great Person, because no marker was available'
+const NONE_BECAUSE_NO_CARD = 'gained no Great Person, because no Great Person card could be drawn'
+
 /** What gaining a Great Person did. The caller writes the public line with `phrase` and records `effect`. */
 interface GreatPersonGain {
   readonly state: GameState
@@ -953,12 +961,33 @@ interface GreatPersonGain {
  * the valid cards to the hand hidden, and with exactly one take its marker at once;
  * with more, store a pending choice that `chooseReward` resolves. With no valid card
  * the player receives nothing. Pure: only a refusal to place the marker is an error.
+ *
+ * Faceup discard and redraw is only for a card whose own type is out while some type
+ * is still available (p. 11 to 12). With no marker of any type left the player does not
+ * receive a Great Person at all, so nothing is drawn: draining the deck would name every
+ * card in a public line and leak which cards the hands hold.
+ * Residual case, accepted as rare: some types have supply but every card still to draw is
+ * of an exhausted type. The loop then names and discards those cards faceup, as the rule
+ * does for each one drawn.
  */
 function gainGreatPerson(
   state: GameState,
   player: Playerhand,
   origin: GreatPersonOrigin,
 ): Result<GreatPersonGain, string> {
+  if (!anyMarkerLeft(state)) {
+    return ok({
+      state,
+      outcome: 'none',
+      phrase: NONE_BECAUSE_NO_MARKER,
+      privateText: '',
+      drawn: [],
+      rejected: [],
+      kept: null,
+      marker: null,
+    })
+  }
+
   // The deck draw is the advance's own (`drawCandidates`, which reshuffles the discards
   // the way the Draw button does); only the validity filter is added. A rejected card
   // goes to the discard pile faceup, named in a public line.
@@ -993,7 +1022,7 @@ function gainGreatPerson(
     return ok({
       state: afterDraw,
       outcome: 'none',
-      phrase: 'gained no Great Person, because no marker was available',
+      phrase: NONE_BECAUSE_NO_CARD,
       privateText: '',
       drawn: [],
       rejected: rejectedIds,
@@ -1110,7 +1139,6 @@ function removeGreatPersonMarker(
 /** The sentence part for a removed marker, or an empty string. */
 const removedMarkerText = (marker: GreatPersonMarker | null | undefined): string =>
   marker === null || marker === undefined ? '' : ` and the ${markerLabelOf(marker.assetId)} great person marker was removed`
-
 
 const cultureAdvance: AssistedActionDefinition = {
   kind: 'cultureAdvance',
