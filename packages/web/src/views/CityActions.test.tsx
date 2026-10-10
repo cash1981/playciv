@@ -195,6 +195,38 @@ describe('Start Building Program', () => {
     expect(startButton().disabled).toBe(false)
   })
 
+  it('gives two cities two buttons, two reason ids and two separate presses', async () => {
+    const second = city({ pieceId: 'city-2', label: 'City D6' })
+    const secondOptions: CityActionOptions = {
+      cityPieceId: 'city-2',
+      label: 'City D6',
+      startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
+    }
+    const send = vi.spyOn(api, 'startBuildingProgram').mockResolvedValue({} as PlayerView)
+    renderPanel(
+      viewOf({
+        own: [city({ pieceId: 'city-1' }), second],
+        cityActions: [{ ...WRONG_PHASE }, { ...secondOptions, startBuildingProgram: WRONG_PHASE.startBuildingProgram }],
+        rev: 3,
+      }),
+    )
+    const first = startButton()
+    const other = screen.getByRole('button', { name: 'Start Building Program in City D6' })
+    const ids = [first, other].map((button) => button.getAttribute('aria-describedby'))
+    expect(ids[0]).toBeTruthy()
+    expect(ids[1]).toBeTruthy()
+    expect(ids[0]).not.toBe(ids[1])
+    cleanup()
+
+    renderPanel(viewOf({ own: [city({ pieceId: 'city-1' }), second], cityActions: [READY, secondOptions], rev: 3 }))
+    fireEvent.click(startButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Start Building Program in City D6' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(2))
+    expect(send).toHaveBeenNthCalledWith(1, 'g1', expect.any(String), 3, 'city-1')
+    expect(send).toHaveBeenNthCalledWith(2, 'g1', expect.any(String), 3, 'city-2')
+  })
+
   it('has no button for an opponent’s city', () => {
     renderPanel(viewOf({ own: [], others: [city({ pieceId: 'theirs', label: 'City H8' })], cityActions: [] }))
     expect(screen.getByRole('heading', { name: 'City H8' })).toBeTruthy()
@@ -286,6 +318,66 @@ describe('Upgrades', () => {
     renderPanel(viewOf({ upgradeOptions: [GRANARY] }))
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (3)' }))
     expect((await screen.findByRole('alert')).textContent).toBe('Nothing can be upgraded now.')
+  })
+
+  it('keeps a refusal on show when the refreshed view has no options', async () => {
+    vi.spyOn(api, 'upgradeBuildings').mockRejectedValue(
+      new ApiError(422, 'ACTION_REFUSED', 'Those buildings are already upgraded.'),
+    )
+    const before = viewOf({ upgradeOptions: [GRANARY], rev: 5 })
+    const after = viewOf({ upgradeOptions: [], rev: 6 })
+    const element = (view: PlayerView): React.JSX.Element => (
+      <CitiesPanel gameId="g1" view={view} busy={false} readOnly={false} run={reloadingRun} />
+    )
+    // The reload that follows the press brings a view where a co-player has flipped the pieces.
+    const reloadingRun: Run = async (action) => {
+      await action()
+      rendered.rerender(element(after))
+    }
+    const rendered = render(element(before))
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (3)' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toBe('Those buildings are already upgraded.')
+    expect(screen.getByRole('heading', { name: 'Upgrades' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Upgrade/ })).toBeNull()
+
+    // A later move changes the revision and clears the message.
+    rendered.rerender(element(viewOf({ upgradeOptions: [], rev: 7 })))
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Upgrades' })).toBeNull()
+  })
+
+  it('clears the refusal when the player presses again', async () => {
+    const send = vi
+      .spyOn(api, 'upgradeBuildings')
+      .mockRejectedValueOnce(new ApiError(422, 'ACTION_REFUSED', 'Nothing can be upgraded now.'))
+      .mockResolvedValueOnce({} as PlayerView)
+    renderPanel(viewOf({ upgradeOptions: [GRANARY] }))
+    const button = screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (3)' })
+    fireEvent.click(button)
+    await screen.findByRole('alert')
+    fireEvent.click(button)
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+  })
+
+  it('shows no message when the failure is an unauthorized error', async () => {
+    vi.spyOn(api, 'upgradeBuildings').mockRejectedValue(new ApiError(401, 'UNAUTHORIZED', 'Sign in again.'))
+    const signOut = vi.fn()
+    const signingOutRun: Run = async (action) => {
+      try {
+        await action()
+      } catch {
+        signOut()
+      }
+    }
+    render(<CitiesPanel gameId="g1" view={viewOf({ upgradeOptions: [GRANARY] })} busy={false} readOnly={false} run={signingOutRun} />)
+    const button = screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (3)' }) as HTMLButtonElement
+    fireEvent.click(button)
+    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(button.disabled).toBe(false))
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByText('Nothing happened.')).toBeNull()
   })
 
   it('is hidden when there is nothing to upgrade', () => {

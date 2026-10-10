@@ -131,7 +131,7 @@ export function FaqView(): React.JSX.Element {
             In your open City Management phase, press <strong>Start Building Program</strong> on
             your city in the Cities panel. The marker is put on the city centre, so the next build
             in that city doubles its outskirts production. A city can have only one marker, and the
-            build removes it. The button is greyed out, with the reason beside it, when the phase is
+            build removes it. The button is greyed out, with the reason shown on the city card, when the phase is
             not open or the marker is already there.
           </p>
           <p className="faq-answer">

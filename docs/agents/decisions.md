@@ -281,7 +281,7 @@ private card, nothing placed).
 
 Source: `engine/src/build-options.ts`, `city-actions.ts`, `building-data.ts`, `assisted.ts` (the `build`,
 `startBuildingProgram` and `upgradeBuildings` actions), `actions/board.ts` (`isAssistedBoardChange`), `web/src/views/BuildPicker.tsx`,
-`buildFlow.ts` and the `assisted-build*` tests.
+`CityActions.tsx`, `CitiesPanel.tsx`, `buildFlow.ts` and the `assisted-build*` tests.
 
 ## Accounts, mail and ratings
 
