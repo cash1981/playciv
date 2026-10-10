@@ -26,6 +26,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/server/test/chat-orders.test.ts`
   - `packages/web/src/lib/api.ts`, `packages/web/src/views/ChatOrdersPanel.tsx`, `ChatOrdersPanel.css` and tests
   - `docs/agents/tasks/issue-265-trade-offers.md`, `docs/agents/decisions.md`
+  - `AGENTS.md`, `docs/agents/conventions.md`
 - **Notes:** Child slice based on `feat/assisted-play-contract`; the parent branch claim is a base dependency, not a concurrent edit. Issue #264 is owned by another agent and is out of scope.
 
 ### assisted-play-contract
