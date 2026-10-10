@@ -9,12 +9,14 @@
  * the opponents' are read only, as is everything for a spectator.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 
 import { MAX_PRODUCTION_OVERRIDE } from '@civ/engine'
 
-import type { CityProduction, PlayerView } from '../lib/api.js'
+import type { BuildChoice, CityBuildOptions, CityProduction, PlayerView } from '../lib/api.js'
 import { api } from '../lib/api.js'
+import { BuildPicker } from './BuildPicker.js'
+import type { BuildFlow } from './buildFlow.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import type { Run } from './GameView.js'
 import './CitiesPanel.css'
@@ -38,12 +40,15 @@ export function CitiesPanel({
   busy,
   readOnly,
   run,
+  build,
 }: {
   readonly gameId: string
   readonly view: PlayerView
   readonly busy: boolean
   readonly readOnly: boolean
   readonly run: Run
+  /** The Build flow GameView shares with the board. Without it the cards have no Build button. */
+  readonly build?: BuildFlow | undefined
 }): React.JSX.Element {
   const own = view.you?.cities ?? []
   const others = view.opponents.filter((opponent) => (opponent.cities ?? []).length > 0)
@@ -71,6 +76,8 @@ export function CitiesPanel({
                 editable={!readOnly}
                 busy={busy}
                 run={run}
+                buildOptions={view.you?.buildOptions?.find((options) => options.cityPieceId === city.pieceId)}
+                build={build}
               />
             ))}
           </ul>
@@ -104,12 +111,17 @@ function CityCard({
   editable,
   busy,
   run,
+  buildOptions,
+  build,
 }: {
   readonly city: CityProduction
   readonly gameId: string
   readonly editable: boolean
   readonly busy: boolean
   readonly run: Run
+  /** What this city can build, for the viewer's own cities only. */
+  readonly buildOptions?: CityBuildOptions | undefined
+  readonly build?: BuildFlow | undefined
 }): React.JSX.Element {
   return (
     <li className="city-card">
@@ -142,8 +154,61 @@ function CityCard({
         <CityArithmetic city={city} />
       </details>
 
+      {editable && build !== undefined && buildOptions !== undefined && (
+        <BuildEntry city={city} options={buildOptions} busy={busy} build={build} />
+      )}
+
       {editable && <OverrideForm city={city} gameId={gameId} busy={busy} run={run} />}
     </li>
+  )
+}
+
+/** The Build button of one of the viewer's cities, and its picker while it is open. */
+function BuildEntry({
+  city,
+  options,
+  busy,
+  build,
+}: {
+  readonly city: CityProduction
+  readonly options: CityBuildOptions
+  readonly busy: boolean
+  readonly build: BuildFlow
+}): React.JSX.Element {
+  const reasonId = useId()
+  const ready = options.status === 'ready'
+  const open = build.pickerCityId === city.pieceId
+  return (
+    <div className="city-build">
+      <div className="city-build-row">
+        <button
+          type="button"
+          className="small"
+          aria-label={`Build in ${city.label}`}
+          aria-expanded={ready ? open : undefined}
+          aria-describedby={ready ? undefined : reasonId}
+          disabled={busy || !ready}
+          onClick={() => (open ? build.closePicker() : build.openPicker(city.pieceId))}
+        >
+          Build
+        </button>
+        {!ready && (
+          <span id={reasonId} className="muted">
+            {options.reason}
+          </span>
+        )}
+      </div>
+      {open && (
+        <BuildPicker
+          city={options}
+          note={build.note}
+          message={build.message}
+          busy={busy}
+          onChoose={(choice: BuildChoice) => build.start(options, choice)}
+          onClose={build.closePicker}
+        />
+      )}
+    </div>
   )
 }
 

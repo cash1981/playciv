@@ -523,7 +523,10 @@ pays the cost of the next space, moves the player's marker one space and deliver
 the reward of that space: a culture event card (two to choose from with Mysticism)
 or a Great Person card (more to choose from with Organized Religion and the
 Greeks). The cards to choose between are private and a refresh shows the same
-ones. Typing the
+ones. A **Build** button on each of your cities in the Cities panel lists the
+buildings that city can build now, with the trade to pay for a rush, and you tap
+a highlighted square and confirm, so the piece, the trade and the log line are one
+step the vote undo can take back. Typing the
 same thing in chat or editing the counters by hand still works. See
 `docs/agents/decisions.md`, 2026-10-09.
 

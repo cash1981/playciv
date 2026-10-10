@@ -14,6 +14,11 @@ import type {
   BoardAsset,
   BoardHistoryEntry,
   BoardPiece,
+  BuildChoice,
+  BuildPayload,
+  BuildSquare,
+  BuildUnavailable,
+  CityBuildOptions,
   CityModifier,
   CityProduction,
   CoinSourceKey,
@@ -43,6 +48,11 @@ export type {
   BoardAsset,
   BoardHistoryEntry,
   BoardPiece,
+  BuildChoice,
+  BuildPayload,
+  BuildSquare,
+  BuildUnavailable,
+  CityBuildOptions,
   CityModifier,
   CityProduction,
   CoinSourceKey,
@@ -769,6 +779,21 @@ export const api = {
       rev,
       rewardId,
       itemId,
+    }),
+  /**
+   * The assisted Build (#264): the same route and request id rules as the other
+   * actions. The payload is what the engine's `build` action takes; the server
+   * checks everything again against the fresh state.
+   */
+  build: (gameId: string, requestId: string, rev: number, payload: BuildPayload) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'build',
+      requestId,
+      rev,
+      cityPieceId: payload.cityPieceId,
+      item: payload.item,
+      target: payload.target,
+      ...(payload.rush === undefined ? {} : { rush: payload.rush }),
     }),
   setPlayerGovernment: (
     gameId: string,

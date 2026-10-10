@@ -19,7 +19,7 @@
  */
 
 import { PHASE_REASON, openCityManagementTurn } from './assisted.js'
-import { cityFootprintsOf, mapCellOf } from './blockade.js'
+import { cityFootprintsOf, mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
 import {
   BUILDABLE_BUILDINGS,
@@ -34,11 +34,8 @@ import type { Board } from './board.js'
 import { cityProductionsOf } from './city-production.js'
 import type { CityProduction } from './city-production.js'
 import type { GameState, Playerhand } from './state.js'
-import { BUILDING_TERRAIN, terrainAt } from './terrain.js'
+import { BUILDING_TERRAIN, describeAllowed, terrainAt } from './terrain.js'
 import type { Terrain } from './terrain.js'
-
-/** The Building Program marker (Wisdom and Warfare p. 7), as `city-production.ts` names it. */
-export const BUILDING_PROGRAM_ASSET_ID = 'markers/Building Program'
 
 /** What a build creates. Parts 3 and 4 add `figure` and `unit` kinds to this union. */
 export type BuildItem = { readonly kind: 'building'; readonly assetId: string }
@@ -128,8 +125,6 @@ export function rushTradeCost(shortfall: number, civilizationName: string | null
 // The board, read once
 // ---------------------------------------------------------------------------
 
-const PIECE_COLOURS = ['blue', 'green', 'purple', 'red', 'yellow'] as const
-
 const keyOf = (cell: Cell): string => `${cell.column},${cell.row}`
 
 const squareLabel = (cell: Cell): string => `${columnLabel(cell.column)}${cell.row + 1}`
@@ -154,7 +149,13 @@ interface Scene {
 
 function sceneOf(state: GameState): Scene {
   const centres = new Set<string>()
-  for (const colour of PIECE_COLOURS) {
+  // The colours come off the pieces, so no list of player colours is kept here
+  const colours = new Set<string>()
+  for (const piece of state.board.pieces) {
+    const colour = piece.category === 'city' ? pieceColorOf(piece) : undefined
+    if (colour !== undefined) colours.add(colour)
+  }
+  for (const colour of colours) {
     for (const footprint of cityFootprintsOf(state, colour)) {
       for (const centre of footprint.centers) centres.add(keyOf(centre))
     }
@@ -218,9 +219,6 @@ function squareProblem(
   if (!allowed.includes(terrain)) return { kind: 'wrong-terrain', terrain }
   return undefined
 }
-
-const describeAllowed = (allowed: readonly Terrain[]): string =>
-  allowed.length === 4 && !allowed.includes('water') ? 'any terrain except water' : allowed.join(' or ')
 
 /** The squares of a city's outskirts that are on the map, in reading order. A city at the edge has outskirts off the map, which are not squares at all. */
 function mapOutskirts(board: Board, footprint: CityFootprintView): readonly Cell[] {
@@ -331,7 +329,7 @@ function unlockReason(techs: TechView, assetId: string): string {
   const needed = techsUnlocking(assetId)
   const waiting = needed.filter((tech) => techs.hidden.has(tech))
   return waiting.length > 0
-    ? `Needs ${needed.join(' or ')}. ${waiting.join(' and ')} is chosen but not revealed yet.`
+    ? `Needs ${needed.join(' or ')}. ${waiting.join(' and ')} ${waiting.length === 1 ? 'is' : 'are'} chosen but not revealed yet.`
     : `Needs ${needed.join(' or ')}.`
 }
 
@@ -394,7 +392,7 @@ function optionsForCity(
     }
     const remaining = remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)
     if (remaining !== undefined && remaining <= 0) {
-      const shared = assetId in BUILDING_UPGRADES || Object.values(BUILDING_UPGRADES).includes(assetId)
+      const shared = Object.hasOwn(BUILDING_UPGRADES, assetId) || Object.values(BUILDING_UPGRADES).includes(assetId)
       skip(
         `None left in the supply: all ${boardAssetLimit(asset, state.numOfPlayers) ?? 0} are on the board` +
           (shared ? ' (the basic and the upgraded form share one supply).' : '.'),

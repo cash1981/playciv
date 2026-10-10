@@ -31,12 +31,17 @@ old test counts and past deployment reports do not establish present health.
 
 - Assisted play (#260) is on PR #271: card buttons, culture advance, Great Person
   markers, phase summary, confirm before reuse. See the "Assisted play" section
-  of decisions and `tasks/assisted-*.md`. Build (#264) and offers (#265) are not built.
+  of decisions and `tasks/assisted-*.md`. Offers (#265) are not built.
 
 - City production (#250 slice A, first part of #264) is on PR #271: a per-city
   estimate with a hand-set override and a Cities panel.
   Brief `tasks/city-production.md`; see "City production" in decisions. The Build
   button, figures, units and other city actions are the next parts.
+
+- Assisted build (#264 part 2) is on `feat/assisted-build`, not yet in PR #271: a
+  Build button per city for buildings, legal choices only, square picking on the
+  board, trade rush, undo by vote. Figures, military units and the other city
+  actions are next. Brief `tasks/assisted-build.md`; see "Assisted build" in decisions.
 
 Read [current decisions](decisions.md) for the relevant compatibility/rationale
 and [limitations](limitations.md) for known gaps. Archived Mongo games remaining

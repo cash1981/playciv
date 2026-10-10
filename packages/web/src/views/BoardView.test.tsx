@@ -13,6 +13,7 @@ import {
   createBoard,
   createBoardForPlayers,
   findBoardAsset,
+  mapTop,
   slotOrigin,
   tileTerrainGrid,
   wondersArea,
@@ -1884,5 +1885,247 @@ describe('BoardView terrain warning (issue #255)', () => {
     await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledOnce())
     expect(mocks.confirm).not.toHaveBeenCalled()
     finish(mocks)
+  })
+})
+
+describe('BoardView square picking for a Build', () => {
+  const cells = [
+    { column: 3, row: 4, label: 'D5' },
+    { column: 4, row: 4, label: 'E5' },
+  ]
+  const picking = (overrides: Partial<NonNullable<React.ComponentProps<typeof BoardView>['pickSquares']>> = {}) => ({
+    itemLabel: 'Library',
+    cells,
+    selected: null,
+    onPick: vi.fn(),
+    onCancel: vi.fn(),
+    ...overrides,
+  })
+  const squares = (): HTMLElement[] => screen.queryAllByRole('button', { name: /^Place Library on / })
+  const pointerTap = (target: HTMLElement, pointerId: number) => {
+    for (const type of ['pointerdown', 'pointerup'] as const) {
+      const event = new Event(type, { bubbles: true })
+      for (const [name, value] of Object.entries({ pointerId, pointerType: 'touch', isPrimary: true, button: 0, clientX: 20, clientY: 20 })) {
+        Object.defineProperty(event, name, { value })
+      }
+      target.dispatchEvent(event)
+    }
+  }
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('draws no square buttons outside pick mode', () => {
+    render(<BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} />)
+    expect(squares()).toHaveLength(0)
+  })
+
+  it('draws one named button per candidate square inside the board surface, placed on its cell', () => {
+    const board = createBoard()
+    const { container } = render(
+      <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking()} />,
+    )
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    const surface = container.querySelector('.board-surface')
+    if (!(surface instanceof HTMLElement)) throw new Error('surface missing')
+    expect(surface.classList.contains('picking')).toBe(true)
+    const buttons = squares()
+    expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual(['Place Library on D5', 'Place Library on E5'])
+    for (const [index, button] of buttons.entries()) {
+      const cell = cells[index]
+      if (cell === undefined) throw new Error('cell missing')
+      expect(surface.contains(button)).toBe(true)
+      expect(button.tagName).toBe('BUTTON')
+      expect(button.style.left).toBe(`${cell.column * board.squareSize}px`)
+      expect(button.style.top).toBe(`${mapTop(board) + cell.row * board.squareSize}px`)
+      expect(button.style.width).toBe(`${board.squareSize}px`)
+      expect(button.style.height).toBe(`${board.squareSize}px`)
+    }
+
+    // The same cells at another zoom step: every length is scaled, the origin included.
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '0.5' } })
+    const zoom = 0.5
+    const scaled = squares()
+    expect(scaled).toHaveLength(cells.length)
+    for (const [index, button] of scaled.entries()) {
+      const cell = cells[index]
+      if (cell === undefined) throw new Error('cell missing')
+      expect(button.style.left).toBe(`${cell.column * board.squareSize * zoom}px`)
+      expect(button.style.top).toBe(`${(mapTop(board) + cell.row * board.squareSize) * zoom}px`)
+      expect(button.style.width).toBe(`${board.squareSize * zoom}px`)
+      expect(button.style.height).toBe(`${board.squareSize * zoom}px`)
+    }
+  })
+
+  it('selects on click and on the keyboard, and marks the chosen square', () => {
+    const onPick = vi.fn()
+    const { rerender } = render(
+      <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking({ onPick })} />,
+    )
+    const [d5, e5] = squares()
+    if (d5 === undefined || e5 === undefined) throw new Error('squares missing')
+    fireEvent.click(d5)
+    expect(onPick).toHaveBeenCalledWith(cells[0])
+
+    // A native button answers Enter and Space with a click; it only has to be focusable and not hidden.
+    e5.focus()
+    expect(document.activeElement).toBe(e5)
+    expect(e5.tabIndex).toBe(0)
+    fireEvent.click(e5)
+    expect(onPick).toHaveBeenLastCalledWith(cells[1])
+
+    rerender(
+      <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking({ onPick, selected: { column: 4, row: 4 } })} />,
+    )
+    expect(squares().map((button) => button.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
+  })
+
+  it('cancels on Escape, except in a field that owns the key', () => {
+    const onCancel = vi.fn()
+    render(
+      <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking({ onCancel })} />,
+    )
+    const zoom = screen.getByLabelText('Zoom')
+    zoom.focus()
+    fireEvent.keyDown(zoom, { key: 'Escape' })
+    expect(onCancel).not.toHaveBeenCalled()
+    ;(zoom as HTMLElement).blur()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onCancel).toHaveBeenCalledOnce()
+  })
+
+  it('does not listen for Escape when it is not in pick mode', () => {
+    const onCancel = vi.fn()
+    const { rerender } = render(
+      <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking({ onCancel })} />,
+    )
+    rerender(<BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} />)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it('leaves pieces alone while picking: a tap neither selects nor moves them', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const board = { ...createBoard(), pieces: [piece('buildings/academy', 'academy-1')] }
+    const { container } = render(
+      <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} run={async (action) => { await action() }} pickSquares={picking()} />,
+    )
+    const tile = container.querySelector('.board-piece')
+    const surface = container.querySelector('.board-surface')
+    if (!(tile instanceof HTMLElement) || !(surface instanceof HTMLElement)) throw new Error('board elements missing')
+
+    pointerTap(tile, 1)
+    expect(tile.classList.contains('selected')).toBe(false)
+    expect(screen.queryByRole('status')).toBeNull()
+    pointerTap(surface, 2)
+    expect(movePiece).not.toHaveBeenCalled()
+  })
+
+  it('drops a piece selection and armed move when pick mode starts, and tap then tap works again after', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const board = { ...createBoard(), pieces: [piece('buildings/academy', 'academy-1')] }
+    const props = { gameId: 'game', board, numOfPlayers: 2, areas: [], busy: false, run: async (action: () => Promise<unknown>) => { await action() } }
+    const { container, rerender } = render(<BoardView {...props} />)
+    const tile = container.querySelector('.board-piece')
+    const surface = container.querySelector('.board-surface')
+    if (!(tile instanceof HTMLElement) || !(surface instanceof HTMLElement)) throw new Error('board elements missing')
+
+    pointerTap(tile, 1)
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Academy'))
+
+    rerender(<BoardView {...props} pickSquares={picking()} />)
+    expect(screen.queryByRole('status')).toBeNull()
+
+    rerender(<BoardView {...props} />)
+    pointerTap(tile, 3)
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Academy'))
+    pointerTap(surface, 4)
+    await waitFor(() => expect(movePiece).toHaveBeenCalledOnce())
+  })
+
+  describe('the palette while a Build waits for its square', () => {
+    const pyramids = findBoardAsset('wonders/pyramids')
+    if (pyramids === undefined) throw new Error('wonders/pyramids missing from manifest')
+    const props = { gameId: 'game', board: createBoard(), numOfPlayers: 2, areas: [], busy: false, run: async (action: () => Promise<unknown>) => { await action() } }
+    const wonderButton = async (): Promise<HTMLButtonElement> => {
+      fireEvent.click(screen.getByRole('button', { name: 'Wonders' }))
+      return (await screen.findByRole('button', { name: /Pyramids/ })) as HTMLButtonElement
+    }
+    const dropOnWondersArea = (surface: HTMLElement) => {
+      const area = wondersArea(props.board)
+      const event = new Event('drop', { bubbles: true, cancelable: true })
+      const dataTransfer = { getData: (type: string) => (type === 'text/civ-asset' ? pyramids.id : '') }
+      for (const [name, value] of Object.entries({ clientX: area.x + area.width / 2, clientY: area.y + area.height / 2, dataTransfer })) {
+        Object.defineProperty(event, name, { value })
+      }
+      fireEvent(surface, event)
+    }
+
+    it('ignores a piece dropped on the board while picking, and places it again after', async () => {
+      vi.spyOn(api, 'boardAssets').mockResolvedValue([pyramids])
+      const placePiece = vi.spyOn(api, 'placePiece').mockResolvedValue({} as PlayerView)
+      const { container, rerender } = render(<BoardView {...props} pickSquares={picking()} />)
+      const surface = container.querySelector('.board-surface')
+      if (!(surface instanceof HTMLElement)) throw new Error('surface missing')
+      await wonderButton()
+
+      dropOnWondersArea(surface)
+      expect(placePiece).not.toHaveBeenCalled()
+
+      rerender(<BoardView {...props} />)
+      dropOnWondersArea(surface)
+      await waitFor(() => expect(placePiece).toHaveBeenCalledOnce())
+    })
+
+    it('does not let the palette arm a piece while picking, and says why', async () => {
+      vi.spyOn(api, 'boardAssets').mockResolvedValue([pyramids])
+      const { rerender } = render(<BoardView {...props} pickSquares={picking()} />)
+      const button = await wonderButton()
+      expect(button.disabled).toBe(true)
+      expect(button.draggable).toBe(false)
+      expect(screen.getByText('Finish or cancel the build first.')).toBeTruthy()
+      fireEvent.click(button)
+      expect(screen.queryByText(/^Placing /)).toBeNull()
+      expect(screen.queryByRole('status')).toBeNull()
+
+      // Outside pick mode the same button arms the piece as before.
+      rerender(<BoardView {...props} />)
+      expect(screen.queryByText('Finish or cancel the build first.')).toBeNull()
+      const free = screen.getByRole('button', { name: /Pyramids/ }) as HTMLButtonElement
+      expect(free.disabled).toBe(false)
+      fireEvent.click(free)
+      expect(screen.getByRole('status').textContent).toContain('Placing The Pyramids')
+    })
+  })
+
+  it('brings the squares into view on entering, smoothly unless reduced motion is asked for, and not again on a refresh', () => {
+    const board = createBoard()
+    const props = { gameId: 'game', board, numOfPlayers: 2, areas: [], busy: false, run: async () => undefined }
+    const scrollTo = vi.fn()
+    vi.stubGlobal('matchMedia', () => ({ matches: false }))
+    const first = render(<BoardView {...props} />)
+    const scroll = first.container.querySelector('.board-scroll')
+    if (!(scroll instanceof HTMLElement)) throw new Error('scroll box missing')
+    ;(scroll as { scrollTo: unknown }).scrollTo = scrollTo
+
+    first.rerender(<BoardView {...props} pickSquares={picking()} />)
+    expect(scrollTo).toHaveBeenCalledOnce()
+    expect(scrollTo.mock.calls[0]?.[0]).toMatchObject({ behavior: 'smooth' })
+
+    first.rerender(<BoardView {...props} pickSquares={picking({ selected: { column: 3, row: 4 } })} />)
+    expect(scrollTo).toHaveBeenCalledOnce()
+    first.unmount()
+
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' }))
+    const second = render(<BoardView {...props} />)
+    const box = second.container.querySelector('.board-scroll')
+    if (!(box instanceof HTMLElement)) throw new Error('scroll box missing')
+    const reducedScroll = vi.fn()
+    ;(box as { scrollTo: unknown }).scrollTo = reducedScroll
+    second.rerender(<BoardView {...props} pickSquares={picking()} />)
+    expect(reducedScroll.mock.calls[0]?.[0]).toMatchObject({ behavior: 'auto' })
   })
 })

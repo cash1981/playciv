@@ -3,7 +3,7 @@
 - **Slug:** `assisted-build`
 - **Branch:** `feat/assisted-build`, branched from `feat/assisted-play-contract` (PR #271)
 - **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
-- **Status:** in progress
+- **Status:** in review (ready for the human to test)
 - **Issue:** [#264](https://github.com/cash1981/playciv/issues/264), part 2 of the Build work (part 1 was city production)
 
 This branch is merged into `feat/assisted-play-contract`, and pushed there, only when the human says it is ready. Parts 3 and 4 (figures, military units) extend this one; design the payload and the effect so they can reuse it.

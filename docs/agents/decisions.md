@@ -163,7 +163,7 @@ buttons and the culture marker. Assisted actions are added beside them.
 Source: `engine/src/assisted.ts`, `culture-track.ts`, `server/src/routes/play.ts`,
 `web/src/views/AssistedActions.tsx`, `PhaseSummary.tsx`, and the `assisted*`
 tests. Not built: Great Person abilities that need a map marker, killing
-markers, map tile 16a, free advances, hand limit, Build (#264), offers (#265).
+markers, map tile 16a, free advances, hand limit, figures and military units (#264), offers (#265).
 
 ## City production
 
@@ -194,6 +194,44 @@ typed by hand (`BoardPiece.productionOverride`, any player in the game may set i
 Source: `engine/src/city-production.ts`, `building-data.ts`, `blockade.ts`
 (`cityFootprintsOf`), `actions/board.ts` (`setCityProductionOverride`),
 `web/src/views/CitiesPanel.tsx` and the `city-production*` tests.
+
+## Assisted build
+
+Issue #264, part 2: a city builds a building from the Build button in the Cities
+panel. `buildOptionsOf` (`engine/src/build-options.ts`) works out, for the own view
+only, what each city may build and where; the `build` assisted action places the
+piece, pays and logs in one step, and the everyone votes undo reverses it. Figures
+and military units are the next parts and reuse the same payload.
+
+- Only legal choices are listed. Everything else is under "Why not the others" with
+  a reason. A cost above the city's production is such a reason; the way out is to
+  set the city's production by hand (decided with the human). Trade can cover a
+  shortfall (rush, base rules p. 15): 3 trade for 1 production, the Americans get 2
+  production per 3 trade, paid in whole steps and never more than needed.
+- A building needs a revealed tech (the human's tech sheet, `BUILDING_TECH_UNLOCKS`).
+  Once the upgraded form is unlocked only that form is built, and its tech alone is
+  enough (base rules p. 22). Flipping already built basic buildings on learning the
+  upgrade is a later action.
+- Squares: the city's outskirts on the map, never a centre (either city's, any
+  colour) or a city-state, known terrain that `BUILDING_TERRAIN` allows, nothing
+  built there, no enemy figure (base rules p. 27). The terrain table is advisory for
+  placing a piece by hand (a warning) and binding for assisted Build, so a wrongly
+  recorded tile (the terrain data was read by eye) can block a legal square; the
+  player then places the piece by hand, which stays a logged correction.
+- One limited building per city in total (Market or Bank, Temple or Cathedral,
+  Barracks or Academy; base rules p. 16 to 17), counted over the city's outskirts
+  whoever built it. Supply is the shared pools in `board.ts`. A square shared by two
+  of the player's own cities (old data; cities may not overlap when built) can give
+  the neighbour a second limited building; not handled, no ruling found.
+- A Building Program marker on the city centre is used up by any build (W&W p. 7) and
+  restored by undo. The figure used is the hand set production if there is one, then
+  the doubled figure, then the estimate.
+- No automatic "city action used" marker: techs, culture cards and Great Persons
+  allow several actions, so the player ends the phase themselves (the human).
+
+Source: `engine/src/build-options.ts`, `building-data.ts`, `assisted.ts` (the `build`
+action), `actions/board.ts` (`isAssistedBoardChange`), `web/src/views/BuildPicker.tsx`,
+`buildFlow.ts` and the `assisted-build*` tests.
 
 ## Accounts, mail and ratings
 

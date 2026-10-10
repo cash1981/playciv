@@ -76,7 +76,8 @@ const TERRAIN_PRODUCTION: Readonly<Record<Terrain, number>> = {
   desert: 0,
 }
 
-const BUILDING_PROGRAM_ASSET_ID = 'markers/Building Program'
+/** The Building Program marker (Wisdom and Warfare p. 7). */
+export const BUILDING_PROGRAM_ASSET_ID = 'markers/Building Program'
 const CHICHEN_ITZA_ASSET_ID = 'wonders/chichenitza'
 const GREAT_LIGHTHOUSE_ASSET_ID = 'wonders/greatlighthouse'
 

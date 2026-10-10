@@ -6,8 +6,9 @@
  * in the printed orientation. A tile on the board may be turned, so the lookup
  * undoes the rotation first.
  *
- * Only a warning is derived from this. Nothing here refuses a placement; the
- * rulebook table is a soft rule (issue #255).
+ * The rulebook table is advisory for manual placement: it only yields a warning
+ * and refuses nothing (issue #255). For assisted Build it is binding:
+ * `build-options.ts` leaves out every square with the wrong terrain.
  */
 
 import tileTerrain from '../data/tile-terrain.json' with { type: 'json' }
@@ -136,7 +137,7 @@ export interface TerrainWarning {
   readonly message: string
 }
 
-const describeAllowed = (allowed: readonly Terrain[]): string => {
+export const describeAllowed = (allowed: readonly Terrain[]): string => {
   if (allowed.length === NOT_WATER.length && !allowed.includes('water')) return 'any terrain except water'
   return allowed.join(' or ')
 }

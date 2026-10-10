@@ -468,6 +468,26 @@ describe('the squares', () => {
     }
   })
 
+  it('a city centre of any of the five colours is not a square, with the player\'s own colour among them', () => {
+    const base = ready(['Writing'], 99)
+    for (const colour of ['blue', 'green', 'purple', 'red', 'yellow']) {
+      const crowded = put(base, KARANDRAS1, `cities/${colour}city2`, C2.column, C2.row)
+      expect(choiceFor(optionsOf(crowded), LIBRARY), colour).toBeUndefined()
+      expect(reasonFor(optionsOf(crowded), LIBRARY), colour).toMatch(/1 square is a city centre/)
+    }
+    // A metropolis of another colour holds two centre squares
+    const metropolis = unwrap(
+      placePiece(base, {
+        playerId: KARANDRAS1,
+        assetId: 'cities/bluemetropolis2',
+        x: 3 * SQUARE_SIZE - (findBoardAsset('cities/bluemetropolis2')?.width ?? 0) / 2,
+        y: mapTop(base.board) + 1.5 * SQUARE_SIZE - (findBoardAsset('cities/bluemetropolis2')?.height ?? 0) / 2,
+        rotation: 0,
+      }),
+    )
+    expect(reasonFor(optionsOf(metropolis), LIBRARY)).toMatch(/city centre/)
+  })
+
   it('a city-state in the outskirts holds its square', () => {
     const crowded = put(ready(['Writing'], 99), KARANDRAS1, 'city-states/cs1', C2.column, C2.row)
     expect(choiceFor(optionsOf(crowded), LIBRARY)).toBeUndefined()

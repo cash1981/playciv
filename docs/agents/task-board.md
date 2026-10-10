@@ -31,12 +31,12 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** Claude (Sonnet 5.5)
 - **Branch:** `feat/assisted-build`, from `feat/assisted-play-contract`; merged there only when the human says ready
 - **Brief:** `docs/agents/tasks/assisted-build.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
   - `packages/engine/src/build-options.ts`, `building-data.ts`, `assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/board.ts`
   - `packages/engine/test/assisted-build*.test.ts`, `hidden-info.test.ts`
   - `packages/server/src/routes/play.ts`, `routes/games.ts`, `errors.ts`, `packages/server/test/assisted-build*.test.ts`
-  - `packages/web/src/lib/api.ts`, `views/CitiesPanel.tsx`, `BuildPicker.tsx`, its css and tests, `BoardView.tsx`, `GameView.tsx`, `styles.css`, `FaqView.tsx`
+  - `packages/web/src/lib/api.ts`, `views/CitiesPanel.tsx`, `BuildPicker.tsx`, `buildFlow.ts`, `AssistedActions.tsx`, its css and tests, `BoardView.tsx`, `GameView.tsx`, `styles.css`, `FaqView.tsx`
   - `docs/agents/decisions.md`, `state.md`, `README.md`
 - **Notes:** several paths overlap the `assisted-play-contract` claim above; same owner, sequenced after it.
 

@@ -92,6 +92,27 @@ export function FaqView(): React.JSX.Element {
             map data does not hold every icon, and a number you type in by hand always wins.
           </p>
         </CollapsiblePanel>
+
+        <CollapsiblePanel
+          id="faq-build"
+          title="How do I build a building?"
+          defaultOpen={false}
+        >
+          <p className="faq-answer">
+            In your open City Management phase, press <strong>Build</strong> on your city in the
+            Cities panel and pick a building. Then tap one of the highlighted squares on the board
+            and press <strong>Confirm</strong>. <strong>Cancel</strong> or Escape changes nothing.
+            The building, any trade you pay and the log line happen together, and a vote can undo
+            them like your other actions. On a phone the squares are small at the default zoom, so
+            zoom the board in to tap one.
+          </p>
+          <p className="faq-answer">
+            Only buildings you can really build are listed. The reasons for the others are under{' '}
+            <strong>Why not the others</strong>. If the estimate of the city&rsquo;s production is
+            too low, set the production by hand in the same card. When production is short but the
+            trade covers it, the list says how much trade you pay.
+          </p>
+        </CollapsiblePanel>
       </div>
     </main>
   )

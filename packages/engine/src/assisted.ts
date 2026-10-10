@@ -41,14 +41,10 @@ import {
   remainingBoardAssetCount,
 } from './board.js'
 import type { BoardPiece } from './board.js'
-import {
-  BUILDING_PROGRAM_ASSET_ID,
-  buildOptionsOf,
-  buildSquareRefusal,
-  squareCentre,
-} from './build-options.js'
+import { buildOptionsOf, buildSquareRefusal, squareCentre } from './build-options.js'
 import type { BuildPayload } from './build-options.js'
 import { buildingNameOf } from './building-data.js'
+import { BUILDING_PROGRAM_ASSET_ID } from './city-production.js'
 import { activeWonderOwnerIds, coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
 import {
   cultureAdvanceCost,
@@ -1434,7 +1430,7 @@ const cultureAdvance: AssistedActionDefinition = {
 
 // -- Build ---------------------------------------------------------------------
 
-/** "a Library", "an Academy", and "a University": it starts with a vowel but is said with a consonant. */
+/** "a Library" and "an Academy" by the first letter; "a University" is the exception, since it starts with a vowel but is said with a consonant. */
 const withArticle = (label: string): string => `${/^[aeiou]/i.test(label) && !/^uni/i.test(label) ? 'an' : 'a'} ${label}`
 
 /** The `build` payload, or `undefined` when the payload is another action's or missing. */
