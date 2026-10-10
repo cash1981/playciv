@@ -33,6 +33,9 @@ vi.mock('../lib/api.js', async (importOriginal) => ({
     markDone: vi.fn(),
     unmarkDone: vi.fn(),
     saveNote: vi.fn(),
+    sendTradeOffer: vi.fn(),
+    transitionTradeOffer: vi.fn(),
+    counterTradeOffer: vi.fn(),
   },
 }))
 
@@ -42,6 +45,9 @@ const postOrder = vi.mocked(api.postOrder)
 const markDone = vi.mocked(api.markDone)
 const unmarkDone = vi.mocked(api.unmarkDone)
 const saveNote = vi.mocked(api.saveNote)
+const sendTradeOffer = vi.mocked(api.sendTradeOffer)
+const transitionTradeOffer = vi.mocked(api.transitionTradeOffer)
+const counterTradeOffer = vi.mocked(api.counterTradeOffer)
 
 /** A controlled textarea standing in for the Milkdown editor. */
 const FakeEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
@@ -90,6 +96,7 @@ interface ViewOptions {
   readonly you?: Record<string, unknown> | null
   readonly opponents?: readonly Record<string, unknown>[]
   readonly activeTurn?: Record<string, unknown> | null
+  readonly tradeOffers?: readonly Record<string, unknown>[]
 }
 
 /**
@@ -108,6 +115,7 @@ function makeView(options: ViewOptions = {}): PlayerView {
         })
       : options.you
   return {
+    rev: 17,
     you,
     opponents: options.opponents ?? [seat('Bob', 2, { color: 'Blue' })],
     activeTurn:
@@ -121,9 +129,10 @@ function makeView(options: ViewOptions = {}): PlayerView {
             waitingFor: [
               { username: 'Alice', phase: 'CM' },
               { username: 'Bob', phase: 'SOT' },
-            ],
-          }
-        : options.activeTurn,
+          ],
+        }
+      : options.activeTurn,
+    tradeOffers: options.tradeOffers ?? [],
   } as unknown as PlayerView
 }
 
@@ -135,6 +144,23 @@ const message = (id: string, overrides: Partial<TimelineMessageDto> = {}): Timel
   kind: 'chat',
   turnNumber: null,
   phase: null,
+  ...overrides,
+})
+
+const tradeOffer = (overrides: Record<string, unknown> = {}) => ({
+  id: 'offer-1',
+  senderId: 'id-Alice',
+  senderUsername: 'Alice',
+  recipientId: 'id-Bob',
+  recipientUsername: 'Bob',
+  terms: 'two trade for one wheat',
+  turnNumber: 4,
+  phase: 'TRADE',
+  status: 'pending',
+  parentOfferId: null,
+  createdAt: null,
+  resolvedAt: null,
+  logId: 'log-1',
   ...overrides,
 })
 
@@ -193,6 +219,9 @@ beforeEach(() => {
   markDone.mockResolvedValue(makeView())
   unmarkDone.mockResolvedValue(makeView())
   saveNote.mockResolvedValue(makeView())
+  sendTradeOffer.mockResolvedValue(makeView())
+  transitionTradeOffer.mockResolvedValue(makeView())
+  counterTradeOffer.mockResolvedValue(makeView())
 })
 
 afterEach(() => {
@@ -323,6 +352,89 @@ describe('the timeline', () => {
     // The refresh says there is more, but the older turn is already on screen
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
   })
+})
+
+describe('trade offers', () => {
+  it('submits free-text terms and clears the draft after success', async () => {
+    await renderPanel(makeView())
+    await type('Terms', ' two trade for one wheat ')
+    await click(screen.getByRole('button', { name: 'Send offer' }))
+
+    expect(sendTradeOffer).toHaveBeenCalledWith('game', 'id-Bob', 'two trade for one wheat', expect.any(String), 17)
+    expect((screen.getByLabelText('Terms') as HTMLTextAreaElement).value).toBe('')
+  })
+
+  it('keeps an unsent draft when the view refreshes', async () => {
+    const { rerender } = await renderPanel(makeView())
+    await type('Terms', 'save this draft')
+
+    await act(async () => {
+      rerender(
+        <ChatOrdersPanel
+          gameId="game" view={{ ...makeView(), rev: 18 }} busy={false} readOnly={false} run={run}
+          reloadCount={1} autoRefresh={false} editorComponent={FakeEditor}
+        />,
+      )
+    })
+
+    expect((screen.getByLabelText('Terms') as HTMLTextAreaElement).value).toBe('save this draft')
+  })
+
+  it('shows acceptance only for the recipient and withdrawal only for the sender', async () => {
+    await renderPanel(makeView({ tradeOffers: [tradeOffer()] }))
+    expect(screen.getByRole('button', { name: 'Withdraw' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Decline' })).toBeNull()
+
+    cleanup()
+    await renderPanel(makeView({
+      you: seat('Bob', 2, { playerTurns: [] }),
+      opponents: [seat('Alice', 1)],
+      tradeOffers: [tradeOffer()],
+    }))
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Decline' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Counter' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Withdraw' })).toBeNull()
+  })
+
+  it('routes accept, decline, and withdraw with the selected offer and revision', async () => {
+    await renderPanel(makeView({ tradeOffers: [tradeOffer()] }))
+    await click(screen.getByRole('button', { name: 'Withdraw' }))
+    expect(transitionTradeOffer).toHaveBeenLastCalledWith('game', 'offer-1', 'withdraw', expect.any(String), 17)
+
+    cleanup()
+    await renderPanel(makeView({
+      you: seat('Bob', 2, { playerTurns: [] }),
+      opponents: [seat('Alice', 1)],
+      tradeOffers: [tradeOffer()],
+    }))
+    await click(screen.getByRole('button', { name: 'Accept' }))
+    expect(transitionTradeOffer).toHaveBeenLastCalledWith('game', 'offer-1', 'accept', expect.any(String), 17)
+
+    cleanup()
+    await renderPanel(makeView({
+      you: seat('Bob', 2, { playerTurns: [] }),
+      opponents: [seat('Alice', 1)],
+      tradeOffers: [tradeOffer()],
+    }))
+    await click(screen.getByRole('button', { name: 'Decline' }))
+    expect(transitionTradeOffer).toHaveBeenLastCalledWith('game', 'offer-1', 'decline', expect.any(String), 17)
+  })
+
+  it('sends a linked counteroffer from the intended offer row', async () => {
+    await renderPanel(makeView({
+      you: seat('Bob', 2, { playerTurns: [] }),
+      opponents: [seat('Alice', 1)],
+      tradeOffers: [tradeOffer()],
+    }))
+    await click(screen.getByRole('button', { name: 'Counter' }))
+    await type('Counteroffer terms', 'one trade for two wheat')
+    await click(screen.getByRole('button', { name: 'Send counteroffer' }))
+
+    expect(counterTradeOffer).toHaveBeenCalledWith('game', 'offer-1', 'one trade for two wheat', expect.any(String), 17)
+  })
+
 })
 
 describe('the row that starts a turn', () => {
@@ -467,6 +579,14 @@ describe('replaced orders', () => {
 })
 
 describe('the composer', () => {
+  it('explains that accepting records agreement but does not transfer resources', async () => {
+    await renderPanel(makeView())
+    expect(screen.getByText(/Accepting records that you agreed to the terms/i).textContent)
+      .toContain('It does not transfer resources')
+    expect(screen.getByText(/Accepting records that you agreed to the terms/i).textContent)
+      .toContain('legal trade window')
+  })
+
   it('sends chat through the chat route and clears the field', async () => {
     await renderPanel(makeView())
 

@@ -38,7 +38,7 @@ const correctSocialPolicyFlipsides = (
 /** Everything that did not exist in some earlier version of `GameState`. */
 type MaybeOlder = Omit<
   GameState,
-  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'endedBattle' | 'rev' | 'createdAt' | 'logSecret' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters' | 'legacyOrdersCopied' | 'legacyRevealsCopied' | 'assistedActions'
+  'board' | 'withdrawnPlayers' | 'publicTurns' | 'wondersDealt' | 'battle' | 'endedBattle' | 'rev' | 'createdAt' | 'logSecret' | 'chatOrdersStartTurn' | 'startPlayerId' | 'turnStarters' | 'legacyOrdersCopied' | 'legacyRevealsCopied' | 'assistedActions' | 'tradeOffers'
 > & {
     /** The switch that used to choose between the old baton view and chat orders. Gone from `GameState`. */
     readonly chatOrders?: boolean
@@ -61,6 +61,7 @@ type MaybeOlder = Omit<
       | 'turnStarters'
       | 'logSecret'
       | 'assistedActions'
+      | 'tradeOffers'
     >
   >
 
@@ -298,6 +299,10 @@ export function migrateGameState(state: GameState): GameState {
     // rng stream is published through log and item ids.
     logSecret: older.logSecret ?? '',
     assistedActions: older.assistedActions ?? [],
+    tradeOffers: (older.tradeOffers ?? []).map((offer) => ({
+      ...offer,
+      transitionRequests: offer.transitionRequests ?? [],
+    })),
     log: older.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
     players: migratedPlayers,
     board:
