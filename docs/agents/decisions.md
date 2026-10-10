@@ -243,9 +243,11 @@ private card, nothing placed).
   colour counted anywhere on the board. A scout is not offered a blockaded square. An
   army is, with a note that the outcome (a battle, or killed scouts and loot) is not
   automated. The rulebook settles this only for movement, so it is left to the player.
-- Not offered: a square with a hut or village marker (scouts may not enter one, and the
-  rulebook does not say what an army placed there does; place by hand). The human
-  should confirm this gap.
+- A hut or village marker on a square: scouts may not enter it and only armies take it (the
+  human). The engine never offers such a square to a new figure. The human says this never
+  matters for Build: a city cannot be founded with a hut or village next to it (the marker must
+  be removed first), so none stands in a city's outskirts during City Management. The rule is
+  inert and left in place; if it ever matters, a newly built army may take the square.
 - A unit card is drawn like the Draw button does (reshuffling discards when the deck is
   empty) and goes hidden into the hand. The public line names the type only, never the
   card, and no item log line is written, so the old item undo cannot take it back
