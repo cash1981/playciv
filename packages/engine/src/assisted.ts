@@ -832,18 +832,17 @@ function drawCandidates(
     readonly state: GameState
     readonly items: readonly Item[]
     readonly rejected: readonly Item[]
-    /** For each card taken, kept or rejected: its index in `state.items` just before it was taken, and whether the discards were reshuffled to reach it. */
-    readonly positions: readonly { readonly itemId: string; readonly index: number; readonly reshuffled: boolean }[]
+    /** For each card taken, kept or rejected: the id of the card that stood right after it in `state.items` just before it was taken (`null` if it was last). */
+    readonly positions: readonly { readonly itemId: string; readonly nextItemId: string | null }[]
   },
   EngineError
 > {
   let current = state
   const items: Item[] = []
   const rejected: Item[] = []
-  const positions: { itemId: string; index: number; reshuffled: boolean }[] = []
+  const positions: { itemId: string; nextItemId: string | null }[] = []
   while (items.length < count) {
     let index = current.items.findIndex((item) => item.sheetName === sheetName)
-    let reshuffledNow = false
     if (index < 0) {
       const reshuffled = reshuffleItems(current, sheetName)
       if (!reshuffled.ok) {
@@ -851,12 +850,11 @@ function drawCandidates(
         break
       }
       current = reshuffled.value
-      reshuffledNow = true
       index = current.items.findIndex((item) => item.sheetName === sheetName)
     }
     const item = current.items[index]
     if (item === undefined) break
-    positions.push({ itemId: item.id, index, reshuffled: reshuffledNow })
+    positions.push({ itemId: item.id, nextItemId: current.items[index + 1]?.id ?? null })
     current = { ...current, items: [...current.items.slice(0, index), ...current.items.slice(index + 1)] }
     if (filter === undefined || filter.valid(current, item)) {
       items.push(item)
@@ -1176,18 +1174,31 @@ function restoreDrawnCards(
 }
 
 /**
- * Takes a drawn unit card from the hand back into the deck at the index it was taken
- * from (clamped to the deck's length), face down and without an owner, and shuffles
- * nothing. The caller has checked that the card is in the hand.
+ * Takes a drawn unit card from the hand back into the deck, face down and without an
+ * owner, and shuffles nothing. It goes right before the card that stood after it when
+ * it was drawn (`card.nextItemId`), so another draw from above it, from any sheet,
+ * does not move it behind a card of its own sheet. If that card has since left the
+ * deck, it goes in front of the first card of its sheet that is left, or at the end of
+ * the deck when there is none. A card that was the last one (`null`) goes back at the
+ * end. The caller has checked that the card is in the hand.
  */
 function restoreCardAt(
   state: GameState,
   player: Playerhand,
-  card: { readonly itemId: string; readonly index: number },
+  card: { readonly itemId: string; readonly sheetName: SheetName; readonly nextItemId: string | null },
 ): GameState {
   const found = player.items.find((item) => item.id === card.itemId)
   if (found === undefined) return state
-  const at = Math.max(0, Math.min(card.index, state.items.length))
+  const sheetFront = state.items.findIndex((item) => item.sheetName === card.sheetName)
+  const neighbour = card.nextItemId === null ? -1 : state.items.findIndex((item) => item.id === card.nextItemId)
+  const at =
+    card.nextItemId === null
+      ? state.items.length
+      : neighbour >= 0
+        ? neighbour
+        : sheetFront >= 0
+          ? sheetFront
+          : state.items.length
   const restored: Item = { ...found, hidden: true, ownerId: null }
   return {
     ...withPlayerHand(state, { ...player, items: player.items.filter((item) => item.id !== card.itemId) }),
@@ -1488,9 +1499,8 @@ type Made =
       readonly state: GameState
       readonly card: Item
       readonly sheetName: SheetName
-      /** Where the card stood in the deck just before it was taken, and whether the discards were reshuffled first. */
-      readonly index: number
-      readonly reshuffled: boolean
+      /** The id of the card that stood right after it in the deck just before it was taken; `null` if it was last. */
+      readonly nextItemId: string | null
     }
 
 /**
@@ -1561,8 +1571,7 @@ function drawBuiltUnit(state: GameState, player: Playerhand, unitType: UnitType)
     state: withPlayerHand(drawn.value.state, { ...holder, items: [...holder.items, card] }),
     card,
     sheetName,
-    index: position.index,
-    reshuffled: position.reshuffled,
+    nextItemId: position.nextItemId,
   })
 }
 
@@ -1729,8 +1738,7 @@ const build: AssistedActionDefinition = {
           card: {
             itemId: made.card.id,
             sheetName: made.sheetName,
-            index: made.index,
-            reshuffled: made.reshuffled,
+            nextItemId: made.nextItemId,
           },
           trade: choice.tradeToPay,
           marker: removal,
@@ -1777,7 +1785,7 @@ const build: AssistedActionDefinition = {
       if (!player.items.some((candidate) => candidate.id === effect.card.itemId)) {
         return err(refused(`The ${label} card is no longer in your hand, so the build cannot be undone.`))
       }
-      // The same card goes back at the index it was taken from and nothing is shuffled, so
+      // The same card goes back in front of the card that stood after it, and nothing is shuffled, so
       // the next draw returns the same card: build and undo is no way to redraw, and it
       // reveals no further card to the player.
       const restored = restoreCardAt(withPlayerHand(state, refunded), refunded, effect.card)

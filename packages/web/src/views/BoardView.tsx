@@ -1066,7 +1066,7 @@ export function BoardView({
                     type="button"
                     className={`board-pick-cell${chosen ? ' chosen' : ''}${cell.note === undefined ? '' : ' noted'}`}
                     // The engine's only square note is the enemy figure on a square an army is placed on; the bar spells it out once the square is picked.
-                    aria-label={`Place ${pickSquares.itemLabel} on ${cell.label}${cell.note === undefined ? '' : ', blockaded, resolve by hand'}`}
+                    aria-label={`Place ${pickSquares.itemLabel} on ${cell.label}${cell.note === undefined ? '' : ', enemy figure there, resolve by hand'}`}
                     aria-pressed={chosen}
                     disabled={busy || readOnly}
                     style={{

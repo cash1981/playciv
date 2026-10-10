@@ -940,7 +940,7 @@ describe('building a figure', () => {
     startFigure('Army figure')
     expect(overlays().map((button) => button.getAttribute('aria-label'))).toEqual([
       'Place Army figure on D5',
-      'Place Army figure on E5, blockaded, resolve by hand',
+      'Place Army figure on E5, enemy figure there, resolve by hand',
     ])
     expect(bar().textContent).toContain('Build Army figure in Capital D5')
     expect(bar().textContent).toContain('Tap a highlighted square')
@@ -977,7 +977,7 @@ describe('building a figure', () => {
     render(<Harness initial={viewOf([ALL_KINDS()])} />)
     startFigure('Army figure')
     const plain = screen.getByRole('button', { name: 'Place Army figure on D5' })
-    const noted = screen.getByRole('button', { name: 'Place Army figure on E5, blockaded, resolve by hand' })
+    const noted = screen.getByRole('button', { name: 'Place Army figure on E5, enemy figure there, resolve by hand' })
     // Marked by a word on the square and a class, not by colour alone.
     expect(noted.classList.contains('noted')).toBe(true)
     expect(noted.textContent).toContain('Enemy')
@@ -1008,7 +1008,7 @@ describe('building a figure', () => {
     const noted = { ...SCOUT, squares: [{ column: 3, row: 4, label: 'D5', note: 'A note.' }] }
     act(() => handle.setView(viewOf([options({ choices: [LIBRARY, ARMY, noted, INFANTRY] })], { rev: 9 })))
     expect(screen.getByRole('status').textContent).toContain('A note.')
-    expect(screen.getByRole('button', { name: 'Place Scout figure on D5, blockaded, resolve by hand' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Place Scout figure on D5, enemy figure there, resolve by hand' })).toBeTruthy()
   })
 })
 
@@ -1031,7 +1031,7 @@ describe('the request key tells the items and squares apart', () => {
     // Army and scout both have D5: only the item tells them apart.
     await press('Army figure', 'Place Army figure on D5', 1)
     await press('Scout figure', 'Place Scout figure on D5', 2)
-    await press('Army figure', 'Place Army figure on E5, blockaded, resolve by hand', 3)
+    await press('Army figure', 'Place Army figure on E5, enemy figure there, resolve by hand', 3)
     await press('Infantry unit', null, 4)
     await press('Mounted unit', null, 5)
     await press('Army figure', 'Place Army figure on D5', 6)
