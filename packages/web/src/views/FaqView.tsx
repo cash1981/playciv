@@ -121,6 +121,28 @@ export function FaqView(): React.JSX.Element {
             trade covers it, the list says how much trade you pay.
           </p>
         </CollapsiblePanel>
+
+        <CollapsiblePanel
+          id="faq-city-actions"
+          title="How do I start a Building Program or upgrade buildings?"
+          defaultOpen={false}
+        >
+          <p className="faq-answer">
+            In your open City Management phase, press <strong>Start Building Program</strong> on
+            your city in the Cities panel. The marker is put on the city centre, so the next build
+            in that city doubles its outskirts production. A city can have only one marker, and the
+            build removes it. The button is greyed out, with the reason beside it, when the phase is
+            not open or the marker is already there.
+          </p>
+          <p className="faq-answer">
+            When you have revealed the tech of an upgraded building, an <strong>Upgrades</strong>{' '}
+            block at the top of the Cities panel lists your basic buildings that can be flipped,
+            for example Granary to Aqueduct, with their squares. Press the button of one family, or{' '}
+            <strong>Upgrade all</strong>. The buildings keep their squares and nothing is paid. It
+            works in any phase of the game. Both actions can be taken back with the same Undo vote
+            as your other actions.
+          </p>
+        </CollapsiblePanel>
       </div>
     </main>
   )

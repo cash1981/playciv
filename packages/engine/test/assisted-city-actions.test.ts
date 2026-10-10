@@ -32,13 +32,14 @@ import {
   slotOrigin,
 } from '../src/board.js'
 import type { BoardPiece, Rotation } from '../src/board.js'
+import { combatBonusOf } from '../src/combat-bonus.js'
 import { buildOptionsOf, squareCentre } from '../src/build-options.js'
 import type { BuildPayload } from '../src/build-options.js'
 import { cityActionsOf, describeUpgrades, upgradeOptionsOf } from '../src/city-actions.js'
 import { BUILDING_UPGRADES } from '../src/building-data.js'
 import { describeError } from '../src/errors.js'
 import { unwrap, unwrapErr } from '../src/result.js'
-import { findPlayer } from '../src/state.js'
+import { buildingCountOf, findPlayer } from '../src/state.js'
 import type { GameState, Playerhand } from '../src/state.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
@@ -1028,6 +1029,60 @@ describe('an upgrade that is not allowed', () => {
       }),
     )
     expect(piecesOf(done, AQUEDUCT)).toHaveLength(3)
+  })
+})
+
+describe('an upgrade and who the piece is attributed to', () => {
+  // Combat bonus and building count read `placedBy`. A Barracks is worth 2 and an Academy 4,
+  // and nobody else in the fixture has a combat bonus of their own.
+  const figures = (state: GameState) => ({
+    cashBonus: combatBonusOf(state, me(state)),
+    karandrasBonus: combatBonusOf(state, me(state, KARANDRAS1)),
+    cashBuildings: buildingCountOf(state, CASH1981),
+    karandrasBuildings: buildingCountOf(state, KARANDRAS1),
+  })
+
+  it('upgrading a Barracks another player placed keeps its bonus and count with the placer', () => {
+    // Karandras put a Barracks on B1, a square of Cash's outskirts
+    const before = put(upgradeScene(['Military Science']), KARANDRAS1, BARRACKS, 1, 0)
+    expect(figures(before)).toEqual({ cashBonus: 0, karandrasBonus: 2, cashBuildings: 4, karandrasBuildings: 3 })
+
+    const done = upgrade(before, 'up-1', BARRACKS)
+    const [academy] = piecesOf(done, ACADEMY)
+    expect(piecesOf(done, BARRACKS)).toEqual([])
+    expect(academy?.placedBy).toBe(KARANDRAS1)
+    // Only the form changes, so the bonus is the Academy's under the original placer
+    expect(figures(done)).toEqual({ cashBonus: 0, karandrasBonus: 4, cashBuildings: 4, karandrasBuildings: 3 })
+    // The line and the board history still name the player who pressed the button
+    expect(done.board.history.slice(before.board.history.length).map((entry) => entry.playerId)).toEqual([CASH1981, CASH1981])
+
+    expect(figures(undoByVote(done, 'up-1'))).toEqual(figures(before))
+  })
+
+  it('upgrading a player\'s own Barracks changes only their own figures', () => {
+    const before = put(upgradeScene(['Military Science']), CASH1981, BARRACKS, 1, 0)
+    expect(figures(before)).toEqual({ cashBonus: 2, karandrasBonus: 0, cashBuildings: 5, karandrasBuildings: 2 })
+
+    const done = upgrade(before, 'up-1', BARRACKS)
+    expect(piecesOf(done, ACADEMY)[0]?.placedBy).toBe(CASH1981)
+    expect(figures(done)).toEqual({ cashBonus: 4, karandrasBonus: 0, cashBuildings: 5, karandrasBuildings: 2 })
+
+    const undone = undoByVote(done, 'up-1')
+    expect(figures(undone)).toEqual(figures(before))
+    expect(piecesOf(undone, BARRACKS).map((piece) => piece.placedBy)).toEqual([CASH1981])
+  })
+
+  it('a piece with no placer is still not attributed to anyone after the flip', () => {
+    const base = put(upgradeScene(['Military Science']), CASH1981, BARRACKS, 1, 0)
+    const unattributed: GameState = {
+      ...base,
+      board: {
+        ...base.board,
+        pieces: base.board.pieces.map((piece) => (piece.assetId === BARRACKS ? { ...piece, placedBy: null } : piece)),
+      },
+    }
+    const done = upgrade(unattributed, 'up-1', BARRACKS)
+    expect(piecesOf(done, ACADEMY).map((piece) => piece.placedBy)).toEqual([null])
   })
 })
 

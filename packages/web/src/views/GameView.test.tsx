@@ -1135,3 +1135,71 @@ describe('the Build flow in the game page', () => {
     expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
   })
 })
+
+describe('the city actions in the game page', () => {
+  const city = {
+    pieceId: 'city-1',
+    label: 'Capital B3',
+    outskirts: 4,
+    outskirtsDetail: [],
+    modifiers: [],
+    buildingProgram: false,
+    estimate: 4,
+    withBuildingProgram: null,
+    override: null,
+    effective: 4,
+    notes: [],
+  }
+  const cityActions = [
+    {
+      cityPieceId: 'city-1',
+      label: 'Capital B3',
+      startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
+    },
+  ]
+  const upgradeOptions = [
+    {
+      basicAssetId: 'buildings/granary',
+      upgradedAssetId: 'buildings/aqueduct',
+      basicLabel: 'Granary',
+      upgradedLabel: 'Aqueduct',
+      label: 'Granary to Aqueduct',
+      count: 1,
+      squares: [{ column: 0, row: 0, label: 'A1' }],
+    },
+  ]
+  const viewWith = (overrides: Record<string, unknown> = {}): PlayerView =>
+    orderView({
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        items: [],
+        pendingRewards: [],
+        cities: [city],
+        cityActions,
+        upgradeOptions,
+      },
+      ...overrides,
+    })
+
+  beforeEach(() => localStorage.setItem('civ.panel.cities', 'true'))
+  afterEach(() => localStorage.removeItem('civ.panel.cities'))
+
+  it('shows the Start button and the Upgrades block to a player in a live game', async () => {
+    await renderOrder(viewWith())
+    expect(screen.getByRole('button', { name: 'Start Building Program in Capital B3' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (1)' })).toBeTruthy()
+  })
+
+  it('shows neither once the game is locked, and neither to a spectator', async () => {
+    const locked = await renderOrder(viewWith({ active: false }))
+    expect(screen.getByRole('heading', { name: 'Cities (1)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Upgrades' })).toBeNull()
+    locked.unmount()
+
+    await renderOrder(orderView(), null)
+    expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Upgrades' })).toBeNull()
+  })
+})

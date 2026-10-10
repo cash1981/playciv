@@ -116,7 +116,36 @@
   color: var(--bad);
 }
 
+.city-upgrades {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.city-upgrade-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.city-upgrade {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.city-upgrade-line {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
 @media (max-width: 900px) {
+  .city-upgrades button,
   .city-input,
   .city-build-row button,
   .city-edit-row button {

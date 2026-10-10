@@ -212,7 +212,7 @@ private card, nothing placed).
 - A building needs a revealed tech (the human's tech sheet, `BUILDING_TECH_UNLOCKS`).
   Once the upgraded form is unlocked only that form is built, and its tech alone is
   enough (base rules p. 22). Flipping already built basic buildings on learning the
-  upgrade is a later action.
+  upgrade is the Upgrade action below.
 - Squares: the city's outskirts on the map, never a centre (either city's, any
   colour) or a city-state, known terrain that `BUILDING_TERRAIN` allows, nothing
   built there, no enemy figure (base rules p. 27). The terrain table is advisory for
@@ -258,8 +258,29 @@ private card, nothing placed).
   Great Person cards and the old item undo still reshuffle the whole deck on undo; that
   is the older behaviour and a possible redraw loop there is not addressed here.
 
-Source: `engine/src/build-options.ts`, `building-data.ts`, `assisted.ts` (the `build`
-action), `actions/board.ts` (`isAssistedBoardChange`), `web/src/views/BuildPicker.tsx`,
+**City actions: start a Building Program, upgrade buildings.**
+
+- Start a Building Program (W&W p. 7) is a city action in the player's open City Management
+  phase, free, one marker per city (a marker on either centre of a metropolis counts). The
+  marker goes on the anchor centre square. A build in that city uses it up (see above); undo
+  of the start is refused while the marker is gone, so a build must be undone first.
+- Upgrade (base rules p. 22) flips the player's basic buildings of a family to the upgraded
+  form once the upgraded form's tech is revealed (the basic form's tech is not needed). The
+  player's buildings are those inside the outskirts of the player's own cities, found with
+  `cityFootprintsOf`, never by `placedBy`. A building in nobody's outskirts or in another
+  player's city is left alone. No cost, no phase gate (the tech may be learned in Research), not
+  automatic: the player presses a button, and moving pieces by hand stays possible. The supply
+  pool is shared by both forms, so a flip never changes the count.
+- A flipped building keeps its square and the original piece's `placedBy`, so the combat bonus
+  and the building count of whoever placed it follow the form change and nothing moves between
+  players. The new piece keeps the old one's centre, not its top left corner, because the two
+  artworks differ by a few pixels. Undo restores the original pieces, with their ids, on top of
+  the piece stack (z order is not restored; the same as the build undo).
+- Known gaps: a square in the outskirts of two players' cities lets both list the building and
+  the first press wins; the record's `phase` reads CM when every phase of the turn is done.
+
+Source: `engine/src/build-options.ts`, `city-actions.ts`, `building-data.ts`, `assisted.ts` (the `build`,
+`startBuildingProgram` and `upgradeBuildings` actions), `actions/board.ts` (`isAssistedBoardChange`), `web/src/views/BuildPicker.tsx`,
 `buildFlow.ts` and the `assisted-build*` tests.
 
 ## Accounts, mail and ratings

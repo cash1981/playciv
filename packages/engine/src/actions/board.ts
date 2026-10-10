@@ -177,7 +177,15 @@ export function placePiece(state: GameState, input: PlacePieceInput): ActionResu
  */
 export function placeUnchecked(
   state: GameState,
-  input: PlacePieceInput,
+  input: PlacePieceInput & {
+    /**
+     * Who the piece is attributed to (`BoardPiece.placedBy`). Left out, it is
+     * `playerId`, as for every other caller. A flip that replaces a piece
+     * passes the old piece's value, so combat bonus and building count stay
+     * with the original placer; `null` keeps a piece with no placer unattributed.
+     */
+    readonly placedBy?: string | null
+  },
 ): GameState | undefined {
   const asset = findBoardAsset(input.assetId)
   if (asset === undefined) return undefined
@@ -218,7 +226,7 @@ export function placeUnchecked(
     width: asset.width,
     height: asset.height,
     rotation: input.rotation ?? 0,
-    placedBy: input.playerId,
+    placedBy: input.placedBy === undefined ? input.playerId : input.placedBy,
     ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
   }
 

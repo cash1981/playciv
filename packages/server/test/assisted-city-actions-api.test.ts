@@ -264,6 +264,7 @@ describe('the city actions in the projection', () => {
     const anonymous = await inject(app, { url: `/api/games/${table.gameId}` })
 
     const theirs = await asOther.json<View>()
+    // These two lines describe the other player's own, empty self view; the leak protection is the serialisation checks below
     expect(theirs.you?.cityActions).toEqual([])
     expect(theirs.you?.upgradeOptions).toEqual([])
     for (const response of [asOther, asSpectator, anonymous]) {
@@ -637,10 +638,29 @@ describe('the payload', () => {
       expect(JSON.stringify(await response.json())).toContain('only belong to build')
     }
     // family belongs to upgradeBuildings only
-    for (const action of ['cultureAdvance', 'build', 'startBuildingProgram']) {
-      const response = await post(table.starter, actions(table), { action, requestId: 'req-2', rev, family: GRANARY })
-      expect(response.status).toBe(400)
+    const other = await post(table.starter, actions(table), { action: 'cultureAdvance', requestId: 'req-2', rev, family: GRANARY })
+    expect(other.status).toBe(400)
+    // a complete, valid body plus the stray field is refused because of that field, and nothing runs
+    const complete = {
+      build: {
+        action: 'build',
+        requestId: 'req-2',
+        rev,
+        cityPieceId: table.cityId,
+        item: { kind: 'building', assetId: LIBRARY },
+        target: C2,
+      },
+      startBuildingProgram: startBody(table, 'req-2', rev),
     }
+    for (const [action, body] of Object.entries(complete)) {
+      const refused = await post(table.starter, actions(table), { ...body, family: GRANARY })
+      expect(refused.status).toBe(400)
+      expect(JSON.stringify(await refused.json())).toContain(`${action} takes only`)
+    }
+    // an unknown field is refused on build the same way
+    const unknown = await post(table.starter, actions(table), { ...complete.build, all: true })
+    expect(unknown.status).toBe(400)
+    expect(JSON.stringify(await unknown.json())).toContain('not all')
     const stray = await post(table.starter, actions(table), { action: 'cultureAdvance', requestId: 'req-3', rev, family: GRANARY })
     expect(JSON.stringify(await stray.json())).toContain('family only belongs to upgradeBuildings')
     // the reward fields belong to chooseReward only, also on the new actions

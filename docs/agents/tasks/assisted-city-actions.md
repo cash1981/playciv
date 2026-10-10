@@ -3,7 +3,7 @@
 - **Slug:** `assisted-city-actions`
 - **Branch:** `feat/assisted-city-actions`, branched from `feat/assisted-units` (which contains `feat/assisted-build`)
 - **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
-- **Status:** in progress
+- **Status:** in review (ready for the human to test)
 - **Issue:** [#264](https://github.com/cash1981/playciv/issues/264) (other city actions) and [#250](https://github.com/cash1981/playciv/issues/250) slice C (the explicit upgrade action)
 
 Merged into `feat/assisted-play-contract` (PR #271), after the two branches it is built on, only when the human says it is ready. Read `tasks/assisted-build.md`, `tasks/assisted-units.md` and the "Assisted build" decisions first. The human chose no automatic "city action used" marker, so neither action here marks a city as used.

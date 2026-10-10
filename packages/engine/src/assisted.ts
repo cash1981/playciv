@@ -2031,6 +2031,8 @@ const upgradeBuildings: AssistedActionDefinition = {
         x: piece.x + piece.width / 2 - asset.width / 2,
         y: piece.y + piece.height / 2 - asset.height / 2,
         rotation: piece.rotation,
+        // The flip keeps whoever the old piece was attributed to: combat bonus and building count follow `placedBy`
+        placedBy: piece.placedBy,
         ...at,
       })
       const placedEntry = placed?.board.history.at(-1)

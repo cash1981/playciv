@@ -88,14 +88,23 @@ const BUILD_FIELDS = ['cityPieceId', 'item', 'target', 'rush'] as const
 /** The highest map column or row a request may name; the largest board has 16 squares a side, so this is generous. */
 const MAX_BUILD_COORDINATE = 63
 
+/** What every `/actions` body carries besides the payload of the action. */
+const ACTION_ENVELOPE_FIELDS: readonly string[] = ['action', 'requestId', 'rev', 'confirmedRepeat']
+
+/** The fields of the body that are neither the envelope nor `allowed`, for an action whose payload is checked strictly. */
+const extraFields = (body: Record<string, unknown>, allowed: readonly string[]): readonly string[] =>
+  Object.keys(body).filter((key) => !ACTION_ENVELOPE_FIELDS.includes(key) && !allowed.includes(key))
+
 /**
  * The `build` payload from a request body, or a sentence saying what is wrong
  * with it. Only the shape is checked here (ids, a known building or unit type,
- * whole numbers, a boolean, no extra fields in the item); whether the city, the
+ * whole numbers, a boolean, no extra fields in the body or the item); whether the city, the
  * item and the square are legal is the engine's decision, made from the fresh
  * state. A building or a figure needs a target, a unit must not have one.
  */
 function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string {
+  const extra = extraFields(body, BUILD_FIELDS)
+  if (extra.length > 0) return `build takes only ${BUILD_FIELDS.join(', ')}, not ${extra.join(', ')}`
   const cityPieceId = requireString(body, 'cityPieceId')
   if (cityPieceId === undefined || !REQUEST_ID.test(cityPieceId)) {
     return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
@@ -141,13 +150,6 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
   }
   return { cityPieceId, item: parsed, target: { column, row }, ...optionalRush }
 }
-
-/** What every `/actions` body carries besides the payload of the action. */
-const ACTION_ENVELOPE_FIELDS: readonly string[] = ['action', 'requestId', 'rev', 'confirmedRepeat']
-
-/** The fields of the body that are neither the envelope nor `allowed`, for an action whose payload is checked strictly. */
-const extraFields = (body: Record<string, unknown>, allowed: readonly string[]): readonly string[] =>
-  Object.keys(body).filter((key) => !ACTION_ENVELOPE_FIELDS.includes(key) && !allowed.includes(key))
 
 /**
  * The `startBuildingProgram` payload, or a sentence saying what is wrong with it:

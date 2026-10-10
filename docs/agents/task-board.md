@@ -59,7 +59,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** Claude (Sonnet 5.5)
 - **Branch:** `feat/assisted-city-actions`, from `feat/assisted-units`; merged into `feat/assisted-play-contract` only when the human says ready
 - **Brief:** `docs/agents/tasks/assisted-city-actions.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
   - `packages/engine/src/build-options.ts`, `city-actions.ts`, `assisted.ts`, `state.ts`, `index.ts`, `actions/board.ts`
   - `packages/engine/test/assisted-city-actions*.test.ts`, `hidden-info.test.ts`

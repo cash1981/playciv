@@ -41,9 +41,10 @@ old test counts and past deployment reports do not establish present health.
 - Assisted build (#264) is on `feat/assisted-build` (buildings) and
   `feat/assisted-units` (army and scout figures, military units; includes the first
   branch), not yet in PR #271: a Build button per city, legal choices only, square
-  picking on the board, trade rush, undo by vote. The other city actions (building
-  program start, harvest, devote to the arts) are next. Briefs `tasks/assisted-build.md`
-  and `tasks/assisted-units.md`; see "Assisted build" in decisions.
+  picking on the board, trade rush, undo by vote. `feat/assisted-city-actions` (includes
+  both) adds Start Building Program and Upgrade buildings. Harvest and devote to the arts
+  are not built (their icon data is not in the map data). Briefs `tasks/assisted-build.md`,
+  `tasks/assisted-units.md` and `tasks/assisted-city-actions.md`; see "Assisted build" in decisions.
 
 Read [current decisions](decisions.md) for the relevant compatibility/rationale
 and [limitations](limitations.md) for known gaps. Archived Mongo games remaining

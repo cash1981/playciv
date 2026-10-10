@@ -469,6 +469,7 @@ describe('city actions', () => {
     const state = cityScene('revealed')
     const opponent = toPlayerView(state, KARANDRAS1)
     const spectator = toPlayerView(state, 'spectator')
+    // These two lines describe the opponent's own, empty self view; the leak protection is the serialisation checks below
     expect(opponent.you?.cityActions).toEqual([])
     expect(opponent.you?.upgradeOptions).toEqual([])
     expect(spectator.you).toBeNull()
