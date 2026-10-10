@@ -35,16 +35,14 @@ old test counts and past deployment reports do not establish present health.
 
 - City production (#250 slice A, first part of #264) is on PR #271: a per-city
   estimate with a hand-set override and a Cities panel.
-  Brief `tasks/city-production.md`; see "City production" in decisions. The Build
-  button, figures, units and other city actions are the next parts.
+  Brief `tasks/city-production.md`; see "City production" in decisions.
 
-- Assisted build (#264) is on `feat/assisted-build` (buildings) and
-  `feat/assisted-units` (army and scout figures, military units; includes the first
-  branch), not yet in PR #271: a Build button per city, legal choices only, square
-  picking on the board, trade rush, undo by vote. `feat/assisted-city-actions` (includes
-  both) adds Start Building Program and Upgrade buildings. Harvest and devote to the arts
-  are not built (their icon data is not in the map data). Briefs `tasks/assisted-build.md`,
-  `tasks/assisted-units.md` and `tasks/assisted-city-actions.md`; see "Assisted build" in decisions.
+- Assisted build (#264) is on PR #271: a Build button per city for buildings, army and
+  scout figures and military units, legal choices only, square picking on the board, trade
+  rush, undo by vote; also Start Building Program and Upgrade buildings. Harvest and devote
+  to the arts are not built (their icon data is not in the map data). Briefs
+  `tasks/assisted-build.md`, `tasks/assisted-units.md` and `tasks/assisted-city-actions.md`;
+  see "Assisted build" in decisions.
 
 Read [current decisions](decisions.md) for the relevant compatibility/rationale
 and [limitations](limitations.md) for known gaps. Archived Mongo games remaining
