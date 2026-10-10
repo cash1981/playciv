@@ -29,6 +29,10 @@ Fortune* and *Wisdom and Warfare*. [README.md](README.md) describes the product.
 - Inspect `git status`, recent history and the relevant diff before editing.
   Fetch `origin` when available; reconcile changes without overwriting others'
   files or local commits. See [workflow.md](docs/agents/workflow.md).
+- Prefer terminal and command-line tools for reading repository files, logs and
+  other local content. Open an IDE or other application only when its UI is
+  required for the task, such as visual/browser verification or interacting
+  with an app that has no suitable CLI/API.
 - Claim paths in `task-board.md` and write a concise active task brief. Resolve
   overlapping live claims before editing. Do not revive an old task from an
   unchecked checkbox or stale status in Git history.
