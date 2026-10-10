@@ -54,6 +54,20 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `docs/agents/decisions.md`, `state.md`, `README.md`
 - **Notes:** several paths overlap the `assisted-build` claim above; same owner, sequenced after it.
 
+### assisted-city-actions
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/assisted-city-actions`, from `feat/assisted-units`; merged into `feat/assisted-play-contract` only when the human says ready
+- **Brief:** `docs/agents/tasks/assisted-city-actions.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/build-options.ts`, `city-actions.ts`, `assisted.ts`, `state.ts`, `index.ts`, `actions/board.ts`
+  - `packages/engine/test/assisted-city-actions*.test.ts`, `hidden-info.test.ts`
+  - `packages/server/src/routes/play.ts`, `routes/games.ts`, `packages/server/test/assisted-city-actions*.test.ts`
+  - `packages/web/src/lib/api.ts`, `views/CitiesPanel.tsx`, `CitiesPanel.css`, `CityActions.tsx` and tests, `FaqView.tsx`
+  - `docs/agents/decisions.md`, `state.md`, `README.md`
+- **Notes:** overlaps the `assisted-build` and `assisted-units` claims above; same owner, sequenced after them.
+
 ---
 
 ## Format
