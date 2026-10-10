@@ -18,6 +18,9 @@ import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, Pl
 
 import { AssistedActionsPanel } from './AssistedActions.js'
 import { BoardView } from './BoardView.js'
+import type { PickSquares } from './BoardView.js'
+import { BuildBar } from './BuildPicker.js'
+import { useBuildFlow } from './buildFlow.js'
 import { CitiesPanel } from './CitiesPanel.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
@@ -482,6 +485,13 @@ export function GameView({
     return () => onGameActions(null)
   }, [onGameActions, view, historical, selectedRevision, busy, gameId, player, onWithdrawn, onDeleted, onEnded, onUnauthorized, reload, run])
 
+  // Building is for a player in the live game: nothing of it survives a replay,
+  // a locked game or a spectator, and it is cleared the moment one of them applies.
+  // Before the loading guard, because hooks run unconditionally.
+  const buildAllowed =
+    view !== null && !(selectedRevision !== null && historical !== null) && (view.active || player?.role === 'admin')
+  const buildFlow = useBuildFlow(buildAllowed ? (view.you?.buildOptions ?? null) : null)
+
   if (view === null) {
     return (
       <>
@@ -501,6 +511,17 @@ export function GameView({
   const you = displayedView.you
   const activePlayer = activePlayerOf(displayedView)
   const chatAuthors = chatAuthorsOf(displayedView)
+  const buildPlan = buildFlow.plan
+  const pickSquares: PickSquares | undefined =
+    buildPlan === null
+      ? undefined
+      : {
+          itemLabel: buildPlan.label,
+          cells: buildPlan.squares,
+          selected: buildPlan.target,
+          onPick: buildFlow.pick,
+          onCancel: buildFlow.clear,
+        }
 
   // An ended game has nobody on turn: the title names the winner, and the
   // turn chips and the progress strip, which describe whose move it is, go.
@@ -569,6 +590,8 @@ export function GameView({
         run={run}
       />
 
+      <BuildBar gameId={gameId} view={displayedView} flow={buildFlow} busy={interactionBusy} run={run} />
+
       <BoardView
         gameId={gameId}
         board={displayedView.board}
@@ -579,6 +602,7 @@ export function GameView({
         readOnly={replaying || locked}
         youId={you?.playerId ?? null}
         viewerIsRussia={you?.civilization?.name === 'Russians'}
+        {...(pickSquares === undefined ? {} : { pickSquares })}
         run={run}
       />
 
@@ -617,6 +641,7 @@ export function GameView({
           busy={interactionBusy}
           readOnly={displayedView.you === null || replaying || locked}
           run={run}
+          build={buildFlow}
         />
         <WondersPanel
           gameId={gameId}

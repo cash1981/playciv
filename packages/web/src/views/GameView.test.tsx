@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Item } from '@civ/engine'
@@ -24,8 +24,14 @@ import {
 } from './GameView.js'
 
 vi.mock('./BoardView.js', () => ({
-  BoardView: ({ viewerIsRussia }: { viewerIsRussia?: boolean }) => (
-    <section id={BOARD_PANEL_ID} tabIndex={-1} data-testid="board" data-viewer-is-russia={String(viewerIsRussia)} />
+  BoardView: ({ viewerIsRussia, pickSquares }: { viewerIsRussia?: boolean; pickSquares?: { cells: readonly unknown[] } }) => (
+    <section
+      id={BOARD_PANEL_ID}
+      tabIndex={-1}
+      data-testid="board"
+      data-viewer-is-russia={String(viewerIsRussia)}
+      data-pick-count={pickSquares === undefined ? 'off' : String(pickSquares.cells.length)}
+    />
   ),
 }))
 // Only the panel is replaced; the helpers GameView uses stay real
@@ -1033,5 +1039,167 @@ describe('the ended-battle banner', () => {
   it('does not offer Undo while another action is running', () => {
     const { getByText } = renderPanel(endedView('me'), true)
     expect((getByText('Undo') as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('the Build flow in the game page', () => {
+  const library = {
+    assetId: 'buildings/library',
+    item: { kind: 'building', assetId: 'buildings/library' },
+    placement: 'square',
+    label: 'Library',
+    cost: 6,
+    tradeToPay: 0,
+    squares: [
+      { column: 3, row: 4, label: 'D5' },
+      { column: 4, row: 4, label: 'E5' },
+    ],
+  }
+  const city = {
+    pieceId: 'city-1',
+    label: 'Capital D5',
+    outskirts: 4,
+    outskirtsDetail: [],
+    modifiers: [],
+    buildingProgram: false,
+    estimate: 4,
+    withBuildingProgram: null,
+    override: null,
+    effective: 4,
+    notes: [],
+  }
+  const buildOptions = [
+    {
+      cityPieceId: 'city-1',
+      label: 'Capital D5',
+      status: 'ready',
+      reason: 'Ready to build.',
+      production: 4,
+      productionSource: 'estimate',
+      choices: [library],
+      unavailable: [],
+    },
+  ]
+  const viewWith = (overrides: Record<string, unknown> = {}): PlayerView =>
+    orderView({
+      you: { playerId: 'p1', username: 'viewer', items: [], pendingRewards: [], cities: [city], buildOptions },
+      ...overrides,
+    })
+
+  beforeEach(() => localStorage.setItem('civ.panel.cities', 'true'))
+  afterEach(() => localStorage.removeItem('civ.panel.cities'))
+
+  it('puts the board in pick mode after a choice and takes it out on Cancel', async () => {
+    await renderOrder(viewWith())
+    expect(screen.getByTestId('board').getAttribute('data-pick-count')).toBe('off')
+    fireEvent.click(screen.getByRole('button', { name: 'Build in Capital D5' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
+    expect(screen.getByTestId('board').getAttribute('data-pick-count')).toBe('2')
+    expect(screen.getByRole('group', { name: 'Build' }).textContent).toContain('Build Library in Capital D5')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByTestId('board').getAttribute('data-pick-count')).toBe('off')
+    expect(screen.queryByRole('group', { name: 'Build' })).toBeNull()
+  })
+
+  it('shows the confirm bar for a unit and leaves the board out of pick mode', async () => {
+    const infantry = {
+      assetId: 'units/infantry',
+      item: { kind: 'unit', unitType: 'infantry' },
+      placement: 'none',
+      label: 'Infantry unit',
+      cost: 4,
+      tradeToPay: 0,
+      squares: [],
+    }
+    const withUnit = [{ ...buildOptions[0], choices: [library, infantry] }]
+    await renderOrder(
+      viewWith({ you: { playerId: 'p1', username: 'viewer', items: [], pendingRewards: [], cities: [city], buildOptions: withUnit } }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Build in Capital D5' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
+    expect(screen.getByRole('group', { name: 'Build' }).textContent).toContain('Build an infantry unit in Capital D5')
+    expect((within(screen.getByRole('group', { name: 'Build' })).getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(false)
+    // Nothing to pick: the board gets no squares
+    expect(screen.getByTestId('board').getAttribute('data-pick-count')).toBe('0')
+  })
+
+  it('has no Build button once the game is locked, and none for a spectator', async () => {
+    const locked = await renderOrder(viewWith({ active: false }))
+    expect(screen.getByRole('heading', { name: 'Cities (1)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
+    locked.unmount()
+
+    // A spectator's view has no `you`, so there are no cards of their own and no options.
+    await renderOrder(orderView(), null)
+    expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
+  })
+})
+
+describe('the city actions in the game page', () => {
+  const city = {
+    pieceId: 'city-1',
+    label: 'Capital B3',
+    outskirts: 4,
+    outskirtsDetail: [],
+    modifiers: [],
+    buildingProgram: false,
+    estimate: 4,
+    withBuildingProgram: null,
+    override: null,
+    effective: 4,
+    notes: [],
+  }
+  const cityActions = [
+    {
+      cityPieceId: 'city-1',
+      label: 'Capital B3',
+      startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
+    },
+  ]
+  const upgradeOptions = [
+    {
+      basicAssetId: 'buildings/granary',
+      upgradedAssetId: 'buildings/aqueduct',
+      basicLabel: 'Granary',
+      upgradedLabel: 'Aqueduct',
+      label: 'Granary to Aqueduct',
+      count: 1,
+      squares: [{ column: 0, row: 0, label: 'A1' }],
+    },
+  ]
+  const viewWith = (overrides: Record<string, unknown> = {}): PlayerView =>
+    orderView({
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        items: [],
+        pendingRewards: [],
+        cities: [city],
+        cityActions,
+        upgradeOptions,
+      },
+      ...overrides,
+    })
+
+  beforeEach(() => localStorage.setItem('civ.panel.cities', 'true'))
+  afterEach(() => localStorage.removeItem('civ.panel.cities'))
+
+  it('shows the Start button and the Upgrades block to a player in a live game', async () => {
+    await renderOrder(viewWith())
+    expect(screen.getByRole('button', { name: 'Start Building Program in Capital B3' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (1)' })).toBeTruthy()
+  })
+
+  it('shows neither once the game is locked, and neither to a spectator', async () => {
+    const locked = await renderOrder(viewWith({ active: false }))
+    expect(screen.getByRole('heading', { name: 'Cities (1)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Upgrades' })).toBeNull()
+    locked.unmount()
+
+    await renderOrder(orderView(), null)
+    expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Upgrades' })).toBeNull()
   })
 })

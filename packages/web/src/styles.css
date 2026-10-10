@@ -950,6 +950,47 @@ ul.list > li:last-child {
   );
 }
 
+/* Square picking for a Build: the legal squares are buttons laid over the map,
+   above the pieces, which stop answering taps meanwhile. */
+.board-surface.picking .board-piece {
+  cursor: default;
+}
+
+.board-pick-cell {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  min-height: 0;
+  border: 2px solid var(--accent);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1.2;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.board-pick-cell:hover {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* The chosen square is solid and carries a second ring, so it does not depend on colour alone. */
+.board-pick-cell.chosen {
+  background: color-mix(in srgb, var(--accent) 65%, transparent);
+  outline: 3px solid var(--text);
+  outline-offset: -5px;
+  font-weight: 700;
+}
+
+.board-pick-cell:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .board-piece.selected {
   outline: 2px solid var(--accent);
   outline-offset: 1px;

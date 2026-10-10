@@ -1,0 +1,175 @@
+/* Assisted Build: the picker under a city card and the confirm bar above the
+   board. Everything wraps, so neither forces a horizontal scroll at 320 px. */
+.build-picker {
+  min-width: 0;
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  overflow-wrap: anywhere;
+}
+
+.build-picker-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.build-picker-production {
+  margin: 0 0 0.4rem;
+  color: var(--muted);
+}
+
+.build-picker-alert,
+.build-bar-alert {
+  margin: 0.3rem 0;
+  color: var(--bad);
+}
+
+.build-picker-note {
+  margin: 0.3rem 0;
+  color: var(--warn);
+}
+
+.build-picker-empty {
+  margin: 0.3rem 0;
+}
+
+.build-choices {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.build-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.75rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.build-choice-text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.6rem;
+  min-width: 0;
+}
+
+.build-why {
+  margin: 0 0 0.5rem;
+}
+
+.build-why summary {
+  cursor: pointer;
+  padding: 0.2rem 0;
+}
+
+.build-why ul {
+  margin: 0.2rem 0 0;
+  padding-left: 1.2rem;
+}
+
+/* The three groups of the picker: buildings, figures placed on the map, and
+   units, which are a private card. Each has a heading. */
+.build-group {
+  margin: 0 0 0.5rem;
+}
+
+.build-group-heading {
+  margin: 0.4rem 0 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.build-group .build-choices {
+  margin-bottom: 0;
+}
+
+/* A square where an enemy figure stands, so an army placed there is settled by hand. Dashed, with the word
+   Enemy on it, so it is told apart by more than its colour. */
+.board-pick-cell.noted {
+  border-style: dashed;
+  border-color: var(--bad);
+}
+
+.board-pick-cell.noted:not(.chosen) {
+  background: color-mix(in srgb, var(--bad) 28%, transparent);
+}
+
+.board-pick-flag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0 2px;
+  background: var(--bad);
+  color: var(--bg);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.build-bar .build-bar-square-note {
+  color: var(--warn);
+}
+
+/* The bar stays at the top of the window while the board scrolls under it, so
+   Confirm and Cancel are always at hand, on a phone too. */
+.build-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow-wrap: anywhere;
+}
+
+.build-bar p {
+  margin: 0 0 0.3rem;
+}
+
+.build-bar-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* Entering pick mode scrolls the board panel to the top of the window. The sticky
+   bar covers the top, so the panel stops below it. BoardView sets the measured
+   height inline for the call; this is the fallback: a few lines on a desktop, and
+   on a phone the bar wraps to about ten lines at 320 px. */
+.board-panel.build-picking {
+  scroll-margin-top: 10rem;
+}
+
+@media (max-width: 900px) {
+  .board-panel.build-picking {
+    scroll-margin-top: 17rem;
+  }
+
+  .build-choice button,
+  .build-picker > button,
+  .build-bar-buttons button {
+    min-height: 2.75rem;
+  }
+
+  .build-why summary {
+    min-height: 2.75rem;
+    display: flex;
+    align-items: center;
+  }
+}

@@ -163,7 +163,7 @@ buttons and the culture marker. Assisted actions are added beside them.
 Source: `engine/src/assisted.ts`, `culture-track.ts`, `server/src/routes/play.ts`,
 `web/src/views/AssistedActions.tsx`, `PhaseSummary.tsx`, and the `assisted*`
 tests. Not built: Great Person abilities that need a map marker, killing
-markers, map tile 16a, free advances, hand limit, Build (#264), offers (#265).
+markers, map tile 16a, free advances, hand limit, figures and military units (#264), offers (#265).
 
 ## City production
 
@@ -194,6 +194,93 @@ typed by hand (`BoardPiece.productionOverride`, any player in the game may set i
 Source: `engine/src/city-production.ts`, `building-data.ts`, `blockade.ts`
 (`cityFootprintsOf`), `actions/board.ts` (`setCityProductionOverride`),
 `web/src/views/CitiesPanel.tsx` and the `city-production*` tests.
+
+## Assisted build
+
+Issue #264, part 2: a city builds a building from the Build button in the Cities
+panel. `buildOptionsOf` (`engine/src/build-options.ts`) works out, for the own view
+only, what each city may build and where; the `build` assisted action places the
+piece, pays and logs in one step, and the everyone votes undo reverses it. The same
+action builds army and scout figures (placed like a building) and military units (a
+private card, nothing placed).
+
+- Only legal choices are listed. Everything else is under "Why not the others" with
+  a reason. A cost above the city's production is such a reason; the way out is to
+  set the city's production by hand (decided with the human). Trade can cover a
+  shortfall (rush, base rules p. 15): 3 trade for 1 production, the Americans get 2
+  production per 3 trade, paid in whole steps and never more than needed.
+- A building needs a revealed tech (the human's tech sheet, `BUILDING_TECH_UNLOCKS`).
+  Once the upgraded form is unlocked only that form is built, and its tech alone is
+  enough (base rules p. 22). Flipping already built basic buildings on learning the
+  upgrade is the Upgrade action below.
+- Squares: the city's outskirts on the map, never a centre (either city's, any
+  colour) or a city-state, known terrain that `BUILDING_TERRAIN` allows, nothing
+  built there, no enemy figure (base rules p. 27). The terrain table is advisory for
+  placing a piece by hand (a warning) and binding for assisted Build, so a wrongly
+  recorded tile (the terrain data was read by eye) can block a legal square; the
+  player then places the piece by hand, which stays a logged correction.
+- One limited building per city in total (Market or Bank, Temple or Cathedral,
+  Barracks or Academy; base rules p. 16 to 17), counted over the city's outskirts
+  whoever built it. Supply is the shared pools in `board.ts`. A square shared by two
+  of the player's own cities (old data; cities may not overlap when built) can give
+  the neighbour a second limited building; not handled, no ruling found.
+- A Building Program marker on the city centre is used up by any build (W&W p. 7) and
+  restored by undo. The figure used is the hand set production if there is one, then
+  the doubled figure, then the estimate.
+- No automatic "city action used" marker: techs, culture cards and Great Persons
+  allow several actions, so the player ends the phase themselves (the human).
+
+**Figures and units (#264 parts 3 and 4).**
+
+- Costs (base rules p. 15 to 17): army 4, scout 6. A unit costs by the player's level
+  for its type, read from `stats.infantry`, `stats.artillery` or `stats.mounted`
+  (clamped to 1 to 4, never changed): 5, 7, 9, 11. Aircraft cost 12 and need a revealed
+  Flight. Rush, the hand set production and the Building Program marker work as for
+  buildings; the marker is used up by any build.
+- Figure squares: outskirts on the map, never a centre or a city-state, water only with
+  a revealed Sailing, Steam Power or Flight, below the stacking limit `stats.stacking`
+  (armies and scouts together; read only, default 2), supply 6 armies and 2 scouts per
+  colour counted anywhere on the board. A scout is not offered a blockaded square. An
+  army is, with a note that the outcome (a battle, or killed scouts and loot) is not
+  automated. The rulebook settles this only for movement, so it is left to the player.
+- A hut or village marker on a square: scouts may not enter it and only armies take it (the
+  human). The engine never offers such a square to a new figure. The human says this never
+  matters for Build: a city cannot be founded with a hut or village next to it (the marker must
+  be removed first), so none stands in a city's outskirts during City Management. The rule is
+  inert and left in place; if it ever matters, a newly built army may take the square.
+- A unit card is drawn like the Draw button does (reshuffling discards when the deck is
+  empty) and goes hidden into the hand. The public line names the type only, never the
+  card, and no item log line is written, so the old item undo cannot take it back
+  alone. Undo puts the card back in its deck and shuffles that unit deck again, as the
+  older item undo does, so the next card is unknown (the human's decision). A build then
+  undo then build can therefore draw a different card; that is accepted.
+  Great Person cards and the old item undo still reshuffle the whole deck on undo; that
+  is the older behaviour and a possible redraw loop there is not addressed here.
+
+**City actions: start a Building Program, upgrade buildings.**
+
+- Start a Building Program (W&W p. 7) is a city action in the player's open City Management
+  phase, free, one marker per city (a marker on either centre of a metropolis counts). The
+  marker goes on the anchor centre square. A build in that city uses it up (see above); undo
+  of the start is refused while the marker is gone, so a build must be undone first.
+- Upgrade (base rules p. 22) flips the player's basic buildings of a family to the upgraded
+  form once the upgraded form's tech is revealed (the basic form's tech is not needed). The
+  player's buildings are those inside the outskirts of the player's own cities, found with
+  `cityFootprintsOf`, never by `placedBy`. A building in nobody's outskirts or in another
+  player's city is left alone. No cost, no phase gate (the tech may be learned in Research), not
+  automatic: the player presses a button, and moving pieces by hand stays possible. The supply
+  pool is shared by both forms, so a flip never changes the count.
+- A flipped building keeps its square and the original piece's `placedBy`, so the combat bonus
+  and the building count of whoever placed it follow the form change and nothing moves between
+  players. The new piece keeps the old one's centre, not its top left corner, because the two
+  artworks differ by a few pixels. Undo restores the original pieces, with their ids, on top of
+  the piece stack (z order is not restored; the same as the build undo).
+- Known gaps: a square in the outskirts of two players' cities lets both list the building and
+  the first press wins; the record's `phase` reads CM when every phase of the turn is done.
+
+Source: `engine/src/build-options.ts`, `city-actions.ts`, `building-data.ts`, `assisted.ts` (the `build`,
+`startBuildingProgram` and `upgradeBuildings` actions), `actions/board.ts` (`isAssistedBoardChange`), `web/src/views/BuildPicker.tsx`,
+`CityActions.tsx`, `CitiesPanel.tsx`, `buildFlow.ts` and the `assisted-build*` tests.
 
 ## Accounts, mail and ratings
 

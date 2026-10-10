@@ -9,13 +9,16 @@
  * the opponents' are read only, as is everything for a spectator.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 
 import { MAX_PRODUCTION_OVERRIDE } from '@civ/engine'
 
-import type { CityProduction, PlayerView } from '../lib/api.js'
+import type { BuildChoice, CityActionOptions, CityBuildOptions, CityProduction, PlayerView } from '../lib/api.js'
 import { api } from '../lib/api.js'
+import { BuildPicker } from './BuildPicker.js'
+import type { BuildFlow } from './buildFlow.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { CityActions, useCityActionPress } from './CityActions.js'
 import type { Run } from './GameView.js'
 import './CitiesPanel.css'
 
@@ -38,12 +41,15 @@ export function CitiesPanel({
   busy,
   readOnly,
   run,
+  build,
 }: {
   readonly gameId: string
   readonly view: PlayerView
   readonly busy: boolean
   readonly readOnly: boolean
   readonly run: Run
+  /** The Build flow GameView shares with the board. Without it the cards have no Build button. */
+  readonly build?: BuildFlow | undefined
 }): React.JSX.Element {
   const own = view.you?.cities ?? []
   const others = view.opponents.filter((opponent) => (opponent.cities ?? []).length > 0)
@@ -59,6 +65,8 @@ export function CitiesPanel({
       <p className="muted">Cities that are not on the map are not listed.</p>
       {nobodyHasCities && <p className="muted">No cities on the map.</p>}
 
+      <CityActions gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
+
       {view.you !== null && own.length > 0 && (
         <div className="cities-group">
           <h3 className="cities-owner">Your cities</h3>
@@ -71,6 +79,10 @@ export function CitiesPanel({
                 editable={!readOnly}
                 busy={busy}
                 run={run}
+                buildOptions={view.you?.buildOptions?.find((options) => options.cityPieceId === city.pieceId)}
+                cityActions={view.you?.cityActions?.find((actions) => actions.cityPieceId === city.pieceId)}
+                view={view}
+                build={build}
               />
             ))}
           </ul>
@@ -104,13 +116,26 @@ function CityCard({
   editable,
   busy,
   run,
+  buildOptions,
+  cityActions,
+  view,
+  build,
 }: {
   readonly city: CityProduction
   readonly gameId: string
   readonly editable: boolean
   readonly busy: boolean
   readonly run: Run
+  /** What this city can build, for the viewer's own cities only. */
+  readonly buildOptions?: CityBuildOptions | undefined
+  /** What else this city can do, for the viewer's own cities only. */
+  readonly cityActions?: CityActionOptions | undefined
+  /** The viewer's view, for the request (revision, player) of a city action. Only the viewer's own cards use it. */
+  readonly view?: PlayerView | undefined
+  readonly build?: BuildFlow | undefined
 }): React.JSX.Element {
+  const programId = useId()
+  const programShown = city.buildingProgram && city.withBuildingProgram !== null
   return (
     <li className="city-card">
       <h4 className="city-label">{city.label}</h4>
@@ -130,7 +155,7 @@ function CityCard({
       </p>
 
       {city.buildingProgram && city.withBuildingProgram !== null && (
-        <p className="city-program">
+        <p id={programId} className="city-program">
           {city.override === null
             ? `Building Program in place: ${city.withBuildingProgram} if this city produces now`
             : 'Building Program in place. The figure above is set by hand, so no doubled figure is shown.'}
@@ -142,8 +167,143 @@ function CityCard({
         <CityArithmetic city={city} />
       </details>
 
+      {editable && build !== undefined && buildOptions !== undefined && (
+        <BuildEntry city={city} options={buildOptions} busy={busy} build={build} />
+      )}
+
+      {editable && cityActions !== undefined && view !== undefined && view.you !== null && (
+        <StartProgramEntry
+          city={city}
+          gameId={gameId}
+          view={view}
+          options={cityActions.startBuildingProgram}
+          markerLineId={programShown ? programId : undefined}
+          busy={busy}
+          run={run}
+        />
+      )}
+
       {editable && <OverrideForm city={city} gameId={gameId} busy={busy} run={run} />}
     </li>
+  )
+}
+
+/** The Build button of one of the viewer's cities, and its picker while it is open. */
+function BuildEntry({
+  city,
+  options,
+  busy,
+  build,
+}: {
+  readonly city: CityProduction
+  readonly options: CityBuildOptions
+  readonly busy: boolean
+  readonly build: BuildFlow
+}): React.JSX.Element {
+  const reasonId = useId()
+  const ready = options.status === 'ready'
+  const open = build.pickerCityId === city.pieceId
+  return (
+    <div className="city-build">
+      <div className="city-build-row">
+        <button
+          type="button"
+          className="small"
+          aria-label={`Build in ${city.label}`}
+          aria-expanded={ready ? open : undefined}
+          aria-describedby={ready ? undefined : reasonId}
+          disabled={busy || !ready}
+          onClick={() => (open ? build.closePicker() : build.openPicker(city.pieceId))}
+        >
+          Build
+        </button>
+        {!ready && (
+          <span id={reasonId} className="muted">
+            {options.reason}
+          </span>
+        )}
+      </div>
+      {open && (
+        <BuildPicker
+          city={options}
+          note={build.note}
+          message={build.message}
+          busy={busy}
+          onChoose={(choice: BuildChoice) => build.start(options, choice)}
+          onClose={build.closePicker}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * The Start Building Program button of one of the viewer's cities. When the
+ * marker is already there the card says so on its own line, so the button only
+ * points at that line instead of repeating it.
+ */
+function StartProgramEntry({
+  city,
+  gameId,
+  view,
+  options,
+  markerLineId,
+  busy,
+  run,
+}: {
+  readonly city: CityProduction
+  readonly gameId: string
+  readonly view: PlayerView
+  readonly options: CityActionOptions['startBuildingProgram']
+  /** The id of the card's "Building Program in place" line, when it is shown. */
+  readonly markerLineId: string | undefined
+  readonly busy: boolean
+  readonly run: Run
+}): React.JSX.Element | null {
+  const reasonId = useId()
+  const errorId = useId()
+  const { sending, message, press } = useCityActionPress(run, view)
+  if (view.you === null) return null
+  const playerId = view.you.playerId
+  const ready = options.status === 'ready'
+  const markerHere = options.hasMarker && options.status === 'unavailable'
+  // The card's own line says "Building Program in place"; say it here only when that line is not shown.
+  const reason = markerHere ? (markerLineId === undefined ? 'Building Program in place' : null) : options.reason
+
+  function start(): void {
+    const key = `${gameId}:${playerId}:startBuildingProgram:${city.pieceId}`
+    press(key, (requestId) => api.startBuildingProgram(gameId, requestId, view.rev, city.pieceId))
+  }
+
+  return (
+    <div className="city-build">
+      <div className="city-build-row">
+        <button
+          type="button"
+          className="small"
+          aria-label={`Start Building Program in ${city.label}`}
+          aria-describedby={
+            [ready ? undefined : (reason === null ? markerLineId : reasonId), message === null ? undefined : errorId]
+              .filter((id) => id !== undefined)
+              .join(' ') || undefined
+          }
+          disabled={busy || sending || !ready}
+          onClick={start}
+        >
+          Start Building Program
+        </button>
+        {!ready && reason !== null && (
+          <span id={reasonId} className="muted">
+            {reason}
+          </span>
+        )}
+      </div>
+      {message !== null && (
+        <p id={errorId} role="alert" className="city-error">
+          {message}
+        </p>
+      )}
+    </div>
   )
 }
 

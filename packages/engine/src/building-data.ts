@@ -55,3 +55,93 @@ export const BUILDING_DATA: Readonly<Record<string, BuildingData>> = {
 export function buildingDataOf(assetId: string): BuildingData | undefined {
   return Object.hasOwn(BUILDING_DATA, assetId) ? BUILDING_DATA[assetId] : undefined
 }
+
+// ---------------------------------------------------------------------------
+// Building a building (assisted Build)
+// ---------------------------------------------------------------------------
+
+/**
+ * The buildings a player can ask to build, basic form before its upgrade, with
+ * the name the log and the picker show. Not the artwork label: the manifest
+ * calls them "Tradingpost", "Ironmine" and "Military dock".
+ */
+export const BUILDABLE_BUILDINGS: readonly { readonly assetId: string; readonly label: string }[] = [
+  { assetId: 'buildings/harbor', label: 'Harbor' },
+  { assetId: 'buildings/tradingpost', label: 'Trading Post' },
+  { assetId: 'buildings/granary', label: 'Granary' },
+  { assetId: 'buildings/aqueduct', label: 'Aqueduct' },
+  { assetId: 'buildings/library', label: 'Library' },
+  { assetId: 'buildings/university', label: 'University' },
+  { assetId: 'buildings/market', label: 'Market' },
+  { assetId: 'buildings/bank', label: 'Bank' },
+  { assetId: 'buildings/temple', label: 'Temple' },
+  { assetId: 'buildings/cathedral', label: 'Cathedral' },
+  { assetId: 'buildings/barracks', label: 'Barracks' },
+  { assetId: 'buildings/academy', label: 'Academy' },
+  { assetId: 'buildings/workshop', label: 'Workshop' },
+  { assetId: 'buildings/ironmine', label: 'Iron Mine' },
+  { assetId: 'buildings/shipyard', label: 'Shipyard' },
+  { assetId: 'buildings/militarydock', label: 'Military Dock' },
+]
+
+/** The asset ids of {@link BUILDABLE_BUILDINGS}, for a route that has to tell a known building from any string. */
+export const BUILDABLE_BUILDING_IDS: readonly string[] = BUILDABLE_BUILDINGS.map((building) => building.assetId)
+
+/** The display name of a buildable building, or `undefined` for any other asset id. */
+export function buildingNameOf(assetId: string): string | undefined {
+  return BUILDABLE_BUILDINGS.find((building) => building.assetId === assetId)?.label
+}
+
+/**
+ * Which tech unlocks which buildings: the human's tech sheet, as written in
+ * `web/src/views/techText.ts`. Military Science unlocks two, both of them
+ * upgraded forms. A tech counts only once it is revealed.
+ */
+export const BUILDING_TECH_UNLOCKS: Readonly<Record<string, readonly string[]>> = {
+  'Code of Laws': ['buildings/tradingpost'],
+  Currency: ['buildings/market'],
+  Metalworking: ['buildings/barracks'],
+  Navigation: ['buildings/harbor'],
+  Philosophy: ['buildings/temple'],
+  Pottery: ['buildings/granary'],
+  Writing: ['buildings/library'],
+  Navy: ['buildings/shipyard'],
+  Construction: ['buildings/workshop'],
+  Engineering: ['buildings/aqueduct'],
+  'Printing Press': ['buildings/university'],
+  Banking: ['buildings/bank'],
+  'Military Science': ['buildings/militarydock', 'buildings/academy'],
+  Railroad: ['buildings/ironmine'],
+  Theology: ['buildings/cathedral'],
+}
+
+/** The tech names that unlock a building, in the table's order. Empty for an id that is not a buildable building. */
+export function techsUnlocking(assetId: string): readonly string[] {
+  return Object.entries(BUILDING_TECH_UNLOCKS)
+    .filter(([, buildings]) => buildings.includes(assetId))
+    .map(([tech]) => tech)
+}
+
+/**
+ * Basic form to upgraded form (base rules p. 22). Once the upgraded form is
+ * unlocked only it can be built, and knowing its tech is enough.
+ */
+export const BUILDING_UPGRADES: Readonly<Record<string, string>> = {
+  'buildings/granary': 'buildings/aqueduct',
+  'buildings/library': 'buildings/university',
+  'buildings/market': 'buildings/bank',
+  'buildings/temple': 'buildings/cathedral',
+  'buildings/barracks': 'buildings/academy',
+  'buildings/workshop': 'buildings/ironmine',
+  'buildings/shipyard': 'buildings/militarydock',
+}
+
+/** Market, Bank, Temple, Cathedral, Barracks and Academy: a city may hold only one of them in total (base rules p. 16 to 17). */
+export const LIMITED_BUILDINGS: ReadonlySet<string> = new Set([
+  'buildings/market',
+  'buildings/bank',
+  'buildings/temple',
+  'buildings/cathedral',
+  'buildings/barracks',
+  'buildings/academy',
+])

@@ -177,7 +177,15 @@ export function placePiece(state: GameState, input: PlacePieceInput): ActionResu
  */
 export function placeUnchecked(
   state: GameState,
-  input: PlacePieceInput,
+  input: PlacePieceInput & {
+    /**
+     * Who the piece is attributed to (`BoardPiece.placedBy`). Left out, it is
+     * `playerId`, as for every other caller. A flip that replaces a piece
+     * passes the old piece's value, so combat bonus and building count stay
+     * with the original placer; `null` keeps a piece with no placer unattributed.
+     */
+    readonly placedBy?: string | null
+  },
 ): GameState | undefined {
   const asset = findBoardAsset(input.assetId)
   if (asset === undefined) return undefined
@@ -218,7 +226,7 @@ export function placeUnchecked(
     width: asset.width,
     height: asset.height,
     rotation: input.rotation ?? 0,
-    placedBy: input.playerId,
+    placedBy: input.placedBy === undefined ? input.playerId : input.placedBy,
     ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
   }
 
@@ -612,8 +620,10 @@ export function removePiece(state: GameState, input: PieceInput): ActionResult {
 /**
  * Whether a board history entry is part of an assisted action that is still
  * applied: the removal of the resource piece it spent, the move of the culture
- * marker a culture advance made, or the Great Person marker a culture advance put in the
- * player's area. That change belongs to the action, so only the undo vote on the
+ * marker a culture advance made, the Great Person marker a culture advance put in the
+ * player's area, or the building a build placed and the Building Program marker it
+ * used up, the marker a Building Program start placed and each building an upgrade
+ * removed and placed again. That change belongs to the action, so only the undo vote on the
  * action's log line may take it back; the board's own Undo would return it and keep
  * what the action gave (or take the marker and keep the card). Once the action is
  * undone the old history entry is an ordinary one again.
@@ -626,6 +636,16 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
   return state.assistedActions.some((record) => {
     if (record.status !== 'applied') return false
     const effect = record.effect
+    // A build placed a building or a figure and used up the Building Program marker: neither can be taken back alone.
+    // A unit placed nothing, so only a marker is on the board.
+    if (effect.kind === 'build') {
+      return ('historyId' in effect && effect.historyId === entry.id) || effect.marker?.historyId === entry.id
+    }
+    // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip
+    if (effect.kind === 'startBuildingProgram') return effect.historyId === entry.id
+    if (effect.kind === 'upgradeBuildings') {
+      return effect.flipped.some((flip) => flip.removedHistoryId === entry.id || flip.placedHistoryId === entry.id)
+    }
     if (change.kind === 'place' && effect.kind === 'cultureAdvance') {
       return effect.marker?.pieceId === change.piece.id
     }

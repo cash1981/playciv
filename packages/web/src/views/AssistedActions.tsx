@@ -59,6 +59,11 @@ const STATUS_TEXT: Readonly<Record<Status, string>> = {
 const pendingRequestIds = new Map<string, string>()
 const inFlight = new Set<string>()
 
+/** Whether a press with this key has been sent and has not settled yet. */
+export function isPressInFlight(key: string): boolean {
+  return inFlight.has(key)
+}
+
 /** For tests: forget every kept request id. */
 export function resetPendingRequestIds(): void {
   pendingRequestIds.clear()
@@ -99,7 +104,7 @@ function dropLandedId(key: string, view: PlayerView | undefined): void {
  * while the outcome is unknown reuses the id, a settled one gets a new id.
  * Resolves to true when the request succeeded.
  */
-function pressOnce(
+export function pressOnce(
   key: string,
   run: Run,
   send: (requestId: string) => Promise<PlayerView>,
