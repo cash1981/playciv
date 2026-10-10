@@ -4,7 +4,7 @@
  */
 
 import type { EngineError, GameState, PlayerView, Playerhand } from '@civ/engine'
-import { toPlayerView } from '@civ/engine'
+import { expireTradeOffers, toPlayerView } from '@civ/engine'
 import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
 
@@ -230,6 +230,8 @@ export interface ApplyToGameOptions {
    * Off by default, so no other route changes.
    */
   readonly skipSaveWhenUnchanged?: boolean
+  /** Allows an already-committed request ID to return its result on a stale revision. */
+  readonly allowIdempotentRetry?: boolean
 }
 
 /** An ended game is read-only for everyone except the admin role. */
@@ -257,6 +259,13 @@ export async function applyToGame(
   if (isLockedForViewer(game, currentPlayer(c))) return gameEndedResponse(c)
 
   if (clientRev !== undefined && clientRev !== game.rev) {
+    if (options.allowIdempotentRetry === true) {
+      const retryState = game.logSecret === '' ? { ...game, logSecret: newId() } : game
+      const retry = action(retryState)
+      if (retry.ok && retry.value === retryState) {
+        return c.json(toPlayerView(game, currentPlayer(c).id))
+      }
+    }
     return sendError(
       c,
       409,
@@ -272,15 +281,17 @@ export async function applyToGame(
   const result = action(given)
   if (!result.ok) return sendEngineError(c, result.error)
 
-  if (options.skipSaveWhenUnchanged === true && result.value === given) {
+  const now = new Date().toISOString()
+  const reconciled = expireTradeOffers(result.value, now)
+
+  if (options.skipSaveWhenUnchanged === true && reconciled === given) {
     return c.json(toPlayerView(game, currentPlayer(c).id))
   }
 
   // Private notes do not create replay checkpoints, but they still advance the
   // optimistic-concurrency token. Otherwise a note and a shared transition
   // could both commit from the same base revision and one would be lost.
-  const now = new Date().toISOString()
-  const stamped = stampLog({ ...result.value, rev: game.rev + 1 }, now)
+  const stamped = stampLog({ ...reconciled, rev: game.rev + 1 }, now)
 
   if (options.record === false) {
     // A note leaves the chain of revisions alone; anything else this path saves

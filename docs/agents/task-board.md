@@ -12,6 +12,23 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-265-trade-offers
+
+- **Owner:** Codex (GPT-5)
+- **Branch:** `feat/issue-265-trade-offers`
+- **Brief:** `docs/agents/tasks/issue-265-trade-offers.md`
+- **Status:** in review
+- **Claimed paths:**
+  - `packages/engine/src/state.ts`, `migrate.ts`, `create-game.ts`, `errors.ts`, `log.ts`, `trade-offers.ts`, `index.ts`
+  - `packages/engine/test/trade-offers*.test.ts`
+  - `packages/engine/test/chat-orders-turns.test.ts`
+  - `packages/server/src/routes/games.ts`, `context.ts`, `errors.ts`, `packages/server/test/trade-offers*.test.ts`
+  - `packages/server/test/chat-orders.test.ts`
+  - `packages/web/src/lib/api.ts`, `packages/web/src/views/ChatOrdersPanel.tsx`, `ChatOrdersPanel.css` and tests
+  - `docs/agents/tasks/issue-265-trade-offers.md`, `docs/agents/decisions.md`
+  - `AGENTS.md`, `docs/agents/conventions.md`
+- **Notes:** Child slice based on `feat/assisted-play-contract`; the parent branch claim is a base dependency, not a concurrent edit. Issue #264 is owned by another agent and is out of scope.
+
 ### assisted-play-contract
 
 - **Owner:** Claude (Sonnet 5.5)

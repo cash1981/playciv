@@ -197,6 +197,7 @@ export function createGame(options: CreateGameOptions): GameState {
     socialPolicies: numberedPolicies,
     log: [],
     assistedActions: [],
+    tradeOffers: [],
     rng: deck.rng,
     logSecret: options.secret ?? deriveLogSecret(seed, gameId),
     itemCounter: counter,

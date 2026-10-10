@@ -257,6 +257,49 @@ export interface GameLogEntry {
   readonly assistedActionId?: string
 }
 
+export type TradeOfferStatus = 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'countered' | 'expired'
+export type TradeOfferAction = 'accept' | 'decline' | 'withdraw'
+export interface TradeOfferTransitionRequest {
+  readonly requestId: string
+  readonly actorId: string
+  readonly action: TradeOfferAction | 'counter'
+  readonly terms: string | null
+}
+
+/** An explicit negotiation record. Terms are deliberately opaque prose. */
+export interface TradeOffer {
+  readonly id: string
+  readonly requestId: string
+  readonly senderId: string
+  readonly recipientId: string
+  readonly terms: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+  readonly status: TradeOfferStatus
+  readonly parentOfferId: string | null
+  readonly transitionRequests: readonly TradeOfferTransitionRequest[]
+  readonly createdAt: string | null
+  readonly resolvedAt: string | null
+  readonly logId: string
+}
+
+/** Safe public projection of a trade offer. Request ids and effect data never leave the engine. */
+export interface PublicTradeOffer {
+  readonly id: string
+  readonly senderId: string
+  readonly senderUsername: string
+  readonly recipientId: string
+  readonly recipientUsername: string
+  readonly terms: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+  readonly status: TradeOfferStatus
+  readonly parentOfferId: string | null
+  readonly createdAt: string | null
+  readonly resolvedAt: string | null
+  readonly logId: string
+}
+
 /** The assisted actions the game can perform for a player. See `assisted.ts`. */
 export type AssistedActionKind =
   | CultureCardKind
@@ -490,6 +533,8 @@ export interface GameState {
    * `effect` inside is for undo only and is never part of a projection.
    */
   readonly assistedActions: readonly AssistedActionRecord[]
+  /** Explicit free-text trade negotiations; no reducer interprets the terms. */
+  readonly tradeOffers: readonly TradeOffer[]
   /** The board and the pieces on it. Every player sees the whole board. */
   readonly board: Board
   readonly rng: Rng
@@ -851,6 +896,29 @@ export function toPublicLog(entry: GameLogEntry): PublicLogEntry {
   }
 }
 
+export function publicTradeOffers(state: GameState): readonly PublicTradeOffer[] {
+  const currentTurn = turnStatus(state).currentTurn
+  return state.tradeOffers.map((offer) => ({
+    id: offer.id,
+    senderId: offer.senderId,
+    senderUsername: findPlayer(state, offer.senderId)?.username ?? offer.senderId,
+    recipientId: offer.recipientId,
+    recipientUsername: findPlayer(state, offer.recipientId)?.username ?? offer.recipientId,
+    terms: offer.terms,
+    turnNumber: offer.turnNumber,
+    phase: offer.phase,
+    status: offer.status === 'pending' && (
+      offer.turnNumber < currentTurn ||
+      findPlayer(state, offer.senderId) === undefined ||
+      findPlayer(state, offer.recipientId) === undefined
+    ) ? 'expired' : offer.status,
+    parentOfferId: offer.parentOfferId,
+    createdAt: offer.createdAt,
+    resolvedAt: offer.resolvedAt,
+    logId: offer.logId,
+  }))
+}
+
 /** The viewer's own hand, plus the same derived board numbers opponents get. */
 export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
   /**
@@ -929,6 +997,7 @@ export interface PlayerView {
   readonly log: readonly (PublicLogEntry | GameLogEntry)[]
   /** Assisted actions already performed, public summary only. */
   readonly assistedActions: readonly PublicAssistedAction[]
+  readonly tradeOffers: readonly PublicTradeOffer[]
   /**
    * The active battle, or null. The arena is fully public — both sides see all
    * units once placed. Units NOT in the arena remain subject to existing
@@ -1037,6 +1106,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),
     assistedActions: publicAssistedActions(state),
+    tradeOffers: publicTradeOffers(state),
     battle: state.battle,
     battleUndo: state.endedBattle === null ? null : { endedBy: state.endedBattle.endedBy },
     battleSummary: battleSummaries(state),
