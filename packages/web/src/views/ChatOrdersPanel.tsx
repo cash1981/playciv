@@ -735,6 +735,9 @@ export function ChatOrdersPanel({
               )}
               <div className="chat-orders-offer-composer">
                 <strong>Trade offer</strong>
+                <p className="chat-orders-offer-note">
+                  Accepting records that you agreed to the terms. It does not transfer resources; settle through the existing controls during the legal trade window.
+                </p>
                 <label htmlFor="trade-offer-recipient">Recipient</label>
                 <select
                   id="trade-offer-recipient"

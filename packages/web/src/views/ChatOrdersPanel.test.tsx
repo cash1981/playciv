@@ -467,6 +467,14 @@ describe('replaced orders', () => {
 })
 
 describe('the composer', () => {
+  it('explains that accepting records agreement but does not transfer resources', async () => {
+    await renderPanel(makeView())
+    expect(screen.getByText(/Accepting records that you agreed to the terms/i).textContent)
+      .toContain('It does not transfer resources')
+    expect(screen.getByText(/Accepting records that you agreed to the terms/i).textContent)
+      .toContain('legal trade window')
+  })
+
   it('sends chat through the chat route and clears the field', async () => {
     await renderPanel(makeView())
 

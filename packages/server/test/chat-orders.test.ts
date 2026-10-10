@@ -659,4 +659,21 @@ describe('trade offers', () => {
     })
     expect(wrongActor.status).toBe(403)
   })
+
+  it('logs and persists expiry when the last player ends the round', async () => {
+    const game = await startedGame('offer-expiry')
+    let before = await loadGame(game.gameId)
+    const recipient = before.players.find((player) => player.username === game.name2)
+    if (recipient === undefined) throw new Error('recipient missing')
+    const created = await post(game.seat1, `/api/games/${game.gameId}/trade-offers`, {
+      recipientId: recipient.playerId, terms: 'two trade', requestId: 'offer-expiry-1', rev: before.rev,
+    })
+    expect(created.status).toBe(200)
+
+    expect((await post(game.seat1, `/api/games/${game.gameId}/turns/done`, { phase: 'RESEARCH' })).status).toBe(200)
+    expect((await post(game.seat2, `/api/games/${game.gameId}/turns/done`, { phase: 'RESEARCH' })).status).toBe(200)
+    before = await loadGame(game.gameId)
+    expect(before.tradeOffers[0]?.status).toBe('expired')
+    expect(before.log.at(-1)?.publicLog).toContain('expired because Turn 1 ended')
+  })
 })

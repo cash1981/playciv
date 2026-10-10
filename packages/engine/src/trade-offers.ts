@@ -50,15 +50,28 @@ function currentContext(state: GameState, playerId: string): { turnNumber: numbe
   }
 }
 
-function expirePending(state: GameState, currentTurn: number): GameState {
-  let changed = false
-  const offers = state.tradeOffers.map((offer) => {
-    const participantMissing = findPlayer(state, offer.senderId) === undefined || findPlayer(state, offer.recipientId) === undefined
-    if (offer.status !== 'pending' || (!participantMissing && offer.turnNumber >= currentTurn)) return offer
-    changed = true
-    return { ...offer, status: 'expired' as const }
-  })
-  return changed ? { ...state, tradeOffers: offers } : state
+/** Records visible expiry when a round advances or either participant leaves. */
+export function expireTradeOffers(state: GameState, at: string | null = null): GameState {
+  const currentTurn = turnStatus(state).currentTurn
+  let next = state
+  for (const offer of state.tradeOffers) {
+    const participantMissing = findPlayer(next, offer.senderId) === undefined || findPlayer(next, offer.recipientId) === undefined
+    if (offer.status !== 'pending' || (!participantMissing && offer.turnNumber >= currentTurn)) continue
+    const sender = findPlayer(next, offer.senderId)?.username ?? offer.senderId
+    const recipient = findPlayer(next, offer.recipientId)?.username ?? offer.recipientId
+    const cause = participantMissing ? 'a participant left the game' : `Turn ${offer.turnNumber} ended`
+    const logged = appendLog(next, {
+      username: 'System',
+      publicLog: `System: Trade offer from ${sender} to ${recipient} expired because ${cause}: ${offer.terms}`,
+    })
+    next = {
+      ...logged,
+      tradeOffers: logged.tradeOffers.map((candidate) => candidate.id === offer.id
+        ? { ...candidate, status: 'expired', resolvedAt: at }
+        : candidate),
+    }
+  }
+  return next
 }
 
 function appendOfferLog(state: GameState, message: string, actorId: string): { state: GameState; logId: string } {
@@ -88,7 +101,7 @@ export function createTradeOffer(state: GameState, input: CreateTradeOfferInput)
   if (!terms.ok) return terms
 
   const context = currentContext(state, input.senderId)
-  const prepared = expirePending(state, context.turnNumber)
+  const prepared = expireTradeOffers(state, input.at ?? null)
   const [id, rng] = nextId(prepared.rng)
   const draft: TradeOffer = {
     id,
@@ -116,15 +129,16 @@ export function createTradeOffer(state: GameState, input: CreateTradeOfferInput)
 export function transitionTradeOffer(state: GameState, input: TradeOfferTransitionInput): TradeOfferResult {
   const found = state.tradeOffers.find((offer) => offer.id === input.offerId)
   if (found === undefined) return err({ kind: 'TRADE_OFFER_NOT_FOUND', offerId: input.offerId })
-  if (found.transitionRequestIds.includes(input.requestId)) return ok(state)
-  const current = expirePending(state, turnStatus(state).currentTurn)
+  const current = expireTradeOffers(state, input.at ?? null)
   const offer = current.tradeOffers.find((candidate) => candidate.id === input.offerId) ?? found
-  if (offer.status !== 'pending') return err({ kind: 'TRADE_OFFER_NOT_PENDING', offerId: offer.id })
   const actorIsSender = input.actorId === offer.senderId
   const actorIsRecipient = input.actorId === offer.recipientId
   if ((input.action === 'withdraw' && !actorIsSender) || (input.action !== 'withdraw' && !actorIsRecipient)) {
     return err({ kind: 'TRADE_OFFER_NOT_ALLOWED', offerId: offer.id })
   }
+  if (offer.transitionRequestIds.includes(input.requestId)) return ok(current)
+  if (offer.status === 'expired' && found.status === 'pending') return ok(current)
+  if (offer.status !== 'pending') return err({ kind: 'TRADE_OFFER_NOT_PENDING', offerId: offer.id })
   const status = input.action === 'accept' ? 'accepted' : input.action === 'decline' ? 'declined' : 'withdrawn'
   const actor = findPlayer(current, input.actorId)
   const next = {
@@ -145,19 +159,22 @@ export function transitionTradeOffer(state: GameState, input: TradeOfferTransiti
 }
 
 export function counterTradeOffer(state: GameState, input: CounterTradeOfferInput): TradeOfferResult {
-  const offer = state.tradeOffers.find((candidate) => candidate.id === input.offerId)
+  const current = expireTradeOffers(state, input.at ?? null)
+  const offer = current.tradeOffers.find((candidate) => candidate.id === input.offerId)
   if (offer === undefined) return err({ kind: 'TRADE_OFFER_NOT_FOUND', offerId: input.offerId })
-  if (offer.transitionRequestIds.includes(input.requestId)) return ok(state)
-  if (offer.status !== 'pending' || offer.recipientId !== input.actorId) {
+  if (offer.recipientId !== input.actorId) return err({ kind: 'TRADE_OFFER_NOT_ALLOWED', offerId: input.offerId })
+  if (offer.transitionRequestIds.includes(input.requestId)) return ok(current)
+  if (offer.status === 'expired') return ok(current)
+  if (offer.status !== 'pending') {
     return err({ kind: 'TRADE_OFFER_NOT_ALLOWED', offerId: input.offerId })
   }
   const terms = requireText(input.terms)
   if (!terms.ok) return terms
-  const closed = transitionTradeOffer(state, {
+  const closed = transitionTradeOffer(current, {
     actorId: input.actorId,
     offerId: input.offerId,
     action: 'decline',
-    requestId: `${input.requestId}:countered`,
+    requestId: input.requestId,
     at: input.at,
   })
   if (!closed.ok) return closed

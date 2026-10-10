@@ -22,7 +22,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/engine/src/state.ts`, `migrate.ts`, `create-game.ts`, `errors.ts`, `log.ts`, `trade-offers.ts`, `index.ts`
   - `packages/engine/test/trade-offers*.test.ts`
   - `packages/engine/test/chat-orders-turns.test.ts`
-  - `packages/server/src/routes/games.ts`, `errors.ts`, `packages/server/test/trade-offers*.test.ts`
+  - `packages/server/src/routes/games.ts`, `context.ts`, `errors.ts`, `packages/server/test/trade-offers*.test.ts`
   - `packages/server/test/chat-orders.test.ts`
   - `packages/web/src/lib/api.ts`, `packages/web/src/views/ChatOrdersPanel.tsx`, `ChatOrdersPanel.css` and tests
   - `docs/agents/tasks/issue-265-trade-offers.md`, `docs/agents/decisions.md`

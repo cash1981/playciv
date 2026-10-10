@@ -4,7 +4,7 @@
  */
 
 import type { EngineError, GameState, PlayerView, Playerhand } from '@civ/engine'
-import { toPlayerView } from '@civ/engine'
+import { expireTradeOffers, toPlayerView } from '@civ/engine'
 import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
 
@@ -272,15 +272,17 @@ export async function applyToGame(
   const result = action(given)
   if (!result.ok) return sendEngineError(c, result.error)
 
-  if (options.skipSaveWhenUnchanged === true && result.value === given) {
+  const now = new Date().toISOString()
+  const reconciled = expireTradeOffers(result.value, now)
+
+  if (options.skipSaveWhenUnchanged === true && reconciled === given) {
     return c.json(toPlayerView(game, currentPlayer(c).id))
   }
 
   // Private notes do not create replay checkpoints, but they still advance the
   // optimistic-concurrency token. Otherwise a note and a shared transition
   // could both commit from the same base revision and one would be lost.
-  const now = new Date().toISOString()
-  const stamped = stampLog({ ...result.value, rev: game.rev + 1 }, now)
+  const stamped = stampLog({ ...reconciled, rev: game.rev + 1 }, now)
 
   if (options.record === false) {
     // A note leaves the chain of revisions alone; anything else this path saves

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createTradeOffer, counterTradeOffer, transitionTradeOffer } from '../src/trade-offers.js'
+import { createTradeOffer, counterTradeOffer, expireTradeOffers, transitionTradeOffer } from '../src/trade-offers.js'
 import { toPlayerView } from '../src/state.js'
 import { unwrap } from '../src/result.js'
 import { CASH1981, CHUL, firstCivGame } from './fixture.js'
@@ -65,6 +65,12 @@ describe('free-text trade offers', () => {
       action: 'accept',
       requestId: 'accept-1',
     }))).toBe(accepted)
+    expect(transitionTradeOffer(accepted, {
+      actorId: CASH1981,
+      offerId: state.tradeOffers[0]!.id,
+      action: 'accept',
+      requestId: 'accept-1',
+    }).ok).toBe(false)
   })
 
   it('creates a linked counteroffer and keeps the original terms unchanged', () => {
@@ -83,6 +89,12 @@ describe('free-text trade offers', () => {
     expect(next.tradeOffers).toHaveLength(2)
     expect(next.tradeOffers[0]).toMatchObject({ terms: 'two trade', status: 'declined' })
     expect(next.tradeOffers[1]).toMatchObject({ terms: 'one trade and one wheat', parentOfferId: state.tradeOffers[0]!.id })
+    expect(unwrap(counterTradeOffer(next, {
+      actorId: CHUL,
+      offerId: state.tradeOffers[0]!.id,
+      terms: 'one trade and one wheat',
+      requestId: 'counter-1',
+    }))).toBe(next)
   })
 
   it('expires an unresolved offer when a later turn is observed', () => {
@@ -107,5 +119,36 @@ describe('free-text trade offers', () => {
       requestId: 'offer-2',
     }))
     expect(next.tradeOffers[0]?.status).toBe('expired')
+    expect(next.tradeOffers[0]?.resolvedAt).toBeNull()
+    expect(next.log.at(-2)?.publicLog).toContain('expired because Turn 1 ended')
+  })
+
+  it('expires and logs an offer when either participant leaves, but preserves accepted offers', () => {
+    const state = unwrap(createTradeOffer(firstCivGame(), {
+      senderId: CASH1981,
+      recipientId: CHUL,
+      terms: 'one wheat',
+      requestId: 'offer-1',
+    }))
+    const accepted = unwrap(transitionTradeOffer(state, {
+      actorId: CHUL,
+      offerId: state.tradeOffers[0]!.id,
+      action: 'accept',
+      requestId: 'accept-1',
+    }))
+    const participantLeft = { ...accepted, players: accepted.players.filter((player) => player.playerId !== CHUL) }
+    const reconciled = expireTradeOffers(participantLeft, '2026-10-10T12:00:00.000Z')
+    expect(reconciled.tradeOffers[0]?.status).toBe('accepted')
+
+    const pending = unwrap(createTradeOffer(firstCivGame(), {
+      senderId: CASH1981,
+      recipientId: CHUL,
+      terms: 'two trade',
+      requestId: 'offer-2',
+    }))
+    const departed = { ...pending, players: pending.players.filter((player) => player.playerId !== CHUL) }
+    const expired = expireTradeOffers(departed, '2026-10-10T12:00:00.000Z')
+    expect(expired.tradeOffers[0]).toMatchObject({ status: 'expired', resolvedAt: '2026-10-10T12:00:00.000Z' })
+    expect(expired.log.at(-1)?.publicLog).toContain('expired because a participant left the game')
   })
 })
