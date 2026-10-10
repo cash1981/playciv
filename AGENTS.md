@@ -50,6 +50,10 @@ Fortune* and *Wisdom and Warfare*. [README.md](README.md) describes the product.
 
   Check visible behavior in a browser when relevant and available; disclose
   checks not performed. Documentation changes also need link/path checks.
+- During review and testing, use terminal commands and CLI/API tooling to read
+  source, diffs, logs and test output. Do not launch an IDE or another desktop
+  application merely to inspect repository content; open a browser only when
+  testing visible behavior is part of the task.
 - Keep current state short, update only relevant current decisions, and release
   claims. Put test totals and delivery details in the PR, not a growing Done log.
   The human merges; do not merge or force-push `main`.
