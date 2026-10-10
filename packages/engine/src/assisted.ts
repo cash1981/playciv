@@ -832,15 +832,12 @@ function drawCandidates(
     readonly state: GameState
     readonly items: readonly Item[]
     readonly rejected: readonly Item[]
-    /** For each card taken, kept or rejected: the id of the card that stood right after it in `state.items` just before it was taken (`null` if it was last). */
-    readonly positions: readonly { readonly itemId: string; readonly nextItemId: string | null }[]
   },
   EngineError
 > {
   let current = state
   const items: Item[] = []
   const rejected: Item[] = []
-  const positions: { itemId: string; nextItemId: string | null }[] = []
   while (items.length < count) {
     let index = current.items.findIndex((item) => item.sheetName === sheetName)
     if (index < 0) {
@@ -854,7 +851,6 @@ function drawCandidates(
     }
     const item = current.items[index]
     if (item === undefined) break
-    positions.push({ itemId: item.id, nextItemId: current.items[index + 1]?.id ?? null })
     current = { ...current, items: [...current.items.slice(0, index), ...current.items.slice(index + 1)] }
     if (filter === undefined || filter.valid(current, item)) {
       items.push(item)
@@ -863,7 +859,7 @@ function drawCandidates(
       current = filter.reject(current, item)
     }
   }
-  return ok({ state: current, items, rejected, positions })
+  return ok({ state: current, items, rejected })
 }
 
 /** Two shuffles of the deck, as an item undo does (`shuffleDeckTwice` in `actions/undo.ts`). */
@@ -871,6 +867,30 @@ function shuffleDeckTwice(state: GameState): GameState {
   const [once, afterFirst] = shuffle(state.items, state.rng)
   const [twice, rng] = shuffle(once, afterFirst)
   return { ...state, items: twice, rng }
+}
+
+/**
+ * Two shuffles of one sheet's cards only. The cards of the sheet are shuffled among the
+ * places they already hold in `state.items`, so every card of another sheet (the Great
+ * Person and culture decks, the other unit decks) stays exactly where it is.
+ */
+function shuffleSheetTwice(state: GameState, sheetName: SheetName): GameState {
+  const slots: number[] = []
+  const cards: Item[] = []
+  state.items.forEach((item, index) => {
+    if (item.sheetName === sheetName) {
+      slots.push(index)
+      cards.push(item)
+    }
+  })
+  const [once, afterFirst] = shuffle(cards, state.rng)
+  const [twice, rng] = shuffle(once, afterFirst)
+  const items = [...state.items]
+  slots.forEach((slot, position) => {
+    const card = twice[position]
+    if (card !== undefined) items[slot] = card
+  })
+  return { ...state, items, rng }
 }
 
 // -- Great Person cards and their markers --------------------------------------
@@ -1173,39 +1193,6 @@ function restoreDrawnCards(
   return ok(toDeck.length === 0 ? withCards : shuffleDeckTwice(withCards))
 }
 
-/**
- * Takes a drawn unit card from the hand back into the deck, face down and without an
- * owner, and shuffles nothing. It goes right before the card that stood after it when
- * it was drawn (`card.nextItemId`), so another draw from above it, from any sheet,
- * does not move it behind a card of its own sheet. If that card has since left the
- * deck, it goes in front of the first card of its sheet that is left, or at the end of
- * the deck when there is none. A card that was the last one (`null`) goes back at the
- * end. The caller has checked that the card is in the hand.
- */
-function restoreCardAt(
-  state: GameState,
-  player: Playerhand,
-  card: { readonly itemId: string; readonly sheetName: SheetName; readonly nextItemId: string | null },
-): GameState {
-  const found = player.items.find((item) => item.id === card.itemId)
-  if (found === undefined) return state
-  const sheetFront = state.items.findIndex((item) => item.sheetName === card.sheetName)
-  const neighbour = card.nextItemId === null ? -1 : state.items.findIndex((item) => item.id === card.nextItemId)
-  const at =
-    card.nextItemId === null
-      ? state.items.length
-      : neighbour >= 0
-        ? neighbour
-        : sheetFront >= 0
-          ? sheetFront
-          : state.items.length
-  const restored: Item = { ...found, hidden: true, ownerId: null }
-  return {
-    ...withPlayerHand(state, { ...player, items: player.items.filter((item) => item.id !== card.itemId) }),
-    items: [...state.items.slice(0, at), restored, ...state.items.slice(at)],
-  }
-}
-
 /** Takes the marker of a gain off the board, through the board history. `Err` is the reason the undo must refuse. */
 function removeGreatPersonMarker(
   state: GameState,
@@ -1499,8 +1486,6 @@ type Made =
       readonly state: GameState
       readonly card: Item
       readonly sheetName: SheetName
-      /** The id of the card that stood right after it in the deck just before it was taken; `null` if it was last. */
-      readonly nextItemId: string | null
     }
 
 /**
@@ -1562,8 +1547,7 @@ function drawBuiltUnit(state: GameState, player: Playerhand, unitType: UnitType)
   const sheetName = unitSheetOf(unitType)
   const drawn = drawCandidates(state, sheetName, 1)
   const first = drawn.ok ? drawn.value.items[0] : undefined
-  const position = drawn.ok ? drawn.value.positions.find((entry) => entry.itemId === first?.id) : undefined
-  if (!drawn.ok || first === undefined || position === undefined) return err(`No ${unitType} unit cards are left in the deck or the discard pile.`)
+  if (!drawn.ok || first === undefined) return err(`No ${unitType} unit cards are left in the deck or the discard pile.`)
   const card: Item = { ...first, ownerId: player.playerId, hidden: true }
   const holder = playerOf(drawn.value.state, player.playerId) ?? player
   return ok({
@@ -1571,7 +1555,6 @@ function drawBuiltUnit(state: GameState, player: Playerhand, unitType: UnitType)
     state: withPlayerHand(drawn.value.state, { ...holder, items: [...holder.items, card] }),
     card,
     sheetName,
-    nextItemId: position.nextItemId,
   })
 }
 
@@ -1738,7 +1721,6 @@ const build: AssistedActionDefinition = {
           card: {
             itemId: made.card.id,
             sheetName: made.sheetName,
-            nextItemId: made.nextItemId,
           },
           trade: choice.tradeToPay,
           marker: removal,
@@ -1782,13 +1764,18 @@ const build: AssistedActionDefinition = {
 
     if ('card' in effect) {
       // Everything is checked before anything is changed, so a refusal leaves the game as it was.
-      if (!player.items.some((candidate) => candidate.id === effect.card.itemId)) {
+      const found = player.items.find((candidate) => candidate.id === effect.card.itemId)
+      if (found === undefined) {
         return err(refused(`The ${label} card is no longer in your hand, so the build cannot be undone.`))
       }
-      // The same card goes back in front of the card that stood after it, and nothing is shuffled, so
-      // the next draw returns the same card: build and undo is no way to redraw, and it
-      // reveals no further card to the player.
-      const restored = restoreCardAt(withPlayerHand(state, refunded), refunded, effect.card)
+      // The card goes back in its deck and that deck alone is shuffled again, as an item undo does,
+      // so nobody knows which card comes next. The other decks keep their order.
+      const withoutCard: Playerhand = { ...refunded, items: refunded.items.filter((candidate) => candidate.id !== found.id) }
+      const returned: GameState = {
+        ...withPlayerHand(state, withoutCard),
+        items: [...state.items, { ...found, hidden: true, ownerId: null }],
+      }
+      const restored = shuffleSheetTwice(returned, effect.card.sheetName)
       const withMarker =
         effect.marker === null ? restored : placeBack(restored, refunded, effect.marker.piece, at)
       return ok({

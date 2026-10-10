@@ -249,12 +249,9 @@ private card, nothing placed).
 - A unit card is drawn like the Draw button does (reshuffling discards when the deck is
   empty) and goes hidden into the hand. The public line names the type only, never the
   card, and no item log line is written, so the old item undo cannot take it back
-  alone. Undo puts the same card back at the same position in the deck with no shuffle,
-  so build then undo then build draws the same card (issue #266: no redraw loop). The card
-  goes back in front of the card that stood after it, so a draw from above in between does not
-  change which card comes next; after a whole deck reshuffle it only goes in front of the
-  first card of its sheet. The cost: after an undone unit build the builder knows the next card
-  of that deck, and so gets an edge over an opponent who draws it next.
+  alone. Undo puts the card back in its deck and shuffles that unit deck again, as the
+  older item undo does, so the next card is unknown (the human's decision). A build then
+  undo then build can therefore draw a different card; that is accepted.
   Great Person cards and the old item undo still reshuffle the whole deck on undo; that
   is the older behaviour and a possible redraw loop there is not addressed here.
 
