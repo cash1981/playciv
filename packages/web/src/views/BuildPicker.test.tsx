@@ -54,6 +54,52 @@ const HARBOR: BuildChoice = {
   squares: [{ column: 2, row: 3, label: 'C4' }],
 }
 
+const BATTLE_NOTE = 'An enemy figure stands here. Placing the army here is not automated: resolve any battle or loot by hand.'
+
+const ARMY: BuildChoice = {
+  assetId: 'figures/redarmy',
+  item: { kind: 'army' },
+  placement: 'square',
+  label: 'Army figure',
+  cost: 4,
+  tradeToPay: 0,
+  squares: [
+    { column: 3, row: 4, label: 'D5' },
+    { column: 4, row: 4, label: 'E5', note: BATTLE_NOTE },
+  ],
+}
+
+const SCOUT: BuildChoice = {
+  assetId: 'figures/redscout',
+  item: { kind: 'scout' },
+  placement: 'square',
+  label: 'Scout figure',
+  cost: 6,
+  tradeToPay: 0,
+  // D5 is also a square of the army, so one square can be told apart only by the item
+  squares: [{ column: 3, row: 4, label: 'D5' }],
+}
+
+const INFANTRY: BuildChoice = {
+  assetId: 'units/infantry',
+  item: { kind: 'unit', unitType: 'infantry' },
+  placement: 'none',
+  label: 'Infantry unit',
+  cost: 5,
+  tradeToPay: 0,
+  squares: [],
+}
+
+const MOUNTED: BuildChoice = {
+  assetId: 'units/mounted',
+  item: { kind: 'unit', unitType: 'mounted' },
+  placement: 'none',
+  label: 'Mounted unit',
+  cost: 7,
+  tradeToPay: 3,
+  squares: [],
+}
+
 function options(overrides: Partial<CityBuildOptions> = {}): CityBuildOptions {
   return {
     cityPieceId: 'city-1',
@@ -584,7 +630,7 @@ describe('square picking and Confirm', () => {
 
     expect(send).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.queryByText('The building was not built.')).toBeNull()
+    expect(screen.queryByText('Nothing was built.')).toBeNull()
     expect(confirm().disabled).toBe(false)
     await act(async () => { answer({} as PlayerView) })
   })
@@ -725,5 +771,345 @@ describe('a refresh while planning', () => {
     rerender(<Harness initial={viewOf([options()])} readOnly />)
     expect(overlays()).toHaveLength(0)
     expect(screen.queryByRole('group', { name: 'Build' })).toBeNull()
+  })
+})
+
+// --- figures and units ----------------------------------------------------------
+
+const ALL_KINDS = (): CityBuildOptions => options({ choices: [LIBRARY, ARMY, SCOUT, INFANTRY, MOUNTED] })
+
+describe('the picker groups', () => {
+  const renderPicker = (city: CityBuildOptions) =>
+    render(<BuildPicker city={city} note={null} message={null} busy={false} onChoose={() => undefined} onClose={() => undefined} />)
+  const headings = (): string[] => screen.getAllByRole('heading', { level: 6 }).map((heading) => heading.textContent ?? '')
+
+  it('lists buildings, figures and units under their own headings, in that order', () => {
+    renderPicker(ALL_KINDS())
+    expect(headings()).toEqual([
+      'Buildings',
+      'Figures (placed on the map)',
+      'Units (a private card, nothing is placed)',
+    ])
+    const names = (list: string): (string | null | undefined)[] =>
+      within(screen.getByRole('list', { name: list }))
+        .getAllByRole('listitem')
+        .map((item) => item.querySelector('strong')?.textContent)
+    expect(names('Buildings Capital D5 can build')).toEqual(['Library'])
+    expect(names('Figures Capital D5 can build')).toEqual(['Army figure', 'Scout figure'])
+    expect(names('Units Capital D5 can build')).toEqual(['Infantry unit', 'Mounted unit'])
+  })
+
+  it('hides a group that has nothing in it', () => {
+    const { unmount } = renderPicker(options({ choices: [LIBRARY] }))
+    expect(headings()).toEqual(['Buildings'])
+    unmount()
+
+    const units = renderPicker(options({ choices: [INFANTRY] }))
+    expect(headings()).toEqual(['Units (a private card, nothing is placed)'])
+    expect(screen.queryByRole('list', { name: 'Buildings Capital D5 can build' })).toBeNull()
+    expect(screen.queryByRole('list', { name: 'Figures Capital D5 can build' })).toBeNull()
+    units.unmount()
+
+    renderPicker(options({ choices: [ARMY] }))
+    expect(headings()).toEqual(['Figures (placed on the map)'])
+  })
+
+  it('shows cost, trade and squares for a figure, and says a unit draws a card in secret', () => {
+    renderPicker(ALL_KINDS())
+    const [army] = within(screen.getByRole('list', { name: 'Figures Capital D5 can build' })).getAllByRole('listitem')
+    expect(army?.textContent).toContain('Cost 4')
+    expect(army?.textContent).toContain('2 squares')
+    const [infantry, mounted] = within(screen.getByRole('list', { name: 'Units Capital D5 can build' })).getAllByRole('listitem')
+    expect(infantry?.textContent).toContain('Cost 5')
+    expect(infantry?.textContent).toContain('Draws a card in secret')
+    expect(infantry?.textContent).not.toContain('square')
+    expect(mounted?.textContent).toContain('Cost 7, pays 3 trade')
+  })
+
+  it('explains the figures and units that are not offered under Why not the others', () => {
+    renderPicker(
+      options({
+        choices: [LIBRARY],
+        unavailable: [
+          { assetId: 'figures/redscout', item: { kind: 'scout' }, label: 'Scout figure', reason: 'All 2 scouts are on the board.' },
+          { assetId: 'units/aircraft', item: { kind: 'unit', unitType: 'aircraft' }, label: 'Aircraft unit', reason: 'Aircraft need the Flight tech.' },
+        ],
+      }),
+    )
+    const details = screen.getByText('Why not the others (2)').closest('details') as HTMLElement
+    const reasons = within(details).getByRole('list', { hidden: true })
+    expect(reasons.textContent).toContain('Scout figure: All 2 scouts are on the board.')
+    expect(reasons.textContent).toContain('Aircraft unit: Aircraft need the Flight tech.')
+  })
+})
+
+describe('building a unit', () => {
+  const startUnit = (name: string): void => {
+    fireEvent.click(buildButton())
+    fireEvent.click(screen.getByRole('button', { name: `Choose ${name}` }))
+  }
+
+  it('goes straight to the confirm bar: no squares, no board pick, Confirm ready at once', () => {
+    render(<Harness initial={viewOf([ALL_KINDS()])} />)
+    startUnit('Infantry unit')
+    expect(overlays()).toHaveLength(0)
+    expect(document.getElementById('game-board')?.classList.contains('build-picking')).toBe(false)
+    expect(bar().textContent).toContain('Build an infantry unit in Capital D5')
+    expect(bar().textContent).toContain('Cost 5')
+    expect(bar().textContent).toContain('A private card is drawn, nothing is placed on the map.')
+    expect(bar().textContent).not.toContain('Tap a highlighted square')
+    expect(confirm().disabled).toBe(false)
+    expect(confirm().textContent).toBe('Confirm')
+    // The picker has done its job and is gone.
+    expect(screen.queryByRole('region', { name: 'Build in Capital D5' })).toBeNull()
+  })
+
+  it('does not scroll the page to the board for a unit', () => {
+    const scrolled: Element[] = []
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this)
+    }
+    render(<Harness initial={viewOf([ALL_KINDS()])} />)
+    startUnit('Infantry unit')
+    expect(scrolled).toHaveLength(0)
+  })
+
+  it('sends exactly one request with the unit type and no target, however often Confirm is pressed', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([ALL_KINDS()])} />)
+    startUnit('Infantry unit')
+    fireEvent.click(confirm())
+    fireEvent.click(confirm())
+
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Build' })).toBeNull())
+    expect(send).toHaveBeenCalledTimes(1)
+    const payload = send.mock.calls[0]?.[3]
+    expect(payload).toEqual({ cityPieceId: 'city-1', item: { kind: 'unit', unitType: 'infantry' } })
+    expect(payload).not.toHaveProperty('target')
+    expect(payload).not.toHaveProperty('rush')
+  })
+
+  it('agrees to the rush when the unit needs trade, and says so on Confirm', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([ALL_KINDS()])} />)
+    startUnit('Mounted unit')
+    expect(bar().textContent).toContain('Build a mounted unit in Capital D5')
+    expect(bar().textContent).toContain('Pays 3 trade')
+    expect(confirm().textContent).toBe('Confirm and pay 3 trade')
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toEqual({
+      cityPieceId: 'city-1',
+      item: { kind: 'unit', unitType: 'mounted' },
+      rush: true,
+    })
+  })
+
+  it('Cancel and Escape close the bar and send nothing', () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([ALL_KINDS()])} />)
+    startUnit('Infantry unit')
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('group', { name: 'Build' })).toBeNull()
+
+    startUnit('Infantry unit')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('group', { name: 'Build' })).toBeNull()
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('shows the server’s refusal in the bar and keeps the unit ready to try again', async () => {
+    vi.spyOn(api, 'build').mockRejectedValue(new ApiError(422, 'BUILD_REFUSED', 'No unit cards left.'))
+    render(<Harness initial={viewOf([ALL_KINDS()])} refresh={() => viewOf([ALL_KINDS()], { rev: 8 })} />)
+    startUnit('Infantry unit')
+    fireEvent.click(confirm())
+    expect((await screen.findByRole('alert')).textContent).toBe('No unit cards left.')
+    expect(confirm().disabled).toBe(false)
+  })
+})
+
+describe('building a figure', () => {
+  const startFigure = (name: string): void => {
+    fireEvent.click(buildButton())
+    fireEvent.click(screen.getByRole('button', { name: `Choose ${name}` }))
+  }
+
+  it('an army enters square picking and sends its item with the chosen square', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([ALL_KINDS()])} />)
+    startFigure('Army figure')
+    expect(overlays().map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Place Army figure on D5',
+      'Place Army figure on E5, blockaded, resolve by hand',
+    ])
+    expect(bar().textContent).toContain('Build Army figure in Capital D5')
+    expect(bar().textContent).toContain('Tap a highlighted square')
+    expect(confirm().disabled).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Place Army figure on D5' }))
+    expect(confirm().disabled).toBe(false)
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toEqual({
+      cityPieceId: 'city-1',
+      item: { kind: 'army' },
+      target: { column: 3, row: 4 },
+    })
+  })
+
+  it('a scout enters square picking and sends its item with the chosen square', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([ALL_KINDS()])} />)
+    startFigure('Scout figure')
+    expect(overlays().map((button) => button.getAttribute('aria-label'))).toEqual(['Place Scout figure on D5'])
+    expect(document.getElementById('game-board')?.classList.contains('build-picking')).toBe(true)
+    fireEvent.click(overlays()[0] as HTMLElement)
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toEqual({
+      cityPieceId: 'city-1',
+      item: { kind: 'scout' },
+      target: { column: 3, row: 4 },
+    })
+  })
+
+  it('shows and announces the enemy figure note for a blockaded square, and not for a plain one', () => {
+    render(<Harness initial={viewOf([ALL_KINDS()])} />)
+    startFigure('Army figure')
+    const plain = screen.getByRole('button', { name: 'Place Army figure on D5' })
+    const noted = screen.getByRole('button', { name: 'Place Army figure on E5, blockaded, resolve by hand' })
+    // Marked by a word on the square and a class, not by colour alone.
+    expect(noted.classList.contains('noted')).toBe(true)
+    expect(noted.textContent).toContain('Enemy')
+    expect(plain.classList.contains('noted')).toBe(false)
+    expect(plain.textContent).not.toContain('Enemy')
+
+    fireEvent.click(plain)
+    expect(screen.queryByRole('status')).toBeNull()
+
+    fireEvent.click(noted)
+    // role="status" is a live region: a screen reader reads the note out when the square is picked.
+    const status = within(bar()).getByRole('status')
+    expect(status.textContent).toContain('Note for E5:')
+    expect(status.textContent).toContain(BATTLE_NOTE)
+    expect(confirm().disabled).toBe(false)
+
+    fireEvent.click(plain)
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('a note that appears on the chosen square after a refresh is shown', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
+    startFigure('Scout figure')
+    fireEvent.click(screen.getByRole('button', { name: 'Place Scout figure on D5' }))
+    expect(screen.queryByRole('status')).toBeNull()
+
+    const noted = { ...SCOUT, squares: [{ column: 3, row: 4, label: 'D5', note: 'A note.' }] }
+    act(() => handle.setView(viewOf([options({ choices: [LIBRARY, ARMY, noted, INFANTRY] })], { rev: 9 })))
+    expect(screen.getByRole('status').textContent).toContain('A note.')
+    expect(screen.getByRole('button', { name: 'Place Scout figure on D5, blockaded, resolve by hand' })).toBeTruthy()
+  })
+})
+
+describe('the request key tells the items and squares apart', () => {
+  it('reuses the id for the same item and square, and gives another item or square a new one', async () => {
+    const send = vi.spyOn(api, 'build').mockRejectedValue(new Error('Failed to fetch'))
+    render(<Harness initial={viewOf([ALL_KINDS()])} refresh={() => viewOf([ALL_KINDS()], { rev: 8 })} />)
+    const press = async (choice: string, square: string | null, calls: number): Promise<void> => {
+      // A rejected press keeps the plan, so Cancel first, then pick the next one.
+      const cancel = screen.queryByRole('button', { name: 'Cancel' })
+      if (cancel !== null) fireEvent.click(cancel)
+      const open = screen.queryByRole('region', { name: 'Build in Capital D5' })
+      if (open === null) fireEvent.click(buildButton())
+      fireEvent.click(screen.getByRole('button', { name: `Choose ${choice}` }))
+      if (square !== null) fireEvent.click(screen.getByRole('button', { name: square }))
+      fireEvent.click(confirm())
+      await waitFor(() => expect(send).toHaveBeenCalledTimes(calls))
+      await screen.findByRole('alert')
+    }
+    // Army and scout both have D5: only the item tells them apart.
+    await press('Army figure', 'Place Army figure on D5', 1)
+    await press('Scout figure', 'Place Scout figure on D5', 2)
+    await press('Army figure', 'Place Army figure on E5, blockaded, resolve by hand', 3)
+    await press('Infantry unit', null, 4)
+    await press('Mounted unit', null, 5)
+    await press('Army figure', 'Place Army figure on D5', 6)
+    await press('Infantry unit', null, 7)
+
+    const ids = send.mock.calls.map((call) => call[1])
+    expect(new Set(ids.slice(0, 5)).size).toBe(5)
+    expect(ids[5]).toBe(ids[0])
+    expect(ids[6]).toBe(ids[3])
+  })
+})
+
+describe('a refresh compares choices by item', () => {
+  it('keeps the plan when the same item comes back under another list key', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
+    fireEvent.click(buildButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Army figure' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Place Army figure on D5' }))
+
+    // The list key is only a key: the item is what the choice is.
+    const recoloured = { ...ARMY, assetId: 'figures/bluearmy' }
+    act(() => handle.setView(viewOf([options({ choices: [recoloured] })], { rev: 9 })))
+    expect(overlays()).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Place Army figure on D5' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(confirm().disabled).toBe(false)
+  })
+
+  it('treats a different item under the same list key as another choice and goes back to the picker', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
+    fireEvent.click(buildButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Army figure' }))
+
+    const scoutUnderArmyKey = { ...SCOUT, assetId: ARMY.assetId }
+    act(() => handle.setView(viewOf([options({ choices: [scoutUnderArmyKey] })], { rev: 9 })))
+    expect(overlays()).toHaveLength(0)
+    expect(screen.getByRole('status').textContent).toBe(OPTIONS_CHANGED)
+    expect(screen.getByRole('region', { name: 'Build in Capital D5' })).toBeTruthy()
+  })
+
+  it('tells two units of different types apart', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
+    fireEvent.click(buildButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
+
+    act(() => handle.setView(viewOf([options({ choices: [MOUNTED] })], { rev: 9 })))
+    expect(screen.queryByRole('group', { name: 'Build' })?.textContent ?? '').not.toContain('infantry')
+    expect(screen.getByRole('status').textContent).toBe(OPTIONS_CHANGED)
+  })
+
+  it('keeps a unit plan across a refresh with the same options, and takes a changed cost', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
+    fireEvent.click(buildButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
+
+    act(() => handle.setView(viewOf([ALL_KINDS()], { rev: 9 })))
+    expect(bar().textContent).toContain('Build an infantry unit in Capital D5')
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(confirm().disabled).toBe(false)
+
+    act(() => handle.setView(viewOf([options({ choices: [{ ...INFANTRY, cost: 7, tradeToPay: 6 }] })], { rev: 10 })))
+    expect(bar().textContent).toContain('Cost 7')
+    expect(bar().textContent).toContain('Pays 6 trade')
+    expect(confirm().textContent).toBe('Confirm and pay 6 trade')
+  })
+
+  it('drops a unit plan with the note when the unit is no longer offered', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
+    fireEvent.click(buildButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
+
+    act(() => handle.setView(viewOf([options({ choices: [LIBRARY] })], { rev: 9 })))
+    expect(screen.getByRole('status').textContent).toBe(OPTIONS_CHANGED)
+    expect(screen.getByRole('region', { name: 'Build in Capital D5' })).toBeTruthy()
   })
 })

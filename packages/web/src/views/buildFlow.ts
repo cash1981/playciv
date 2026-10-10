@@ -9,16 +9,34 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import type { BuildChoice, BuildSquare, CityBuildOptions } from '../lib/api.js'
+import { sameBuildItem } from '@civ/engine'
+
+import type { BuildChoice, BuildItem, BuildSquare, CityBuildOptions } from '../lib/api.js'
 
 export const OPTIONS_CHANGED = 'The options changed, pick again.'
 export const SQUARE_GONE = 'That square is no longer available, pick another.'
 
-/** A choice the player has started: the item, the city, and the square once one is picked. */
+/**
+ * A short, stable text for an item: `building:<asset id>`, `army`, `scout` or
+ * `unit:<type>`. For React keys and request keys; the engine's `assetId` of a
+ * choice is only a list key, and an item is what the server takes.
+ */
+export function itemKeyOf(item: BuildItem): string {
+  if (item.kind === 'building') return `building:${item.assetId}`
+  if (item.kind === 'unit') return `unit:${item.unitType}`
+  return item.kind
+}
+
+/**
+ * A choice the player has started: the item, the city, and the square once one is
+ * picked. A unit (`placement` is `none`) is a private card with no square, so its
+ * `squares` are empty and its `target` stays `null`.
+ */
 export interface BuildPlan {
   readonly cityPieceId: string
   readonly cityLabel: string
-  readonly assetId: string
+  readonly item: BuildItem
+  readonly placement: BuildChoice['placement']
   readonly label: string
   readonly cost: number
   readonly tradeToPay: number
@@ -54,17 +72,22 @@ const EMPTY: State = { pickerCityId: null, plan: null, note: null, message: null
 
 const sameSquare = (a: BuildSquare, b: BuildSquare): boolean => a.column === b.column && a.row === b.row
 
+const sameSquareWithNote = (a: BuildSquare, b: BuildSquare): boolean =>
+  sameSquare(a, b) && a.note === b.note
+
 const samePlan = (a: BuildPlan, b: BuildPlan): boolean =>
   a.cityLabel === b.cityLabel &&
+  sameBuildItem(a.item, b.item) &&
+  a.placement === b.placement &&
   a.label === b.label &&
   a.cost === b.cost &&
   a.tradeToPay === b.tradeToPay &&
   a.squares.length === b.squares.length &&
   a.squares.every((square, index) => {
     const other = b.squares[index]
-    return other !== undefined && sameSquare(square, other)
+    return other !== undefined && sameSquareWithNote(square, other)
   }) &&
-  (a.target === null ? b.target === null : b.target !== null && sameSquare(a.target, b.target))
+  (a.target === null ? b.target === null : b.target !== null && sameSquareWithNote(a.target, b.target))
 
 /**
  * Checks the flow against fresh options. Returns the same object when nothing
@@ -80,7 +103,9 @@ function reconcile(state: State, options: readonly CityBuildOptions[]): State {
 
   const city = options.find((candidate) => candidate.cityPieceId === plan.cityPieceId)
   const choice =
-    city?.status === 'ready' ? city.choices.find((candidate) => candidate.assetId === plan.assetId) : undefined
+    city?.status === 'ready'
+      ? city.choices.find((candidate) => sameBuildItem(candidate.item, plan.item))
+      : undefined
   if (city === undefined || choice === undefined) {
     // Back to the picker of the same city, if it is still there, with fresh choices.
     return {
@@ -91,12 +116,16 @@ function reconcile(state: State, options: readonly CityBuildOptions[]): State {
     }
   }
 
+  // The picked square is kept as the fresh options list it (with its current note),
+  // or forgotten when it is no longer legal. A unit has no square to keep.
   const planned = plan.target
-  const target = planned !== null && choice.squares.some((square) => sameSquare(square, planned)) ? planned : null
+  const target =
+    planned === null ? null : (choice.squares.find((square) => sameSquare(square, planned)) ?? null)
   const fresh: BuildPlan = {
     cityPieceId: plan.cityPieceId,
     cityLabel: city.label,
-    assetId: plan.assetId,
+    item: choice.item,
+    placement: choice.placement,
     label: choice.label,
     cost: choice.cost,
     tradeToPay: choice.tradeToPay,
@@ -132,7 +161,8 @@ export function useBuildFlow(options: readonly CityBuildOptions[] | null): Build
       plan: {
         cityPieceId: city.cityPieceId,
         cityLabel: city.label,
-        assetId: choice.assetId,
+        item: choice.item,
+        placement: choice.placement,
         label: choice.label,
         cost: choice.cost,
         tradeToPay: choice.tradeToPay,

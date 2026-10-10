@@ -77,6 +77,52 @@
   padding-left: 1.2rem;
 }
 
+/* The three groups of the picker: buildings, figures placed on the map, and
+   units, which are a private card. Each has a heading. */
+.build-group {
+  margin: 0 0 0.5rem;
+}
+
+.build-group-heading {
+  margin: 0.4rem 0 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.build-group .build-choices {
+  margin-bottom: 0;
+}
+
+/* A square where an enemy figure stands, so an army placed there is settled by hand. Dashed, with the word
+   Enemy on it, so it is told apart by more than its colour. */
+.board-pick-cell.noted {
+  border-style: dashed;
+  border-color: var(--bad);
+}
+
+.board-pick-cell.noted:not(.chosen) {
+  background: color-mix(in srgb, var(--bad) 28%, transparent);
+}
+
+.board-pick-flag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0 2px;
+  background: var(--bad);
+  color: var(--bg);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.build-bar .build-bar-square-note {
+  color: var(--warn);
+}
+
 /* The bar stays at the top of the window while the board scrolls under it, so
    Confirm and Cancel are always at hand, on a phone too. */
 .build-bar {

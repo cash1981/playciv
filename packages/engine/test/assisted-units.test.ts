@@ -509,6 +509,13 @@ describe('the stacking limit', () => {
     expect(choiceOf(optionsOf(withStats(ready(), { stacking: 0 })), ARMY)).toBeUndefined()
   })
 
+  it('a stacking limit of 0 is said as such, not as "already holds 0"', () => {
+    const none = withStats(ready(), { stacking: 0 })
+    expect(buildSquareRefusal(none, me(none), cityOf(none).id, ARMY, C2)).toBe(
+      'C2 cannot hold a figure: your stacking limit is 0.',
+    )
+  })
+
   it('armies and scouts count together, and figures of another colour do not count', () => {
     // A blue army and one red army: one friendly figure, so the red player may add one
     const mixed = put(figuresOn(ready(), C2, 'figures/redarmy'), KARANDRAS1, 'figures/bluearmy', C2.column, C2.row)
@@ -532,7 +539,7 @@ describe('the stacking limit', () => {
     // Not Russia: with no Russian player it is an enemy of all, and the square is blockaded, not full
     const notRussia = noCivilization(white(ready()))
     expect(buildSquareRefusal(notRussia, me(notRussia), cityOf(notRussia).id, ARMY, C2)).toBeUndefined()
-    expect(choiceOf(optionsOf(notRussia), ARMY)?.squares.find((square) => square.label === 'C2')?.note).toMatch(/^Blockaded/)
+    expect(choiceOf(optionsOf(notRussia), ARMY)?.squares.find((square) => square.label === 'C2')?.note).toMatch(/^An enemy figure stands here/)
   })
 })
 
@@ -550,7 +557,7 @@ describe('blockade', () => {
       )
       const square = choiceOf(options, ARMY)?.squares.find((candidate) => candidate.label === 'C2')
       expect(square?.note, enemy).toBe(
-        'Blockaded: placing the army here starts a battle with the blockader. Start the battle by hand.',
+        'An enemy figure stands here. Placing the army here is not automated: resolve any battle or loot by hand.',
       )
       expect(buildSquareRefusal(state, me(state), cityOf(state).id, ARMY, C2), enemy).toBeUndefined()
     }
@@ -564,7 +571,7 @@ describe('blockade', () => {
   it('an army put on a blockaded square says so in the line, and undo takes it away', () => {
     const state = blockaded(ready())
     const done = build(state, ARMY, C2)
-    expect(lastLine(done)).toBe('cash1981 built an army in City B2 on square C2 (blockaded, so a battle is to be started by hand)')
+    expect(lastLine(done)).toBe('cash1981 built an army in City B2 on square C2 (an enemy figure is there, so the outcome is to be settled by hand)')
     expect(mapCellOf(done.board, piecesOf(done, 'figures/redarmy')[0] as BoardPiece)).toEqual(C2)
     const undone = undoByVote(done, 'req-1')
     expect(piecesOf(undone, 'figures/redarmy')).toEqual([])
@@ -872,21 +879,59 @@ describe('undoing a unit', () => {
     expect(lastLine(undone)).toBe("System: cash1981's mounted unit was undone: the card was put back in the deck, 9 trade returned")
   })
 
-  it('shuffles the deck twice, as an item undo does, so the card cannot simply be drawn again', () => {
+  it('puts the card back where it was and shuffles nothing, so a second build draws the same card', () => {
     const before = ready()
+    const top = firstCardOf(before, 'INFANTRY')
+    const index = before.items.findIndex((item) => item.id === top.id)
     const done = build(before, unit('infantry'))
     const undone = undoByVote(done, 'req-1')
-    // The shuffles come from the seed, so the order is not the one it had
-    expect(undone.items.map((item) => item.id)).not.toEqual(before.items.map((item) => item.id))
-    expect(undone.rng).not.toEqual(done.rng)
+
+    // The deck is exactly what it was: same cards, same order, and the card at its old index
+    expect(undone.items).toEqual(before.items)
+    expect(undone.items[index]?.id).toBe(top.id)
+    // The other decks are not reshuffled either
+    for (const sheet of ['GREAT_PERSON', 'CULTURE_I', 'CULTURE_II'] as const) {
+      expect(undone.items.filter((item) => item.sheetName === sheet)).toEqual(
+        before.items.filter((item) => item.sheetName === sheet),
+      )
+    }
+
+    // Build and undo is no way to redraw: the second build takes the same card
+    const again = build(undone, unit('infantry'), undefined, 'req-2')
+    expect(handOf(again).map((item) => item.id)).toContain(top.id)
+    expect(again.items).toEqual(done.items)
   })
 
-  it('an undone reshuffle keeps the discards in the deck', () => {
+  it('a repeated build and undo never reveals a second card', () => {
+    let state = ready()
+    const top = firstCardOf(state, 'INFANTRY')
+    for (let round = 1; round <= 3; round += 1) {
+      const done = build(state, unit('infantry'), undefined, `req-${round}`)
+      expect(handOf(done).filter((item) => item.sheetName === 'INFANTRY').map((item) => item.id)).toEqual([top.id])
+      state = undoByVote(done, `req-${round}`)
+    }
+    expect(state.items).toEqual(ready().items)
+  })
+
+  it('puts the card back at its index in the reshuffled deck when the discards were reshuffled during the build', () => {
     const before = discardSheet(ready(), 'INFANTRY')
-    const total = before.discardedItems.filter((item) => item.sheetName === 'INFANTRY').length
-    const undone = undoByVote(build(before, unit('infantry')), 'req-1')
-    expect(undone.items.filter((item) => item.sheetName === 'INFANTRY')).toHaveLength(total)
+    const done = build(before, unit('infantry'))
+    const card = handOf(done).find((item) => item.sheetName === 'INFANTRY') as Item
+    const undone = undoByVote(done, 'req-1')
+
+    // The reshuffled deck stays reshuffled, and the card is back at the front of its sheet, where it was drawn from
+    const index = undone.items.findIndex((item) => item.id === card.id)
+    expect(index).toBeGreaterThanOrEqual(0)
+    expect(undone.items.findIndex((item) => item.sheetName === 'INFANTRY')).toBe(index)
+    expect(undone.items.filter((item) => item.id !== card.id)).toEqual(done.items)
+    expect(undone.items[index]).toMatchObject({ hidden: true, ownerId: null })
+    expect(undone.discardedItems.some((item) => item.sheetName === 'INFANTRY')).toBe(false)
     expect(handOf(undone)).toEqual(handOf(before))
+
+    // The second build takes the same card
+    const again = build(undone, unit('infantry'), undefined, 'req-2')
+    expect(handOf(again).map((item) => item.id)).toContain(card.id)
+    expect(again.items).toEqual(done.items)
   })
 
   it('refuses the undo when the card has left the hand, and changes nothing', () => {
@@ -1116,6 +1161,10 @@ describe('hidden information', () => {
     expect(record).not.toContain(a.id)
     expect(record).not.toContain('"effect"')
     expect(record).not.toContain('"card"')
+    // The deck position the undo needs is server side only
+    expect(record).not.toContain('"index"')
+    expect(record).not.toContain('"reshuffled"')
+    expect(JSON.stringify(view)).not.toContain('"reshuffled"')
   })
 
   it('another player\'s projection does not depend on which card was drawn', () => {

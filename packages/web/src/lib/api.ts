@@ -15,8 +15,10 @@ import type {
   BoardHistoryEntry,
   BoardPiece,
   BuildChoice,
+  BuildItem,
   BuildPayload,
   BuildSquare,
+  BuildTarget,
   BuildUnavailable,
   CityBuildOptions,
   CityModifier,
@@ -34,6 +36,7 @@ import type {
   SocialPolicyItem,
   TechItem,
   TurnPhase,
+  UnitType,
   WaitingFor,
   WinnerEntry,
 } from '@civ/engine'
@@ -49,8 +52,10 @@ export type {
   BoardHistoryEntry,
   BoardPiece,
   BuildChoice,
+  BuildItem,
   BuildPayload,
   BuildSquare,
+  BuildTarget,
   BuildUnavailable,
   CityBuildOptions,
   CityModifier,
@@ -68,6 +73,7 @@ export type {
   SocialPolicyItem,
   TechItem,
   TurnPhase,
+  UnitType,
   WaitingFor,
   WinnerEntry,
 }
@@ -783,7 +789,9 @@ export const api = {
   /**
    * The assisted Build (#264): the same route and request id rules as the other
    * actions. The payload is what the engine's `build` action takes; the server
-   * checks everything again against the fresh state.
+   * checks everything again against the fresh state. A building or a figure
+   * sends its `target` square; a unit is a private card and sends none (the
+   * server refuses a target on one).
    */
   build: (gameId: string, requestId: string, rev: number, payload: BuildPayload) =>
     post<PlayerView>(`/api/games/${gameId}/actions`, {
@@ -792,7 +800,7 @@ export const api = {
       rev,
       cityPieceId: payload.cityPieceId,
       item: payload.item,
-      target: payload.target,
+      ...(payload.target === undefined ? {} : { target: payload.target }),
       ...(payload.rush === undefined ? {} : { rush: payload.rush }),
     }),
   setPlayerGovernment: (

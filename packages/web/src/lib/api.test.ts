@@ -263,6 +263,37 @@ describe('api timeline and admin calls (issue #215)', () => {
     expect(lastCall(rushed).body).toMatchObject({ action: 'build', requestId: 'req-2', rush: true })
   })
 
+  it('posts a figure with its square and a unit with no target field at all', async () => {
+    const army = respondWith(200, '{}')
+    await api.build('g1', 'req-3', 9, { cityPieceId: 'city-1', item: { kind: 'army' }, target: { column: 3, row: 4 } })
+    expect(lastCall(army).body).toEqual({
+      action: 'build',
+      requestId: 'req-3',
+      rev: 9,
+      cityPieceId: 'city-1',
+      item: { kind: 'army' },
+      target: { column: 3, row: 4 },
+    })
+
+    // The server refuses a target on a unit, so the key must be absent, not null
+    const unit = respondWith(200, '{}')
+    await api.build('g1', 'req-4', 9, {
+      cityPieceId: 'city-1',
+      item: { kind: 'unit', unitType: 'mounted' },
+      rush: true,
+    })
+    const body = lastCall(unit).body as Record<string, unknown>
+    expect(body).toEqual({
+      action: 'build',
+      requestId: 'req-4',
+      rev: 9,
+      cityPieceId: 'city-1',
+      item: { kind: 'unit', unitType: 'mounted' },
+      rush: true,
+    })
+    expect('target' in body).toBe(false)
+  })
+
   it('adds confirmedOutOfTurn to a draw only when it is true', async () => {
     const plain = respondWith(200, '{}')
     await api.draw('g1', 'CIV')

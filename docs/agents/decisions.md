@@ -200,8 +200,9 @@ Source: `engine/src/city-production.ts`, `building-data.ts`, `blockade.ts`
 Issue #264, part 2: a city builds a building from the Build button in the Cities
 panel. `buildOptionsOf` (`engine/src/build-options.ts`) works out, for the own view
 only, what each city may build and where; the `build` assisted action places the
-piece, pays and logs in one step, and the everyone votes undo reverses it. Figures
-and military units are the next parts and reuse the same payload.
+piece, pays and logs in one step, and the everyone votes undo reverses it. The same
+action builds army and scout figures (placed like a building) and military units (a
+private card, nothing placed).
 
 - Only legal choices are listed. Everything else is under "Why not the others" with
   a reason. A cost above the city's production is such a reason; the way out is to
@@ -228,6 +229,30 @@ and military units are the next parts and reuse the same payload.
   the doubled figure, then the estimate.
 - No automatic "city action used" marker: techs, culture cards and Great Persons
   allow several actions, so the player ends the phase themselves (the human).
+
+**Figures and units (#264 parts 3 and 4).**
+
+- Costs (base rules p. 15 to 17): army 4, scout 6. A unit costs by the player's level
+  for its type, read from `stats.infantry`, `stats.artillery` or `stats.mounted`
+  (clamped to 1 to 4, never changed): 5, 7, 9, 11. Aircraft cost 12 and need a revealed
+  Flight. Rush, the hand set production and the Building Program marker work as for
+  buildings; the marker is used up by any build.
+- Figure squares: outskirts on the map, never a centre or a city-state, water only with
+  a revealed Sailing, Steam Power or Flight, below the stacking limit `stats.stacking`
+  (armies and scouts together; read only, default 2), supply 6 armies and 2 scouts per
+  colour counted anywhere on the board. A scout is not offered a blockaded square. An
+  army is, with a note that the outcome (a battle, or killed scouts and loot) is not
+  automated. The rulebook settles this only for movement, so it is left to the player.
+- Not offered: a square with a hut or village marker (scouts may not enter one, and the
+  rulebook does not say what an army placed there does; place by hand). The human
+  should confirm this gap.
+- A unit card is drawn like the Draw button does (reshuffling discards when the deck is
+  empty) and goes hidden into the hand. The public line names the type only, never the
+  card, and no item log line is written, so the old item undo cannot take it back
+  alone. Undo puts the same card back at the same position in the deck with no shuffle,
+  so build then undo then build draws the same card (issue #266: no redraw loop).
+  Great Person cards and the old item undo still reshuffle the whole deck on undo; that
+  is the older behaviour and a possible redraw loop there is not addressed here.
 
 Source: `engine/src/build-options.ts`, `building-data.ts`, `assisted.ts` (the `build`
 action), `actions/board.ts` (`isAssistedBoardChange`), `web/src/views/BuildPicker.tsx`,

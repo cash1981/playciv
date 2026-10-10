@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Item } from '@civ/engine'
@@ -1045,6 +1045,8 @@ describe('the ended-battle banner', () => {
 describe('the Build flow in the game page', () => {
   const library = {
     assetId: 'buildings/library',
+    item: { kind: 'building', assetId: 'buildings/library' },
+    placement: 'square',
     label: 'Library',
     cost: 6,
     tradeToPay: 0,
@@ -1098,6 +1100,28 @@ describe('the Build flow in the game page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.getByTestId('board').getAttribute('data-pick-count')).toBe('off')
     expect(screen.queryByRole('group', { name: 'Build' })).toBeNull()
+  })
+
+  it('shows the confirm bar for a unit and leaves the board out of pick mode', async () => {
+    const infantry = {
+      assetId: 'units/infantry',
+      item: { kind: 'unit', unitType: 'infantry' },
+      placement: 'none',
+      label: 'Infantry unit',
+      cost: 4,
+      tradeToPay: 0,
+      squares: [],
+    }
+    const withUnit = [{ ...buildOptions[0], choices: [library, infantry] }]
+    await renderOrder(
+      viewWith({ you: { playerId: 'p1', username: 'viewer', items: [], pendingRewards: [], cities: [city], buildOptions: withUnit } }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Build in Capital D5' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
+    expect(screen.getByRole('group', { name: 'Build' }).textContent).toContain('Build an infantry unit in Capital D5')
+    expect((within(screen.getByRole('group', { name: 'Build' })).getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(false)
+    // Nothing to pick: the board gets no squares
+    expect(screen.getByTestId('board').getAttribute('data-pick-count')).toBe('0')
   })
 
   it('has no Build button once the game is locked, and none for a spectator', async () => {

@@ -38,10 +38,12 @@ old test counts and past deployment reports do not establish present health.
   Brief `tasks/city-production.md`; see "City production" in decisions. The Build
   button, figures, units and other city actions are the next parts.
 
-- Assisted build (#264 part 2) is on `feat/assisted-build`, not yet in PR #271: a
-  Build button per city for buildings, legal choices only, square picking on the
-  board, trade rush, undo by vote. Figures, military units and the other city
-  actions are next. Brief `tasks/assisted-build.md`; see "Assisted build" in decisions.
+- Assisted build (#264) is on `feat/assisted-build` (buildings) and
+  `feat/assisted-units` (army and scout figures, military units; includes the first
+  branch), not yet in PR #271: a Build button per city, legal choices only, square
+  picking on the board, trade rush, undo by vote. The other city actions (building
+  program start, harvest, devote to the arts) are next. Briefs `tasks/assisted-build.md`
+  and `tasks/assisted-units.md`; see "Assisted build" in decisions.
 
 Read [current decisions](decisions.md) for the relevant compatibility/rationale
 and [limitations](limitations.md) for known gaps. Archived Mongo games remaining

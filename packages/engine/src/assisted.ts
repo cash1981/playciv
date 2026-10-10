@@ -828,14 +828,22 @@ function drawCandidates(
     readonly reject: (state: GameState, item: Item) => GameState
   },
 ): Result<
-  { readonly state: GameState; readonly items: readonly Item[]; readonly rejected: readonly Item[] },
+  {
+    readonly state: GameState
+    readonly items: readonly Item[]
+    readonly rejected: readonly Item[]
+    /** For each card taken, kept or rejected: its index in `state.items` just before it was taken, and whether the discards were reshuffled to reach it. */
+    readonly positions: readonly { readonly itemId: string; readonly index: number; readonly reshuffled: boolean }[]
+  },
   EngineError
 > {
   let current = state
   const items: Item[] = []
   const rejected: Item[] = []
+  const positions: { itemId: string; index: number; reshuffled: boolean }[] = []
   while (items.length < count) {
     let index = current.items.findIndex((item) => item.sheetName === sheetName)
+    let reshuffledNow = false
     if (index < 0) {
       const reshuffled = reshuffleItems(current, sheetName)
       if (!reshuffled.ok) {
@@ -843,10 +851,12 @@ function drawCandidates(
         break
       }
       current = reshuffled.value
+      reshuffledNow = true
       index = current.items.findIndex((item) => item.sheetName === sheetName)
     }
     const item = current.items[index]
     if (item === undefined) break
+    positions.push({ itemId: item.id, index, reshuffled: reshuffledNow })
     current = { ...current, items: [...current.items.slice(0, index), ...current.items.slice(index + 1)] }
     if (filter === undefined || filter.valid(current, item)) {
       items.push(item)
@@ -855,7 +865,7 @@ function drawCandidates(
       current = filter.reject(current, item)
     }
   }
-  return ok({ state: current, items, rejected })
+  return ok({ state: current, items, rejected, positions })
 }
 
 /** Two shuffles of the deck, as an item undo does (`shuffleDeckTwice` in `actions/undo.ts`). */
@@ -1165,6 +1175,26 @@ function restoreDrawnCards(
   return ok(toDeck.length === 0 ? withCards : shuffleDeckTwice(withCards))
 }
 
+/**
+ * Takes a drawn unit card from the hand back into the deck at the index it was taken
+ * from (clamped to the deck's length), face down and without an owner, and shuffles
+ * nothing. The caller has checked that the card is in the hand.
+ */
+function restoreCardAt(
+  state: GameState,
+  player: Playerhand,
+  card: { readonly itemId: string; readonly index: number },
+): GameState {
+  const found = player.items.find((item) => item.id === card.itemId)
+  if (found === undefined) return state
+  const at = Math.max(0, Math.min(card.index, state.items.length))
+  const restored: Item = { ...found, hidden: true, ownerId: null }
+  return {
+    ...withPlayerHand(state, { ...player, items: player.items.filter((item) => item.id !== card.itemId) }),
+    items: [...state.items.slice(0, at), restored, ...state.items.slice(at)],
+  }
+}
+
 /** Takes the marker of a gain off the board, through the board history. `Err` is the reason the undo must refuse. */
 function removeGreatPersonMarker(
   state: GameState,
@@ -1458,6 +1488,9 @@ type Made =
       readonly state: GameState
       readonly card: Item
       readonly sheetName: SheetName
+      /** Where the card stood in the deck just before it was taken, and whether the discards were reshuffled first. */
+      readonly index: number
+      readonly reshuffled: boolean
     }
 
 /**
@@ -1519,7 +1552,8 @@ function drawBuiltUnit(state: GameState, player: Playerhand, unitType: UnitType)
   const sheetName = unitSheetOf(unitType)
   const drawn = drawCandidates(state, sheetName, 1)
   const first = drawn.ok ? drawn.value.items[0] : undefined
-  if (!drawn.ok || first === undefined) return err(`No ${unitType} unit cards are left in the deck or the discard pile.`)
+  const position = drawn.ok ? drawn.value.positions.find((entry) => entry.itemId === first?.id) : undefined
+  if (!drawn.ok || first === undefined || position === undefined) return err(`No ${unitType} unit cards are left in the deck or the discard pile.`)
   const card: Item = { ...first, ownerId: player.playerId, hidden: true }
   const holder = playerOf(drawn.value.state, player.playerId) ?? player
   return ok({
@@ -1527,6 +1561,8 @@ function drawBuiltUnit(state: GameState, player: Playerhand, unitType: UnitType)
     state: withPlayerHand(drawn.value.state, { ...holder, items: [...holder.items, card] }),
     card,
     sheetName,
+    index: position.index,
+    reshuffled: position.reshuffled,
   })
 }
 
@@ -1655,7 +1691,7 @@ const build: AssistedActionDefinition = {
     const where =
       made.kind === 'placed'
         ? ` on square ${made.square.label}` +
-          (square?.note === undefined ? '' : ' (blockaded, so a battle is to be started by hand)')
+          (square?.note === undefined ? '' : ' (an enemy figure is there, so the outcome is to be settled by hand)')
         : ''
     const logged = appendLog(paid, {
       username: player.username,
@@ -1690,7 +1726,12 @@ const build: AssistedActionDefinition = {
           kind: 'build',
           cityPieceId: city.cityPieceId,
           item: payload.item,
-          card: { itemId: made.card.id, sheetName: made.sheetName },
+          card: {
+            itemId: made.card.id,
+            sheetName: made.sheetName,
+            index: made.index,
+            reshuffled: made.reshuffled,
+          },
           trade: choice.tradeToPay,
           marker: removal,
         },
@@ -1736,18 +1777,12 @@ const build: AssistedActionDefinition = {
       if (!player.items.some((candidate) => candidate.id === effect.card.itemId)) {
         return err(refused(`The ${label} card is no longer in your hand, so the build cannot be undone.`))
       }
-      // The same card goes back and the deck is shuffled twice, as for the Great Person cards: no chance to redraw
-      const restored = restoreDrawnCards(
-        withPlayerHand(state, refunded),
-        refunded,
-        record.id,
-        [effect.card.itemId],
-        effect.card.itemId,
-        effect.card.sheetName,
-      )
-      if (!restored.ok) return restored
+      // The same card goes back at the index it was taken from and nothing is shuffled, so
+      // the next draw returns the same card: build and undo is no way to redraw, and it
+      // reveals no further card to the player.
+      const restored = restoreCardAt(withPlayerHand(state, refunded), refunded, effect.card)
       const withMarker =
-        effect.marker === null ? restored.value : placeBack(restored.value, refunded, effect.marker.piece, at)
+        effect.marker === null ? restored : placeBack(restored, refunded, effect.marker.piece, at)
       return ok({
         state: withMarker,
         text:

@@ -359,8 +359,19 @@ export type AssistedEffect =
       readonly cityPieceId: string
       /** A military unit: no square and no piece, only a card in the hand. */
       readonly item: UnitBuildItem
-      /** The card that was drawn and its deck. Server side only, like every effect: it is how an undo finds the card again. */
-      readonly card: { readonly itemId: string; readonly sheetName: SheetName }
+      /**
+       * The card that was drawn, its deck, and the index it had in `GameState.items` just
+       * before it was taken, so an undo puts the same card back in the same place and
+       * the next draw returns it again (no chance to redraw). `reshuffled` is true when
+       * the discards were reshuffled during the draw, which means `index` refers to the
+       * reshuffled deck. Server side only, like every effect: never projected.
+       */
+      readonly card: {
+        readonly itemId: string
+        readonly sheetName: SheetName
+        readonly index: number
+        readonly reshuffled: boolean
+      }
       readonly trade: number
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
     }

@@ -63,6 +63,8 @@ export interface PickableSquare {
   readonly row: number
   /** For example "D5". */
   readonly label: string
+  /** Something to know before picking it. The engine sets one only for an army on a square where an enemy figure stands; any battle or loot is settled by hand. */
+  readonly note?: string
 }
 
 /**
@@ -71,7 +73,7 @@ export interface PickableSquare {
  * should not and a refresh cannot lose the player's choice.
  */
 export interface PickSquares {
-  /** What is being placed, for the buttons' names: "Place Library on D5". */
+  /** What is being placed, for the buttons' names: "Place Library on D5", "Place Army figure on D5". */
   readonly itemLabel: string
   readonly cells: readonly PickableSquare[]
   readonly selected: { readonly column: number; readonly row: number } | null
@@ -373,7 +375,10 @@ export function BoardView({
       .catch((caught: unknown) => setLoadError(errorMessage(caught)))
   }, [])
 
-  const picking = pickSquares !== undefined
+  // A unit is a private card with no square: its plan arrives with no cells, and
+  // there is nothing to pick, so the board stays as it is (no scroll, no lock).
+  // Escape still cancels it through `onCancel` below.
+  const picking = pickSquares !== undefined && pickSquares.cells.length > 0
   const onCancelPick = pickSquares?.onCancel
   const pickFirstCell = pickSquares?.cells[0]
 
@@ -1059,8 +1064,9 @@ export function BoardView({
                   <button
                     key={`pick-${cell.column}-${cell.row}`}
                     type="button"
-                    className={`board-pick-cell${chosen ? ' chosen' : ''}`}
-                    aria-label={`Place ${pickSquares.itemLabel} on ${cell.label}`}
+                    className={`board-pick-cell${chosen ? ' chosen' : ''}${cell.note === undefined ? '' : ' noted'}`}
+                    // The engine's only square note is the enemy figure on a square an army is placed on; the bar spells it out once the square is picked.
+                    aria-label={`Place ${pickSquares.itemLabel} on ${cell.label}${cell.note === undefined ? '' : ', blockaded, resolve by hand'}`}
                     aria-pressed={chosen}
                     disabled={busy || readOnly}
                     style={{
@@ -1072,6 +1078,11 @@ export function BoardView({
                     onClick={() => pickSquares.onPick(cell)}
                   >
                     <span aria-hidden="true">{cell.label}</span>
+                    {cell.note !== undefined && (
+                      <span className="board-pick-flag" aria-hidden="true">
+                        Enemy
+                      </span>
+                    )}
                   </button>
                 )
               })}

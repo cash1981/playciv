@@ -1,12 +1,15 @@
 /**
- * Assisted Build in the browser (#264, part 2: buildings).
+ * Assisted Build in the browser (#264: buildings, army and scout figures, and
+ * military units).
  *
  * Two pieces that share one {@link BuildFlow}, owned by GameView:
  *
- * - {@link BuildPicker}, in the Cities panel under a city: the buildings the
- *   engine says that city can build now, and, folded away, why the others can not;
+ * - {@link BuildPicker}, in the Cities panel under a city: what the engine says
+ *   that city can build now, in three groups (buildings, figures placed on the
+ *   map, units that are a private card), and, folded away, why the others can not;
  * - {@link BuildBar}, above the board: the choice, the cost, the square picked on
- *   the board, Confirm and Cancel.
+ *   the board, Confirm and Cancel. A unit has no square, so its bar opens with
+ *   Confirm ready.
  *
  * Neither adds a rule. The choices, costs, trade and squares come from
  * `view.you.buildOptions`, and the server checks it all again on Confirm.
@@ -15,9 +18,10 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
-import type { BuildChoice, CityBuildOptions, PlayerView } from '../lib/api.js'
+import type { BuildChoice, BuildPayload, CityBuildOptions, PlayerView } from '../lib/api.js'
 import { api } from '../lib/api.js'
 import { isPressInFlight, pressOnce } from './AssistedActions.js'
+import { itemKeyOf } from './buildFlow.js'
 import type { BuildFlow, BuildPlan } from './buildFlow.js'
 import type { Run } from './GameView.js'
 import './BuildPicker.css'
@@ -31,6 +35,25 @@ const SOURCE_TEXT: Readonly<Record<CityBuildOptions['productionSource'], string>
 }
 
 const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`
+
+/** The three groups of the picker, in the order they are shown. */
+const GROUPS = [
+  { id: 'building', noun: 'Buildings', heading: 'Buildings' },
+  { id: 'figure', noun: 'Figures', heading: 'Figures (placed on the map)' },
+  { id: 'unit', noun: 'Units', heading: 'Units (a private card, nothing is placed)' },
+] as const
+
+type GroupId = (typeof GROUPS)[number]['id']
+
+function groupOf(choice: BuildChoice): GroupId {
+  if (choice.item.kind === 'building') return 'building'
+  return choice.item.kind === 'unit' ? 'unit' : 'figure'
+}
+
+/** "an infantry unit", "a mounted unit": the bar names the type of card, never a placed item. */
+function unitNameOf(unitType: string): string {
+  return `${/^[aeiou]/.test(unitType) ? 'an' : 'a'} ${unitType} unit`
+}
 
 /**
  * Back to the picker, which sits in the Cities panel. That panel may have been
@@ -73,7 +96,10 @@ interface PickerProps {
   readonly onClose: () => void
 }
 
-/** The buildings one city can build now. Choosing one starts picking a square on the board. */
+/**
+ * What one city can build now. Choosing a building or a figure starts picking a
+ * square on the board; choosing a unit goes straight to the confirm bar.
+ */
 export function BuildPicker({ city, note, message, busy, onChoose, onClose }: PickerProps): React.JSX.Element {
   const ref = useRef<HTMLElement>(null)
   // Opening the picker is a press on Build right above it: put keyboard focus in it.
@@ -106,36 +132,49 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
         </p>
       )}
 
-      {ready && city.choices.length > 0 && (
-        <ul className="build-choices" aria-label={`Buildings ${city.label} can build`}>
-          {city.choices.map((choice) => (
-            <li key={choice.assetId} className="build-choice">
-              <span className="build-choice-text">
-                <strong>{choice.label}</strong>
-                <span>
-                  Cost {choice.cost}
-                  {choice.tradeToPay > 0 && <>, pays {choice.tradeToPay} trade</>}
-                </span>
-                <span className="muted">{plural(choice.squares.length, 'square')}</span>
-              </span>
-              <button
-                type="button"
-                className="small"
-                aria-label={`Choose ${choice.label}`}
-                disabled={busy}
-                onClick={() => onChoose(choice)}
-              >
-                Choose
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {ready &&
+        GROUPS.map((group) => {
+          const choices = city.choices.filter((choice) => groupOf(choice) === group.id)
+          // An empty group has no heading: nothing says "Units" when there is none to pick.
+          if (choices.length === 0) return null
+          return (
+            <section key={group.id} className="build-group">
+              <h6 className="build-group-heading">{group.heading}</h6>
+              <ul className="build-choices" aria-label={`${group.noun} ${city.label} can build`}>
+                {choices.map((choice) => (
+                  <li key={choice.assetId} className="build-choice">
+                    <span className="build-choice-text">
+                      <strong>{choice.label}</strong>
+                      <span>
+                        Cost {choice.cost}
+                        {choice.tradeToPay > 0 && <>, pays {choice.tradeToPay} trade</>}
+                      </span>
+                      <span className="muted">
+                        {choice.placement === 'none'
+                          ? 'Draws a card in secret'
+                          : plural(choice.squares.length, 'square')}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="small"
+                      aria-label={`Choose ${choice.label}`}
+                      disabled={busy}
+                      onClick={() => onChoose(choice)}
+                    >
+                      Choose
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )
+        })}
 
       {ready && city.unavailable.length > 0 && (
         <details className="build-why">
           <summary>Why not the others ({city.unavailable.length})</summary>
-          <ul aria-label={`Buildings ${city.label} cannot build`}>
+          <ul aria-label={`Items ${city.label} cannot build`}>
             {city.unavailable.map((entry) => (
               <li key={entry.assetId}>
                 <strong>{entry.label}</strong>: {entry.reason}
@@ -175,7 +214,7 @@ export function BuildBar({ gameId, view, flow, busy, run }: BarProps): React.JSX
   if (flow.plan !== null) {
     return (
       <PlanBar
-        key={`${flow.plan.cityPieceId}:${flow.plan.assetId}`}
+        key={`${flow.plan.cityPieceId}:${itemKeyOf(flow.plan.item)}`}
         gameId={gameId}
         playerId={view.you.playerId}
         view={view}
@@ -236,12 +275,26 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
 
   const target = plan.target
   const rush = plan.tradeToPay > 0
+  const placed = plan.placement === 'square'
+  // A unit has no square to wait for: Confirm is ready at once.
+  const ready = !placed || target !== null
 
   function confirm(): void {
-    if (target === null || sending) return
-    // The key says which press this is: the same square of the same choice while
-    // the outcome is unknown reuses the request id, another square is a new press.
-    const key = `${gameId}:${playerId}:build:${plan.cityPieceId}:${plan.assetId}:${target.column},${target.row}`
+    if (!ready || sending) return
+    const item = plan.item
+    const rushPart = rush ? { rush: true as const } : {}
+    let payload: BuildPayload
+    if (item.kind === 'unit') {
+      payload = { cityPieceId: plan.cityPieceId, item, ...rushPart }
+    } else if (target !== null) {
+      payload = { cityPieceId: plan.cityPieceId, item, target: { column: target.column, row: target.row }, ...rushPart }
+    } else {
+      return
+    }
+    // The key says which press this is: the same item and square (a unit has none)
+    // while the outcome is unknown reuses the request id, another is a new press.
+    const where = target === null ? 'card' : `${target.column},${target.row}`
+    const key = `${gameId}:${playerId}:build:${plan.cityPieceId}:${itemKeyOf(item)}:${where}`
     // The same press is already on its way (this bar was closed and opened again):
     // its outcome is not known yet, so this click says nothing and sends nothing.
     if (isPressInFlight(key)) return
@@ -262,30 +315,26 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     void pressOnce(
       key,
       quietRun,
-      (requestId) =>
-        api.build(gameId, requestId, view.rev, {
-          cityPieceId: plan.cityPieceId,
-          item: { kind: 'building', assetId: plan.assetId },
-          target: { column: target.column, row: target.row },
-          ...(rush ? { rush: true } : {}),
-        }),
+      (requestId) => api.build(gameId, requestId, view.rev, payload),
       view,
     ).then((done) => {
       setSending(false)
       if (done) flow.clear()
-      else flow.refused(failure === null ? 'The building was not built.' : errorMessage(failure))
+      else flow.refused(failure === null ? 'Nothing was built.' : errorMessage(failure))
     })
   }
 
   return (
     <div ref={ref} className="build-bar" role="group" aria-label="Build" tabIndex={-1}>
       <p className="build-bar-title">
-        <strong>Build {plan.label}</strong> in {plan.cityLabel}
+        <strong>Build {plan.item.kind === 'unit' ? unitNameOf(plan.item.unitType) : plan.label}</strong> in {plan.cityLabel}
       </p>
       <p className="build-bar-facts">
         Cost {plan.cost}
         {rush && <>. Pays {plan.tradeToPay} trade</>}.{' '}
-        {target === null ? (
+        {!placed ? (
+          <>A private card is drawn, nothing is placed on the map.</>
+        ) : target === null ? (
           <>Tap a highlighted square on the board ({plural(plan.squares.length, 'square')}).</>
         ) : (
           <>
@@ -293,6 +342,12 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
           </>
         )}
       </p>
+      {/* What the engine says about the chosen square: an army put where an enemy figure stands is not automated. A live region, so it is read out when the square is picked. */}
+      {target?.note !== undefined && (
+        <p role="status" className="build-bar-square-note">
+          <strong>Note for {target.label}:</strong> {target.note}
+        </p>
+      )}
       {flow.message !== null && (
         <p role="alert" className="build-bar-alert">
           {flow.message}
@@ -303,7 +358,7 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
         <button
           type="button"
           className="small primary"
-          disabled={busy || sending || target === null}
+          disabled={busy || sending || !ready}
           onClick={confirm}
         >
           {rush ? `Confirm and pay ${plan.tradeToPay} trade` : 'Confirm'}

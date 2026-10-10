@@ -103,7 +103,7 @@ export function sameBuildItem(a: BuildItem, b: BuildItem): boolean {
 export interface BuildSquare extends BuildTarget {
   /** The square's label, for example "D5". */
   readonly label: string
-  /** Something to tell the player about this square before they pick it: an army put in a blockaded square starts a battle. Absent for a plain square. */
+  /** Something to tell the player about this square before they pick it: an army put in a square where an enemy figure stands, which is not automated. Absent for a plain square. */
   readonly note?: string
 }
 
@@ -276,7 +276,7 @@ type SquareProblem =
   | { readonly kind: 'occupied'; readonly by: string }
   | { readonly kind: 'blockaded' }
   | { readonly kind: 'unknown-terrain' }
-  | { readonly kind: 'wrong-terrain'; readonly terrain: Terrain }
+  | { readonly kind: 'wrong-terrain'; readonly terrain: Terrain; readonly assetId: string }
   | { readonly kind: 'city-state' }
   | { readonly kind: 'marker'; readonly marker: string }
   | { readonly kind: 'water' }
@@ -301,7 +301,7 @@ function squareProblem(
   const terrain = terrainOf(scene, cell)
   if (terrain === null) return { kind: 'unknown-terrain' }
   const allowed = BUILDING_TERRAIN[assetId] ?? []
-  if (!allowed.includes(terrain)) return { kind: 'wrong-terrain', terrain }
+  if (!allowed.includes(terrain)) return { kind: 'wrong-terrain', terrain, assetId }
   return undefined
 }
 
@@ -340,7 +340,7 @@ const isFriendlyFigure = (piece: BoardPiece, rules: FigureRules): boolean =>
 /**
  * Why an army or a scout cannot be put on a map square, or `undefined` when it
  * can. Blockade is the one rule that differs: a scout is refused, an army is
- * allowed (the caller flags it with `battleNote`).
+ * allowed (the caller flags it with `enemyFigureNoteOf`).
  */
 function figureSquareProblem(
   scene: Scene,
@@ -364,11 +364,16 @@ function figureSquareProblem(
   return undefined
 }
 
-/** An army put in a blockaded square starts a battle with the blockader as defender (base rules p. 27). Battles are not automated. */
-const BATTLE_NOTE = 'Blockaded: placing the army here starts a battle with the blockader. Start the battle by hand.'
+/**
+ * An army put in a square where an enemy figure stands. The rulebook settles what
+ * happens when an army moves there (loot from scouts, a battle against an army) but
+ * not placement by production, so Build does not decide the outcome: it only says
+ * so. Battles and loot are not automated.
+ */
+const ENEMY_FIGURE_NOTE = 'An enemy figure stands here. Placing the army here is not automated: resolve any battle or loot by hand.'
 
-const battleNoteOf = (footprint: CityFootprintView, rules: FigureRules, cell: Cell): string | undefined =>
-  rules.kind === 'army' && footprint.hasEnemyFigureAt(cell) ? BATTLE_NOTE : undefined
+const enemyFigureNoteOf = (footprint: CityFootprintView, rules: FigureRules, cell: Cell): string | undefined =>
+  rules.kind === 'army' && footprint.hasEnemyFigureAt(cell) ? ENEMY_FIGURE_NOTE : undefined
 
 /** The squares of a city's outskirts that are on the map, in reading order. A city at the edge has outskirts off the map, which are not squares at all. */
 function mapOutskirts(board: Board, footprint: CityFootprintView): readonly Cell[] {
@@ -379,7 +384,7 @@ function mapOutskirts(board: Board, footprint: CityFootprintView): readonly Cell
 
 const WATER_TECH_TEXT = 'a revealed Sailing, Steam Power or Flight'
 
-function describeProblem(cell: Cell, item: PlacedBuildItem, problem: SquareProblem): string {
+function describeProblem(cell: Cell, problem: SquareProblem): string {
   const square = squareLabel(cell)
   switch (problem.kind) {
     case 'centre':
@@ -390,10 +395,8 @@ function describeProblem(cell: Cell, item: PlacedBuildItem, problem: SquareProbl
       return `${square} is blockaded by an enemy figure.`
     case 'unknown-terrain':
       return `The terrain of ${square} is not known.`
-    case 'wrong-terrain': {
-      const assetId = item.kind === 'building' ? item.assetId : ''
-      return `${square} is ${problem.terrain}, and a ${buildingNameOf(assetId) ?? 'building'} needs ${describeAllowed(BUILDING_TERRAIN[assetId] ?? [])}.`
-    }
+    case 'wrong-terrain':
+      return `${square} is ${problem.terrain}, and a ${buildingNameOf(problem.assetId) ?? 'building'} needs ${describeAllowed(BUILDING_TERRAIN[problem.assetId] ?? [])}.`
     case 'city-state':
       return `${square} is a city-state square.`
     case 'marker':
@@ -401,6 +404,7 @@ function describeProblem(cell: Cell, item: PlacedBuildItem, problem: SquareProbl
     case 'water':
       return `${square} is water, and a figure may stand in water only with ${WATER_TECH_TEXT}.`
     case 'full':
+      if (problem.limit <= 0) return `${square} cannot hold a figure: your stacking limit is ${problem.limit}.`
       return `${square} already holds ${problem.count} of your figures, which is your stacking limit of ${problem.limit}.`
   }
 }
@@ -464,12 +468,12 @@ export function buildSquareRefusal(
   const scene = sceneOf(state)
   if (item.kind === 'building') {
     const problem = squareProblem(scene, footprint, item.assetId, cell)
-    return problem === undefined ? undefined : describeProblem(cell, item, problem)
+    return problem === undefined ? undefined : describeProblem(cell, problem)
   }
   const rules = figureRulesOf(player, item.kind, techViewOf(player))
   if (rules === undefined) return undefined
   const problem = figureSquareProblem(scene, footprint, rules, cell)
-  return problem === undefined ? undefined : describeProblem(cell, item, problem)
+  return problem === undefined ? undefined : describeProblem(cell, problem)
 }
 
 // ---------------------------------------------------------------------------
@@ -608,12 +612,38 @@ function paymentFor(
   }
 }
 
+/** What does not depend on the city, worked out once per call: the card supply of each unit type and the figures left in the box. */
+interface SharedSupply {
+  readonly unitCards: Readonly<Record<UnitType, boolean>>
+  readonly figures: Readonly<Record<'army' | 'scout', { readonly asset: ReturnType<typeof findBoardAsset>; readonly remaining: number | undefined }>>
+}
+
+function sharedSupplyOf(state: GameState, colour: string): SharedSupply {
+  const figureOf = (kind: 'army' | 'scout') => {
+    const asset = findBoardAsset(figureAssetIdOf(colour, kind))
+    return {
+      asset,
+      remaining: asset === undefined ? undefined : remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers),
+    }
+  }
+  return {
+    unitCards: {
+      infantry: unitCardAvailable(state, UNIT_SHEET.infantry),
+      artillery: unitCardAvailable(state, UNIT_SHEET.artillery),
+      mounted: unitCardAvailable(state, UNIT_SHEET.mounted),
+      aircraft: unitCardAvailable(state, UNIT_SHEET.aircraft),
+    },
+    figures: { army: figureOf('army'), scout: figureOf('scout') },
+  }
+}
+
 function optionsForCity(
   scene: Scene,
   player: Playerhand,
   footprint: CityFootprintView,
   city: CityProduction,
   open: boolean,
+  shared: SharedSupply,
 ): CityBuildOptions {
   const production = productionOf(city)
   const base = {
@@ -702,12 +732,11 @@ function optionsForCity(
       unavailable.push({ assetId, item, label, reason })
     }
 
-    const asset = findBoardAsset(assetId)
+    const { asset, remaining } = shared.figures[kind]
     if (asset === undefined) {
       skip('This figure is not in the game data.')
       continue
     }
-    const remaining = remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)
     if (remaining !== undefined && remaining <= 0) {
       skip(`None left in the supply: all ${boardAssetLimit(asset, state.numOfPlayers) ?? 0} ${kind === 'army' ? 'armies' : 'scouts'} of your colour are on the board.`)
       continue
@@ -721,7 +750,7 @@ function optionsForCity(
         problems.push(problem)
         continue
       }
-      const note = battleNoteOf(footprint, rules, cell)
+      const note = enemyFigureNoteOf(footprint, rules, cell)
       squares.push({
         column: cell.column,
         row: cell.row,
@@ -756,7 +785,7 @@ function optionsForCity(
       skip(needsReason(techs, [AIRCRAFT_TECH]))
       continue
     }
-    if (!unitCardAvailable(state, UNIT_SHEET[unitType])) {
+    if (!shared.unitCards[unitType]) {
       skip(`No ${unitType} unit cards left in the deck or the discard pile.`)
       continue
     }
@@ -792,8 +821,9 @@ export function buildOptionsOf(state: GameState, player: Playerhand): readonly C
   const productions = cityProductionsOf(state, player)
   const open = openCityManagementTurn(state, player) !== undefined
   const scene = sceneOf(state)
+  const shared = sharedSupplyOf(state, player.color.toLowerCase())
   return footprints.flatMap((footprint) => {
     const city = productions.find((candidate) => candidate.pieceId === footprint.piece.id)
-    return city === undefined ? [] : [optionsForCity(scene, player, footprint, city, open)]
+    return city === undefined ? [] : [optionsForCity(scene, player, footprint, city, open, shared)]
   })
 }
