@@ -3,7 +3,7 @@
 - **Slug:** `assisted-units`
 - **Branch:** `feat/assisted-units`, branched from `feat/assisted-build` (part 2, Build for buildings)
 - **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
-- **Status:** in progress
+- **Status:** in review (ready for the human to test)
 - **Issue:** [#264](https://github.com/cash1981/playciv/issues/264), parts 3 and 4 of the Build work
 
 This branch is merged into `feat/assisted-play-contract` (PR #271), after `feat/assisted-build`, only when the human says it is ready. Read `tasks/assisted-build.md` and the "Assisted build" decisions first: this brief extends that action, it does not replace it.
