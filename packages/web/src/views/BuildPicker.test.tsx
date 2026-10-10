@@ -320,23 +320,87 @@ describe('square picking and Confirm', () => {
     expect(screen.queryByRole('region', { name: 'Build in Capital D5' })).toBeNull()
   })
 
-  it('scrolls the bar into view and focuses it, smoothly unless reduced motion is asked for', () => {
-    const scrolled: { element: Element; options: ScrollIntoViewOptions | undefined }[] = []
+  const boardPanel = (): HTMLElement => {
+    const panel = document.getElementById('game-board')
+    if (panel === null) throw new Error('board panel missing')
+    return panel
+  }
+  const recordScrolls = (): { element: Element; options: ScrollIntoViewOptions | undefined; margin: string }[] => {
+    const scrolled: { element: Element; options: ScrollIntoViewOptions | undefined; margin: string }[] = []
     Element.prototype.scrollIntoView = function (this: Element, scrollOptions?: boolean | ScrollIntoViewOptions) {
-      scrolled.push({ element: this, options: typeof scrollOptions === 'object' ? scrollOptions : undefined })
+      scrolled.push({
+        element: this,
+        options: typeof scrollOptions === 'object' ? scrollOptions : undefined,
+        margin: this instanceof HTMLElement ? this.style.scrollMarginTop : '',
+      })
     }
+    return scrolled
+  }
+
+  it('focuses the bar without scrolling the page by itself, so it does not fight the board scroll', () => {
+    const scrolled = recordScrolls()
+    render(<Harness initial={viewOf([options()])} />)
+    startLibrary()
+    expect(scrolled.some((entry) => entry.element === bar())).toBe(false)
+    expect(document.activeElement).toBe(bar())
+  })
+
+  it('scrolls the page to the board panel once when picking starts, smoothly unless reduced motion is asked for', () => {
+    const scrolled = recordScrolls()
     vi.stubGlobal('matchMedia', () => ({ matches: false }))
     const { unmount } = render(<Harness initial={viewOf([options()])} />)
+    expect(scrolled).toHaveLength(0)
     startLibrary()
-    expect(scrolled.at(-1)?.element).toBe(bar())
-    expect(scrolled.at(-1)?.options).toEqual({ behavior: 'smooth', block: 'start' })
+    expect(scrolled).toHaveLength(1)
+    expect(scrolled[0]?.element).toBe(boardPanel())
+    expect(scrolled[0]?.options).toEqual({ behavior: 'smooth', block: 'start' })
+    expect(boardPanel().classList.contains('build-picking')).toBe(true)
+    // Focus stays on the bar, so Tab goes on to the squares.
     expect(document.activeElement).toBe(bar())
     unmount()
 
+    scrolled.length = 0
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' }))
     render(<Harness initial={viewOf([options()])} />)
     startLibrary()
-    expect(scrolled.at(-1)?.options).toEqual({ behavior: 'auto', block: 'start' })
+    expect(scrolled).toHaveLength(1)
+    expect(scrolled[0]?.options).toEqual({ behavior: 'auto', block: 'start' })
+  })
+
+  it('stops the board below the measured height of the bar, and leaves no inline margin behind', () => {
+    const scrolled = recordScrolls()
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      return { height: this.classList.contains('build-bar') ? 181.2 : 0 } as DOMRect
+    })
+    render(<Harness initial={viewOf([options()])} />)
+    startLibrary()
+    expect(scrolled).toHaveLength(1)
+    expect(scrolled[0]?.margin).toBe('194px')
+    expect(boardPanel().style.scrollMarginTop).toBe('')
+  })
+
+  it('does not scroll the page again on a refresh that keeps the plan, when the square is chosen, or when picking ends', () => {
+    const handle: Handle = { setView: () => undefined }
+    const scrolled = recordScrolls()
+    render(<Harness initial={viewOf([options()])} handle={handle} />)
+    startLibrary()
+    expect(scrolled).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))
+    act(() => handle.setView(viewOf([options()], { rev: 9 })))
+    expect(overlays()).toHaveLength(2)
+    expect(scrolled).toHaveLength(1)
+
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Cancel' }))
+    expect(overlays()).toHaveLength(0)
+    expect(scrolled).toHaveLength(1)
+    expect(boardPanel().classList.contains('build-picking')).toBe(false)
+
+    // Picking again is a new start.
+    startLibrary()
+    expect(scrolled).toHaveLength(2)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(scrolled).toHaveLength(2)
   })
 
   it('selects a square with a click, shows it, and Confirm opens; the squares are real buttons a keyboard can reach', () => {
