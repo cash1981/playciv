@@ -40,6 +40,20 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `docs/agents/decisions.md`, `state.md`, `README.md`
 - **Notes:** several paths overlap the `assisted-play-contract` claim above; same owner, sequenced after it.
 
+### assisted-units
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/assisted-units`, from `feat/assisted-build`; merged into `feat/assisted-play-contract` only when the human says ready
+- **Brief:** `docs/agents/tasks/assisted-units.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/build-options.ts`, `building-data.ts`, `assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/board.ts`
+  - `packages/engine/test/assisted-units*.test.ts`, `hidden-info.test.ts`
+  - `packages/server/src/routes/play.ts`, `packages/server/test/assisted-units*.test.ts`
+  - `packages/web/src/lib/api.ts`, `views/BuildPicker.tsx`, `buildFlow.ts`, `CitiesPanel.tsx`, their css and tests, `FaqView.tsx`
+  - `docs/agents/decisions.md`, `state.md`, `README.md`
+- **Notes:** several paths overlap the `assisted-build` claim above; same owner, sequenced after it.
+
 ---
 
 ## Format
