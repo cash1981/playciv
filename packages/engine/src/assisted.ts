@@ -41,9 +41,16 @@ import {
   remainingBoardAssetCount,
 } from './board.js'
 import type { BoardPiece } from './board.js'
-import { buildOptionsOf, buildSquareRefusal, squareCentre } from './build-options.js'
-import type { BuildPayload } from './build-options.js'
-import { buildingNameOf } from './building-data.js'
+import {
+  buildItemName,
+  buildOptionsOf,
+  buildSquareRefusal,
+  figureAssetIdOf,
+  sameBuildItem,
+  squareCentre,
+  unitSheetOf,
+} from './build-options.js'
+import type { BuildPayload, BuildSquare, PlacedBuildItem, UnitType } from './build-options.js'
 import { BUILDING_PROGRAM_ASSET_ID } from './city-production.js'
 import { activeWonderOwnerIds, coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
 import {
@@ -1430,20 +1437,108 @@ const cultureAdvance: AssistedActionDefinition = {
 
 // -- Build ---------------------------------------------------------------------
 
-/** "a Library" and "an Academy" by the first letter; "a University" is the exception, since it starts with a vowel but is said with a consonant. */
+/** "a Library", "an Academy", "an army", "a mounted unit": by the first letter, with "a University" as the exception since it starts with a vowel but is said with a consonant. */
 const withArticle = (label: string): string => `${/^[aeiou]/i.test(label) && !/^uni/i.test(label) ? 'an' : 'a'} ${label}`
 
 /** The `build` payload, or `undefined` when the payload is another action's or missing. */
 const buildPayloadOf = (payload: AssistedPayload | undefined): BuildPayload | undefined =>
   payload !== undefined && 'cityPieceId' in payload ? payload : undefined
 
+/** What the part of a build that differs between items did: a piece put on a square, or a card drawn into the hand. */
+type Made =
+  | {
+      readonly kind: 'placed'
+      readonly state: GameState
+      readonly square: { readonly column: number; readonly row: number; readonly label: string }
+      readonly piece: BoardPiece
+      readonly historyId: string
+    }
+  | {
+      readonly kind: 'card'
+      readonly state: GameState
+      readonly card: Item
+      readonly sheetName: SheetName
+    }
+
 /**
- * A city builds a building. Everything is decided from the fresh state: the
- * options are recomputed for the city and the request must be one of them, so a
- * square taken, a supply used up, trade spent or a phase closed since the player
- * looked is refused with the reason. One step places the piece, pays the trade,
- * uses up the Building Program marker and writes the public line; one undo vote
- * takes all of it back. Parts 3 and 4 add figure and unit items to `payload.item`.
+ * Puts a building or a figure centred on its square, through the board history.
+ * A building's asset is its own; a figure's is of the player's colour. `Err` is a
+ * sentence for the player and nothing is changed.
+ */
+function placeBuilt(
+  state: GameState,
+  player: Playerhand,
+  item: PlacedBuildItem,
+  square: BuildSquare,
+  at: { readonly at?: string },
+): Result<Made, string> {
+  const assetId =
+    item.kind === 'building'
+      ? item.assetId
+      : player.color === null
+        ? undefined
+        : figureAssetIdOf(player.color.toLowerCase(), item.kind)
+  const name = buildItemName(item)
+  const asset = assetId === undefined ? undefined : findBoardAsset(assetId)
+  if (assetId === undefined || asset === undefined) return err(`The ${name} has no artwork to put on the board.`)
+
+  const centre = squareCentre(state.board, square)
+  const placed = placeUnchecked(state, {
+    playerId: player.playerId,
+    assetId,
+    x: centre.x - asset.width / 2,
+    y: centre.y - asset.height / 2,
+    ...at,
+  })
+  const entry = placed?.board.history.at(-1)
+  if (placed === undefined || entry === undefined || entry.change.kind !== 'place') {
+    return err(`The ${name} could not be placed.`)
+  }
+  const piece = entry.change.piece
+  const landed = mapCellOf(placed.board, piece)
+  if (landed === null || landed.column !== square.column || landed.row !== square.row) {
+    return err(`The ${name} could not be placed on ${square.label}.`)
+  }
+  return ok({
+    kind: 'placed',
+    state: placed,
+    square: { column: square.column, row: square.row, label: square.label },
+    piece,
+    historyId: entry.id,
+  })
+}
+
+/**
+ * Draws one card of the unit's sheet into the player's hand, hidden, the way the
+ * Draw button does (the discards are reshuffled when the deck has none). Like the
+ * Great Person cards it writes no item log line: a line carrying the item would
+ * make the old item undo a way to take the card back without the trade and the
+ * marker. `Err` is a sentence for the player.
+ */
+function drawBuiltUnit(state: GameState, player: Playerhand, unitType: UnitType): Result<Made, string> {
+  const sheetName = unitSheetOf(unitType)
+  const drawn = drawCandidates(state, sheetName, 1)
+  const first = drawn.ok ? drawn.value.items[0] : undefined
+  if (!drawn.ok || first === undefined) return err(`No ${unitType} unit cards are left in the deck or the discard pile.`)
+  const card: Item = { ...first, ownerId: player.playerId, hidden: true }
+  const holder = playerOf(drawn.value.state, player.playerId) ?? player
+  return ok({
+    kind: 'card',
+    state: withPlayerHand(drawn.value.state, { ...holder, items: [...holder.items, card] }),
+    card,
+    sheetName,
+  })
+}
+
+/**
+ * A city builds a building, an army or scout figure, or a military unit.
+ * Everything is decided from the fresh state: the options are recomputed for the
+ * city and the request must be one of them, so a square taken, a supply used up,
+ * trade spent or a phase closed since the player looked is refused with the
+ * reason. One step puts the piece on its square or the card in the hand, pays
+ * the trade, uses up the Building Program marker and writes the public line; one
+ * undo vote takes all of it back. A unit has no square and its public line names
+ * the type only, never the card.
  */
 const build: AssistedActionDefinition = {
   kind: 'build',
@@ -1459,52 +1554,63 @@ const build: AssistedActionDefinition = {
     if (player.color === null || cityFootprintsOf(state, player.color.toLowerCase()).length === 0) {
       return blocked('unavailable', 'You have no city on the map to build with.')
     }
-    return { status: 'ready', reason: 'Choose a city, what to build and a square.' }
+    return { status: 'ready', reason: 'Choose a city, what to build and where.' }
   },
 
   apply(state, player, context) {
     const failed = (reason: string): EngineError => rejected('build', blocked('unavailable', reason))
     const payload = buildPayloadOf(context.payload)
     if (payload === undefined) return err(failed('Say which city, what to build and which square.'))
-    if (payload.item.kind !== 'building') return err(failed('Only buildings can be built for now.'))
-    const { assetId } = payload.item
-    const target = payload.target
+    const { item } = payload
+    // The server checks the shape; the engine is also called with whatever a caller sent
+    if (!['building', 'army', 'scout', 'unit'].includes(item.kind)) {
+      return err(failed('That is not something that can be built.'))
+    }
 
     const city = buildOptionsOf(state, player).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
     if (city === undefined) return err(failed('That city is not yours, or it is no longer on the map.'))
     if (city.status !== 'ready') return err(rejected('build', blocked('wrong-phase', city.reason)))
 
-    const label = buildingNameOf(assetId) ?? assetId
-    const choice = city.choices.find((candidate) => candidate.assetId === assetId)
+    const label = buildItemName(item)
+    const choice = city.choices.find((candidate) => sameBuildItem(candidate.item, item))
     if (choice === undefined) {
-      const why = city.unavailable.find((candidate) => candidate.assetId === assetId)
+      const why = city.unavailable.find((candidate) => sameBuildItem(candidate.item, item))
       return err(
         failed(
           why === undefined
-            ? `${assetId} is not a building that can be built.`
+            ? item.kind === 'building'
+              ? `${item.assetId} is not a building that can be built.`
+              : `A ${label} cannot be built.`
             : `${why.label} cannot be built in ${city.label} now. ${why.reason}`,
         ),
       )
     }
-    const square = choice.squares.find(
-      (candidate) => candidate.column === target.column && candidate.row === target.row,
-    )
-    if (square === undefined) {
-      const why = buildSquareRefusal(state, player, city.cityPieceId, assetId, target)
-      return err(failed(`${why ?? 'That square is not one of the legal squares.'} Pick one of the highlighted squares.`))
+
+    // A square is chosen for a building or a figure and for nothing else
+    let square: BuildSquare | undefined
+    if (payload.item.kind === 'unit') {
+      if (payload.target !== undefined) {
+        return err(failed(`${choice.label} is a card and has no square. Send no square.`))
+      }
+    } else {
+      const target = payload.target
+      if (target === undefined) return err(failed('Pick one of the highlighted squares.'))
+      square = choice.squares.find((candidate) => candidate.column === target.column && candidate.row === target.row)
+      if (square === undefined) {
+        const why = buildSquareRefusal(state, player, city.cityPieceId, payload.item, target)
+        return err(failed(`${why ?? 'That square is not one of the legal squares.'} Pick one of the highlighted squares.`))
+      }
     }
     if (choice.tradeToPay > 0 && payload.rush !== true) {
       return err(
         failed(
-          `${label} costs ${choice.cost} and ${city.label} has ${city.production}. Confirm paying ${choice.tradeToPay} trade to build it.`,
+          `${choice.label} costs ${choice.cost} and ${city.label} has ${city.production}. Confirm paying ${choice.tradeToPay} trade to build it.`,
         ),
       )
     }
-    const asset = findBoardAsset(assetId)
-    if (asset === undefined) return err(failed(`${label} has no artwork to put on the board.`))
     const at = context.at === undefined ? {} : { at: context.at }
 
-    // The marker a city with the Building Program must use (Wisdom and Warfare p. 7), found before the piece goes down
+    // The marker a city with the Building Program must use (Wisdom and Warfare p. 7), found before anything is placed
     const centres = new Set(
       (player.color === null ? [] : cityFootprintsOf(state, player.color.toLowerCase()))
         .filter((candidate) => candidate.piece.id === city.cityPieceId)
@@ -1516,28 +1622,23 @@ const build: AssistedActionDefinition = {
       return cell !== null && centres.has(`${cell.column},${cell.row}`)
     })
 
-    const centre = squareCentre(state.board, square)
-    const placed = placeUnchecked(state, {
-      playerId: player.playerId,
-      assetId,
-      x: centre.x - asset.width / 2,
-      y: centre.y - asset.height / 2,
-      ...at,
-    })
-    const entry = placed?.board.history.at(-1)
-    if (placed === undefined || entry === undefined || entry.change.kind !== 'place') {
-      return err(failed(`The ${label} could not be placed.`))
-    }
-    const piece = entry.change.piece
-    const landed = mapCellOf(placed.board, piece)
-    if (landed === null || landed.column !== square.column || landed.row !== square.row) {
-      return err(failed(`The ${label} could not be placed on ${square.label}.`))
+    // The one step that differs: a piece on a square, or a card in the hand
+    let made: Made
+    if (payload.item.kind === 'unit') {
+      const drawn = drawBuiltUnit(state, player, payload.item.unitType)
+      if (!drawn.ok) return err(failed(drawn.error))
+      made = drawn.value
+    } else {
+      if (square === undefined) return err(failed('Pick one of the highlighted squares.'))
+      const placed = placeBuilt(state, player, payload.item, square, at)
+      if (!placed.ok) return err(failed(placed.error))
+      made = placed.value
     }
 
-    let board = placed
+    let board = made.state
     let removal: { readonly piece: BoardPiece; readonly historyId: string } | null = null
     if (marker !== undefined) {
-      const removed = removePiece(placed, { playerId: player.playerId, pieceId: marker.id, ...at })
+      const removed = removePiece(made.state, { playerId: player.playerId, pieceId: marker.id, ...at })
       const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
       if (!removed.ok || removedEntry === undefined) {
         return err(failed('The Building Program marker could not be taken off the board.'))
@@ -1551,32 +1652,66 @@ const build: AssistedActionDefinition = {
       ...paying,
       stats: { ...paying.stats, trade: paying.stats.trade - choice.tradeToPay },
     })
+    const where =
+      made.kind === 'placed'
+        ? ` on square ${made.square.label}` +
+          (square?.note === undefined ? '' : ' (blockaded, so a battle is to be started by hand)')
+        : ''
     const logged = appendLog(paid, {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        `${player.username} built ${withArticle(label)} in ${city.label} on square ${square.label}` +
+        `${player.username} built ${withArticle(label)} in ${city.label}${where}` +
         (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} trade for the missing production` : '') +
         (removal === null ? '' : ', using up the Building Program marker'),
       privateLog: '',
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,
     })
+    const logId = lastLogId(logged)
+    // The card is named in a private line only, as the Great Person draw does; the public line has the type
+    const withPrivate =
+      made.kind === 'card'
+        ? appendLog(logged, {
+            username: player.username,
+            playerId: player.playerId,
+            privateLog: `${player.username} drew ${itemName(made.card)} (${SHEET_LABEL[made.sheetName]}) for ${withArticle(label)} built in ${city.label}`,
+            createdAt: context.at ?? null,
+          })
+        : logged
     // The board changes were recorded before the line existed: count it in, as the culture advance does
+    const counted = countLinesIn(withPrivate, [made.kind === 'placed' ? made.historyId : undefined, removal?.historyId])
+
+    if (made.kind === 'card') {
+      if (payload.item.kind !== 'unit') return err(failed('That is not a unit.'))
+      return ok({
+        state: counted,
+        effect: {
+          kind: 'build',
+          cityPieceId: city.cityPieceId,
+          item: payload.item,
+          card: { itemId: made.card.id, sheetName: made.sheetName },
+          trade: choice.tradeToPay,
+          marker: removal,
+        },
+        logId,
+      })
+    }
+    if (payload.item.kind === 'unit') return err(failed('A unit is not put on a square.'))
     return ok({
-      state: countLinesIn(logged, [entry.id, removal?.historyId]),
+      state: counted,
       effect: {
         kind: 'build',
         cityPieceId: city.cityPieceId,
-        item: { kind: 'building', assetId },
-        square: { column: square.column, row: square.row, label: square.label },
-        pieceId: piece.id,
-        position: { x: piece.x, y: piece.y },
-        historyId: entry.id,
+        item: payload.item,
+        square: made.square,
+        pieceId: made.piece.id,
+        position: { x: made.piece.x, y: made.piece.y },
+        historyId: made.historyId,
         trade: choice.tradeToPay,
         marker: removal,
       },
-      logId: lastLogId(logged),
+      logId,
     })
   },
 
@@ -1588,7 +1723,39 @@ const build: AssistedActionDefinition = {
       logId: record.logId,
       reason,
     })
-    const label = buildingNameOf(effect.item.assetId) ?? effect.item.assetId
+    const label = buildItemName(effect.item)
+    const refunded: Playerhand = {
+      ...player,
+      stats: { ...player.stats, trade: player.stats.trade + effect.trade },
+    }
+    const markerText = effect.marker === null ? '' : ' and the Building Program marker was put back'
+    const tradeText = effect.trade > 0 ? `, ${effect.trade} trade returned` : ''
+
+    if ('card' in effect) {
+      // Everything is checked before anything is changed, so a refusal leaves the game as it was.
+      if (!player.items.some((candidate) => candidate.id === effect.card.itemId)) {
+        return err(refused(`The ${label} card is no longer in your hand, so the build cannot be undone.`))
+      }
+      // The same card goes back and the deck is shuffled twice, as for the Great Person cards: no chance to redraw
+      const restored = restoreDrawnCards(
+        withPlayerHand(state, refunded),
+        refunded,
+        record.id,
+        [effect.card.itemId],
+        effect.card.itemId,
+        effect.card.sheetName,
+      )
+      if (!restored.ok) return restored
+      const withMarker =
+        effect.marker === null ? restored.value : placeBack(restored.value, refunded, effect.marker.piece, at)
+      return ok({
+        state: withMarker,
+        text:
+          `${player.username}'s ${label} was undone: the card was put back in the deck` +
+          tradeText +
+          markerText,
+      })
+    }
 
     // Everything is checked before anything is changed, so a refusal leaves the game as it was.
     const piece = state.board.pieces.find((candidate) => candidate.id === effect.pieceId)
@@ -1600,10 +1767,6 @@ const build: AssistedActionDefinition = {
       return err(refused(`The ${label} has left ${effect.square.label}. Move it back first.`))
     }
 
-    const refunded: Playerhand = {
-      ...player,
-      stats: { ...player.stats, trade: player.stats.trade + effect.trade },
-    }
     const removed = removePiece(withPlayerHand(state, refunded), {
       playerId: record.playerId,
       pieceId: effect.pieceId,
@@ -1616,9 +1779,9 @@ const build: AssistedActionDefinition = {
     return ok({
       state: restored,
       text:
-        `${player.username}'s ${label} on ${effect.square.label} was undone: the building was removed` +
-        (effect.trade > 0 ? `, ${effect.trade} trade returned` : '') +
-        (effect.marker === null ? '' : ' and the Building Program marker was put back'),
+        `${player.username}'s ${label} on ${effect.square.label} was undone: the ${effect.item.kind === 'building' ? 'building' : 'figure'} was removed` +
+        tradeText +
+        markerText,
     })
   },
 }

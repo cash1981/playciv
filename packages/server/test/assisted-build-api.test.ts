@@ -38,10 +38,16 @@ beforeEach(async () => {
   repo = created.repo
 })
 
+/** The building choices only: figures and units are offered in the same list (task `assisted-units`). */
+const buildingChoices = (city: CityOptionsJson | undefined): readonly BuildChoiceJson[] =>
+  (city?.choices ?? []).filter((choice) => choice.item.kind === 'building')
+
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` })
 
 interface BuildChoiceJson {
   readonly assetId: string
+  readonly item: { readonly kind: string; readonly assetId?: string }
+  readonly placement: string
   readonly label: string
   readonly cost: number
   readonly tradeToPay: number
@@ -202,8 +208,16 @@ describe('the build options in the projection', () => {
     const mine = await view(table.gameId, table.starter)
     const city = mine.you?.buildOptions?.[0]
     expect(city).toMatchObject({ cityPieceId: table.cityId, label: 'City B2', status: 'ready', production: 5, productionSource: 'estimate' })
-    expect(city?.choices).toEqual([
-      { assetId: LIBRARY, label: 'Library', cost: 5, tradeToPay: 0, squares: [{ ...C2, label: 'C2' }] },
+    expect(buildingChoices(city)).toEqual([
+      {
+        assetId: LIBRARY,
+        item: { kind: 'building', assetId: LIBRARY },
+        placement: 'square',
+        label: 'Library',
+        cost: 5,
+        tradeToPay: 0,
+        squares: [{ ...C2, label: 'C2' }],
+      },
     ])
     expect(city?.unavailable.find((entry) => entry.assetId === UNIVERSITY)?.reason).toBe('Needs Printing Press.')
   })
@@ -238,7 +252,7 @@ describe('the build options in the projection', () => {
     const table = await buildTable('Unrevealed')
     expect((await post(table.starter, `/api/games/${table.gameId}/techs/choose`, { name: 'Writing' })).status).toBe(200)
     const mine = await view(table.gameId, table.starter)
-    expect(mine.you?.buildOptions?.[0]?.choices).toEqual([])
+    expect(buildingChoices(mine.you?.buildOptions?.[0])).toEqual([])
     expect(mine.you?.buildOptions?.[0]?.unavailable.find((entry) => entry.assetId === LIBRARY)?.reason).toBe(
       'Needs Writing. Writing is chosen but not revealed yet.',
     )
@@ -249,7 +263,7 @@ describe('the build options in the projection', () => {
   it('a replayed revision shows no options, though the live state has them', async () => {
     const table = await buildTable('Replay', { techs: ['Writing'] })
     const ready = await view(table.gameId, table.starter)
-    expect(ready.you?.buildOptions?.[0]?.choices).toHaveLength(1)
+    expect(buildingChoices(ready.you?.buildOptions?.[0])).toHaveLength(1)
     expect((await sendBuild(table, 'req-1', ready.rev)).status).toBe(200)
 
     const past = await inject(app, {
@@ -276,7 +290,7 @@ describe('building over HTTP', () => {
     expect(after.board.pieces.filter((piece) => piece.assetId === LIBRARY)).toHaveLength(1)
     // The square is used, so the Library has no square left and is no choice any more
     const city = after.you?.buildOptions?.[0]
-    expect(city?.choices).toEqual([])
+    expect(buildingChoices(city)).toEqual([])
     expect(city?.unavailable.find((entry) => entry.assetId === LIBRARY)?.reason).toMatch(/^No legal square\./)
     expect(after.assistedActions).toEqual([
       expect.objectContaining({
@@ -480,7 +494,7 @@ describe('undo over HTTP', () => {
     expect(after.assistedActions[0]?.status).toBe('undone')
     expect(after.board.pieces.some((piece) => piece.assetId === LIBRARY)).toBe(false)
     // It can be built again
-    expect(after.you?.buildOptions?.[0]?.choices.map((choice) => choice.assetId)).toEqual([LIBRARY])
+    expect(buildingChoices(after.you?.buildOptions?.[0]).map((choice) => choice.assetId)).toEqual([LIBRARY])
     expect((await stored(table)).log.at(-1)?.publicLog).toBe(`System: ${table.starterName}'s Library on C2 was undone: the building was removed`)
   })
 

@@ -16,7 +16,7 @@ import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './bl
 import { combatBonusOf } from './combat-bonus.js'
 import type { CityProduction } from './city-production.js'
 import { cityProductionsOf } from './city-production.js'
-import type { CityBuildOptions } from './build-options.js'
+import type { CityBuildOptions, PlacedBuildItem, UnitBuildItem } from './build-options.js'
 import { buildOptionsOf } from './build-options.js'
 import { BASE_CULTURE_HAND_SIZE, cultureHandSizeOf } from './culture-hand.js'
 import type { CoinSources } from './coins.js'
@@ -341,8 +341,8 @@ export type AssistedEffect =
   | {
       readonly kind: 'build'
       readonly cityPieceId: string
-      /** What was built. Figures and units add their own kinds to this union. */
-      readonly item: { readonly kind: 'building'; readonly assetId: string }
+      /** What was built: a building or a figure, which stands on the map. */
+      readonly item: PlacedBuildItem
       /** The map square, as numbers from the map's top left corner, and the label the log used. */
       readonly square: { readonly column: number; readonly row: number; readonly label: string }
       /** The piece that was placed, where it went and the board history entry that placed it. */
@@ -352,6 +352,16 @@ export type AssistedEffect =
       /** The trade paid for the missing production; 0 when the city's production was enough. */
       readonly trade: number
       /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
+      readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+    }
+  | {
+      readonly kind: 'build'
+      readonly cityPieceId: string
+      /** A military unit: no square and no piece, only a card in the hand. */
+      readonly item: UnitBuildItem
+      /** The card that was drawn and its deck. Server side only, like every effect: it is how an undo finds the card again. */
+      readonly card: { readonly itemId: string; readonly sheetName: SheetName }
+      readonly trade: number
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
     }
 

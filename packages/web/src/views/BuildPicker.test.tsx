@@ -33,6 +33,8 @@ afterEach(() => {
 
 const LIBRARY: BuildChoice = {
   assetId: 'buildings/library',
+  item: { kind: 'building', assetId: 'buildings/library' },
+  placement: 'square',
   label: 'Library',
   cost: 6,
   tradeToPay: 0,
@@ -44,6 +46,8 @@ const LIBRARY: BuildChoice = {
 
 const HARBOR: BuildChoice = {
   assetId: 'buildings/harbor',
+  item: { kind: 'building', assetId: 'buildings/harbor' },
+  placement: 'square',
   label: 'Harbor',
   cost: 5,
   tradeToPay: 3,
@@ -60,8 +64,8 @@ function options(overrides: Partial<CityBuildOptions> = {}): CityBuildOptions {
     productionSource: 'estimate',
     choices: [LIBRARY, HARBOR],
     unavailable: [
-      { assetId: 'buildings/market', label: 'Market', reason: 'Needs the Currency tech.' },
-      { assetId: 'buildings/granary', label: 'Granary', reason: 'No legal square: D4 is forest.' },
+      { assetId: 'buildings/market', item: { kind: 'building', assetId: 'buildings/market' }, label: 'Market', reason: 'Needs the Currency tech.' },
+      { assetId: 'buildings/granary', item: { kind: 'building', assetId: 'buildings/granary' }, label: 'Granary', reason: 'No legal square: D4 is forest.' },
     ],
     ...overrides,
   }
@@ -443,7 +447,7 @@ describe('square picking and Confirm', () => {
 
   it('drops the plan and goes back to the picker with the reason when the refusal took the choice away', async () => {
     vi.spyOn(api, 'build').mockRejectedValue(new ApiError(422, 'BUILD_REFUSED', 'Supply of Library is used up.'))
-    const fresh = viewOf([options({ choices: [HARBOR], unavailable: [{ assetId: 'buildings/library', label: 'Library', reason: 'No Library left in the supply.' }] })], { rev: 8 })
+    const fresh = viewOf([options({ choices: [HARBOR], unavailable: [{ assetId: 'buildings/library', item: { kind: 'building', assetId: 'buildings/library' }, label: 'Library', reason: 'No Library left in the supply.' }] })], { rev: 8 })
     render(<Harness initial={viewOf([options()])} refresh={() => fresh} />)
     startLibrary()
     fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))

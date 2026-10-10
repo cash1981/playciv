@@ -627,9 +627,10 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
   return state.assistedActions.some((record) => {
     if (record.status !== 'applied') return false
     const effect = record.effect
-    // A build placed the building and used up the Building Program marker: neither can be taken back alone
+    // A build placed a building or a figure and used up the Building Program marker: neither can be taken back alone.
+    // A unit placed nothing, so only a marker is on the board.
     if (effect.kind === 'build') {
-      return effect.historyId === entry.id || effect.marker?.historyId === entry.id
+      return ('historyId' in effect && effect.historyId === entry.id) || effect.marker?.historyId === entry.id
     }
     if (change.kind === 'place' && effect.kind === 'cultureAdvance') {
       return effect.marker?.pieceId === change.piece.id

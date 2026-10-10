@@ -36,7 +36,7 @@ import { mapCellOf } from '../src/blockade.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop, piecesAtStep, slotOrigin } from '../src/board.js'
 import type { BoardPiece, Rotation } from '../src/board.js'
 import { buildOptionsOf, buildSquareRefusal } from '../src/build-options.js'
-import type { BuildPayload, CityBuildOptions } from '../src/build-options.js'
+import type { BuildPayload, CityBuildOptions, PlacedBuildItem } from '../src/build-options.js'
 import { cityProductionsOf } from '../src/city-production.js'
 import type { CivItem } from '../src/item.js'
 import { describeError } from '../src/errors.js'
@@ -165,10 +165,19 @@ const cityOf = (state: GameState, index = 0): BoardPiece => {
   return city
 }
 
+/**
+ * The city's building choices only. Figures and units are offered in the same
+ * lists (task `assisted-units`, tested in `assisted-units.test.ts`) and would
+ * otherwise turn every "nothing is built yet" assertion here into a different one.
+ */
 const optionsOf = (state: GameState, index = 0): CityBuildOptions => {
   const found = buildOptionsOf(state, me(state))[index]
   if (found === undefined) throw new Error('no build options')
-  return found
+  return {
+    ...found,
+    choices: found.choices.filter((choice) => choice.item.kind === 'building'),
+    unavailable: found.unavailable.filter((entry) => entry.item.kind === 'building'),
+  }
 }
 
 const choiceFor = (options: CityBuildOptions, assetId: string) =>
@@ -279,6 +288,8 @@ describe('the unlock', () => {
     const library = choiceFor(options, LIBRARY)
     expect(library).toEqual({
       assetId: LIBRARY,
+      item: { kind: 'building', assetId: LIBRARY },
+      placement: 'square',
       label: 'Library',
       cost: 5,
       tradeToPay: 0,
@@ -518,15 +529,16 @@ describe('the squares', () => {
   })
 
   it('buildSquareRefusal says why one square does not work', () => {
+    const market = { kind: 'building', assetId: MARKET } as const
     const state = put(ready(['Currency'], 99), KARANDRAS1, 'buildings/granary', 0, 0)
     const cash = me(state)
     const id = cityOf(state).id
-    expect(buildSquareRefusal(state, cash, id, MARKET, { column: 1, row: 0 })).toBeUndefined()
-    expect(buildSquareRefusal(state, cash, id, MARKET, { column: 0, row: 0 })).toBe('A1 is already taken: Granary stands there.')
-    expect(buildSquareRefusal(state, cash, id, MARKET, { column: 2, row: 0 })).toBe('C1 is water, and a Market needs any terrain except water.')
-    expect(buildSquareRefusal(state, cash, id, MARKET, { column: 1, row: 1 })).toBe('B2 is not in the outskirts of that city.')
-    expect(buildSquareRefusal(state, cash, id, MARKET, { column: 3, row: 3 })).toBe('D4 is not in the outskirts of that city.')
-    expect(buildSquareRefusal(state, cash, 'nope', MARKET, { column: 1, row: 0 })).toBeUndefined()
+    expect(buildSquareRefusal(state, cash, id, market, { column: 1, row: 0 })).toBeUndefined()
+    expect(buildSquareRefusal(state, cash, id, market, { column: 0, row: 0 })).toBe('A1 is already taken: Granary stands there.')
+    expect(buildSquareRefusal(state, cash, id, market, { column: 2, row: 0 })).toBe('C1 is water, and a Market needs any terrain except water.')
+    expect(buildSquareRefusal(state, cash, id, market, { column: 1, row: 1 })).toBe('B2 is not in the outskirts of that city.')
+    expect(buildSquareRefusal(state, cash, id, market, { column: 3, row: 3 })).toBe('D4 is not in the outskirts of that city.')
+    expect(buildSquareRefusal(state, cash, 'nope', market, { column: 1, row: 0 })).toBeUndefined()
   })
 })
 
@@ -889,11 +901,11 @@ describe('a request that is not allowed', () => {
       requestId: 'req-1',
       payload: {
         cityPieceId: cityOf(state).id,
-        item: { kind: 'figure', assetId: 'figures/redarmy' } as unknown as BuildPayload['item'],
+        item: { kind: 'figure', assetId: 'figures/redarmy' } as unknown as PlacedBuildItem,
         target: C2,
       },
     })
-    expect(refusal(figure)).toBe('Only buildings can be built for now.')
+    expect(refusal(figure)).toBe('That is not something that can be built.')
     expect(refusal(tryBuild(state, 'buildings/nothing', C2))).toBe('buildings/nothing is not a building that can be built.')
   })
 

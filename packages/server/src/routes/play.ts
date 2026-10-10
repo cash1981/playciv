@@ -3,11 +3,12 @@
  * drawing, battle, techs, social policy, revealing, trading, turns and undo.
  */
 
-import type { AssistedPayload, BuildPayload, GameState, Government, PlayerStatKey, SheetName } from '@civ/engine'
+import type { AssistedPayload, BuildItem, BuildPayload, GameState, Government, PlayerStatKey, SheetName } from '@civ/engine'
 import {
   ALL_WONDERS,
   BUILDABLE_BUILDING_IDS,
   CULTURE_CARD,
+  UNIT_TYPES,
   chooseSocialPolicy,
   chooseTech,
   discardBarbarians,
@@ -78,9 +79,10 @@ const MAX_BUILD_COORDINATE = 63
 
 /**
  * The `build` payload from a request body, or a sentence saying what is wrong
- * with it. Only the shape is checked here (ids, a known building, whole numbers,
- * a boolean); whether the city, the building and the square are legal is the
- * engine's decision, made from the fresh state.
+ * with it. Only the shape is checked here (ids, a known building or unit type,
+ * whole numbers, a boolean, no extra fields in the item); whether the city, the
+ * item and the square are legal is the engine's decision, made from the fresh
+ * state. A building or a figure needs a target, a unit must not have one.
  */
 function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string {
   const cityPieceId = requireString(body, 'cityPieceId')
@@ -88,9 +90,35 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
     return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
   }
   const item = asRecord(body['item'])
-  const assetId = item['assetId']
-  if (item['kind'] !== 'building' || typeof assetId !== 'string' || !BUILDABLE_BUILDING_IDS.includes(assetId)) {
-    return 'item must be { kind: "building", assetId } with the asset id of a building that can be built'
+  const keys = Object.keys(item)
+  const hasOnly = (...allowed: readonly string[]): boolean =>
+    keys.length === allowed.length && allowed.every((key) => keys.includes(key))
+  let parsed: BuildItem | undefined
+  if (item['kind'] === 'building' && hasOnly('kind', 'assetId')) {
+    const assetId = item['assetId']
+    if (typeof assetId === 'string' && BUILDABLE_BUILDING_IDS.includes(assetId)) {
+      parsed = { kind: 'building', assetId }
+    }
+  } else if ((item['kind'] === 'army' || item['kind'] === 'scout') && hasOnly('kind')) {
+    parsed = { kind: item['kind'] }
+  } else if (item['kind'] === 'unit' && hasOnly('kind', 'unitType')) {
+    const unitType = UNIT_TYPES.find((candidate) => candidate === item['unitType'])
+    if (unitType !== undefined) parsed = { kind: 'unit', unitType }
+  }
+  if (parsed === undefined) {
+    return (
+      `item must be { kind: "building", assetId } with the asset id of a building that can be built, ` +
+      `{ kind: "army" }, { kind: "scout" } or { kind: "unit", unitType } with unitType one of ${UNIT_TYPES.join(', ')}; no other fields`
+    )
+  }
+  const rush = body['rush']
+  if (rush !== undefined && typeof rush !== 'boolean') return 'rush must be a boolean'
+  const optionalRush = rush === undefined ? {} : { rush }
+
+  if (parsed.kind === 'unit') {
+    // A unit is a card in the hand: there is no square to name
+    if (body['target'] !== undefined) return 'a unit has no target: it is a card, not placed on a square'
+    return { cityPieceId, item: parsed, ...optionalRush }
   }
   const target = asRecord(body['target'])
   const column = target['column']
@@ -100,14 +128,7 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
   if (!whole(column) || !whole(row)) {
     return `target must be { column, row }, whole numbers from 0 to ${MAX_BUILD_COORDINATE}`
   }
-  const rush = body['rush']
-  if (rush !== undefined && typeof rush !== 'boolean') return 'rush must be a boolean'
-  return {
-    cityPieceId,
-    item: { kind: 'building', assetId },
-    target: { column, row },
-    ...(rush === undefined ? {} : { rush }),
-  }
+  return { cityPieceId, item: parsed, target: { column, row }, ...optionalRush }
 }
 
 /** Looks up the sheet name and answers 400 when there is no such sheet. */

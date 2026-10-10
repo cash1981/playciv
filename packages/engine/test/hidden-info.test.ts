@@ -342,7 +342,9 @@ describe('build options', () => {
   it('the owner gets the options of their own city', () => {
     const view = toPlayerView(buildScene([{ name: 'Writing', reveal: true }]), CASH1981)
     expect(view.you?.buildOptions).toHaveLength(1)
-    expect(view.you?.buildOptions[0]?.choices.map((choice) => choice.assetId)).toEqual(['buildings/library'])
+    // Figures and units are offered as well (task `assisted-units`); this test is about the buildings
+    const buildings = view.you?.buildOptions[0]?.choices.filter((choice) => choice.item.kind === 'building')
+    expect(buildings?.map((choice) => choice.assetId)).toEqual(['buildings/library'])
   })
 
   it('an opponent and a spectator get no options, and none of the owner\'s are in their view', () => {
@@ -376,7 +378,7 @@ describe('build options', () => {
   it('a tech that is chosen but not revealed unlocks nothing for anyone but the owner, who is told it is hidden', () => {
     const state = buildScene([{ name: 'Writing', reveal: false }])
     const owner = toPlayerView(state, CASH1981)
-    expect(owner.you?.buildOptions[0]?.choices).toEqual([])
+    expect(owner.you?.buildOptions[0]?.choices.filter((choice) => choice.item.kind === 'building')).toEqual([])
     expect(owner.you?.buildOptions[0]?.unavailable.find((entry) => entry.assetId === 'buildings/library')?.reason).toBe(
       'Needs Writing. Writing is chosen but not revealed yet.',
     )
