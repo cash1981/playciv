@@ -41,17 +41,18 @@ import {
   remainingBoardAssetCount,
 } from './board.js'
 import type { BoardPiece } from './board.js'
+import { sameBuildItem } from './build-item.js'
+import type { PlacedBuildItem, UnitType } from './build-item.js'
 import {
   buildItemName,
   buildOptionsOf,
   buildSquareRefusal,
   figureAssetIdOf,
-  sameBuildItem,
   squareCentre,
   squareLabel,
   unitSheetOf,
 } from './build-options.js'
-import type { BuildPayload, BuildSquare, PlacedBuildItem, UnitType } from './build-options.js'
+import type { BuildPayload, BuildSquare } from './build-options.js'
 import {
   buildingProgramMarkerOf,
   cityActionsOf,
@@ -2247,17 +2248,6 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
 export const ASSISTED_ACTION_KINDS: readonly AssistedActionKind[] = ASSISTED_ACTIONS.filter(
   (definition) => definition.button,
 ).map((definition) => definition.kind)
-
-/**
- * Which assisted action belongs to which tech card, by the tech's name. The tech
- * dialog uses it to show the button for any registered card, so a new card needs
- * no change in the web code.
- */
-export const ASSISTED_TECH_ACTIONS: ReadonlyMap<string, AssistedActionKind> = new Map(
-  ASSISTED_ACTIONS.flatMap((definition): [string, AssistedActionKind][] =>
-    definition.techName === null ? [] : [[definition.techName, definition.kind]],
-  ),
-)
 
 /** Any registered action, buttons and `chooseReward` alike: what the route accepts. */
 export function isAssistedActionKind(value: unknown): value is AssistedActionKind {

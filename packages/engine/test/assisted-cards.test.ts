@@ -12,13 +12,14 @@ import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import {
+  ASSISTED_ACTIONS,
   ASSISTED_ACTION_KINDS,
-  ASSISTED_TECH_ACTIONS,
   assistedAvailability,
   availableActionsFor,
   isAssistedActionKind,
   performAssistedAction,
 } from '../src/assisted.js'
+import { ASSISTED_TECH_ACTIONS } from '../src/assisted-techs.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { AssistedActionKind, GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
@@ -94,6 +95,15 @@ describe('the registry and the tech map', () => {
       'Printing Press': 'printingPress',
     })
     expect(ASSISTED_TECH_ACTIONS.get('Writing')).toBeUndefined()
+  })
+
+  it('the tech table lists the same cards as the registry', () => {
+    const fromRegistry = new Map(
+      ASSISTED_ACTIONS.flatMap((definition): [string, string][] =>
+        definition.techName === null ? [] : [[definition.techName, definition.kind]],
+      ),
+    )
+    expect(new Map(ASSISTED_TECH_ACTIONS)).toEqual(fromRegistry)
   })
 
   it('the label of each card is the tech name', () => {

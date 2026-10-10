@@ -20,6 +20,8 @@
  */
 
 import { PHASE_REASON, openCityManagementTurn } from './assisted.js'
+import { UNIT_TYPES } from './build-item.js'
+import type { BuildItem, PlacedBuildItem, UnitBuildItem, UnitType } from './build-item.js'
 import { cityFootprintsOf, mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
 import {
@@ -48,28 +50,6 @@ import type { GameState, Playerhand } from './state.js'
 import { BUILDING_TERRAIN, describeAllowed, terrainAt } from './terrain.js'
 import type { Terrain } from './terrain.js'
 
-/** The four kinds of military unit card. */
-export const UNIT_TYPES = ['infantry', 'artillery', 'mounted', 'aircraft'] as const
-export type UnitType = (typeof UNIT_TYPES)[number]
-
-/** An item that is put on a map square: a building, an army figure or a scout figure. */
-export type PlacedBuildItem =
-  | { readonly kind: 'building'; readonly assetId: string }
-  | { readonly kind: 'army' }
-  | { readonly kind: 'scout' }
-
-/** A military unit: a private card drawn into the hand, with no square. */
-export interface UnitBuildItem {
-  readonly kind: 'unit'
-  readonly unitType: UnitType
-}
-
-/**
- * What a build creates. A figure carries no asset id: its artwork depends on the
- * player's colour, which the engine reads off the player.
- */
-export type BuildItem = PlacedBuildItem | UnitBuildItem
-
 /** A map square as column and row numbers, zero based from the map's top left corner. */
 export interface BuildTarget {
   readonly column: number
@@ -92,13 +72,6 @@ interface BuildPayloadBase {
 export type BuildPayload =
   | (BuildPayloadBase & { readonly item: PlacedBuildItem; readonly target: BuildTarget })
   | (BuildPayloadBase & { readonly item: UnitBuildItem; readonly target?: undefined })
-
-/** Whether two items are the same thing to build. */
-export function sameBuildItem(a: BuildItem, b: BuildItem): boolean {
-  if (a.kind === 'building') return b.kind === 'building' && a.assetId === b.assetId
-  if (a.kind === 'unit') return b.kind === 'unit' && a.unitType === b.unitType
-  return a.kind === b.kind
-}
 
 export interface BuildSquare extends BuildTarget {
   /** The square's label, for example "D5". */

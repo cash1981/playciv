@@ -35,6 +35,7 @@ import {
   WHITE_ARMY_ID,
 } from '../board.js'
 import type { EngineError } from '../errors.js'
+import { MAX_PRODUCTION_OVERRIDE } from '../limits.js'
 import { appendLog } from '../log.js'
 import { nextId } from '../random.js'
 import type { Result } from '../result.js'
@@ -549,9 +550,6 @@ export function setWonderCoinTokens(
     description: `set the Panama Canal's coin tokens to ${input.value}`,
   }))
 }
-
-/** The largest production a player may type in for a city. */
-export const MAX_PRODUCTION_OVERRIDE = 99
 
 /**
  * Sets, or with `null` removes, the production a player typed in for a city. A
