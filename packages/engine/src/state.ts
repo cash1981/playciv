@@ -254,6 +254,12 @@ export interface GameLogEntry {
 
 export type TradeOfferStatus = 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'countered' | 'expired'
 export type TradeOfferAction = 'accept' | 'decline' | 'withdraw'
+export interface TradeOfferTransitionRequest {
+  readonly requestId: string
+  readonly actorId: string
+  readonly action: TradeOfferAction | 'counter'
+  readonly terms: string | null
+}
 
 /** An explicit negotiation record. Terms are deliberately opaque prose. */
 export interface TradeOffer {
@@ -266,7 +272,7 @@ export interface TradeOffer {
   readonly phase: TurnPhase
   readonly status: TradeOfferStatus
   readonly parentOfferId: string | null
-  readonly transitionRequestIds: readonly string[]
+  readonly transitionRequests: readonly TradeOfferTransitionRequest[]
   readonly createdAt: string | null
   readonly resolvedAt: string | null
   readonly logId: string

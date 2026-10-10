@@ -628,7 +628,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       terms,
       requestId,
       at: new Date().toISOString(),
-    }), rev, { skipSaveWhenUnchanged: true })
+    }), rev, { skipSaveWhenUnchanged: true, allowIdempotentRetry: true })
   })
 
   app.post('/api/games/:gameId/trade-offers/:offerId/counter', auth, async (c) => {
@@ -645,7 +645,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       terms,
       requestId,
       at: new Date().toISOString(),
-    }), rev, { skipSaveWhenUnchanged: true })
+    }), rev, { skipSaveWhenUnchanged: true, allowIdempotentRetry: true })
   })
 
   app.post('/api/games/:gameId/trade-offers/:offerId/:action', auth, async (c) => {
@@ -662,7 +662,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       action,
       requestId,
       at: new Date().toISOString(),
-    }), rev, { skipSaveWhenUnchanged: true })
+    }), rev, { skipSaveWhenUnchanged: true, allowIdempotentRetry: true })
   })
 
   app.post('/api/games/:gameId/chat', auth, async (c) => {

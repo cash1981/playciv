@@ -617,6 +617,32 @@ describe('hidden information', () => {
 })
 
 describe('trade offers', () => {
+  it('returns exact committed requests on stale revisions without accepting changed retries', async () => {
+    const game = await startedGame('offer-retries')
+    const before = await loadGame(game.gameId)
+    const recipient = before.players.find((player) => player.username === game.name2)
+    if (recipient === undefined) throw new Error('recipient missing')
+    const path = `/api/games/${game.gameId}/trade-offers`
+    const request = { recipientId: recipient.playerId, terms: 'two trade', requestId: 'retry-create', rev: before.rev }
+    expect((await post(game.seat1, path, request)).status).toBe(200)
+    expect((await post(game.seat1, path, request)).status).toBe(200)
+    expect((await loadGame(game.gameId)).tradeOffers).toHaveLength(1)
+
+    const changedRetry = await post(game.seat1, path, { ...request, terms: 'changed terms' })
+    expect(changedRetry.status).toBe(409)
+
+    const pending = await loadGame(game.gameId)
+    const offer = pending.tradeOffers[0]
+    if (offer === undefined) throw new Error('offer missing')
+    const acceptPath = `/api/games/${game.gameId}/trade-offers/${offer.id}/accept`
+    const acceptRequest = { requestId: 'retry-accept', rev: pending.rev }
+    expect((await post(game.seat2, acceptPath, acceptRequest)).status).toBe(200)
+    expect((await post(game.seat2, acceptPath, acceptRequest)).status).toBe(200)
+    const accepted = await loadGame(game.gameId)
+    expect(accepted.tradeOffers[0]?.status).toBe('accepted')
+    expect(accepted.log.filter((entry) => entry.publicLog?.includes('accepted trade offer'))).toHaveLength(1)
+  })
+
   it('creates and accepts an offer without changing inventory or stats', async () => {
     const game = await startedGame('offers')
     const before = await loadGame(game.gameId)

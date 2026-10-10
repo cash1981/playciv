@@ -230,6 +230,8 @@ export interface ApplyToGameOptions {
    * Off by default, so no other route changes.
    */
   readonly skipSaveWhenUnchanged?: boolean
+  /** Allows an already-committed request ID to return its result on a stale revision. */
+  readonly allowIdempotentRetry?: boolean
 }
 
 /** An ended game is read-only for everyone except the admin role. */
@@ -257,6 +259,13 @@ export async function applyToGame(
   if (isLockedForViewer(game, currentPlayer(c))) return gameEndedResponse(c)
 
   if (clientRev !== undefined && clientRev !== game.rev) {
+    if (options.allowIdempotentRetry === true) {
+      const retryState = game.logSecret === '' ? { ...game, logSecret: newId() } : game
+      const retry = action(retryState)
+      if (retry.ok && retry.value === retryState) {
+        return c.json(toPlayerView(game, currentPlayer(c).id))
+      }
+    }
     return sendError(
       c,
       409,

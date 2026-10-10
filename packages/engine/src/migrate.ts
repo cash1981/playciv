@@ -299,7 +299,10 @@ export function migrateGameState(state: GameState): GameState {
     // rng stream is published through log and item ids.
     logSecret: older.logSecret ?? '',
     assistedActions: older.assistedActions ?? [],
-    tradeOffers: older.tradeOffers ?? [],
+    tradeOffers: (older.tradeOffers ?? []).map((offer) => ({
+      ...offer,
+      transitionRequests: offer.transitionRequests ?? [],
+    })),
     log: older.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),
     players: migratedPlayers,
     board:

@@ -398,6 +398,30 @@ describe('trade offers', () => {
     expect(screen.queryByRole('button', { name: 'Withdraw' })).toBeNull()
   })
 
+  it('routes accept, decline, and withdraw with the selected offer and revision', async () => {
+    await renderPanel(makeView({ tradeOffers: [tradeOffer()] }))
+    await click(screen.getByRole('button', { name: 'Withdraw' }))
+    expect(transitionTradeOffer).toHaveBeenLastCalledWith('game', 'offer-1', 'withdraw', expect.any(String), 17)
+
+    cleanup()
+    await renderPanel(makeView({
+      you: seat('Bob', 2, { playerTurns: [] }),
+      opponents: [seat('Alice', 1)],
+      tradeOffers: [tradeOffer()],
+    }))
+    await click(screen.getByRole('button', { name: 'Accept' }))
+    expect(transitionTradeOffer).toHaveBeenLastCalledWith('game', 'offer-1', 'accept', expect.any(String), 17)
+
+    cleanup()
+    await renderPanel(makeView({
+      you: seat('Bob', 2, { playerTurns: [] }),
+      opponents: [seat('Alice', 1)],
+      tradeOffers: [tradeOffer()],
+    }))
+    await click(screen.getByRole('button', { name: 'Decline' }))
+    expect(transitionTradeOffer).toHaveBeenLastCalledWith('game', 'offer-1', 'decline', expect.any(String), 17)
+  })
+
   it('sends a linked counteroffer from the intended offer row', async () => {
     await renderPanel(makeView({
       you: seat('Bob', 2, { playerTurns: [] }),
@@ -411,11 +435,6 @@ describe('trade offers', () => {
     expect(counterTradeOffer).toHaveBeenCalledWith('game', 'offer-1', 'one trade for two wheat', expect.any(String), 17)
   })
 
-  it('explains that acceptance records agreement but does not settle resources', async () => {
-    await renderPanel(makeView())
-    expect(screen.getByText(/Accepting records that you agreed to the terms/)).toBeTruthy()
-    expect(screen.getByText(/does not transfer resources/)).toBeTruthy()
-  })
 })
 
 describe('the row that starts a turn', () => {

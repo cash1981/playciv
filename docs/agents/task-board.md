@@ -17,7 +17,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** Codex (GPT-5)
 - **Branch:** `feat/issue-265-trade-offers`
 - **Brief:** `docs/agents/tasks/issue-265-trade-offers.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
   - `packages/engine/src/state.ts`, `migrate.ts`, `create-game.ts`, `errors.ts`, `log.ts`, `trade-offers.ts`, `index.ts`
   - `packages/engine/test/trade-offers*.test.ts`

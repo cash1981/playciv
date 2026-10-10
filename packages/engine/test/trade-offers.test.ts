@@ -29,7 +29,7 @@ describe('free-text trade offers', () => {
     const viewJson = JSON.stringify(toPlayerView(offered, CHUL))
     expect(toPlayerView(offered, CHUL).tradeOffers[0]?.senderUsername).toBe('cash1981')
     expect(viewJson).not.toContain('requestId')
-    expect(viewJson).not.toContain('transitionRequestIds')
+    expect(viewJson).not.toContain('transitionRequests')
   })
 
   it('is idempotent by create request id and transitions only the intended actor', () => {
@@ -42,10 +42,16 @@ describe('free-text trade offers', () => {
     const retried = unwrap(createTradeOffer(state, {
       senderId: CASH1981,
       recipientId: CHUL,
-      terms: 'different text is ignored on retry',
+      terms: 'one wheat',
       requestId: 'offer-1',
     }))
     expect(retried).toBe(state)
+    expect(createTradeOffer(state, {
+      senderId: CASH1981,
+      recipientId: CASH1981,
+      terms: 'different recipient',
+      requestId: 'offer-1',
+    }).ok).toBe(false)
     expect(transitionTradeOffer(state, {
       actorId: CASH1981,
       offerId: state.tradeOffers[0]!.id,
@@ -65,6 +71,12 @@ describe('free-text trade offers', () => {
       action: 'accept',
       requestId: 'accept-1',
     }))).toBe(accepted)
+    expect(transitionTradeOffer(accepted, {
+      actorId: CHUL,
+      offerId: state.tradeOffers[0]!.id,
+      action: 'decline',
+      requestId: 'accept-1',
+    }).ok).toBe(false)
     expect(transitionTradeOffer(accepted, {
       actorId: CASH1981,
       offerId: state.tradeOffers[0]!.id,
@@ -90,18 +102,74 @@ describe('free-text trade offers', () => {
     expect(next.tradeOffers[0]).toMatchObject({ terms: 'two trade', status: 'countered' })
     expect(next.tradeOffers[1]).toMatchObject({ terms: 'one trade and one wheat', parentOfferId: state.tradeOffers[0]!.id })
     expect(next.log.at(-2)?.publicLog).toContain('countered trade offer')
-    expect(unwrap(counterTradeOffer(next, {
+    expect(counterTradeOffer(next, {
       actorId: CHUL,
       offerId: state.tradeOffers[0]!.id,
       terms: 'different retry text is ignored',
       requestId: 'counter-1',
-    }))).toBe(next)
+    }).ok).toBe(false)
+    expect(counterTradeOffer(next, {
+      actorId: CHUL,
+      offerId: state.tradeOffers[0]!.id,
+      terms: 'different counter terms',
+      requestId: 'counter-1',
+    }).ok).toBe(false)
     expect(unwrap(counterTradeOffer(next, {
       actorId: CHUL,
       offerId: state.tradeOffers[0]!.id,
       terms: 'one trade and one wheat',
       requestId: 'counter-1',
     }))).toBe(next)
+  })
+
+  it('does not confuse a counter request id with an earlier offer creation id', () => {
+    const first = unwrap(createTradeOffer(firstCivGame(), {
+      senderId: CASH1981,
+      recipientId: CHUL,
+      terms: 'first offer',
+      requestId: 'first-offer',
+    }))
+    const other = unwrap(createTradeOffer(first, {
+      senderId: CHUL,
+      recipientId: CASH1981,
+      terms: 'unrelated offer',
+      requestId: 'counter-request',
+    }))
+    const next = unwrap(counterTradeOffer(other, {
+      actorId: CHUL,
+      offerId: first.tradeOffers[0]!.id,
+      terms: 'actual counteroffer',
+      requestId: 'counter-request',
+    }))
+
+    expect(next.tradeOffers).toHaveLength(3)
+    expect(next.tradeOffers[0]?.status).toBe('countered')
+    expect(next.tradeOffers[1]).toMatchObject({ terms: 'unrelated offer', parentOfferId: null })
+    expect(next.tradeOffers[2]).toMatchObject({ terms: 'actual counteroffer', parentOfferId: first.tradeOffers[0]!.id })
+  })
+
+  it('rejects a collision with the counteroffer creation key without closing the original', () => {
+    const first = unwrap(createTradeOffer(firstCivGame(), {
+      senderId: CASH1981,
+      recipientId: CHUL,
+      terms: 'first offer',
+      requestId: 'first-offer',
+    }))
+    const offerId = first.tradeOffers[0]!.id
+    const existing = unwrap(createTradeOffer(first, {
+      senderId: CHUL,
+      recipientId: CASH1981,
+      terms: 'unrelated offer',
+      requestId: `counter:${offerId}:counter-request`,
+    }))
+
+    expect(counterTradeOffer(existing, {
+      actorId: CHUL,
+      offerId,
+      terms: 'actual counteroffer',
+      requestId: 'counter-request',
+    }).ok).toBe(false)
+    expect(existing.tradeOffers[0]?.status).toBe('pending')
   })
 
   it('expires an unresolved offer when a later turn is observed', () => {

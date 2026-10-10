@@ -3,7 +3,7 @@
 - **Slug:** `issue-265-trade-offers`
 - **Branch:** `feat/issue-265-trade-offers`
 - **Issue:** [#265](https://github.com/cash1981/playciv/issues/265)
-- **Status:** in progress
+- **Status:** in review
 
 ## Goal
 
