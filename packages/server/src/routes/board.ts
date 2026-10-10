@@ -16,6 +16,7 @@ import {
   redoLastBoardChange,
   removePiece,
   rotatePiece,
+  setCityProductionOverride,
   setWonderOwner,
   sendToBack,
   undoLastBoardChange,
@@ -105,6 +106,30 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
     if (ownerId === undefined) return sendError(c, 400, 'BAD_REQUEST', 'ownerId is required')
     return applyToGame(context, c, gameId, (state) =>
       setWonderOwner(state, { playerId: currentPlayer(c).id, pieceId, ownerId, at: now() }),
+    )
+  })
+
+  /**
+   * The production the players typed in for a city. Body: `{ production, rev? }`,
+   * where `production` is a whole number or `null` to go back to the estimate.
+   */
+  app.post('/api/games/:gameId/board/pieces/:pieceId/production', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const pieceId = c.req.param('pieceId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const production = body['production']
+    if (production !== null && (typeof production !== 'number' || !Number.isFinite(production))) {
+      return sendError(c, 400, 'BAD_REQUEST', 'production must be a number or null')
+    }
+    const clientRev = optionalNumber(body, 'rev')
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) =>
+        setCityProductionOverride(state, { playerId: currentPlayer(c).id, pieceId, value: production, at: now() }),
+      clientRev,
+      { skipSaveWhenUnchanged: true },
     )
   })
 

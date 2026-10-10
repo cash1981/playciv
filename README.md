@@ -512,6 +512,30 @@ villages), but the cards flow in one grid instead of one section per kind, so
 short groups do not leave empty space. `useritems.html` rendered a heading per
 kind. See [historical interface decisions](docs/history/README.md).
 
+**Cards can be used with a button.** A player with Chivalry, Democracy or
+Printing Press sees a "Your actions" panel, and the same button in the card's
+detail dialog, that does the bookkeeping for the card: Chivalry spends an
+incense (a hut in hand first, otherwise the piece in the player's own area,
+back to the stock) and adds 5 culture; the two coin cards pay and add a coin.
+Every card is once per turn. The press is recorded, shown in the log, and can be
+taken back with the same everyone-votes undo the game already has. Currency (3) and Metal Casting (7) work the same way. An **Advance culture** button
+pays the cost of the next space, moves the player's marker one space and delivers
+the reward of that space: a culture event card (two to choose from with Mysticism)
+or a Great Person card (more to choose from with Organized Religion and the
+Greeks). The cards to choose between are private and a refresh shows the same
+ones. A **Build** button on each of your cities in the Cities panel lists what that
+city can build now, in three groups: buildings, army and scout figures, and
+military units, with the trade to pay for a rush. A building or a figure goes on
+a highlighted square you tap, then you confirm; a unit is a private card that is
+drawn into your hand with no square, and only its type is public. The piece or
+card, the trade and the log line are one step the vote undo can take back. A **Start
+Building Program** button on each of your cities puts the Building Program marker on
+the city centre, and an **Upgrades** block in the Cities panel flips your basic
+buildings to the upgraded form once you have revealed its tech; both are one step
+the vote undo can take back. Typing the
+same thing in chat or editing the counters by hand still works. See
+`docs/agents/decisions.md`, 2026-10-09.
+
 **Opponents' public hands show face-down cards.** Issue #142 adds one generic
 card back for each culture card, hut, village, great person and unit in another
 player's hand, grouped by player and category. Spectators see the same counts.

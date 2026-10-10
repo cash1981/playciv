@@ -21,8 +21,8 @@ Fortune* and *Wisdom and Warfare*. [README.md](README.md) describes the product.
    no exceptions, clock, unseeded randomness, I/O or mutation of input state.
 4. **Keep hidden information private.** Changes to projections need tests
    showing that hands, private notes/logs and unrevealed cards cannot leak.
-5. **TypeScript strict; English in repository files.** Conversation with the
-   human is Norwegian. Follow [conventions.md](docs/agents/conventions.md).
+5. **TypeScript strict; English in repository files and in conversation with
+   the human.** Follow [conventions.md](docs/agents/conventions.md).
 
 ## Working on a change
 

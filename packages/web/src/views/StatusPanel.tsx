@@ -31,6 +31,7 @@ import type { CoinSourceKey, Government, PlayerStatKey } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerStats, PlayerView } from '../lib/api.js'
+import { AssistedActionButton } from './AssistedActions.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import type { Run } from './GameView.js'
 import { PlayerTabs } from './PlayerTabs.js'
@@ -216,9 +217,8 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
           <CoinSection
             gameId={gameId}
             rows={rows}
+            view={view}
             currentPlayerId={view.you?.playerId ?? null}
-            currentTurnNumber={view.activeTurn?.turnNumber ?? null}
-            currentPlayerTurns={view.you?.playerTurns ?? []}
             internetOwners={wonderOwners(view, 'wonders/internet')}
             panamaOwners={wonderOwners(view, 'wonders/panamacanal')}
             panamaBlockaded={blockadedWonderOwners(view, 'wonders/panamacanal')}
@@ -428,9 +428,8 @@ function availableCoinSources(
 function CoinSection({
   gameId,
   rows,
+  view,
   currentPlayerId,
-  currentTurnNumber,
-  currentPlayerTurns,
   internetOwners,
   panamaOwners,
   panamaBlockaded,
@@ -440,9 +439,9 @@ function CoinSection({
 }: {
   readonly gameId: string
   readonly rows: readonly Row[]
+  /** The viewer's `availableActions` decide the purchase buttons (#260). */
+  readonly view: PlayerView
   readonly currentPlayerId: string | null
-  readonly currentTurnNumber: number | null
-  readonly currentPlayerTurns: NonNullable<PlayerView['you']>['playerTurns']
   readonly internetOwners: ReadonlySet<string>
   readonly panamaOwners: ReadonlySet<string>
   /** Owners whose Panama Canal is blockaded: the engine shows its coins as 0 until it is released. */
@@ -459,25 +458,6 @@ function CoinSection({
     available.get(row.playerId)?.has(key) === true ||
     row.stats.coinSources[key] > 0 ||
     (key === 'panamaCanal' && panamaBlockaded.has(row.playerId))
-  const activePlayerTurn = currentPlayerTurns.find((turn) => turn.turnNumber === currentTurnNumber)
-  const canPurchase = (row: Row, source: 'democracy' | 'printingPress'): boolean => {
-    const techName = source === 'democracy' ? 'Democracy' : 'Printing Press'
-    const resource = source === 'democracy' ? 'trade' : 'culture'
-    const cost = source === 'democracy' ? 6 : 5
-    const key = `coin-purchase:${source}`
-    const limit = source === 'democracy' ? 4 : 4
-    return row.playerId === currentPlayerId &&
-      row.revealedTechNames.includes(techName) &&
-      activePlayerTurn !== undefined &&
-      activePlayerTurn.done.SOT &&
-      activePlayerTurn.done.TRADE &&
-      !activePlayerTurn.done.CM &&
-      !activePlayerTurn.done.MOVEMENT &&
-      !activePlayerTurn.done.RESEARCH &&
-      !activePlayerTurn.usedActions.includes(key) &&
-      row.stats[resource] >= cost &&
-      row.stats.coinSources[source] < limit + (internetOwners.has(row.playerId) ? 2 : 0)
-  }
   const sources = COIN_SOURCES.filter((source) => rows.some((row) => renders(row, source.key)))
   return (
     <div className="scroll-x">
@@ -556,15 +536,18 @@ function CoinSection({
                       row.playerId === currentPlayerId && row.revealedTechNames.includes(
                         source.key === 'democracy' ? 'Democracy' : 'Printing Press',
                       ) && (
-                        <button
-                          type="button"
+                        <AssistedActionButton
+                          action={source.key}
+                          gameId={gameId}
+                          view={view}
+                          busy={busy}
+                          readOnly={readOnly}
+                          run={run}
+                          detail="blocked"
                           className="button secondary"
-                          disabled={disabled || !canPurchase(row, source.key)}
-                          title={canPurchase(row, source.key) ? undefined : 'Available once during your open City Management phase'}
-                          onClick={() => void run(() => api.purchaseCoin(gameId, source.key))}
                         >
                           {source.key === 'democracy' ? 'Spend 6 trade' : 'Spend 5 culture'}
-                        </button>
+                        </AssistedActionButton>
                       )}
                     </>
                   )}

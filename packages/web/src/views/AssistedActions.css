@@ -1,0 +1,76 @@
+/* Assisted actions (#260): one button component, used in "Your actions" and in
+   the tech dialog. Wraps so it never forces a horizontal scroll at 320 px. */
+.assisted-actions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.assisted-actions > li {
+  display: block;
+  min-width: 0;
+}
+
+.assisted-name {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.assisted-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.assisted-reason {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* In a table cell the reason sits under the button instead of beside it. */
+td .assisted-action {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* The card choice after a culture advance. The cards reuse .card-grid.small,
+   which reflows to one or two columns at 320 px. */
+.assisted-reward {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.assisted-reward-title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.assisted-reward > p {
+  margin: 0 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.assisted-reward-cards {
+  min-width: 0;
+}
+
+.assisted-reward-cards .card {
+  min-width: 0;
+}
+
+.assisted-reward-cards .card-actions button {
+  max-width: 100%;
+}
+
+/* Focus lands here after a card choice is kept, because the choice itself is gone.
+   The container is not interactive, so it gets no ring. */
+.assisted-panel-body:focus {
+  outline: none;
+}

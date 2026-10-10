@@ -16,13 +16,19 @@ import { useActivity } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
 
+import { AssistedActionsPanel } from './AssistedActions.js'
 import { BoardView } from './BoardView.js'
+import type { PickSquares } from './BoardView.js'
+import { BuildBar } from './BuildPicker.js'
+import { useBuildFlow } from './buildFlow.js'
+import { CitiesPanel } from './CitiesPanel.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
+import { PageShortcuts, PhaseSummary } from './PhaseSummary.js'
 import { RevealedPanel } from './RevealedPanel.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
@@ -479,6 +485,13 @@ export function GameView({
     return () => onGameActions(null)
   }, [onGameActions, view, historical, selectedRevision, busy, gameId, player, onWithdrawn, onDeleted, onEnded, onUnauthorized, reload, run])
 
+  // Building is for a player in the live game: nothing of it survives a replay,
+  // a locked game or a spectator, and it is cleared the moment one of them applies.
+  // Before the loading guard, because hooks run unconditionally.
+  const buildAllowed =
+    view !== null && !(selectedRevision !== null && historical !== null) && (view.active || player?.role === 'admin')
+  const buildFlow = useBuildFlow(buildAllowed ? (view.you?.buildOptions ?? null) : null)
+
   if (view === null) {
     return (
       <>
@@ -498,6 +511,17 @@ export function GameView({
   const you = displayedView.you
   const activePlayer = activePlayerOf(displayedView)
   const chatAuthors = chatAuthorsOf(displayedView)
+  const buildPlan = buildFlow.plan
+  const pickSquares: PickSquares | undefined =
+    buildPlan === null
+      ? undefined
+      : {
+          itemLabel: buildPlan.label,
+          cells: buildPlan.squares,
+          selected: buildPlan.target,
+          onPick: buildFlow.pick,
+          onCancel: buildFlow.clear,
+        }
 
   // An ended game has nobody on turn: the title names the winner, and the
   // turn chips and the progress strip, which describe whose move it is, go.
@@ -525,6 +549,7 @@ export function GameView({
           />
         </div>
 
+        {!ended && <PhaseSummary view={displayedView} />}
         {!ended && <TurnStatusStrip view={displayedView} />}
 
         {you === null && (
@@ -532,6 +557,8 @@ export function GameView({
             <span className="muted">Watching (not a player)</span>
           </div>
         )}
+
+        <PageShortcuts chat={player !== null} />
       </div>
 
       <GlobalReplayBar
@@ -553,7 +580,18 @@ export function GameView({
 
       {error !== null && <div className="error">{error}</div>}
 
-      {/* The board sits above everything else */}
+      {/* The page runs: header and summary, Your actions, the board, Your cards,
+          then the rest. The board has the whole content width at every size. */}
+      <AssistedActionsPanel
+        gameId={gameId}
+        view={displayedView}
+        busy={interactionBusy}
+        readOnly={displayedView.you === null || replaying || locked}
+        run={run}
+      />
+
+      <BuildBar gameId={gameId} view={displayedView} flow={buildFlow} busy={interactionBusy} run={run} />
+
       <BoardView
         gameId={gameId}
         board={displayedView.board}
@@ -564,12 +602,15 @@ export function GameView({
         readOnly={replaying || locked}
         youId={you?.playerId ?? null}
         viewerIsRussia={you?.civilization?.name === 'Russians'}
+        {...(pickSquares === undefined ? {} : { pickSquares })}
         run={run}
       />
 
       <div className="panel-stack">
-        {/* Draw is the first panel after the board, then the chat and orders timeline and the log. */}
+        {/* Your cards sit directly under the board; the log and the revealed feed are last. */}
+        <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <DrawPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
+        <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         {/* The chat routes need a signed-in player */}
         {player !== null && (
           <ChatOrdersPanel
@@ -584,18 +625,8 @@ export function GameView({
             authors={chatAuthors}
           />
         )}
-        <LogPanel
-          gameId={gameId}
-          busy={busy || locked}
-          readOnly={replaying || locked}
-          run={run}
-          reloadCount={reloadCount}
-          historical={historical}
-        />
-        <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <OpponentHandPanel opponents={displayedView.opponents} />
         <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
-        <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         <SocialPolicyPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         <StatusPanel
           gameId={gameId}
@@ -604,12 +635,28 @@ export function GameView({
           readOnly={displayedView.you === null || replaying || locked}
           run={run}
         />
+        <CitiesPanel
+          gameId={gameId}
+          view={displayedView}
+          busy={interactionBusy}
+          readOnly={displayedView.you === null || replaying || locked}
+          run={run}
+          build={buildFlow}
+        />
         <WondersPanel
           gameId={gameId}
           view={displayedView}
           busy={interactionBusy}
           readOnly={displayedView.you === null || replaying || locked}
           run={run}
+        />
+        <LogPanel
+          gameId={gameId}
+          busy={busy || locked}
+          readOnly={replaying || locked}
+          run={run}
+          reloadCount={reloadCount}
+          historical={historical}
         />
         <RevealedPanel gameId={gameId} reloadCount={reloadCount} historical={historical} />
       </div>

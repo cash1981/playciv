@@ -54,7 +54,8 @@ const COIN_TOKEN_IDS: ReadonlySet<string> = new Set([
 /** Russia's civilization card is named in the plural, like the other civs. */
 const RUSSIA_CIV = 'Russians'
 
-interface Cell {
+/** A map square as column and row numbers, zero based from the map's top left corner. */
+export interface Cell {
   readonly column: number
   readonly row: number
 }
@@ -71,7 +72,7 @@ interface CityFootprint {
  * playable slot); it only gives the numbers instead of the label, so the eight
  * neighbours of a city can be found.
  */
-function cellOf(board: Board, piece: BoardPiece): Cell | null {
+export function mapCellOf(board: Board, piece: BoardPiece): Cell | null {
   if (squareOf(board, piece) === null) return null
   return {
     column: Math.floor((piece.x + piece.width / 2) / board.squareSize),
@@ -83,7 +84,7 @@ const keyOf = (cell: Cell): string => `${cell.column},${cell.row}`
 
 /** The metropolis marker spans two city squares along its long axis. */
 function cityFootprint(board: Board, piece: BoardPiece, color: string): CityFootprint | undefined {
-  const anchor = cellOf(board, piece)
+  const anchor = mapCellOf(board, piece)
   if (anchor === null) return undefined
   const isMetropolis = piece.assetId.includes('metropolis')
   const isVertical = piece.rotation === 90 || piece.rotation === 270
@@ -122,7 +123,7 @@ class BlockadeIndex {
     const cities: CityFootprint[] = []
     for (const piece of state.board.pieces) {
       if (piece.category !== 'city' && piece.category !== 'figure') continue
-      const cell = cellOf(state.board, piece)
+      const cell = mapCellOf(state.board, piece)
       if (cell === null) continue
       const color = pieceColorOf(piece)
       if (piece.category === 'city') {
@@ -170,7 +171,7 @@ class BlockadeIndex {
         .find((player) => player.playerId === piece.ownerId)
         ?.color?.toLowerCase()
     }
-    const cell = cellOf(this.state.board, piece)
+    const cell = mapCellOf(this.state.board, piece)
     if (cell !== null) {
       const around = this.cityColorsAround(cell)
       if (around.size === 1) return [...around][0]
@@ -183,7 +184,7 @@ class BlockadeIndex {
 
   /** A building's city owner without the placedBy fallback. */
   cityOwnerColor(piece: BoardPiece): string | undefined {
-    const cell = cellOf(this.state.board, piece)
+    const cell = mapCellOf(this.state.board, piece)
     if (cell === null) return undefined
     if (this.isCityCenter(cell)) return undefined
     const around = this.cityColorsAround(cell)
@@ -197,9 +198,13 @@ class BlockadeIndex {
 
   /** Whether a figure that is no friend of `color` stands in the piece's map square. */
   hasEnemyFigure(piece: BoardPiece, color: string): boolean {
-    const cell = cellOf(this.state.board, piece)
+    const cell = mapCellOf(this.state.board, piece)
     if (cell === null) return false
+    return this.hasEnemyFigureAt(cell, color)
+  }
 
+  /** The same question for a square, whether or not a piece stands in it. */
+  hasEnemyFigureAt(cell: Cell, color: string): boolean {
     for (const figure of this.figureColors.get(keyOf(cell)) ?? []) {
       if (figure === 'white') {
         // The white army is the Russian player's extra army. Without a Russia
@@ -277,6 +282,45 @@ export function blockadeCheckFor(
 }
 
 /**
+ * One of a player's city pieces with the squares it covers: the centre square
+ * (two for a metropolis, whichever way it lies) and the outskirts, which never
+ * include a centre. Production reads it; the footprint arithmetic is the same
+ * as the blockade's, so the two cannot disagree about which squares a city owns.
+ */
+export interface CityFootprintView {
+  readonly piece: BoardPiece
+  readonly centers: readonly Cell[]
+  readonly outskirts: readonly Cell[]
+  /** Whether a figure that is no friend of the city's colour stands in `cell` (white army and Russia included). */
+  readonly hasEnemyFigureAt: (cell: Cell) => boolean
+}
+
+/**
+ * The cities of one colour on the map, in board order. `color` is lower case,
+ * as `pieceColorOf` gives it. A city piece that is off the map is left out.
+ */
+export function cityFootprintsOf(
+  state: Pick<GameState, 'board' | 'players'>,
+  color: string,
+): readonly CityFootprintView[] {
+  const index = new BlockadeIndex(state)
+  const views: CityFootprintView[] = []
+  for (const piece of state.board.pieces) {
+    if (piece.category !== 'city' || pieceColorOf(piece) !== color) continue
+    const footprint = cityFootprint(state.board, piece, color)
+    if (footprint === undefined) continue
+    const centerKeys = new Set(footprint.centers.map(keyOf))
+    views.push({
+      piece,
+      centers: footprint.centers,
+      outskirts: footprint.cells.filter((cell) => !centerKeys.has(keyOf(cell))),
+      hasEnemyFigureAt: (cell) => index.hasEnemyFigureAt(cell, color),
+    })
+  }
+  return views
+}
+
+/**
  * Whether a wonder the player owns (`ownerId`) stands on a map square with a
  * figure of another colour than the player's in it. Used for the wonders whose
  * effect the engine derives: the Statue of Zeus and the Panama Canal.
@@ -328,7 +372,7 @@ export function blockadedGreatPersonTypes(
     const tokens = state.board.pieces.filter(
       (piece) =>
         piece.assetId === assetId &&
-        cellOf(state.board, piece) !== null &&
+        mapCellOf(state.board, piece) !== null &&
         index.ownerColor(piece) === colour,
     )
     return tokens.length > 0 && tokens.every((piece) => index.isBlockaded(piece))
@@ -352,7 +396,7 @@ export function greatPersonCoinsOf(
   let coins = 0
   for (const piece of state.board.pieces) {
     if (!COIN_TOKEN_IDS.has(piece.assetId)) continue
-    const cell = cellOf(state.board, piece)
+    const cell = mapCellOf(state.board, piece)
     if (cell === null) continue
     if (index.isCityCenter(cell)) continue
     if (!index.cityColorsAround(cell).has(colour)) continue

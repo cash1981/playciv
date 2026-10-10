@@ -12,7 +12,36 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
-_No live claims._
+### issue-265-trade-offers
+
+- **Owner:** Codex (GPT-5)
+- **Branch:** `feat/issue-265-trade-offers`
+- **Brief:** `docs/agents/tasks/issue-265-trade-offers.md`
+- **Status:** in review
+- **Claimed paths:**
+  - `packages/engine/src/state.ts`, `migrate.ts`, `create-game.ts`, `errors.ts`, `log.ts`, `trade-offers.ts`, `index.ts`
+  - `packages/engine/test/trade-offers*.test.ts`
+  - `packages/engine/test/chat-orders-turns.test.ts`
+  - `packages/server/src/routes/games.ts`, `context.ts`, `errors.ts`, `packages/server/test/trade-offers*.test.ts`
+  - `packages/server/test/chat-orders.test.ts`
+  - `packages/web/src/lib/api.ts`, `packages/web/src/views/ChatOrdersPanel.tsx`, `ChatOrdersPanel.css` and tests
+  - `docs/agents/tasks/issue-265-trade-offers.md`, `docs/agents/decisions.md`
+  - `AGENTS.md`, `docs/agents/conventions.md`
+- **Notes:** Child slice based on `feat/assisted-play-contract`; the parent branch claim is a base dependency, not a concurrent edit. Issue #264 is owned by another agent and is out of scope.
+
+### assisted-play-contract
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/assisted-play-contract` (one PR, #271, by the human's choice; later parts are committed here)
+- **Brief:** `docs/agents/tasks/assisted-play-contract.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/turn.ts`
+  - `packages/engine/test/assisted*.test.ts`
+  - `packages/server/src/routes/play.ts`, `packages/server/test/assisted*.test.ts`
+  - `packages/web/src/views/AssistedActions.tsx`, `TechPanel.tsx`, `GameView.tsx`, `PhaseSummary.tsx`, `BoardView.tsx`, `styles.css`, `FaqView.tsx` and tests
+  - `docs/agents/decisions.md`, `state.md`, `README.md`
+- **Notes:** parts 1 to 8 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout, city production, Build for buildings, figures and units, Start Building Program and Upgrade buildings). The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
 
 ---
 

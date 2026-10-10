@@ -3,10 +3,23 @@
  * drawing, battle, techs, social policy, revealing, trading, turns and undo.
  */
 
-import type { GameState, Government, PlayerStatKey, SheetName } from '@civ/engine'
+import type {
+  AssistedPayload,
+  BuildItem,
+  BuildPayload,
+  GameState,
+  Government,
+  PlayerStatKey,
+  SheetName,
+  StartBuildingProgramPayload,
+  UpgradeBuildingsPayload,
+} from '@civ/engine'
 import {
   ALL_WONDERS,
+  BUILDABLE_BUILDING_IDS,
+  BUILDING_UPGRADES,
   CULTURE_CARD,
+  UNIT_TYPES,
   chooseSocialPolicy,
   chooseTech,
   discardBarbarians,
@@ -19,10 +32,12 @@ import {
   endBattle,
   findSheetName,
   initiateUndo,
+  isAssistedActionKind,
   loot,
   markPhasesDone,
   placeGreatPersonInPyramid,
   postOrder,
+  performAssistedAction,
   playerPutsItemBackInDeck,
   playersActiveUndos,
   remainingTechsForPlayer,
@@ -64,6 +79,111 @@ import {
   requireString,
 } from '../context.js'
 import { sendError } from '../errors.js'
+
+/** What a client may use as a `requestId`: 1 to 64 characters of a small safe set. */
+const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/
+
+const BUILD_FIELDS = ['cityPieceId', 'item', 'target', 'rush'] as const
+
+/** The highest map column or row a request may name; the largest board has 16 squares a side, so this is generous. */
+const MAX_BUILD_COORDINATE = 63
+
+/** What every `/actions` body carries besides the payload of the action. */
+const ACTION_ENVELOPE_FIELDS: readonly string[] = ['action', 'requestId', 'rev', 'confirmedRepeat']
+
+/** The fields of the body that are neither the envelope nor `allowed`, for an action whose payload is checked strictly. */
+const extraFields = (body: Record<string, unknown>, allowed: readonly string[]): readonly string[] =>
+  Object.keys(body).filter((key) => !ACTION_ENVELOPE_FIELDS.includes(key) && !allowed.includes(key))
+
+/**
+ * The `build` payload from a request body, or a sentence saying what is wrong
+ * with it. Only the shape is checked here (ids, a known building or unit type,
+ * whole numbers, a boolean, no extra fields in the body or the item); whether the city, the
+ * item and the square are legal is the engine's decision, made from the fresh
+ * state. A building or a figure needs a target, a unit must not have one.
+ */
+function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string {
+  const extra = extraFields(body, BUILD_FIELDS)
+  if (extra.length > 0) return `build takes only ${BUILD_FIELDS.join(', ')}, not ${extra.join(', ')}`
+  const cityPieceId = requireString(body, 'cityPieceId')
+  if (cityPieceId === undefined || !REQUEST_ID.test(cityPieceId)) {
+    return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+  }
+  const item = asRecord(body['item'])
+  const keys = Object.keys(item)
+  const hasOnly = (...allowed: readonly string[]): boolean =>
+    keys.length === allowed.length && allowed.every((key) => keys.includes(key))
+  let parsed: BuildItem | undefined
+  if (item['kind'] === 'building' && hasOnly('kind', 'assetId')) {
+    const assetId = item['assetId']
+    if (typeof assetId === 'string' && BUILDABLE_BUILDING_IDS.includes(assetId)) {
+      parsed = { kind: 'building', assetId }
+    }
+  } else if ((item['kind'] === 'army' || item['kind'] === 'scout') && hasOnly('kind')) {
+    parsed = { kind: item['kind'] }
+  } else if (item['kind'] === 'unit' && hasOnly('kind', 'unitType')) {
+    const unitType = UNIT_TYPES.find((candidate) => candidate === item['unitType'])
+    if (unitType !== undefined) parsed = { kind: 'unit', unitType }
+  }
+  if (parsed === undefined) {
+    return (
+      `item must be { kind: "building", assetId } with the asset id of a building that can be built, ` +
+      `{ kind: "army" }, { kind: "scout" } or { kind: "unit", unitType } with unitType one of ${UNIT_TYPES.join(', ')}; no other fields`
+    )
+  }
+  const rush = body['rush']
+  if (rush !== undefined && typeof rush !== 'boolean') return 'rush must be a boolean'
+  const optionalRush = rush === undefined ? {} : { rush }
+
+  if (parsed.kind === 'unit') {
+    // A unit is a card in the hand: there is no square to name
+    if (body['target'] !== undefined) return 'a unit has no target: it is a card, not placed on a square'
+    return { cityPieceId, item: parsed, ...optionalRush }
+  }
+  const target = asRecord(body['target'])
+  const column = target['column']
+  const row = target['row']
+  const whole = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_BUILD_COORDINATE
+  if (!whole(column) || !whole(row)) {
+    return `target must be { column, row }, whole numbers from 0 to ${MAX_BUILD_COORDINATE}`
+  }
+  return { cityPieceId, item: parsed, target: { column, row }, ...optionalRush }
+}
+
+/**
+ * The `startBuildingProgram` payload, or a sentence saying what is wrong with it:
+ * exactly `cityPieceId`, nothing else. Whether the city is the player's and free of a
+ * marker is the engine's decision.
+ */
+function parseStartBuildingProgramPayload(body: Record<string, unknown>): StartBuildingProgramPayload | string {
+  const extra = extraFields(body, ['cityPieceId'])
+  if (extra.length > 0) return `startBuildingProgram takes only cityPieceId, not ${extra.join(', ')}`
+  const cityPieceId = requireString(body, 'cityPieceId')
+  if (cityPieceId === undefined || !REQUEST_ID.test(cityPieceId)) {
+    return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+  }
+  return { cityPieceId }
+}
+
+/** The basic building asset ids that have an upgraded form: what `family` may name. */
+const UPGRADE_FAMILIES: readonly string[] = Object.keys(BUILDING_UPGRADES)
+
+/**
+ * The `upgradeBuildings` payload, or a sentence saying what is wrong with it: only an
+ * optional `family`, the asset id of a basic building. Without it every family that can
+ * be upgraded is.
+ */
+function parseUpgradeBuildingsPayload(body: Record<string, unknown>): UpgradeBuildingsPayload | string {
+  const extra = extraFields(body, ['family'])
+  if (extra.length > 0) return `upgradeBuildings takes only an optional family, not ${extra.join(', ')}`
+  const family = body['family']
+  if (family === undefined) return {}
+  if (typeof family !== 'string' || !UPGRADE_FAMILIES.includes(family)) {
+    return `family must be the asset id of a basic building: ${UPGRADE_FAMILIES.join(', ')}`
+  }
+  return { family }
+}
 
 /** Looks up the sheet name and answers 400 when there is no such sheet. */
 function parseSheetName(
@@ -734,6 +854,100 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     )
   })
 
+  /**
+   * One route for every assisted action (#260). `requestId` makes a retry or a
+   * second tab harmless; `rev` is the revision the client saw, so a stale tab
+   * gets the usual 409 before anything runs. The old `/coin-purchase` route
+   * stays and shares the engine code.
+   */
+  app.post('/api/games/:gameId/actions', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const action = requireString(body, 'action')
+    if (action === undefined || !isAssistedActionKind(action)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'action must be a known assisted action')
+    }
+    const requestId = requireString(body, 'requestId')
+    if (requestId === undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'requestId is required')
+    }
+    if (!REQUEST_ID.test(requestId)) {
+      return sendError(
+        c,
+        400,
+        'BAD_REQUEST',
+        'requestId must be 1 to 64 characters: letters, digits and . _ : -',
+      )
+    }
+    const clientRev = optionalNumber(body, 'rev')
+    if (body['rev'] !== undefined && (clientRev === undefined || !Number.isInteger(clientRev) || clientRev < 0)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'rev must be a non-negative integer')
+    }
+    // `confirmedRepeat` is the player's yes to "use it again?". It must be a real boolean:
+    // a string such as "true" is refused, the same as for `confirmedOutOfTurn` elsewhere.
+    if (body['confirmedRepeat'] !== undefined && typeof body['confirmedRepeat'] !== 'boolean') {
+      return sendError(c, 400, 'BAD_REQUEST', 'confirmedRepeat must be a boolean')
+    }
+    const confirmedRepeat = body['confirmedRepeat'] === true
+    // Only `chooseReward`, `build`, `startBuildingProgram` and `upgradeBuildings` carry a payload, each its own; the other actions take none
+    let payload: AssistedPayload | undefined
+    if (action === 'chooseReward') {
+      const rewardId = requireString(body, 'rewardId')
+      const itemId = requireString(body, 'itemId')
+      if (rewardId === undefined || itemId === undefined || !REQUEST_ID.test(rewardId) || !REQUEST_ID.test(itemId)) {
+        return sendError(
+          c,
+          400,
+          'BAD_REQUEST',
+          'rewardId and itemId are required: 1 to 64 characters, letters, digits and . _ : -',
+        )
+      }
+      payload = { rewardId, itemId }
+    } else if (body['rewardId'] !== undefined || body['itemId'] !== undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'rewardId and itemId only belong to chooseReward')
+    }
+    if (action === 'build') {
+      const parsed = parseBuildPayload(body)
+      if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
+      payload = parsed
+    } else if (action === 'startBuildingProgram') {
+      const parsed = parseStartBuildingProgramPayload(body)
+      if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
+      payload = parsed
+    } else if (action === 'upgradeBuildings') {
+      const parsed = parseUpgradeBuildingsPayload(body)
+      if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
+      payload = parsed
+    } else if (BUILD_FIELDS.some((field) => body[field] !== undefined)) {
+      return sendError(
+        c,
+        400,
+        'BAD_REQUEST',
+        'cityPieceId, item, target and rush only belong to build, and cityPieceId also to startBuildingProgram',
+      )
+    } else if (body['family'] !== undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'family only belongs to upgradeBuildings')
+    }
+    const actor = currentPlayer(c)
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) =>
+        performAssistedAction(state, {
+          playerId: actor.id,
+          action,
+          requestId,
+          at: new Date().toISOString(),
+          ...(payload === undefined ? {} : { payload }),
+          ...(confirmedRepeat ? { confirmedRepeat } : {}),
+        }),
+      clientRev,
+      // A requestId that is already recorded answers with the same state: no new revision
+      { description: `${actor.username} used ${action}`, skipSaveWhenUnchanged: true },
+    )
+  })
+
   /** Shared government bookkeeping, parallel to the numeric status values. */
   app.post('/api/games/:gameId/players/:targetPlayerId/government', auth, async (c) => {
     const gameId = c.req.param('gameId')
@@ -772,7 +986,12 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     const value = asRecord(await c.req.json().catch(() => ({})))['vote']
 
     return applyToGame(context, c, gameId, (state) =>
-      vote(state, { logId, playerId: currentPlayer(c).id, vote: value === true }),
+      vote(state, {
+        logId,
+        playerId: currentPlayer(c).id,
+        vote: value === true,
+        at: new Date().toISOString(),
+      }),
     )
   })
 

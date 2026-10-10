@@ -1,0 +1,154 @@
+/* The Cities panel (task city-production). Everything wraps, so it never forces
+   a horizontal scroll at 320 px, and nothing has a fixed width. */
+.cities-group {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.cities-owner {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.cities-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.city-card {
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.city-label {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.city-figure {
+  margin: 0.25rem 0;
+  overflow-wrap: anywhere;
+}
+
+.city-number {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.city-program {
+  margin: 0.25rem 0;
+  color: var(--accent);
+}
+
+.city-details {
+  margin: 0.4rem 0;
+}
+
+.city-details summary {
+  cursor: pointer;
+  padding: 0.2rem 0;
+}
+
+.city-arithmetic {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.city-arithmetic ul {
+  margin: 0.2rem 0 0.4rem;
+  padding-left: 1.2rem;
+}
+
+.city-caption {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
+}
+
+.city-flag {
+  color: var(--warn);
+}
+
+.city-build {
+  margin-top: 0.4rem;
+  min-width: 0;
+}
+
+.city-build-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  overflow-wrap: anywhere;
+}
+
+.city-edit {
+  margin-top: 0.4rem;
+}
+
+.city-edit-label {
+  margin-bottom: 0.2rem;
+}
+
+/* The field and its two buttons share a line when there is room and wrap when there is not. */
+.city-edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.city-input {
+  flex: 0 1 5rem;
+  width: 5rem;
+  min-width: 0;
+}
+
+.city-error {
+  margin: 0.3rem 0 0;
+  color: var(--bad);
+}
+
+.city-upgrades {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.city-upgrade-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.city-upgrade {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.city-upgrade-line {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .city-upgrades button,
+  .city-input,
+  .city-build-row button,
+  .city-edit-row button {
+    min-height: 2.75rem;
+  }
+}

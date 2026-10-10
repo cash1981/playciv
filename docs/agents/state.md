@@ -29,6 +29,21 @@ old test counts and past deployment reports do not establish present health.
   Verify configuration/migrations in the target environment before deployment;
   repository history does not establish whether production is up to date.
 
+- Assisted play (#260) is on PR #271: card buttons, culture advance, Great Person
+  markers, phase summary, confirm before reuse. See the "Assisted play" section
+  of decisions and `tasks/assisted-*.md`. Offers (#265) are not built.
+
+- City production (#250 slice A, first part of #264) is on PR #271: a per-city
+  estimate with a hand-set override and a Cities panel.
+  Brief `tasks/city-production.md`; see "City production" in decisions.
+
+- Assisted build (#264) is on PR #271: a Build button per city for buildings, army and
+  scout figures and military units, legal choices only, square picking on the board, trade
+  rush, undo by vote; also Start Building Program and Upgrade buildings. Harvest and devote
+  to the arts are not built (their icon data is not in the map data). Briefs
+  `tasks/assisted-build.md`, `tasks/assisted-units.md` and `tasks/assisted-city-actions.md`;
+  see "Assisted build" in decisions.
+
 Read [current decisions](decisions.md) for the relevant compatibility/rationale
 and [limitations](limitations.md) for known gaps. Archived Mongo games remaining
 nonplayable is separate from the completed single-chat migration.

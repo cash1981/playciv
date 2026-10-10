@@ -77,10 +77,19 @@ export type EngineError =
   | { readonly kind: 'BOARD_ASSET_RUSSIA_ONLY'; readonly assetId: string }
   | { readonly kind: 'BOARD_PIECE_NOT_FOUND'; readonly pieceId: string }
   | { readonly kind: 'UNKNOWN_WONDER_OWNER'; readonly playerId: string }
+  /** `setCityProductionOverride` was pointed at a piece that is not a city. */
+  | { readonly kind: 'PIECE_NOT_A_CITY'; readonly pieceId: string }
+  /** `setCityProductionOverride` got something other than a whole number from 0 to 99 (or `null` to clear). */
+  | { readonly kind: 'INVALID_PRODUCTION_OVERRIDE'; readonly value: number }
   /** The board history is empty, so there is nothing to take back */
   | { readonly kind: 'NOTHING_TO_UNDO_ON_BOARD' }
   /** The board's last change belongs to someone else, not the caller */
   | { readonly kind: 'BOARD_UNDO_NOT_YOURS' }
+  /**
+   * The board's last change is the removal of a piece an assisted action spent.
+   * Only the undo vote on that action's log line may put it back.
+   */
+  | { readonly kind: 'BOARD_UNDO_ASSISTED' }
   /** Nothing has been undone since the last board change, so there is nothing to redo */
   | { readonly kind: 'NOTHING_TO_REDO_ON_BOARD' }
   /** The game has not started: there is no player to the left of the caller yet (barbarians) */
@@ -110,6 +119,24 @@ export type EngineError =
       readonly source: 'democracy' | 'printingPress'
       readonly reason: 'TECH_NOT_REVEALED' | 'PHASE_CLOSED' | 'ALREADY_USED' | 'INSUFFICIENT_RESOURCES' | 'AT_CAPACITY'
     }
+  /**
+   * An assisted action could not be performed. `status` is the same word the
+   * projection shows (`used`, `needs-resource`, `wrong-phase`, `not-owned`,
+   * `unavailable`) and `reason` is the sentence for the player.
+   */
+  | {
+      readonly kind: 'ASSISTED_ACTION_REJECTED'
+      readonly action: string
+      readonly status: 'used' | 'needs-resource' | 'wrong-phase' | 'not-owned' | 'unavailable'
+      readonly reason: string
+    }
+  /** The assisted action behind this log line has already been undone. */
+  | { readonly kind: 'ASSISTED_ACTION_ALREADY_UNDONE'; readonly logId: string }
+  /**
+   * The undo vote on an assisted action passed but the board no longer allows the
+   * reversal (the culture marker has been moved since). Nothing is changed.
+   */
+  | { readonly kind: 'ASSISTED_UNDO_BLOCKED'; readonly logId: string; readonly reason: string }
   /** `setPlayerGovernment` got a value outside the Wisdom and Warfare cards. */
   | { readonly kind: 'UNKNOWN_GOVERNMENT'; readonly government: string }
   /** A battle is already active — only one at a time is allowed */
@@ -128,6 +155,13 @@ export type EngineError =
   | { readonly kind: 'CANNOT_BATTLE_YOURSELF'; readonly playerId: string }
   /** That position is already occupied on this side */
   | { readonly kind: 'ARENA_POSITION_OCCUPIED' }
+  | { readonly kind: 'INVALID_TRADE_OFFER_TERMS'; readonly length: number }
+  | { readonly kind: 'TRADE_OFFER_REQUEST_REUSED'; readonly requestId: string }
+  | { readonly kind: 'TRADE_OFFER_RECIPIENT_NOT_FOUND'; readonly playerId: string }
+  | { readonly kind: 'TRADE_OFFER_SELF' }
+  | { readonly kind: 'TRADE_OFFER_NOT_FOUND'; readonly offerId: string }
+  | { readonly kind: 'TRADE_OFFER_NOT_PENDING'; readonly offerId: string }
+  | { readonly kind: 'TRADE_OFFER_NOT_ALLOWED'; readonly offerId: string }
 
 export function describeError(error: EngineError): string {
   switch (error.kind) {
@@ -199,10 +233,16 @@ export function describeError(error: EngineError): string {
       return `No piece on the board with id ${error.pieceId}`
     case 'UNKNOWN_WONDER_OWNER':
       return `No player in this game with id ${error.playerId}`
+    case 'PIECE_NOT_A_CITY':
+      return `Piece ${error.pieceId} is not a city`
+    case 'INVALID_PRODUCTION_OVERRIDE':
+      return `Production must be a whole number between 0 and 99, got ${error.value}`
     case 'NOTHING_TO_UNDO_ON_BOARD':
       return 'There is no board change to undo'
     case 'BOARD_UNDO_NOT_YOURS':
       return 'The last board change was made by someone else'
+    case 'BOARD_UNDO_ASSISTED':
+      return 'The last board change was made by an assisted action. Ask for an undo vote on its log line instead'
     case 'NOTHING_TO_REDO_ON_BOARD':
       return 'There is no undone board change to redo'
     case 'GAME_NOT_STARTED':
@@ -229,6 +269,12 @@ export function describeError(error: EngineError): string {
         INSUFFICIENT_RESOURCES: 'You do not have enough trade or culture for this purchase.',
         AT_CAPACITY: 'This coin source is already at its capacity.',
       }[error.reason]
+    case 'ASSISTED_ACTION_REJECTED':
+      return error.reason
+    case 'ASSISTED_ACTION_ALREADY_UNDONE':
+      return 'This action has already been undone'
+    case 'ASSISTED_UNDO_BLOCKED':
+      return error.reason
     case 'UNKNOWN_GOVERNMENT':
       return `Unknown government: ${error.government}`
     case 'BATTLE_ALREADY_ACTIVE':
@@ -247,5 +293,19 @@ export function describeError(error: EngineError): string {
       return 'You cannot initiate a battle against yourself'
     case 'ARENA_POSITION_OCCUPIED':
       return 'That position is already occupied on this side'
+    case 'INVALID_TRADE_OFFER_TERMS':
+      return `Trade offer terms must contain 1 to 2,000 characters (got ${error.length})`
+    case 'TRADE_OFFER_REQUEST_REUSED':
+      return 'This trade-offer request id belongs to another offer'
+    case 'TRADE_OFFER_RECIPIENT_NOT_FOUND':
+      return 'The selected recipient is not a player in this game'
+    case 'TRADE_OFFER_SELF':
+      return 'Choose another player as the recipient'
+    case 'TRADE_OFFER_NOT_FOUND':
+      return 'Trade offer not found'
+    case 'TRADE_OFFER_NOT_PENDING':
+      return 'This trade offer is no longer pending'
+    case 'TRADE_OFFER_NOT_ALLOWED':
+      return 'You are not allowed to perform that action on this trade offer'
   }
 }

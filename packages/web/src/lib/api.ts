@@ -8,23 +8,38 @@
 
 import type {
   ActiveTurnStatus,
+  AssistedActionKind,
   Board,
   BoardArea,
   BoardAsset,
   BoardHistoryEntry,
   BoardPiece,
+  BuildChoice,
+  BuildItem,
+  BuildPayload,
+  BuildSquare,
+  BuildTarget,
+  BuildUnavailable,
+  CityActionOptions,
+  CityBuildOptions,
+  CityModifier,
+  CityProduction,
   CoinSourceKey,
   HighscoreResult,
   Government,
   Item,
+  OutskirtsSquare,
   PlayerStatKey,
   PlayerStats,
   PlayerView,
   RevealedEntry,
   SheetName,
   SocialPolicyItem,
+  StartBuildingProgramOption,
   TechItem,
   TurnPhase,
+  UnitType,
+  UpgradeFamilyOption,
   WaitingFor,
   WinnerEntry,
 } from '@civ/engine'
@@ -33,23 +48,38 @@ import { beginActivity } from './activity.js'
 
 export type {
   ActiveTurnStatus,
+  AssistedActionKind,
   Board,
   BoardArea,
   BoardAsset,
   BoardHistoryEntry,
   BoardPiece,
+  BuildChoice,
+  BuildItem,
+  BuildPayload,
+  BuildSquare,
+  BuildTarget,
+  BuildUnavailable,
+  CityActionOptions,
+  CityBuildOptions,
+  CityModifier,
+  CityProduction,
   CoinSourceKey,
   HighscoreResult,
   Government,
   Item,
+  OutskirtsSquare,
   PlayerStatKey,
   PlayerStats,
   PlayerView,
   RevealedEntry,
   SheetName,
   SocialPolicyItem,
+  StartBuildingProgramOption,
   TechItem,
   TurnPhase,
+  UnitType,
+  UpgradeFamilyOption,
   WaitingFor,
   WinnerEntry,
 }
@@ -256,6 +286,8 @@ export interface LogEntryDto {
   readonly createdAt?: string | null
   readonly hasUndo: boolean
   readonly canUndo?: boolean
+  /** Set on a line an assisted action wrote; the undo vote can target it (#260). */
+  readonly assistedActionId?: string
 }
 
 export interface ChatMessageDto {
@@ -727,8 +759,75 @@ export const api = {
     value: number,
   ) =>
     post<PlayerView>(`/api/games/${gameId}/players/${targetPlayerId}/coin`, { source, value }),
-  purchaseCoin: (gameId: string, source: 'democracy' | 'printingPress') =>
-    post<PlayerView>(`/api/games/${gameId}/coin-purchase`, { source }),
+  /**
+   * One assisted action (#260). `requestId` is chosen by the caller and kept until
+   * the request settles, so a retry cannot do the action twice; `rev` is the
+   * revision the caller saw, so a stale tab gets the usual 409.
+   * `confirmedRepeat` is sent only after the player answered yes to "use it
+   * again?" for a card already used this turn; the server refuses a second use
+   * without it, as `draw` does without `confirmedOutOfTurn`.
+   */
+  performAction: (
+    gameId: string,
+    action: AssistedActionKind,
+    requestId: string,
+    rev: number,
+    confirmedRepeat?: boolean,
+  ) =>
+    post<PlayerView>(
+      `/api/games/${gameId}/actions`,
+      confirmedRepeat === true
+        ? { action, requestId, rev, confirmedRepeat: true }
+        : { action, requestId, rev },
+    ),
+  /**
+   * The card choice after a culture advance: the same route as `performAction`,
+   * with the reward and the card to keep. The request id is kept like any other.
+   */
+  chooseReward: (gameId: string, rewardId: string, itemId: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'chooseReward',
+      requestId,
+      rev,
+      rewardId,
+      itemId,
+    }),
+  /**
+   * The assisted Build (#264): the same route and request id rules as the other
+   * actions. The payload is what the engine's `build` action takes; the server
+   * checks everything again against the fresh state. A building or a figure
+   * sends its `target` square; a unit is a private card and sends none (the
+   * server refuses a target on one).
+   */
+  build: (gameId: string, requestId: string, rev: number, payload: BuildPayload) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'build',
+      requestId,
+      rev,
+      cityPieceId: payload.cityPieceId,
+      item: payload.item,
+      ...(payload.target === undefined ? {} : { target: payload.target }),
+      ...(payload.rush === undefined ? {} : { rush: payload.rush }),
+    }),
+  /** Put the Building Program marker on one of the viewer's cities (assisted city action). */
+  startBuildingProgram: (gameId: string, requestId: string, rev: number, cityPieceId: string) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'startBuildingProgram',
+      requestId,
+      rev,
+      cityPieceId,
+    }),
+  /**
+   * Flip the viewer's basic buildings to their upgraded form. `family` is the
+   * basic asset id of one family; without it every family that can be flipped is.
+   */
+  upgradeBuildings: (gameId: string, requestId: string, rev: number, family?: string) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'upgradeBuildings',
+      requestId,
+      rev,
+      ...(family === undefined ? {} : { family }),
+    }),
   setPlayerGovernment: (
     gameId: string,
     targetPlayerId: string,
@@ -755,6 +854,9 @@ export const api = {
     }),
   setWonderOwner: (gameId: string, pieceId: string, ownerId: string | null) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/owner`, { ownerId }),
+  /** The production typed in for a city; `null` goes back to the estimate. */
+  setCityProduction: (gameId: string, pieceId: string, production: number | null) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/production`, { production }),
   rotatePiece: (gameId: string, pieceId: string, rotation?: number) =>
     post<PlayerView>(
       `/api/games/${gameId}/board/pieces/${pieceId}/rotate`,
@@ -776,4 +878,15 @@ export const api = {
     ),
   sendChat: (gameId: string, message: string) =>
     post<ChatMessageDto>(`/api/games/${gameId}/chat`, { message }),
+  sendTradeOffer: (gameId: string, recipientId: string, terms: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/trade-offers`, { recipientId, terms, requestId, rev }),
+  transitionTradeOffer: (
+    gameId: string,
+    offerId: string,
+    action: 'accept' | 'decline' | 'withdraw',
+    requestId: string,
+    rev: number,
+  ) => post<PlayerView>(`/api/games/${gameId}/trade-offers/${offerId}/${action}`, { requestId, rev }),
+  counterTradeOffer: (gameId: string, offerId: string, terms: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/trade-offers/${offerId}/counter`, { terms, requestId, rev }),
 }

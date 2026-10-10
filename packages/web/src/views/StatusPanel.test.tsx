@@ -3,11 +3,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createBoard, createPlayerTurn, DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS, wondersArea } from '@civ/engine'
+import { createBoard, DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS, wondersArea } from '@civ/engine'
 import type { CoinSources, Government } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
+import { resetPendingRequestIds } from './AssistedActions.js'
 import type { Run } from './GameView.js'
 import { StatusPanel } from './StatusPanel.js'
 
@@ -406,30 +407,133 @@ describe('StatusPanel Coins section', () => {
     expect(screen.queryByRole('button', { name: 'Increase Alice Adam Smith' })).toBeNull()
   })
 
-  it('buys a Democracy coin through one atomic action during City Management', async () => {
-    const purchase = vi.spyOn(api, 'purchaseCoin').mockResolvedValue(memberView)
+  const democracyAction = (
+    status: 'ready' | 'wrong-phase' | 'needs-resource' | 'used',
+    reason: string,
+  ) => ({ action: 'democracy' as const, label: 'Democracy', status, reason })
+
+  /** The viewer holds a revealed Democracy; the engine's `availableActions` say what can be pressed. */
+  function democracyView(action: ReturnType<typeof democracyAction>): PlayerView {
     const base = coinView({}, { techs: ['Democracy'] })
-    const turn = createPlayerTurn('Alice', 1)
-    const view = {
+    return {
       ...base,
-      activeTurn: {
-        playerId: 'player-me', username: 'Alice', turnNumber: 1, phase: 'CM', waitingFor: [], startPlayer: 'Alice',
-      },
-      you: {
-        ...base.you!,
-        stats: { ...base.you!.stats, trade: 6 },
-        playerTurns: [{
-          ...turn,
-          done: { ...turn.done, SOT: true, TRADE: true },
-        }],
-      },
-    } as PlayerView
+      rev: 7,
+      you: { ...base.you!, availableActions: [action] },
+    } as unknown as PlayerView
+  }
+
+  it('buys a Democracy coin through the assisted action route, with the revision it saw', async () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue(memberView)
+    const view = democracyView(democracyAction('ready', 'Spend 6 trade to add 1 coin to Democracy.'))
     render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
 
     openCoins()
     fireEvent.click(screen.getByRole('button', { name: 'Spend 6 trade' }))
 
-    await waitFor(() => expect(purchase).toHaveBeenCalledWith('game-1', 'democracy'))
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    expect(perform).toHaveBeenCalledWith('game-1', 'democracy', expect.any(String), 7)
+  })
+
+  it('takes the Democracy button state and reason from availableActions, not from its own rules', () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue(memberView)
+    const view = democracyView(
+      democracyAction('wrong-phase', 'Only available during your open City Management phase.'),
+    )
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+    const button = screen.getByRole('button', { name: 'Spend 6 trade' })
+
+    expect((button as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Only available during your open City Management phase.')).toBeTruthy()
+    fireEvent.click(button)
+    expect(perform).not.toHaveBeenCalled()
+  })
+
+  it('a Democracy purchase already made this turn stays pressable, asks first and sends confirmedRepeat after a yes', async () => {
+    resetPendingRequestIds()
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue(memberView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const view = democracyView(
+      democracyAction('used', 'Democracy has already been used this turn. You will be asked to confirm.'),
+    )
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+    const button = screen.getByRole('button', { name: 'Spend 6 trade' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    expect(screen.getByText('Democracy has already been used this turn. You will be asked to confirm.')).toBeTruthy()
+
+    fireEvent.click(button)
+    expect(confirm).toHaveBeenCalledWith(
+      'You have already used Democracy this turn. The rules allow it once per turn. Use it again?',
+    )
+    expect(perform).not.toHaveBeenCalled()
+
+    fireEvent.click(button)
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    expect(perform).toHaveBeenCalledWith('game-1', 'democracy', expect.any(String), 7, true)
+  })
+
+  const printingPressAction = (
+    status: 'ready' | 'wrong-phase' | 'needs-resource' | 'used',
+    reason: string,
+  ) => ({ action: 'printingPress' as const, label: 'Printing Press', status, reason })
+
+  it('buys a Printing Press coin from the viewer\'s own row through performAction, with the revision it saw', async () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue(memberView)
+    const base = coinView({}, { techs: ['Printing Press'] })
+    const view = {
+      ...base,
+      rev: 9,
+      you: {
+        ...base.you!,
+        availableActions: [printingPressAction('ready', 'Spend 5 culture to add 1 coin to Printing Press.')],
+      },
+      // Bob holds it too, so a button on his row would show up as a second one
+      opponents: [
+        {
+          ...memberView.opponents[0]!,
+          revealedTechs: [{ name: 'Printing Press', hidden: false }],
+        },
+      ],
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+    const buttons = screen.getAllByRole('button', { name: 'Spend 5 culture' })
+    expect(buttons).toHaveLength(1)
+    fireEvent.click(buttons[0]!)
+
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    expect(perform).toHaveBeenCalledWith('game-1', 'printingPress', expect.any(String), 9)
+  })
+
+  it('offers no Printing Press purchase on another player\'s row', () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue(memberView)
+    const base = coinView()
+    const view = {
+      ...base,
+      you: {
+        ...base.you!,
+        // Even a ready action for the viewer must not put a button on Bob's row
+        availableActions: [printingPressAction('ready', 'Spend 5 culture to add 1 coin to Printing Press.')],
+      },
+      opponents: [
+        {
+          ...memberView.opponents[0]!,
+          revealedTechs: [{ name: 'Printing Press', hidden: false }],
+        },
+      ],
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    openCoins()
+
+    // Bob's counter is there, so the source row renders, but without the purchase
+    expect(screen.getByRole('button', { name: 'Increase Bob Printing Press (II)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Spend 5 culture' })).toBeNull()
+    expect(perform).not.toHaveBeenCalled()
   })
 
   it('offers Panama Canal to its owner wherever the wonder is displayed', () => {

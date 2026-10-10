@@ -124,6 +124,7 @@ export function emptyPlayerhand(player: NewPlayer, playernumber: number): Player
     gamenote: null,
     stats: DEFAULT_PLAYER_STATS,
     government: DEFAULT_GOVERNMENT,
+    pendingRewards: [],
   }
 }
 
@@ -195,6 +196,8 @@ export function createGame(options: CreateGameOptions): GameState {
     techs: numberedTechs,
     socialPolicies: numberedPolicies,
     log: [],
+    assistedActions: [],
+    tradeOffers: [],
     rng: deck.rng,
     logSecret: options.secret ?? deriveLogSecret(seed, gameId),
     itemCounter: counter,

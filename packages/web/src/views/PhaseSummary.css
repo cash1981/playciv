@@ -1,0 +1,80 @@
+/* The phase summary and the page shortcuts in the game header (#260).
+   Everything wraps, so nothing forces a horizontal scroll at 320 px. */
+.phase-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 1rem;
+  margin-top: 0.6rem;
+  min-width: 0;
+}
+
+.phase-summary p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.phase-summary-round,
+.phase-summary-you {
+  font-weight: 600;
+}
+
+.phase-summary-waiting {
+  color: var(--muted);
+}
+
+.phase-summary-choice {
+  /* Reads as a link to the card choice in "Your actions" */
+  background: none;
+  border: none;
+  padding: 0.25rem 0;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.phase-summary-choice:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.phase-summary-resources {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.9rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+}
+
+.phase-summary-resources strong {
+  color: var(--text);
+}
+
+.page-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+/* A shortcut lands with its heading in view, not under the edge of the window */
+.board-panel,
+.collapsible-panel {
+  scroll-margin-top: 0.5rem;
+}
+
+.board-panel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .page-shortcuts button {
+    min-height: 2.75rem;
+  }
+}

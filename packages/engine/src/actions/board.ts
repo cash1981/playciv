@@ -15,7 +15,7 @@
  * log would drown.
  */
 
-import type { Board, BoardArea, BoardChange, BoardPiece, Rotation } from '../board.js'
+import type { Board, BoardArea, BoardChange, BoardHistoryEntry, BoardPiece, Rotation } from '../board.js'
 import {
   applyChange,
   areaAt,
@@ -35,6 +35,7 @@ import {
   WHITE_ARMY_ID,
 } from '../board.js'
 import type { EngineError } from '../errors.js'
+import { MAX_PRODUCTION_OVERRIDE } from '../limits.js'
 import { appendLog } from '../log.js'
 import { nextId } from '../random.js'
 import type { Result } from '../result.js'
@@ -177,7 +178,15 @@ export function placePiece(state: GameState, input: PlacePieceInput): ActionResu
  */
 export function placeUnchecked(
   state: GameState,
-  input: PlacePieceInput,
+  input: PlacePieceInput & {
+    /**
+     * Who the piece is attributed to (`BoardPiece.placedBy`). Left out, it is
+     * `playerId`, as for every other caller. A flip that replaces a piece
+     * passes the old piece's value, so combat bonus and building count stay
+     * with the original placer; `null` keeps a piece with no placer unattributed.
+     */
+    readonly placedBy?: string | null
+  },
 ): GameState | undefined {
   const asset = findBoardAsset(input.assetId)
   if (asset === undefined) return undefined
@@ -218,7 +227,7 @@ export function placeUnchecked(
     width: asset.width,
     height: asset.height,
     rotation: input.rotation ?? 0,
-    placedBy: input.playerId,
+    placedBy: input.placedBy === undefined ? input.playerId : input.placedBy,
     ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
   }
 
@@ -542,6 +551,42 @@ export function setWonderCoinTokens(
   }))
 }
 
+/**
+ * Sets, or with `null` removes, the production a player typed in for a city. A
+ * typed number wins over the estimate (`cityProductionsOf`), because the map data
+ * does not hold every icon. Any player in the game may do it, like other board
+ * edits, and it is undone and replayed like them. Setting the value a city
+ * already has changes nothing and is not recorded.
+ */
+export function setCityProductionOverride(
+  state: GameState,
+  input: PieceInput & { readonly value: number | null },
+): ActionResult {
+  const denied = requireAccess(state, input.playerId)
+  if (denied !== undefined) return err(denied)
+  if (
+    input.value !== null &&
+    (!Number.isInteger(input.value) || input.value < 0 || input.value > MAX_PRODUCTION_OVERRIDE)
+  ) {
+    return err({ kind: 'INVALID_PRODUCTION_OVERRIDE', value: input.value })
+  }
+  const piece = findPiece(state.board, input.pieceId)
+  if (piece === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+  if (piece.category !== 'city') return err({ kind: 'PIECE_NOT_A_CITY', pieceId: input.pieceId })
+  const from = piece.productionOverride ?? null
+  if (from === input.value) return ok(state)
+  const change: BoardChange = { kind: 'productionOverride', pieceId: piece.id, from, to: input.value }
+  const to = input.value
+  return ok(record(input, {
+    state,
+    pieces: applyChange(state.board.pieces, change),
+    change,
+    description: to === null
+      ? `removed the typed production of ${piece.label} at ${locationOf(state.board, areasFor(state), piece)}`
+      : `set the production of ${piece.label} at ${locationOf(state.board, areasFor(state), piece)} to ${to}`,
+  }))
+}
+
 // ---------------------------------------------------------------------------
 // Removing
 // ---------------------------------------------------------------------------
@@ -571,6 +616,50 @@ export function removePiece(state: GameState, input: PieceInput): ActionResult {
 // ---------------------------------------------------------------------------
 
 /**
+ * Whether a board history entry is part of an assisted action that is still
+ * applied: the removal of the resource piece it spent, the move of the culture
+ * marker a culture advance made, the Great Person marker a culture advance put in the
+ * player's area, or the building a build placed and the Building Program marker it
+ * used up, the marker a Building Program start placed and each building an upgrade
+ * removed and placed again. That change belongs to the action, so only the undo vote on the
+ * action's log line may take it back; the board's own Undo would return it and keep
+ * what the action gave (or take the marker and keep the card). Once the action is
+ * undone the old history entry is an ordinary one again.
+ *
+ * Reads the records directly instead of importing `assisted.ts`, which imports
+ * this file.
+ */
+function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): boolean {
+  const { change } = entry
+  return state.assistedActions.some((record) => {
+    if (record.status !== 'applied') return false
+    const effect = record.effect
+    // A build placed a building or a figure and used up the Building Program marker: neither can be taken back alone.
+    // A unit placed nothing, so only a marker is on the board.
+    if (effect.kind === 'build') {
+      return ('historyId' in effect && effect.historyId === entry.id) || effect.marker?.historyId === entry.id
+    }
+    // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip
+    if (effect.kind === 'startBuildingProgram') return effect.historyId === entry.id
+    if (effect.kind === 'upgradeBuildings') {
+      return effect.flipped.some((flip) => flip.removedHistoryId === entry.id || flip.placedHistoryId === entry.id)
+    }
+    if (change.kind === 'place' && effect.kind === 'cultureAdvance') {
+      return effect.marker?.pieceId === change.piece.id
+    }
+    if (effect.kind === 'cultureAdvance') {
+      return change.kind === 'move' && effect.historyId === entry.id
+    }
+    return (
+      change.kind === 'remove' &&
+      'spent' in effect &&
+      effect.spent.kind === 'piece' &&
+      effect.spent.piece.id === change.piece.id
+    )
+  })
+}
+
+/**
  * Takes back the board's last change, but only the player's own.
  *
  * Everyone may move everything on this shared board, but Undo is scoped to
@@ -590,6 +679,7 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
   const last = state.board.history.at(-1)
   if (last === undefined) return err({ kind: 'NOTHING_TO_UNDO_ON_BOARD' })
   if (last.playerId !== playerId) return err({ kind: 'BOARD_UNDO_NOT_YOURS' })
+  if (isAssistedBoardChange(state, last)) return err({ kind: 'BOARD_UNDO_ASSISTED' })
 
   return ok(
     withBoard(state, {

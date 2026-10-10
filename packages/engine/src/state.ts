@@ -10,10 +10,17 @@
 import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement } from './item.js'
 import { isUnit } from './item.js'
 import type { Rng } from './random.js'
-import type { Board, BoardArea } from './board.js'
-import { boardAreas, cultureStepOf, leaderAssetId } from './board.js'
+import type { Board, BoardArea, BoardPiece } from './board.js'
+import { boardAreas } from './board.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
+import type { CityProduction } from './city-production.js'
+import { cityProductionsOf } from './city-production.js'
+import type { PlacedBuildItem, UnitBuildItem } from './build-item.js'
+import type { CityBuildOptions } from './build-options.js'
+import { buildOptionsOf } from './build-options.js'
+import { cityActionsOf, upgradeOptionsOf } from './city-actions.js'
+import type { CityActionOptions, UpgradeFamilyOption } from './city-actions.js'
 import { BASE_CULTURE_HAND_SIZE, cultureHandSizeOf } from './culture-hand.js'
 import type { CoinSources } from './coins.js'
 import { EMPTY_COIN_SOURCES, coinSourcesOf } from './coins.js'
@@ -28,6 +35,10 @@ import {
 import type { Undo } from './undo.js'
 import type { Battle, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
+import { availableActionsFor, livePendingRewards, publicAssistedActions } from './assisted.js'
+import { cultureMarkerOf } from './culture-track.js'
+import type { CultureLevel, CultureSpaceKind } from './culture-track.js'
+import type { SheetName } from './sheet-name.js'
 
 export type GameType = 'WAW'
 
@@ -153,6 +164,38 @@ export interface Playerhand {
   readonly stats: PlayerStats
   /** Public shared bookkeeping for the civilization's current government. */
   readonly government: Government
+  /**
+   * Card choices waiting for the owner after a culture advance. Private: the
+   * candidates are in the hand, hidden, and only the owner's projection carries
+   * this list. Stored in the state, so a refresh resumes the choice and never draws again.
+   */
+  readonly pendingRewards: readonly PendingReward[]
+}
+
+/**
+ * A reward of a culture advance that still has to be resolved: the player drew
+ * `candidateIds.length` cards, keeps `keep` of them and discards the rest.
+ */
+export interface PendingReward {
+  /** The `requestId` of the advance that drew them. */
+  readonly id: string
+  readonly kind: CultureSpaceKind
+  readonly level: CultureLevel
+  /** The space the marker moved to. */
+  readonly step: number
+  /** Ids of the drawn cards, which are in the player's hand until the choice is made. */
+  readonly candidateIds: readonly string[]
+  readonly keep: 1
+}
+
+/** A pending reward in the owner's projection, with the candidate cards in the clear. */
+export interface PendingRewardView {
+  readonly id: string
+  readonly kind: CultureSpaceKind
+  readonly level: CultureLevel
+  readonly step: number
+  readonly candidates: readonly Item[]
+  readonly keep: 1
 }
 
 /** Java: `GameLog.LogType`. */
@@ -206,6 +249,254 @@ export interface GameLogEntry {
   readonly undo: Undo | null
   /** ISO timestamp assigned by the server when this entry is persisted. */
   readonly createdAt: string | null
+  /**
+   * The `requestId` of the assisted action this line reports (see
+   * `AssistedActionRecord`). It makes the line a target for the undo vote even
+   * though it carries no item.
+   */
+  readonly assistedActionId?: string
+}
+
+export type TradeOfferStatus = 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'countered' | 'expired'
+export type TradeOfferAction = 'accept' | 'decline' | 'withdraw'
+export interface TradeOfferTransitionRequest {
+  readonly requestId: string
+  readonly actorId: string
+  readonly action: TradeOfferAction | 'counter'
+  readonly terms: string | null
+}
+
+/** An explicit negotiation record. Terms are deliberately opaque prose. */
+export interface TradeOffer {
+  readonly id: string
+  readonly requestId: string
+  readonly senderId: string
+  readonly recipientId: string
+  readonly terms: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+  readonly status: TradeOfferStatus
+  readonly parentOfferId: string | null
+  readonly transitionRequests: readonly TradeOfferTransitionRequest[]
+  readonly createdAt: string | null
+  readonly resolvedAt: string | null
+  readonly logId: string
+}
+
+/** Safe public projection of a trade offer. Request ids and effect data never leave the engine. */
+export interface PublicTradeOffer {
+  readonly id: string
+  readonly senderId: string
+  readonly senderUsername: string
+  readonly recipientId: string
+  readonly recipientUsername: string
+  readonly terms: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+  readonly status: TradeOfferStatus
+  readonly parentOfferId: string | null
+  readonly createdAt: string | null
+  readonly resolvedAt: string | null
+  readonly logId: string
+}
+
+/** The assisted actions the game can perform for a player. See `assisted.ts`. */
+export type AssistedActionKind =
+  | CultureCardKind
+  | 'democracy'
+  | 'printingPress'
+  | 'cultureAdvance'
+  | 'chooseReward'
+  | 'build'
+  | 'startBuildingProgram'
+  | 'upgradeBuildings'
+
+/** The cards that spend a resource token for culture: "Incense, City Management: gain N culture". */
+export type CultureCardKind = 'chivalry' | 'currency' | 'metalCasting'
+
+/** Why a player can or cannot press an assisted action right now. */
+export type AssistedStatus =
+  | 'ready'
+  | 'used'
+  | 'needs-resource'
+  | 'wrong-phase'
+  | 'not-owned'
+  | 'unavailable'
+
+/**
+ * The resource token an action spent, exactly, so an undo puts back the same
+ * one: a hut from the hand (moved to `discardedItems`), or the board piece that
+ * was removed, with its position.
+ */
+export type SpentResource =
+  | { readonly kind: 'hut'; readonly resource: string; readonly itemId: string }
+  | { readonly kind: 'piece'; readonly resource: string; readonly piece: BoardPiece }
+
+/**
+ * The Great Person marker a culture advance put in the player's area: which piece, where it
+ * landed and the board history entry that placed it. An undo removes exactly this
+ * piece, and refuses when it has left the owner's area.
+ */
+export interface GreatPersonMarker {
+  readonly assetId: string
+  readonly pieceId: string
+  readonly position: { readonly x: number; readonly y: number }
+  readonly historyId: string
+}
+
+/** What an action changed, enough to reverse it. Server side only, never in a view. */
+export type AssistedEffect =
+  | { readonly kind: CultureCardKind; readonly culture: number; readonly spent: SpentResource }
+  | {
+      readonly kind: 'coinPurchase'
+      readonly source: 'democracy' | 'printingPress'
+      readonly resource: 'trade' | 'culture'
+      readonly cost: number
+    }
+  | {
+      readonly kind: 'cultureAdvance'
+      readonly fromStep: number
+      readonly toStep: number
+      /** What was paid, after the discounts. */
+      readonly culture: number
+      readonly trade: number
+      /** The leader piece that moved, where it was and where it went, and the board history entry of the move. */
+      readonly markerPieceId: string
+      readonly markerFrom: { readonly x: number; readonly y: number }
+      readonly markerTo: { readonly x: number; readonly y: number }
+      readonly historyId: string
+      readonly reward: CultureSpaceKind
+      readonly level: CultureLevel
+      readonly sheetName: SheetName
+      /** Every card drawn, in draw order. */
+      readonly drawn: readonly string[]
+      /** The card kept, or `null` while the choice is still pending. */
+      readonly kept: string | null
+      /**
+       * Great Person space only (absent on a culture event and on records saved
+       * before the markers existed): the faceup cards discarded because no marker of
+       * their type was left, and the marker taken once a card is kept.
+       */
+      readonly rejected?: readonly string[]
+      readonly marker?: GreatPersonMarker | null
+    }
+  | {
+      readonly kind: 'chooseReward'
+      readonly rewardId: string
+      /** The card kept, or `null` when no candidate was left in the hand and the choice was only dropped. */
+      readonly itemId: string | null
+    }
+  | {
+      readonly kind: 'build'
+      readonly cityPieceId: string
+      /** What was built: a building or a figure, which stands on the map. */
+      readonly item: PlacedBuildItem
+      /** The map square, as numbers from the map's top left corner, and the label the log used. */
+      readonly square: { readonly column: number; readonly row: number; readonly label: string }
+      /** The piece that was placed, where it went and the board history entry that placed it. */
+      readonly pieceId: string
+      readonly position: { readonly x: number; readonly y: number }
+      readonly historyId: string
+      /** The trade paid for the missing production; 0 when the city's production was enough. */
+      readonly trade: number
+      /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
+      readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+    }
+  | {
+      readonly kind: 'build'
+      readonly cityPieceId: string
+      /** A military unit: no square and no piece, only a card in the hand. */
+      readonly item: UnitBuildItem
+      /**
+       * The card that was drawn and its deck. An undo puts the card back in that deck
+       * and shuffles the deck again. Server side only, like every effect: never
+       * projected.
+       */
+      readonly card: {
+        readonly itemId: string
+        readonly sheetName: SheetName
+      }
+      readonly trade: number
+      readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+    }
+  | {
+      readonly kind: 'startBuildingProgram'
+      readonly cityPieceId: string
+      /** The city as the log named it, for example "Capital B3", kept for the undo line. */
+      readonly cityLabel: string
+      /** The centre square the marker was put on (the anchor square of a metropolis). */
+      readonly square: { readonly column: number; readonly row: number; readonly label: string }
+      /** The marker that was placed, where it went and the board history entry that placed it. */
+      readonly pieceId: string
+      readonly position: { readonly x: number; readonly y: number }
+      readonly historyId: string
+    }
+  | {
+      readonly kind: 'upgradeBuildings'
+      /** Every building flipped, in the order it was flipped (board order). */
+      readonly flipped: readonly {
+        /** The basic building exactly as it stood, so an undo puts the same piece back. */
+        readonly from: BoardPiece
+        /** The map square both forms stand on. */
+        readonly square: { readonly column: number; readonly row: number; readonly label: string }
+        /** The upgraded piece that replaced it, where it went, and the two board history entries (the removal, the placement). */
+        readonly pieceId: string
+        readonly position: { readonly x: number; readonly y: number }
+        readonly removedHistoryId: string
+        readonly placedHistoryId: string
+      }[]
+    }
+
+/**
+ * One applied assisted action. `id` is the client's `requestId`, which is what
+ * makes a retry, a refresh or a second tab harmless. `phase` and `turnNumber`
+ * stay on the record so a later "reopen phase" can find what belongs to it.
+ */
+export interface AssistedActionRecord {
+  readonly id: string
+  readonly kind: AssistedActionKind
+  readonly playerId: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+  /** The key written to the player's `PlayerTurn.usedActions`, or `null` for a repeatable action. */
+  readonly usageKey: string | null
+  readonly at: string | null
+  /** The public log line the action wrote. */
+  readonly logId: string
+  readonly status: 'applied' | 'undone'
+  readonly effect: AssistedEffect
+  /**
+   * Set when the card had already been used this turn and the player confirmed
+   * using it again. The record then shares the first use's `usageKey`, which is
+   * freed only when no applied record holds it any more.
+   */
+  readonly confirmedRepeat?: boolean
+}
+
+/** One entry of `PlayerView.you.availableActions`: the viewer's own button state. */
+export interface AvailableAction {
+  readonly action: AssistedActionKind
+  readonly label: string
+  readonly status: AssistedStatus
+  /** A readable sentence, also when `status` is `ready`. */
+  readonly reason: string
+}
+
+/** An assisted action as everybody may read it. No effect, no hut or piece identity. */
+export interface PublicAssistedAction {
+  readonly id: string
+  readonly kind: AssistedActionKind
+  readonly label: string
+  readonly playerId: string
+  readonly username: string
+  readonly turnNumber: number
+  readonly phase: TurnPhase
+  readonly status: 'applied' | 'undone'
+  /** The public log line, as it was written. */
+  readonly text: string
+  readonly logId: string
+  /** Present, and true, for a use the player confirmed after the card was used this turn. Not secret. */
+  readonly confirmedRepeat?: boolean
 }
 
 export interface GameState {
@@ -237,6 +528,13 @@ export interface GameState {
    */
   readonly publicTurns: Readonly<Record<string, PlayerTurn>>
   readonly log: readonly GameLogEntry[]
+  /**
+   * Every assisted action performed, with what it spent and gained. The
+   * `effect` inside is for undo only and is never part of a projection.
+   */
+  readonly assistedActions: readonly AssistedActionRecord[]
+  /** Explicit free-text trade negotiations; no reducer interprets the terms. */
+  readonly tradeOffers: readonly TradeOffer[]
   /** The board and the pieces on it. Every player sees the whole board. */
   readonly board: Board
   readonly rng: Rng
@@ -417,17 +715,8 @@ export function withPlayer(state: GameState, player: Playerhand): GameState {
  */
 export function cultureMarkerLevelOf(state: GameState, playerId: string): number | null {
   const player = findPlayer(state, playerId)
-  if (player === undefined || player.civilization === null || player.color === null) {
-    return null
-  }
-
-  const assetId = leaderAssetId(player.civilization.name, player.color)
-  if (assetId === undefined) return null
-
-  const piece = state.board.pieces.find((candidate) => candidate.assetId === assetId)
-  if (piece === undefined) return null
-
-  return cultureStepOf(state.board, piece)
+  if (player === undefined) return null
+  return cultureMarkerOf(state, player)?.step ?? null
 }
 
 /**
@@ -546,6 +835,12 @@ export interface OpaquePlayerhand {
   readonly cultureMarkerLevel: number | null
   readonly cityCount: number
   readonly buildingCount: number
+  /**
+   * Each city's production estimate with its arithmetic. Derived from the public
+   * board and from revealed cards only (see `city-production.ts`), so an opponent
+   * gets the same figures a spectator would.
+   */
+  readonly cities: readonly CityProduction[]
 }
 
 function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
@@ -577,6 +872,7 @@ function opaque(state: GameState, player: Playerhand): OpaquePlayerhand {
     cultureMarkerLevel: cultureMarkerLevelOf(state, player.playerId),
     cityCount: cityCountOf(state, player.playerId),
     buildingCount: buildingCountOf(state, player.playerId),
+    cities: cityProductionsOf(state, player),
   }
 }
 
@@ -586,6 +882,8 @@ export interface PublicLogEntry {
   readonly username: string
   readonly logType: LogType | null
   readonly publicLog: string
+  /** Present on the line of an assisted action, so anyone can ask to undo it. */
+  readonly assistedActionId?: string
 }
 
 export function toPublicLog(entry: GameLogEntry): PublicLogEntry {
@@ -594,14 +892,46 @@ export function toPublicLog(entry: GameLogEntry): PublicLogEntry {
     username: entry.username,
     logType: entry.logType,
     publicLog: entry.publicLog,
+    ...(entry.assistedActionId === undefined ? {} : { assistedActionId: entry.assistedActionId }),
   }
 }
 
+export function publicTradeOffers(state: GameState): readonly PublicTradeOffer[] {
+  const currentTurn = turnStatus(state).currentTurn
+  return state.tradeOffers.map((offer) => ({
+    id: offer.id,
+    senderId: offer.senderId,
+    senderUsername: findPlayer(state, offer.senderId)?.username ?? offer.senderId,
+    recipientId: offer.recipientId,
+    recipientUsername: findPlayer(state, offer.recipientId)?.username ?? offer.recipientId,
+    terms: offer.terms,
+    turnNumber: offer.turnNumber,
+    phase: offer.phase,
+    status: offer.status === 'pending' && (
+      offer.turnNumber < currentTurn ||
+      findPlayer(state, offer.senderId) === undefined ||
+      findPlayer(state, offer.recipientId) === undefined
+    ) ? 'expired' : offer.status,
+    parentOfferId: offer.parentOfferId,
+    createdAt: offer.createdAt,
+    resolvedAt: offer.resolvedAt,
+    logId: offer.logId,
+  }))
+}
+
 /** The viewer's own hand, plus the same derived board numbers opponents get. */
-export interface PlayerViewSelf extends Playerhand {
+export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
+  /**
+   * The card choices waiting for the viewer, each with its candidate cards.
+   * Only ever the viewer's own: an opponent or a spectator gets no such field,
+   * not even a count.
+   */
+  readonly pendingRewards: readonly PendingRewardView[]
   readonly cultureMarkerLevel: number | null
   readonly cityCount: number
   readonly buildingCount: number
+  /** The viewer's cities, as `OpaquePlayerhand.cities` gives them for everybody. */
+  readonly cities: readonly CityProduction[]
   /**
    * The Great Person card types the viewer cannot use for now (issue #241): they
    * have tokens of the type on the map and every one is blockaded. Derived from
@@ -609,6 +939,31 @@ export interface PlayerViewSelf extends Playerhand {
    * of `OpaquePlayerhand`.
    */
   readonly blockadedGreatPersonTypes: readonly string[]
+  /**
+   * What the viewer can press right now, one entry per assisted action. Only
+   * ever built for the viewer's own player: it depends on their hand and on
+   * the resource tokens they hold, so nobody else gets it.
+   */
+  readonly availableActions: readonly AvailableAction[]
+  /**
+   * What each of the viewer's cities can build now (assisted Build). Derived
+   * from the viewer's revealed techs and trade, so it exists on the own view only:
+   * never on `OpaquePlayerhand`, never for a spectator, and blanked for a replayed
+   * revision.
+   */
+  readonly buildOptions: readonly CityBuildOptions[]
+  /**
+   * What the viewer can do with each city besides building: for now, start a
+   * Building Program. Own view only, like `buildOptions`.
+   */
+  readonly cityActions: readonly CityActionOptions[]
+  /**
+   * The building families the viewer can flip to their upgraded form now: the
+   * upgraded tech is revealed and a basic building stands in one of their cities.
+   * Own view only, because it depends on the viewer's techs; empty for a viewer
+   * with no such building.
+   */
+  readonly upgradeOptions: readonly UpgradeFamilyOption[]
 }
 
 /**
@@ -640,6 +995,9 @@ export interface PlayerView {
    */
   readonly blockadedPieceIds: readonly string[]
   readonly log: readonly (PublicLogEntry | GameLogEntry)[]
+  /** Assisted actions already performed, public summary only. */
+  readonly assistedActions: readonly PublicAssistedAction[]
+  readonly tradeOffers: readonly PublicTradeOffer[]
   /**
    * The active battle, or null. The arena is fully public — both sides see all
    * units once placed. Units NOT in the arena remain subject to existing
@@ -694,6 +1052,20 @@ export function battleSummaries(state: GameState): readonly BattleSideSummary[] 
   })
 }
 
+/**
+ * The viewer's pending rewards with the candidate cards looked up in their hand.
+ * A reward with no candidate left in the hand is not shown (`livePendingRewards`).
+ */
+function pendingRewardViews(player: Playerhand): readonly PendingRewardView[] {
+  return livePendingRewards(player).map(({ candidateIds, ...reward }) => ({
+    ...reward,
+    candidates: candidateIds.flatMap((id) => {
+      const item = player.items.find((candidate) => candidate.id === id)
+      return item === undefined ? [] : [item]
+    }),
+  }))
+}
+
 export function toPlayerView(state: GameState, viewerId: string): PlayerView {
   const player = findPlayer(state, viewerId)
   const you: PlayerViewSelf | null =
@@ -704,7 +1076,13 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           cultureMarkerLevel: cultureMarkerLevelOf(state, viewerId),
           cityCount: cityCountOf(state, viewerId),
           buildingCount: buildingCountOf(state, viewerId),
+          cities: cityProductionsOf(state, player),
           blockadedGreatPersonTypes: blockadedGreatPersonTypes(state, player),
+          availableActions: availableActionsFor(state, viewerId),
+          buildOptions: buildOptionsOf(state, player),
+          cityActions: cityActionsOf(state, player),
+          upgradeOptions: upgradeOptionsOf(state, player),
+          pendingRewards: pendingRewardViews(player),
         }
   return {
     id: state.id,
@@ -727,6 +1105,8 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
     log: state.log.map((entry) =>
       entry.playerId === viewerId ? entry : toPublicLog(entry),
     ),
+    assistedActions: publicAssistedActions(state),
+    tradeOffers: publicTradeOffers(state),
     battle: state.battle,
     battleUndo: state.endedBattle === null ? null : { endedBy: state.endedBattle.endedBy },
     battleSummary: battleSummaries(state),
