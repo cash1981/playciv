@@ -170,15 +170,23 @@ export function counterTradeOffer(state: GameState, input: CounterTradeOfferInpu
   }
   const terms = requireText(input.terms)
   if (!terms.ok) return terms
-  const closed = transitionTradeOffer(current, {
-    actorId: input.actorId,
-    offerId: input.offerId,
-    action: 'decline',
-    requestId: input.requestId,
-    at: input.at,
-  })
-  if (!closed.ok) return closed
-  const created = createTradeOffer(closed.value, {
+  const actor = findPlayer(current, input.actorId)
+  const logged = appendOfferLog(
+    current,
+    `${actor?.username ?? input.actorId} countered trade offer: ${offer.terms}`,
+    input.actorId,
+  )
+  const countered = {
+    ...offer,
+    status: 'countered' as const,
+    transitionRequestIds: [...offer.transitionRequestIds, input.requestId],
+    resolvedAt: input.at ?? null,
+  }
+  const closed: GameState = {
+    ...logged.state,
+    tradeOffers: logged.state.tradeOffers.map((candidate) => candidate.id === offer.id ? countered : candidate),
+  }
+  const created = createTradeOffer(closed, {
     senderId: input.actorId,
     recipientId: offer.senderId,
     terms: terms.value,

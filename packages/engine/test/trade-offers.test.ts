@@ -87,8 +87,15 @@ describe('free-text trade offers', () => {
       requestId: 'counter-1',
     }))
     expect(next.tradeOffers).toHaveLength(2)
-    expect(next.tradeOffers[0]).toMatchObject({ terms: 'two trade', status: 'declined' })
+    expect(next.tradeOffers[0]).toMatchObject({ terms: 'two trade', status: 'countered' })
     expect(next.tradeOffers[1]).toMatchObject({ terms: 'one trade and one wheat', parentOfferId: state.tradeOffers[0]!.id })
+    expect(next.log.at(-2)?.publicLog).toContain('countered trade offer')
+    expect(unwrap(counterTradeOffer(next, {
+      actorId: CHUL,
+      offerId: state.tradeOffers[0]!.id,
+      terms: 'different retry text is ignored',
+      requestId: 'counter-1',
+    }))).toBe(next)
     expect(unwrap(counterTradeOffer(next, {
       actorId: CHUL,
       offerId: state.tradeOffers[0]!.id,
