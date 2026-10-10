@@ -862,7 +862,7 @@ describe('building a unit', () => {
 })
 
 describe('undoing a unit', () => {
-  it('puts the same card back in the deck, refunds the trade and leaves the hand as it was', () => {
+  it('puts the card back in the deck, refunds the trade and leaves the hand as it was', () => {
     const before = withOverride(ready([], 9), 2)
     const top = firstCardOf(before, 'MOUNTED')
     const done = build(before, unit('mounted'), undefined, 'req-1', true)
@@ -879,27 +879,41 @@ describe('undoing a unit', () => {
     expect(lastLine(undone)).toBe("System: cash1981's mounted unit was undone: the card was put back in the deck, 9 trade returned")
   })
 
-  it('puts the card back where it was and shuffles nothing, so a second build draws the same card', () => {
+  const idsOf = (items: readonly Item[]): readonly string[] => items.map((item) => item.id)
+
+  /** The cards of one sheet, in deck order. */
+  const sheetOf = (state: GameState, sheetName: SheetName): readonly Item[] =>
+    state.items.filter((item) => item.sheetName === sheetName)
+
+  const OTHER_SHEETS = ['GREAT_PERSON', 'CULTURE_1', 'CULTURE_2', 'ARTILLERY', 'MOUNTED', 'AIRCRAFT'] as const
+
+  it('puts the card back in its deck once and shuffles that deck only', () => {
     const before = ready()
     const top = firstCardOf(before, 'INFANTRY')
-    const index = before.items.findIndex((item) => item.id === top.id)
     const done = build(before, unit('infantry'))
     const undone = undoByVote(done, 'req-1')
 
-    // The deck is exactly what it was: same cards, same order, and the card at its old index
-    expect(undone.items).toEqual(before.items)
-    expect(undone.items[index]?.id).toBe(top.id)
-    // The other decks are not reshuffled either
-    for (const sheet of ['GREAT_PERSON', 'CULTURE_1', 'CULTURE_2'] as const) {
-      expect(undone.items.filter((item) => item.sheetName === sheet)).toEqual(
-        before.items.filter((item) => item.sheetName === sheet),
-      )
-    }
+    // The card is in the deck exactly once, face down and without an owner, and not in the hand
+    expect(undone.items.filter((item) => item.id === top.id)).toHaveLength(1)
+    expect(undone.items.find((item) => item.id === top.id)).toMatchObject({ hidden: true, ownerId: null })
+    expect(handOf(undone)).toEqual(handOf(before))
+    // The infantry deck holds the same cards as before, in any order
+    expect(idsOf(sheetOf(undone, 'INFANTRY')).slice().sort()).toEqual(idsOf(sheetOf(before, 'INFANTRY')).slice().sort())
+    expect(undone.items.length).toBe(before.items.length)
+    // Every other sheet is exactly as it was, card for card and in the same order
+    for (const sheet of OTHER_SHEETS) expect(sheetOf(undone, sheet)).toEqual(sheetOf(before, sheet))
+    expect(undone.items.filter((item) => item.sheetName !== 'INFANTRY')).toEqual(
+      before.items.filter((item) => item.sheetName !== 'INFANTRY'),
+    )
+  })
 
-    // Build and undo is no way to redraw: the second build takes the same card
-    const again = build(undone, unit('infantry'), undefined, 'req-2')
-    expect(handOf(again).map((item) => item.id)).toContain(top.id)
-    expect(again.items).toEqual(done.items)
+  it('shuffles with the game\'s random state, so the same state gives the same deck', () => {
+    const done = build(ready(), unit('infantry'))
+    const one = undoByVote(done, 'req-1')
+    const two = undoByVote(done, 'req-1')
+    expect(idsOf(one.items)).toEqual(idsOf(two.items))
+    // The random state moved on: the shuffle used it
+    expect(one.rng).not.toEqual(done.rng)
   })
 
   /** The deck with the given cards moved to the front, in the order given. */
@@ -912,59 +926,49 @@ describe('undoing a unit', () => {
   const drawnBy = (state: GameState, playerId: string, sheetName: SheetName): GameState =>
     unwrap(draw(state, { playerId, sheetName, confirmedOutOfTurn: true }))
 
-  const idsOf = (items: readonly Item[]): readonly string[] => items.map((item) => item.id)
-
-  it('puts the card back in front of the card that stood after it when another card above it was drawn meanwhile', () => {
+  it('keeps the other sheets in order when another card above it was drawn meanwhile', () => {
     const base = ready()
     const above = firstCardOf(base, 'CULTURE_1')
     const before = withFront(base, above)
     const top = firstCardOf(before, 'INFANTRY')
-    expect(before.items.findIndex((item) => item.id === above.id)).toBeLessThan(
-      before.items.findIndex((item) => item.id === top.id),
-    )
     const done = build(before, unit('infantry'))
-    // Someone else takes a Culture I card from above it: every index below it moves up by one
+    // Someone else takes a Culture I card from above it
     const moved = drawnBy(done, KARANDRAS1, 'CULTURE_1')
     expect(handOf(moved, KARANDRAS1).map((item) => item.id)).toContain(above.id)
     const undone = undoByVote(moved, 'req-1')
 
-    // The card is the first of its sheet again, and it is in the deck once
-    expect(undone.items.findIndex((item) => item.sheetName === 'INFANTRY')).toBe(
-      undone.items.findIndex((item) => item.id === top.id),
-    )
     expect(undone.items.filter((item) => item.id === top.id)).toHaveLength(1)
-
-    // A second build draws the same card, not the one behind it
-    const again = build(undone, unit('infantry'), undefined, 'req-2')
-    expect(idsOf(handOf(again).filter((item) => item.sheetName === 'INFANTRY'))).toEqual([top.id])
+    expect(undone.items.find((item) => item.id === top.id)).toMatchObject({ hidden: true, ownerId: null })
+    expect(idsOf(sheetOf(undone, 'INFANTRY')).slice().sort()).toEqual(idsOf(sheetOf(before, 'INFANTRY')).slice().sort())
+    expect(undone.items.filter((item) => item.sheetName !== 'INFANTRY')).toEqual(
+      moved.items.filter((item) => item.sheetName !== 'INFANTRY'),
+    )
+    expect(handOf(undone, KARANDRAS1)).toEqual(handOf(moved, KARANDRAS1))
   })
 
-  it('puts the card in front of the first card of its sheet that is left when the card after it was drawn by someone else', () => {
+  it('puts the card back in its deck when another player took a card of the same deck meanwhile', () => {
     const base = ready()
-    const infantry = base.items.filter((item) => item.sheetName === 'INFANTRY')
-    const [first, second] = infantry as [Item, Item]
-    const other = firstCardOf(base, 'CULTURE_1')
-    // First and second infantry card side by side, then a card of another sheet
-    const before = withFront(base, first, second, other)
+    const [first, second] = sheetOf(base, 'INFANTRY') as [Item, Item]
+    const before = withFront(base, first, second, firstCardOf(base, 'CULTURE_1'))
     const done = build(before, unit('infantry'))
     expect(idsOf(handOf(done).filter((item) => item.sheetName === 'INFANTRY'))).toEqual([first.id])
-    // Another player takes the neighbour: the second infantry card
+    // Another player takes the second infantry card
     const moved = drawnBy(done, KARANDRAS1, 'INFANTRY')
     expect(idsOf(handOf(moved, KARANDRAS1).filter((item) => item.sheetName === 'INFANTRY'))).toEqual([second.id])
     const undone = undoByVote(moved, 'req-1')
 
-    // The card is first of its sheet again, still behind the card of the other sheet that stood in front of the sheet
-    const index = undone.items.findIndex((item) => item.id === first.id)
-    expect(undone.items.findIndex((item) => item.sheetName === 'INFANTRY')).toBe(index)
-    expect(undone.items[index + 1]?.sheetName).toBe('INFANTRY')
     expect(undone.items.filter((item) => item.id === first.id)).toHaveLength(1)
     expect(undone.items.length).toBe(moved.items.length + 1)
-
-    const again = build(undone, unit('infantry'), undefined, 'req-2')
-    expect(idsOf(handOf(again).filter((item) => item.sheetName === 'INFANTRY'))).toEqual([first.id])
+    expect(idsOf(sheetOf(undone, 'INFANTRY')).slice().sort()).toEqual(
+      [...idsOf(sheetOf(moved, 'INFANTRY')), first.id].sort(),
+    )
+    expect(undone.items.filter((item) => item.sheetName !== 'INFANTRY')).toEqual(
+      moved.items.filter((item) => item.sheetName !== 'INFANTRY'),
+    )
+    expect(handOf(undone, KARANDRAS1)).toEqual(handOf(moved, KARANDRAS1))
   })
 
-  it('puts the card at the end of the deck when nothing of its sheet is left and it was the last card', () => {
+  it('puts the card back when it was the only one of its deck', () => {
     const base = ready()
     const only = firstCardOf(base, 'INFANTRY')
     // The deck holds exactly one infantry card, and it is the very last card
@@ -973,9 +977,10 @@ describe('undoing a unit', () => {
       items: [...base.items.filter((item) => item.sheetName !== 'INFANTRY'), only],
     }
     const done = build(before, unit('infantry'))
+    expect(sheetOf(done, 'INFANTRY')).toEqual([])
     const undone = undoByVote(done, 'req-1')
-    expect(undone.items.map((item) => item.id)).toEqual(before.items.map((item) => item.id))
-    expect(undone.items.at(-1)?.id).toBe(only.id)
+    expect(idsOf(undone.items)).toEqual(idsOf(before.items))
+    expect(undone.items.at(-1)).toMatchObject({ id: only.id, hidden: true, ownerId: null })
   })
 
   it('does not fail or duplicate the card when the whole deck was reshuffled by an item undo after the build', () => {
@@ -1002,36 +1007,37 @@ describe('undoing a unit', () => {
     expect(undone.items.find((item) => item.id === top.id)).toMatchObject({ hidden: true, ownerId: null })
   })
 
-  it('a repeated build and undo never reveals a second card', () => {
-    let state = ready()
-    const top = firstCardOf(state, 'INFANTRY')
+  it('a repeated build and undo keeps the deck whole and leaves nothing in the hand', () => {
+    const start = ready()
+    let state = start
     for (let round = 1; round <= 3; round += 1) {
       const done = build(state, unit('infantry'), undefined, `req-${round}`)
-      expect(handOf(done).filter((item) => item.sheetName === 'INFANTRY').map((item) => item.id)).toEqual([top.id])
+      expect(handOf(done).filter((item) => item.sheetName === 'INFANTRY')).toHaveLength(1)
       state = undoByVote(done, `req-${round}`)
+      expect(handOf(state)).toEqual(handOf(start))
+      expect(idsOf(state.items).slice().sort()).toEqual(idsOf(start.items).slice().sort())
+      expect(state.items.filter((item) => item.sheetName !== 'INFANTRY')).toEqual(
+        start.items.filter((item) => item.sheetName !== 'INFANTRY'),
+      )
     }
-    expect(state.items).toEqual(ready().items)
   })
 
-  it('puts the card back at its index in the reshuffled deck when the discards were reshuffled during the build', () => {
+  it('puts the card back in the reshuffled deck when the discards were reshuffled during the build', () => {
     const before = discardSheet(ready(), 'INFANTRY')
     const done = build(before, unit('infantry'))
     const card = handOf(done).find((item) => item.sheetName === 'INFANTRY') as Item
     const undone = undoByVote(done, 'req-1')
 
-    // The reshuffled deck stays reshuffled, and the card is back at the front of its sheet, where it was drawn from
-    const index = undone.items.findIndex((item) => item.id === card.id)
-    expect(index).toBeGreaterThanOrEqual(0)
-    expect(undone.items.findIndex((item) => item.sheetName === 'INFANTRY')).toBe(index)
-    expect(undone.items.filter((item) => item.id !== card.id)).toEqual(done.items)
-    expect(undone.items[index]).toMatchObject({ hidden: true, ownerId: null })
+    expect(undone.items.filter((item) => item.id === card.id)).toHaveLength(1)
+    expect(undone.items.find((item) => item.id === card.id)).toMatchObject({ hidden: true, ownerId: null })
+    expect(idsOf(sheetOf(undone, 'INFANTRY')).slice().sort()).toEqual(
+      [...idsOf(sheetOf(done, 'INFANTRY')), card.id].sort(),
+    )
+    expect(undone.items.filter((item) => item.sheetName !== 'INFANTRY')).toEqual(
+      done.items.filter((item) => item.sheetName !== 'INFANTRY'),
+    )
     expect(undone.discardedItems.some((item) => item.sheetName === 'INFANTRY')).toBe(false)
     expect(handOf(undone)).toEqual(handOf(before))
-
-    // The second build takes the same card
-    const again = build(undone, unit('infantry'), undefined, 'req-2')
-    expect(handOf(again).map((item) => item.id)).toContain(card.id)
-    expect(again.items).toEqual(done.items)
   })
 
   it('refuses the undo when the card has left the hand, and changes nothing', () => {
@@ -1261,10 +1267,10 @@ describe('hidden information', () => {
     expect(record).not.toContain(a.id)
     expect(record).not.toContain('"effect"')
     expect(record).not.toContain('"card"')
-    // The deck position the undo needs is server side only
+    // The card the undo needs is server side only
     expect(record).not.toContain('"index"')
-    expect(record).not.toContain('"nextItemId"')
-    expect(JSON.stringify(view)).not.toContain('"nextItemId"')
+    expect(record).not.toContain('"itemId"')
+    expect(JSON.stringify(view)).not.toContain('"itemId"')
   })
 
   it('another player\'s projection does not depend on which card was drawn', () => {
