@@ -413,3 +413,114 @@ describe('build options', () => {
     }
   })
 })
+
+describe('city actions', () => {
+  /**
+   * Cash is Red with the America tile, a city on B2 and a Granary on A1 and C2;
+   * Karandras is Blue. City Management is open and Engineering, which unlocks the
+   * Aqueduct, is revealed, chosen but hidden, or not chosen.
+   */
+  function cityScene(engineering: 'revealed' | 'hidden' | 'none') {
+    let state = firstCivGame()
+    state = {
+      ...state,
+      players: state.players.map((player) => ({
+        ...player,
+        color: player.playerId === CASH1981 ? 'Red' : player.playerId === KARANDRAS1 ? 'Blue' : 'Green',
+      })),
+    }
+    const slot = state.board.slots[0]
+    if (slot === undefined) throw new Error('board has no slots')
+    const [x, y] = slotOrigin(state.board, slot)
+    state = unwrap(placePiece(state, { playerId: CASH1981, assetId: 'tiles/america', x, y }))
+    const at = (assetId: string, column: number, row: number) =>
+      unwrap(
+        placePiece(state, {
+          playerId: CASH1981,
+          assetId,
+          x: column * SQUARE_SIZE + 2,
+          y: mapTop(state.board) + row * SQUARE_SIZE + 2,
+        }),
+      )
+    state = at('cities/redcity2', 1, 1)
+    state = at('buildings/granary', 0, 0)
+    state = at('buildings/granary', 2, 1)
+    if (engineering !== 'none') {
+      state = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Engineering' }))
+      if (engineering === 'revealed') state = unwrap(revealTech(state, { playerId: CASH1981, techName: 'Engineering' }))
+    }
+    return unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'TRADE' }))
+  }
+
+  it('the owner gets the Building Program option of each city and the families to upgrade', () => {
+    const view = toPlayerView(cityScene('revealed'), CASH1981)
+    expect(view.you?.cityActions).toEqual([
+      expect.objectContaining({
+        label: 'City B2',
+        startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
+      }),
+    ])
+    expect(view.you?.upgradeOptions).toEqual([
+      expect.objectContaining({ label: 'Granary to Aqueduct', count: 2, squares: [expect.objectContaining({ label: 'A1' }), expect.objectContaining({ label: 'C2' })] }),
+    ])
+  })
+
+  it('an opponent and a spectator get neither the city actions nor the upgrade options of the owner', () => {
+    const state = cityScene('revealed')
+    const opponent = toPlayerView(state, KARANDRAS1)
+    const spectator = toPlayerView(state, 'spectator')
+    expect(opponent.you?.cityActions).toEqual([])
+    expect(opponent.you?.upgradeOptions).toEqual([])
+    expect(spectator.you).toBeNull()
+
+    for (const view of [opponent, spectator]) {
+      const json = JSON.stringify(view)
+      expect(json).not.toContain('"startBuildingProgram"')
+      expect(json).not.toContain('Ready to start a Building Program')
+      expect(json).not.toContain('Granary to Aqueduct')
+      expect(json).not.toContain('"upgradedLabel"')
+      expect(json).not.toContain('"hasMarker"')
+    }
+    for (const key of ['cityActions', 'upgradeOptions']) {
+      expect(JSON.stringify(spectator)).not.toContain(key)
+      expect(opponent.opponents.find((candidate) => candidate.playerId === CASH1981)).not.toHaveProperty(key)
+    }
+  })
+
+  it('a tech that is chosen but not revealed unlocks no upgrade for anyone, and nothing of it reaches the others', () => {
+    const state = cityScene('hidden')
+    expect(toPlayerView(state, CASH1981).you?.upgradeOptions).toEqual([])
+    for (const viewerId of [KARANDRAS1, ITCHI, 'spectator']) {
+      const json = JSON.stringify(toPlayerView(state, viewerId))
+      expect(json).not.toContain('Granary to Aqueduct')
+      expect(json).not.toContain('"upgradedLabel"')
+    }
+    // Without the tech chosen at all, the owner's view is the same
+    expect(toPlayerView(cityScene('none'), CASH1981).you?.upgradeOptions).toEqual([])
+  })
+
+  it('the two actions show others only their public line, never the effect', () => {
+    let state = cityScene('revealed')
+    const cityPieceId = toPlayerView(state, CASH1981).you?.cityActions[0]?.cityPieceId ?? ''
+    state = unwrap(
+      performAssistedAction(state, { playerId: CASH1981, action: 'startBuildingProgram', requestId: 'start-1', payload: { cityPieceId } }),
+    )
+    state = unwrap(performAssistedAction(state, { playerId: CASH1981, action: 'upgradeBuildings', requestId: 'up-1' }))
+    for (const viewerId of [KARANDRAS1, 'spectator']) {
+      const view = toPlayerView(state, viewerId)
+      const json = JSON.stringify(view)
+      expect(json).not.toContain('"effect"')
+      expect(json).not.toContain('"flipped"')
+      expect(json).not.toContain('removedHistoryId')
+      expect(json).not.toContain('cityLabel')
+      expect(view.assistedActions.map((action) => [action.kind, action.label, action.text])).toEqual([
+        ['startBuildingProgram', 'Start Building Program', 'cash1981 started a Building Program in City B2'],
+        ['upgradeBuildings', 'Upgrade buildings', 'cash1981 upgraded 2 Granaries to Aqueducts at A1 and C2'],
+      ])
+    }
+    // The owner's own list is derived again: the marker is there, and nothing is left to flip
+    const owner = toPlayerView(state, CASH1981)
+    expect(owner.you?.cityActions[0]?.startBuildingProgram).toMatchObject({ status: 'unavailable', hasMarker: true })
+    expect(owner.you?.upgradeOptions).toEqual([])
+  })
+})

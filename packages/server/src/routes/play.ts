@@ -3,10 +3,21 @@
  * drawing, battle, techs, social policy, revealing, trading, turns and undo.
  */
 
-import type { AssistedPayload, BuildItem, BuildPayload, GameState, Government, PlayerStatKey, SheetName } from '@civ/engine'
+import type {
+  AssistedPayload,
+  BuildItem,
+  BuildPayload,
+  GameState,
+  Government,
+  PlayerStatKey,
+  SheetName,
+  StartBuildingProgramPayload,
+  UpgradeBuildingsPayload,
+} from '@civ/engine'
 import {
   ALL_WONDERS,
   BUILDABLE_BUILDING_IDS,
+  BUILDING_UPGRADES,
   CULTURE_CARD,
   UNIT_TYPES,
   chooseSocialPolicy,
@@ -129,6 +140,47 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
     return `target must be { column, row }, whole numbers from 0 to ${MAX_BUILD_COORDINATE}`
   }
   return { cityPieceId, item: parsed, target: { column, row }, ...optionalRush }
+}
+
+/** What every `/actions` body carries besides the payload of the action. */
+const ACTION_ENVELOPE_FIELDS: readonly string[] = ['action', 'requestId', 'rev', 'confirmedRepeat']
+
+/** The fields of the body that are neither the envelope nor `allowed`, for an action whose payload is checked strictly. */
+const extraFields = (body: Record<string, unknown>, allowed: readonly string[]): readonly string[] =>
+  Object.keys(body).filter((key) => !ACTION_ENVELOPE_FIELDS.includes(key) && !allowed.includes(key))
+
+/**
+ * The `startBuildingProgram` payload, or a sentence saying what is wrong with it:
+ * exactly `cityPieceId`, nothing else. Whether the city is the player's and free of a
+ * marker is the engine's decision.
+ */
+function parseStartBuildingProgramPayload(body: Record<string, unknown>): StartBuildingProgramPayload | string {
+  const extra = extraFields(body, ['cityPieceId'])
+  if (extra.length > 0) return `startBuildingProgram takes only cityPieceId, not ${extra.join(', ')}`
+  const cityPieceId = requireString(body, 'cityPieceId')
+  if (cityPieceId === undefined || !REQUEST_ID.test(cityPieceId)) {
+    return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+  }
+  return { cityPieceId }
+}
+
+/** The basic building asset ids that have an upgraded form: what `family` may name. */
+const UPGRADE_FAMILIES: readonly string[] = Object.keys(BUILDING_UPGRADES)
+
+/**
+ * The `upgradeBuildings` payload, or a sentence saying what is wrong with it: only an
+ * optional `family`, the asset id of a basic building. Without it every family that can
+ * be upgraded is.
+ */
+function parseUpgradeBuildingsPayload(body: Record<string, unknown>): UpgradeBuildingsPayload | string {
+  const extra = extraFields(body, ['family'])
+  if (extra.length > 0) return `upgradeBuildings takes only an optional family, not ${extra.join(', ')}`
+  const family = body['family']
+  if (family === undefined) return {}
+  if (typeof family !== 'string' || !UPGRADE_FAMILIES.includes(family)) {
+    return `family must be the asset id of a basic building: ${UPGRADE_FAMILIES.join(', ')}`
+  }
+  return { family }
 }
 
 /** Looks up the sheet name and answers 400 when there is no such sheet. */
@@ -835,7 +887,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       return sendError(c, 400, 'BAD_REQUEST', 'confirmedRepeat must be a boolean')
     }
     const confirmedRepeat = body['confirmedRepeat'] === true
-    // Only `chooseReward` and `build` carry a payload, each its own; the other actions take none
+    // Only `chooseReward`, `build`, `startBuildingProgram` and `upgradeBuildings` carry a payload, each its own; the other actions take none
     let payload: AssistedPayload | undefined
     if (action === 'chooseReward') {
       const rewardId = requireString(body, 'rewardId')
@@ -856,8 +908,23 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       const parsed = parseBuildPayload(body)
       if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
       payload = parsed
+    } else if (action === 'startBuildingProgram') {
+      const parsed = parseStartBuildingProgramPayload(body)
+      if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
+      payload = parsed
+    } else if (action === 'upgradeBuildings') {
+      const parsed = parseUpgradeBuildingsPayload(body)
+      if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
+      payload = parsed
     } else if (BUILD_FIELDS.some((field) => body[field] !== undefined)) {
-      return sendError(c, 400, 'BAD_REQUEST', 'cityPieceId, item, target and rush only belong to build')
+      return sendError(
+        c,
+        400,
+        'BAD_REQUEST',
+        'cityPieceId, item, target and rush only belong to build, and cityPieceId also to startBuildingProgram',
+      )
+    } else if (body['family'] !== undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'family only belongs to upgradeBuildings')
     }
     const actor = currentPlayer(c)
     return applyToGame(

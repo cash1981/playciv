@@ -18,6 +18,8 @@ import type { CityProduction } from './city-production.js'
 import { cityProductionsOf } from './city-production.js'
 import type { CityBuildOptions, PlacedBuildItem, UnitBuildItem } from './build-options.js'
 import { buildOptionsOf } from './build-options.js'
+import { cityActionsOf, upgradeOptionsOf } from './city-actions.js'
+import type { CityActionOptions, UpgradeFamilyOption } from './city-actions.js'
 import { BASE_CULTURE_HAND_SIZE, cultureHandSizeOf } from './culture-hand.js'
 import type { CoinSources } from './coins.js'
 import { EMPTY_COIN_SOURCES, coinSourcesOf } from './coins.js'
@@ -262,6 +264,8 @@ export type AssistedActionKind =
   | 'cultureAdvance'
   | 'chooseReward'
   | 'build'
+  | 'startBuildingProgram'
+  | 'upgradeBuildings'
 
 /** The cards that spend a resource token for culture: "Incense, City Management: gain N culture". */
 export type CultureCardKind = 'chivalry' | 'currency' | 'metalCasting'
@@ -374,6 +378,33 @@ export type AssistedEffect =
       }
       readonly trade: number
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+    }
+  | {
+      readonly kind: 'startBuildingProgram'
+      readonly cityPieceId: string
+      /** The city as the log named it, for example "Capital B3", kept for the undo line. */
+      readonly cityLabel: string
+      /** The centre square the marker was put on (the anchor square of a metropolis). */
+      readonly square: { readonly column: number; readonly row: number; readonly label: string }
+      /** The marker that was placed, where it went and the board history entry that placed it. */
+      readonly pieceId: string
+      readonly position: { readonly x: number; readonly y: number }
+      readonly historyId: string
+    }
+  | {
+      readonly kind: 'upgradeBuildings'
+      /** Every building flipped, in the order it was flipped (board order). */
+      readonly flipped: readonly {
+        /** The basic building exactly as it stood, so an undo puts the same piece back. */
+        readonly from: BoardPiece
+        /** The map square both forms stand on. */
+        readonly square: { readonly column: number; readonly row: number; readonly label: string }
+        /** The upgraded piece that replaced it, where it went, and the two board history entries (the removal, the placement). */
+        readonly pieceId: string
+        readonly position: { readonly x: number; readonly y: number }
+        readonly removedHistoryId: string
+        readonly placedHistoryId: string
+      }[]
     }
 
 /**
@@ -856,6 +887,18 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
    * revision.
    */
   readonly buildOptions: readonly CityBuildOptions[]
+  /**
+   * What the viewer can do with each city besides building: for now, start a
+   * Building Program. Own view only, like `buildOptions`.
+   */
+  readonly cityActions: readonly CityActionOptions[]
+  /**
+   * The building families the viewer can flip to their upgraded form now: the
+   * upgraded tech is revealed and a basic building stands in one of their cities.
+   * Own view only, because it depends on the viewer's techs; empty for a viewer
+   * with no such building.
+   */
+  readonly upgradeOptions: readonly UpgradeFamilyOption[]
 }
 
 /**
@@ -971,6 +1014,8 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           blockadedGreatPersonTypes: blockadedGreatPersonTypes(state, player),
           availableActions: availableActionsFor(state, viewerId),
           buildOptions: buildOptionsOf(state, player),
+          cityActions: cityActionsOf(state, player),
+          upgradeOptions: upgradeOptionsOf(state, player),
           pendingRewards: pendingRewardViews(player),
         }
   return {

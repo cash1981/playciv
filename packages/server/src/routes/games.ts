@@ -212,14 +212,14 @@ function revisionSummary(revision: GameRevisionMetadata) {
  * A past state as the viewer may read it. Their private note is blanked, and so
  * are their button states: they were computed against a state that is gone, and
  * a ready button in a replay would be a press on the wrong game. The same goes for
- * a card choice that was waiting then: it cannot be made from the past.
+ * a card choice that was waiting then, the city actions and the upgrade options: none can be made from the past.
  */
 function projectedRevision(revision: GameRevision, viewerId: string) {
   const state = revision.state
   const projected = toPlayerView(state, viewerId)
   const view = projected.you === null
     ? projected
-    : { ...projected, you: { ...projected.you, gamenote: '', availableActions: [], buildOptions: [], pendingRewards: [] } }
+    : { ...projected, you: { ...projected.you, gamenote: '', availableActions: [], buildOptions: [], cityActions: [], upgradeOptions: [], pendingRewards: [] } }
   return {
     ...revisionSummary(revision),
     view,

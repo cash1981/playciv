@@ -182,7 +182,8 @@ export function rushTradeCost(shortfall: number, civilizationName: string | null
 
 const keyOf = (cell: Cell): string => `${cell.column},${cell.row}`
 
-const squareLabel = (cell: Cell): string => `${columnLabel(cell.column)}${cell.row + 1}`
+/** A map square's label, for example "D5". */
+export const squareLabel = (cell: Cell): string => `${columnLabel(cell.column)}${cell.row + 1}`
 
 /** The centre of a map square in board coordinates: where a building is put. */
 export function squareCentre(board: Board, cell: Cell): { readonly x: number; readonly y: number } {

@@ -48,9 +48,18 @@ import {
   figureAssetIdOf,
   sameBuildItem,
   squareCentre,
+  squareLabel,
   unitSheetOf,
 } from './build-options.js'
 import type { BuildPayload, BuildSquare, PlacedBuildItem, UnitType } from './build-options.js'
+import {
+  buildingProgramMarkerOf,
+  cityActionsOf,
+  describeUpgrades,
+  ownCityFootprint,
+  upgradePlanOf,
+} from './city-actions.js'
+import { BUILDING_UPGRADES, buildingNameOf } from './building-data.js'
 import { BUILDING_PROGRAM_ASSET_ID } from './city-production.js'
 import { activeWonderOwnerIds, coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
 import {
@@ -364,13 +373,34 @@ export interface ChooseRewardPayload {
   readonly itemId: string
 }
 
-/** What an action may carry: `chooseReward` takes the reward and card, `build` takes the city, item and square. */
-export type AssistedPayload = ChooseRewardPayload | BuildPayload
+/** What `startBuildingProgram` carries: the city whose centre gets the marker. */
+export interface StartBuildingProgramPayload {
+  readonly cityPieceId: string
+}
+
+/**
+ * What `upgradeBuildings` carries: the asset id of one basic building to flip
+ * (`buildings/granary`), or nothing to flip every family that can be flipped.
+ */
+export interface UpgradeBuildingsPayload {
+  readonly family?: string
+}
+
+/**
+ * What an action may carry: `chooseReward` takes the reward and card, `build` takes
+ * the city, item and square, `startBuildingProgram` the city and `upgradeBuildings`
+ * an optional family.
+ */
+export type AssistedPayload =
+  | ChooseRewardPayload
+  | BuildPayload
+  | StartBuildingProgramPayload
+  | UpgradeBuildingsPayload
 
 interface ApplyContext {
   readonly requestId: string
   readonly at: string | undefined
-  /** Only `chooseReward` and `build` read it, each its own shape; every other action ignores it. */
+  /** Only `chooseReward`, `build`, `startBuildingProgram` and `upgradeBuildings` read it, each its own shape; every other action ignores it. */
   readonly payload: AssistedPayload | undefined
   /**
    * True when the action was `used` this turn and the player confirmed using it
@@ -1483,7 +1513,7 @@ const withArticle = (label: string): string => `${/^[aeiou]/i.test(label) && !/^
 
 /** The `build` payload, or `undefined` when the payload is another action's or missing. */
 const buildPayloadOf = (payload: AssistedPayload | undefined): BuildPayload | undefined =>
-  payload !== undefined && 'cityPieceId' in payload ? payload : undefined
+  payload !== undefined && 'cityPieceId' in payload && 'item' in payload ? payload : undefined
 
 /** What the part of a build that differs between items did: a piece put on a square, or a card drawn into the hand. */
 type Made =
@@ -1656,16 +1686,8 @@ const build: AssistedActionDefinition = {
     const at = context.at === undefined ? {} : { at: context.at }
 
     // The marker a city with the Building Program must use (Wisdom and Warfare p. 7), found before anything is placed
-    const centres = new Set(
-      (player.color === null ? [] : cityFootprintsOf(state, player.color.toLowerCase()))
-        .filter((candidate) => candidate.piece.id === city.cityPieceId)
-        .flatMap((candidate) => candidate.centers.map((cell) => `${cell.column},${cell.row}`)),
-    )
-    const marker = state.board.pieces.find((piece) => {
-      if (piece.assetId !== BUILDING_PROGRAM_ASSET_ID) return false
-      const cell = mapCellOf(state.board, piece)
-      return cell !== null && centres.has(`${cell.column},${cell.row}`)
-    })
+    const footprint = ownCityFootprint(state, player, city.cityPieceId)
+    const marker = footprint === undefined ? undefined : buildingProgramMarkerOf(state, footprint)
 
     // The one step that differs: a piece on a square, or a card in the hand
     let made: Made
@@ -1829,6 +1851,267 @@ const build: AssistedActionDefinition = {
   },
 }
 
+// -- Start a Building Program -----------------------------------------------------
+
+/** The `startBuildingProgram` payload, or `undefined` when the payload is another action's or missing. */
+const startPayloadOf = (payload: AssistedPayload | undefined): StartBuildingProgramPayload | undefined =>
+  payload !== undefined && 'cityPieceId' in payload && !('item' in payload) ? payload : undefined
+
+/**
+ * Puts the Building Program marker on a city's centre (Wisdom and Warfare p. 7), so
+ * the next build there doubles the outskirts. Free, and a city holds one marker at a
+ * time: a marker on either centre of a metropolis counts. The marker goes on the
+ * anchor centre square through the board history. The build action uses the marker up
+ * and restores it on its undo, so the two undo in either order as long as the marker
+ * is back where it was: undoing the start while a build has used the marker up is
+ * refused with the vote left open.
+ */
+const startBuildingProgram: AssistedActionDefinition = {
+  kind: 'startBuildingProgram',
+  techName: null,
+  label: 'Start Building Program',
+  button: false,
+  usageKey: null,
+
+  availability(state, playerId) {
+    const player = playerOf(state, playerId)
+    if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
+    if (openCityManagementTurn(state, player) === undefined) return blocked('wrong-phase', PHASE_REASON)
+    if (player.color === null || cityFootprintsOf(state, player.color.toLowerCase()).length === 0) {
+      return blocked('unavailable', 'You have no city on the map to start a Building Program in.')
+    }
+    return { status: 'ready', reason: 'Choose a city.' }
+  },
+
+  apply(state, player, context) {
+    const failed = (reason: string): EngineError => rejected('startBuildingProgram', blocked('unavailable', reason))
+    const payload = startPayloadOf(context.payload)
+    if (payload === undefined) return err(failed('Say which city.'))
+
+    const city = cityActionsOf(state, player).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
+    const footprint = ownCityFootprint(state, player, payload.cityPieceId)
+    const anchor = footprint?.centers[0]
+    if (city === undefined || anchor === undefined) return err(failed('That city is not yours, or it is no longer on the map.'))
+    const option = city.startBuildingProgram
+    if (option.status === 'wrong-phase') return err(rejected('startBuildingProgram', blocked('wrong-phase', option.reason)))
+    if (option.status !== 'ready') return err(failed(`${city.label}: ${option.reason}`))
+
+    const asset = findBoardAsset(BUILDING_PROGRAM_ASSET_ID)
+    if (asset === undefined) return err(failed('The Building Program marker has no artwork to put on the board.'))
+    const centre = squareCentre(state.board, anchor)
+    const at = context.at === undefined ? {} : { at: context.at }
+    const placed = placeUnchecked(state, {
+      playerId: player.playerId,
+      assetId: BUILDING_PROGRAM_ASSET_ID,
+      x: centre.x - asset.width / 2,
+      y: centre.y - asset.height / 2,
+      ...at,
+    })
+    const entry = placed?.board.history.at(-1)
+    if (placed === undefined || entry === undefined || entry.change.kind !== 'place') {
+      return err(failed('The Building Program marker could not be placed.'))
+    }
+    const piece = entry.change.piece
+    const landed = mapCellOf(placed.board, piece)
+    if (landed === null || landed.column !== anchor.column || landed.row !== anchor.row) {
+      return err(failed(`The Building Program marker could not be placed on the centre of ${city.label}.`))
+    }
+
+    const logged = appendLog(placed, {
+      username: player.username,
+      playerId: player.playerId,
+      publicLog: `${player.username} started a Building Program in ${city.label}`,
+      privateLog: '',
+      createdAt: context.at ?? null,
+      assistedActionId: context.requestId,
+    })
+    return ok({
+      state: countLinesIn(logged, [entry.id]),
+      effect: {
+        kind: 'startBuildingProgram',
+        cityPieceId: city.cityPieceId,
+        cityLabel: city.label,
+        square: { column: anchor.column, row: anchor.row, label: squareLabel(anchor) },
+        pieceId: piece.id,
+        position: { x: piece.x, y: piece.y },
+        historyId: entry.id,
+      },
+      logId: lastLogId(logged),
+    })
+  },
+
+  reverse(state, player, record, at) {
+    const effect = record.effect
+    if (effect.kind !== 'startBuildingProgram') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+    const refused = (reason: string): EngineError => ({
+      kind: 'ASSISTED_UNDO_BLOCKED',
+      logId: record.logId,
+      reason,
+    })
+    // Everything is checked before anything is changed, so a refusal leaves the game as it was.
+    const piece = state.board.pieces.find((candidate) => candidate.id === effect.pieceId)
+    if (piece === undefined) {
+      return err(
+        refused(
+          `The Building Program marker of ${effect.cityLabel} is no longer on the board (a build may have used it up), so this cannot be undone.`,
+        ),
+      )
+    }
+    const cell = mapCellOf(state.board, piece)
+    if (cell === null || cell.column !== effect.square.column || cell.row !== effect.square.row) {
+      return err(refused(`The Building Program marker has left the centre of ${effect.cityLabel}. Move it back first.`))
+    }
+    const removed = removePiece(state, {
+      playerId: record.playerId,
+      pieceId: effect.pieceId,
+      ...(at === null ? {} : { at }),
+    })
+    if (!removed.ok) return err(refused('The Building Program marker could not be taken off the board.'))
+    return ok({
+      state: removed.value,
+      text: `${player.username}'s Building Program in ${effect.cityLabel} was undone: the marker was removed`,
+    })
+  },
+}
+
+// -- Upgrade buildings -------------------------------------------------------------
+
+/** The `upgradeBuildings` payload, or `undefined` when there is none or it is another action's. No payload means every family. */
+const upgradePayloadOf = (payload: AssistedPayload | undefined): UpgradeBuildingsPayload | undefined =>
+  payload !== undefined && 'family' in payload ? payload : undefined
+
+/**
+ * Flips the basic buildings of the player's cities to the upgraded form whose tech is
+ * revealed (base rules p. 22): "they immediately flip over any of the corresponding
+ * basic buildings that they've already produced in their cities". Each flipped
+ * building keeps its square; the two forms share one supply, so the count never
+ * changes, and nothing is paid, produced or marked as a city action. Allowed in any
+ * phase of the player's turn, since the tech may be learned in Research. A flip is a
+ * removal and a placement through the board history, per building, in board order.
+ */
+const upgradeBuildings: AssistedActionDefinition = {
+  kind: 'upgradeBuildings',
+  techName: null,
+  label: 'Upgrade buildings',
+  button: false,
+  usageKey: null,
+
+  availability(state, playerId) {
+    const player = playerOf(state, playerId)
+    if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
+    const plan = upgradePlanOf(state, player)
+    if (!plan.ok) return blocked('unavailable', plan.error)
+    return { status: 'ready', reason: 'Choose what to upgrade.' }
+  },
+
+  apply(state, player, context) {
+    const failed = (reason: string): EngineError => rejected('upgradeBuildings', blocked('unavailable', reason))
+    const family = upgradePayloadOf(context.payload)?.family
+    // The server checks the shape; the engine is also called with whatever a caller sent, and a bad family must not read as "all"
+    if (family !== undefined && typeof family !== 'string') return err(failed('family must be the asset id of a basic building.'))
+    const plan = upgradePlanOf(state, player, family)
+    if (!plan.ok) return err(failed(plan.error))
+
+    const at = context.at === undefined ? {} : { at: context.at }
+    const flipped: Extract<AssistedEffect, { kind: 'upgradeBuildings' }>['flipped'][number][] = []
+    let next = state
+    for (const { piece, cell, upgradedAssetId } of plan.value) {
+      const asset = findBoardAsset(upgradedAssetId)
+      const name = buildItemName({ kind: 'building', assetId: upgradedAssetId })
+      if (asset === undefined) return err(failed(`The ${name} has no artwork to put on the board.`))
+      const removed = removePiece(next, { playerId: player.playerId, pieceId: piece.id, ...at })
+      const removedEntry = removed.ok ? removed.value.board.history.at(-1) : undefined
+      if (!removed.ok || removedEntry === undefined) {
+        return err(failed(`The ${buildItemName({ kind: 'building', assetId: piece.assetId })} on ${squareLabel(cell)} could not be taken off the board.`))
+      }
+      // The two forms differ by a few pixels, so the centre is kept: the new piece stands on the same square
+      const placed = placeUnchecked(removed.value, {
+        playerId: player.playerId,
+        assetId: upgradedAssetId,
+        x: piece.x + piece.width / 2 - asset.width / 2,
+        y: piece.y + piece.height / 2 - asset.height / 2,
+        rotation: piece.rotation,
+        ...at,
+      })
+      const placedEntry = placed?.board.history.at(-1)
+      if (placed === undefined || placedEntry === undefined || placedEntry.change.kind !== 'place') {
+        return err(failed(`The ${name} could not be placed on ${squareLabel(cell)}.`))
+      }
+      const created = placedEntry.change.piece
+      const landed = mapCellOf(placed.board, created)
+      if (landed === null || landed.column !== cell.column || landed.row !== cell.row) {
+        return err(failed(`The ${name} could not be placed on ${squareLabel(cell)}.`))
+      }
+      flipped.push({
+        from: piece,
+        square: { column: cell.column, row: cell.row, label: squareLabel(cell) },
+        pieceId: created.id,
+        position: { x: created.x, y: created.y },
+        removedHistoryId: removedEntry.id,
+        placedHistoryId: placedEntry.id,
+      })
+      next = placed
+    }
+
+    const logged = appendLog(next, {
+      username: player.username,
+      playerId: player.playerId,
+      publicLog: `${player.username} upgraded ${describeUpgrades(
+        flipped.map((flip) => ({ basicAssetId: flip.from.assetId, squareLabel: flip.square.label })),
+      )}`,
+      privateLog: '',
+      createdAt: context.at ?? null,
+      assistedActionId: context.requestId,
+    })
+    return ok({
+      state: countLinesIn(logged, flipped.flatMap((flip) => [flip.removedHistoryId, flip.placedHistoryId])),
+      effect: { kind: 'upgradeBuildings', flipped },
+      logId: lastLogId(logged),
+    })
+  },
+
+  reverse(state, player, record, at) {
+    const effect = record.effect
+    if (effect.kind !== 'upgradeBuildings') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+    const refused = (reason: string): EngineError => ({
+      kind: 'ASSISTED_UNDO_BLOCKED',
+      logId: record.logId,
+      reason,
+    })
+    // Every upgraded piece is checked before anything is changed, so a refusal leaves the game as it was.
+    for (const flip of effect.flipped) {
+      const name = buildingNameOf(BUILDING_UPGRADES[flip.from.assetId] ?? flip.from.assetId) ?? 'upgraded building'
+      const piece = state.board.pieces.find((candidate) => candidate.id === flip.pieceId)
+      if (piece === undefined) {
+        return err(refused(`The ${name} on ${flip.square.label} is no longer on the board, so the upgrade cannot be undone.`))
+      }
+      const cell = mapCellOf(state.board, piece)
+      if (cell === null || cell.column !== flip.square.column || cell.row !== flip.square.row) {
+        return err(refused(`The ${name} has left ${flip.square.label}. Move it back first.`))
+      }
+    }
+
+    // In the order they were flipped, so the basic pieces keep their relative order on the board
+    let next = state
+    for (const flip of effect.flipped) {
+      const removed = removePiece(next, {
+        playerId: record.playerId,
+        pieceId: flip.pieceId,
+        ...(at === null ? {} : { at }),
+      })
+      if (!removed.ok) return err(refused(`The upgraded building on ${flip.square.label} could not be taken off the board.`))
+      next = placeBack(removed.value, player, flip.from, at)
+    }
+    return ok({
+      state: next,
+      text:
+        `${player.username}'s upgrade of ${describeUpgrades(
+          effect.flipped.map((flip) => ({ basicAssetId: flip.from.assetId, squareLabel: flip.square.label })),
+        )} was undone: the basic buildings were put back`,
+    })
+  },
+}
+
 const chooseReward: AssistedActionDefinition = {
   kind: 'chooseReward',
   techName: null,
@@ -1967,6 +2250,8 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   cultureAdvance,
   chooseReward,
   build,
+  startBuildingProgram,
+  upgradeBuildings,
 ]
 
 /** The actions that are buttons, in the order of `availableActions`. `chooseReward` answers a choice and is not one. */
@@ -2116,8 +2401,11 @@ export function performAssistedAction(
     kind: input.action,
     playerId: input.playerId,
     turnNumber: status.currentTurn,
-    // A reward can be chosen after City Management has closed; every other action needs it open
-    phase: definition.kind === 'chooseReward' ? openPhaseOf(status, input.playerId) : 'CM',
+    // A reward can be chosen after City Management has closed, and an upgrade is done in whatever phase the tech was learned in; every other action needs it open
+    phase:
+      definition.kind === 'chooseReward' || definition.kind === 'upgradeBuildings'
+        ? openPhaseOf(status, input.playerId)
+        : 'CM',
     usageKey: definition.usageKey,
     at: input.at ?? null,
     logId: applied.value.logId,
