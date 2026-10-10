@@ -37,8 +37,9 @@ vi.mock('./BoardView.js', () => ({
 // Only the panel is replaced; the helpers GameView uses stay real
 vi.mock('./ChatOrdersPanel.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./ChatOrdersPanel.js')>()),
-  ChatOrdersPanel: () => <section><h2>Chat and orders</h2></section>,
+  ChatOrdersPanel: () => <section><h2>Conversation &amp; actions</h2></section>,
 }))
+vi.mock('./TradeOffersPanel.js', () => ({ TradeOffersPanel: () => <section><h2>Trade offers</h2></section> }))
 vi.mock('./LogPanel.js', () => ({ LogPanel: () => <section><h2>Log</h2></section> }))
 vi.mock('./OpponentHandPanel.js', () => ({ OpponentHandPanel: () => <section><h2>Other players' hands</h2></section> }))
 vi.mock('./RevealedPanel.js', () => ({ RevealedPanel: () => <section><h2>Revealed</h2></section> }))
@@ -256,7 +257,7 @@ const pageOrder = (container: HTMLElement): string[] =>
 describe('primary game panel order', () => {
   // Changed on purpose (#260): the board no longer follows the header directly.
   // It was header, board, Draw, Chat and orders, Log, Your hand, and so on.
-  it('runs Your actions, the board, Your cards, Draw, the tech tree, chat, the rest, then the log and the revealed feed', async () => {
+  it('runs the board, Your cards, Draw, the tech tree, conversation, offers, the rest, then the log and the revealed feed', async () => {
     const view = orderView({
       you: {
         playerId: 'p1',
@@ -269,12 +270,12 @@ describe('primary game panel order', () => {
     const { container } = await renderOrder(view)
 
     expect(pageOrder(container)).toEqual([
-      'Your actions',
       'Board',
       'Your hand (0)',
       'Draw',
       'Techs',
-      'Chat and orders',
+      'Conversation & actions',
+      'Trade offers',
       "Other players' hands",
       'Battle',
       'Social policy',
@@ -299,7 +300,7 @@ describe('primary game panel order', () => {
 
   it('leaves the chat panel out for a spectator without an account, and its shortcut with it', async () => {
     const { container } = await renderOrder(orderView(), null)
-    expect(pageOrder(container)).not.toContain('Chat and orders')
+    expect(pageOrder(container)).not.toContain('Conversation & actions')
     expect(screen.getByRole('navigation', { name: 'Go to' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Chat' })).toBeNull()
   })
@@ -849,7 +850,7 @@ describe('the game page (issue #215)', () => {
       expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
         "Turn 4 · Bob's turn — city management phase",
       )
-      expect(screen.getByRole('heading', { name: 'Chat and orders' })).toBeTruthy()
+      expect(screen.getByRole('heading', { name: 'Conversation & actions' })).toBeTruthy()
       // The log stays
       expect(screen.getByRole('heading', { name: 'Log' })).toBeTruthy()
       expect(screen.getByRole('list', { name: 'Turn progress' }).textContent).toContain('BobSOT')

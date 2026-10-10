@@ -172,6 +172,21 @@ describe('PhaseSummary: a card choice waiting', () => {
     expect(document.activeElement).toBe(heading.querySelector('button'))
   })
 
+  it('falls back to the combined conversation panel after actions are embedded there', () => {
+    render(
+      <>
+        <PhaseSummary view={viewOf({ waitingFor: [], pendingRewards: [{ id: 'r1' }] })} />
+        <CollapsiblePanel id="chat-orders" title="Conversation & actions" defaultOpen>
+          <p>body</p>
+        </CollapsiblePanel>
+      </>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '1 card choice waiting' }))
+    const heading = screen.getByRole('heading', { name: 'Conversation & actions' })
+    expect(scrolled).toEqual([heading.closest('section')])
+    expect(document.activeElement).toBe(heading.querySelector('button'))
+  })
+
   it('counts several choices', () => {
     render(<PhaseSummary view={viewOf({ waitingFor: [], pendingRewards: [{ id: 'r1' }, { id: 'r2' }] })} />)
     expect(screen.getByRole('button', { name: '2 card choices waiting' })).toBeTruthy()

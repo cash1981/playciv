@@ -177,8 +177,14 @@ recipient may perform each transition, and revision checks plus request ids make
 retries and competing writes deterministic. Pending offers expire when a later
 turn is observed; accepted offers are never expired.
 
+The web UI gives offers their own collapsible section below the combined
+Conversation & actions panel, so negotiation cannot cover the chat/order composer.
+Assisted choices are presented inside that conversation panel; the manual order
+history and composer remain available as a fallback while the guided flow grows.
+
 Source: `packages/engine/src/trade-offers.ts`, `state.ts`, the trade-offer routes
-in `packages/server/src/routes/games.ts`, and the chat panel/API tests.
+in `packages/server/src/routes/games.ts`, `packages/web/src/views/TradeOffersPanel.tsx`,
+and the trade-offer/chat panel tests.
 
 ## City production
 

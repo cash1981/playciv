@@ -1,0 +1,111 @@
+.trade-offers-panel {
+  min-width: 0;
+}
+
+.trade-offers-intro {
+  max-width: 62rem;
+  margin: 0 0 0.8rem;
+  color: var(--muted);
+}
+
+.trade-offers-list {
+  display: grid;
+  gap: 0.6rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.trade-offer {
+  min-width: 0;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  background: var(--panel-2);
+}
+
+.trade-offer-meta,
+.trade-offer-actions,
+.trade-offer-counter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.trade-offer-terms {
+  margin: 0.45rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.trade-offer-actions,
+.trade-offer-counter {
+  margin-top: 0.6rem;
+}
+
+.trade-offer-counter input {
+  flex: 1 1 16rem;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.45rem;
+}
+
+.trade-offer-composer {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.35fr) minmax(12rem, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 0.7rem;
+  margin-top: 0.9rem;
+  padding: 0.8rem;
+  border: 1px dashed var(--line);
+  border-radius: 0.45rem;
+}
+
+.trade-offer-composer-heading {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.8rem;
+}
+
+.trade-offer-composer-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.trade-offer-composer select,
+.trade-offer-composer textarea {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.45rem;
+}
+
+.trade-offer-composer textarea {
+  grid-column: 1 / 3;
+  min-height: 4rem;
+  resize: vertical;
+}
+
+.trade-offer-composer > label:nth-of-type(2) {
+  align-self: start;
+}
+
+.trade-offer-composer > button {
+  min-height: 44px;
+}
+
+@media (max-width: 620px) {
+  .trade-offer-composer {
+    grid-template-columns: 1fr;
+  }
+
+  .trade-offer-composer-heading,
+  .trade-offer-composer textarea {
+    grid-column: 1;
+  }
+
+  .trade-offer-composer > button {
+    width: 100%;
+  }
+}

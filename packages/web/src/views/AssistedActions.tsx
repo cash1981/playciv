@@ -26,6 +26,15 @@ import './AssistedActions.css'
 
 type Status = NonNullable<PlayerView['you']>['availableActions'][number]['status']
 
+/** Whether the current player has an assisted choice worth showing. */
+export function hasYourActions(view: PlayerView): boolean {
+  const you = view.you
+  return you !== null && (
+    (you.pendingRewards ?? []).length > 0 ||
+    (you.availableActions ?? []).some((candidate) => candidate.status !== 'not-owned')
+  )
+}
+
 const STATUS_TEXT: Readonly<Record<Status, string>> = {
   ready: 'Ready',
   used: 'Used',
@@ -244,12 +253,11 @@ interface PanelProps {
 }
 
 /**
- * "Your actions": the viewer's assisted actions with their state, and the card
- * choice waiting after a culture advance. Actions for a card the player does not
- * hold are left out, so the list stays short, and the panel is not rendered at
- * all for a spectator or when there is nothing to show.
+ * The action controls without their outer panel. The conversation can embed
+ * this content so the player sees the next useful action beside the place where
+ * they talk and submit orders.
  */
-export function AssistedActionsPanel({
+export function YourActionsContent({
   gameId,
   view,
   busy,
@@ -259,59 +267,65 @@ export function AssistedActionsPanel({
   const actions = (view.you?.availableActions ?? []).filter(
     (candidate) => candidate.status !== 'not-owned',
   )
-  // Only the viewer's own projection has the field; a replayed view has it blank.
-  const waiting = view.you?.pendingRewards?.length ?? 0
   const pending = view.you?.pendingRewards?.[0]
   // After a successful Keep the choice unmounts and focus would fall to the page.
   const bodyRef = useRef<HTMLDivElement>(null)
   if (view.you === null || (actions.length === 0 && pending === undefined)) return null
-  // A collapsed panel must not hide the choice, so the title says it is waiting.
+  return (
+    <div
+      ref={bodyRef}
+      className="assisted-panel-body"
+      tabIndex={-1}
+      role="group"
+      aria-label="Your action"
+    >
+      {actions.length > 0 && (
+        <ul className="assisted-actions">
+          {actions.map((candidate) => (
+            <li key={candidate.action}>
+              {/* A button with its own text (Advance culture) names the row itself. */}
+              {BUTTON_TEXT[candidate.action] === undefined && (
+                <span className="assisted-name">{candidate.label}</span>
+              )}
+              <AssistedActionButton
+                action={candidate.action}
+                gameId={gameId}
+                view={view}
+                busy={busy}
+                readOnly={readOnly}
+                run={run}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+      {pending !== undefined && (
+        <RewardChoice
+          gameId={gameId}
+          playerId={view.you.playerId}
+          rev={view.rev}
+          reward={pending}
+          busy={busy}
+          readOnly={readOnly}
+          run={run}
+          onKept={() => bodyRef.current?.focus()}
+        />
+      )}
+    </div>
+  )
+}
+
+/** "Your actions" as a standalone collapsible panel for screens outside the conversation. */
+export function AssistedActionsPanel(props: PanelProps): React.JSX.Element | null {
+  if (!hasYourActions(props.view)) return null
+  const waiting = props.view.you?.pendingRewards?.length ?? 0
   const title =
     waiting > 0
       ? `Your actions (${waiting} ${waiting === 1 ? 'choice' : 'choices'} waiting)`
       : 'Your actions'
   return (
     <CollapsiblePanel id="actions" title={title} defaultOpen>
-      <div
-        ref={bodyRef}
-        className="assisted-panel-body"
-        tabIndex={-1}
-        role="group"
-        aria-label="Your actions"
-      >
-        {actions.length > 0 && (
-          <ul className="assisted-actions">
-            {actions.map((candidate) => (
-              <li key={candidate.action}>
-                {/* A button with its own text (Advance culture) names the row itself. */}
-                {BUTTON_TEXT[candidate.action] === undefined && (
-                  <span className="assisted-name">{candidate.label}</span>
-                )}
-                <AssistedActionButton
-                  action={candidate.action}
-                  gameId={gameId}
-                  view={view}
-                  busy={busy}
-                  readOnly={readOnly}
-                  run={run}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-        {pending !== undefined && (
-          <RewardChoice
-            gameId={gameId}
-            playerId={view.you.playerId}
-            rev={view.rev}
-            reward={pending}
-            busy={busy}
-            readOnly={readOnly}
-            run={run}
-            onKept={() => bodyRef.current?.focus()}
-          />
-        )}
-      </div>
+      <YourActionsContent {...props} />
     </CollapsiblePanel>
   )
 }

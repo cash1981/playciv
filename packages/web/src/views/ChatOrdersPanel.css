@@ -30,6 +30,44 @@
   margin-bottom: 0;
 }
 
+.chat-orders-your-action {
+  margin: 0.8rem 0;
+  padding: 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+}
+
+.chat-orders-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.8rem;
+  margin-bottom: 0.6rem;
+}
+
+.chat-orders-section-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.chat-orders-your-action .assisted-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0.65rem;
+}
+
+.chat-orders-your-action .assisted-actions > li {
+  padding: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  background: var(--panel-2);
+}
+
+.chat-orders-your-action .assisted-reward {
+  margin-top: 0.8rem;
+}
+
 .chat-orders-filters,
 .chat-orders-mode {
   display: flex;
@@ -118,49 +156,6 @@
   overflow-wrap: anywhere;
 }
 
-.chat-orders-offer {
-  margin-bottom: 0.6rem;
-  padding: 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: 0.35rem;
-  background: var(--panel-2);
-}
-
-.chat-orders-offer-actions,
-.chat-orders-counter,
-.chat-orders-offer-composer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.45rem;
-}
-
-.chat-orders-counter input,
-.chat-orders-offer-composer textarea,
-.chat-orders-offer-composer select {
-  min-width: min(100%, 18rem);
-  min-height: 44px;
-  padding: 0.45rem;
-}
-
-.chat-orders-offer-composer {
-  padding: 0.6rem;
-  border: 1px dashed var(--line);
-}
-
-.chat-orders-offer-composer textarea {
-  flex-basis: 100%;
-  min-height: 4rem;
-}
-
-.chat-orders-offer-note {
-  flex-basis: 100%;
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
 .chat-orders-replaced {
   opacity: 0.6;
 }
@@ -212,6 +207,10 @@
   padding-top: 0.6rem;
   border-top: 1px solid var(--line);
   background: var(--panel);
+}
+
+.chat-orders-composer > .chat-orders-mode {
+  margin-bottom: 0.35rem;
 }
 
 .chat-orders-composer .markdown-editor {

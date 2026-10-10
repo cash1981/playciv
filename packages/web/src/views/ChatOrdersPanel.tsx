@@ -18,6 +18,7 @@ import { api } from '../lib/api.js'
 import type { ActiveTurnStatus, PlayerView, TimelineMessageDto } from '../lib/api.js'
 import type { NavigationAttempt } from '../lib/navigationGuard.js'
 import { AutoRefreshStatus } from './AutoRefresh.js'
+import { hasYourActions, YourActionsContent } from './AssistedActions.js'
 import { ChatTimestamp } from './ChatTimestamp.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { MarkdownEditor } from './MarkdownEditor.js'
@@ -29,13 +30,6 @@ import { handleTabKeyDown } from './tabKeys.js'
 import './ChatOrdersPanel.css'
 
 const TIMELINE_REFRESH_MS = 10_000
-
-function newRequestId(): string {
-  const random = globalThis.crypto?.randomUUID
-  return typeof random === 'function'
-    ? random.call(globalThis.crypto)
-    : `offer-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-}
 
 /** What the timeline shows next to a nickname; both are already public in the view. */
 export interface ChatAuthor {
@@ -323,10 +317,6 @@ export function ChatOrdersPanel({
   const [filter, setFilter] = useState<Filter>('all')
   const [mode, setMode] = useState<'chat' | 'order'>('chat')
   const [draft, setDraft] = useState('')
-  const [offerTerms, setOfferTerms] = useState('')
-  const [offerRecipientId, setOfferRecipientId] = useState(view.opponents[0]?.playerId ?? '')
-  const [counterOfferId, setCounterOfferId] = useState<string | null>(null)
-  const [counterTerms, setCounterTerms] = useState('')
   // Null follows the viewer's own progress; a pick sticks until the panel goes.
   const [turnPick, setTurnPick] = useState<number | null>(null)
   const [phasePick, setPhasePick] = useState<TurnPhase | null>(null)
@@ -480,34 +470,6 @@ export function ChatOrdersPanel({
     })
   }
 
-  const sendOffer = (): void => {
-    const terms = offerTerms.trim()
-    if (terms === '' || offerRecipientId === '') return
-    void run(async () => {
-      await api.sendTradeOffer(gameId, offerRecipientId, terms, newRequestId(), view.rev)
-      setOfferTerms('')
-      await load()
-    })
-  }
-
-  const transitionOffer = (offerId: string, action: 'accept' | 'decline' | 'withdraw'): void => {
-    void run(async () => {
-      await api.transitionTradeOffer(gameId, offerId, action, newRequestId(), view.rev)
-      await load()
-    })
-  }
-
-  const sendCounter = (offerId: string): void => {
-    const terms = counterTerms.trim()
-    if (terms === '') return
-    void run(async () => {
-      await api.counterTradeOffer(gameId, offerId, terms, newRequestId(), view.rev)
-      setCounterOfferId(null)
-      setCounterTerms('')
-      await load()
-    })
-  }
-
   const savePrivate = (): void => {
     const text = privateEditorRef.current?.getMarkdown() ?? privateNote
     setPrivateStatus('saving')
@@ -528,7 +490,7 @@ export function ChatOrdersPanel({
   const showFilters = FILTERS.filter(({ filter: name }) => name !== 'private' || view.you !== null)
 
   return (
-    <CollapsiblePanel id="chat-orders" title="Chat and orders" defaultOpen className="chat-orders">
+    <CollapsiblePanel id="chat-orders" title="Conversation & actions" defaultOpen className="chat-orders">
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <div className="chat-orders-head">
@@ -555,6 +517,22 @@ export function ChatOrdersPanel({
         </div>
         <AutoRefreshStatus on={autoRefresh} />
       </div>
+
+      {hasYourActions(view) && (
+        <section className="chat-orders-your-action" aria-labelledby="chat-orders-your-action-title">
+          <div className="chat-orders-section-heading">
+            <h3 id="chat-orders-your-action-title">Your action</h3>
+            <span className="muted">Choose a ready action, then use the conversation below to coordinate.</span>
+          </div>
+          <YourActionsContent
+            gameId={gameId}
+            view={view}
+            busy={busy}
+            readOnly={readOnly}
+            run={run}
+          />
+        </section>
+      )}
 
       {filter === 'private' && view.you !== null && replaying ? (
         <div role="tabpanel" id="chat-orders-private-panel" aria-labelledby="chat-orders-filter-private">
@@ -622,42 +600,6 @@ export function ChatOrdersPanel({
               </button>
             )}
             <ul className="chat-orders-list">
-              {(view.tradeOffers ?? []).map((offer) => {
-                const recipient = view.you?.playerId === offer.recipientId
-                const sender = view.you?.playerId === offer.senderId
-                return (
-                  <li key={offer.id} className="chat-orders-offer">
-                    <div className="chat-orders-meta">
-                      <strong>{`Offer · ${offer.senderUsername} → ${offer.recipientUsername}`}</strong>
-                      <span className="tag turn">{`T${offer.turnNumber} · ${PHASE_SHORT[offer.phase]}`}</span>
-                      <span className="tag">{offer.status}</span>
-                    </div>
-                    <div className="chat-orders-body">{offer.terms}</div>
-                    {canWrite && offer.status === 'pending' && (recipient || sender) && (
-                      <div className="chat-orders-offer-actions">
-                        {recipient && <>
-                          <button type="button" disabled={busy} onClick={() => transitionOffer(offer.id, 'accept')}>Accept</button>
-                          <button type="button" disabled={busy} onClick={() => transitionOffer(offer.id, 'decline')}>Decline</button>
-                          <button type="button" disabled={busy} onClick={() => setCounterOfferId(counterOfferId === offer.id ? null : offer.id)}>Counter</button>
-                        </>}
-                        {sender && <button type="button" disabled={busy} onClick={() => transitionOffer(offer.id, 'withdraw')}>Withdraw</button>}
-                      </div>
-                    )}
-                    {counterOfferId === offer.id && (
-                      <form className="chat-orders-counter" onSubmit={(event) => { event.preventDefault(); sendCounter(offer.id) }}>
-                        <input
-                          value={counterTerms}
-                          onChange={(event) => setCounterTerms(event.target.value)}
-                          aria-label="Counteroffer terms"
-                          placeholder="Counteroffer terms"
-                          maxLength={2000}
-                        />
-                        <button type="submit" disabled={busy || counterTerms.trim() === ''}>Send counteroffer</button>
-                      </form>
-                    )}
-                  </li>
-                )
-              })}
               {visible.map((row) => (
                 <TimelineRow
                   key={row.id}
@@ -733,30 +675,6 @@ export function ChatOrdersPanel({
                   </label>
                 </div>
               )}
-              <div className="chat-orders-offer-composer">
-                <strong>Trade offer</strong>
-                <p className="chat-orders-offer-note">
-                  Accepting records that you agreed to the terms. It does not transfer resources; settle through the existing controls during the legal trade window.
-                </p>
-                <label htmlFor="trade-offer-recipient">Recipient</label>
-                <select
-                  id="trade-offer-recipient"
-                  value={offerRecipientId}
-                  onChange={(event) => setOfferRecipientId(event.target.value)}
-                >
-                  <option value="">Choose a player</option>
-                  {view.opponents.map((player) => <option key={player.playerId} value={player.playerId}>{player.username}</option>)}
-                </select>
-                <label htmlFor="trade-offer-terms">Terms</label>
-                <textarea
-                  id="trade-offer-terms"
-                  value={offerTerms}
-                  onChange={(event) => setOfferTerms(event.target.value)}
-                  maxLength={2000}
-                  placeholder="Write the terms in plain language"
-                />
-                <button type="button" disabled={busy || offerRecipientId === '' || offerTerms.trim() === ''} onClick={sendOffer}>Send offer</button>
-              </div>
               <EditorComponent
                 key="composer"
                 ref={composerEditorRef}

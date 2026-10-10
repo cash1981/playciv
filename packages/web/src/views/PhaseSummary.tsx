@@ -99,9 +99,13 @@ function findPanel(key: string): { readonly section: HTMLElement; readonly focus
     const board = document.getElementById(BOARD_PANEL_ID)
     return board === null ? null : { section: board, focus: board }
   }
-  const section = document.getElementById(`${key}-content`)?.closest('section')
+  // Assisted choices moved into Conversation & actions. Keep the old key as a
+  // compatibility alias so existing shortcuts land on the new combined panel.
+  const content = document.getElementById(`${key}-content`)
+    ?? (key === 'actions' ? document.getElementById('chat-orders-content') : null)
+  const section = content?.closest('section')
   if (section === null || section === undefined) return null
-  const toggle = section.querySelector<HTMLElement>(`[aria-controls="${key}-content"]`)
+  const toggle = content === null ? null : section.querySelector<HTMLElement>(`[aria-controls="${content.id}"]`)
   return { section, focus: toggle ?? section }
 }
 
