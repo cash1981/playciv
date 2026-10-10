@@ -226,10 +226,12 @@ interface PlanBarProps {
 function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   const [sending, setSending] = useState(false)
-  // A new plan mounts a new bar: bring it into view once and put focus on it.
+  // A new plan mounts a new bar: put focus on it once, without scrolling. The page
+  // is scrolled by the board (BoardView), which brings its panel into view under
+  // this sticky bar, so the two never pull the page in different directions.
   // Keyboard users then Tab on to the squares, which follow it on the page.
   useEffect(() => {
-    if (ref.current !== null) bringIntoView(ref.current)
+    ref.current?.focus({ preventScroll: true })
   }, [])
 
   const target = plan.target

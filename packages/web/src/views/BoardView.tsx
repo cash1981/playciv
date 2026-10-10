@@ -331,6 +331,7 @@ export function BoardView({
 
   const surfaceRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
   /**
    * The piece being dragged: the grab offset inside it, and its latest position.
@@ -457,6 +458,23 @@ export function BoardView({
     })
     // Zoom and the board are read at entry; the squares themselves may change later.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picking])
+
+  // The Build picker sits in the Cities panel, far from the board. Entering pick
+  // mode brings the board panel into the page, under the sticky confirm bar.
+  // Only on entering: a refresh that keeps the plan, or leaving, does not scroll.
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!picking || panel === null || typeof panel.scrollIntoView !== 'function') return
+    const reduced =
+      typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // The bar wraps onto several lines on a phone, so its real height is the margin
+    // when it can be measured; the stylesheet has a fallback. The scroll position is
+    // worked out inside the call, so the inline value is removed straight after.
+    const barHeight = document.querySelector('.build-bar')?.getBoundingClientRect().height ?? 0
+    if (barHeight > 0) panel.style.scrollMarginTop = `${Math.ceil(barHeight) + 12}px`
+    panel.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' })
+    panel.style.removeProperty('scroll-margin-top')
   }, [picking])
 
   useEffect(() => {
@@ -805,7 +823,13 @@ export function BoardView({
   }
 
   return (
-    <section id={BOARD_PANEL_ID} className="panel board-panel" tabIndex={-1} aria-labelledby={`${BOARD_PANEL_ID}-heading`}>
+    <section
+      ref={panelRef}
+      id={BOARD_PANEL_ID}
+      className={`panel board-panel${picking ? ' build-picking' : ''}`}
+      tabIndex={-1}
+      aria-labelledby={`${BOARD_PANEL_ID}-heading`}
+    >
       <div className="row">
         <h2 id={`${BOARD_PANEL_ID}-heading`} style={{ margin: 0 }}>Civilization Boardgame</h2>
         <span style={{ flex: 1 }} />
