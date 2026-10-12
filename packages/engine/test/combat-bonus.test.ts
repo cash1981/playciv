@@ -231,6 +231,15 @@ describe('city-state 4', () => {
     expect(bonus(state, KARANDRAS1)).toBe(0)
   })
 
+  it('gives nothing to a player without a colour', () => {
+    const state = put(put(colouredGame(), CASH1981, CS4, 5, 5), CASH1981, 'figures/redarmy', 5, 5)
+    const colourless = {
+      ...state,
+      players: state.players.map((p) => (p.playerId === CASH1981 ? { ...p, color: null } : p)),
+    }
+    expect(bonus(colourless, CASH1981)).toBe(0)
+  })
+
   it('adds to the other sources and shows in the projection', () => {
     let state = place(colouredGame(), CASH1981, 'buildings/barracks', 0)
     state = put(state, CASH1981, CS4, 5, 5)

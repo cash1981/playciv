@@ -112,8 +112,8 @@ for the Russian player. Holding the card is not required. When two colours
 stand there (a battle) it counts for both; the survivor keeps it. The +1
 culture half is not derived. Test: `combat-bonus.test.ts`.
 
-Source: `packages/engine/src/coins.ts`, `packages/engine/src/blockade.ts`
-and related tests.
+Source: `packages/engine/src/coins.ts`, `packages/engine/src/blockade.ts`,
+`packages/engine/src/combat-bonus.ts` and related tests.
 
 ## Arena and card handling
 

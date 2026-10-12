@@ -546,7 +546,8 @@ movement/combat/stacking values, a Combat hand size note and EftA/Infra/MIC/PE
 modifiers. Every value except Combat and Culture hand size is editable by any
 member of the game, with every edit written to the public log. Combat is
 calculated automatically from buildings, generals, MIC investments, government,
-civilization and the Statue of Zeus. Culture hand size starts at 2 and is
+civilization, the Statue of Zeus and city-state 4 (+2 while an army or scout of
+the player's colour stands on it). Culture hand size starts at 2 and is
 calculated from Pottery, Civil Service and Theology (+1 each), Computers (+1 per
 5 coins), Valmiki (+2 while revealed and usable, suppressed when all tracked
 Artist or Thinker tokens are blockaded, gone again when discarded), the first

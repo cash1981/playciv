@@ -2,8 +2,8 @@
  * The combat bonus (issue #197), derived from what a player has rather than
  * typed in. Like `cityCountOf` and `cultureMarkerLevelOf`, it is computed from
  * the board, the MIC stat, the government and the civilization each time it is read, so it recalculates by itself
- * whenever a building, general, wonder, investment, government or civilization
- * changes and cannot drift out of step.
+ * whenever a building, general, wonder, figure, investment, government or
+ * civilization changes and cannot drift out of step.
  *
  * Each source and its value come from the human (issue #197); there is no old
  * system behind them, since the old status sheet was typed in by hand.
