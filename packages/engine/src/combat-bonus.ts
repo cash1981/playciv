@@ -9,7 +9,7 @@
  * system behind them, since the old status sheet was typed in by hand.
  */
 
-import { blockadeCheckFor, firstOccupierColour } from './blockade.js'
+import { blockadeCheckFor, cityStateHolderColour } from './blockade.js'
 import type { BoardPiece } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
@@ -48,7 +48,7 @@ const CITY_STATE_4_BONUS = 2
  * their own piece. City-state 4 gives +2 once to the player whose army or scout
  * stood in its square first (the white army is the Russian player's); a figure
  * of another colour that comes later, in a battle, does not get it, and it
- * passes on only when the holder's figures are gone. See `firstOccupierColour`.
+ * passes on only when the holder's figures are gone. See `cityStateHolderColour`.
  */
 export function combatBonusOf(state: GameState, player: Playerhand): number {
   let bonus = 0
@@ -73,7 +73,12 @@ export function combatBonusOf(state: GameState, player: Playerhand): number {
     }
   }
 
-  if (colour !== undefined && firstOccupierColour(state, CITY_STATE_4_ASSET_ID) === colour) {
+  if (
+    colour !== undefined &&
+    state.board.pieces.some(
+      (piece) => piece.assetId === CITY_STATE_4_ASSET_ID && cityStateHolderColour(state, piece) === colour,
+    )
+  ) {
     bonus += CITY_STATE_4_BONUS
   }
 

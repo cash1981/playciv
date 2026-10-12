@@ -278,78 +278,79 @@ export function blockadeCheckFor(
 }
 
 /**
- * The colour that holds a piece such as a city-state: the colour of the figure
- * (army or scout) that stood in its map square first, for as long as one of
- * that colour still stands there. If its figures are killed or leave, the
- * colour that has stood there longest takes over, and an empty square has no
- * holder. The white army is the Russian player's colour.
+ * The colour that holds a piece such as a city-state: the colour of the army or
+ * scout that stood in its map square first, for as long as that colour still has
+ * a figure there. If its figures are killed or leave, the colour that has stood
+ * there longest without a break takes over, and an empty square has no holder.
+ * The white army is the Russian player's colour.
  *
  * Whoever came first cannot be read off the board, and the stacking order does
- * not tell it (bringing a piece to the front reorders it), so the board history
- * is replayed. It is complete and follows undo and redo, so nothing is stored.
- * `undefined` when the piece is not on the map or no figure of a known colour
- * stands on it. Pieces that predate the history, if any, are ranked by their
- * stacking order.
+ * not tell it (moving or bringing a piece to the front reorders it), so the
+ * board history is replayed. It is complete and follows undo and redo, so
+ * nothing is stored. `undefined` when the piece is not on the map or no figure
+ * of a known colour stands on it. Colours that stand there without any history
+ * (a save from before it) are ranked by stacking order.
  */
-export function firstOccupierColour(
+export function cityStateHolderColour(
   state: Pick<GameState, 'board' | 'players'>,
-  assetId: string,
+  target: BoardPiece,
 ): string | undefined {
-  const target = state.board.pieces.find((piece) => piece.assetId === assetId)
-  if (target === undefined) return undefined
-
   const russiaColor = state.players
     .find((player) => player.civilization?.name === RUSSIA_CIV)
     ?.color?.toLowerCase()
   const colourOf = (piece: BoardPiece): string | undefined =>
     piece.assetId === WHITE_ARMY_ID ? russiaColor : pieceColorOf(piece)
 
-  /** Colours of the figures in the target's square, with the step each got there, oldest first. */
-  const occupiers = (
-    pieces: readonly BoardPiece[],
-    arrivedAt: ReadonlyMap<string, { key: string; step: number }>,
-  ): { colour: string; step: number; order: number }[] => {
+  /** The colours with an army or scout in the target's square, in stacking order. */
+  const coloursOn = (pieces: readonly BoardPiece[]): string[] => {
     const at = pieces.find((piece) => piece.id === target.id)
     const cell = at === undefined ? null : cellOf(state.board, at)
     if (cell === null) return []
-    const found: { colour: string; step: number; order: number }[] = []
-    pieces.forEach((piece, order) => {
-      if (piece.category !== 'figure') return
-      const colour = colourOf(piece)
-      const figureCell = cellOf(state.board, piece)
-      if (colour === undefined || figureCell === null || keyOf(figureCell) !== keyOf(cell)) return
-      found.push({ colour, step: arrivedAt.get(piece.id)?.step ?? -1, order })
-    })
-    return found.sort((a, b) => a.step - b.step || a.order - b.order)
-  }
-
-  let pieces: readonly BoardPiece[] = []
-  const arrivedAt = new Map<string, { key: string; step: number }>()
-  let holder: string | undefined
-  let targetKey: string | undefined
-  state.board.history.forEach((entry, index) => {
-    pieces = applyChange(pieces, entry.change)
+    const found: string[] = []
     for (const piece of pieces) {
       if (piece.category !== 'figure') continue
-      const cell = cellOf(state.board, piece)
-      const key = cell === null ? '' : keyOf(cell)
-      if (arrivedAt.get(piece.id)?.key !== key) arrivedAt.set(piece.id, { key, step: index })
+      const colour = colourOf(piece)
+      const figureCell = colour === undefined ? null : cellOf(state.board, piece)
+      if (colour !== undefined && figureCell !== null && keyOf(figureCell) === keyOf(cell)) {
+        if (!found.includes(colour)) found.push(colour)
+      }
     }
+    return found
+  }
+
+  // Most of the time nobody stands there, so the history need not be read.
+  const now = coloursOn(state.board.pieces)
+  if (now.length === 0) return undefined
+
+  let pieces: readonly BoardPiece[] = []
+  /** Colour -> the step from which it has stood on the square without a break. */
+  let since = new Map<string, number>()
+  let holder: string | undefined
+  let targetKey: string | undefined
+  state.board.history.forEach((entry, step) => {
+    pieces = applyChange(pieces, entry.change)
     const at = pieces.find((piece) => piece.id === target.id)
     const cell = at === undefined ? null : cellOf(state.board, at)
     const key = cell === null ? undefined : keyOf(cell)
     // A piece that is moved starts over: whoever stands on its new square first holds it.
-    if (key !== targetKey) holder = undefined
+    if (key !== targetKey) {
+      holder = undefined
+      since = new Map()
+    }
     targetKey = key
-    const present = occupiers(pieces, arrivedAt)
-    if (holder === undefined || !present.some((entry) => entry.colour === holder)) {
-      holder = present[0]?.colour
+    const present = coloursOn(pieces)
+    since = new Map(present.map((colour) => [colour, since.get(colour) ?? step]))
+    if (holder === undefined || !since.has(holder)) {
+      holder = present.reduce<string | undefined>(
+        (oldest, colour) =>
+          oldest === undefined || (since.get(colour) ?? 0) < (since.get(oldest) ?? 0) ? colour : oldest,
+        undefined,
+      )
     }
   })
 
   // The board itself decides what stands there now; the replay only says who was first.
-  const now = occupiers(state.board.pieces, arrivedAt)
-  return now.some((entry) => entry.colour === holder) ? holder : now[0]?.colour
+  return holder !== undefined && now.includes(holder) ? holder : now[0]
 }
 
 /**

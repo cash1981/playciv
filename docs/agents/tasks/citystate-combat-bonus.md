@@ -26,7 +26,7 @@ player who has an army or scout of their own colour on its square.
 
 ## Scope
 
-**In:** `combatBonusOf`, `firstOccupierColour` in `blockade.ts` (and thus the stats panel and battle HP bonus), a
+**In:** `combatBonusOf`, `cityStateHolderColour` in `blockade.ts` (and thus the stats panel and battle HP bonus), a
 regression test, a line in `decisions.md`.
 
 **Out:** the +1 culture half of the card.

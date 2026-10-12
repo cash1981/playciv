@@ -112,7 +112,7 @@ Russian player. Holding the card is not required. A figure of another colour
 that arrives later (a battle) does not get it. It passes on only when the
 holder has no figure left there (killed or moved away), to the colour that has
 stood there longest; it is not regained by coming back. "First" is found by
-replaying `board.history` (`firstOccupierColour`), because the stacking order
+replaying `board.history` (`cityStateHolderColour`), because the stacking order
 changes with bring to front; nothing is stored, and undo follows. The +1
 culture half is not derived. Test: `combat-bonus.test.ts`.
 
