@@ -214,6 +214,18 @@ class BlockadeIndex {
     }
     return false
   }
+
+  /**
+   * Whether an army or scout of `color` stands in the piece's map square. The
+   * white army counts for `color` when it is the Russian player's colour.
+   */
+  hasFigureOf(piece: BoardPiece, color: string): boolean {
+    const cell = cellOf(this.state.board, piece)
+    if (cell === null) return false
+    const figures = this.figureColors.get(keyOf(cell))
+    if (figures === undefined) return false
+    return figures.has(color) || (figures.has('white') && this.russiaColor === color)
+  }
 }
 
 /**
@@ -274,6 +286,18 @@ export function blockadeCheckFor(
 ): (piece: BoardPiece, colour: string) => boolean {
   const index = new BlockadeIndex(state)
   return (piece, colour) => index.hasEnemyFigure(piece, colour)
+}
+
+/**
+ * Whether an army or scout of `colour` stands in the piece's map square. The
+ * white army counts as the Russian player's colour. `blockadeCheckFor` for the
+ * opposite question: many pieces, the board indexed once.
+ */
+export function figureCheckFor(
+  state: Pick<GameState, 'board' | 'players'>,
+): (piece: BoardPiece, colour: string) => boolean {
+  const index = new BlockadeIndex(state)
+  return (piece, colour) => index.hasFigureOf(piece, colour)
 }
 
 /**

@@ -9,7 +9,7 @@
  * system behind them, since the old status sheet was typed in by hand.
  */
 
-import { blockadeCheckFor } from './blockade.js'
+import { blockadeCheckFor, figureCheckFor } from './blockade.js'
 import type { BoardPiece } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
@@ -32,6 +32,9 @@ const FUNDAMENTALISM_BONUS = 4
 const FRENCH_BONUS = 2
 const STATUE_OF_ZEUS_ASSET_ID = 'wonders/statueofzeus'
 const STATUE_OF_ZEUS_BONUS = 6
+/** City-state 4 ("1 Culture & +2 Combat bonus"): its card text, on the board piece. */
+const CITY_STATE_4_ASSET_ID = 'city-states/cs4'
+const CITY_STATE_4_BONUS = 2
 
 /**
  * A player's combat bonus. Buildings and generals are attributed by `placedBy`
@@ -42,7 +45,9 @@ const STATUE_OF_ZEUS_BONUS = 6
  * own stands in its square (issue #241, the blockade rule; see `blockade.ts`),
  * and so does the Statue of Zeus. That is judged against the colour of the
  * player it is attributed to, so a player's own figure never switches off
- * their own piece.
+ * their own piece. City-state 4 gives +2 once to every player with an army or
+ * scout of their own colour in its square (the white army is the Russian
+ * player's); when two colours stand there it counts for both, in the battle.
  */
 export function combatBonusOf(state: GameState, player: Playerhand): number {
   let bonus = 0
@@ -64,6 +69,14 @@ export function combatBonusOf(state: GameState, player: Playerhand): number {
       !switchedOff(piece)
     ) {
       bonus += STATUE_OF_ZEUS_BONUS
+    }
+  }
+
+  if (colour !== undefined) {
+    const cityStates = state.board.pieces.filter((piece) => piece.assetId === CITY_STATE_4_ASSET_ID)
+    if (cityStates.length > 0) {
+      const hasFigure = figureCheckFor(state)
+      if (cityStates.some((piece) => hasFigure(piece, colour))) bonus += CITY_STATE_4_BONUS
     }
   }
 

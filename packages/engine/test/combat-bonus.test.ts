@@ -7,14 +7,14 @@ import { describe, expect, it } from 'vitest'
 
 import { placePiece, setWonderOwner } from '../src/actions/board.js'
 import { setPlayerGovernment, setPlayerStat } from '../src/actions/player.js'
-import { isInWondersArea, wondersArea } from '../src/board.js'
+import { SQUARE_SIZE, findBoardAsset, isInWondersArea, mapTop, wondersArea } from '../src/board.js'
 import { combatBonusOf } from '../src/combat-bonus.js'
 import type { CivItem } from '../src/item.js'
 import { unwrap } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
 
-import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
+import { CASH1981, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
 
 function bonus(state: GameState, playerId = CASH1981): number {
   const player = findPlayer(state, playerId)
@@ -159,6 +159,85 @@ describe('combatBonusOf', () => {
     )
     // French 2 + Barracks 2 + Academy 4 + General 4 + MIC 8 + Fundamentalism 4
     expect(bonus(state)).toBe(24)
+  })
+})
+
+/** Cash is Red, Karandras Blue and Itchi Green, so figures can be told apart. */
+function colouredGame(): GameState {
+  const colors: Record<string, string> = { [CASH1981]: 'Red', [KARANDRAS1]: 'Blue', [ITCHI]: 'Green' }
+  const state = firstCivGame()
+  return {
+    ...state,
+    players: state.players.map((p) => ({ ...p, color: colors[p.playerId] ?? p.color })),
+  }
+}
+
+/** Puts a piece with its centre in map square (column, row), both from 0. */
+function put(state: GameState, playerId: string, assetId: string, column: number, row: number): GameState {
+  const asset = findBoardAsset(assetId)
+  if (asset === undefined) throw new Error(`no asset ${assetId}`)
+  return unwrap(placePiece(state, {
+    playerId,
+    assetId,
+    x: column * SQUARE_SIZE + (SQUARE_SIZE - asset.width) / 2,
+    y: mapTop(state.board) + row * SQUARE_SIZE + (SQUARE_SIZE - asset.height) / 2,
+  }))
+}
+
+describe('city-state 4', () => {
+  const CS4 = 'city-states/cs4'
+
+  it('gives +2 to a player with an army or scout of their own colour in its square', () => {
+    const base = put(colouredGame(), CASH1981, CS4, 5, 5)
+    expect(bonus(base)).toBe(0)
+    expect(bonus(put(base, CASH1981, 'figures/redarmy', 5, 5))).toBe(2)
+    expect(bonus(put(base, CASH1981, 'figures/redscout', 5, 5))).toBe(2)
+  })
+
+  it('counts once however many own figures stand there', () => {
+    let state = put(colouredGame(), CASH1981, CS4, 5, 5)
+    state = put(state, CASH1981, 'figures/redarmy', 5, 5)
+    state = put(state, CASH1981, 'figures/redarmy', 5, 5)
+    state = put(state, CASH1981, 'figures/redscout', 5, 5)
+    expect(bonus(state)).toBe(2)
+  })
+
+  it('ignores other city-states and figures in a neighbouring square', () => {
+    let state = put(colouredGame(), CASH1981, 'city-states/cs1', 5, 5)
+    state = put(state, CASH1981, 'figures/redarmy', 5, 5)
+    expect(bonus(state)).toBe(0)
+    state = put(state, CASH1981, CS4, 8, 8)
+    state = put(state, CASH1981, 'figures/redarmy', 9, 8)
+    expect(bonus(state)).toBe(0)
+  })
+
+  it('does not go to a player whose figure is another colour, and does not need the card', () => {
+    const state = put(put(colouredGame(), CASH1981, CS4, 5, 5), KARANDRAS1, 'figures/bluearmy', 5, 5)
+    expect(bonus(state, KARANDRAS1)).toBe(2)
+    expect(bonus(state, CASH1981)).toBe(0)
+  })
+
+  it('counts for both colours while they fight over it', () => {
+    let state = put(colouredGame(), CASH1981, CS4, 5, 5)
+    state = put(state, CASH1981, 'figures/redarmy', 5, 5)
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 5, 5)
+    expect(bonus(state, CASH1981)).toBe(2)
+    expect(bonus(state, KARANDRAS1)).toBe(2)
+  })
+
+  it('counts the white army for the Russian player only', () => {
+    const state = put(put(withCiv(colouredGame(), CASH1981, 'Russians'), CASH1981, CS4, 5, 5), CASH1981, 'figures/whitearmy', 5, 5)
+    expect(bonus(state, CASH1981)).toBe(2)
+    expect(bonus(state, KARANDRAS1)).toBe(0)
+  })
+
+  it('adds to the other sources and shows in the projection', () => {
+    let state = place(colouredGame(), CASH1981, 'buildings/barracks', 0)
+    state = put(state, CASH1981, CS4, 5, 5)
+    state = put(state, CASH1981, 'figures/redscout', 5, 5)
+    expect(bonus(state)).toBe(4)
+    expect(toPlayerView(state, CASH1981).you?.stats.combat).toBe(4)
+    expect(toPlayerView(state, KARANDRAS1).opponents.find((p) => p.playerId === CASH1981)?.stats.combat).toBe(4)
   })
 })
 

@@ -105,6 +105,13 @@ compatibility with existing games. Public totals never include hidden bonuses.
 Scout-transfer corrections remain manual; see [limitations](limitations.md).
 The palette uses a single `coin1` marker named Coin.
 
+City-state 4 (`city-states/cs4`, "1 Culture & +2 Combat bonus") adds +2 to the
+derived combat bonus of every player with an army or scout of their own colour
+in its square, once however many figures stand there; the white army counts
+for the Russian player. Holding the card is not required. When two colours
+stand there (a battle) it counts for both; the survivor keeps it. The +1
+culture half is not derived. Test: `combat-bonus.test.ts`.
+
 Source: `packages/engine/src/coins.ts`, `packages/engine/src/blockade.ts`
 and related tests.
 
