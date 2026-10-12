@@ -9,7 +9,7 @@
  * system behind them, since the old status sheet was typed in by hand.
  */
 
-import { blockadeCheckFor, figureCheckFor } from './blockade.js'
+import { blockadeCheckFor, firstOccupierColour } from './blockade.js'
 import type { BoardPiece } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
@@ -45,9 +45,10 @@ const CITY_STATE_4_BONUS = 2
  * own stands in its square (issue #241, the blockade rule; see `blockade.ts`),
  * and so does the Statue of Zeus. That is judged against the colour of the
  * player it is attributed to, so a player's own figure never switches off
- * their own piece. City-state 4 gives +2 once to every player with an army or
- * scout of their own colour in its square (the white army is the Russian
- * player's); when two colours stand there it counts for both, in the battle.
+ * their own piece. City-state 4 gives +2 once to the player whose army or scout
+ * stood in its square first (the white army is the Russian player's); a figure
+ * of another colour that comes later, in a battle, does not get it, and it
+ * passes on only when the holder's figures are gone. See `firstOccupierColour`.
  */
 export function combatBonusOf(state: GameState, player: Playerhand): number {
   let bonus = 0
@@ -72,12 +73,8 @@ export function combatBonusOf(state: GameState, player: Playerhand): number {
     }
   }
 
-  if (colour !== undefined) {
-    const cityStates = state.board.pieces.filter((piece) => piece.assetId === CITY_STATE_4_ASSET_ID)
-    if (cityStates.length > 0) {
-      const hasFigure = figureCheckFor(state)
-      if (cityStates.some((piece) => hasFigure(piece, colour))) bonus += CITY_STATE_4_BONUS
-    }
+  if (colour !== undefined && firstOccupierColour(state, CITY_STATE_4_ASSET_ID) === colour) {
+    bonus += CITY_STATE_4_BONUS
   }
 
   const investments = Math.min(Math.max(player.stats.mic, 0), MIC_MAX_INVESTMENTS)

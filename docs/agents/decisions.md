@@ -106,10 +106,14 @@ Scout-transfer corrections remain manual; see [limitations](limitations.md).
 The palette uses a single `coin1` marker named Coin.
 
 City-state 4 (`city-states/cs4`, "1 Culture & +2 Combat bonus") adds +2 to the
-derived combat bonus of every player with an army or scout of their own colour
-in its square, once however many figures stand there; the white army counts
-for the Russian player. Holding the card is not required. When two colours
-stand there (a battle) it counts for both; the survivor keeps it. The +1
+derived combat bonus of the player whose army or scout stood in its square
+first, once however many figures stand there; the white army counts for the
+Russian player. Holding the card is not required. A figure of another colour
+that arrives later (a battle) does not get it. It passes on only when the
+holder has no figure left there (killed or moved away), to the colour that has
+stood there longest; it is not regained by coming back. "First" is found by
+replaying `board.history` (`firstOccupierColour`), because the stacking order
+changes with bring to front; nothing is stored, and undo follows. The +1
 culture half is not derived. Test: `combat-bonus.test.ts`.
 
 Source: `packages/engine/src/coins.ts`, `packages/engine/src/blockade.ts`,

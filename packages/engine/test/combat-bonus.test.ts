@@ -5,7 +5,15 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { placePiece, setWonderOwner } from '../src/actions/board.js'
+import {
+  bringToFront,
+  movePiece,
+  placePiece,
+  removePiece,
+  sendToBack,
+  setWonderOwner,
+  undoLastBoardChange,
+} from '../src/actions/board.js'
 import { setPlayerGovernment, setPlayerStat } from '../src/actions/player.js'
 import { SQUARE_SIZE, findBoardAsset, isInWondersArea, mapTop, wondersArea } from '../src/board.js'
 import { combatBonusOf } from '../src/combat-bonus.js'
@@ -217,12 +225,98 @@ describe('city-state 4', () => {
     expect(bonus(state, CASH1981)).toBe(0)
   })
 
-  it('counts for both colours while they fight over it', () => {
+  /** Moves the last piece with this asset id to the centre of map square (column, row). */
+  function moveTo(state: GameState, assetId: string, column: number, row: number): GameState {
+    const piece = [...state.board.pieces].reverse().find((candidate) => candidate.assetId === assetId)
+    if (piece === undefined) throw new Error(`no ${assetId}`)
+    return unwrap(movePiece(state, {
+      playerId: CASH1981,
+      pieceId: piece.id,
+      x: column * SQUARE_SIZE + (SQUARE_SIZE - piece.width) / 2,
+      y: mapTop(state.board) + row * SQUARE_SIZE + (SQUARE_SIZE - piece.height) / 2,
+      snap: false,
+    }))
+  }
+
+  function fight(): GameState {
     let state = put(colouredGame(), CASH1981, CS4, 5, 5)
     state = put(state, CASH1981, 'figures/redarmy', 5, 5)
-    state = put(state, KARANDRAS1, 'figures/bluearmy', 5, 5)
+    return put(state, KARANDRAS1, 'figures/bluearmy', 5, 5)
+  }
+
+  it('goes only to the figure that stood there first when another colour comes in', () => {
+    const state = fight()
     expect(bonus(state, CASH1981)).toBe(2)
+    expect(bonus(state, KARANDRAS1)).toBe(0)
+    // The other way round: Blue was first.
+    let blueFirst = put(colouredGame(), CASH1981, CS4, 5, 5)
+    blueFirst = put(blueFirst, KARANDRAS1, 'figures/bluearmy', 5, 5)
+    blueFirst = put(blueFirst, CASH1981, 'figures/redarmy', 5, 5)
+    expect(bonus(blueFirst, CASH1981)).toBe(0)
+    expect(bonus(blueFirst, KARANDRAS1)).toBe(2)
+  })
+
+  it('does not change when the first arrival is sent to the back or the later one brought to the front', () => {
+    const state = fight()
+    const red = state.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
+    const blue = state.board.pieces.find((piece) => piece.assetId === 'figures/bluearmy')
+    if (red === undefined || blue === undefined) throw new Error('no armies')
+    const reordered = unwrap(
+      sendToBack(unwrap(bringToFront(state, { playerId: CASH1981, pieceId: blue.id })), {
+        playerId: CASH1981,
+        pieceId: red.id,
+      }),
+    )
+    expect(reordered.board.pieces.findIndex((piece) => piece.id === red.id)).toBeLessThan(
+      reordered.board.pieces.findIndex((piece) => piece.id === blue.id),
+    )
+    expect(bonus(reordered, CASH1981)).toBe(2)
+    expect(bonus(reordered, KARANDRAS1)).toBe(0)
+  })
+
+  it('passes to the figure left standing when the holder is killed', () => {
+    const state = fight()
+    const red = state.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
+    if (red === undefined) throw new Error('no red army')
+    const after = unwrap(removePiece(state, { playerId: CASH1981, pieceId: red.id }))
+    expect(bonus(after, CASH1981)).toBe(0)
+    expect(bonus(after, KARANDRAS1)).toBe(2)
+    // An undo gives it back to Red.
+    const undone = unwrap(undoLastBoardChange(after, CASH1981))
+    expect(bonus(undone, CASH1981)).toBe(2)
+    expect(bonus(undone, KARANDRAS1)).toBe(0)
+  })
+
+  it('stays with the holder while one of their figures remains', () => {
+    let state = put(colouredGame(), CASH1981, CS4, 5, 5)
+    state = put(state, CASH1981, 'figures/redarmy', 5, 5)
+    state = put(state, CASH1981, 'figures/redscout', 5, 5)
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 5, 5)
+    state = moveTo(state, 'figures/redarmy', 1, 1)
+    expect(bonus(state, CASH1981)).toBe(2)
+    expect(bonus(state, KARANDRAS1)).toBe(0)
+  })
+
+  it('goes to the figure left standing when the holder leaves, and does not come back with them', () => {
+    let state = fight()
+    state = moveTo(state, 'figures/redarmy', 1, 1)
+    expect(bonus(state, CASH1981)).toBe(0)
     expect(bonus(state, KARANDRAS1)).toBe(2)
+    // Red returns, but Blue has stood there since Red left.
+    state = moveTo(state, 'figures/redarmy', 5, 5)
+    expect(bonus(state, CASH1981)).toBe(0)
+    expect(bonus(state, KARANDRAS1)).toBe(2)
+  })
+
+  it('goes to nobody once the square is empty, and the next to arrive gets it', () => {
+    let state = put(colouredGame(), CASH1981, CS4, 5, 5)
+    state = put(state, CASH1981, 'figures/redarmy', 5, 5)
+    state = moveTo(state, 'figures/redarmy', 1, 1)
+    expect(bonus(state, CASH1981)).toBe(0)
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 5, 5)
+    state = moveTo(state, 'figures/redarmy', 5, 5)
+    expect(bonus(state, KARANDRAS1)).toBe(2)
+    expect(bonus(state, CASH1981)).toBe(0)
   })
 
   it('counts the white army for the Russian player only', () => {
