@@ -2,14 +2,14 @@
  * The combat bonus (issue #197), derived from what a player has rather than
  * typed in. Like `cityCountOf` and `cultureMarkerLevelOf`, it is computed from
  * the board, the MIC stat, the government and the civilization each time it is read, so it recalculates by itself
- * whenever a building, general, wonder, investment, government or civilization
- * changes and cannot drift out of step.
+ * whenever a building, general, wonder, figure, investment, government or
+ * civilization changes and cannot drift out of step.
  *
  * Each source and its value come from the human (issue #197); there is no old
  * system behind them, since the old status sheet was typed in by hand.
  */
 
-import { blockadeCheckFor } from './blockade.js'
+import { blockadeCheckFor, cityStateHolderColour } from './blockade.js'
 import type { BoardPiece } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
@@ -32,6 +32,9 @@ const FUNDAMENTALISM_BONUS = 4
 const FRENCH_BONUS = 2
 const STATUE_OF_ZEUS_ASSET_ID = 'wonders/statueofzeus'
 const STATUE_OF_ZEUS_BONUS = 6
+/** City-state 4 ("1 Culture & +2 Combat bonus"): its card text, on the board piece. */
+const CITY_STATE_4_ASSET_ID = 'city-states/cs4'
+const CITY_STATE_4_BONUS = 2
 
 /**
  * A player's combat bonus. Buildings and generals are attributed by `placedBy`
@@ -42,7 +45,10 @@ const STATUE_OF_ZEUS_BONUS = 6
  * own stands in its square (issue #241, the blockade rule; see `blockade.ts`),
  * and so does the Statue of Zeus. That is judged against the colour of the
  * player it is attributed to, so a player's own figure never switches off
- * their own piece.
+ * their own piece. City-state 4 gives +2 once to the player whose army or scout
+ * stood in its square first (the white army is the Russian player's); a figure
+ * of another colour that comes later, in a battle, does not get it, and it
+ * passes on only when the holder's figures are gone. See `cityStateHolderColour`.
  */
 export function combatBonusOf(state: GameState, player: Playerhand): number {
   let bonus = 0
@@ -65,6 +71,15 @@ export function combatBonusOf(state: GameState, player: Playerhand): number {
     ) {
       bonus += STATUE_OF_ZEUS_BONUS
     }
+  }
+
+  if (
+    colour !== undefined &&
+    state.board.pieces.some(
+      (piece) => piece.assetId === CITY_STATE_4_ASSET_ID && cityStateHolderColour(state, piece) === colour,
+    )
+  ) {
+    bonus += CITY_STATE_4_BONUS
   }
 
   const investments = Math.min(Math.max(player.stats.mic, 0), MIC_MAX_INVESTMENTS)

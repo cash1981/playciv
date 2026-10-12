@@ -17,7 +17,7 @@
  */
 
 import type { Board, BoardPiece } from './board.js'
-import { WHITE_ARMY_ID, mapTop, squareOf } from './board.js'
+import { WHITE_ARMY_ID, applyChange, mapTop, squareOf } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
 /** The five player colours a city or figure piece can come in, matching `PLAYER_COLORS`. */
@@ -214,6 +214,7 @@ class BlockadeIndex {
     }
     return false
   }
+
 }
 
 /**
@@ -274,6 +275,82 @@ export function blockadeCheckFor(
 ): (piece: BoardPiece, colour: string) => boolean {
   const index = new BlockadeIndex(state)
   return (piece, colour) => index.hasEnemyFigure(piece, colour)
+}
+
+/**
+ * The colour that holds a piece such as a city-state: the colour of the army or
+ * scout that stood in its map square first, for as long as that colour still has
+ * a figure there. If its figures are killed or leave, the colour that has stood
+ * there longest without a break takes over, and an empty square has no holder.
+ * The white army is the Russian player's colour.
+ *
+ * Whoever came first cannot be read off the board, and the stacking order does
+ * not tell it (moving or bringing a piece to the front reorders it), so the
+ * board history is replayed. It is complete and follows undo and redo, so
+ * nothing is stored. `undefined` when the piece is not on the map or no figure
+ * of a known colour stands on it. Colours that stand there without any history
+ * (a save from before it) are ranked by stacking order.
+ */
+export function cityStateHolderColour(
+  state: Pick<GameState, 'board' | 'players'>,
+  target: BoardPiece,
+): string | undefined {
+  const russiaColor = state.players
+    .find((player) => player.civilization?.name === RUSSIA_CIV)
+    ?.color?.toLowerCase()
+  const colourOf = (piece: BoardPiece): string | undefined =>
+    piece.assetId === WHITE_ARMY_ID ? russiaColor : pieceColorOf(piece)
+
+  /** The colours with an army or scout in the target's square, in stacking order. */
+  const coloursOn = (pieces: readonly BoardPiece[]): string[] => {
+    const at = pieces.find((piece) => piece.id === target.id)
+    const cell = at === undefined ? null : cellOf(state.board, at)
+    if (cell === null) return []
+    const found: string[] = []
+    for (const piece of pieces) {
+      if (piece.category !== 'figure') continue
+      const colour = colourOf(piece)
+      const figureCell = colour === undefined ? null : cellOf(state.board, piece)
+      if (colour !== undefined && figureCell !== null && keyOf(figureCell) === keyOf(cell)) {
+        if (!found.includes(colour)) found.push(colour)
+      }
+    }
+    return found
+  }
+
+  // Most of the time nobody stands there, so the history need not be read.
+  const now = coloursOn(state.board.pieces)
+  if (now.length === 0) return undefined
+
+  let pieces: readonly BoardPiece[] = []
+  /** Colour -> the step from which it has stood on the square without a break. */
+  let since = new Map<string, number>()
+  let holder: string | undefined
+  let targetKey: string | undefined
+  state.board.history.forEach((entry, step) => {
+    pieces = applyChange(pieces, entry.change)
+    const at = pieces.find((piece) => piece.id === target.id)
+    const cell = at === undefined ? null : cellOf(state.board, at)
+    const key = cell === null ? undefined : keyOf(cell)
+    // A piece that is moved starts over: whoever stands on its new square first holds it.
+    if (key !== targetKey) {
+      holder = undefined
+      since = new Map()
+    }
+    targetKey = key
+    const present = coloursOn(pieces)
+    since = new Map(present.map((colour) => [colour, since.get(colour) ?? step]))
+    if (holder === undefined || !since.has(holder)) {
+      holder = present.reduce<string | undefined>(
+        (oldest, colour) =>
+          oldest === undefined || (since.get(colour) ?? 0) < (since.get(oldest) ?? 0) ? colour : oldest,
+        undefined,
+      )
+    }
+  })
+
+  // The board itself decides what stands there now; the replay only says who was first.
+  return holder !== undefined && now.includes(holder) ? holder : now[0]
 }
 
 /**
