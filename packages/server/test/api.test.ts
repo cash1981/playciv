@@ -2694,6 +2694,42 @@ describe('player stats (#43)', () => {
     expect(view.opponents.find((o) => o.playerId === other)?.stats.culture).toBe(5)
   })
 
+  it('stores Aircraft unlocked as a boolean and rejects anything else', async () => {
+    const { gameId, starter } = await startedGame('StatsAircraft')
+    const { other } = await ids(gameId, starter)
+    const post = (value: unknown) => inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/stat`,
+      headers: bearer(starter),
+      payload: { stat: 'aircraft', value },
+    })
+
+    const saved = await post(true)
+    expect(saved.status).toBe(200)
+    const view = await saved.json() as {
+      opponents: { playerId: string; stats: { aircraft: boolean } }[]
+    }
+    expect(view.opponents.find((o) => o.playerId === other)?.stats.aircraft).toBe(true)
+
+    const cleared = await post(false)
+    expect(cleared.status).toBe(200)
+    expect((await cleared.json() as typeof view).opponents.find((o) => o.playerId === other)?.stats.aircraft).toBe(false)
+
+    const boolForNumber = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/stat`,
+      headers: bearer(starter),
+      payload: { stat: 'culture', value: true },
+    })
+    expect(boolForNumber.status).toBe(400)
+
+    for (const bad of [1, 'true']) {
+      const rejected = await post(bad)
+      expect(rejected.status).toBe(400)
+      expect((await rejected.json() as { error: string }).error).toBe('BAD_REQUEST')
+    }
+  })
+
   it('rejects an invalid Movement value', async () => {
     const { gameId, starter } = await startedGame('StatsMovementBad')
     const { other } = await ids(gameId, starter)

@@ -59,6 +59,11 @@ export interface PlayerStats {
   readonly infantry: number
   readonly artillery: number
   readonly mounted: number
+  /**
+   * Whether the player has unlocked Aircraft units. Set when they reveal Flight
+   * (`revealTech`), and tickable by hand like every other status value.
+   */
+  readonly aircraft: boolean
   readonly stacking: number
   /**
    * Movement is the one status value the players write as an expression:
@@ -88,6 +93,7 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   infantry: 1,
   artillery: 1,
   mounted: 1,
+  aircraft: false,
   stacking: 2,
   mvmt: '2',
   combat: 0,

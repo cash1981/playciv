@@ -94,6 +94,7 @@ const normalizeStats = (stats: Partial<PlayerStats> | undefined): PlayerStats =>
     infantry: merged.infantry,
     artillery: merged.artillery,
     mounted: merged.mounted,
+    aircraft: merged.aircraft === true,
     stacking: merged.stacking,
     // `?? default` guards a hand-edited or older save that stored neither.
     mvmt: String(merged.mvmt ?? DEFAULT_PLAYER_STATS.mvmt),
