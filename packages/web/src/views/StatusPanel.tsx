@@ -127,6 +127,7 @@ const UNIT_COLUMNS: readonly StatColumn[] = [
   { key: 'infantry', label: 'Infantry' },
   { key: 'artillery', label: 'Artillery' },
   { key: 'mounted', label: 'Mounted' },
+  { key: 'aircraft', label: 'Aircraft' },
 ]
 
 const MODIFIER_COLUMNS: readonly StatColumn[] = [
@@ -200,6 +201,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
       <p className="muted" style={{ margin: '0 0 0.5rem' }}>
         These values are shared bookkeeping — anyone in the game can edit them,
         except Combat and Culture hand size, which are calculated automatically.
+        Aircraft is ticked automatically when a player reveals Flight.
         Culture hand size counts revealed cards only, and Cristo Redentor for its owner.
         Unit and modifier values start with the standard defaults shown below.
       </p>
@@ -328,6 +330,20 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
                             <span className="stat-total" aria-label={`${row.username} Coins`}>
                               {totalCoins(row.stats.coinSources)}
                             </span>
+                          ) : key === 'aircraft' ? (
+                            // The one yes/no stat: a checkbox rather than a number.
+                            <input
+                              type="checkbox"
+                              className="stat-checkbox"
+                              aria-label={`${row.username} ${column.label} unlocked`}
+                              checked={row.stats.aircraft}
+                              disabled={busy || readOnly}
+                              onChange={(event) =>
+                                void run(() =>
+                                  api.setPlayerStat(gameId, row.playerId, 'aircraft', event.target.checked),
+                                )
+                              }
+                            />
                           ) : column.derived === true ? (
                             <span className="stat-total" aria-label={`${row.username} ${column.label}`}>
                               {row.stats[key]}

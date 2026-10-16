@@ -94,7 +94,7 @@ export type EngineError =
    * non-integer or negative number, or — for Movement (issue #102) — a string
    * that is not a `base(+bonus)*` expression.
    */
-  | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number | string }
+  | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number | string | boolean }
   /** `setCoinSource` got a source key outside the reference sheet's rows */
   | { readonly kind: 'UNKNOWN_COIN_SOURCE'; readonly source: string }
   /** `setCoinSource` was asked to set a row derived from current game state. */
@@ -212,7 +212,7 @@ export function describeError(error: EngineError): string {
     case 'STAT_NOT_EDITABLE':
       return `The ${error.stat} stat is calculated automatically and cannot be edited`
     case 'INVALID_STAT_VALUE':
-      return `Player stat must be a whole number of zero or more, got ${error.value}`
+      return `Player stat must be a whole number of zero or more (or true/false for Aircraft), got ${error.value}`
     case 'UNKNOWN_COIN_SOURCE':
       return `Unknown coin source: ${error.source}`
     case 'COIN_SOURCE_NOT_EDITABLE':

@@ -78,6 +78,11 @@ markers. Board undo targets the caller's latest consecutive actions; a new
 board action clears redo. Undoing board edits does not undo game actions.
 
 Terrain checks are advisory client warnings, not server placement restrictions.
+Player status has an Aircraft checkbox under Units (`stats.aircraft`, default
+false) meaning the player has unlocked Aircraft units. Revealing the Flight tech
+for the first time ticks it; anyone can still tick or untick it by hand, and it
+is neither cleared when Flight is removed nor enforced when drawing Aircraft.
+
 Government selection and tech-pyramid placement remain permissive bookkeeping
 unless a specific effect is explicitly automated. Generated data should be
 changed through its generator/source process, not patched to encode a rule.
