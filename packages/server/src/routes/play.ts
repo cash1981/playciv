@@ -58,6 +58,7 @@ import {
   authenticateOptionallyWith,
   authenticateWith,
   currentPlayer,
+  optionalBoolean,
   optionalNumber,
   optionalString,
   readGame,
@@ -671,9 +672,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     const isFlag = stat === 'aircraft'
     const value =
       isFlag
-        ? typeof rawValue === 'boolean'
-          ? rawValue
-          : undefined
+        ? optionalBoolean(body, 'value')
         : isText
           ? typeof rawValue === 'number' || typeof rawValue === 'string'
             ? rawValue

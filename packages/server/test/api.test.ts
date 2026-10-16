@@ -2711,6 +2711,18 @@ describe('player stats (#43)', () => {
     }
     expect(view.opponents.find((o) => o.playerId === other)?.stats.aircraft).toBe(true)
 
+    const cleared = await post(false)
+    expect(cleared.status).toBe(200)
+    expect((await cleared.json() as typeof view).opponents.find((o) => o.playerId === other)?.stats.aircraft).toBe(false)
+
+    const boolForNumber = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/stat`,
+      headers: bearer(starter),
+      payload: { stat: 'culture', value: true },
+    })
+    expect(boolForNumber.status).toBe(400)
+
     for (const bad of [1, 'true']) {
       const rejected = await post(bad)
       expect(rejected.status).toBe(400)

@@ -183,6 +183,23 @@ describe('StatusPanel Aircraft unlocked', () => {
     )
   })
 
+  it('saves an untick as false', async () => {
+    const setStat = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(memberView)
+    const view = {
+      ...memberView,
+      opponents: [
+        { ...memberView.opponents[0]!, stats: { ...DEFAULT_PLAYER_STATS, aircraft: true } },
+      ],
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Bob Aircraft unlocked' }))
+
+    await waitFor(() =>
+      expect(setStat).toHaveBeenCalledWith('game-1', 'player-them', 'aircraft', false),
+    )
+  })
+
   it('is disabled for spectators or replay', () => {
     render(<StatusPanel gameId="game-1" view={memberView} busy={false} readOnly run={run} />)
     expect((screen.getByRole('checkbox', { name: 'Alice Aircraft unlocked' }) as HTMLInputElement).disabled).toBe(true)

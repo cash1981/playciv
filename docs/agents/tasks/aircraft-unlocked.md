@@ -3,7 +3,7 @@
 - **Slug:** `aircraft-unlocked`
 - **Branch:** `feat/aircraft-unlocked`
 - **Owner:** Claude
-- **Status:** in progress
+- **Status:** in review
 
 ## Goal
 
@@ -48,9 +48,9 @@ web `lib/api.ts` and `StatusPanel.tsx`, plus tests in each package.
 ## Claimed paths
 
 - `packages/engine/src/state.ts` (`PlayerStats` only)
-- `packages/engine/src/migrate.ts`, `packages/engine/src/actions/player.ts`
+- `packages/engine/src/migrate.ts`, `packages/engine/src/actions/player.ts`, `packages/engine/src/errors.ts`
 - `packages/engine/test/player-stats.test.ts`
-- `packages/server/src/routes/play.ts`
+- `packages/server/src/routes/play.ts`, `packages/server/test/api.test.ts`
 - `packages/web/src/lib/api.ts`, `packages/web/src/views/StatusPanel.tsx`, `packages/web/src/styles.css`
 - `packages/web/src/views/StatusPanel.test.tsx`
 - `docs/agents/decisions.md` (Board and manual bookkeeping)

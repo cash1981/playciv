@@ -336,7 +336,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
                               type="checkbox"
                               className="stat-checkbox"
                               aria-label={`${row.username} ${column.label} unlocked`}
-                              checked={row.stats.aircraft}
+                              checked={row.stats.aircraft === true}
                               disabled={busy || readOnly}
                               onChange={(event) =>
                                 void run(() =>

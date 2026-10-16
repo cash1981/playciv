@@ -166,8 +166,9 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
     ),
     stats: {
       ...player.stats,
-      // Revealing Flight unlocks Aircraft units. Only the first reveal counts, so a
-      // player who unticked the box by hand is not overruled by a second reveal.
+      // Revealing Flight unlocks Aircraft units. Only the reveal of a hidden copy
+      // counts, so a player who unticked the box by hand is not overruled by
+      // revealing it again.
       ...(tech.hidden && tech.name === 'Flight' ? { aircraft: true } : {}),
       ...(source === undefined
         ? {}

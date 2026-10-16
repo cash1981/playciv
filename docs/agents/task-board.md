@@ -17,11 +17,11 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** Claude
 - **Branch:** `feat/aircraft-unlocked`
 - **Brief:** `docs/agents/tasks/aircraft-unlocked.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
-  - `packages/engine/src/state.ts` (`PlayerStats` only), `migrate.ts`, `actions/player.ts`
-  - `packages/server/src/routes/play.ts`
-  - `packages/web/src/lib/api.ts`, `packages/web/src/views/StatusPanel.tsx`
+  - `packages/engine/src/state.ts` (`PlayerStats` only), `migrate.ts`, `errors.ts`, `actions/player.ts`
+  - `packages/server/src/routes/play.ts`, `packages/server/test/api.test.ts`
+  - `packages/web/src/lib/api.ts`, `packages/web/src/views/StatusPanel.tsx`, `styles.css`
   - related tests, `docs/agents/decisions.md`
 - **Notes:** adds an Aircraft-unlocked checkbox to Player status
 
