@@ -6,7 +6,12 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { redoLastBoardChange, undoLastBoardChange } from '../src/actions/board.js'
+import {
+  placePiece,
+  redoLastBoardChange,
+  removePiece,
+  undoLastBoardChange,
+} from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
 import { chooseTech, discardItem, removeTech, revealItem } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
@@ -182,7 +187,9 @@ describe('undo of a civilization reveal', () => {
     const undone = undoByVote(revealed, CASH1981)
     expect(undone.board.pieces).toEqual([])
 
-    expect(unwrapErr(undoLastBoardChange(undone, CASH1981))).toEqual({ kind: 'BOARD_UNDO_NOT_YOURS' })
+    expect(unwrapErr(undoLastBoardChange(undone, CASH1981))).toEqual({
+      kind: 'NOTHING_TO_UNDO_ON_BOARD',
+    })
     expect(undone.board.history.at(-1)?.username).toBe('System')
   })
 
@@ -268,6 +275,36 @@ describe('undo of a civilization reveal', () => {
     for (const unit of others) {
       expect(undone.items.some((item) => item.id === unit.id)).toBe(true)
     }
+  })
+
+  it('does not let Undo bring back a piece the owner removed by hand before the vote', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Egyptians'), CASH1981)
+    const wonder = wondersOnBoard(revealed)[0]
+    if (wonder === undefined) throw new Error('no wonder piece')
+    // Every piece is gone by hand, so the vote has nothing left to remove itself
+    let state = revealed
+    for (const piece of revealed.board.pieces) {
+      state = unwrap(removePiece(state, { playerId: CASH1981, pieceId: piece.id }))
+    }
+    const undone = undoByVote(state, CASH1981)
+    expect(wondersInDeck(undone).some((item) => item.sheetName === 'ANCIENT_WONDERS')).toBe(true)
+
+    expect(unwrapErr(undoLastBoardChange(undone, CASH1981))).toEqual({
+      kind: 'NOTHING_TO_UNDO_ON_BOARD',
+    })
+    expect(undone.board.pieces).toEqual([])
+  })
+
+  it('still lets a player undo board changes made after the vote', () => {
+    const undone = undoByVote(drawCivsAndReveal(firstCivGame(), CASH1981, 1), CASH1981)
+    const placed = unwrap(
+      placePiece(undone, { playerId: CASH1981, assetId: 'wonders/bigben', x: 0, y: 0 }),
+    )
+    expect(placed.board.pieces).toHaveLength(1)
+
+    const back = unwrap(undoLastBoardChange(placed, CASH1981))
+
+    expect(back.board.pieces).toEqual([])
   })
 
   it('logs the undo publicly as the System', () => {

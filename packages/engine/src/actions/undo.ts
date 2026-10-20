@@ -278,9 +278,12 @@ function undoCivReveal(
     toDeck = [...toDeck, ...dealt.wonders]
   }
 
-  // Whatever board changes were taken back by hand before the vote must not
-  // come back through Redo, with the cards already in the deck
-  next = { ...next, board: { ...next.board, redo: [] } }
+  // Whatever board changes were taken back or made by hand before the vote must
+  // not come back through Redo or Undo, with the cards already in the deck
+  next = {
+    ...next,
+    board: { ...next.board, redo: [], undoFloor: next.board.history.length },
+  }
   next = shuffleDeckTwice({ ...next, items: [...next.items, ...toDeck] })
   return ok(
     logUndo(

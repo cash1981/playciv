@@ -19,6 +19,7 @@ import type { Board, BoardArea, BoardChange, BoardPiece, Rotation } from '../boa
 import {
   applyChange,
   areaAt,
+  boardUndoBlocked,
   boardAssetLimit,
   boardAreas,
   clampToBoard,
@@ -615,7 +616,9 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
   if (denied !== undefined) return err(denied)
 
   const last = state.board.history.at(-1)
-  if (last === undefined) return err({ kind: 'NOTHING_TO_UNDO_ON_BOARD' })
+  if (last === undefined || boardUndoBlocked(state.board)) {
+    return err({ kind: 'NOTHING_TO_UNDO_ON_BOARD' })
+  }
   if (last.playerId !== playerId) return err({ kind: 'BOARD_UNDO_NOT_YOURS' })
 
   return ok(

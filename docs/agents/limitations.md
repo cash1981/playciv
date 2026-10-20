@@ -13,11 +13,6 @@ were made as part of the documentation cleanup.
   not a newly inferred rules requirement. The same applies to revealing again
   after an undone reveal: the player needs the turn, so one who has already
   handed it on must wait for it before the starting units can be drawn.
-- **Civ reveal undo and pieces removed by hand:** the undo clears the board's
-  Redo stack and removes the setup pieces that are still on the board as System
-  history. A piece the owner already removed with the board's Remove before the
-  vote is not covered: the owner's board Undo can still bring it back, so remove
-  it again by hand. See `actions/undo.ts` (`undoCivReveal`).
 - **Legacy board layouts:** pre-shape three-player saves already containing
   pieces and pre-shape five-player saves keep 16×16 rectangular slots. Only an
   empty pre-shape three-player board is rescued into the pyramid. On the legacy
