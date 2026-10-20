@@ -28,7 +28,7 @@ Kun det som automatisk tildeles bør rulles tilbake."
 
 - A record of what a civ reveal handed out, kept on its REVEAL log entry.
 - `vote` runs the rollback when a civ REVEAL undo is accepted.
-- Reveals made before this change have no record and cannot be undone.
+- Reveals made before this change have no record; a rebuild from the log and board covers them unless Egypt or the shared wonders are involved.
 
 **Out:**
 

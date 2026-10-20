@@ -537,14 +537,14 @@ function placeLeaderMarker(
  * Java: `drawStartingItems`. Units only, plus one ancient wonder for Egypt.
  * The counts come from the civilization cards in the rulebook.
  */
-const STARTING_UNITS: Readonly<Record<string, readonly SheetName[]>> = {
+export const STARTING_UNITS: Readonly<Record<string, readonly SheetName[]>> = {
   Germans: ['INFANTRY', 'INFANTRY', 'INFANTRY', 'ARTILLERY', 'MOUNTED'],
   Mongols: ['INFANTRY', 'ARTILLERY', 'MOUNTED', 'MOUNTED', 'MOUNTED'],
   Zulu: ['INFANTRY', 'ARTILLERY', 'ARTILLERY', 'ARTILLERY', 'ARTILLERY', 'MOUNTED'],
   Egyptians: ['INFANTRY', 'ARTILLERY', 'MOUNTED', 'ANCIENT_WONDERS'],
 }
 
-const DEFAULT_STARTING_UNITS: readonly SheetName[] = ['INFANTRY', 'ARTILLERY', 'MOUNTED']
+export const DEFAULT_STARTING_UNITS: readonly SheetName[] = ['INFANTRY', 'ARTILLERY', 'MOUNTED']
 
 /** Whether a sheet holds wonders, which go to the board rather than a hand. */
 const isWonderSheet = (sheetName: SheetName): boolean => ALL_WONDERS.has(sheetName)

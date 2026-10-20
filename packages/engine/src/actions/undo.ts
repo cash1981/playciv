@@ -12,6 +12,7 @@
  * no item, so an undo of one could never be started. The branch is not ported.
  */
 
+import { civTileAssetId, leaderAssetId } from '../board.js'
 import { techCoinSource, withCoinSource } from '../coins.js'
 import type { EngineError } from '../errors.js'
 import { DEFAULT_GOVERNMENT } from '../government.js'
@@ -33,6 +34,7 @@ import {
 import { castVote, createUndo, resultOfVotes } from '../undo.js'
 
 import { removePieceAsSystem } from './board.js'
+import { DEFAULT_STARTING_UNITS, STARTING_UNITS } from './player.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -47,13 +49,65 @@ function isCivReveal(entry: GameLogEntry): boolean {
 }
 
 /**
- * Whether an undo can be asked for on this entry: there is an item to put back
- * and no vote yet. A civilization reveal also needs the record of what it
- * handed out, which reveals made before the record existed do not have.
+ * What a civ reveal handed out: the recorded setup, or for a reveal made before
+ * it was recorded, one rebuilt from the log and the board. The rebuild only
+ * covers what can be told apart with certainty. It refuses (`undefined`) once
+ * the shared wonders are dealt, because those cannot be matched to the reveal,
+ * and for Egypt, whose own wonder is not tied to the reveal by anything saved.
  */
-export function canInitiateUndo(entry: GameLogEntry): boolean {
+function civSetupOf(state: GameState, entry: GameLogEntry): CivRevealSetup | undefined {
+  if (entry.civSetup !== undefined) return entry.civSetup
+  const civ = entry.item
+  if (civ?.kind !== 'civ' || entry.playerId === null) return undefined
+  if (state.wondersDealt || civ.name === 'Egyptians') return undefined
+
+  const owner = findPlayer(state, entry.playerId)
+  const after = state.log.slice(state.log.findIndex((candidate) => candidate.id === entry.id) + 1)
+  const expected = STARTING_UNITS[civ.name] ?? DEFAULT_STARTING_UNITS
+
+  // The starting units are drawn right after the REVEAL line, all or none
+  const drawn = after.slice(0, expected.length)
+  const unitIds = drawn.flatMap((line) =>
+    line.logType === 'ITEM' && line.playerId === entry.playerId && line.item !== null
+      ? [line.item]
+      : [],
+  )
+  const hasUnits =
+    unitIds.length === expected.length &&
+    unitIds.every((item, index) => item.sheetName === expected[index])
+  // Neither none nor all of them: this is not the log of a reveal we can read
+  if (!hasUnits && drawn[0]?.logType === 'ITEM') return undefined
+  const skipped = hasUnits ? expected.length : 0
+
+  // The other civ cards are discarded right after the units
+  const discardedCivIds: string[] = []
+  for (const line of after.slice(skipped)) {
+    if (line.logType !== 'DISCARD' || line.playerId !== entry.playerId) break
+    if (line.item?.kind !== 'civ') break
+    discardedCivIds.push(line.item.id)
+  }
+
+  const assetIds = [civTileAssetId(civ.name), leaderAssetId(civ.name, owner?.color ?? '')]
+  const pieceIds = state.board.pieces
+    .filter((piece) => assetIds.includes(piece.assetId))
+    .map((piece) => piece.id)
+
+  return {
+    unitIds: hasUnits ? unitIds.map((item) => item.id) : [],
+    discardedCivIds,
+    pieceIds,
+    wonders: [],
+  }
+}
+
+/**
+ * Whether an undo can be asked for on this entry: there is an item to put back
+ * and no vote yet. A civilization reveal also needs to be readable, see
+ * {@link civSetupOf}.
+ */
+export function canInitiateUndo(state: GameState, entry: GameLogEntry): boolean {
   if (entry.item === null || entry.undo !== null) return false
-  return !isCivReveal(entry) || entry.civSetup !== undefined
+  return !isCivReveal(entry) || civSetupOf(state, entry) !== undefined
 }
 
 /**
@@ -67,7 +121,7 @@ export function initiateUndo(state: GameState, input: InitiateUndoInput): Action
   if (entry.undo !== null) {
     return err({ kind: 'UNDO_ALREADY_INITIATED', logId: input.logId })
   }
-  if (!canInitiateUndo(entry)) return err({ kind: 'CIV_REVEAL_NOT_UNDOABLE', logId: input.logId })
+  if (!canInitiateUndo(state, entry)) return err({ kind: 'CIV_REVEAL_NOT_UNDOABLE', logId: input.logId })
   if (!hasUserAccess(state, input.playerId)) {
     return err({ kind: 'PLAYER_NOT_FOUND', playerId: input.playerId })
   }
@@ -136,10 +190,9 @@ export function vote(state: GameState, input: VoteInput): ActionResult {
   if (ownerId === null) return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
 
   if (entry.logType === 'REVEAL' && entry.item.kind === 'civ') {
-    if (entry.civSetup === undefined) {
-      return err({ kind: 'CIV_REVEAL_NOT_UNDOABLE', logId: input.logId })
-    }
-    return undoCivReveal(next, ownerId, entry.item, entry.civSetup, input.logId)
+    const setup = civSetupOf(state, entry)
+    if (setup === undefined) return err({ kind: 'CIV_REVEAL_NOT_UNDOABLE', logId: input.logId })
+    return undoCivReveal(next, ownerId, entry.item, setup, input.logId)
   }
 
   return putItemBack(next, ownerId, entry.item, entry.logType)

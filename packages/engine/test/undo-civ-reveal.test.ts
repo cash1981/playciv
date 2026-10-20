@@ -10,7 +10,7 @@ import { undoLastBoardChange } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
 import { discardItem, revealItem } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
-import { canInitiateUndo, initiateUndo, vote } from '../src/actions/undo.js'
+import { canInitiateUndo, initiateUndo, playerPutsItemBackInDeck, vote } from '../src/actions/undo.js'
 import { DEFAULT_GOVERNMENT } from '../src/government.js'
 import { isUnit, itemName } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -226,18 +226,86 @@ describe('undo of a civilization reveal', () => {
     expect(unwrapErr(initiateUndo(undone, { logId, playerId: CASH1981 })).kind).toBe(
       'UNDO_ALREADY_INITIATED',
     )
-    expect(canInitiateUndo(civRevealOf(undone, CASH1981))).toBe(false)
+    expect(canInitiateUndo(undone, civRevealOf(undone, CASH1981))).toBe(false)
   })
 
-  it('is refused for a reveal made before reveals were recorded', () => {
-    const revealed = drawCivsAndReveal(firstCivGame(), CASH1981, 1)
-    const { civSetup: _recorded, ...legacy } = civRevealOf(revealed, CASH1981)
-    const state = { ...revealed, log: revealed.log.map((e) => (e.id === legacy.id ? legacy : e)) }
+  describe('a reveal made before reveals were recorded', () => {
+    /** The same game as it was saved before `civSetup` existed. */
+    const asLegacy = (state: GameState): GameState => ({
+      ...state,
+      log: state.log.map(({ civSetup: _recorded, ...entry }) => entry),
+    })
 
-    expect(canInitiateUndo(legacy)).toBe(false)
-    expect(unwrapErr(initiateUndo(state, { logId: legacy.id, playerId: CASH1981 }))).toEqual({
-      kind: 'CIV_REVEAL_NOT_UNDOABLE',
-      logId: legacy.id,
+    it('is rebuilt from the log and the board, and rolled back the same way', () => {
+      const before = firstCivGame()
+      const legacy = asLegacy(drawCivsAndReveal(before, CASH1981, 3))
+      expect(canInitiateUndo(legacy, civRevealOf(legacy, CASH1981))).toBe(true)
+
+      const undone = undoByVote(legacy, CASH1981)
+      const after = findPlayer(undone, CASH1981)
+
+      expect(after?.civilization).toBeNull()
+      expect(after?.techsChosen).toEqual([])
+      expect(handOf(undone, CASH1981).filter((item) => item.kind === 'civ')).toHaveLength(3)
+      expect(handOf(undone, CASH1981).some(isUnit)).toBe(false)
+      expect(undone.board.pieces).toEqual([])
+      const ids = undone.items.map((item) => item.id)
+      expect(new Set(ids).size).toBe(ids.length)
+    })
+
+    it('unsticks a player who already put the units back and discarded the civ by hand', () => {
+      let state = drawCivsAndReveal(firstCivGame(), CASH1981, 2)
+      const chosen = findPlayer(state, CASH1981)?.civilization
+      if (chosen === null || chosen === undefined) throw new Error('no civilization')
+      for (const unit of handOf(state, CASH1981).filter(isUnit)) {
+        state = unwrap(
+          playerPutsItemBackInDeck(state, {
+            playerId: CASH1981,
+            sheetName: unit.sheetName,
+            name: itemName(unit),
+          }),
+        )
+      }
+      state = unwrap(
+        discardItem(state, {
+          playerId: CASH1981,
+          sheetName: 'CIV',
+          itemNumber: chosen.itemNumber,
+          name: itemName(chosen),
+        }),
+      )
+      // The player still holds the civilization, and no civ card in the hand can be revealed
+      expect(findPlayer(state, CASH1981)?.civilization).not.toBeNull()
+      const legacy = asLegacy(state)
+
+      const undone = undoByVote(legacy, CASH1981)
+
+      expect(findPlayer(undone, CASH1981)?.civilization).toBeNull()
+      expect(findPlayer(undone, CASH1981)?.techsChosen).toEqual([])
+      const ids = undone.items.map((item) => item.id)
+      expect(new Set(ids).size).toBe(ids.length)
+      // The card discarded by hand stays discarded; the other civ is back to reveal
+      expect(undone.discardedItems.some((item) => item.id === chosen.id)).toBe(true)
+      const again = revealHidden(undone, CASH1981)
+      expect(findPlayer(again, CASH1981)?.civilization).not.toBeNull()
+    })
+
+    it('is refused for Egypt, whose own wonder is not tied to the reveal', () => {
+      const legacy = asLegacy(revealHidden(giveCiv(firstCivGame(), CASH1981, 'Egyptians'), CASH1981))
+      const entry = civRevealOf(legacy, CASH1981)
+
+      expect(canInitiateUndo(legacy, entry)).toBe(false)
+      expect(unwrapErr(initiateUndo(legacy, { logId: entry.id, playerId: CASH1981 }))).toEqual({
+        kind: 'CIV_REVEAL_NOT_UNDOABLE',
+        logId: entry.id,
+      })
+    })
+
+    it('is refused once the shared wonders are dealt', () => {
+      const legacy = asLegacy(revealEveryCiv(firstCivGame()))
+      expect(legacy.wondersDealt).toBe(true)
+
+      expect(canInitiateUndo(legacy, civRevealOf(legacy, CASH1981))).toBe(false)
     })
   })
 

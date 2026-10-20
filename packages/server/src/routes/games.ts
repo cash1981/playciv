@@ -552,7 +552,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
             message: entry.privateLog,
             createdAt: entry.createdAt,
             hasUndo: entry.undo !== null,
-            canUndo: canInitiateUndo(entry),
+            canUndo: canInitiateUndo(state, entry),
           })),
       ),
     )

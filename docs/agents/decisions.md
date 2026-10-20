@@ -149,9 +149,12 @@ holds while every seat has a civilization, so it is taken back too, whichever
 reveal triggered it, and the next reveal that completes the table deals it
 again. The board pieces are removed as history entries by the System, so the
 owner's board Undo cannot bring back a piece whose card is already in the deck,
-and the starting tech's and Democracy's coin counters are cleared. Reveals made
-before `civSetup` existed cannot be undone (`CIV_REVEAL_NOT_UNDOABLE`, and the
-private log offers no undo for them); before, such an undo only moved the civ
+and the starting tech's and Democracy's coin counters are cleared. A reveal made
+before `civSetup` existed is rebuilt from the log (the starting-unit draws and
+civ discards right after the REVEAL line) and the board (the civ's tile and
+leader asset). It is refused (`CIV_REVEAL_NOT_UNDOABLE`, and the private log
+offers no undo) for Egypt and once the shared wonders are dealt, because those
+wonders cannot be tied to a reveal. Before, such an undo only moved the civ
 card into the deck and left the civilization set.
 `civSetup` is server-side like `item`: opponents get the public log form only.
 Tests: `packages/engine/test/undo-civ-reveal.test.ts`.
