@@ -91,6 +91,8 @@ export function statusFor(error: EngineError): number {
     case 'CIVILIZATION_ALREADY_CHOSEN':
     case 'UNDO_ALREADY_INITIATED':
     case 'NOTHING_TO_UNDO':
+    case 'UNDO_ALREADY_DONE':
+    case 'CIV_REVEAL_NOT_UNDOABLE':
     case 'GAME_IS_FULL':
     case 'ALREADY_JOINED':
     case 'NO_COLOR_AVAILABLE':

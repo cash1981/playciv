@@ -402,7 +402,18 @@ export interface Board {
    * keep typing.
    */
   readonly redo: readonly BoardHistoryEntry[]
+  /**
+   * Board Undo cannot go back past this many history entries. Set when the
+   * engine itself takes pieces off the board (the undo of a civilization
+   * reveal), so nobody's Undo can bring back a piece whose card has gone back
+   * to the deck. Absent means no limit.
+   */
+  readonly undoFloor?: number
 }
+
+/** Whether board Undo has reached the floor and has nothing left it may revert. */
+export const boardUndoBlocked = (board: Board): boolean =>
+  board.history.length <= (board.undoFloor ?? 0)
 
 export function createBoard(
   columns = DEFAULT_COLUMNS,

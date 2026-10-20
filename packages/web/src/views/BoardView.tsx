@@ -30,6 +30,7 @@ import {
   WONDERS_AREA_ID,
   areaBandTop,
   boardHeight,
+  boardUndoBlocked,
   boardWidth,
   clampToBoard,
   columnLabel,
@@ -736,7 +737,7 @@ export function BoardView({
         </label>
         <button
           className="small"
-          disabled={busy || readOnly || board.history.at(-1)?.playerId !== youId}
+          disabled={busy || readOnly || board.history.at(-1)?.playerId !== youId || boardUndoBlocked(board)}
           title="Take back your last change to the board"
           onClick={() => void run(() => api.undoBoard(gameId))}
         >

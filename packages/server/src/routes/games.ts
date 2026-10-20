@@ -5,6 +5,7 @@
 
 import type { GameState } from '@civ/engine'
 import {
+  canInitiateUndo,
   createGame,
   endGame,
   joinGame,
@@ -551,7 +552,7 @@ export function registerGameRoutes(app: App, context: AppContext): void {
             message: entry.privateLog,
             createdAt: entry.createdAt,
             hasUndo: entry.undo !== null,
-            canUndo: entry.item !== null && entry.undo === null,
+            canUndo: canInitiateUndo(state, entry),
           })),
       ),
     )
