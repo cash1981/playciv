@@ -14,14 +14,15 @@
 
 import { techCoinSource, withCoinSource } from '../coins.js'
 import type { EngineError } from '../errors.js'
-import type { Item, TechItem } from '../item.js'
+import { DEFAULT_GOVERNMENT } from '../government.js'
+import type { CivItem, Item, TechItem } from '../item.js'
 import { itemName } from '../item.js'
 import { appendUndoLog, appendUndoRequestLog, appendVoteLog, publicItemSubject } from '../log.js'
 import { shuffle } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { SheetName } from '../sheet-name.js'
-import type { GameLogEntry, GameState, Playerhand } from '../state.js'
+import type { CivRevealSetup, GameLogEntry, GameState, Playerhand } from '../state.js'
 import {
   findLogEntry,
   findPlayer,
@@ -31,11 +32,28 @@ import {
 } from '../state.js'
 import { castVote, createUndo, resultOfVotes } from '../undo.js'
 
+import { removePiece } from './board.js'
+
 type ActionResult = Result<GameState, EngineError>
 
 export interface InitiateUndoInput {
   readonly logId: string
   readonly playerId: string
+}
+
+/** The REVEAL entry of a civilization. Undoing it takes the whole setup back. */
+function isCivReveal(entry: GameLogEntry): boolean {
+  return entry.logType === 'REVEAL' && entry.item?.kind === 'civ'
+}
+
+/**
+ * Whether an undo can be asked for on this entry: there is an item to put back
+ * and no vote yet. A civilization reveal also needs the record of what it
+ * handed out, which reveals made before the record existed do not have.
+ */
+export function canInitiateUndo(entry: GameLogEntry): boolean {
+  if (entry.item === null || entry.undo !== null) return false
+  return !isCivReveal(entry) || entry.civSetup !== undefined
 }
 
 /**
@@ -49,6 +67,7 @@ export function initiateUndo(state: GameState, input: InitiateUndoInput): Action
   if (entry.undo !== null) {
     return err({ kind: 'UNDO_ALREADY_INITIATED', logId: input.logId })
   }
+  if (!canInitiateUndo(entry)) return err({ kind: 'CIV_REVEAL_NOT_UNDOABLE', logId: input.logId })
   if (!hasUserAccess(state, input.playerId)) {
     return err({ kind: 'PLAYER_NOT_FOUND', playerId: input.playerId })
   }
@@ -116,7 +135,129 @@ export function vote(state: GameState, input: VoteInput): ActionResult {
   const ownerId = entry.item.ownerId ?? entry.playerId
   if (ownerId === null) return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
 
+  if (entry.logType === 'REVEAL' && entry.item.kind === 'civ') {
+    if (entry.civSetup === undefined) {
+      return err({ kind: 'CIV_REVEAL_NOT_UNDOABLE', logId: input.logId })
+    }
+    return undoCivReveal(next, ownerId, entry.item, entry.civSetup, input.logId)
+  }
+
   return putItemBack(next, ownerId, entry.item, entry.logType)
+}
+
+/**
+ * Takes back what revealing a civilization handed out by itself: the starting
+ * units and Egypt's wonder go back into the deck, the other civ cards return to
+ * the hand, and the tile, leader marker, starting tech and government are
+ * removed. Anything the player drew or chose on their own stays where it is.
+ *
+ * The start-of-game wonder deal only holds while every seat has a civilization,
+ * so it is taken back too, whichever reveal triggered it. The next reveal that
+ * completes the table deals it again. The deck is reshuffled once at the end.
+ */
+function undoCivReveal(
+  state: GameState,
+  playerId: string,
+  civ: CivItem,
+  setup: CivRevealSetup,
+  logId: string,
+): ActionResult {
+  const owner = findPlayer(state, playerId)
+  if (owner === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId })
+  // Already taken back some other way, so there is nothing left to undo
+  if (owner.civilization?.id !== civ.id) return err({ kind: 'NOTHING_TO_UNDO', logId })
+
+  const units = takeOutOfPlay(state, setup.unitIds)
+  const discardedCivs = units.state.discardedItems.filter((item) =>
+    setup.discardedCivIds.includes(item.id),
+  )
+  const current = findPlayer(units.state, playerId) as Playerhand
+  let next = withPlayer(
+    {
+      ...units.state,
+      discardedItems: units.state.discardedItems.filter(
+        (item) => !setup.discardedCivIds.includes(item.id),
+      ),
+    },
+    {
+      ...current,
+      civilization: null,
+      government: DEFAULT_GOVERNMENT,
+      items: [
+        ...current.items.map((item) => (item.id === civ.id ? { ...item, hidden: true } : item)),
+        ...discardedCivs.map((item) => ({ ...item, hidden: true })),
+      ],
+      techsChosen: current.techsChosen.filter((tech) => tech.name !== civ.startingTech.name),
+    },
+  )
+
+  next = removePieces(next, playerId, setup.pieceIds)
+  let toDeck: readonly Item[] = [
+    ...setup.wonders,
+    ...units.taken.map((item) => ({ ...item, hidden: true, ownerId: null })),
+  ]
+
+  const dealEntry = next.log.find((entry) => entry.civSetup?.dealt !== undefined)
+  const dealt = dealEntry?.civSetup?.dealt
+  if (dealEntry?.civSetup !== undefined && dealt !== undefined) {
+    const { dealt: _dealt, ...withoutDeal } = dealEntry.civSetup
+    next = removePieces(next, playerId, dealt.pieceIds)
+    next = withLogEntry({ ...next, wondersDealt: false }, { ...dealEntry, civSetup: withoutDeal })
+    toDeck = [...toDeck, ...dealt.wonders]
+  }
+
+  next = shuffleDeckTwice({ ...next, items: [...next.items, ...toDeck] })
+  return ok(
+    logUndo(
+      next,
+      current,
+      civ,
+      'REVEAL',
+      (name) =>
+        `has undone ${current.username}'s reveal of ${name}. Its starting units, wonders, tile and ` +
+        `marker are put back${dealt === undefined ? '' : ', and so are the start-of-game wonders'}. ` +
+        'Deck is reshuffled',
+    ),
+  )
+}
+
+/** Removes the pieces that are still on the board, as ordinary history entries. */
+function removePieces(
+  state: GameState,
+  playerId: string,
+  pieceIds: readonly string[],
+): GameState {
+  return pieceIds.reduce((acc, pieceId) => {
+    // A piece a player has since removed or undone is already gone
+    const removed = removePiece(acc, { playerId, pieceId })
+    return removed.ok ? removed.value : acc
+  }, state)
+}
+
+/**
+ * Takes the given items out of every hand, battle hand and the discard pile,
+ * wherever they ended up since being drawn, and returns them once each.
+ */
+function takeOutOfPlay(
+  state: GameState,
+  ids: readonly string[],
+): { readonly state: GameState; readonly taken: readonly Item[] } {
+  const wanted = new Set(ids)
+  const taken = new Map<string, Item>()
+  const keep = <T extends Item>(items: readonly T[]): T[] =>
+    items.filter((item) => {
+      if (!wanted.has(item.id)) return true
+      taken.set(item.id, item)
+      return false
+    })
+
+  const players = state.players.map((player) => ({
+    ...player,
+    items: keep(player.items),
+    battlehand: keep(player.battlehand),
+  }))
+  const discardedItems = keep(state.discardedItems)
+  return { state: { ...state, players, discardedItems }, taken: [...taken.values()] }
 }
 
 /**

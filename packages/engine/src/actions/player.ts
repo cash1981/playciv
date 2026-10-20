@@ -42,7 +42,7 @@ import { err, ok } from '../result.js'
 import { shuffle } from '../random.js'
 import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
-import type { GameState, Playerhand, PlayerStats } from '../state.js'
+import type { CivRevealSetup, GameState, Playerhand, PlayerStats } from '../state.js'
 import {
   findPlayer,
   hasUserAccess,
@@ -399,6 +399,8 @@ function revealCivilization(
     techsChosen: [...player.techsChosen, startingTech],
   })
   next = appendItemLog(next, 'REVEAL', player.username, player.playerId, civ)
+  const revealIndex = next.log.length - 1
+  const afterReveal = next
 
   // Java drew starting units only if the player had none already
   const hasUnits = (findPlayer(next, player.playerId)?.items ?? []).some(isUnit)
@@ -407,18 +409,52 @@ function revealCivilization(
     if (!drawn.ok) return drawn
     next = drawn.value
   }
+  const handIds = (state: GameState): ReadonlySet<string> =>
+    new Set((findPlayer(state, player.playerId)?.items ?? []).map((item) => item.id))
+  const handBefore = handIds(afterReveal)
+  const unitIds = [...handIds(next)].filter((id) => !handBefore.has(id))
 
+  const discardedCivIds = (findPlayer(next, player.playerId)?.items ?? [])
+    .filter((item) => item.kind === 'civ' && item.id !== civ.id)
+    .map((item) => item.id)
   next = discardTheOtherCivs(next, player.playerId, civ)
   next = placeStartingTile(next, player, civ)
   next = placeLeaderMarker(next, player, civ)
+  const ownPieces = newPieces(afterReveal, next)
+  const ownWonders = wondersTakenFromDeck(afterReveal, next)
 
+  let dealt: CivRevealSetup['dealt']
   if (shouldDrawWonders(next)) {
+    const beforeDeal = next
     const drawn = drawStartingWonders(next, player.playerId)
     if (!drawn.ok) return drawn
     next = drawn.value
+    dealt = { wonders: wondersTakenFromDeck(beforeDeal, next), pieceIds: newPieces(beforeDeal, next) }
   }
 
-  return ok(next)
+  const civSetup: CivRevealSetup = {
+    unitIds,
+    discardedCivIds,
+    pieceIds: ownPieces,
+    wonders: ownWonders,
+    ...(dealt === undefined ? {} : { dealt }),
+  }
+  return ok({
+    ...next,
+    log: next.log.map((entry, index) => (index === revealIndex ? { ...entry, civSetup } : entry)),
+  })
+}
+
+/** The ids of the board pieces that `after` has and `before` did not. */
+function newPieces(before: GameState, after: GameState): readonly string[] {
+  const known = new Set(before.board.pieces.map((piece) => piece.id))
+  return after.board.pieces.filter((piece) => !known.has(piece.id)).map((piece) => piece.id)
+}
+
+/** The wonders that were in the deck in `before` and are gone from it in `after`. */
+function wondersTakenFromDeck(before: GameState, after: GameState): readonly Item[] {
+  const left = new Set(after.items.map((item) => item.id))
+  return before.items.filter((item) => item.kind === 'wonder' && !left.has(item.id))
 }
 
 /**

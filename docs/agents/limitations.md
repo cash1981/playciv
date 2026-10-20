@@ -10,7 +10,9 @@ were made as part of the documentation cleanup.
 - **Civilization reveal during setup:** a non-holder can receive
   `NOT_YOUR_TURN` when starting units are drawn. This is pinned by
   `packages/engine/test/player-action.test.ts` (the non-holder reveal test),
-  not a newly inferred rules requirement.
+  not a newly inferred rules requirement. The same applies to revealing again
+  after an undone reveal: the player needs the turn, so one who has already
+  handed it on must wait for it before the starting units can be drawn.
 - **Legacy board layouts:** pre-shape three-player saves already containing
   pieces and pre-shape five-player saves keep 16×16 rectangular slots. Only an
   empty pre-shape three-player board is rescued into the pyramid. On the legacy

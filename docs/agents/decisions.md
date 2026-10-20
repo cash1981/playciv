@@ -139,6 +139,19 @@ or draws automatically. Only the player who ended the battle may undo End
 battle, until another battle begins. Undo restores battle state; the projection
 exposes only `battleUndo.endedBy`, never the stored private unit identities.
 
+An undo vote on a civilization's REVEAL entry takes back everything the reveal
+handed out by itself, recorded on that entry as `GameLogEntry.civSetup`: the
+starting units and Egypt's own wonder go back into the deck (the deck is
+reshuffled), the other civ cards return to the hand, and the starting tile,
+leader marker, starting tech and government are removed. Anything the player
+drew or chose themselves stays in the hand. The start-of-game wonder deal only
+holds while every seat has a civilization, so it is taken back too, whichever
+reveal triggered it, and the next reveal that completes the table deals it
+again. Reveals made before `civSetup` existed cannot be undone
+(`CIV_REVEAL_NOT_UNDOABLE`, and the private log offers no undo for them).
+`civSetup` is server-side like `item`: opponents get the public log form only.
+Tests: `packages/engine/test/undo-civ-reveal.test.ts`.
+
 Source: `packages/engine/src/actions/arena.ts`, `actions/player.ts`, `state.ts`
 and arena tests. The earlier auto-discard and automatic-only barbarian plans
 are superseded.

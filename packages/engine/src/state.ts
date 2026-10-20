@@ -210,8 +210,32 @@ export interface GameLogEntry {
    * taken back, not the item.
    */
   readonly undo: Undo | null
+  /**
+   * Only on the REVEAL entry of a civilization: what that reveal handed out by
+   * itself, so an undo can take exactly that back. Absent on reveals made before
+   * it was recorded, which therefore cannot be undone. Server-side only, like
+   * `item`; no public projection copies it.
+   */
+  readonly civSetup?: CivRevealSetup
   /** ISO timestamp assigned by the server when this entry is persisted. */
   readonly createdAt: string | null
+}
+
+/** What revealing a civilization put in place, as ids and pieces to take back. */
+export interface CivRevealSetup {
+  /** Starting units drawn into the hand. Empty when the player already had units. */
+  readonly unitIds: readonly string[]
+  /** The other civilization cards, discarded when this one was chosen. */
+  readonly discardedCivIds: readonly string[]
+  /** Pieces placed on the board: the starting tile, the leader marker and Egypt's wonder. */
+  readonly pieceIds: readonly string[]
+  /** Egypt's own starting wonder, taken off the deck. */
+  readonly wonders: readonly Item[]
+  /** Set on the reveal that completed the table and dealt the shared wonders. */
+  readonly dealt?: {
+    readonly wonders: readonly Item[]
+    readonly pieceIds: readonly string[]
+  }
 }
 
 export interface GameState {
