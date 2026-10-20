@@ -32,7 +32,7 @@ import {
 } from '../state.js'
 import { castVote, createUndo, resultOfVotes } from '../undo.js'
 
-import { removePiece } from './board.js'
+import { removePieceAsSystem } from './board.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -188,10 +188,14 @@ function undoCivReveal(
         ...discardedCivs.map((item) => ({ ...item, hidden: true })),
       ],
       techsChosen: current.techsChosen.filter((tech) => tech.name !== civ.startingTech.name),
+      stats: {
+        ...current.stats,
+        coinSources: clearedCoinSources(current, civ),
+      },
     },
   )
 
-  next = removePieces(next, playerId, setup.pieceIds)
+  next = removePieces(next, setup.pieceIds)
   let toDeck: readonly Item[] = [
     ...setup.wonders,
     ...units.taken.map((item) => ({ ...item, hidden: true, ownerId: null })),
@@ -201,7 +205,7 @@ function undoCivReveal(
   const dealt = dealEntry?.civSetup?.dealt
   if (dealEntry?.civSetup !== undefined && dealt !== undefined) {
     const { dealt: _dealt, ...withoutDeal } = dealEntry.civSetup
-    next = removePieces(next, playerId, dealt.pieceIds)
+    next = removePieces(next, dealt.pieceIds)
     next = withLogEntry({ ...next, wondersDealt: false }, { ...dealEntry, civSetup: withoutDeal })
     toDeck = [...toDeck, ...dealt.wonders]
   }
@@ -221,17 +225,28 @@ function undoCivReveal(
   )
 }
 
-/** Removes the pieces that are still on the board, as ordinary history entries. */
-function removePieces(
-  state: GameState,
-  playerId: string,
-  pieceIds: readonly string[],
-): GameState {
-  return pieceIds.reduce((acc, pieceId) => {
-    // A piece a player has since removed or undone is already gone
-    const removed = removePiece(acc, { playerId, pieceId })
-    return removed.ok ? removed.value : acc
-  }, state)
+/**
+ * The coin counters that go with the civilization's starting tech and the
+ * Democracy government card, cleared like `putTechBack` and a government change
+ * do, so no hidden value is left in the public coin total.
+ */
+function clearedCoinSources(player: Playerhand, civ: CivItem): Playerhand['stats']['coinSources'] {
+  const techSource = techCoinSource(civ.startingTech.name)
+  const withoutTech =
+    techSource === undefined
+      ? player.stats.coinSources
+      : withCoinSource(player.stats.coinSources, techSource, 0)
+  return withCoinSource(withoutTech, 'democracyGovernment', 0)
+}
+
+/**
+ * Removes the pieces that are still on the board, as history entries by the
+ * System. They are not the owner's, or the owner's board Undo would bring a
+ * piece back whose card is already in the deck.
+ */
+function removePieces(state: GameState, pieceIds: readonly string[]): GameState {
+  // A piece a player has since removed or undone is already gone
+  return pieceIds.reduce((acc, pieceId) => removePieceAsSystem(acc, pieceId) ?? acc, state)
 }
 
 /**

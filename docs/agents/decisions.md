@@ -147,13 +147,17 @@ leader marker, starting tech and government are removed. Anything the player
 drew or chose themselves stays in the hand. The start-of-game wonder deal only
 holds while every seat has a civilization, so it is taken back too, whichever
 reveal triggered it, and the next reveal that completes the table deals it
-again. Reveals made before `civSetup` existed cannot be undone
-(`CIV_REVEAL_NOT_UNDOABLE`, and the private log offers no undo for them).
+again. The board pieces are removed as history entries by the System, so the
+owner's board Undo cannot bring back a piece whose card is already in the deck,
+and the starting tech's and Democracy's coin counters are cleared. Reveals made
+before `civSetup` existed cannot be undone (`CIV_REVEAL_NOT_UNDOABLE`, and the
+private log offers no undo for them); before, such an undo only moved the civ
+card into the deck and left the civilization set.
 `civSetup` is server-side like `item`: opponents get the public log form only.
 Tests: `packages/engine/test/undo-civ-reveal.test.ts`.
 
-Source: `packages/engine/src/actions/arena.ts`, `actions/player.ts`, `state.ts`
-and arena tests. The earlier auto-discard and automatic-only barbarian plans
+Source: `packages/engine/src/actions/arena.ts`, `actions/player.ts`,
+`actions/undo.ts`, `state.ts` and arena tests. The earlier auto-discard and automatic-only barbarian plans
 are superseded.
 
 ## Accounts, mail and ratings

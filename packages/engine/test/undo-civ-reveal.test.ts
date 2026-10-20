@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { undoLastBoardChange } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
 import { discardItem, revealItem } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
@@ -14,7 +15,7 @@ import { DEFAULT_GOVERNMENT } from '../src/government.js'
 import { isUnit, itemName } from '../src/item.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameLogEntry, GameState } from '../src/state.js'
-import { findPlayer, toPlayerView } from '../src/state.js'
+import { findPlayer, toPlayerView, withPlayer } from '../src/state.js'
 import { turnHolder } from '../src/turn.js'
 
 import { CASH1981, CHUL, ITCHI, KARANDRAS1, firstCivGame } from './fixture.js'
@@ -156,6 +157,35 @@ describe('undo of a civilization reveal', () => {
     expect(wondersInDeck(undone)).toHaveLength(wondersBefore)
   })
 
+  it('clears the coin counters of the starting tech and the Democracy card', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Romans'), CASH1981)
+    const player = findPlayer(revealed, CASH1981)
+    if (player === undefined) throw new Error('no player')
+    // The Romans start with Code of Laws, a coin tech; the player then edits both counters
+    const edited = withPlayer(revealed, {
+      ...player,
+      stats: {
+        ...player.stats,
+        coinSources: { ...player.stats.coinSources, codeOfLaws: 2, democracyGovernment: 1 },
+      },
+    })
+
+    const undone = undoByVote(edited, CASH1981)
+
+    const sources = findPlayer(undone, CASH1981)?.stats.coinSources
+    expect(sources?.codeOfLaws).toBe(0)
+    expect(sources?.democracyGovernment).toBe(0)
+  })
+
+  it("does not let the owner's board Undo bring back a piece whose card is in the deck", () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Egyptians'), CASH1981)
+    const undone = undoByVote(revealed, CASH1981)
+    expect(undone.board.pieces).toEqual([])
+
+    expect(unwrapErr(undoLastBoardChange(undone, CASH1981))).toEqual({ kind: 'BOARD_UNDO_NOT_YOURS' })
+    expect(undone.board.history.at(-1)?.username).toBe('System')
+  })
+
   it('logs the undo publicly as the System', () => {
     const undone = undoByVote(drawCivsAndReveal(firstCivGame(), CASH1981, 1), CASH1981)
     const line = undone.log.at(-1)
@@ -230,6 +260,24 @@ describe('undo of a civilization reveal', () => {
       const again = revealHidden(undone, holder)
       expect(again.wondersDealt).toBe(true)
       expect(wondersOnBoard(again)).toHaveLength(4)
+    })
+
+    it("takes Egypt's wonder and the 3 + 1 deal back together", () => {
+      let start = giveCiv(firstCivGame(), CASH1981, 'Egyptians')
+      const wondersBefore = wondersInDeck(start).length
+      const order = [CASH1981, KARANDRAS1, ITCHI, CHUL]
+      for (const playerId of order) {
+        if (playerId !== CASH1981) start = unwrap(draw(start, { playerId, sheetName: 'CIV' }))
+        start = revealHidden(start, playerId)
+        start = unwrap(markPhasesDone(start, { playerId, turnNumber: 1, upToPhase: 'SOT' }))
+      }
+      expect(wondersOnBoard(start)).toHaveLength(5)
+
+      const undone = undoByVote(start, CASH1981)
+
+      expect(wondersOnBoard(undone)).toEqual([])
+      expect(wondersInDeck(undone)).toHaveLength(wondersBefore)
+      expect(undone.wondersDealt).toBe(false)
     })
 
     it('rolls the deal back whichever reveal triggered it, without losing the deal record', () => {
