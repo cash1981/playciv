@@ -45,8 +45,8 @@ Kun det som automatisk tildeles bør rulles tilbake."
 ## Approach
 
 `GameLogEntry.civSetup` records the ids and pieces the reveal produced.
-`actions/undo.ts` branches on it in `vote`; the server hides "Ask for undo"
-for reveals with no record.
+`actions/undo.ts` branches on it in `vote`, rebuilding it from the log and board
+for older reveals; the server hides "Ask for undo" where that is not possible.
 
 ## Claimed paths
 

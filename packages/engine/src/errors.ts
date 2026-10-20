@@ -55,7 +55,9 @@ export type EngineError =
   | { readonly kind: 'UNDO_NOT_INITIATED'; readonly logId: string }
   /** The log entry carries no item, so there is nothing to undo */
   | { readonly kind: 'NOTHING_TO_UNDO'; readonly logId: string }
-  /** A civilization revealed before reveals were recorded; its setup cannot be taken back */
+  /** The vote has already run, so a late vote cannot run the undo again */
+  | { readonly kind: 'UNDO_ALREADY_DONE'; readonly logId: string }
+  /** A civilization reveal whose setup cannot be told apart from the log, so it cannot be taken back */
   | { readonly kind: 'CIV_REVEAL_NOT_UNDOABLE'; readonly logId: string }
   /** Java: 400 "Cannot join the game. Its full!" */
   | { readonly kind: 'GAME_IS_FULL'; readonly numOfPlayers: number }
@@ -173,8 +175,10 @@ export function describeError(error: EngineError): string {
       return 'This item cannot be undone. Nothing to undo.'
     case 'NOTHING_TO_UNDO':
       return 'The log entry has no item to undo'
+    case 'UNDO_ALREADY_DONE':
+      return 'This undo has already been carried out'
     case 'CIV_REVEAL_NOT_UNDOABLE':
-      return 'This civilization was revealed before reveals could be undone'
+      return 'This civilization reveal cannot be undone'
     case 'GAME_IS_FULL':
       return 'Cannot join the game. Its full!'
     case 'ALREADY_JOINED':

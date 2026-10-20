@@ -6,9 +6,9 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { undoLastBoardChange } from '../src/actions/board.js'
+import { redoLastBoardChange, undoLastBoardChange } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
-import { discardItem, revealItem } from '../src/actions/player.js'
+import { chooseTech, discardItem, removeTech, revealItem } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { canInitiateUndo, initiateUndo, playerPutsItemBackInDeck, vote } from '../src/actions/undo.js'
 import { DEFAULT_GOVERNMENT } from '../src/government.js'
@@ -184,6 +184,90 @@ describe('undo of a civilization reveal', () => {
 
     expect(unwrapErr(undoLastBoardChange(undone, CASH1981))).toEqual({ kind: 'BOARD_UNDO_NOT_YOURS' })
     expect(undone.board.history.at(-1)?.username).toBe('System')
+  })
+
+  it('rejects a late vote on an undo that has already run, so a new reveal stays', () => {
+    const revealed = drawCivsAndReveal(firstCivGame(), CASH1981, 2)
+    const logId = civRevealOf(revealed, CASH1981).id
+    const undone = undoByVote(revealed, CASH1981)
+    const again = revealHidden(undone, CASH1981)
+
+    expect(unwrapErr(vote(again, { logId, playerId: KARANDRAS1, vote: true }))).toEqual({
+      kind: 'UNDO_ALREADY_DONE',
+      logId,
+    })
+    expect(findPlayer(again, CASH1981)?.civilization).not.toBeNull()
+  })
+
+  it('keeps a copy of the starting tech the player chose again themselves', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Romans'), CASH1981)
+    const startingTech = findPlayer(revealed, CASH1981)?.civilization?.startingTech
+    if (startingTech === undefined) throw new Error('no starting tech')
+    let state = unwrap(removeTech(revealed, { playerId: CASH1981, techName: startingTech.name }))
+    state = unwrap(chooseTech(state, { playerId: CASH1981, techName: startingTech.name }))
+    const own = findPlayer(state, CASH1981)?.techsChosen.find((t) => t.name === startingTech.name)
+    expect(own?.id).not.toBe(startingTech.id)
+
+    const undone = undoByVote(state, CASH1981)
+
+    expect(findPlayer(undone, CASH1981)?.techsChosen.map((t) => t.id)).toEqual([own?.id])
+  })
+
+  it('does not take a starting unit into the deck still flagged as in battle', () => {
+    const revealed = drawCivsAndReveal(firstCivGame(), CASH1981, 1)
+    const unit = handOf(revealed, CASH1981).find(isUnit)
+    if (unit === undefined) throw new Error('no starting unit')
+    const player = findPlayer(revealed, CASH1981)
+    if (player === undefined) throw new Error('no player')
+    const inArena = withPlayer(revealed, {
+      ...player,
+      items: player.items.map((item) => (item.id === unit.id ? { ...item, inBattle: true } : item)),
+    })
+
+    const undone = undoByVote(inArena, CASH1981)
+
+    const back = undone.items.find((item) => item.id === unit.id)
+    expect(back && isUnit(back) ? back.inBattle : undefined).toBe(false)
+  })
+
+  it('does not let Redo bring back a placement undone by hand before the vote', () => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Egyptians'), CASH1981)
+    const handUndone = unwrap(undoLastBoardChange(revealed, CASH1981))
+    expect(handUndone.board.redo.length).toBeGreaterThan(0)
+
+    const undone = undoByVote(handUndone, CASH1981)
+
+    expect(unwrapErr(redoLastBoardChange(undone, CASH1981))).toEqual({
+      kind: 'NOTHING_TO_REDO_ON_BOARD',
+    })
+  })
+
+  it('leaves a starting unit alone that was put back and then drawn again as an ordinary card', () => {
+    let state = drawCivsAndReveal(firstCivGame(), CASH1981, 1)
+    const units = handOf(state, CASH1981).filter(isUnit)
+    const [again, ...others] = units
+    if (again === undefined) throw new Error('no starting unit')
+    state = unwrap(
+      playerPutsItemBackInDeck(state, {
+        playerId: CASH1981,
+        sheetName: again.sheetName,
+        name: itemName(again),
+      }),
+    )
+    // Make the very same card the next one drawn from its pile
+    const back = state.items.find((item) => item.id === again.id)
+    if (back === undefined) throw new Error('unit not back in the deck')
+    state = { ...state, items: [back, ...state.items.filter((item) => item.id !== again.id)] }
+    state = unwrap(draw(state, { playerId: CASH1981, sheetName: again.sheetName }))
+    expect(handOf(state, CASH1981).some((item) => item.id === again.id)).toBe(true)
+
+    const undone = undoByVote(state, CASH1981)
+
+    // The card drawn by hand stays; the other starting units go back to the deck
+    expect(handOf(undone, CASH1981).some((item) => item.id === again.id)).toBe(true)
+    for (const unit of others) {
+      expect(undone.items.some((item) => item.id === unit.id)).toBe(true)
+    }
   })
 
   it('logs the undo publicly as the System', () => {

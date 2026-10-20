@@ -156,6 +156,9 @@ leader asset). It is refused (`CIV_REVEAL_NOT_UNDOABLE`, and the private log
 offers no undo) for Egypt and once the shared wonders are dealt, because those
 wonders cannot be tied to a reveal. Before, such an undo only moved the civ
 card into the deck and left the civilization set.
+A vote that has run cannot be voted on again (`UNDO_ALREADY_DONE`), the starting
+tech goes by the civ's own tech id so a copy the player chose again stays, and
+returned units are no longer flagged in battle.
 `civSetup` is server-side like `item`: opponents get the public log form only.
 Tests: `packages/engine/test/undo-civ-reveal.test.ts`.
 

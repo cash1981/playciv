@@ -213,8 +213,8 @@ export interface GameLogEntry {
   /**
    * Only on the REVEAL entry of a civilization: what that reveal handed out by
    * itself, so an undo can take exactly that back. Absent on reveals made before
-   * it was recorded, which therefore cannot be undone. Server-side only, like
-   * `item`; no public projection copies it.
+   * it was recorded; an undo then rebuilds it from the log where it can.
+   * Server-side only, like `item`; no public projection copies it.
    */
   readonly civSetup?: CivRevealSetup
   /** ISO timestamp assigned by the server when this entry is persisted. */

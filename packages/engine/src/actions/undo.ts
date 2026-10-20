@@ -17,7 +17,7 @@ import { techCoinSource, withCoinSource } from '../coins.js'
 import type { EngineError } from '../errors.js'
 import { DEFAULT_GOVERNMENT } from '../government.js'
 import type { CivItem, Item, TechItem } from '../item.js'
-import { itemName } from '../item.js'
+import { isUnit, itemName } from '../item.js'
 import { appendUndoLog, appendUndoRequestLog, appendVoteLog, publicItemSubject } from '../log.js'
 import { shuffle } from '../random.js'
 import type { Result } from '../result.js'
@@ -163,6 +163,8 @@ export function vote(state: GameState, input: VoteInput): ActionResult {
   const entry = findLogEntry(state, input.logId)
   if (entry === undefined) return err({ kind: 'LOG_ENTRY_NOT_FOUND', logId: input.logId })
   if (entry.undo === null) return err({ kind: 'UNDO_NOT_INITIATED', logId: input.logId })
+  // A vote that has run is over: a late yes would otherwise run the undo again
+  if (entry.undo.done) return err({ kind: 'UNDO_ALREADY_DONE', logId: input.logId })
   if (entry.item === null) return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
 
   const voter = findPlayer(state, input.playerId)
@@ -220,7 +222,14 @@ function undoCivReveal(
   // Already taken back some other way, so there is nothing left to undo
   if (owner.civilization?.id !== civ.id) return err({ kind: 'NOTHING_TO_UNDO', logId })
 
-  const units = takeOutOfPlay(state, setup.unitIds)
+  const units = takeOutOfPlay(
+    state,
+    playerId,
+    setup.unitIds.filter((id) => !drawnAgainSince(state, logId, id)),
+  )
+  // Only the tech the reveal handed out goes, not one the player chose again
+  // themselves after removing it: that copy has the catalogue's id, not the civ's
+  const techsChosen = owner.techsChosen.filter((tech) => tech.id !== civ.startingTech.id)
   const discardedCivs = units.state.discardedItems.filter((item) =>
     setup.discardedCivIds.includes(item.id),
   )
@@ -240,10 +249,10 @@ function undoCivReveal(
         ...current.items.map((item) => (item.id === civ.id ? { ...item, hidden: true } : item)),
         ...discardedCivs.map((item) => ({ ...item, hidden: true })),
       ],
-      techsChosen: current.techsChosen.filter((tech) => tech.name !== civ.startingTech.name),
+      techsChosen,
       stats: {
         ...current.stats,
-        coinSources: clearedCoinSources(current, civ),
+        coinSources: clearedCoinSources(current, civ, techsChosen),
       },
     },
   )
@@ -251,7 +260,13 @@ function undoCivReveal(
   next = removePieces(next, setup.pieceIds)
   let toDeck: readonly Item[] = [
     ...setup.wonders,
-    ...units.taken.map((item) => ({ ...item, hidden: true, ownerId: null })),
+    ...units.taken.map((item) => ({
+      ...item,
+      hidden: true,
+      ownerId: null,
+      // A unit that stood in the arena must not keep the flag in the deck
+      ...(isUnit(item) ? { inBattle: false } : {}),
+    })),
   ]
 
   const dealEntry = next.log.find((entry) => entry.civSetup?.dealt !== undefined)
@@ -263,6 +278,9 @@ function undoCivReveal(
     toDeck = [...toDeck, ...dealt.wonders]
   }
 
+  // Whatever board changes were taken back by hand before the vote must not
+  // come back through Redo, with the cards already in the deck
+  next = { ...next, board: { ...next.board, redo: [] } }
   next = shuffleDeckTwice({ ...next, items: [...next.items, ...toDeck] })
   return ok(
     logUndo(
@@ -283,10 +301,16 @@ function undoCivReveal(
  * Democracy government card, cleared like `putTechBack` and a government change
  * do, so no hidden value is left in the public coin total.
  */
-function clearedCoinSources(player: Playerhand, civ: CivItem): Playerhand['stats']['coinSources'] {
+function clearedCoinSources(
+  player: Playerhand,
+  civ: CivItem,
+  techsKept: readonly TechItem[],
+): Playerhand['stats']['coinSources'] {
   const techSource = techCoinSource(civ.startingTech.name)
+  // A copy the player chose themselves keeps its counter
+  const keepsOwnCopy = techsKept.some((tech) => tech.name === civ.startingTech.name)
   const withoutTech =
-    techSource === undefined
+    techSource === undefined || keepsOwnCopy
       ? player.stats.coinSources
       : withCoinSource(player.stats.coinSources, techSource, 0)
   return withCoinSource(withoutTech, 'democracyGovernment', 0)
@@ -303,11 +327,27 @@ function removePieces(state: GameState, pieceIds: readonly string[]): GameState 
 }
 
 /**
- * Takes the given items out of every hand, battle hand and the discard pile,
- * wherever they ended up since being drawn, and returns them once each.
+ * Whether the item was drawn once more after the reveal's own draws. The reveal
+ * drew each starting unit once; a second `ITEM` line for the same id means the
+ * unit went back into the deck (or was reshuffled into it) and someone drew it
+ * as an ordinary card, which the undo must leave alone.
+ */
+function drawnAgainSince(state: GameState, revealLogId: string, itemId: string): boolean {
+  const revealIndex = state.log.findIndex((entry) => entry.id === revealLogId)
+  const draws = state.log
+    .slice(revealIndex + 1)
+    .filter((entry) => entry.logType === 'ITEM' && entry.item?.id === itemId)
+  return draws.length > 1
+}
+
+/**
+ * Takes the given items out of the owner's hand and battle hand and out of the
+ * discard pile, wherever they ended up since being drawn, and returns them once
+ * each. Another player's hand is left alone: a unit there was drawn by them.
  */
 function takeOutOfPlay(
   state: GameState,
+  ownerId: string,
   ids: readonly string[],
 ): { readonly state: GameState; readonly taken: readonly Item[] } {
   const wanted = new Set(ids)
@@ -319,11 +359,11 @@ function takeOutOfPlay(
       return false
     })
 
-  const players = state.players.map((player) => ({
-    ...player,
-    items: keep(player.items),
-    battlehand: keep(player.battlehand),
-  }))
+  const players = state.players.map((player) =>
+    player.playerId === ownerId
+      ? { ...player, items: keep(player.items), battlehand: keep(player.battlehand) }
+      : player,
+  )
   const discardedItems = keep(state.discardedItems)
   return { state: { ...state, players, discardedItems }, taken: [...taken.values()] }
 }
