@@ -65,11 +65,12 @@ order timeline row follows the authoritative game-state commit and can fail
 independently; do not roll back or blindly repeat the committed action.
 
 Layout: only the timeline is height-capped (the screen minus about 40rem for the
-composer, between 8rem and 32rem); the thread and composer are not. A composer
-taller than the screen (Order mode, the trade offer form) lengthens the page. A
-cap on the thread let it overflow under the next panel and hide End turn and
-Send. The stylesheet test in `ChatOrdersPanel.test.tsx` guards this; retune the
-40rem if the composer changes size.
+composer, between 8rem and 32rem); the thread and composer are not. When the
+timeline and composer together are taller than the screen (Order mode adds the
+Turn and Phase row, and the trade offer form is always there), the page grows.
+A cap on the thread let the composer overflow under the next panel and hide End
+turn and Send. The stylesheet test in `ChatOrdersPanel.test.tsx` guards this;
+retune the 40rem if the composer changes size.
 
 Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
 `packages/web/src/views/ChatOrdersPanel.tsx`, `ChatOrdersPanel.css`.

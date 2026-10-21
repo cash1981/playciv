@@ -435,9 +435,8 @@ export function ChatOrdersPanel({
     }
   }, [visible])
 
-  // The timeline changes height with the screen (dvh) and as messages arrive
-  // while it is below its cap. Keep the newest message in view when it was in
-  // view.
+  // The timeline changes height with the screen (dvh) and when messages fill it
+  // up to its cap. Keep the newest message in view when it was in view.
   useEffect(() => {
     const element = scrollRef.current
     if (element === null || typeof ResizeObserver === 'undefined') return

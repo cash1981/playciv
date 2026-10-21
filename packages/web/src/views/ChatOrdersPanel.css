@@ -55,9 +55,11 @@
    taller in Order mode and with the trade offer form, and a cap on the thread let
    it spill out under the next panel, hiding End turn and Send. Now a taller
    composer only lengthens the page.
-   The timeline gets the screen minus room for the composer (about 40rem with the
-   trade offer form, measured; retune it if the composer changes), between 8rem and
-   32rem, so where the screen allows, timeline and composer fit in one screen.
+   The timeline gets the screen minus room for the composer (about 40rem in Chat
+   mode with the trade offer form, measured; retune it if the composer changes),
+   between 8rem and 32rem, so where the screen allows, timeline and composer fit in
+   one screen. Order mode adds the Turn and Phase row and runs a little past one
+   screen (935 px at 900 px); the page just scrolls.
    (A sticky composer kept it in reach but covered the last messages on a phone.) */
 .chat-orders-thread {
   display: flex;

@@ -884,8 +884,8 @@ describe('the thread layout', () => {
       .map((match) => match[2] ?? '')
 
   // jsdom has no layout, so the stylesheet is the contract. A height cap on the
-  // thread let a composer taller than the screen (Order mode, the trade offer form)
-  // overflow it and slide under the next panel, hiding End turn and Send.
+  // thread let the composer overflow it (Order mode, the trade offer form) and slide
+  // under the next panel, hiding End turn and Send.
   it('caps the timeline only, so a tall composer lengthens the page instead of overflowing', () => {
     const css = readFileSync('src/views/ChatOrdersPanel.css', 'utf8').replaceAll('\r\n', '\n')
     const thread = [...bodies(css, 'chat-orders-thread'), ...bodies(css, 'chat-orders-timeline-panel')]
