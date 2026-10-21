@@ -346,6 +346,10 @@ export function ChatOrdersPanel({
   const composerEditorRef = useRef<MarkdownEditorHandle | null>(null)
   const privateEditorRef = useRef<MarkdownEditorHandle | null>(null)
   const privateDirtyRef = useRef(false)
+  // A lost response leaves the player not knowing whether the offer went through.
+  // Sending the same thing again reuses the request id, so the server answers with
+  // the first outcome instead of making a second offer. An id is dropped on success.
+  const requestIds = useRef(new Map<string, string>())
 
   const currentTurn = viewerTurn(view)
   const orderTurn = turnPick ?? currentTurn
@@ -479,30 +483,50 @@ export function ChatOrdersPanel({
     })
   }
 
+  /** The request id for one exact request: the same key gives the same id until it succeeds. */
+  const requestIdFor = (key: string): string => {
+    const held = requestIds.current.get(key)
+    if (held !== undefined) return held
+    const fresh = newRequestId()
+    requestIds.current.set(key, fresh)
+    return fresh
+  }
+
+  // The offer controls are only drawn for a viewer who may write, but a counter form
+  // that was already open stays on screen when replay or a lock starts, so the
+  // handlers check too.
   const sendOffer = (): void => {
     const terms = offerTerms.trim()
-    if (terms === '' || offerRecipientId === '') return
+    if (!canWrite || busy || terms === '' || offerRecipientId === '') return
+    const key = `offer\n${offerRecipientId}\n${terms}`
     void run(async () => {
-      await api.sendTradeOffer(gameId, offerRecipientId, terms, newRequestId(), view.rev)
-      setOfferTerms('')
+      await api.sendTradeOffer(gameId, offerRecipientId, terms, requestIdFor(key), view.rev)
+      requestIds.current.delete(key)
+      // What was typed while the request was out is a new draft and stays
+      setOfferTerms((current) => (current.trim() === terms ? '' : current))
       await load()
     })
   }
 
   const transitionOffer = (offerId: string, action: 'accept' | 'decline' | 'withdraw'): void => {
+    if (!canWrite || busy) return
+    const key = `${action}\n${offerId}`
     void run(async () => {
-      await api.transitionTradeOffer(gameId, offerId, action, newRequestId(), view.rev)
+      await api.transitionTradeOffer(gameId, offerId, action, requestIdFor(key), view.rev)
+      requestIds.current.delete(key)
       await load()
     })
   }
 
   const sendCounter = (offerId: string): void => {
     const terms = counterTerms.trim()
-    if (terms === '') return
+    if (!canWrite || busy || terms === '') return
+    const key = `counter\n${offerId}\n${terms}`
     void run(async () => {
-      await api.counterTradeOffer(gameId, offerId, terms, newRequestId(), view.rev)
+      await api.counterTradeOffer(gameId, offerId, terms, requestIdFor(key), view.rev)
+      requestIds.current.delete(key)
       setCounterOfferId(null)
-      setCounterTerms('')
+      setCounterTerms((current) => (current.trim() === terms ? '' : current))
       await load()
     })
   }
@@ -642,7 +666,7 @@ export function ChatOrdersPanel({
                         {sender && <button type="button" disabled={busy} onClick={() => transitionOffer(offer.id, 'withdraw')}>Withdraw</button>}
                       </div>
                     )}
-                    {counterOfferId === offer.id && (
+                    {canWrite && counterOfferId === offer.id && (
                       <form className="chat-orders-counter" onSubmit={(event) => { event.preventDefault(); sendCounter(offer.id) }}>
                         <input
                           value={counterTerms}

@@ -166,9 +166,18 @@ const tradeOffer = (overrides: Record<string, unknown> = {}) => ({
 
 const page = (messages: readonly TimelineMessageDto[], hasMore = false): ChatPageDto => ({ messages, hasMore })
 
+/** Like the game page's run: a failed request is shown there, not thrown at the panel. */
+const quietRun = async (action: () => Promise<unknown>): Promise<void> => {
+  try {
+    await action()
+  } catch {
+    // the page shows the error
+  }
+}
+
 async function renderPanel(
   view: PlayerView,
-  props: { readOnly?: boolean; autoRefresh?: boolean; reloadCount?: number } = {},
+  props: { readOnly?: boolean; autoRefresh?: boolean; reloadCount?: number; run?: typeof run } = {},
 ): Promise<ReturnType<typeof render>> {
   let result: ReturnType<typeof render> | undefined
   await act(async () => {
@@ -178,7 +187,7 @@ async function renderPanel(
         view={view}
         busy={false}
         readOnly={props.readOnly ?? false}
-        run={run}
+        run={props.run ?? run}
         reloadCount={props.reloadCount ?? 0}
         autoRefresh={props.autoRefresh ?? false}
         editorComponent={FakeEditor}
@@ -435,6 +444,114 @@ describe('trade offers', () => {
     expect(counterTradeOffer).toHaveBeenCalledWith('game', 'offer-1', 'one trade for two wheat', expect.any(String), 17)
   })
 
+  const bobView = (): PlayerView => makeView({
+    you: seat('Bob', 2, { playerTurns: [] }),
+    opponents: [seat('Alice', 1)],
+    tradeOffers: [tradeOffer()],
+  })
+
+  describe('after a response that never arrived', () => {
+    const sendButton = (): HTMLElement => screen.getByRole('button', { name: 'Send offer' })
+    const terms = (): string => (screen.getByLabelText('Terms') as HTMLTextAreaElement).value
+
+    it('sends the same offer again with the same request id, and keeps the draft meanwhile', async () => {
+      sendTradeOffer.mockRejectedValueOnce(new Error('network down'))
+      await renderPanel(makeView(), { run: quietRun })
+      await type('Terms', 'two trade for one wheat')
+      await click(sendButton())
+      // The player cannot tell whether the offer arrived, so the words stay
+      expect(terms()).toBe('two trade for one wheat')
+      await click(sendButton())
+
+      expect(sendTradeOffer).toHaveBeenCalledTimes(2)
+      expect(sendTradeOffer.mock.calls[1]?.[3]).toBe(sendTradeOffer.mock.calls[0]?.[3])
+      expect(terms()).toBe('')
+
+      // The same words once the first offer is settled make a new offer
+      await type('Terms', 'two trade for one wheat')
+      await click(sendButton())
+      expect(sendTradeOffer.mock.calls[2]?.[3]).not.toBe(sendTradeOffer.mock.calls[0]?.[3])
+    })
+
+    it('uses a new request id when the words were changed after the failed send', async () => {
+      sendTradeOffer.mockRejectedValueOnce(new Error('network down'))
+      await renderPanel(makeView(), { run: quietRun })
+      await type('Terms', 'two trade for one wheat')
+      await click(sendButton())
+      await type('Terms', 'three trade for one wheat')
+      await click(sendButton())
+
+      expect(sendTradeOffer.mock.calls[1]?.[3]).not.toBe(sendTradeOffer.mock.calls[0]?.[3])
+    })
+
+    it('reuses the request id of an Accept that is pressed again', async () => {
+      transitionTradeOffer.mockRejectedValueOnce(new Error('network down'))
+      await renderPanel(bobView(), { run: quietRun })
+      await click(screen.getByRole('button', { name: 'Accept' }))
+      await click(screen.getByRole('button', { name: 'Accept' }))
+
+      expect(transitionTradeOffer).toHaveBeenCalledTimes(2)
+      expect(transitionTradeOffer.mock.calls[1]?.[3]).toBe(transitionTradeOffer.mock.calls[0]?.[3])
+    })
+
+    it('reuses the request id of a counteroffer that is sent again', async () => {
+      counterTradeOffer.mockRejectedValueOnce(new Error('network down'))
+      await renderPanel(bobView(), { run: quietRun })
+      await click(screen.getByRole('button', { name: 'Counter' }))
+      await type('Counteroffer terms', 'one trade for two wheat')
+      await click(screen.getByRole('button', { name: 'Send counteroffer' }))
+      await click(screen.getByRole('button', { name: 'Send counteroffer' }))
+
+      expect(counterTradeOffer).toHaveBeenCalledTimes(2)
+      expect(counterTradeOffer.mock.calls[1]?.[3]).toBe(counterTradeOffer.mock.calls[0]?.[3])
+    })
+  })
+
+  it('keeps what was typed while the offer was on its way, and clears what was sent', async () => {
+    let arrive: (() => void) | undefined
+    sendTradeOffer.mockImplementationOnce(() => new Promise((resolve) => { arrive = () => resolve(makeView()) }))
+    await renderPanel(makeView())
+    await type('Terms', 'first words')
+    await click(screen.getByRole('button', { name: 'Send offer' }))
+    await type('Terms', 'first words and then more')
+    await act(async () => { arrive?.() })
+
+    expect((screen.getByLabelText('Terms') as HTMLTextAreaElement).value).toBe('first words and then more')
+  })
+
+  it('keeps what was typed in a counteroffer while it was on its way', async () => {
+    let arrive: (() => void) | undefined
+    counterTradeOffer.mockImplementationOnce(() => new Promise((resolve) => { arrive = () => resolve(makeView()) }))
+    await renderPanel(bobView())
+    await click(screen.getByRole('button', { name: 'Counter' }))
+    await type('Counteroffer terms', 'one for two')
+    await click(screen.getByRole('button', { name: 'Send counteroffer' }))
+    await type('Counteroffer terms', 'one for two, or one for three')
+    await act(async () => { arrive?.() })
+    // The form closes with the offer answered, but the new words are not thrown away
+    await click(screen.getByRole('button', { name: 'Counter' }))
+    expect((screen.getByLabelText('Counteroffer terms') as HTMLInputElement).value).toBe('one for two, or one for three')
+  })
+
+  it('takes the counter form away, and sends nothing, once the viewer can no longer write', async () => {
+    const { rerender } = await renderPanel(bobView())
+    await click(screen.getByRole('button', { name: 'Counter' }))
+    await type('Counteroffer terms', 'one trade for two wheat')
+
+    await act(async () => {
+      rerender(
+        <ChatOrdersPanel
+          gameId="game" view={bobView()} busy={false} readOnly run={run}
+          reloadCount={0} autoRefresh={false} editorComponent={FakeEditor}
+        />,
+      )
+    })
+
+    expect(screen.queryByLabelText('Counteroffer terms')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Send counteroffer' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull()
+    expect(counterTradeOffer).not.toHaveBeenCalled()
+  })
 })
 
 describe('the row that starts a turn', () => {
