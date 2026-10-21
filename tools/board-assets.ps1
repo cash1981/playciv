@@ -121,7 +121,10 @@ $wonderLabels = @{
 
 # Pieces to leave out of the manifest even though the source art exists, keyed by
 # "<folder>/<basename>". The white army (barbarians) was once dropped as unused
-# (issue #26); it is back as Russia's extra army (issue #204). The extra coin
+# (issue #26); it is back as Russia's extra army (issue #204). The white scout
+# (Spain's extra scout) has no source art in the Moderator folder: it is the red
+# scout recoloured by hand, so re-running this script drops `figures/whitescout`
+# from the manifest and it must be added back. The extra coin
 # denominations were dropped 2026-09-23: the palette only needs one single-coin
 # marker (coin1, labelled "Coin"); see docs/agents/tasks/coin-marker-cleanup.md.
 $exclude = @(

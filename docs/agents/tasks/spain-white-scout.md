@@ -36,7 +36,7 @@ remover så settes denne til 1 og kan flyttes tilbake."
 
 ## Reference
 
-Spanish card: "The Spanish start with 2 scouts." Read as one extra scout.
+Spanish card: "The Spanish start with 2 scouts." One extra scout follows the owner's request and the issue #204 precedent, not a rulebook reading.
 See the board section of [decisions](../decisions.md).
 
 ## Acceptance criteria

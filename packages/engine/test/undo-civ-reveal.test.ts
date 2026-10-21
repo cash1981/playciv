@@ -140,6 +140,24 @@ describe('undo of a civilization reveal', () => {
     expect(again.board.pieces.filter((piece) => piece.assetId === white)).toHaveLength(1)
   })
 
+  it.each([
+    ['Spanish', 'figures/whitescout'],
+    ['Russians', 'figures/whitearmy'],
+  ])('does not add a second white %s figure when one was placed by hand before the undo', (civ, white) => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, civ), CASH1981)
+    const auto = revealed.board.pieces.find((piece) => piece.assetId === white)
+    if (auto === undefined) throw new Error(`no ${white} on the board`)
+    // Take the dealt one off and place it again by hand: it gets a new id the reveal did not record
+    const removed = unwrap(removePiece(revealed, { playerId: CASH1981, pieceId: auto.id }))
+    const byHand = unwrap(placePiece(removed, { playerId: CASH1981, assetId: white, x: 0, y: 0 }))
+
+    const undone = undoByVote(byHand, CASH1981)
+    expect(undone.board.pieces.filter((piece) => piece.assetId === white)).toHaveLength(1)
+
+    const again = revealHidden(undone, CASH1981)
+    expect(again.board.pieces.filter((piece) => piece.assetId === white)).toHaveLength(1)
+  })
+
   it('keeps what the player drew on their own', () => {
     let state = firstCivGame()
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CULTURE_1' }))

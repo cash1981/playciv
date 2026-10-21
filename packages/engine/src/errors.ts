@@ -202,7 +202,7 @@ export function describeError(error: EngineError): string {
     case 'BOARD_ASSET_LIMIT_REACHED':
       return `No ${error.assetId} pieces remain available`
     case 'BOARD_ASSET_CIV_ONLY':
-      return `Only the ${error.civilization} player can place ${error.assetId}`
+      return `The white figure belongs to the ${error.civilization}; only their player can place it`
     case 'BOARD_PIECE_NOT_FOUND':
       return `No piece on the board with id ${error.pieceId}`
     case 'UNKNOWN_WONDER_OWNER':
