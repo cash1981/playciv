@@ -296,6 +296,58 @@ foreach ($folder in $categories.Keys) {
     Write-Host ("  {0,-10} {1,3} files" -f $folder, (Get-ChildItem $to -File).Count)
 }
 
+# Spain's extra scout has no source art in the Moderator folder, so it is made
+# from the red scout: the flat red background becomes light grey (not pure white,
+# which would hide the white hull) and the anti-aliased edge pixels are blended
+# against the new colour. It is inserted after the white army, where the folder
+# order would put it.
+$redScoutSource = Join-Path $Source 'figures\redscout.png'
+if (-not (Test-Path $redScoutSource)) { throw "Could not find $redScoutSource" }
+$redBackground = @(255, 42, 42)
+$whiteBackground = @(230, 230, 230)
+$redScout = New-Object System.Drawing.Bitmap $redScoutSource
+try {
+    $whiteScout = New-Object System.Drawing.Bitmap $redScout.Width, $redScout.Height
+    for ($y = 0; $y -lt $redScout.Height; $y++) {
+        for ($x = 0; $x -lt $redScout.Width; $x++) {
+            $pixel = $redScout.GetPixel($x, $y)
+            $channels = @($pixel.R, $pixel.G, $pixel.B)
+            $spread = ($channels | Measure-Object -Maximum -Minimum)
+            $out = $channels
+            if ($channels[0] -eq $redBackground[0] -and $channels[1] -eq $redBackground[1] -and $channels[2] -eq $redBackground[2]) {
+                $out = $whiteBackground
+            } elseif (($spread.Maximum - $spread.Minimum) -gt 12) {
+                # Edge pixel: weight t of the red background over a grey of value gv,
+                # read from the green channel (the red channel is 255 either way)
+                $t = (255 - $pixel.G) / (255 - $redBackground[1])
+                if ($t -ge 1) {
+                    $out = $whiteBackground
+                } else {
+                    $gv = [Math]::Min(255, [Math]::Max(0, ($pixel.G - $redBackground[1] * $t) / (1 - $t)))
+                    $out = 0..2 | ForEach-Object { [int] [Math]::Round($t * $whiteBackground[$_] + (1 - $t) * $gv) }
+                }
+            }
+            $whiteScout.SetPixel($x, $y, [System.Drawing.Color]::FromArgb(255, $out[0], $out[1], $out[2]))
+        }
+    }
+    $whiteScoutPath = Join-Path $WebPublic 'figures\whitescout.png'
+    $whiteScout.Save($whiteScoutPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    $whiteScoutEntry = [ordered] @{
+        id       = 'figures/whitescout'
+        category = 'figure'
+        path     = 'figures/whitescout.png'
+        label    = 'White scout'
+        width    = $redScout.Width
+        height   = $redScout.Height
+    }
+} finally {
+    $redScout.Dispose()
+    if ($null -ne $whiteScout) { $whiteScout.Dispose() }
+}
+$afterWhiteArmy = [Array]::FindIndex([object[]] $assets, [Predicate[object]] { param($a) $a.id -eq 'figures/whitearmy' })
+if ($afterWhiteArmy -lt 0) { throw 'Could not find figures/whitearmy to place the white scout after' }
+$assets = @($assets[0..$afterWhiteArmy]) + @($whiteScoutEntry) + @($assets[($afterWhiteArmy + 1)..($assets.Count - 1)])
+
 # The culture track is a backdrop, not a piece, so it is copied on its own and
 # only its natural size is recorded. The engine scales it to the map width.
 # The correct track is Moderator/map/culturetrack.png, not the older

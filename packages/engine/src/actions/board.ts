@@ -19,6 +19,7 @@ import type { Board, BoardArea, BoardChange, BoardHistoryEntry, BoardPiece, Rota
 import {
   applyChange,
   areaAt,
+  boardUndoBlocked,
   boardAssetLimit,
   boardAreas,
   clampToBoard,
@@ -32,7 +33,7 @@ import {
   revertChange,
   playerAreas,
   START_PLAYER_ID,
-  WHITE_ARMY_ID,
+  whiteFigureCivilization,
 } from '../board.js'
 import type { EngineError } from '../errors.js'
 import { MAX_PRODUCTION_OVERRIDE } from '../limits.js'
@@ -64,6 +65,13 @@ export function areasFor(state: GameState): readonly BoardArea[] {
   return boardAreas(state.board, state.players)
 }
 
+/**
+ * The actor of a board change the engine makes on its own, such as taking back
+ * what a civilization reveal placed. No player is this, so nobody's board Undo
+ * can revert it (`undoLastBoardChange` only reverts the caller's own entries).
+ */
+export const BOARD_SYSTEM_ACTOR = 'System'
+
 interface Recorded {
   readonly state: GameState
   readonly pieces: readonly BoardPiece[]
@@ -83,6 +91,7 @@ function record(
 ): GameState {
   const { state } = recorded
   const player = findPlayer(state, input.playerId)
+  const actor = input.playerId === BOARD_SYSTEM_ACTOR ? 'System' : player?.username
   const [id, rng] = nextId(state.rng)
 
   return {
@@ -97,8 +106,8 @@ function record(
           id,
           at: input.at ?? null,
           playerId: input.playerId,
-          username: player?.username ?? 'unknown',
-          description: `${player?.username ?? 'Someone'} ${recorded.description}`,
+          username: actor ?? 'unknown',
+          description: `${actor ?? 'Someone'} ${recorded.description}`,
           change: recorded.change,
           logLength: state.log.length,
         },
@@ -141,12 +150,17 @@ export function placePiece(state: GameState, input: PlacePieceInput): ActionResu
   if (asset === undefined) {
     return err({ kind: 'BOARD_ASSET_NOT_FOUND', assetId: input.assetId })
   }
-  // Checked before the limit so a non-Russian is told why, not "none left"
+  // Checked before the limit so the wrong civ is told why, not "none left"
+  const owningCivilization = whiteFigureCivilization(asset.id)
   if (
-    asset.id === WHITE_ARMY_ID &&
-    findPlayer(state, input.playerId)?.civilization?.name !== 'Russians'
+    owningCivilization !== undefined &&
+    findPlayer(state, input.playerId)?.civilization?.name !== owningCivilization
   ) {
-    return err({ kind: 'BOARD_ASSET_RUSSIA_ONLY', assetId: input.assetId })
+    return err({
+      kind: 'BOARD_ASSET_CIV_ONLY',
+      assetId: input.assetId,
+      civilization: owningCivilization,
+    })
   }
   const remaining = remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)
   if (remaining !== undefined && remaining === 0) {
@@ -611,6 +625,25 @@ export function removePiece(state: GameState, input: PieceInput): ActionResult {
   )
 }
 
+/**
+ * Removes a piece on the engine's own account, as an ordinary history entry
+ * credited to {@link BOARD_SYSTEM_ACTOR}. `undefined` when the piece is gone.
+ */
+export function removePieceAsSystem(state: GameState, pieceId: string): GameState | undefined {
+  const index = state.board.pieces.findIndex((piece) => piece.id === pieceId)
+  const piece = state.board.pieces[index]
+  if (piece === undefined) return undefined
+  return record(
+    { playerId: BOARD_SYSTEM_ACTOR },
+    {
+      state,
+      pieces: state.board.pieces.filter((other) => other.id !== piece.id),
+      change: { kind: 'remove', piece, index },
+      description: `removed ${piece.label} from ${locationOf(state.board, areasFor(state), piece)}`,
+    },
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Undo
 // ---------------------------------------------------------------------------
@@ -677,7 +710,9 @@ export function undoLastBoardChange(state: GameState, playerId: string): ActionR
   if (denied !== undefined) return err(denied)
 
   const last = state.board.history.at(-1)
-  if (last === undefined) return err({ kind: 'NOTHING_TO_UNDO_ON_BOARD' })
+  if (last === undefined || boardUndoBlocked(state.board)) {
+    return err({ kind: 'NOTHING_TO_UNDO_ON_BOARD' })
+  }
   if (last.playerId !== playerId) return err({ kind: 'BOARD_UNDO_NOT_YOURS' })
   if (isAssistedBoardChange(state, last)) return err({ kind: 'BOARD_UNDO_ASSISTED' })
 

@@ -532,7 +532,7 @@ describe('BoardPalette figures (issue #204)', () => {
     ...piece(assetId, id),
     category: 'figure',
   })
-  const markup = (pieces: readonly BoardPiece[], viewerIsRussia?: boolean): string =>
+  const markup = (pieces: readonly BoardPiece[], viewerCivilization?: string | null): string =>
     renderToStaticMarkup(
       <BoardPalette
         assets={figures()}
@@ -541,7 +541,7 @@ describe('BoardPalette figures (issue #204)', () => {
         replaying={false}
         pieces={pieces}
         numOfPlayers={4}
-        {...(viewerIsRussia === undefined ? {} : { viewerIsRussia })}
+        {...(viewerCivilization === undefined ? {} : { viewerCivilization })}
       />,
     )
 
@@ -566,14 +566,25 @@ describe('BoardPalette figures (issue #204)', () => {
 
   it('lists the white army only for a Russian viewer', () => {
     expect(markup([])).not.toContain('White army')
-    expect(markup([], false)).not.toContain('White army')
-    expect(markup([], true)).toContain('White army (1)')
+    expect(markup([], null)).not.toContain('White army')
+    expect(markup([], 'Spanish')).not.toContain('White army')
+    expect(markup([], 'Russians')).toContain('White army (1)')
   })
 
-  it('disables the white army once it has been placed', () => {
-    const html = markup([figurePiece('figures/whitearmy', 'w')], true)
-    expect(html).toContain('White army (0)')
-    expect(html).toContain('palette-item unavailable')
+  it('lists the white scout only for a Spanish viewer', () => {
+    expect(markup([])).not.toContain('White scout')
+    expect(markup([], null)).not.toContain('White scout')
+    expect(markup([], 'Russians')).not.toContain('White scout')
+    expect(markup([], 'Spanish')).toContain('White scout (1)')
+  })
+
+  it('disables a white figure once it has been placed', () => {
+    const army = markup([figurePiece('figures/whitearmy', 'w')], 'Russians')
+    expect(army).toContain('White army (0)')
+    expect(army).toContain('palette-item unavailable')
+    const scout = markup([figurePiece('figures/whitescout', 'w')], 'Spanish')
+    expect(scout).toContain('White scout (0)')
+    expect(scout).toContain('palette-item unavailable')
   })
 })
 

@@ -2213,6 +2213,83 @@ describe('undo end battle', () => {
   })
 })
 
+/** Voting away a civilization reveal through the API. */
+describe('undo of a civilization reveal', () => {
+  it('offers the undo on the reveal, and a unanimous vote puts the setup back', async () => {
+    const tokens: Record<string, string> = {}
+    for (const username of ['cash1981', 'Karandras1', 'Itchi', 'Chul']) {
+      tokens[username] = await register(username)
+    }
+    const gameId = await createGame(tokens['cash1981'] as string, 'Angre civ', 4)
+    for (const username of ['Karandras1', 'Itchi', 'Chul']) {
+      const join = await inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/join`,
+        headers: bearer(tokens[username] as string),
+        payload: {},
+      })
+      expect(join.status).toBe(200)
+    }
+    let state = await repo.findGame(gameId)
+    const starterName = (state === undefined ? null : activeTurnStatus(state))?.username as string
+    const starter = tokens[starterName] as string
+
+    const drawn = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/CIV`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(drawn.status).toBe(200)
+    state = await repo.findGame(gameId)
+    const civ = state?.players
+      .find((player) => player.username === starterName)
+      ?.items.find((item) => item.sheetName === 'CIV')
+    const revealed = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/items/reveal`,
+      headers: bearer(starter),
+      payload: { sheetName: 'CIV', itemNumber: civ?.itemNumber },
+    })
+    expect(revealed.status).toBe(200)
+
+    const privateLog = await inject(app, {
+      method: 'GET',
+      url: `/api/games/${gameId}/log/private`,
+      headers: bearer(starter),
+    })
+    const entries = await privateLog.json() as { id: string; logType: string; canUndo: boolean }[]
+    const reveal = entries.find((entry) => entry.logType === 'REVEAL')
+    expect(reveal?.canUndo).toBe(true)
+
+    const asked = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/undo/${reveal?.id}`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(asked.status).toBe(200)
+    for (const username of ['cash1981', 'Karandras1', 'Itchi', 'Chul']) {
+      if (username === starterName) continue
+      const voted = await inject(app, {
+        method: 'POST',
+        url: `/api/games/${gameId}/undo/${reveal?.id}/vote`,
+        headers: bearer(tokens[username] as string),
+        payload: { vote: true },
+      })
+      expect(voted.status).toBe(200)
+    }
+
+    state = await repo.findGame(gameId)
+    const hand = state?.players.find((player) => player.username === starterName)
+    expect(hand?.civilization).toBeNull()
+    expect(hand?.techsChosen).toEqual([])
+    expect(hand?.items.filter((item) => item.kind === 'infantry')).toEqual([])
+    expect(hand?.items.some((item) => item.kind === 'civ' && item.hidden)).toBe(true)
+    expect(state?.board.pieces).toEqual([])
+  })
+})
+
 /** A whole round through the API, as a smoke test for the entire stack. */
 describe('a whole round', () => {
   it('four players play through setup, draws, turns and an undo', async () => {
@@ -2692,6 +2769,42 @@ describe('player stats (#43)', () => {
     expect(saved.status).toBe(200)
     const view = await saved.json() as StatView
     expect(view.opponents.find((o) => o.playerId === other)?.stats.culture).toBe(5)
+  })
+
+  it('stores Aircraft unlocked as a boolean and rejects anything else', async () => {
+    const { gameId, starter } = await startedGame('StatsAircraft')
+    const { other } = await ids(gameId, starter)
+    const post = (value: unknown) => inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/stat`,
+      headers: bearer(starter),
+      payload: { stat: 'aircraft', value },
+    })
+
+    const saved = await post(true)
+    expect(saved.status).toBe(200)
+    const view = await saved.json() as {
+      opponents: { playerId: string; stats: { aircraft: boolean } }[]
+    }
+    expect(view.opponents.find((o) => o.playerId === other)?.stats.aircraft).toBe(true)
+
+    const cleared = await post(false)
+    expect(cleared.status).toBe(200)
+    expect((await cleared.json() as typeof view).opponents.find((o) => o.playerId === other)?.stats.aircraft).toBe(false)
+
+    const boolForNumber = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/players/${other}/stat`,
+      headers: bearer(starter),
+      payload: { stat: 'culture', value: true },
+    })
+    expect(boolForNumber.status).toBe(400)
+
+    for (const bad of [1, 'true']) {
+      const rejected = await post(bad)
+      expect(rejected.status).toBe(400)
+      expect((await rejected.json() as { error: string }).error).toBe('BAD_REQUEST')
+    }
   })
 
   it('rejects an invalid Movement value', async () => {

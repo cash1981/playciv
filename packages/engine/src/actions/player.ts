@@ -7,13 +7,17 @@
  */
 
 import {
+  areaSlotRegion,
   civTileAssetId,
   cultureCellCenter,
   cultureStepOf,
   cultureTrackHeight,
   findBoardAsset,
   leaderAssetId,
+  playerAreas,
+  remainingBoardAssetCount,
   startingCorner,
+  whiteFigureFor,
 } from '../board.js'
 import {
   activeWonderOwnerIds,
@@ -42,7 +46,7 @@ import { err, ok } from '../result.js'
 import { shuffle } from '../random.js'
 import type { SheetName } from '../sheet-name.js'
 import { ALL_WONDERS } from '../sheet-name.js'
-import type { GameState, Playerhand, PlayerStats } from '../state.js'
+import type { CivRevealSetup, GameState, Playerhand, PlayerStats } from '../state.js'
 import {
   findPlayer,
   hasUserAccess,
@@ -163,13 +167,16 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
     techsChosen: player.techsChosen.map((candidate) =>
       candidate.name === tech.name ? revealed : candidate,
     ),
-    stats:
-      source === undefined
-        ? player.stats
-        : {
-            ...player.stats,
-            coinSources: withCoinSource(player.stats.coinSources, source, coinOnReveal(source)),
-          },
+    stats: {
+      ...player.stats,
+      // Revealing Flight unlocks Aircraft units. Only the reveal of a hidden copy
+      // counts, so a player who unticked the box by hand is not overruled by
+      // revealing it again.
+      ...(tech.hidden && tech.name === 'Flight' ? { aircraft: true } : {}),
+      ...(source === undefined
+        ? {}
+        : { coinSources: withCoinSource(player.stats.coinSources, source, coinOnReveal(source)) }),
+    },
   })
 
   return ok(appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed))
@@ -395,6 +402,8 @@ function revealCivilization(
     techsChosen: [...player.techsChosen, startingTech],
   })
   next = appendItemLog(next, 'REVEAL', player.username, player.playerId, civ)
+  const revealIndex = next.log.length - 1
+  const afterReveal = next
 
   // Java drew starting units only if the player had none already
   const hasUnits = (findPlayer(next, player.playerId)?.items ?? []).some(isUnit)
@@ -403,18 +412,53 @@ function revealCivilization(
     if (!drawn.ok) return drawn
     next = drawn.value
   }
+  const handIds = (state: GameState): ReadonlySet<string> =>
+    new Set((findPlayer(state, player.playerId)?.items ?? []).map((item) => item.id))
+  const handBefore = handIds(afterReveal)
+  const unitIds = [...handIds(next)].filter((id) => !handBefore.has(id))
 
+  const discardedCivIds = (findPlayer(next, player.playerId)?.items ?? [])
+    .filter((item) => item.kind === 'civ' && item.id !== civ.id)
+    .map((item) => item.id)
   next = discardTheOtherCivs(next, player.playerId, civ)
   next = placeStartingTile(next, player, civ)
   next = placeLeaderMarker(next, player, civ)
+  next = placeWhiteFigure(next, player, civ)
+  const ownPieces = newPieces(afterReveal, next)
+  const ownWonders = wondersTakenFromDeck(afterReveal, next)
 
+  let dealt: CivRevealSetup['dealt']
   if (shouldDrawWonders(next)) {
+    const beforeDeal = next
     const drawn = drawStartingWonders(next, player.playerId)
     if (!drawn.ok) return drawn
     next = drawn.value
+    dealt = { wonders: wondersTakenFromDeck(beforeDeal, next), pieceIds: newPieces(beforeDeal, next) }
   }
 
-  return ok(next)
+  const civSetup: CivRevealSetup = {
+    unitIds,
+    discardedCivIds,
+    pieceIds: ownPieces,
+    wonders: ownWonders,
+    ...(dealt === undefined ? {} : { dealt }),
+  }
+  return ok({
+    ...next,
+    log: next.log.map((entry, index) => (index === revealIndex ? { ...entry, civSetup } : entry)),
+  })
+}
+
+/** The ids of the board pieces that `after` has and `before` did not. */
+function newPieces(before: GameState, after: GameState): readonly string[] {
+  const known = new Set(before.board.pieces.map((piece) => piece.id))
+  return after.board.pieces.filter((piece) => !known.has(piece.id)).map((piece) => piece.id)
+}
+
+/** The wonders that were in the deck in `before` and are gone from it in `after`. */
+function wondersTakenFromDeck(before: GameState, after: GameState): readonly Item[] {
+  const left = new Set(after.items.map((item) => item.id))
+  return before.items.filter((item) => item.kind === 'wonder' && !left.has(item.id))
 }
 
 /**
@@ -494,17 +538,53 @@ function placeLeaderMarker(
 }
 
 /**
+ * Puts Russia's white army or Spain's white scout in the player's own area.
+ *
+ * It sits there like any other piece: the palette then shows none left, and
+ * removing it from the board puts it back in the supply to be placed again.
+ */
+function placeWhiteFigure(
+  state: GameState,
+  player: Playerhand,
+  civ: CivItem,
+): GameState {
+  const assetId = whiteFigureFor(civ.name)
+  if (assetId === undefined) return state
+
+  const asset = findBoardAsset(assetId)
+  if (asset === undefined) return state
+
+  // The supply is one: a second reveal, or a figure already placed by hand, must not add another
+  if (remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers) === 0) return state
+
+  const area = playerAreas(state.board, state.players).find(
+    (candidate) => candidate.playerId === player.playerId,
+  )
+  if (area === undefined) return state
+
+  const region = areaSlotRegion(area)
+  return (
+    placeUnchecked(state, {
+      playerId: player.playerId,
+      assetId,
+      x: region.x,
+      y: region.y,
+    }) ?? state
+  )
+}
+
+/**
  * Java: `drawStartingItems`. Units only, plus one ancient wonder for Egypt.
  * The counts come from the civilization cards in the rulebook.
  */
-const STARTING_UNITS: Readonly<Record<string, readonly SheetName[]>> = {
+export const STARTING_UNITS: Readonly<Record<string, readonly SheetName[]>> = {
   Germans: ['INFANTRY', 'INFANTRY', 'INFANTRY', 'ARTILLERY', 'MOUNTED'],
   Mongols: ['INFANTRY', 'ARTILLERY', 'MOUNTED', 'MOUNTED', 'MOUNTED'],
   Zulu: ['INFANTRY', 'ARTILLERY', 'ARTILLERY', 'ARTILLERY', 'ARTILLERY', 'MOUNTED'],
   Egyptians: ['INFANTRY', 'ARTILLERY', 'MOUNTED', 'ANCIENT_WONDERS'],
 }
 
-const DEFAULT_STARTING_UNITS: readonly SheetName[] = ['INFANTRY', 'ARTILLERY', 'MOUNTED']
+export const DEFAULT_STARTING_UNITS: readonly SheetName[] = ['INFANTRY', 'ARTILLERY', 'MOUNTED']
 
 /** Whether a sheet holds wonders, which go to the board rather than a hand. */
 const isWonderSheet = (sheetName: SheetName): boolean => ALL_WONDERS.has(sheetName)
@@ -942,6 +1022,7 @@ const STAT_KEYS = [
   'infantry',
   'artillery',
   'mounted',
+  'aircraft',
   'stacking',
   'mvmt',
   'combat',
@@ -966,6 +1047,7 @@ const STAT_LABEL: Readonly<Record<PlayerStatKey, string>> = {
   infantry: 'infantry',
   artillery: 'artillery',
   mounted: 'mounted',
+  aircraft: 'aircraft unlocked',
   stacking: 'stacking',
   mvmt: 'movement',
   combat: 'combat',
@@ -984,6 +1066,7 @@ function isPlayerStatKey(stat: string): stat is PlayerStatKey {
  * The value `setPlayerStat` accepts for a given stat. Everything is a number
  * except Movement (issue #102), whose expression (`3+1`) is a string — though a
  * bare number is still accepted and normalised, so older callers keep working.
+ * `aircraft` is the one yes/no value.
  * `K` is inferred from `stat`, so passing a Movement expression to `combat` is
  * a compile error as well as a runtime one.
  */
@@ -1029,7 +1112,22 @@ export function setPlayerStat<K extends PlayerStatKey>(
 
   // `input.value` is `PlayerStatValue<K>`, a type the compiler cannot narrow
   // through a generic key; the runtime checks below are what make the cast safe.
-  const value = input.value as number | string
+  const value = input.value as number | string | boolean
+
+  // Aircraft unlocked is the one yes/no value; it is checked before the numeric
+  // and text stats below, which never see a boolean.
+  if (input.stat === 'aircraft') {
+    if (typeof value !== 'boolean') {
+      return err({ kind: 'INVALID_STAT_VALUE', value })
+    }
+    return ok(logStatChange(withPlayer(state, {
+      ...target,
+      stats: { ...target.stats, aircraft: value },
+    }), editor, target, input, value ? 'yes' : 'no'))
+  }
+  if (typeof value === 'boolean') {
+    return err({ kind: 'INVALID_STAT_VALUE', value })
+  }
 
   // Movement (issue #102) is the one value written as an expression, `3+1`, to
   // record a natural-religion bonus. Every other stat stays a plain integer.
@@ -1062,21 +1160,28 @@ export function setPlayerStat<K extends PlayerStatKey>(
   })
 
   // Combat hand size is the one stat that can be cleared; say so rather than end on "to ".
-  const shown = storedValue === '' ? 'empty' : storedValue
+  return ok(logStatChange(next, editor, target, input, storedValue === '' ? 'empty' : storedValue))
+}
+
+/** The public log line for one status-board edit; `shown` is the new value as written. */
+function logStatChange(
+  state: GameState,
+  editor: Playerhand,
+  target: Playerhand,
+  input: { readonly stat: PlayerStatKey; readonly at?: string },
+  shown: number | string,
+): GameState {
   const message =
     editor.playerId === target.playerId
       ? `set their ${STAT_LABEL[input.stat]} to ${shown}`
       : `set ${target.username}'s ${STAT_LABEL[input.stat]} to ${shown}`
-
-  return ok(
-    appendLog(next, {
-      username: editor.username,
-      playerId: editor.playerId,
-      publicLog: `${editor.username} ${message}`,
-      privateLog: '',
-      createdAt: input.at ?? null,
-    }),
-  )
+  return appendLog(state, {
+    username: editor.username,
+    playerId: editor.playerId,
+    publicLog: `${editor.username} ${message}`,
+    privateLog: '',
+    createdAt: input.at ?? null,
+  })
 }
 
 export interface SetPlayerGovernmentInput {
