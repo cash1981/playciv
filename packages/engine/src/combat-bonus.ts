@@ -46,7 +46,8 @@ const CITY_STATE_4_BONUS = 2
  * and so does the Statue of Zeus. That is judged against the colour of the
  * player it is attributed to, so a player's own figure never switches off
  * their own piece. City-state 4 gives +2 once to the player whose army or scout
- * stood in its square first (the white army is the Russian player's); a figure
+ * stood in its square first (the white army and scout are the Russian and
+ * Spanish player's); a figure
  * of another colour that comes later, in a battle, does not get it, and it
  * passes on only when the holder's figures are gone. See `cityStateHolderColour`.
  */

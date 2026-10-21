@@ -7,13 +7,17 @@
  */
 
 import {
+  areaSlotRegion,
   civTileAssetId,
   cultureCellCenter,
   cultureStepOf,
   cultureTrackHeight,
   findBoardAsset,
   leaderAssetId,
+  playerAreas,
+  remainingBoardAssetCount,
   startingCorner,
+  whiteFigureFor,
 } from '../board.js'
 import {
   activeWonderOwnerIds,
@@ -420,6 +424,7 @@ function revealCivilization(
   next = discardTheOtherCivs(next, player.playerId, civ)
   next = placeStartingTile(next, player, civ)
   next = placeLeaderMarker(next, player, civ)
+  next = placeWhiteFigure(next, player, civ)
   const ownPieces = newPieces(afterReveal, next)
   const ownWonders = wondersTakenFromDeck(afterReveal, next)
 
@@ -529,6 +534,42 @@ function placeLeaderMarker(
         (cultureTrackHeight(state.board) - lanes * asset.height) / 2 +
           (sharing % lanes) * asset.height,
       ),
+    }) ?? state
+  )
+}
+
+/**
+ * Puts Russia's white army or Spain's white scout in the player's own area.
+ *
+ * It sits there like any other piece: the palette then shows none left, and
+ * removing it from the board puts it back in the supply to be placed again.
+ */
+function placeWhiteFigure(
+  state: GameState,
+  player: Playerhand,
+  civ: CivItem,
+): GameState {
+  const assetId = whiteFigureFor(civ.name)
+  if (assetId === undefined) return state
+
+  const asset = findBoardAsset(assetId)
+  if (asset === undefined) return state
+
+  // The supply is one: a second reveal, or a figure already placed by hand, must not add another
+  if (remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers) === 0) return state
+
+  const area = playerAreas(state.board, state.players).find(
+    (candidate) => candidate.playerId === player.playerId,
+  )
+  if (area === undefined) return state
+
+  const region = areaSlotRegion(area)
+  return (
+    placeUnchecked(state, {
+      playerId: player.playerId,
+      assetId,
+      x: region.x,
+      y: region.y,
     }) ?? state
   )
 }

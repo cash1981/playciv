@@ -80,6 +80,14 @@
       "height": 51
     },
     {
+      "id": "figures/whitescout",
+      "category": "figure",
+      "path": "figures/whitescout.png",
+      "label": "White scout",
+      "width": 51,
+      "height": 34
+    },
+    {
       "id": "figures/yellowarmy",
       "category": "figure",
       "path": "figures/yellowarmy.png",

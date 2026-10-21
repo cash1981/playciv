@@ -26,7 +26,6 @@ import {
   CULTURE_TRACK_CELLS,
   ROTATIONS,
   TILE_SQUARES,
-  WHITE_ARMY_ID,
   WONDERS_AREA_ID,
   areaBandTop,
   boardHeight,
@@ -45,6 +44,7 @@ import {
   slotOrigin,
   terrainAt,
   terrainWarning,
+  whiteFigureCivilization,
 } from '@civ/engine'
 import type { Board, BoardArea, BoardAsset, BoardPiece } from '@civ/engine'
 
@@ -61,8 +61,8 @@ interface Props {
   readonly readOnly?: boolean
   /** Whose Undo button this is — only enabled when they made the last change. */
   readonly youId?: string | null
-  /** Only the Russian player is offered the white army (issue #204). */
-  readonly viewerIsRussia?: boolean
+  /** The viewer's civ: Russia is offered the white army (issue #204), Spain the white scout. */
+  readonly viewerCivilization?: string | null
   /** Buildings and Great Persons an enemy figure stands on (issue #241); drawn greyed and struck through. */
   readonly blockadedPieceIds?: readonly string[]
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
@@ -163,8 +163,8 @@ export interface BoardPaletteProps {
   readonly replaying: boolean
   readonly pieces: readonly BoardPiece[]
   readonly numOfPlayers: number
-  /** Hides the white army from everyone else; the engine enforces it too. */
-  readonly viewerIsRussia?: boolean
+  /** Hides a white figure from everyone but its civ; the engine enforces it too. */
+  readonly viewerCivilization?: string | null
   readonly onSelectAsset?: (asset: BoardAsset) => void
 }
 
@@ -176,12 +176,14 @@ export function BoardPalette({
   replaying,
   pieces,
   numOfPlayers,
-  viewerIsRussia = false,
+  viewerCivilization = null,
   onSelectAsset,
 }: BoardPaletteProps): React.JSX.Element {
-  const available = assets.filter(
-    (asset) => asset.category === category && (asset.id !== WHITE_ARMY_ID || viewerIsRussia),
-  )
+  const available = assets.filter((asset) => {
+    if (asset.category !== category) return false
+    const owner = whiteFigureCivilization(asset.id)
+    return owner === undefined || owner === viewerCivilization
+  })
   const inCategory =
     category === 'wonder'
       ? [...available].sort((a, b) => compareWonderNames(a.label, b.label))
@@ -274,7 +276,7 @@ export function BoardView({
   busy,
   readOnly = false,
   youId = null,
-  viewerIsRussia = false,
+  viewerCivilization = null,
   blockadedPieceIds = [],
   run,
 }: Props): React.JSX.Element {
@@ -957,7 +959,7 @@ export function BoardView({
             replaying={readOnly}
             pieces={pieces}
             numOfPlayers={numOfPlayers}
-            viewerIsRussia={viewerIsRussia}
+            viewerCivilization={viewerCivilization}
             onSelectAsset={(asset) => {
               setPendingAssetId(asset.id)
               setMoveModeId(null)

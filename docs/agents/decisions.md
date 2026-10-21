@@ -77,6 +77,20 @@ see [legacy layout limitations](limitations.md#game-behavior). The culture track
 markers. Board undo targets the caller's latest consecutive actions; a new
 board action clears redo. Undoing board edits does not undo game actions.
 
+Each colour has six armies and two scouts. Russia gets one extra white army and
+Spain one extra white scout (`whiteFigureFor` in `board.ts`), a supply of one
+each. Revealing the civ puts that figure in the player's own area, so the
+palette shows 0 left; removing it from the board makes it 1 again, and only a
+player of that civ is offered it and may place it (`BOARD_ASSET_CIV_ONLY`).
+Undoing the reveal takes it back. In the blockade and City-state 4 rules a white
+figure counts as its civ's colour. Players who revealed Russia before this
+change get no automatic army and place it from the palette. The white scout art
+is made from the red scout by `tools/board-assets.ps1`, which also adds its
+manifest entry. The Spanish card says
+only "start with 2 scouts"; one extra scout follows the owner's request and the
+issue #204 precedent for Russia, not a rulebook reading. Tests: `white-figures.test.ts`,
+`undo-civ-reveal.test.ts`.
+
 Terrain checks are advisory client warnings, not server placement restrictions.
 Player status has an Aircraft checkbox under Units (`stats.aircraft`, default
 false) meaning the player has unlocked Aircraft units. Revealing the Flight tech
@@ -112,8 +126,8 @@ The palette uses a single `coin1` marker named Coin.
 
 City-state 4 (`city-states/cs4`, "1 Culture & +2 Combat bonus") adds +2 to the
 derived combat bonus of the player whose army or scout stood in its square
-first, once however many figures stand there; the white army counts for the
-Russian player. Holding the card is not required. A figure of another colour
+first, once however many figures stand there; the white army and white scout count
+for the Russian and Spanish player. Holding the card is not required. A figure of another colour
 that arrives later (a battle) does not get it. It passes on only when the
 holder has no figure left there (killed or moved away), to the colour that has
 stood there longest; it is not regained by coming back. "First" is found by

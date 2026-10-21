@@ -292,8 +292,8 @@ function undoCivReveal(
       civ,
       'REVEAL',
       (name) =>
-        `has undone ${current.username}'s reveal of ${name}. Its starting units, wonders, tile and ` +
-        `marker are put back${dealt === undefined ? '' : ', and so are the start-of-game wonders'}. ` +
+        `has undone ${current.username}'s reveal of ${name}. Its starting units, wonders, tile, ` +
+        `marker and white figure are put back${dealt === undefined ? '' : ', and so are the start-of-game wonders'}. ` +
         'Deck is reshuffled',
     ),
   )

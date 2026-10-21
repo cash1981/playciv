@@ -365,8 +365,11 @@ describe('city-state 4', () => {
     expect(bonus(nudged)).toBe(2)
   })
 
-  it('counts the white army for the Russian player only', () => {
-    const state = put(put(withCiv(colouredGame(), CASH1981, 'Russians'), CASH1981, CS4, 5, 5), CASH1981, 'figures/whitearmy', 5, 5)
+  it.each([
+    ['army', 'Russians'],
+    ['scout', 'Spanish'],
+  ])('counts the white %s for the %s player only', (figure, civ) => {
+    const state = put(put(withCiv(colouredGame(), CASH1981, civ), CASH1981, CS4, 5, 5), CASH1981, `figures/white${figure}`, 5, 5)
     expect(bonus(state, CASH1981)).toBe(2)
     expect(bonus(state, KARANDRAS1)).toBe(0)
   })
