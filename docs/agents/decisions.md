@@ -64,11 +64,12 @@ Out-of-turn draws require explicit confirmation. Posting the explanatory
 order timeline row follows the authoritative game-state commit and can fail
 independently; do not roll back or blindly repeat the committed action.
 
-Layout: only the timeline is height-capped (to what the screen leaves for a
-typical composer); the thread and composer are not. A composer taller than the
-screen (Order mode, the trade offer form) lengthens the page. A cap on the thread
-let it spill out under the next panel and hide End turn and Send. The stylesheet
-test in `ChatOrdersPanel.test.tsx` guards this.
+Layout: only the timeline is height-capped (the screen minus about 40rem for the
+composer, between 8rem and 32rem); the thread and composer are not. A composer
+taller than the screen (Order mode, the trade offer form) lengthens the page. A
+cap on the thread let it overflow under the next panel and hide End turn and
+Send. The stylesheet test in `ChatOrdersPanel.test.tsx` guards this; retune the
+40rem if the composer changes size.
 
 Source: `packages/engine/src/turn.ts`, `packages/server/src/routes/play.ts`,
 `packages/web/src/views/ChatOrdersPanel.tsx`, `ChatOrdersPanel.css`.

@@ -876,19 +876,22 @@ describe('the selected chip', () => {
 })
 
 describe('the thread layout', () => {
-  const rule = (css: string, selector: string): string => {
-    const match = css.match(new RegExp(`^${selector.replace('.', '\\.')} \\{([^}]*)\\}`, 'm'))
-    expect(match, `no rule for ${selector}`).not.toBeNull()
-    return match?.[1] ?? ''
-  }
+  // The declaration blocks of every rule whose selector mentions `name`, wherever
+  // they sit (inside a media query, in a selector list, in a later block).
+  const bodies = (css: string, name: string): readonly string[] =>
+    [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]*)\{([^{}]*)\}/g)]
+      .filter((match) => (match[1] ?? '').includes(name))
+      .map((match) => match[2] ?? '')
 
   // jsdom has no layout, so the stylesheet is the contract. A height cap on the
-  // thread clipped a composer taller than the screen (Order mode, the trade offer
-  // form) and let it spill out under the next panel, hiding End turn and Send.
+  // thread let a composer taller than the screen (Order mode, the trade offer form)
+  // overflow it and slide under the next panel, hiding End turn and Send.
   it('caps the timeline only, so a tall composer lengthens the page instead of overflowing', () => {
     const css = readFileSync('src/views/ChatOrdersPanel.css', 'utf8').replaceAll('\r\n', '\n')
-    expect(rule(css, '.chat-orders-thread')).not.toMatch(/(^|\s)(max-)?height:/)
-    expect(rule(css, '.chat-orders-scroll')).toMatch(/max-height:/)
+    const thread = [...bodies(css, 'chat-orders-thread'), ...bodies(css, 'chat-orders-timeline-panel')]
+    expect(thread.length).toBeGreaterThan(0)
+    for (const body of thread) expect(body).not.toMatch(/(^|[\s;])(max-)?(height|block-size):/)
+    expect(bodies(css, 'chat-orders-scroll').join('\n')).toMatch(/max-height:/)
   })
 })
 

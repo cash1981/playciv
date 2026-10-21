@@ -435,9 +435,9 @@ export function ChatOrdersPanel({
     }
   }, [visible])
 
-  // The composer changes height when the editor finishes loading or the mode
-  // switches, and the timeline is what gives way. Keep the newest message in
-  // view when it was in view.
+  // The timeline changes height with the screen (dvh) and as messages arrive
+  // while it is below its cap. Keep the newest message in view when it was in
+  // view.
   useEffect(() => {
     const element = scrollRef.current
     if (element === null || typeof ResizeObserver === 'undefined') return

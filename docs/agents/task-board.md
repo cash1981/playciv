@@ -40,7 +40,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/engine/test/assisted*.test.ts`
   - `packages/server/src/routes/play.ts`, `packages/server/test/assisted*.test.ts`
   - `packages/web/src/views/AssistedActions.tsx`, `TechPanel.tsx`, `GameView.tsx`, `PhaseSummary.tsx`, `BoardView.tsx`, `styles.css`, `FaqView.tsx` and tests
-  - `packages/web/src/views/ChatOrdersPanel.css` and its stylesheet test in `ChatOrdersPanel.test.tsx` (composer overflow fix; the trade offers from #274 are already merged here)
+  - `packages/web/src/views/ChatOrdersPanel.css`, its stylesheet test in `ChatOrdersPanel.test.tsx`, and one comment in `ChatOrdersPanel.tsx` (composer overflow fix; the trade offers from #274 are already merged here)
   - `docs/agents/decisions.md`, `state.md`, `README.md`
 - **Notes:** parts 1 to 8 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout, city production, Build for buildings, figures and units, Start Building Program and Upgrade buildings). The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
 
