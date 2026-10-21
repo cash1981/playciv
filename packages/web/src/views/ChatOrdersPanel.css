@@ -50,20 +50,21 @@
   font-weight: 600;
 }
 
-/* The timeline and the composer share one box that never outgrows the screen,
-   so the composer is always reachable and never lies over the newest message.
-   The timeline takes what the composer leaves; it scrolls inside. (A sticky
-   composer did the first but covered the last messages on a phone.) */
+/* The timeline and the composer sit in one column. Only the timeline is capped,
+   to what the screen leaves for a typical composer, and it scrolls inside. The
+   thread itself has no height cap: the composer is taller in Order mode and with
+   the trade offer form, and a cap on the thread let it spill out under the next
+   panel, hiding End turn and Send. Now a taller composer only lengthens the page.
+   (A sticky composer kept it in reach but covered the last messages on a phone.) */
 .chat-orders-thread {
   display: flex;
   flex-direction: column;
-  max-height: calc(100dvh - 4rem);
 }
 
 .chat-orders-scroll {
   flex: 1 1 auto;
   min-height: 8rem;
-  max-height: 32rem;
+  max-height: clamp(8rem, calc(100dvh - 24rem), 32rem);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -145,6 +146,7 @@
 }
 
 .chat-orders-offer-composer {
+  margin-bottom: 0.6rem;
   padding: 0.6rem;
   border: 1px dashed var(--line);
 }

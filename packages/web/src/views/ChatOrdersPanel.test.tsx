@@ -875,6 +875,23 @@ describe('the selected chip', () => {
   })
 })
 
+describe('the thread layout', () => {
+  const rule = (css: string, selector: string): string => {
+    const match = css.match(new RegExp(`^${selector.replace('.', '\\.')} \\{([^}]*)\\}`, 'm'))
+    expect(match, `no rule for ${selector}`).not.toBeNull()
+    return match?.[1] ?? ''
+  }
+
+  // jsdom has no layout, so the stylesheet is the contract. A height cap on the
+  // thread clipped a composer taller than the screen (Order mode, the trade offer
+  // form) and let it spill out under the next panel, hiding End turn and Send.
+  it('caps the timeline only, so a tall composer lengthens the page instead of overflowing', () => {
+    const css = readFileSync('src/views/ChatOrdersPanel.css', 'utf8').replaceAll('\r\n', '\n')
+    expect(rule(css, '.chat-orders-thread')).not.toMatch(/(^|\s)(max-)?height:/)
+    expect(rule(css, '.chat-orders-scroll')).toMatch(/max-height:/)
+  })
+})
+
 describe('the Markdown renderer', () => {
   it('is loaded on demand, not imported by the panel, so the page does not carry it up front', () => {
     const source = readFileSync('src/views/ChatOrdersPanel.tsx', 'utf8')
