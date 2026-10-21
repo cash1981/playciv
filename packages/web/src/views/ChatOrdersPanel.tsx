@@ -492,9 +492,8 @@ export function ChatOrdersPanel({
     return fresh
   }
 
-  // The offer controls are only drawn for a viewer who may write, but a counter form
-  // that was already open stays on screen when replay or a lock starts, so the
-  // handlers check too.
+  // The offer controls are only drawn for a viewer who may write; the handlers check
+  // too, as a fallback.
   const sendOffer = (): void => {
     const terms = offerTerms.trim()
     if (!canWrite || busy || terms === '' || offerRecipientId === '') return
@@ -525,8 +524,9 @@ export function ChatOrdersPanel({
     void run(async () => {
       await api.counterTradeOffer(gameId, offerId, terms, requestIdFor(key), view.rev)
       requestIds.current.delete(key)
+      // The form closes with its offer answered, so its words go too
       setCounterOfferId(null)
-      setCounterTerms((current) => (current.trim() === terms ? '' : current))
+      setCounterTerms('')
       await load()
     })
   }

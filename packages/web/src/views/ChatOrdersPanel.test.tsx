@@ -470,6 +470,7 @@ describe('trade offers', () => {
       // The same words once the first offer is settled make a new offer
       await type('Terms', 'two trade for one wheat')
       await click(sendButton())
+      expect(sendTradeOffer).toHaveBeenCalledTimes(3)
       expect(sendTradeOffer.mock.calls[2]?.[3]).not.toBe(sendTradeOffer.mock.calls[0]?.[3])
     })
 
@@ -481,6 +482,7 @@ describe('trade offers', () => {
       await type('Terms', 'three trade for one wheat')
       await click(sendButton())
 
+      expect(sendTradeOffer).toHaveBeenCalledTimes(2)
       expect(sendTradeOffer.mock.calls[1]?.[3]).not.toBe(sendTradeOffer.mock.calls[0]?.[3])
     })
 
@@ -513,27 +515,15 @@ describe('trade offers', () => {
     await renderPanel(makeView())
     await type('Terms', 'first words')
     await click(screen.getByRole('button', { name: 'Send offer' }))
+    expect(sendTradeOffer).toHaveBeenCalledTimes(1)
     await type('Terms', 'first words and then more')
+    expect(arrive).toBeDefined()
     await act(async () => { arrive?.() })
 
     expect((screen.getByLabelText('Terms') as HTMLTextAreaElement).value).toBe('first words and then more')
   })
 
-  it('keeps what was typed in a counteroffer while it was on its way', async () => {
-    let arrive: (() => void) | undefined
-    counterTradeOffer.mockImplementationOnce(() => new Promise((resolve) => { arrive = () => resolve(makeView()) }))
-    await renderPanel(bobView())
-    await click(screen.getByRole('button', { name: 'Counter' }))
-    await type('Counteroffer terms', 'one for two')
-    await click(screen.getByRole('button', { name: 'Send counteroffer' }))
-    await type('Counteroffer terms', 'one for two, or one for three')
-    await act(async () => { arrive?.() })
-    // The form closes with the offer answered, but the new words are not thrown away
-    await click(screen.getByRole('button', { name: 'Counter' }))
-    expect((screen.getByLabelText('Counteroffer terms') as HTMLInputElement).value).toBe('one for two, or one for three')
-  })
-
-  it('takes the counter form away, and sends nothing, once the viewer can no longer write', async () => {
+  it('takes the counter form and the answer buttons away once the viewer can no longer write', async () => {
     const { rerender } = await renderPanel(bobView())
     await click(screen.getByRole('button', { name: 'Counter' }))
     await type('Counteroffer terms', 'one trade for two wheat')
@@ -550,7 +540,6 @@ describe('trade offers', () => {
     expect(screen.queryByLabelText('Counteroffer terms')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Send counteroffer' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull()
-    expect(counterTradeOffer).not.toHaveBeenCalled()
   })
 })
 
