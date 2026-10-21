@@ -31,7 +31,8 @@ old test counts and past deployment reports do not establish present health.
 
 - Assisted play (#260) is on PR #271: card buttons, culture advance, Great Person
   markers, phase summary, confirm before reuse. See the "Assisted play" section
-  of decisions and `tasks/assisted-*.md`. Offers (#265) are not built.
+  of decisions and `tasks/assisted-*.md`. Free-text trade offers (#265, #274) are
+  built too; see "Trade offers (#265)" in decisions.
 
 - City production (#250 slice A, first part of #264) is on PR #271: a per-city
   estimate with a hand-set override and a Cities panel.

@@ -227,7 +227,7 @@ buttons and the culture marker. Assisted actions are added beside them.
 Source: `engine/src/assisted.ts`, `culture-track.ts`, `server/src/routes/play.ts`,
 `web/src/views/AssistedActions.tsx`, `PhaseSummary.tsx`, and the `assisted*`
 tests. Not built: Great Person abilities that need a map marker, killing
-markers, map tile 16a, free advances, hand limit, figures and military units (#264), offers (#265).
+markers, map tile 16a, free advances, hand limit.
 
 ## Trade offers (#265)
 
