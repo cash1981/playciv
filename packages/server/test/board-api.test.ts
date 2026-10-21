@@ -129,12 +129,15 @@ describe('player areas', () => {
     expect((await third.json() as { error: string }).error).toBe('BOARD_ASSET_LIMIT_REACHED')
   })
 
-  it('answers 403 when a player who is not Russia places the white army (issue #204)', async () => {
-    const { gameId, starter } = await startedGame('White')
-    const refused = await place(gameId, starter, 'figures/whitearmy', 0, 0)
-    expect(refused.status).toBe(403)
-    expect((await refused.json() as { error: string }).error).toBe('BOARD_ASSET_RUSSIA_ONLY')
-  })
+  it.each(['figures/whitearmy', 'figures/whitescout'])(
+    'answers 403 when a player of the wrong civ places %s (issue #204)',
+    async (assetId) => {
+      const { gameId, starter } = await startedGame('White')
+      const refused = await place(gameId, starter, assetId, 0, 0)
+      expect(refused.status).toBe(403)
+      expect((await refused.json() as { error: string }).error).toBe('BOARD_ASSET_CIV_ONLY')
+    },
+  )
 })
 
 describe('history over HTTP', () => {

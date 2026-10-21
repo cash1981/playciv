@@ -231,15 +231,39 @@ export function boardAssetLimit(asset: BoardAsset, numOfPlayers: number): number
  */
 export const START_PLAYER_ID = 'markers/startplayer'
 
-/** The asset that only the Russian player may place. */
+/** Russia's extra army (issue #204). */
 export const WHITE_ARMY_ID = 'figures/whitearmy'
+/** Spain's extra scout. */
+export const WHITE_SCOUT_ID = 'figures/whitescout'
 
 /**
- * Each colour has 6 armies and 2 scouts; Russia also gets one white army.
- * The asset id includes the colour, so counting per id is counting per colour.
+ * The white figures and the one civilization that may place each. Their
+ * `civilization.name` is the plural card form, like the other civs.
+ */
+const WHITE_FIGURE_CIVILIZATION: Readonly<Record<string, string>> = {
+  [WHITE_ARMY_ID]: 'Russians',
+  [WHITE_SCOUT_ID]: 'Spanish',
+}
+
+/** The civilization that owns a white figure, or `undefined` for any other asset. */
+export function whiteFigureCivilization(assetId: string): string | undefined {
+  return WHITE_FIGURE_CIVILIZATION[assetId]
+}
+
+/** The white figure a civilization gets on top of its colour's supply, if any. */
+export function whiteFigureFor(civilizationName: string): string | undefined {
+  return Object.keys(WHITE_FIGURE_CIVILIZATION).find(
+    (assetId) => WHITE_FIGURE_CIVILIZATION[assetId] === civilizationName,
+  )
+}
+
+/**
+ * Each colour has 6 armies and 2 scouts; Russia also gets one white army and
+ * Spain one white scout. The asset id includes the colour, so counting per id
+ * is counting per colour.
  */
 function figureLimit(asset: BoardAsset): number | undefined {
-  if (asset.id === WHITE_ARMY_ID) return 1
+  if (whiteFigureCivilization(asset.id) !== undefined) return 1
   if (asset.id.endsWith('army')) return 6
   if (asset.id.endsWith('scout')) return 2
   return undefined

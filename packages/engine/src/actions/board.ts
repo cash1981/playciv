@@ -33,7 +33,7 @@ import {
   revertChange,
   playerAreas,
   START_PLAYER_ID,
-  WHITE_ARMY_ID,
+  whiteFigureCivilization,
 } from '../board.js'
 import type { EngineError } from '../errors.js'
 import { appendLog } from '../log.js'
@@ -149,12 +149,17 @@ export function placePiece(state: GameState, input: PlacePieceInput): ActionResu
   if (asset === undefined) {
     return err({ kind: 'BOARD_ASSET_NOT_FOUND', assetId: input.assetId })
   }
-  // Checked before the limit so a non-Russian is told why, not "none left"
+  // Checked before the limit so the wrong civ is told why, not "none left"
+  const owningCivilization = whiteFigureCivilization(asset.id)
   if (
-    asset.id === WHITE_ARMY_ID &&
-    findPlayer(state, input.playerId)?.civilization?.name !== 'Russians'
+    owningCivilization !== undefined &&
+    findPlayer(state, input.playerId)?.civilization?.name !== owningCivilization
   ) {
-    return err({ kind: 'BOARD_ASSET_RUSSIA_ONLY', assetId: input.assetId })
+    return err({
+      kind: 'BOARD_ASSET_CIV_ONLY',
+      assetId: input.assetId,
+      civilization: owningCivilization,
+    })
   }
   const remaining = remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)
   if (remaining !== undefined && remaining === 0) {

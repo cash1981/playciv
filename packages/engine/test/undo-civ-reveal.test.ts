@@ -125,6 +125,21 @@ describe('undo of a civilization reveal', () => {
     )
   })
 
+  it.each([
+    ['Spanish', 'figures/whitescout'],
+    ['Russians', 'figures/whitearmy'],
+  ])('takes the white figure of the %s back with the rest of the setup', (civ, white) => {
+    const revealed = revealHidden(giveCiv(firstCivGame(), CASH1981, civ), CASH1981)
+    expect(revealed.board.pieces.some((piece) => piece.assetId === white)).toBe(true)
+
+    const undone = undoByVote(revealed, CASH1981)
+    expect(undone.board.pieces).toEqual([])
+
+    // A new reveal hands out one white figure again, not a second one
+    const again = revealHidden(undone, CASH1981)
+    expect(again.board.pieces.filter((piece) => piece.assetId === white)).toHaveLength(1)
+  })
+
   it('keeps what the player drew on their own', () => {
     let state = firstCivGame()
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CULTURE_1' }))

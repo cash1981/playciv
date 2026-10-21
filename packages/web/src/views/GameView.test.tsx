@@ -23,8 +23,8 @@ import {
 } from './GameView.js'
 
 vi.mock('./BoardView.js', () => ({
-  BoardView: ({ viewerIsRussia }: { viewerIsRussia?: boolean }) => (
-    <div data-testid="board" data-viewer-is-russia={String(viewerIsRussia)} />
+  BoardView: ({ viewerCivilization }: { viewerCivilization?: string | null }) => (
+    <div data-testid="board" data-viewer-civilization={String(viewerCivilization)} />
   ),
 }))
 // Only the panel is replaced; the helpers GameView uses stay real
@@ -354,20 +354,20 @@ describe('game header chips (issue #206)', () => {
   })
 })
 
-describe('the white army is offered to Russia only (issue #204)', () => {
-  const flag = async (civilization: { name: string } | null): Promise<string | null> => {
+describe('the white figures are offered to their civ only (issue #204)', () => {
+  const civOf = async (civilization: { name: string } | null): Promise<string | null> => {
     await renderHeader(headerView(seat('viewer', { civilization }), [seat('s3s3')], null))
-    return screen.getByTestId('board').getAttribute('data-viewer-is-russia')
+    return screen.getByTestId('board').getAttribute('data-viewer-civilization')
   }
 
-  it('tells the board the viewer is Russia only when their civ is the Russians', async () => {
-    expect(await flag({ name: 'Russians' })).toBe('true')
+  it('tells the board which civ the viewer plays', async () => {
+    expect(await civOf({ name: 'Russians' })).toBe('Russians')
+    cleanup()
+    expect(await civOf({ name: 'Spanish' })).toBe('Spanish')
   })
 
-  it('does not for another civ, or before the civ is revealed', async () => {
-    expect(await flag({ name: 'Romans' })).toBe('false')
-    cleanup()
-    expect(await flag(null)).toBe('false')
+  it('tells it nothing before the civ is revealed', async () => {
+    expect(await civOf(null)).toBe('null')
   })
 })
 

@@ -17,7 +17,7 @@
  */
 
 import type { Board, BoardPiece } from './board.js'
-import { WHITE_ARMY_ID, applyChange, mapTop, squareOf } from './board.js'
+import { applyChange, mapTop, squareOf, whiteFigureCivilization } from './board.js'
 import type { GameState, Playerhand } from './state.js'
 
 /** The five player colours a city or figure piece can come in, matching `PLAYER_COLORS`. */
@@ -26,7 +26,7 @@ const PIECE_COLORS = ['blue', 'green', 'purple', 'red', 'yellow'] as const
 /**
  * A city or figure piece's colour, lower case, read off its asset id: for
  * example "cities/redcity2" or "figures/redarmy" belong to Red. `undefined`
- * for the white army and for pieces that have no colour in the artwork
+ * for the white figures and for pieces that have no colour in the artwork
  * (buildings, great persons, city-states).
  */
 export function pieceColorOf(piece: BoardPiece): string | undefined {
@@ -51,8 +51,15 @@ const COIN_TOKEN_IDS: ReadonlySet<string> = new Set([
   'great people/humanitarian',
 ])
 
-/** Russia's civilization card is named in the plural, like the other civs. */
-const RUSSIA_CIV = 'Russians'
+/** The colour of the player with this civilization, lower case; `undefined` when there is none or it has no colour yet. */
+function civilizationColor(
+  state: Pick<GameState, 'players'>,
+  civilization: string,
+): string | undefined {
+  return state.players
+    .find((player) => player.civilization?.name === civilization)
+    ?.color?.toLowerCase()
+}
 
 interface Cell {
   readonly column: number
@@ -108,6 +115,9 @@ function cityFootprint(board: Board, piece: BoardPiece, color: string): CityFoot
   return { color, centers, cells: [...cells.values()] }
 }
 
+/** Marks a white figure in the per-square colour sets, followed by its civ. */
+const WHITE_PREFIX = 'white:'
+
 /**
  * Everything the questions below need, worked out once from the board: the
  * colours of the cities on the map and of the figures in each square.
@@ -115,8 +125,6 @@ function cityFootprint(board: Board, piece: BoardPiece, color: string): CityFoot
 class BlockadeIndex {
   private readonly cities: readonly CityFootprint[]
   private readonly figureColors = new Map<string, Set<string | undefined>>()
-  private readonly russiaColor: string | undefined
-  private readonly hasRussia: boolean
 
   constructor(private readonly state: Pick<GameState, 'board' | 'players'>) {
     const cities: CityFootprint[] = []
@@ -133,13 +141,12 @@ class BlockadeIndex {
         continue
       }
       const seen = this.figureColors.get(keyOf(cell)) ?? new Set<string | undefined>()
-      seen.add(piece.assetId === WHITE_ARMY_ID ? 'white' : color)
+      // A white figure is kept under its owning civ, resolved to a colour on use
+      const whiteOwner = whiteFigureCivilization(piece.assetId)
+      seen.add(whiteOwner === undefined ? color : `${WHITE_PREFIX}${whiteOwner}`)
       this.figureColors.set(keyOf(cell), seen)
     }
     this.cities = cities
-    const russia = state.players.find((player) => player.civilization?.name === RUSSIA_CIV)
-    this.hasRussia = russia !== undefined
-    this.russiaColor = russia?.color?.toLowerCase()
   }
 
   /** The colours of cities whose center or outskirts include this square. */
@@ -201,13 +208,16 @@ class BlockadeIndex {
     if (cell === null) return false
 
     for (const figure of this.figureColors.get(keyOf(cell)) ?? []) {
-      if (figure === 'white') {
-        // The white army is the Russian player's extra army. Without a Russia
-        // player it is nobody's, so an enemy to all. A Russia player who has no
-        // colour yet makes it unattributable: it is an enemy of no one.
-        if (!this.hasRussia) return true
-        if (this.russiaColor === undefined) continue
-        if (this.russiaColor !== color) return true
+      if (figure?.startsWith(WHITE_PREFIX)) {
+        // A white figure is its civ's extra army or scout (Russia, Spain).
+        // Without such a player it is nobody's, so an enemy to all. A player
+        // who has no colour yet makes it unattributable: an enemy of no one.
+        const civilization = figure.slice(WHITE_PREFIX.length)
+        if (!this.state.players.some((player) => player.civilization?.name === civilization)) {
+          return true
+        }
+        const owner = civilizationColor(this.state, civilization)
+        if (owner !== undefined && owner !== color) return true
         continue
       }
       if (figure !== color) return true
@@ -249,7 +259,7 @@ export function pieceCityOwnerColor(
 /**
  * Whether a piece is on a map square (never a player area or the culture
  * track) that holds an army or scout of another colour than its owner's.
- * `figures/whitearmy` counts as the Russian player's colour.
+ * The white army and scout count as the Russian and Spanish player's colour.
  */
 export function isBlockaded(state: Pick<GameState, 'board' | 'players'>, piece: BoardPiece): boolean {
   return new BlockadeIndex(state).isBlockaded(piece)
@@ -282,7 +292,7 @@ export function blockadeCheckFor(
  * scout that stood in its map square first, for as long as that colour still has
  * a figure there. If its figures are killed or leave, the colour that has stood
  * there longest without a break takes over, and an empty square has no holder.
- * The white army is the Russian player's colour.
+ * The white army and scout are the Russian and Spanish player's colour.
  *
  * Whoever came first cannot be read off the board, and the stacking order does
  * not tell it (moving or bringing a piece to the front reorders it), so the
@@ -295,11 +305,10 @@ export function cityStateHolderColour(
   state: Pick<GameState, 'board' | 'players'>,
   target: BoardPiece,
 ): string | undefined {
-  const russiaColor = state.players
-    .find((player) => player.civilization?.name === RUSSIA_CIV)
-    ?.color?.toLowerCase()
-  const colourOf = (piece: BoardPiece): string | undefined =>
-    piece.assetId === WHITE_ARMY_ID ? russiaColor : pieceColorOf(piece)
+  const colourOf = (piece: BoardPiece): string | undefined => {
+    const whiteOwner = whiteFigureCivilization(piece.assetId)
+    return whiteOwner === undefined ? pieceColorOf(piece) : civilizationColor(state, whiteOwner)
+  }
 
   /** The colours with an army or scout in the target's square, in stacking order. */
   const coloursOn = (pieces: readonly BoardPiece[]): string[] => {
