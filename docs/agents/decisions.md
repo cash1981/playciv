@@ -85,8 +85,8 @@ player of that civ is offered it and may place it (`BOARD_ASSET_CIV_ONLY`).
 Undoing the reveal takes it back. In the blockade and City-state 4 rules a white
 figure counts as its civ's colour. Players who revealed Russia before this
 change get no automatic army and place it from the palette. The white scout art
-is the red scout recoloured by hand, so regenerating the manifest from the
-Moderator art drops it (see `tools/board-assets.ps1`). The Spanish card says
+is made from the red scout by `tools/board-assets.ps1`, which also adds its
+manifest entry. The Spanish card says
 only "start with 2 scouts"; one extra scout follows the owner's request and the
 issue #204 precedent for Russia, not a rulebook reading. Tests: `white-figures.test.ts`,
 `undo-civ-reveal.test.ts`.
