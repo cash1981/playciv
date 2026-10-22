@@ -17,7 +17,7 @@ describe('focusPlayer', () => {
       { username: 'admin', phase: 'MOVEMENT' },
       { username: 'cash', phase: 'CM' },
     ])
-    expect(focusPlayer(active, 'cash')).toEqual({ username: 'cash', phase: 'CM' })
+    expect(focusPlayer(active)).toEqual({ username: 'cash', phase: 'CM' })
   })
 
   it('is the player furthest behind when the viewer is ahead', () => {
@@ -25,39 +25,29 @@ describe('focusPlayer', () => {
       { username: 'admin', phase: 'CM' },
       { username: 'cash', phase: 'MOVEMENT' },
     ])
-    expect(focusPlayer(active, 'cash')).toEqual({ username: 'admin', phase: 'CM' })
+    expect(focusPlayer(active)).toEqual({ username: 'admin', phase: 'CM' })
   })
 
-  it('prefers the viewer in a tie', () => {
+  it('prefers the turn holder in a tie, whoever is looking', () => {
     const active = turn('admin', [
-      { username: 'admin', phase: 'TRADE' },
       { username: 'cash', phase: 'TRADE' },
+      { username: 'admin', phase: 'TRADE' },
     ])
-    expect(focusPlayer(active, 'cash')?.username).toBe('cash')
+    expect(focusPlayer(active)?.username).toBe('admin')
   })
 
-  it('prefers the turn holder in a tie that does not include the viewer', () => {
-    const active = turn('carol', [
-      { username: 'bob', phase: 'TRADE' },
-      { username: 'carol', phase: 'TRADE' },
-      { username: 'viewer', phase: 'MOVEMENT' },
-    ])
-    expect(focusPlayer(active, 'viewer')?.username).toBe('carol')
-  })
-
-  it('picks the first in the list in a tie without the viewer or the holder', () => {
+  it('picks the first in the list in a tie without the turn holder', () => {
     const active = turn('holder', [
       { username: 'bob', phase: 'TRADE' },
       { username: 'carol', phase: 'TRADE' },
       { username: 'holder', phase: 'RESEARCH' },
     ])
-    expect(focusPlayer(active, 'viewer')?.username).toBe('bob')
     expect(focusPlayer(active)?.username).toBe('bob')
   })
 
   it('is nobody when everyone is done or there is no active turn', () => {
-    expect(focusPlayer(turn('admin', []), 'cash')).toBeNull()
-    expect(focusPlayer(null, 'cash')).toBeNull()
+    expect(focusPlayer(turn('admin', []))).toBeNull()
+    expect(focusPlayer(null)).toBeNull()
   })
 })
 

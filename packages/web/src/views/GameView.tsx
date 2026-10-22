@@ -29,12 +29,12 @@ import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
 import { PageShortcuts, PhaseSummary } from './PhaseSummary.js'
-import { focusPlayer } from './turnFocus.js'
 import { RevealedPanel } from './RevealedPanel.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
 import { WondersPanel } from './WondersPanel.js'
 import { TechPanel } from './TechPanel.js'
+import { focusPlayer } from './turnFocus.js'
 import { AutoRefreshSwitch } from './AutoRefresh.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { DigitInput } from './DigitInput.js'
@@ -50,7 +50,7 @@ type Seat = NonNullable<PlayerView['you']> | PlayerView['opponents'][number]
  */
 export function activePlayerOf(view: PlayerView): Seat | undefined {
   const seats: readonly Seat[] = view.you === null ? view.opponents : [view.you, ...view.opponents]
-  const focus = focusPlayer(view.activeTurn, view.you?.username)
+  const focus = focusPlayer(view.activeTurn)
   if (focus === null) return undefined
   return seats.find((seat) => seat.username === focus.username)
 }
@@ -533,8 +533,9 @@ export function GameView({
     <>
       <div className="panel">
         <div className="row" style={{ alignItems: 'baseline' }}>
-          {/* Civ, then colour, then the name in the title: whose turn it is,
-              not who is looking. They wrap above the title on a phone. */}
+          {/* Civ, then colour, then the name in the title: who is up (the
+              player furthest behind, the turn holder in a tie), not who is
+              looking. They wrap above the title on a phone. */}
           {!ended && activePlayer !== undefined && <PlayerChips player={activePlayer} />}
           <h1 style={{ margin: 0 }}>
             {ended

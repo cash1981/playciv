@@ -893,7 +893,7 @@ message is chat or an order tagged with a turn and a phase, orders are public th
 moment they are sent, and a player ends a turn from the Order tab, which marks the
 chosen phase done (and can take it back). There is no baton to pass: anyone can
 write at any time, and Draw only asks for a confirmation when it is not your turn.
-The title says whose turn it is and which phase they are on, and a strip under it
+The title names the player furthest behind (the turn holder among a tie) and the phase they are on, and a strip under it
 shows what each player is missing; a finished game is titled with its winner
 instead, and its replay bar shows only who won. The start player is derived from
 the Start player marker on the board (the player whose area holds it), and the

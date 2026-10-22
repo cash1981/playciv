@@ -20,6 +20,7 @@ afterEach(() => {
 })
 
 const memberView = {
+  activeTurn: null,
   board: { pieces: [] },
   you: {
     playerId: 'player-me',
@@ -866,7 +867,13 @@ describe('StatusPanel turn tag', () => {
     // Alice is still flagged yourTurn in the data, but the active turn is Bob's
     const view = {
       ...memberView,
-      activeTurn: { playerId: 'player-them', username: 'Bob', turnNumber: 2, phase: 'SOT' },
+      activeTurn: {
+        playerId: 'player-them',
+        username: 'Bob',
+        turnNumber: 2,
+        phase: 'SOT',
+        waitingFor: [{ username: 'Bob', phase: 'SOT' }],
+      },
     } as unknown as PlayerView
     render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
     expect(rowsWithTurnTag()).toEqual(['Bob'])
@@ -875,10 +882,34 @@ describe('StatusPanel turn tag', () => {
   it('tags the viewer when the active turn is theirs', () => {
     const view = {
       ...memberView,
-      activeTurn: { playerId: 'player-me', username: 'Alice', turnNumber: 2, phase: 'SOT' },
+      activeTurn: {
+        playerId: 'player-me',
+        username: 'Alice',
+        turnNumber: 2,
+        phase: 'SOT',
+        waitingFor: [{ username: 'Alice', phase: 'SOT' }],
+      },
     } as unknown as PlayerView
     render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
     expect(rowsWithTurnTag()).toEqual(['Alice'])
+  })
+
+  it('tags the player furthest behind, the same one the title names, not the holder', () => {
+    const view = {
+      ...memberView,
+      activeTurn: {
+        playerId: 'player-me',
+        username: 'Alice',
+        turnNumber: 2,
+        phase: 'MOVEMENT',
+        waitingFor: [
+          { username: 'Alice', phase: 'MOVEMENT' },
+          { username: 'Bob', phase: 'CM' },
+        ],
+      },
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+    expect(rowsWithTurnTag()).toEqual(['Bob'])
   })
 
   it('tags nobody when no one is up', () => {

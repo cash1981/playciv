@@ -17,39 +17,39 @@ export interface FocusEntry {
   readonly phase: TurnPhase
 }
 
-/** The entries at the earliest open phase, in list order. Empty when nobody is waited for. */
-function earliestEntries(activeTurn: ActiveTurnStatus): readonly FocusEntry[] {
+/**
+ * The entries at the earliest open phase, in list order. Empty when there is no
+ * active turn or nobody is waited for. A projection without a waiting list
+ * counts as nobody waited for.
+ */
+function earliestEntries(activeTurn: ActiveTurnStatus | null): readonly FocusEntry[] {
+  const waiting = activeTurn?.waitingFor ?? []
   const index = (phase: TurnPhase): number => TURN_PHASES.indexOf(phase)
-  const earliest = Math.min(...activeTurn.waitingFor.map((entry) => index(entry.phase)))
-  return activeTurn.waitingFor.filter((entry) => index(entry.phase) === earliest)
+  const earliest = Math.min(...waiting.map((entry) => index(entry.phase)))
+  return waiting.filter((entry) => index(entry.phase) === earliest)
 }
 
 /**
  * The player furthest behind: the lowest phase among those waited for. Among a
- * tie the viewer comes first, then the turn holder, then the first in the list.
+ * tie the turn holder comes first when they are in it, else the first in the
+ * list. The viewer gets no preference, so at the start of a round, when
+ * everyone is tied, the title keeps naming the start player for everybody.
  * `null` when there is no active turn or everyone is done.
  */
-export function focusPlayer(activeTurn: ActiveTurnStatus | null, viewerUsername?: string): FocusEntry | null {
-  if (activeTurn === null || activeTurn.waitingFor.length === 0) return null
+export function focusPlayer(activeTurn: ActiveTurnStatus | null): FocusEntry | null {
   const tied = earliestEntries(activeTurn)
-  return (
-    tied.find((entry) => entry.username === viewerUsername) ??
-    tied.find((entry) => entry.username === activeTurn.username) ??
-    tied[0] ??
-    null
-  )
+  return tied.find((entry) => entry.username === activeTurn?.username) ?? tied[0] ?? null
 }
 
 /**
  * The players other than the viewer who are at the earliest open phase, with
- * that phase. Empty when the viewer is alone at that phase, ahead of nobody
- * else, or when nobody is waited for.
+ * that phase. `null` when nobody is waited for, or when the viewer is the only
+ * one at that phase. A viewer tied with others still gets the others.
  */
 export function earliestOthers(
   activeTurn: ActiveTurnStatus | null,
   viewerUsername?: string,
 ): { readonly phase: TurnPhase; readonly usernames: readonly string[] } | null {
-  if (activeTurn === null || activeTurn.waitingFor.length === 0) return null
   const tied = earliestEntries(activeTurn)
   const first = tied[0]
   if (first === undefined) return null

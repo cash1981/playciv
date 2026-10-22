@@ -1191,7 +1191,7 @@ describe('header helpers', () => {
     expect(turnTitle(view.activeTurn)).not.toContain('started')
   })
 
-  it('says Your turn when the viewer is the one furthest behind', () => {
+  it('says Your turn when the viewer is the player in focus', () => {
     const view = makeView({
       activeTurn: { playerId: 'p1', username: 'Alice', turnNumber: 2, phase: 'CM', startPlayer: 'Bob', waitingFor: [{ username: 'Alice', phase: 'CM' }] },
     })
@@ -1214,6 +1214,22 @@ describe('header helpers', () => {
     expect(turnTitle(active, 'cash1981')).toBe('Turn 1 · Your turn — city management phase')
     expect(turnTitle(active, 'admin')).toBe("Turn 1 · cash1981's turn — city management phase")
     expect(turnTitle(active)).toBe("Turn 1 · cash1981's turn — city management phase")
+  })
+
+  it('names the turn holder in a tie, for the viewer too', () => {
+    const active = {
+      playerId: 'id-admin',
+      username: 'admin',
+      turnNumber: 1,
+      phase: 'SOT' as const,
+      startPlayer: 'admin',
+      waitingFor: [
+        { username: 'cash1981', phase: 'SOT' as const },
+        { username: 'admin', phase: 'SOT' as const },
+      ],
+    }
+    expect(turnTitle(active, 'cash1981')).toBe("Turn 1 · admin's turn — start of turn phase")
+    expect(turnTitle(active, 'admin')).toBe('Turn 1 · Your turn — start of turn phase')
   })
 
   it('says so when everyone is done, and when nobody is up', () => {

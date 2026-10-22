@@ -37,9 +37,10 @@ export function viewerPhaseText(view: PlayerView): string | null {
 
 /**
  * Who holds the round up besides the viewer: the players at the earliest open
- * phase, with that phase. `null` when the round is finished, `''` when the
- * viewer is the one furthest behind (their own line already says so). Players
- * who are ahead are not listed.
+ * phase, with that phase. `null` when there is no active turn, 'Everyone is done'
+ * when nobody is waited for, and `''` when the viewer is the only one at the
+ * earliest phase (their own line already says so). Players who are ahead are
+ * not listed.
  */
 export function waitingText(view: PlayerView): string | null {
   const turn = view.activeTurn

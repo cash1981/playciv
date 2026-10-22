@@ -136,7 +136,25 @@ function CityCard({
   readonly build?: BuildFlow | undefined
 }): React.JSX.Element {
   const programId = useId()
+  // The dialog is a sibling of the figure paragraph, not inside it: a div and a
+  // section are not valid in a p. Focus goes back to the link on close.
+  const [countOpen, setCountOpen] = useState(false)
+  const countTitleId = useId()
+  const countLinkRef = useRef<HTMLButtonElement | null>(null)
+  const countLinkText = city.override === null ? 'Not a complete count' : 'How the estimate is counted'
   const programShown = city.buildingProgram && city.withBuildingProgram !== null
+  const countLink = (
+    <button
+      ref={countLinkRef}
+      type="button"
+      className="city-count-link"
+      aria-haspopup="dialog"
+      aria-label={`${countLinkText}: ${city.label}`}
+      onClick={() => setCountOpen(true)}
+    >
+      {countLinkText}
+    </button>
+  )
   return (
     <li className="city-card">
       <h4 className="city-label">{city.label}</h4>
@@ -145,16 +163,28 @@ function CityCard({
         {city.override === null ? (
           <>
             <strong className="city-number">Estimated production: {city.estimate}</strong>{' '}
-            <CountDialogLink city={city} linkText="Not a complete count" />
+            {countLink}
           </>
         ) : (
           <>
             <strong className="city-number">Set by hand: {city.override}</strong>{' '}
             <small className="muted">estimate was {city.estimate}</small>{' '}
-            <CountDialogLink city={city} linkText="How the estimate is counted" />
+            {countLink}
           </>
         )}
       </p>
+
+      {countOpen && (
+        <ReferenceDialog
+          titleId={countTitleId}
+          title={`${city.label}: how the estimate is counted`}
+          onClose={() => setCountOpen(false)}
+          returnFocusTo={countLinkRef}
+          className="city-count-dialog"
+        >
+          <CityArithmetic city={city} />
+        </ReferenceDialog>
+      )}
 
       {city.buildingProgram && city.withBuildingProgram !== null && (
         <p id={programId} className="city-program">
@@ -301,46 +331,6 @@ function StartProgramEntry({
         </p>
       )}
     </div>
-  )
-}
-
-/**
- * A link styled button that opens the arithmetic of one city in a small dialog.
- * Focus goes back to the link when the dialog closes.
- */
-function CountDialogLink({
-  city,
-  linkText,
-}: {
-  readonly city: CityProduction
-  readonly linkText: string
-}): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-  const titleId = useId()
-  const linkRef = useRef<HTMLButtonElement | null>(null)
-  return (
-    <>
-      <button
-        ref={linkRef}
-        type="button"
-        className="city-count-link"
-        aria-haspopup="dialog"
-        onClick={() => setOpen(true)}
-      >
-        {linkText}
-      </button>
-      {open && (
-        <ReferenceDialog
-          titleId={titleId}
-          title={`${city.label}: how the estimate is counted`}
-          onClose={() => setOpen(false)}
-          returnFocusTo={linkRef}
-          className="city-count-dialog"
-        >
-          <CityArithmetic city={city} />
-        </ReferenceDialog>
-      )}
-    </>
   )
 }
 

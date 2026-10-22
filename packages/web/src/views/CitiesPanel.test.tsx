@@ -91,7 +91,7 @@ describe('CitiesPanel', () => {
     expect(screen.getByRole('heading', { name: 'Capital D5' })).toBeTruthy()
     const figure = document.querySelector('.city-figure')
     expect(figure?.textContent).toBe('Estimated production: 9 Not a complete count')
-    const link = screen.getByRole('button', { name: 'Not a complete count' })
+    const link = screen.getByRole('button', { name: 'Not a complete count: Capital D5' })
     expect(link.getAttribute('type')).toBe('button')
     expect(link.getAttribute('aria-haspopup')).toBe('dialog')
     expect(document.querySelector('details')).toBeNull()
@@ -103,8 +103,8 @@ describe('CitiesPanel', () => {
     renderPanel(viewOf([city({ override: 11, effective: 11 })]))
     expect(screen.getByText('Set by hand: 11')).toBeTruthy()
     expect(screen.getByText('estimate was 9').tagName).toBe('SMALL')
-    expect(screen.queryByRole('button', { name: 'Not a complete count' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'How the estimate is counted' }))
+    expect(screen.queryByRole('button', { name: /^Not a complete count/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'How the estimate is counted: Capital D5' }))
     const dialog = screen.getByRole('dialog', { name: 'Capital D5: how the estimate is counted' })
     expect(within(dialog).getByText('Estimate: 9')).toBeTruthy()
     expect(screen.queryByText(/Estimated production/)).toBeNull()
@@ -135,7 +135,7 @@ describe('CitiesPanel', () => {
 
   it('opens a dialog with the squares, modifiers and notes', () => {
     renderPanel(viewOf([city()]))
-    fireEvent.click(screen.getByRole('button', { name: 'Not a complete count' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Not a complete count: Capital D5' }))
     const details = screen.getByRole('dialog', { name: 'Capital D5: how the estimate is counted' })
 
     const squares = within(within(details).getByRole('list', { name: 'Capital D5 outskirts squares' }))
@@ -162,7 +162,7 @@ describe('CitiesPanel', () => {
 
   it('closes the dialog with Escape and with Close, and gives focus back to the link', () => {
     renderPanel(viewOf([city()]))
-    const link = screen.getByRole('button', { name: 'Not a complete count' })
+    const link = screen.getByRole('button', { name: 'Not a complete count: Capital D5' })
 
     fireEvent.click(link)
     expect(screen.getByRole('dialog')).toBeTruthy()
@@ -178,16 +178,26 @@ describe('CitiesPanel', () => {
     expect(document.activeElement).toBe(link)
   })
 
+  it('opens the dialog outside the figure paragraph, with no React nesting error', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    renderPanel(viewOf([city()]))
+    fireEvent.click(screen.getByRole('button', { name: 'Not a complete count: Capital D5' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.closest('p')).toBeNull()
+    expect(document.querySelector('p.city-figure')?.contains(dialog)).toBe(false)
+    expect(errors).not.toHaveBeenCalled()
+  })
+
   it('opens the dialog of the city whose link was pressed, one at a time', () => {
     renderPanel(viewOf([city(), city({ pieceId: 'city-2', label: 'City B2' })]))
-    fireEvent.click(screen.getAllByRole('button', { name: 'Not a complete count' })[1] as HTMLElement)
+    fireEvent.click(screen.getByRole('button', { name: 'Not a complete count: City B2' }))
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
     expect(screen.getByRole('dialog', { name: 'City B2: how the estimate is counted' })).toBeTruthy()
   })
 
   it('says so when no square and no modifier counts', () => {
     renderPanel(viewOf([city({ outskirts: 0, outskirtsDetail: [], modifiers: [], estimate: 0, effective: 0 })]))
-    fireEvent.click(screen.getByRole('button', { name: 'Not a complete count' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Not a complete count: Capital D5' }))
     expect(screen.getByText('No outskirts square gives production.')).toBeTruthy()
     expect(screen.getByText('Nothing is added.')).toBeTruthy()
   })
@@ -360,11 +370,11 @@ describe('CitiesPanel, who may edit', () => {
     expect(screen.getByText('Estimated production: 5')).toBeTruthy()
     // One field only: Alice's. Bob's city has none.
     expect(screen.getAllByRole('textbox')).toHaveLength(1)
-    expect(screen.queryByRole('button', { name: /Capital J10/ })).toBeNull()
+    // Only the count link names the city: no Build, Start or Set button.
+    expect(screen.queryByRole('button', { name: /^(Build|Start|Set|Use).*Capital J10/ })).toBeNull()
     // The arithmetic is still there for the opponent's city.
-    const links = screen.getAllByRole('button', { name: 'Not a complete count' })
-    expect(links).toHaveLength(2)
-    fireEvent.click(links[1] as HTMLElement)
+    expect(screen.getAllByRole('button', { name: /^Not a complete count/ })).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Not a complete count: Capital J10' }))
     const dialog = screen.getByRole('dialog', { name: 'Capital J10: how the estimate is counted' })
     expect(within(dialog).getByText('Estimate: 5')).toBeTruthy()
   })

@@ -176,14 +176,14 @@ export function firstOpenPhase(view: PlayerView, turnNumber: number): TurnPhase 
 
 /**
  * `Turn 4 · Alice's turn — city management phase`, or `Turn 4 · Your turn — ...`
- * when the player furthest behind is the viewer (see `focusPlayer`), with that
+ * when the player in focus (see `focusPlayer`) is the viewer, with that
  * player's own phase. The full list of who is missing what is the status strip
  * below the title.
  */
 export function turnTitle(activeTurn: ActiveTurnStatus | null, viewerUsername?: string): string {
   if (activeTurn === null) return 'Nobody is up'
   const turn = `Turn ${activeTurn.turnNumber}`
-  const focus = focusPlayer(activeTurn, viewerUsername)
+  const focus = focusPlayer(activeTurn)
   if (focus === null) return `${turn} · everyone is done`
   const who = focus.username === viewerUsername ? 'Your turn' : `${focus.username}'s turn`
   return `${turn} · ${who} — ${TURN_PHASE_LABEL[focus.phase]} phase`

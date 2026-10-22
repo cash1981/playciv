@@ -38,6 +38,7 @@ import { PlayerTabs } from './PlayerTabs.js'
 import './PlayerTabs.css'
 import { ReferenceCard } from './ReferenceCard.js'
 import { ReferenceDialog } from './ReferenceDialog.js'
+import { focusPlayer } from './turnFocus.js'
 
 interface Props {
   readonly gameId: string
@@ -162,15 +163,17 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
   const [section, setSection] = useState<Section>('status')
   const governmentHelpRef = useRef<HTMLButtonElement | null>(null)
   const rows: Row[] = []
-  // There is no baton: the tag follows whoever holds the active turn.
-  const onTurn = (playerId: string): boolean => view.activeTurn?.playerId === playerId
+  // There is no baton: the tag follows the player in focus, the same one the
+  // game title names (`focusPlayer`), by username.
+  const focus = focusPlayer(view.activeTurn)
+  const onTurn = (username: string): boolean => focus?.username === username
 
   if (view.you !== null) {
     rows.push({
       playerId: view.you.playerId,
       username: view.you.username,
       color: view.you.color,
-      onTurn: onTurn(view.you.playerId),
+      onTurn: onTurn(view.you.username),
       civilizationName: view.you.civilization?.name ?? null,
       government: view.you.government,
       stats: view.you.stats,
@@ -188,7 +191,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
       playerId: opponent.playerId,
       username: opponent.username,
       color: opponent.color,
-      onTurn: onTurn(opponent.playerId),
+      onTurn: onTurn(opponent.username),
       civilizationName: opponent.civilization?.name ?? null,
       government: opponent.government,
       stats: opponent.stats,

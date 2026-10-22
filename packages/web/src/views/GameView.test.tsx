@@ -297,7 +297,7 @@ describe('primary game panel order', () => {
     expect(screen.queryByRole('heading', { name: 'Your actions' })).toBeNull()
   })
 
-  it('leaves the chat panel out for a spectator without an account, and its shortcut with it', async () => {
+  it('leaves the chat panel out for a spectator without an account, and keeps the shortcuts', async () => {
     const { container } = await renderOrder(orderView(), null)
     expect(pageOrder(container)).not.toContain('Chat and orders')
     expect(screen.getByRole('navigation', { name: 'Go to' })).toBeTruthy()
@@ -438,6 +438,16 @@ describe('game header chips (issue #206)', () => {
     )
     expect(chipTexts(container)).toEqual(['Greeks', 'Green'])
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("Turn 1 · s3s3's turn — city management phase")
+  })
+
+  it('keeps naming the start player in a tie, so the viewer does not read "Your turn" at the start of a round', async () => {
+    await renderHeader(
+      headerView(seat('viewer'), [seat('s3s3')], 's3s3', [
+        { username: 'viewer', phase: 'SOT' },
+        { username: 's3s3', phase: 'SOT' },
+      ]),
+    )
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("Turn 1 · s3s3's turn — start of turn phase")
   })
 
   it('has no civ chip while the civilization is not revealed', async () => {
@@ -602,7 +612,7 @@ describe('chatAuthorsOf and activePlayerOf (issue #206)', () => {
     )
   })
 
-  it('finds the holder of the active turn among the seats, the viewer included', () => {
+  it('finds the player in focus among the seats, the viewer included, when only the holder is waited for', () => {
     const view = headerView(seat('viewer'), [seat('s3s3')], 's3s3')
     expect(activePlayerOf(view)?.username).toBe('s3s3')
     expect(activePlayerOf(headerView(seat('viewer'), [seat('s3s3')], 'viewer'))?.username).toBe('viewer')
@@ -619,6 +629,15 @@ describe('chatAuthorsOf and activePlayerOf (issue #206)', () => {
       { username: 's3s3', phase: 'MOVEMENT' },
     ])
     expect(activePlayerOf(behind)?.username).toBe('viewer')
+  })
+
+  it('names the turn holder in a tie, whoever is looking', () => {
+    const tie = [
+      { username: 'viewer', phase: 'SOT' },
+      { username: 's3s3', phase: 'SOT' },
+    ]
+    expect(activePlayerOf(headerView(seat('viewer'), [seat('s3s3')], 's3s3', tie))?.username).toBe('s3s3')
+    expect(activePlayerOf(headerView(seat('viewer'), [seat('s3s3')], 'viewer', tie))?.username).toBe('viewer')
   })
 
   it('names nobody when the active turn belongs to someone who left, or there is none', () => {

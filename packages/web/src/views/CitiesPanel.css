@@ -61,6 +61,17 @@
   cursor: pointer;
 }
 
+/* A narrow phone: the title wraps, Close keeps its width and its word. */
+.city-count-dialog .reference-heading h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.city-count-dialog .reference-heading button {
+  flex: none;
+  white-space: nowrap;
+}
+
 .reference.city-count-dialog {
   width: min(92vw, 28rem);
   max-height: 85vh;

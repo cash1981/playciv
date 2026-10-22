@@ -16,11 +16,14 @@ With admin on Movement and cash1981 on City management, cash1981 read "Waiting
 for admin (movement)" although cash1981 held things up.
 
 - `focusPlayer` (`packages/web/src/views/turnFocus.ts`): among `activeTurn.waitingFor`
-  take the lowest phase in `TURN_PHASES`. A tie goes to the viewer (by
-  username), then the turn holder (`activeTurn.username`), then the first in the list.
+  take the lowest phase in `TURN_PHASES`. A tie goes to the turn holder
+  (`activeTurn.username`) when they are in it, else the first in the list. The
+  viewer gets no preference, so nobody reads "Your turn" for everybody at the
+  start of a round (the human's decision after review).
 - `turnTitle(activeTurn, viewerUsername)`: `Turn N · Your turn — <phase> phase`
   when the focus is the viewer, else `Turn N · <name>'s turn — <phase> phase`,
   with the focus player's own phase. Everyone done and no active turn are unchanged.
+- `StatusPanel` tags the same player with "turn".
 - `activePlayerOf` (colour chips) finds the focus player's seat by username.
 - `waitingText` uses `earliestOthers`: the other players at the earliest open
   phase, with that phase ("Waiting for admin (city management)", several as
@@ -41,7 +44,8 @@ The `<details>` in each city card is gone. The figure line reads
 count"; a hand-set figure keeps its line and gets "How the estimate is counted".
 Both open `ReferenceDialog` (class `city-count-dialog`, max width 28rem, scrolls
 at 320 px) titled "<city>: how the estimate is counted", with the same content
-as before. Opponents' cities get the link too. Focus returns to the link on close.
+as before. The dialog is a sibling of the figure paragraph (a div is not valid
+in a p). The link has an aria-label "<link text>: <city label>". Opponents' cities get the link too. Focus returns to the link on close.
 
 ## Files
 
@@ -52,7 +56,7 @@ as before. Opponents' cities get the link too. Focus returns to the link on clos
 
 - When the viewer is tied with another player at the earliest phase, the
   "Waiting for" line lists that other player. Only a viewer who is alone at the
-  earliest phase gets an empty line. Confirm that this is what you want.
+  earliest phase gets an empty line.
 - Several players at the same earliest phase are grouped: "bob, carol (trade)".
 
 ## Handover
