@@ -8,9 +8,10 @@
  * state, and Undo is the vote every assisted action has.
  */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
+import { ApiError } from '../lib/api.js'
 import type { PlayerView, UpgradeFamilyOption } from '../lib/api.js'
 import { api } from '../lib/api.js'
 import { isPressInFlight, pressOnce } from './AssistedActions.js'
@@ -36,13 +37,26 @@ export function useCityActionPress(
   readonly press: (key: string, send: (requestId: string) => Promise<PlayerView>) => Promise<boolean>
 } {
   const [sending, setSending] = useState(false)
-  const [shown, setShown] = useState<{ readonly text: string; readonly rev: number } | null>(null)
+  const [shown, setShown] = useState<{
+    readonly text: string
+    readonly rev: number
+    readonly awaitingRefresh: boolean
+  } | null>(null)
   // The revision after the reload that follows the press, read when the press settles.
   const latestRev = useRef(view.rev)
   latestRev.current = view.rev
 
+  useEffect(() => {
+    setShown((current) => {
+      if (current === null || current.rev === view.rev) return current
+      if (current.awaitingRefresh) return { text: current.text, rev: view.rev, awaitingRefresh: false }
+      return null
+    })
+  }, [view.rev])
+
   function press(key: string, send: (requestId: string) => Promise<PlayerView>): Promise<boolean> {
     if (sending || isPressInFlight(key)) return Promise.resolve(false)
+    const pressedRev = view.rev
     let failure: unknown = null
     const quietRun: Run = (action) =>
       run(async () => {
@@ -59,12 +73,17 @@ export function useCityActionPress(
     setShown(null)
     return pressOnce(key, quietRun, send, view).then((done) => {
       setSending(false)
-      if (failure !== null) setShown({ text: errorMessage(failure), rev: latestRev.current })
+      if (failure !== null) {
+        const rev = latestRev.current
+        const awaitingRefresh =
+          failure instanceof ApiError && failure.code === 'STALE_REVISION' && rev === pressedRev
+        setShown({ text: errorMessage(failure), rev, awaitingRefresh })
+      }
       return done
     })
   }
 
-  const message = shown !== null && shown.rev === view.rev ? shown.text : null
+  const message = shown !== null && !shown.awaitingRefresh && shown.rev === view.rev ? shown.text : null
   return { sending, message, press }
 }
 

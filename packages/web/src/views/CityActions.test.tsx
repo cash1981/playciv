@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '../lib/api.js'
@@ -343,28 +344,36 @@ describe('Upgrades', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('Nothing can be upgraded now.')
   })
 
-  it('keeps a refusal on show when the refreshed view has no options', async () => {
+  it('keeps a stale refusal on the refreshed view until the next revision', async () => {
     vi.spyOn(api, 'upgradeBuildings').mockRejectedValue(
-      new ApiError(422, 'ACTION_REFUSED', 'Those buildings are already upgraded.'),
+      new ApiError(409, 'STALE_REVISION', 'Those buildings are already upgraded.'),
     )
     const before = viewOf({ upgradeOptions: [GRANARY], rev: 5 })
     const after = viewOf({ upgradeOptions: [], rev: 6 })
-    const element = (view: PlayerView): React.JSX.Element => page(view, { run: reloadingRun })
-    // The reload that follows the press brings a view where a co-player has flipped the pieces.
-    const reloadingRun: Run = async (action) => {
-      await action()
-      rendered.rerender(element(after))
+    const later = viewOf({ upgradeOptions: [], rev: 7 })
+    function Harness(): React.JSX.Element {
+      const [view, setView] = useState(before)
+      const reloadingRun: Run = async (action) => {
+        await action()
+        // GameView queues the refreshed view; the action can settle before React commits it.
+        setTimeout(() => setView(after), 0)
+      }
+      return (
+        <>
+          {page(view, { run: reloadingRun })}
+          <button type="button" onClick={() => setView(later)}>Advance revision</button>
+        </>
+      )
     }
-    const rendered = render(element(before))
+    render(<Harness />)
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (3)' }))
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe('Those buildings are already upgraded.')
     expect(screen.getByRole('heading', { name: 'Upgrades' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Upgrade/ })).toBeNull()
 
-    // A later move changes the revision and clears the message.
-    rendered.rerender(element(viewOf({ upgradeOptions: [], rev: 7 })))
-    expect(screen.queryByRole('alert')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Advance revision' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
     expect(screen.queryByRole('heading', { name: 'Upgrades' })).toBeNull()
   })
 
