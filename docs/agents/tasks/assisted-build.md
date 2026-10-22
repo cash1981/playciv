@@ -14,7 +14,7 @@ A city can build a building from a Build button. The player picks a city, picks 
 
 ## Why
 
-#264: "Choose Build from a city summary, choose an eligible item, then click the highlighted surrounding square." The human's answers: all of #264 in the end; production first (done, the Cities panel); only legal choices in the main list, with a separate explanation for the rest and the hand set production as the way out when the estimate is too low; trade rush is part of Build; the cost of units and figures follows the player's level. Also: no automatic "city action used" marker, the player presses End when done, because techs, culture cards and Great Persons allow several actions.
+#264: "Choose Build from a city summary, choose an eligible item, then click the highlighted surrounding square." The human's answers: all of #264 in the end; production first (done, the Cities panel [Moved to Your actions, see decisions.md]); only legal choices in the main list, with a separate explanation for the rest and the hand set production as the way out when the estimate is too low; trade rush is part of Build; the cost of units and figures follows the player's level. Also: no automatic "city action used" marker, the player presses End when done, because techs, culture cards and Great Persons allow several actions.
 
 ## Rules (source in brackets; do not add others)
 
@@ -39,7 +39,7 @@ A city can build a building from a Build button. The player picks a city, picks 
 - Idempotence and revision: the same route and rules as the other actions (`requestId`, `rev`).
 - Projection: `buildOptions` on the own view only (`PlayerViewSelf`), blanked for replayed revisions in `projectedRevision` like `availableActions`. Opponents and spectators never get it (it depends on unrevealed techs). Hidden information tests.
 - Server route: `POST /api/games/:gameId/actions` accepts the `build` payload, validates the shape (ids, integers, a boolean) and rejects payload fields on other actions as it does today.
-- Web: a "Build" button on each of the viewer's cities in the Cities panel (disabled with the reason when `status` is not ready). It opens a picker: the choices with name, cost and "pay N trade" when it rushes, and a collapsed "Why not the others" list with the reasons. Picking a choice enters a square picking mode on the board: the legal squares are highlighted (cell overlays inside the board surface, tap or click selects, keyboard reachable), the page scrolls and moves focus to the board (smooth scroll off with reduced motion), and a bar shows the item, the city, the cost, the square and Confirm and Cancel. Cancel and Escape leave everything unchanged. Confirm sends the action through `pressOnce` with a key that includes the payload, then clears the mode. After a rejection, say what changed and return to the picker with fresh data. Drag and drop and tap then tap of pieces keep working as today.
+- Web: a "Build" button on each of the viewer's cities in the Cities panel [Moved to Your actions, see decisions.md] (disabled with the reason when `status` is not ready). It opens a picker: the choices with name, cost and "pay N trade" when it rushes, and a collapsed "Why not the others" list with the reasons. Picking a choice enters a square picking mode on the board: the legal squares are highlighted (cell overlays inside the board surface, tap or click selects, keyboard reachable), the page scrolls and moves focus to the board (smooth scroll off with reduced motion), and a bar shows the item, the city, the cost, the square and Confirm and Cancel. Cancel and Escape leave everything unchanged. Confirm sends the action through `pressOnce` with a key that includes the payload, then clears the mode. After a rejection, say what changed and return to the picker with fresh data. Drag and drop and tap then tap of pieces keep working as today.
 - Tests at engine, server and web level; the FAQ sentence; `decisions.md` ("Assisted build"); README sentence.
 
 **Out, and why:**
@@ -58,7 +58,7 @@ A city can build a building from a Build button. The player picks a city, picks 
 - `packages/engine/src/build-options.ts` (new), `building-data.ts`, `assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/board.ts`
 - `packages/engine/test/assisted-build*.test.ts`, `hidden-info.test.ts`
 - `packages/server/src/routes/play.ts`, `routes/games.ts`, `errors.ts`, `packages/server/test/assisted-build*.test.ts`
-- `packages/web/src/lib/api.ts`, `views/CitiesPanel.tsx`, `BuildPicker.tsx` (new) and its css and tests, `BoardView.tsx`, `GameView.tsx`, `styles.css`, `FaqView.tsx`
+- `packages/web/src/lib/api.ts`, `views/CitiesPanel.tsx` (its css, `CitiesPanel.css`, is now `CityCard.css`), `BuildPicker.tsx` (new) and its css and tests, `BoardView.tsx`, `GameView.tsx`, `styles.css`, `FaqView.tsx`
 - `docs/agents/decisions.md`, `state.md`, `README.md`
 
 ## Acceptance criteria

@@ -246,6 +246,21 @@ const renderOrder = async (view: PlayerView, player: PlayerDto | null = { userna
   return rendered
 }
 
+/** A city of the projection's `cities` list, with the fields the card reads. */
+const cityOf = (pieceId: string, label: string): Record<string, unknown> => ({
+  pieceId,
+  label,
+  outskirts: 4,
+  outskirtsDetail: [],
+  modifiers: [],
+  buildingProgram: false,
+  estimate: 4,
+  withBuildingProgram: null,
+  override: null,
+  effective: 4,
+  notes: [],
+})
+
 /** The page top to bottom: each panel heading, and the board, after the header's own title. */
 const pageOrder = (container: HTMLElement): string[] =>
   Array.from(container.querySelectorAll('h1, h2, [data-testid="board"]'))
@@ -254,6 +269,8 @@ const pageOrder = (container: HTMLElement): string[] =>
     .map((element) => (element.getAttribute('data-testid') === 'board' ? 'Board' : (element.textContent ?? '').replace(/[−+]$/, '')))
 
 describe('primary game panel order', () => {
+  afterEach(() => localStorage.removeItem('civ.panel.cities'))
+
   // Changed on purpose (#260): the board no longer follows the header directly.
   // It was header, board, Draw, Chat and orders, Log, Your hand, and so on.
   it('runs Your actions, the board, Your cards, Draw, the tech tree, chat, the rest, then the log and the revealed feed', async () => {
@@ -279,11 +296,52 @@ describe('primary game panel order', () => {
       'Battle',
       'Social policy',
       'Player status',
-      'Cities (0)',
       'Wonders',
       'Log',
       'Revealed',
     ])
+  })
+
+  it('puts the viewer’s own cities in Your actions and the opponents’ cities in their own panel further down', async () => {
+    // The opponents' panel is collapsed by default, and a collapsed panel hides its cards from the queries below.
+    localStorage.setItem('civ.panel.cities', 'true')
+    const view = orderView({
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        items: [],
+        pendingRewards: [],
+        cities: [cityOf('mine', 'Capital D5')],
+      },
+      opponents: [{ playerId: 'p2', username: 'rival', cities: [cityOf('theirs', 'City H8')] }],
+    })
+    const { container } = await renderOrder(view)
+
+    expect(pageOrder(container)).toEqual([
+      'Your actions',
+      'Board',
+      'Your hand (0)',
+      'Draw',
+      'Techs',
+      'Chat and orders',
+      "Other players' hands",
+      'Battle',
+      'Social policy',
+      'Player status',
+      "Opponents' cities (1)",
+      'Wonders',
+      'Log',
+      'Revealed',
+    ])
+    const actions = screen.getByRole('heading', { name: 'Your actions' }).closest('section') as HTMLElement
+    const opponents = screen.getByRole('heading', { name: "Opponents' cities (1)" }).closest('section') as HTMLElement
+    expect(within(actions).getByRole('heading', { name: 'Capital D5' })).toBeTruthy()
+    expect(within(actions).queryByRole('heading', { name: 'City H8' })).toBeNull()
+    expect(within(opponents).getByRole('heading', { name: 'City H8' })).toBeTruthy()
+    expect(within(opponents).queryByRole('heading', { name: 'Capital D5' })).toBeNull()
+    // No id is on the page twice, with both panels showing a city each.
+    const ids = Array.from(container.querySelectorAll('[id]')).map((element) => element.id)
+    expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([])
   })
 
   it('has Your cards directly under the board, and no Your actions panel when there is nothing to show', async () => {
@@ -332,6 +390,56 @@ describe('game page shortcuts', () => {
     const heading = screen.getByRole('heading', { name: 'Your hand (0)' })
     expect(scrolled).toEqual([heading.closest('section')])
     expect(document.activeElement).toBe(heading.querySelector('button'))
+  })
+
+  const shortcutLabels = (): (string | null)[] =>
+    Array.from(screen.getByRole('navigation', { name: 'Go to' }).querySelectorAll('button')).map(
+      (button) => button.textContent,
+    )
+  const withCity = (overrides: Record<string, unknown> = {}): PlayerView =>
+    orderView({
+      you: { playerId: 'p1', username: 'viewer', items: [], pendingRewards: [], cities: [cityOf('mine', 'Capital D5')], ...overrides },
+    })
+
+  it('offers Board, Actions, Your cards and Tech tree to a player who has Your actions', async () => {
+    await renderOrder(withCity())
+    expect(shortcutLabels()).toEqual(['Board', 'Actions', 'Your cards', 'Tech tree'])
+  })
+
+  it('scrolls Your actions into view and focuses its heading button', async () => {
+    await renderOrder(withCity())
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+    const heading = screen.getByRole('heading', { name: 'Your actions' })
+    expect(scrolled).toEqual([heading.closest('section')])
+    expect(document.activeElement).toBe(heading.querySelector('button'))
+  })
+
+  it('offers no Actions button to a spectator, who has no Your actions panel', async () => {
+    await renderOrder(orderView(), null)
+    expect(shortcutLabels()).toEqual(['Board', 'Your cards', 'Tech tree'])
+    cleanup()
+
+    // Signed in but not seated in the game: the view has no `you`.
+    await renderOrder(orderView())
+    expect(shortcutLabels()).toEqual(['Board', 'Your cards', 'Tech tree'])
+  })
+
+  it('offers no Actions button to a player with nothing in Your actions yet', async () => {
+    await renderOrder(orderView({ you: { playerId: 'p1', username: 'viewer', items: [], pendingRewards: [], cities: [] } }))
+    expect(screen.queryByRole('heading', { name: 'Your actions' })).toBeNull()
+    expect(shortcutLabels()).toEqual(['Board', 'Your cards', 'Tech tree'])
+  })
+
+  it('the card choice button still goes to Your actions', async () => {
+    await renderOrder(
+      withCity({
+        pendingRewards: [{ id: 'adv-1', kind: 'event', level: 2, step: 9, keep: 1, candidates: [] }],
+        availableActions: [],
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: '1 card choice waiting' }))
+    const heading = screen.getByRole('heading', { name: 'Your actions (1 choice waiting)' })
+    expect(scrolled).toEqual([heading.closest('section')])
   })
 })
 
@@ -1136,8 +1244,8 @@ describe('the Build flow in the game page', () => {
       ...overrides,
     })
 
-  beforeEach(() => localStorage.setItem('civ.panel.cities', 'true'))
-  afterEach(() => localStorage.removeItem('civ.panel.cities'))
+  beforeEach(() => localStorage.setItem('civ.panel.actions', 'true'))
+  afterEach(() => localStorage.removeItem('civ.panel.actions'))
 
   it('puts the board in pick mode after a choice and takes it out on Cancel', async () => {
     await renderOrder(viewWith())
@@ -1176,7 +1284,8 @@ describe('the Build flow in the game page', () => {
 
   it('has no Build button once the game is locked, and none for a spectator', async () => {
     const locked = await renderOrder(viewWith({ active: false }))
-    expect(screen.getByRole('heading', { name: 'Cities (1)' })).toBeTruthy()
+    // The city card and its figure stay in Your actions; only the controls go.
+    expect(screen.getByRole('heading', { name: 'Capital D5' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
     locked.unmount()
 
@@ -1232,8 +1341,8 @@ describe('the city actions in the game page', () => {
       ...overrides,
     })
 
-  beforeEach(() => localStorage.setItem('civ.panel.cities', 'true'))
-  afterEach(() => localStorage.removeItem('civ.panel.cities'))
+  beforeEach(() => localStorage.setItem('civ.panel.actions', 'true'))
+  afterEach(() => localStorage.removeItem('civ.panel.actions'))
 
   it('shows the Start button and the Upgrades block to a player in a live game', async () => {
     await renderOrder(viewWith())
@@ -1243,7 +1352,7 @@ describe('the city actions in the game page', () => {
 
   it('shows neither once the game is locked, and neither to a spectator', async () => {
     const locked = await renderOrder(viewWith({ active: false }))
-    expect(screen.getByRole('heading', { name: 'Cities (1)' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Capital B3' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
     expect(screen.queryByRole('heading', { name: 'Upgrades' })).toBeNull()
     locked.unmount()

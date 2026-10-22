@@ -33,7 +33,7 @@ for admin (movement)" although cash1981 held things up.
 
 ## 2. Fewer page shortcuts
 
-Board, Your cards, Tech tree and Cities (`cities`, the `CollapsiblePanel` id).
+Board, Your cards, Tech tree and Cities (`cities`, the `CollapsiblePanel` id). [Moved to Your actions, see decisions.md: the shortcuts are now Board, Actions, Your cards, Tech tree.]
 Chat and History are removed for now; the `chat` prop is gone. `goToPanel` stays
 exported for the card choice button.
 
@@ -50,7 +50,7 @@ in a p). The link has an aria-label "<link text>: <city label>". Opponents' citi
 ## Files
 
 `turnFocus.ts` (new), `ChatOrdersPanel.tsx`, `GameView.tsx`, `PhaseSummary.tsx`,
-`CitiesPanel.tsx`, `CitiesPanel.css`, their tests, `decisions.md`, `state.md`.
+`CitiesPanel.tsx`, `CitiesPanel.css` (now `CityCard.css`), their tests, `decisions.md`, `state.md`.
 
 ## Open questions for the human
 

@@ -77,7 +77,7 @@ må kunne overstyres".
   on the own view (everything is derived from the public board and revealed items;
   use `!hidden` for techs, great person items and social policies). Add the hidden
   information tests.
-- Web: a collapsed "Cities" panel after Status. For the viewer's cities: the label,
+- Web: a collapsed "Cities" panel after Status [Moved to Your actions, see decisions.md]. For the viewer's cities: the label,
   "Estimated production 11, not a complete count" with a details element showing the
   squares and modifiers, the building program figure when present, the notes, and a
   "Set by hand" number field with a "Use the estimate" button. Opponents' cities
@@ -135,7 +135,7 @@ derived public value goes.
 - `packages/engine/test/city-production*.test.ts` (new), `hidden-info.test.ts`
 - `packages/server/src/routes/board.ts`, `packages/server/test/city-production*.test.ts`
 - `packages/web/src/lib/api.ts`, `packages/web/src/views/CitiesPanel.tsx` (new), its css
-  and tests, `GameView.tsx`, `FaqView.tsx`
+  (`CitiesPanel.css`, now `CityCard.css`) and tests, `GameView.tsx`, `FaqView.tsx`
 - `docs/agents/decisions.md`, `state.md`
 
 ## Acceptance criteria

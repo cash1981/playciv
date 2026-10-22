@@ -5,16 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '../lib/api.js'
 import type { CityActionOptions, CityProduction, PlayerView, UpgradeFamilyOption } from '../lib/api.js'
-import { resetPendingRequestIds } from './AssistedActions.js'
+import { AssistedActionsPanel, resetPendingRequestIds } from './AssistedActions.js'
 import { CitiesPanel } from './CitiesPanel.js'
 import type { Run } from './GameView.js'
 
 beforeEach(() => {
+  localStorage.setItem('civ.panel.actions', 'true')
   localStorage.setItem('civ.panel.cities', 'true')
   resetPendingRequestIds()
 })
 afterEach(() => {
   cleanup()
+  localStorage.removeItem('civ.panel.actions')
   localStorage.removeItem('civ.panel.cities')
   vi.restoreAllMocks()
 })
@@ -109,16 +111,24 @@ const run: Run = async (action) => {
   await action()
 }
 
-function renderPanel(view: PlayerView, options: { busy?: boolean; readOnly?: boolean } = {}): void {
-  render(
-    <CitiesPanel
-      gameId="g1"
-      view={view}
-      busy={options.busy ?? false}
-      readOnly={options.readOnly ?? false}
-      run={run}
-    />,
+/** The page as GameView lays it out: the city actions are in Your actions, the opponents' cities in the Cities panel. */
+function page(view: PlayerView, options: { busy?: boolean; readOnly?: boolean; run?: Run } = {}): React.JSX.Element {
+  return (
+    <>
+      <AssistedActionsPanel
+        gameId="g1"
+        view={view}
+        busy={options.busy ?? false}
+        readOnly={options.readOnly ?? false}
+        run={options.run ?? run}
+      />
+      <CitiesPanel view={view} />
+    </>
   )
+}
+
+function renderPanel(view: PlayerView, options: { busy?: boolean; readOnly?: boolean; run?: Run } = {}): void {
+  render(page(view, options))
 }
 
 const startButton = (): HTMLButtonElement =>
@@ -326,9 +336,7 @@ describe('Upgrades', () => {
     )
     const before = viewOf({ upgradeOptions: [GRANARY], rev: 5 })
     const after = viewOf({ upgradeOptions: [], rev: 6 })
-    const element = (view: PlayerView): React.JSX.Element => (
-      <CitiesPanel gameId="g1" view={view} busy={false} readOnly={false} run={reloadingRun} />
-    )
+    const element = (view: PlayerView): React.JSX.Element => page(view, { run: reloadingRun })
     // The reload that follows the press brings a view where a co-player has flipped the pieces.
     const reloadingRun: Run = async (action) => {
       await action()
@@ -371,7 +379,7 @@ describe('Upgrades', () => {
         signOut()
       }
     }
-    render(<CitiesPanel gameId="g1" view={viewOf({ upgradeOptions: [GRANARY] })} busy={false} readOnly={false} run={signingOutRun} />)
+    render(page(viewOf({ upgradeOptions: [GRANARY] }), { run: signingOutRun }))
     const button = screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (3)' }) as HTMLButtonElement
     fireEvent.click(button)
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1))

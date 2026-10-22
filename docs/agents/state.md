@@ -35,7 +35,7 @@ old test counts and past deployment reports do not establish present health.
   built too; see "Trade offers (#265)" in decisions.
 
 - City production (#250 slice A, first part of #264) is on PR #271: a per-city
-  estimate with a hand-set override and a Cities panel.
+  estimate with a hand-set override, shown on each city card.
   Brief `tasks/city-production.md`; see "City production" in decisions.
 
 - Assisted build (#264) is on PR #271: a Build button per city for buildings, army and
@@ -46,9 +46,14 @@ old test counts and past deployment reports do not establish present health.
   see "Assisted build" in decisions.
 
 - The game header names the player furthest behind as the one who is up and lists
-  only the earliest open phase under "Waiting for"; the shortcuts are Board, Your
-  cards, Tech tree and Cities; a city's arithmetic opens in a popup. Brief
+  only the earliest open phase under "Waiting for"; the shortcuts are Board, Actions,
+  Your cards and Tech tree; a city's arithmetic opens in a popup. Brief
   `tasks/phase-cities-polish.md`; see "Assisted play" in decisions.
+
+- The viewer's own cities (cards, Build, Start Building Program, Upgrades, the
+  production figure) are in "Your actions"; the collapsed Cities panel lists the
+  opponents' cities only. Brief `tasks/cities-in-actions.md`; see "Assisted play"
+  in decisions.
 
 Read [current decisions](decisions.md) for the relevant compatibility/rationale
 and [limitations](limitations.md) for known gaps. Archived Mongo games remaining

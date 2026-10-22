@@ -93,7 +93,8 @@ export function PhaseSummary({ view }: { readonly view: PlayerView }): React.JSX
 
 /**
  * A panel on the page by its `CollapsiblePanel` id, or the board. A collapsed
- * panel still has its heading on the page, so that is where the shortcut lands.
+ * panel still has its heading on the page, so that is where the shortcut lands
+ * ({@link goToPanel} opens Your actions as well).
  */
 function findPanel(key: string): { readonly section: HTMLElement; readonly focus: HTMLElement } | null {
   if (key === 'board') {
@@ -110,10 +111,16 @@ function findPanel(key: string): { readonly section: HTMLElement; readonly focus
  * Scrolls a panel into view and moves focus to it. The scroll is smooth unless
  * the user asks for reduced motion. Focus does not scroll on its own, so the
  * page moves once.
+ *
+ * Your actions (`actions`) is opened when it is collapsed: the city controls and
+ * a waiting card choice are in it, and a saved collapsed state would hide them
+ * behind a button that says it goes there. The click on its toggle is a manual
+ * one, so the open state is remembered. Every other panel is left as it is.
  */
 export function goToPanel(key: string): void {
   const panel = findPanel(key)
   if (panel === null) return
+  if (key === 'actions' && panel.focus.getAttribute('aria-expanded') === 'false') panel.focus.click()
   const reduced =
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -121,18 +128,23 @@ export function goToPanel(key: string): void {
   panel.focus.focus({ preventScroll: true })
 }
 
-const SHORTCUTS: readonly { readonly key: string; readonly label: string }[] = [
+const SHORTCUTS: readonly { readonly key: string; readonly label: string; readonly onlyWithActions?: true }[] = [
   { key: 'board', label: 'Board' },
+  // The panel id, not its title: "Your actions" is too long for a button.
+  { key: 'actions', label: 'Actions', onlyWithActions: true },
   { key: 'hand', label: 'Your cards' },
   { key: 'techs', label: 'Tech tree' },
-  { key: 'cities', label: 'Cities' },
 ]
 
-/** Buttons that jump to the main parts of the page. Chat and History are left out on purpose, for now. */
-export function PageShortcuts(): React.JSX.Element {
+/**
+ * Buttons that jump to the main parts of the page. Chat and History are left out on purpose, for now.
+ * `actions` says whether "Your actions" is on the page (a spectator has none, and a
+ * player with nothing to do there has none either), so the button is never dead.
+ */
+export function PageShortcuts({ actions }: { readonly actions: boolean }): React.JSX.Element {
   return (
     <nav className="page-shortcuts" aria-label="Go to">
-      {SHORTCUTS.map((shortcut) => (
+      {SHORTCUTS.filter((shortcut) => actions || shortcut.onlyWithActions !== true).map((shortcut) => (
         <button
           key={shortcut.key}
           type="button"

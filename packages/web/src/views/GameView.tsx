@@ -16,7 +16,7 @@ import { useActivity } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
 
-import { AssistedActionsPanel } from './AssistedActions.js'
+import { AssistedActionsPanel, hasActionsPanel } from './AssistedActions.js'
 import { BoardView } from './BoardView.js'
 import type { PickSquares } from './BoardView.js'
 import { BuildBar } from './BuildPicker.js'
@@ -561,7 +561,7 @@ export function GameView({
           </div>
         )}
 
-        <PageShortcuts />
+        <PageShortcuts actions={hasActionsPanel(displayedView)} />
       </div>
 
       <GlobalReplayBar
@@ -583,14 +583,16 @@ export function GameView({
 
       {error !== null && <div className="error">{error}</div>}
 
-      {/* The page runs: header and summary, Your actions, the board, Your cards,
-          then the rest. The board has the whole content width at every size. */}
+      {/* The page runs: header and summary, Your actions (the card buttons, a waiting
+          choice and the viewer's own cities), the board, Your cards, then the rest. The
+          board has the whole content width at every size. */}
       <AssistedActionsPanel
         gameId={gameId}
         view={displayedView}
         busy={interactionBusy}
         readOnly={displayedView.you === null || replaying || locked}
         run={run}
+        build={buildFlow}
       />
 
       <BuildBar gameId={gameId} view={displayedView} flow={buildFlow} busy={interactionBusy} run={run} />
@@ -638,14 +640,7 @@ export function GameView({
           readOnly={displayedView.you === null || replaying || locked}
           run={run}
         />
-        <CitiesPanel
-          gameId={gameId}
-          view={displayedView}
-          busy={interactionBusy}
-          readOnly={displayedView.you === null || replaying || locked}
-          run={run}
-          build={buildFlow}
-        />
+        <CitiesPanel view={displayedView} />
         <WondersPanel
           gameId={gameId}
           view={displayedView}
