@@ -755,6 +755,22 @@ describe('the Advance culture button', () => {
   })
 })
 
+describe('the culture hand limit warning', () => {
+  const READY_REASON = 'Advance to space 9 (culture II event): 5 culture and 3 trade.'
+  const WARNING = 'Culture hand limit: this card brings your hand to 3 culture cards, over your culture hand size of 2.'
+
+  it('shows the warning beside the ready Advance culture button, which stays pressable', () => {
+    renderPanel(viewWith([{ ...advance('ready', READY_REASON), warning: WARNING }]))
+    expect(screen.getByText(WARNING)).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Advance culture' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('shows no warning when the action has none', () => {
+    const { container } = renderPanel(viewWith([advance('ready', READY_REASON)]))
+    expect(container.querySelector('.assisted-warning')).toBeNull()
+  })
+})
+
 describe('the pending card choice', () => {
   it('shows the candidate cards with their names and one Keep button each', () => {
     renderPanel(viewWithRewards([reward()]))

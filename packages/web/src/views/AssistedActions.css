@@ -118,3 +118,12 @@ td .assisted-action {
 .assisted-panel-body:focus {
   outline: none;
 }
+
+.assisted-warning {
+  flex: 1 1 100%;
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  border-left: 3px solid var(--warning, #b7791f);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}

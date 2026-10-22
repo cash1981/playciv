@@ -74,6 +74,7 @@ import {
   rewardDrawCount,
 } from './culture-track.js'
 import type { CultureAdvanceCost, CultureLevel, CultureMarker, CultureSpace } from './culture-track.js'
+import { cultureHandWarning } from './culture-hand.js'
 import type { EngineError } from './errors.js'
 import { itemName } from './item.js'
 import type { Item } from './item.js'
@@ -123,7 +124,7 @@ export interface BlockedAvailability {
 
 /** Whether an action can be pressed now. A union, so `status !== 'ready'` narrows to the reason it is blocked. */
 export type AssistedAvailability =
-  | { readonly status: 'ready'; readonly reason: string }
+  | { readonly status: 'ready'; readonly reason: string; readonly warning?: string }
   | BlockedAvailability
 
 const READY: AssistedAvailability = { status: 'ready', reason: 'Ready to use.' }
@@ -1266,9 +1267,13 @@ const cultureAdvance: AssistedActionDefinition = {
     if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
     const plan = planAdvance(state, player)
     if (!plan.ok) return plan.error
+    // A culture event keeps one card (the Mysticism extra goes back); a Great Person goes to the markers.
+    const warning =
+      plan.value.to.kind === 'event' ? cultureHandWarning(state, player, 1) : undefined
     return {
       status: 'ready',
       reason: `Advance to ${describeSpace(plan.value.to)}: ${describeCost(plan.value.cost)}.`,
+      ...(warning === undefined ? {} : { warning }),
     }
   },
 

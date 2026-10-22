@@ -216,6 +216,15 @@ buttons and the culture marker. Assisted actions are added beside them.
   Management. Event spaces draw 1 card (2 with Mysticism); Great Person spaces
   draw 1 plus 1 for Organized Religion plus 1 for the Greeks. The player keeps
   one in a private `pendingRewards` choice.
+- Culture hand limit (#248): a culture event advance warns, and never refuses, when the
+  new card takes the culture cards in the hand above `cultureHandSizeOf` (a player may
+  hold size + 1 while deciding what to discard). The warning is `warning` on the
+  viewer's own `availableActions` entry, shown beside Advance culture, and Your hand
+  shows a notice while the culture cards exceed the size. A Great Person space gives a
+  marker, not a culture card, so it never warns. Moving the leader marker by hand
+  charges and awards nothing (test `assisted-culture-hand-limit.test.ts`). The count
+  includes every culture card in the hand, revealed or not, and the size counts only
+  revealed cards, so an unrevealed Pottery or Valmiki can make the warning early.
 - A Great Person card is valid only when its marker type has supply (3 per
   type). Invalid draws are discarded faceup. With no marker of any type left,
   nothing is drawn. The kept card stays hidden in the hand and the marker piece
@@ -278,7 +287,7 @@ Source: `engine/src/assisted.ts`, `culture-track.ts`, `server/src/routes/play.ts
 `web/src/views/AssistedActions.tsx`, `EndTurn.tsx`, `PhaseSummary.tsx`, `turnFocus.ts`,
 `YourCities.tsx`, `CityCard.tsx`, and the `assisted*`
 tests. Not built: Great Person abilities that need a map marker, killing
-markers, map tile 16a, free advances, hand limit.
+markers, map tile 16a, free advances.
 
 ## Trade offers (#265)
 

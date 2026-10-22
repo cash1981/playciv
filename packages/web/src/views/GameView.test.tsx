@@ -336,6 +336,22 @@ describe('primary game panel order', () => {
     expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([])
   })
 
+  it('warns in Your hand when the culture cards exceed the culture hand size', async () => {
+    const cultureCard = (id: string) => ({ id, kind: 'cultureI', sheetName: 'CULTURE_1', name: id, hidden: true, ownerId: 'p1' })
+    const you = (cards: number, size: number) => ({
+      playerId: 'p1',
+      username: 'viewer',
+      items: Array.from({ length: cards }, (_, index) => cultureCard(`c${index}`)),
+      pendingRewards: [],
+      stats: { cultureHandSize: size },
+    })
+    await renderOrder(orderView({ you: you(3, 2) }))
+    expect(screen.getByText(/Culture hand limit: you hold 3 culture cards, over your culture hand size of 2/)).toBeTruthy()
+    cleanup()
+    await renderOrder(orderView({ you: you(2, 2) }))
+    expect(screen.queryByText(/Culture hand limit/)).toBeNull()
+  })
+
   it('has Your actions directly under the board and Your cards right after it', async () => {
     const view = orderView({
       you: {

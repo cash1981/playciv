@@ -511,6 +511,8 @@ export interface AvailableAction {
   readonly status: AssistedStatus
   /** A readable sentence, also when `status` is `ready`. */
   readonly reason: string
+  /** A ready action that the player should think twice about, for example a culture card over the hand size. */
+  readonly warning?: string
 }
 
 /** An assisted action as everybody may read it. No effect, no hut or piece identity. */

@@ -803,9 +803,19 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   const items = view.you?.items ?? []
   const opponents = view.opponents
   const blockadedTypes = view.you?.blockadedGreatPersonTypes ?? []
+  const cultureHeld = items.filter(
+    (item) => item.kind === 'cultureI' || item.kind === 'cultureII' || item.kind === 'cultureIII',
+  ).length
+  const cultureSize = view.you?.stats?.cultureHandSize
 
   return (
     <CollapsiblePanel id="hand" title={`Your hand (${items.length})`} defaultOpen>
+      {cultureSize !== undefined && cultureHeld > cultureSize && (
+        <p role="status" className="assisted-warning culture-hand-warning">
+          Culture hand limit: you hold {cultureHeld} culture cards, over your culture hand size
+          of {cultureSize}. Discard a culture card or increase your culture hand size.
+        </p>
+      )}
       <LootControls
         items={items}
         opponents={opponents}

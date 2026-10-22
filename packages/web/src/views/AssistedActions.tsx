@@ -244,6 +244,11 @@ export function AssistedActionButton({
           {state.reason}
         </span>
       )}
+      {ready && state.warning !== undefined && (
+        <span role="status" className="assisted-warning">
+          {state.warning}
+        </span>
+      )}
     </span>
   )
 }
