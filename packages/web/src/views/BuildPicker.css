@@ -120,7 +120,8 @@
 }
 
 /* A square where an enemy figure stands, so an army placed there is settled by hand. Dashed, with the word
-   Enemy on it, so it is told apart by more than its colour. */
+   Enemy on it, so it is told apart by more than its colour. A square whose building, wonder or Great Person the item replaces
+   is dashed in the warning colour and says Replace. */
 .board-pick-cell.noted {
   border-style: dashed;
   border-color: var(--bad);
@@ -128,6 +129,19 @@
 
 .board-pick-cell.noted:not(.chosen) {
   background: color-mix(in srgb, var(--bad) 28%, transparent);
+}
+
+.board-pick-cell.replacing {
+  border-style: dashed;
+  border-color: var(--warn);
+}
+
+.board-pick-cell.replacing:not(.chosen) {
+  background: color-mix(in srgb, var(--warn) 28%, transparent);
+}
+
+.board-pick-cell.replacing .board-pick-flag {
+  background: var(--warn);
 }
 
 .board-pick-flag {

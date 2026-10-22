@@ -1327,6 +1327,122 @@ describe('building a wonder', () => {
   })
 })
 
+const WALLS: BuildChoice = {
+  assetId: 'walls',
+  item: { kind: 'walls' },
+  placement: 'none',
+  label: 'City Walls',
+  cost: 7,
+  tradeToPay: 0,
+  squares: [],
+}
+
+describe('building City Walls', () => {
+  const startWalls = (): void => {
+    fireEvent.click(buildButton())
+    choose('City Walls')
+  }
+  const withWalls = (): CityBuildOptions => options({ choices: [LIBRARY, WALLS] })
+
+  it('is listed with the buildings, with its cost and no square', () => {
+    render(<BuildPicker city={withWalls()} note={null} message={null} busy={false} onChoose={() => undefined} onClose={() => undefined} />)
+    const [library, walls] = within(screen.getByRole('list', { name: 'Buildings Capital D5 can build' })).getAllByRole('listitem')
+    expect(library?.textContent).toContain('Library')
+    expect(walls?.textContent).toContain('City Walls')
+    expect(walls?.textContent).toContain('Cost 7')
+    expect(walls?.textContent).not.toMatch(/square/i)
+  })
+
+  it('goes straight to the confirm bar: no board pick, and the bar says the marker is turned over', () => {
+    render(<Harness initial={viewOf([withWalls()])} />)
+    startWalls()
+    expect(overlays()).toHaveLength(0)
+    expect(bar().textContent).toContain('Build City Walls in Capital D5')
+    expect(bar().textContent).toContain('Cost 7')
+    expect(bar().textContent).toContain('The city marker is turned over to its walled side, nothing else is placed on the map.')
+    expect(bar().textContent).not.toContain('Tap a highlighted square')
+    expect(confirm().disabled).toBe(false)
+  })
+
+  it('sends the item with no target, once, however often Confirm is pressed', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([withWalls()])} />)
+    startWalls()
+    fireEvent.click(confirm())
+    fireEvent.click(confirm())
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Build' })).toBeNull())
+    expect(send).toHaveBeenCalledTimes(1)
+    const payload = send.mock.calls[0]?.[3]
+    expect(payload).toEqual({ cityPieceId: 'city-1', item: { kind: 'walls' } })
+    expect(payload).not.toHaveProperty('target')
+  })
+
+  it('agrees to the rush when the walls need trade', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([options({ choices: [{ ...WALLS, tradeToPay: 6 }] })])} />)
+    startWalls()
+    expect(confirm().textContent).toBe('Confirm and pay 6 trade')
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toEqual({ cityPieceId: 'city-1', item: { kind: 'walls' }, rush: true })
+  })
+})
+
+describe('replacing a building or wonder', () => {
+  const GRANARY_NOTE = 'Replaces your Granary, which is taken off the board and goes back to the supply.'
+  const WONDER_NOTE = 'Replaces the Pyramids, which is destroyed and cannot be built again for the rest of the game.'
+  const REPLACING: BuildChoice = {
+    ...LIBRARY,
+    squares: [
+      { column: 3, row: 4, label: 'D5' },
+      { column: 4, row: 4, label: 'E5', note: GRANARY_NOTE, replaces: { assetId: 'buildings/granary', label: 'Granary', kind: 'building' } },
+    ],
+  }
+  const startLibrary = (): void => {
+    fireEvent.click(buildButton())
+    choose('Library')
+  }
+
+  it('marks the square with the word Replace and names what goes, not by colour alone', () => {
+    render(<Harness initial={viewOf([options({ choices: [REPLACING] })])} />)
+    startLibrary()
+    const replacing = screen.getByRole('button', { name: 'Place Library on E5, replaces Granary' })
+    const plain = screen.getByRole('button', { name: 'Place Library on D5' })
+    expect(replacing.classList.contains('replacing')).toBe(true)
+    expect(replacing.classList.contains('noted')).toBe(false)
+    expect(replacing.textContent).toContain('Replace')
+    expect(plain.textContent).not.toContain('Replace')
+  })
+
+  it('is read before it is placed: the tap picks the square and shows the note, and Confirm builds', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([options({ choices: [REPLACING] })])} />)
+    startLibrary()
+    fireEvent.click(screen.getByRole('button', { name: 'Place Library on E5, replaces Granary' }))
+    expect(within(bar()).getByRole('status').textContent).toContain(`Note for E5: ${GRANARY_NOTE}`)
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toEqual({
+      cityPieceId: 'city-1',
+      item: { kind: 'building', assetId: 'buildings/library' },
+      target: { column: 4, row: 4 },
+    })
+  })
+
+  it('says that a replaced wonder is destroyed for good', () => {
+    const wonder: BuildChoice = {
+      ...COLOSSUS,
+      squares: [{ column: 3, row: 4, label: 'D5', note: WONDER_NOTE, replaces: { assetId: 'wonders/pyramids', label: 'The Pyramids', kind: 'wonder' } }],
+    }
+    render(<Harness initial={viewOf([options({ choices: [wonder] })])} />)
+    fireEvent.click(buildButton())
+    choose('The Colossus')
+    fireEvent.click(screen.getByRole('button', { name: 'Place The Colossus on D5, replaces The Pyramids' }))
+    expect(within(bar()).getByRole('status').textContent).toContain(WONDER_NOTE)
+  })
+})
+
 describe('a second action of the same city this turn', () => {
   const question = 'Capital D5 has already acted this turn (Harvest). A city takes one action each turn. Do it anyway?'
 

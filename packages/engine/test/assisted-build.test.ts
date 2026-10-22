@@ -33,7 +33,7 @@ import { markPhasesDone, unmarkPhaseDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { performAssistedAction, takeBackOpenBuild } from '../src/assisted.js'
 import { mapCellOf } from '../src/blockade.js'
-import { SQUARE_SIZE, findBoardAsset, mapTop, piecesAtStep, slotOrigin } from '../src/board.js'
+import { SQUARE_SIZE, areaAt, boardAreas, findBoardAsset, mapTop, piecesAtStep, slotOrigin } from '../src/board.js'
 import type { BoardPiece, Rotation } from '../src/board.js'
 import { buildOptionsOf, buildSquareRefusal } from '../src/build-options.js'
 import type { PlacedBuildItem } from '../src/build-item.js'
@@ -388,7 +388,8 @@ describe('the supply', () => {
     const options = optionsOf(used)
     expect(choiceFor(options, UNIVERSITY)).toBeUndefined()
     expect(reasonFor(options, UNIVERSITY)).toBe(
-      'None left in the supply: all 6 are on the board (the basic and the upgraded form share one supply).',
+      'None left in the supply: all 6 are on the board (the basic and the upgraded form share one supply). ' +
+        'One of yours of the same kind can be replaced, but none stands in this city.',
     )
     // The Harbor has a pool of its own
     expect(choiceFor(optionsOf(exhaust(ready(['Navigation'], 99), [LIBRARY, LIBRARY, LIBRARY, LIBRARY, LIBRARY, UNIVERSITY])), HARBOR)).toBeDefined()
@@ -403,18 +404,37 @@ describe('the supply', () => {
 describe('one limited building per city', () => {
   const limitedTechs = ['Currency', 'Philosophy', 'Metalworking', 'Banking', 'Theology', 'Military Science']
 
-  it('a Temple in the outskirts, whoever put it there, rules out all six limited buildings', () => {
+  it('a Temple in the outskirts, whoever put it there, leaves the limited buildings one square: the Temple, which they replace', () => {
     // Karandras put it on A2, a square of Cash's outskirts
     const state = put(ready([...limitedTechs, 'Writing'], 99), KARANDRAS1, 'buildings/temple', 0, 1)
     const options = optionsOf(state)
-    for (const assetId of [MARKET, 'buildings/bank', 'buildings/temple', 'buildings/cathedral', 'buildings/barracks', 'buildings/academy']) {
-      expect(choiceFor(options, assetId), assetId).toBeUndefined()
+    // The upgraded forms are the ones that can be built; each may go only where the Temple stands
+    for (const assetId of ['buildings/bank', 'buildings/cathedral', 'buildings/academy']) {
+      expect(cellsOf(choiceFor(options, assetId)?.squares), assetId).toEqual([[0, 1]])
+      expect(choiceFor(options, assetId)?.squares[0]?.replaces, assetId).toEqual({ assetId: 'buildings/temple', label: 'Temple', kind: 'building' })
     }
-    expect(reasonFor(options, 'buildings/bank')).toBe(
-      'City B2 already has a Temple. A city may hold only one of Market, Bank, Temple, Cathedral, Barracks and Academy.',
-    )
     // A building that is not limited is not affected
-    expect(choiceFor(options, LIBRARY)).toBeDefined()
+    expect(choiceFor(options, LIBRARY)?.squares.length).toBeGreaterThan(0)
+  })
+
+  it('a limited building that cannot be replaced leaves no square, and the reason says so', () => {
+    // The Temple's square is blockaded, so it cannot be built on, and no other square may hold a limited building
+    const state = put(put(ready([...limitedTechs], 99), KARANDRAS1, 'buildings/temple', 0, 1), KARANDRAS1, 'figures/bluearmy', 0, 1)
+    const options = optionsOf(state)
+    expect(choiceFor(options, 'buildings/bank')).toBeUndefined()
+    expect(reasonFor(options, 'buildings/bank')).toBe(
+      'No legal square. A Bank needs any terrain except water: 1 square has the wrong terrain, ' +
+        '6 squares are not allowed because the city already has its one limited building, Temple, which a new one can only replace, ' +
+        '1 square is blockaded.',
+    )
+  })
+
+  it('a limited building elsewhere in the outskirts keeps another limited building off a square with a different building', () => {
+    // A Library on C2 could be replaced by a Market, but the Temple on A2 already is the city's limited building
+    const state = put(put(ready(['Currency', 'Philosophy', 'Writing'], 99), CASH1981, 'buildings/temple', 0, 1), CASH1981, LIBRARY, 2, 1)
+    expect(cellsOf(choiceFor(optionsOf(state), MARKET)?.squares)).toEqual([[0, 1]])
+    // A Library is not limited: grassland is C2, where the Library of this test stands
+    expect(cellsOf(choiceFor(optionsOf(state), LIBRARY)?.squares)).toEqual([[2, 1]])
   })
 
   it('a limited building outside the outskirts does not count', () => {
@@ -426,8 +446,9 @@ describe('one limited building per city', () => {
     // A second city far from the first has an empty outskirts
     const state = put(put(ready(['Currency'], 99), KARANDRAS1, 'buildings/temple', 0, 1), CASH1981, 'cities/redcity2', 9, 9)
     const [first, second] = buildOptionsOf(state, me(state))
-    expect(choiceFor(first as CityBuildOptions, MARKET)).toBeUndefined()
-    expect(reasonFor(second as CityBuildOptions, MARKET)).not.toMatch(/already has/)
+    // The first city may build a Market only in place of its Temple; the second is held to nothing (it has no tile under it here, so no square)
+    expect(cellsOf(choiceFor(first as CityBuildOptions, MARKET)?.squares)).toEqual([[0, 1]])
+    expect(reasonFor(second as CityBuildOptions, MARKET)).not.toMatch(/limited building/)
   })
 })
 
@@ -450,16 +471,26 @@ describe('the squares', () => {
     expect(squares.some((square) => square.column === 1 && square.row === 1)).toBe(false)
   })
 
-  it('a square with a building, a wonder or a great person is taken, whoever put it there', () => {
-    const base = ready(['Writing'], 99)
-    for (const assetId of ['buildings/granary', 'wonders/pyramids', 'great people/scientist']) {
-      const taken = put(base, KARANDRAS1, assetId, C2.column, C2.row)
-      const options = optionsOf(taken)
-      expect(choiceFor(options, LIBRARY), assetId).toBeUndefined()
-      expect(reasonFor(options, LIBRARY), assetId).toBe(
-        'No legal square. A Library needs grassland: 7 squares have the wrong terrain, 1 square is taken.',
-      )
-    }
+  it('a square with a Great Person in the outskirts is replaced, whoever put it there, and the note says where it goes', () => {
+    const taken = put(ready(['Writing'], 99), KARANDRAS1, 'great people/scientist', C2.column, C2.row)
+    const library = choiceFor(optionsOf(taken), LIBRARY)
+    expect(library?.squares).toEqual([
+      {
+        ...C2,
+        label: 'C2',
+        note: 'Replaces your Scientist (Great Person), which goes back to your player area and can be placed again at the start of a turn.',
+        replaces: { assetId: 'great people/scientist', label: 'Scientist', kind: 'greatperson' },
+      },
+    ])
+  })
+
+  it('a city-state keeps its square taken', () => {
+    const taken = put(ready(['Writing'], 99), KARANDRAS1, 'city-states/cs1', C2.column, C2.row)
+    const options = optionsOf(taken)
+    expect(choiceFor(options, LIBRARY)).toBeUndefined()
+    expect(reasonFor(options, LIBRARY)).toBe(
+      'No legal square. A Library needs grassland: 7 squares have the wrong terrain, 1 square is taken.',
+    )
   })
 
   it('an enemy figure blockades its square, a friendly one does not', () => {
@@ -527,18 +558,21 @@ describe('the squares', () => {
   it('names the wrong terrain when nothing else is in the way', () => {
     const options = optionsOf(ready(['Navigation', 'Code of Laws'], 99))
     expect(cellsOf(choiceFor(options, HARBOR)?.squares)).toEqual([[2, 0]])
-    // The Harbor's only square taken: the reason counts the others as wrong terrain
-    const taken = optionsOf(put(ready(['Navigation'], 99), KARANDRAS1, 'buildings/granary', 2, 0))
+    // The Harbor's only square taken by a city-state: the reason counts the others as wrong terrain
+    const taken = optionsOf(put(ready(['Navigation'], 99), KARANDRAS1, 'city-states/cs1', 2, 0))
     expect(reasonFor(taken, HARBOR)).toBe('No legal square. A Harbor needs water: 7 squares have the wrong terrain, 1 square is taken.')
   })
 
   it('buildSquareRefusal says why one square does not work', () => {
     const market = { kind: 'building', assetId: MARKET } as const
-    const state = put(ready(['Currency'], 99), KARANDRAS1, 'buildings/granary', 0, 0)
+    const state = put(put(ready(['Currency'], 99), KARANDRAS1, 'city-states/cs1', 0, 0), KARANDRAS1, 'buildings/granary', 1, 0)
     const cash = me(state)
     const id = cityOf(state).id
+    // A building of the player's own may be replaced, a city-state keeps its square taken
     expect(buildSquareRefusal(state, cash, id, market, { column: 1, row: 0 })).toBeUndefined()
-    expect(buildSquareRefusal(state, cash, id, market, { column: 0, row: 0 })).toBe('A1 is already taken: Granary stands there.')
+    expect(buildSquareRefusal(state, cash, id, market, { column: 0, row: 0 })).toBe(
+      `A1 is already taken: ${findBoardAsset('city-states/cs1')?.label} stands there.`,
+    )
     expect(buildSquareRefusal(state, cash, id, market, { column: 2, row: 0 })).toBe('C1 is water, and a Market needs any terrain except water.')
     expect(buildSquareRefusal(state, cash, id, market, { column: 1, row: 1 })).toBe('B2 is not in the outskirts of that city.')
     expect(buildSquareRefusal(state, cash, id, market, { column: 3, row: 3 })).toBe('D4 is not in the outskirts of that city.')
@@ -808,18 +842,20 @@ describe('a request that is not allowed', () => {
     expect(again.assistedActions).toHaveLength(1)
   })
 
-  it('a second request for the same square is refused, with the reason', () => {
-    const done = build(ready(['Writing']), LIBRARY, C2)
-    expect(refusal(tryBuild(done, LIBRARY, C2, 'req-2'))).toMatch(/^Library cannot be built in City B2 now\. No legal square\./)
+  it('a request for a square a city-state has taken since is refused, with the reason', () => {
+    const taken = put(ready(['Writing']), KARANDRAS1, 'city-states/cs1', C2.column, C2.row)
+    expect(refusal(tryBuild(taken, LIBRARY, C2, 'req-2'))).toMatch(/^Library cannot be built in City B2 now\. No legal square\./)
   })
 
   it('a square taken in between is refused and says which', () => {
     const state = ready(['Currency'], 99)
     const looked = optionsOf(state)
     expect(cellsOf(choiceFor(looked, MARKET)?.squares)).toContainEqual([0, 0])
-    const taken = put(state, KARANDRAS1, 'buildings/granary', 0, 0)
+    const taken = put(state, KARANDRAS1, 'city-states/cs1', 0, 0)
     const result = tryBuild(taken, MARKET, { column: 0, row: 0 })
-    expect(refusal(result)).toBe('A1 is already taken: Granary stands there. Pick one of the highlighted squares.')
+    expect(refusal(result)).toBe(
+      `A1 is already taken: ${findBoardAsset('city-states/cs1')?.label} stands there. Pick one of the highlighted squares.`,
+    )
     expect(piecesOf(taken, MARKET)).toEqual([])
   })
 
@@ -1282,5 +1318,260 @@ describe('removing a built piece by hand', () => {
     }
     later = unwrap(unmarkPhaseDone(later, { playerId: CASH1981, turnNumber: 1, phase: 'CM' }))
     expect(takeBackOpenBuild(later, { playerId: CASH1981, pieceId: piece.id, at: AT })).toBeUndefined()
+  })
+})
+
+describe('replacing a building (base rules p. 17)', () => {
+  const GRANARY = 'buildings/granary'
+
+  /** Cash's own Granary on C2, the only grassland square. */
+  const withGranary = (techs: readonly string[] = ['Writing', 'Pottery']): GameState =>
+    put(ready(techs, 99), CASH1981, GRANARY, C2.column, C2.row)
+
+  it('offers the square of a building of the player, saying what it replaces', () => {
+    const library = choiceFor(optionsOf(withGranary()), LIBRARY)
+    expect(library?.squares).toEqual([
+      {
+        ...C2,
+        label: 'C2',
+        note: 'Replaces your Granary, which is taken off the board and goes back to the supply.',
+        replaces: { assetId: GRANARY, label: 'Granary', kind: 'building' },
+      },
+    ])
+  })
+
+  it('takes the old building off the board, puts the new one in its place and says so', () => {
+    const before = withGranary()
+    const granary = piecesOf(before, GRANARY)[0] as BoardPiece
+    const done = build(before, LIBRARY, C2)
+
+    expect(piecesOf(done, GRANARY)).toEqual([])
+    const library = piecesOf(done, LIBRARY)
+    expect(library).toHaveLength(1)
+    expect(mapCellOf(done.board, library[0] as BoardPiece)).toEqual(C2)
+    expect(done.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toBe(
+      'cash1981 built a Library in City B2 on square C2, replacing the Granary',
+    )
+
+    const effect = done.assistedActions[0]?.effect
+    if (effect?.kind !== 'build' || !('replaced' in effect) || effect.replaced === undefined) throw new Error('no replaced piece')
+    expect(effect.replaced.piece).toEqual(granary)
+    // The removal and the placement are two board entries, both counted with the build's line
+    const removal = done.board.history.find((entry) => entry.id === effect.replaced?.historyId)
+    expect(removal?.change).toMatchObject({ kind: 'remove', piece: { id: granary.id } })
+    const lineAt = done.log.findIndex((entry) => entry.assistedActionId === 'req-1') + 1
+    expect(removal?.logLength).toBe(lineAt)
+  })
+
+  it('takes the replaced building off the supply count, so the basic and the upgraded form can swap when none is left', () => {
+    // 5 Libraries and a University are all 6 of the pool: one of them in the city is the way to build another
+    const base = ready(['Writing', 'Printing Press'], 99)
+    const used = exhaust(put(base, CASH1981, LIBRARY, C2.column, C2.row), [LIBRARY, LIBRARY, LIBRARY, LIBRARY, UNIVERSITY])
+    const options = optionsOf(used)
+    expect(cellsOf(choiceFor(options, UNIVERSITY)?.squares)).toEqual([[2, 1]])
+    // The University costs 8 and the city has 5: pay the trade for the rest
+    const done = build(used, UNIVERSITY, C2, 'req-1', true)
+    expect(piecesOf(done, LIBRARY)).toHaveLength(4)
+    expect(piecesOf(done, UNIVERSITY)).toHaveLength(2)
+  })
+
+  it('the Building Program marker is used up as for any build', () => {
+    const marked = put(withOverride(withGranary(), null), CASH1981, 'markers/Building Program', 1, 1)
+    const done = build(marked, LIBRARY, C2)
+    expect(piecesOf(done, 'markers/Building Program')).toEqual([])
+    expect(piecesOf(done, GRANARY)).toEqual([])
+  })
+
+  it('a wonder of another player and a city-state are not replaced', () => {
+    const base = ready(['Writing'], 99)
+    expect(choiceFor(optionsOf(put(base, KARANDRAS1, 'city-states/cs1', C2.column, C2.row)), LIBRARY)).toBeUndefined()
+    const wonder = put(base, KARANDRAS1, 'wonders/pyramids', C2.column, C2.row)
+    const owned = { ...wonder, board: { ...wonder.board, pieces: wonder.board.pieces.map((piece) => (piece.assetId === 'wonders/pyramids' ? { ...piece, ownerId: KARANDRAS1 } : piece)) } }
+    expect(choiceFor(optionsOf(owned), LIBRARY)).toBeUndefined()
+    expect(reasonFor(optionsOf(owned), LIBRARY)).toContain("1 square holds another player's wonder, which cannot be replaced")
+  })
+
+  it('a blockaded square is not a square, also with a building on it', () => {
+    const blocked = put(withGranary(), KARANDRAS1, 'figures/bluearmy', C2.column, C2.row)
+    expect(choiceFor(optionsOf(blocked), LIBRARY)).toBeUndefined()
+  })
+
+  it('the old building is looked for again when the request comes: one that moved away leaves a plain build', () => {
+    const before = withGranary()
+    const looked = optionsOf(before)
+    expect(choiceFor(looked, LIBRARY)).toBeDefined()
+    const granary = piecesOf(before, GRANARY)[0] as BoardPiece
+    const moved = unwrap(
+      movePiece(before, { playerId: CASH1981, pieceId: granary.id, x: 3 * SQUARE_SIZE + 4, y: mapTop(before.board) + 3 * SQUARE_SIZE + 4 }),
+    )
+    // The square is empty now: the same request still builds, without replacing anything
+    const done = build(moved, LIBRARY, C2)
+    expect(done.assistedActions[0]?.effect).not.toHaveProperty('replaced')
+    expect(piecesOf(done, GRANARY)).toHaveLength(1)
+  })
+
+  describe('undoing it', () => {
+    it('by the vote puts the old building back, the same piece on the same square', () => {
+      const before = withGranary()
+      const granary = piecesOf(before, GRANARY)[0] as BoardPiece
+      const undone = undoByVote(build(before, LIBRARY, C2), 'req-1')
+
+      expect(piecesOf(undone, LIBRARY)).toEqual([])
+      const back = piecesOf(undone, GRANARY)
+      expect(back).toEqual([granary])
+      expect(undone.assistedActions[0]?.status).toBe('undone')
+      expect(undone.log.at(-1)?.publicLog).toBe(
+        "System: cash1981's Library on C2 was undone: the building was removed, and the Granary it replaced was put back",
+      )
+    })
+
+    it('removing the new building by hand before End turn takes the build back and puts the old one back', () => {
+      const before = withGranary()
+      const granary = piecesOf(before, GRANARY)[0] as BoardPiece
+      const done = build(before, LIBRARY, C2)
+      const library = piecesOf(done, LIBRARY)[0] as BoardPiece
+      const result = takeBackOpenBuild(done, { playerId: CASH1981, pieceId: library.id, at: AT })
+      if (result === undefined) throw new Error('the Library is not an open build')
+      const taken = unwrap(result)
+      expect(piecesOf(taken, LIBRARY)).toEqual([])
+      expect(piecesOf(taken, GRANARY)).toEqual([granary])
+    })
+
+    it('replaying the history gives the same pieces after the replacement and after its undo', () => {
+      const done = build(withGranary(), LIBRARY, C2)
+      const key = (piece: BoardPiece): string => `${piece.id}@${piece.x},${piece.y}`
+      for (const state of [done, undoByVote(done, 'req-1')]) {
+        const replayed = piecesAtStep(state.board.history, state.board.history.length)
+        expect([...replayed].map(key).sort()).toEqual([...state.board.pieces].map(key).sort())
+      }
+    })
+
+    it('the removal of the old building is the history entry before the placement, which the board Undo refuses', () => {
+      const done = build(withGranary(), LIBRARY, C2)
+      // The last entry is the Library placed, which is guarded; the removal sits right before it
+      expect(unwrapErr(undoLastBoardChange(done, CASH1981))).toEqual({ kind: 'BOARD_UNDO_ASSISTED' })
+      const effect = done.assistedActions[0]?.effect
+      if (effect?.kind !== 'build' || !('replaced' in effect) || effect.replaced === undefined) throw new Error('no replaced piece')
+      const entries = done.board.history
+      expect(entries.findIndex((entry) => entry.id === effect.replaced?.historyId)).toBe(entries.length - 2)
+    })
+  })
+})
+
+describe('replacing a Great Person (base rules p. 18)', () => {
+  const SCIENTIST = 'great people/scientist'
+  const withPerson = (): GameState => put(ready(['Writing'], 99), CASH1981, SCIENTIST, C2.column, C2.row)
+  const areaOwnerOf = (state: GameState, piece: BoardPiece): string | undefined =>
+    areaAt(boardAreas(state.board, state.players), piece.x + piece.width / 2, piece.y + piece.height / 2)?.playerId
+
+  it('moves the Great Person to the player area, where it has no effect, and builds on the empty square', () => {
+    const before = withPerson()
+    const person = piecesOf(before, SCIENTIST)[0] as BoardPiece
+    const done = build(before, LIBRARY, C2)
+
+    const held = piecesOf(done, SCIENTIST)
+    expect(held).toHaveLength(1)
+    expect((held[0] as BoardPiece).id).toBe(person.id)
+    // Off the map, in the player's own area
+    expect(mapCellOf(done.board, held[0] as BoardPiece)).toBeNull()
+    expect(areaOwnerOf(done, held[0] as BoardPiece)).toBe(CASH1981)
+    expect(mapCellOf(done.board, piecesOf(done, LIBRARY)[0] as BoardPiece)).toEqual(C2)
+    expect(done.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toBe(
+      'cash1981 built a Library in City B2 on square C2, replacing the Scientist (Great Person), which goes back to the player area',
+    )
+
+    const effect = done.assistedActions[0]?.effect
+    if (effect?.kind !== 'build' || !('reserved' in effect) || effect.reserved === undefined) throw new Error('no reserved piece')
+    expect(effect.reserved.piece).toEqual(person)
+    expect(effect).not.toHaveProperty('replaced')
+    const entry = done.board.history.find((candidate) => candidate.id === effect.reserved?.historyId)
+    expect(entry?.change).toMatchObject({ kind: 'move', pieceId: person.id, from: { x: person.x, y: person.y } })
+    // Counted with the build's line, and guarded from the board Undo
+    expect(entry?.logLength).toBe(done.log.findIndex((line) => line.assistedActionId === 'req-1') + 1)
+  })
+
+  it('the vote undo puts the Great Person back on its square, exactly where it was', () => {
+    const before = withPerson()
+    const person = piecesOf(before, SCIENTIST)[0] as BoardPiece
+    const undone = undoByVote(build(before, LIBRARY, C2), 'req-1')
+    expect(piecesOf(undone, LIBRARY)).toEqual([])
+    expect(piecesOf(undone, SCIENTIST)).toEqual([person])
+    expect(undone.log.at(-1)?.publicLog).toBe(
+      "System: cash1981's Library on C2 was undone: the building was removed, and the Scientist it replaced was put back",
+    )
+  })
+
+  it('the vote undo is refused when the Great Person has been placed somewhere else since', () => {
+    const done = build(withPerson(), LIBRARY, C2)
+    const held = piecesOf(done, SCIENTIST)[0] as BoardPiece
+    // D4 is outside the city's outskirts, so this is a plain move
+    const moved = unwrap(
+      movePiece(done, { playerId: CASH1981, pieceId: held.id, x: 3 * SQUARE_SIZE + 4, y: mapTop(done.board) + 3 * SQUARE_SIZE + 4 }),
+    )
+    const almost = almostUndone(moved, 'req-1')
+    const refused = unwrapErr(almost.last())
+    expect(refused).toMatchObject({ kind: 'ASSISTED_UNDO_BLOCKED' })
+    expect(refused.kind === 'ASSISTED_UNDO_BLOCKED' && refused.reason).toBe('The Scientist has left your player area. Move it back first.')
+  })
+
+  it('removing the new building by hand before End turn takes the build back and puts the Great Person back', () => {
+    const before = withPerson()
+    const person = piecesOf(before, SCIENTIST)[0] as BoardPiece
+    const done = build(before, LIBRARY, C2)
+    const library = piecesOf(done, LIBRARY)[0] as BoardPiece
+    const result = takeBackOpenBuild(done, { playerId: CASH1981, pieceId: library.id, at: AT })
+    if (result === undefined) throw new Error('the Library is not an open build')
+    expect(piecesOf(unwrap(result), SCIENTIST)).toEqual([person])
+  })
+
+  it('removing the new building by hand is a plain removal, with no refund, once the Great Person has been placed elsewhere', () => {
+    const done = build(withPerson(), LIBRARY, C2)
+    const held = piecesOf(done, SCIENTIST)[0] as BoardPiece
+    const moved = unwrap(
+      movePiece(done, { playerId: CASH1981, pieceId: held.id, x: 3 * SQUARE_SIZE + 4, y: mapTop(done.board) + 3 * SQUARE_SIZE + 4 }),
+    )
+    const library = piecesOf(moved, LIBRARY)[0] as BoardPiece
+    // The caller then removes the piece as any other: the build stays applied and nothing is given back
+    expect(takeBackOpenBuild(moved, { playerId: CASH1981, pieceId: library.id, at: AT })).toBeUndefined()
+    const removed = unwrap(removePiece(moved, { playerId: CASH1981, pieceId: library.id }))
+    expect(piecesOf(removed, LIBRARY)).toEqual([])
+    expect(removed.assistedActions[0]?.status).toBe('applied')
+    // The Great Person stays where the player put it
+    expect(mapCellOf(removed.board, piecesOf(removed, SCIENTIST)[0] as BoardPiece)).toEqual({ column: 3, row: 3 })
+  })
+
+  it('the board Undo cannot move the Great Person back alone', () => {
+    const done = build(withPerson(), LIBRARY, C2)
+    const effect = done.assistedActions[0]?.effect
+    if (effect?.kind !== 'build' || !('reserved' in effect) || effect.reserved === undefined) throw new Error('no reserved piece')
+    const entries = done.board.history
+    expect(entries.findIndex((entry) => entry.id === effect.reserved?.historyId)).toBe(entries.length - 2)
+    expect(unwrapErr(undoLastBoardChange(done, CASH1981))).toEqual({ kind: 'BOARD_UNDO_ASSISTED' })
+  })
+
+  it('replaying the history gives the same pieces after the build and after its undo', () => {
+    const done = build(withPerson(), LIBRARY, C2)
+    const key = (piece: BoardPiece): string => `${piece.id}@${piece.x},${piece.y}`
+    for (const state of [done, undoByVote(done, 'req-1')]) {
+      const replayed = piecesAtStep(state.board.history, state.board.history.length)
+      expect([...replayed].map(key).sort()).toEqual([...state.board.pieces].map(key).sort())
+    }
+  })
+})
+
+describe('replacing a limited building with another (base rules p. 16 to 17)', () => {
+  it('a Market is built in place of the Temple, which goes back to the supply, and the vote undo puts it back', () => {
+    const base = put(ready(['Currency', 'Philosophy'], 99), CASH1981, 'buildings/temple', 0, 1)
+    const temple = piecesOf(base, 'buildings/temple')[0] as BoardPiece
+    // The Temple's square is the only one a limited building may go on
+    expect(cellsOf(choiceFor(optionsOf(base), MARKET)?.squares)).toEqual([[0, 1]])
+    const done = build(base, MARKET, { column: 0, row: 1 }, 'req-1', true)
+    expect(piecesOf(done, 'buildings/temple')).toEqual([])
+    expect(mapCellOf(done.board, piecesOf(done, MARKET)[0] as BoardPiece)).toEqual({ column: 0, row: 1 })
+    expect(done.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toContain('on square A2, replacing the Temple')
+    const undone = undoByVote(done, 'req-1')
+    expect(piecesOf(undone, 'buildings/temple')).toEqual([temple])
+    expect(piecesOf(undone, MARKET)).toEqual([])
+    expect(me(undone).stats.trade).toBe(99)
   })
 })

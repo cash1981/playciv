@@ -10,13 +10,13 @@
 import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement } from './item.js'
 import { isUnit } from './item.js'
 import type { Rng } from './random.js'
-import type { Board, BoardArea, BoardPiece } from './board.js'
+import type { Board, BoardArea, BoardPiece, PieceFace } from './board.js'
 import { boardAreas } from './board.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
 import type { CityProduction } from './city-production.js'
 import { cityProductionsOf } from './city-production.js'
-import type { PlacedBuildItem, UnitBuildItem } from './build-item.js'
+import type { PlacedBuildItem, UnitBuildItem, WallsBuildItem } from './build-item.js'
 import type { CityBuildOptions } from './build-options.js'
 import { buildOptionsOf } from './build-options.js'
 import { cityActionsOf, upgradeOptionsOf } from './city-actions.js'
@@ -423,6 +423,18 @@ export type AssistedEffect =
        * Absent when no wonder was left to draw. Server side only, like every effect.
        */
       readonly drawn?: DrawnWonder
+      /**
+       * The building or wonder this one replaced (base rules p. 17): exactly as it stood, and the
+       * board history entry that removed it, so an undo puts the same piece back. Absent when the
+       * square was empty.
+       */
+      readonly replaced?: { readonly piece: BoardPiece; readonly historyId: string }
+      /**
+       * The Great Person this build replaced (base rules p. 18): held in reserve, which is moved to the
+       * player's area, and the board history entry that moved it. The piece as it stood, so an undo
+       * moves it back to its square. Absent when none was replaced.
+       */
+      readonly reserved?: { readonly piece: BoardPiece; readonly historyId: string }
       /** The trade paid for the missing production; 0 when the city's production was enough. */
       readonly trade: number
       /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
@@ -441,6 +453,21 @@ export type AssistedEffect =
       readonly card: {
         readonly itemId: string
         readonly sheetName: SheetName
+      }
+      readonly trade: number
+      readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+    }
+  | {
+      readonly kind: 'build'
+      readonly cityPieceId: string
+      /** City Walls: no square and no new piece, the city marker is turned over to its walled side. */
+      readonly item: WallsBuildItem
+      /** The city marker (the same piece before and after), how it looked before and after, and the board history entry that turned it over. */
+      readonly walls: {
+        readonly pieceId: string
+        readonly from: PieceFace
+        readonly to: PieceFace
+        readonly historyId: string
       }
       readonly trade: number
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null

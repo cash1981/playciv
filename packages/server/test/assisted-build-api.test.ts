@@ -289,10 +289,13 @@ describe('building over HTTP', () => {
     const after = await response.json<View>()
     expect(after.rev).toBe(before.rev + 1)
     expect(after.board.pieces.filter((piece) => piece.assetId === LIBRARY)).toHaveLength(1)
-    // The square is used, so the Library has no square left and is no choice any more
+    // The only square is the Library's own, which a new Library could only replace
     const city = after.you?.buildOptions?.[0]
-    expect(buildingChoices(city)).toEqual([])
-    expect(city?.unavailable.find((entry) => entry.assetId === LIBRARY)?.reason).toMatch(/^No legal square\./)
+    const again = buildingChoices(city)
+    expect(again.map((choice) => choice.assetId)).toEqual([LIBRARY])
+    expect(again[0]?.squares).toEqual([
+      expect.objectContaining({ label: 'C2', replaces: expect.objectContaining({ assetId: LIBRARY, kind: 'building' }) }),
+    ])
     expect(after.assistedActions).toEqual([
       expect.objectContaining({
         id: 'req-1', kind: 'build', status: 'applied', text: `${table.starterName} built a Library in City B2 on square C2`,
@@ -367,16 +370,23 @@ describe('building over HTTP', () => {
     expect(piecesOf(await stored(table), LIBRARY)).toEqual([])
   })
 
-  it('a second build on the same square is refused with the reason, and the board is unchanged', async () => {
+  it('a second build on the same square replaces the first, once the city is confirmed to act again', async () => {
     const table = await buildTable('Taken', { techs: ['Writing'] })
     const rev = (await view(table.gameId, table.starter)).rev
     const first = await (await sendBuild(table, 'req-1', rev)).json<View>()
-    const second = await sendBuild(table, 'req-2', first.rev)
-    expect(second.status).toBe(400)
-    expect(await second.json()).toMatchObject({
-      error: 'ASSISTED_ACTION_REJECTED',
-      message: expect.stringContaining('No legal square'),
+    // The city has acted: asked, not refused for good
+    const asked = await sendBuild(table, 'req-2', first.rev)
+    expect(asked.status).toBe(409)
+    expect(piecesOf(await stored(table), LIBRARY)).toHaveLength(1)
+
+    const confirmed = await post(table.starter, `/api/games/${table.gameId}/actions`, {
+      ...buildBody(table, 'req-3', first.rev),
+      confirmedRepeat: true,
     })
+    expect(confirmed.status).toBe(200)
+    const after = await confirmed.json<View>()
+    expect(after.assistedActions.at(-1)?.text).toContain('on square C2, replacing the Library')
+    // One Library still: the first was taken off and the second put in its place
     expect(piecesOf(await stored(table), LIBRARY)).toHaveLength(1)
   })
 

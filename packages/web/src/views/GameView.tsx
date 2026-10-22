@@ -597,6 +597,7 @@ export function GameView({
         readOnly={replaying || locked}
         youId={you?.playerId ?? null}
         viewerCivilization={you?.civilization?.name ?? null}
+        viewerColor={you?.color ?? null}
         {...(pickSquares === undefined ? {} : { pickSquares })}
         run={run}
       />

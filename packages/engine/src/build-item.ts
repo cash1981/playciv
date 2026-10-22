@@ -28,10 +28,21 @@ export interface UnitBuildItem {
 }
 
 /**
+ * City Walls (base rules p. 17): a building that stands in the city centre, so no square is
+ * picked. Building them turns the city marker over to its walled side; nothing new is placed.
+ */
+export interface WallsBuildItem {
+  readonly kind: 'walls'
+}
+
+/** An item with no square to pick: a military unit (a card) or City Walls (the city marker turned over). */
+export type SquarelessBuildItem = UnitBuildItem | WallsBuildItem
+
+/**
  * What a build creates. A figure carries no asset id: its artwork depends on the
  * player's colour, which the engine reads off the player.
  */
-export type BuildItem = PlacedBuildItem | UnitBuildItem
+export type BuildItem = PlacedBuildItem | SquarelessBuildItem
 
 /** Whether two items are the same thing to build. */
 export function sameBuildItem(a: BuildItem, b: BuildItem): boolean {

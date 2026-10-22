@@ -271,12 +271,33 @@ describe('what a city may build of the wonders', () => {
     expect(options.unavailable.filter((entry) => entry.item.kind === 'wonder')).toEqual([])
   })
 
-  it('a city holds one wonder: a wonder in its outskirts, whoever owns it, keeps the others out', () => {
+  it('a city holds one wonder: with one in its outskirts a new wonder may only take its square', () => {
     const state = put(ready(), KARANDRAS1, PYRAMIDS, 0, 2)
     const options = optionsOf(state)
-    expect(options.choices.filter((choice) => choice.item.kind === 'wonder')).toEqual([])
+    // Not owned by anybody (it was put there by hand), so it is the city's own to replace
+    for (const assetId of [COLOSSUS, STONEHENGE]) {
+      expect(wonderChoice(options, assetId)?.squares, assetId).toEqual([
+        {
+          column: 0,
+          row: 2,
+          label: 'A3',
+          note: 'Replaces the Pyramids, which is destroyed and cannot be built again for the rest of the game.',
+          replaces: { assetId: PYRAMIDS, label: 'The Pyramids', kind: 'wonder' },
+        },
+      ])
+    }
+  })
+
+  it('a wonder that belongs to another player cannot be replaced, and then no square is left', () => {
+    const placed = put(ready(), KARANDRAS1, PYRAMIDS, 0, 2)
+    const pyramids = piecesOf(placed, PYRAMIDS)[0] as BoardPiece
+    const state = unwrap(setWonderOwner(placed, { playerId: CASH1981, pieceId: pyramids.id, ownerId: KARANDRAS1 }))
+    const options = optionsOf(state)
+    expect(wonderChoice(options, COLOSSUS)).toBeUndefined()
     expect(wonderReason(options, COLOSSUS)).toBe(
-      'City B2 already has The Pyramids. A city may hold only one wonder, and may also hold one limited building.',
+      'No legal square. A wonder needs any terrain except water: 1 square has the wrong terrain, ' +
+        "1 square holds another player's wonder, which cannot be replaced, " +
+        '6 squares are not allowed because the city already has its one wonder, The Pyramids, which a new one can only replace.',
     )
   })
 
@@ -285,11 +306,26 @@ describe('what a city may build of the wonders', () => {
     expect(wonderChoice(optionsOf(state), COLOSSUS)).toBeDefined()
   })
 
-  it('a square with a building or a wonder is taken', () => {
+  it('a building of the player is replaced by a wonder, and the square says so', () => {
     const state = put(ready(), CASH1981, 'buildings/library', 2, 1)
-    expect(wonderChoice(optionsOf(state), COLOSSUS)?.squares.map((square) => square.label)).not.toContain('C2')
+    const square = wonderChoice(optionsOf(state), COLOSSUS)?.squares.find((candidate) => candidate.label === 'C2')
+    expect(square).toMatchObject({
+      note: 'Replaces your Library, which is taken off the board and goes back to the supply.',
+      replaces: { assetId: 'buildings/library', label: 'Library', kind: 'building' },
+    })
+    expect(buildSquareRefusal(state, me(state), cityOf(state).id, { kind: 'wonder', assetId: COLOSSUS }, C2)).toBeUndefined()
+  })
+
+  it('a Great Person of the player is replaced by a wonder, and a city-state keeps its square taken', () => {
+    const person = put(ready(), CASH1981, 'great people/scientist', 2, 1)
+    const square = wonderChoice(optionsOf(person), COLOSSUS)?.squares.find((candidate) => candidate.label === 'C2')
+    expect(square?.replaces).toEqual({ assetId: 'great people/scientist', label: 'Scientist', kind: 'greatperson' })
+    expect(buildSquareRefusal(person, me(person), cityOf(person).id, { kind: 'wonder', assetId: COLOSSUS }, C2)).toBeUndefined()
+
+    const state = put(ready(), KARANDRAS1, 'city-states/cs1', 2, 1)
+    expect(wonderChoice(optionsOf(state), COLOSSUS)?.squares.map((candidate) => candidate.label)).not.toContain('C2')
     expect(buildSquareRefusal(state, me(state), cityOf(state).id, { kind: 'wonder', assetId: COLOSSUS }, C2)).toBe(
-      'C2 is already taken: Library stands there.',
+      `C2 is already taken: ${findBoardAsset('city-states/cs1')?.label} stands there.`,
     )
   })
 
@@ -360,11 +396,11 @@ describe('building a wonder', () => {
     )
   })
 
-  it('refuses the water square and a second wonder in the same city', () => {
+  it('refuses the water square, and a second wonder anywhere but on the first', () => {
     expect(describeError(unwrapErr(tryBuild(ready(), COLOSSUS, C1)))).toContain('C1 is water, and a wonder needs any terrain except water.')
     const first = build(ready(), COLOSSUS, C2)
     const second = describeError(unwrapErr(tryBuild(first, STONEHENGE, A1, 'req-2')))
-    expect(second).toContain('City B2 already has The Colossus')
+    expect(second).toContain("A1 cannot be used: The Colossus is the city's one wonder, and a new one can only replace it.")
   })
 
   it('a building program marker is used up, as with a building', () => {
@@ -636,5 +672,110 @@ describe('undoing a wonder', () => {
     expect(deckNames(lost)).not.toContain('Stonehenge')
     const done = build(lost, COLOSSUS, C2)
     expect(done.log.at(-1)?.publicLog).toBe('System: drew The Great Wall and placed it in the Wonders area')
+  })
+})
+
+describe('replacing a wonder or a building with a wonder (base rules p. 17)', () => {
+  /** An own Colossus on C2, with the Stonehenge and the Pyramids in the market. */
+  function withOwnColossus(): GameState {
+    const placed = put(ready({ market: [STONEHENGE, PYRAMIDS] }), CASH1981, COLOSSUS, C2.column, C2.row)
+    const colossus = piecesOf(placed, COLOSSUS)[0] as BoardPiece
+    // A wonder on the board has left its deck, so its card is taken out of it
+    return withWonderDeck(unwrap(setWonderOwner(placed, { playerId: CASH1981, pieceId: colossus.id, ownerId: CASH1981 })), DECK)
+  }
+
+  it('a second wonder may only replace the first, so the first one is the only square', () => {
+    const options = optionsOf(withOwnColossus())
+    for (const assetId of [STONEHENGE, PYRAMIDS]) {
+      const squares = wonderChoice(options, assetId)?.squares ?? []
+      expect(squares.map((square) => square.label), assetId).toEqual(['C2'])
+      expect(squares[0]?.replaces).toEqual({ assetId: COLOSSUS, label: 'The Colossus', kind: 'wonder' })
+    }
+  })
+
+  it('destroys the old wonder for good: it leaves the board and is not in the market or the deck', () => {
+    const before = withOwnColossus()
+    const colossus = piecesOf(before, COLOSSUS)[0] as BoardPiece
+    const done = build(before, STONEHENGE, C2)
+
+    expect(piecesOf(done, COLOSSUS)).toEqual([])
+    expect(deckNames(done)).not.toContain('The Colossus')
+    expect(marketWondersOf(done.board, done.board.pieces).map((piece) => piece.label)).not.toContain('The Colossus')
+    const stonehenge = piecesOf(done, STONEHENGE)[0] as BoardPiece
+    expect(mapCellOf(done.board, stonehenge)).toEqual(C2)
+    expect(stonehenge.ownerId).toBe(CASH1981)
+    expect(buildLine(done)).toBe('cash1981 built Stonehenge in City B2 on square C2, replacing the Colossus, which is destroyed')
+
+    const effect = done.assistedActions[0]?.effect
+    if (effect?.kind !== 'build' || !('replaced' in effect) || effect.replaced === undefined) throw new Error('no replaced piece')
+    expect(effect.replaced.piece).toEqual({ ...colossus, ownerId: CASH1981 })
+    // The next wonder is still drawn into the market, as for any wonder that is built
+    expect(done.log.at(-1)?.publicLog).toContain('drew')
+  })
+
+  it('the vote undo brings the old wonder back, owned and in its place, and the new one back to the market', () => {
+    const before = withOwnColossus()
+    const colossus = piecesOf(before, COLOSSUS)[0] as BoardPiece
+    const undone = undoByVote(build(before, STONEHENGE, C2), 'req-1')
+
+    expect(piecesOf(undone, COLOSSUS)).toEqual([{ ...colossus, ownerId: CASH1981 }])
+    expect(marketWondersOf(undone.board, undone.board.pieces).map((piece) => piece.assetId)).toEqual([PYRAMIDS, STONEHENGE])
+    expect(undone.log.at(-1)?.publicLog).toContain('and the Colossus it replaced was put back')
+  })
+
+  it('removing the new wonder by hand before End turn takes the whole build back, the old wonder too', () => {
+    const before = withOwnColossus()
+    const colossus = piecesOf(before, COLOSSUS)[0] as BoardPiece
+    const done = build(before, STONEHENGE, C2)
+    const stonehenge = piecesOf(done, STONEHENGE)[0] as BoardPiece
+    const result = takeBackOpenBuild(done, { playerId: CASH1981, pieceId: stonehenge.id, at: AT })
+    if (result === undefined) throw new Error('the wonder is not an open build')
+    const taken = unwrap(result)
+    expect(piecesOf(taken, COLOSSUS)).toEqual([{ ...colossus, ownerId: CASH1981 }])
+    expect(marketWondersOf(taken.board, taken.board.pieces).map((piece) => piece.assetId)).toEqual([PYRAMIDS, STONEHENGE])
+  })
+
+  it('a wonder replaces a building of the player when the city has no wonder, and the building goes back to the supply', () => {
+    const state = put(ready(), CASH1981, 'buildings/library', C2.column, C2.row)
+    const done = build(state, COLOSSUS, C2)
+    expect(piecesOf(done, 'buildings/library')).toEqual([])
+    expect(buildLine(done)).toBe('cash1981 built the Colossus in City B2 on square C2, replacing the Library')
+    const undone = undoByVote(done, 'req-1')
+    expect(piecesOf(undone, 'buildings/library')).toHaveLength(1)
+    expect(piecesOf(undone, COLOSSUS)[0] && isInWondersArea(undone.board, piecesOf(undone, COLOSSUS)[0] as BoardPiece)).toBe(true)
+  })
+
+  it('a building replaces a wonder of the player, which is destroyed', () => {
+    // The Library goes on grassland, and C2 is the only grassland square
+    const state = learn(withOwnColossus(), 'Writing')
+    const library = (buildOptionsOf(state, me(state))[0] as CityBuildOptions).choices.find((choice) => choice.assetId === 'buildings/library')
+    expect(library?.squares.map((square) => square.replaces?.assetId)).toEqual([COLOSSUS])
+    const done = unwrap(
+      performAssistedAction(state, {
+        playerId: CASH1981,
+        action: 'build',
+        requestId: 'req-1',
+        at: AT,
+        payload: { cityPieceId: cityOf(state).id, item: { kind: 'building', assetId: 'buildings/library' }, target: C2 },
+      }),
+    )
+    expect(piecesOf(done, COLOSSUS)).toEqual([])
+    expect(buildLine(done)).toBe('cash1981 built a Library in City B2 on square C2, replacing the Colossus, which is destroyed')
+    const undone = undoByVote(done, 'req-1')
+    expect(piecesOf(undone, COLOSSUS)).toHaveLength(1)
+    expect(piecesOf(undone, 'buildings/library')).toEqual([])
+  })
+
+  it('a wonder replaces a Great Person of the player, which goes back to the player area, and the undo brings it back', () => {
+    const before = put(ready(), CASH1981, 'great people/scientist', C2.column, C2.row)
+    const person = piecesOf(before, 'great people/scientist')[0] as BoardPiece
+    const done = build(before, COLOSSUS, C2)
+    const held = piecesOf(done, 'great people/scientist')[0] as BoardPiece
+    expect(held.id).toBe(person.id)
+    expect(mapCellOf(done.board, held)).toBeNull()
+    expect(buildLine(done)).toBe(
+      'cash1981 built the Colossus in City B2 on square C2, replacing the Scientist (Great Person), which goes back to the player area',
+    )
+    expect(piecesOf(undoByVote(done, 'req-1'), 'great people/scientist')).toEqual([person])
   })
 })

@@ -41,10 +41,12 @@ import {
   compareWonderNames,
   cultureCellCenter,
   cultureTrackHeight,
+  findBoardAsset,
   locationOf,
   mapHeight,
   mapTop,
   nearestSlotOrigin,
+  piecesReplacedByGreatPerson,
   remainingBoardAssetCount,
   slotOrigin,
   terrainAt,
@@ -64,8 +66,10 @@ export interface PickableSquare {
   readonly row: number
   /** For example "D5". */
   readonly label: string
-  /** Something to know before picking it. The engine sets one only for an army on a square where an enemy figure stands; any battle or loot is settled by hand. */
+  /** Something to know before picking it: an army on a square where an enemy figure stands (any battle or loot is settled by hand), or the building, wonder or Great Person of the player's that the item replaces. */
   readonly note?: string
+  /** The building, wonder or Great Person of the player's own that the item takes the place of; set with `note`. */
+  readonly replaces?: { readonly assetId: string; readonly label: string; readonly kind: 'building' | 'wonder' | 'greatperson' }
 }
 
 /**
@@ -94,6 +98,8 @@ interface Props {
   readonly youId?: string | null
   /** The viewer's civ: Russia is offered the white army (issue #204), Spain the white scout. */
   readonly viewerCivilization?: string | null
+  /** The viewer's colour, which decides whose cities a Great Person placed in their outskirts replaces what stands there. */
+  readonly viewerColor?: string | null
   /** Buildings and Great Persons an enemy figure stands on (issue #241); drawn greyed and struck through. */
   readonly blockadedPieceIds?: readonly string[]
   /** Set while a Build waits for the player to pick a square. */
@@ -316,6 +322,7 @@ export function BoardView({
   readOnly = false,
   youId = null,
   viewerCivilization = null,
+  viewerColor = null,
   blockadedPieceIds = [],
   pickSquares,
   run,
@@ -436,15 +443,57 @@ export function BoardView({
   const terrainAllows = useCallback(
     (assetId: string, centreX: number, centreY: number, from?: BoardPiece, quiet = false): boolean => {
       const warning = terrainWarning(board, assetId, centreX, centreY)
-      if (warning === null) return true
-      if (from !== undefined && terrainAt(board, from.x + from.width / 2, from.y + from.height / 2) === warning.terrain) {
-        return true
+      if (warning !== null && !(from !== undefined && terrainAt(board, from.x + from.width / 2, from.y + from.height / 2) === warning.terrain)) {
+        // `quiet` is a held key repeating: the first press already asked, so say no without asking again.
+        if (quiet) return false
+        if (!window.confirm(`${warning.message} Place it anyway?`)) return false
       }
-      // `quiet` is a held key repeating: the first press already asked, so say no without asking again.
+
+      // A Great Person placed on a wonder of its owner destroys it for good (base rules p. 18, as on p. 17):
+      // the engine does it on the drop, so the player is asked first. Buildings and Great People are replaced
+      // without a question, and a marker that stays on its square replaces nothing. The manifest is read
+      // directly, not the palette list, which is fetched later and may have failed.
+      const asset = findBoardAsset(assetId)
+      if (asset === undefined || asset.category !== 'greatperson' || youId === null || viewerColor === null) return true
+      const width = from?.width ?? asset.width
+      const height = from?.height ?? asset.height
+      // Where the server will put it: clamped to the board and rounded, so a drag past the edge is judged on the square it lands in
+      const [x, y] = clampToBoard(board, centreX - width / 2, centreY - height / 2, width, height)
+      const marker: BoardPiece = {
+        id: from?.id ?? '',
+        assetId,
+        path: asset.path,
+        label: asset.label,
+        category: asset.category,
+        x,
+        y,
+        width,
+        height,
+        rotation: 0,
+        placedBy: youId,
+      }
+      const cell = (piece: BoardPiece) => ({
+        column: Math.floor((piece.x + piece.width / 2) / board.squareSize),
+        row: Math.floor((piece.y + piece.height / 2 - mapTop(board)) / board.squareSize),
+      })
+      if (from !== undefined) {
+        const before = cell(from)
+        const after = cell(marker)
+        if (before.column === after.column && before.row === after.row) return true
+      }
+      const wonders = piecesReplacedByGreatPerson(
+        { board, players: [] },
+        { playerId: youId, colour: viewerColor.toLowerCase() },
+        marker,
+      ).filter((piece) => piece.category === 'wonder')
+      if (wonders.length === 0) return true
       if (quiet) return false
-      return window.confirm(`${warning.message} Place it anyway?`)
+      const names = wonders.map((piece) => piece.label).join(' and ')
+      return window.confirm(
+        `Placing ${asset.label} here destroys ${names}, which cannot be built again for the rest of the game. Place it anyway?`,
+      )
     },
-    [board],
+    [board, youId, viewerColor],
   )
 
   const width = boardWidth(board)
@@ -1067,9 +1116,15 @@ export function BoardView({
                   <button
                     key={`pick-${cell.column}-${cell.row}`}
                     type="button"
-                    className={`board-pick-cell${chosen ? ' chosen' : ''}${cell.note === undefined ? '' : ' noted'}`}
-                    // The engine's only square note is the enemy figure on a square an army is placed on; the bar spells it out once the square is picked.
-                    aria-label={`Place ${pickSquares.itemLabel} on ${cell.label}${cell.note === undefined ? '' : ', enemy figure there, resolve by hand'}`}
+                    className={`board-pick-cell${chosen ? ' chosen' : ''}${cell.note === undefined ? '' : cell.replaces === undefined ? ' noted' : ' replacing'}`}
+                    // A square note is the enemy figure on a square an army is placed on, or what the item replaces; the bar spells it out once the square is picked.
+                    aria-label={`Place ${pickSquares.itemLabel} on ${cell.label}${
+                      cell.note === undefined
+                        ? ''
+                        : cell.replaces === undefined
+                          ? ', enemy figure there, resolve by hand'
+                          : `, replaces ${cell.replaces.label}`
+                    }`}
                     aria-pressed={chosen}
                     disabled={busy || readOnly}
                     style={{
@@ -1083,7 +1138,7 @@ export function BoardView({
                     <span aria-hidden="true">{cell.label}</span>
                     {cell.note !== undefined && (
                       <span className="board-pick-flag" aria-hidden="true">
-                        Enemy
+                        {cell.replaces === undefined ? 'Enemy' : 'Replace'}
                       </span>
                     )}
                   </button>

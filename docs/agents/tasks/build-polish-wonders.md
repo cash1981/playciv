@@ -58,3 +58,13 @@ server; one new data file.
 - Web: `BuildPicker.tsx`, `.css`, `buildFlow.ts`, `GameView.tsx`, `CityCard.tsx`, `FaqView.tsx`, and the
   tests of those; `CitiesPanel.tsx` and its test are removed.
 - `decisions.md`, `state.md`, `README.md`, `task-board.md`.
+
+## Added later: replacing, Great People and City Walls
+
+After trying Build the human asked for: a second wonder in a city (it replaces the first), building
+over any of one's own buildings or wonders (the old piece is removed), City Walls as a Build choice
+(Masonry), and upgrades replacing the building (already the Upgrade block). He first described a Great
+Person as only disabling the building under it; the rulebook (p. 18) says it replaces it, a replaced
+Great Person goes back to the player's area, and the human chose the rulebook. The rules, the choices
+made and what is not built are in "Replacing, Great People and City Walls" in `decisions.md`. Rulebook
+text read from `Civilization/civilization-rules.pdf` p. 17 and 18.

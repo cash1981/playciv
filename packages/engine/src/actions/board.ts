@@ -22,7 +22,9 @@ import {
   boardUndoBlocked,
   boardAssetLimit,
   boardAreas,
+  AREA_LABEL_HEIGHT,
   clampToBoard,
+  faceOf,
   findBoardAsset,
   findPiece,
   locationOf,
@@ -35,6 +37,7 @@ import {
   START_PLAYER_ID,
   whiteFigureCivilization,
 } from '../board.js'
+import { cityFootprintsOf, mapCellOf } from '../blockade.js'
 import type { EngineError } from '../errors.js'
 import { MAX_PRODUCTION_OVERRIDE } from '../limits.js'
 import { appendLog } from '../log.js'
@@ -178,7 +181,8 @@ export function placePiece(state: GameState, input: PlacePieceInput): ActionResu
   // A second start player marker dropped in another area takes over
   // The id comes from the history entry, not from the position: map tiles go underneath
   const change = placed.board.history.at(-1)?.change
-  return ok(change?.kind === 'place' ? announceStartPlayer(state, placed, change.piece.id) : placed)
+  if (change?.kind !== 'place') return ok(placed)
+  return ok(replaceUnderGreatPerson(announceStartPlayer(state, placed, change.piece.id), change.piece.id, input, null))
 }
 
 /**
@@ -288,11 +292,14 @@ export function movePiece(state: GameState, input: MovePieceInput): ActionResult
   const denied = requireAccess(state, input.playerId)
   if (denied !== undefined) return err(denied)
 
+  const before = state.board.pieces.find((piece) => piece.id === input.pieceId)
   const moved = movePieceUnchecked(state, input)
   if (moved === undefined) {
     return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
   }
-  return ok(announceStartPlayer(state, moved, input.pieceId))
+  // Only a marker that arrives on a square replaces what is there: a nudge or a re-drop on its own square leaves it alone
+  const from = before === undefined ? null : mapCellOf(state.board, before)
+  return ok(replaceUnderGreatPerson(announceStartPlayer(state, moved, input.pieceId), input.pieceId, input, from))
 }
 
 /**
@@ -370,6 +377,87 @@ export function movePieceUnchecked(
       from === to
         ? `nudged ${piece.label} in ${to}`
         : `moved ${piece.label} from ${from} to ${to}`,
+  })
+}
+
+/**
+ * A Great Person placed on a building, a wonder or another Great Person replaces it (base rules
+ * p. 18, as described on p. 17; the human chose this over covering it). The old piece is taken off
+ * as the board history entry after the move, so the board Undo gives it back one step at a time: a
+ * building or wonder is removed (a wonder is destroyed for good), another Great Person is held in
+ * reserve, which is the player's own area (it has no effect off the map). Only on a square in the
+ * outskirts of a city of the player who placed it, and never another player's wonder: a drag that
+ * ends anywhere else is the plain move it was before. `from` is the map square a moved marker came
+ * from, `null` for a marker that was just placed or came from off the map: a marker that stays on
+ * its square (a nudge, a drop in the same place) replaces nothing, so a building left beside a
+ * marker on purpose is not removed by straightening it.
+ */
+function replaceUnderGreatPerson(
+  state: GameState,
+  personId: string,
+  input: { readonly playerId: string; readonly at?: string },
+  from: { readonly column: number; readonly row: number } | null,
+): GameState {
+  const person = state.board.pieces.find((piece) => piece.id === personId)
+  if (person === undefined) return state
+  const player = findPlayer(state, input.playerId)
+  const colour = player?.color?.toLowerCase()
+  const cell = mapCellOf(state.board, person)
+  if (player === undefined || colour === undefined || cell === null) return state
+  if (from !== null && from.column === cell.column && from.row === cell.row) return state
+
+  const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === input.playerId)
+  let next = state
+  for (const old of piecesReplacedByGreatPerson(state, { playerId: input.playerId, colour }, person)) {
+    if (old.category === 'greatperson') {
+      // Held in reserve: back in the player's own area, tidied into the next free slot
+      if (area === undefined) continue
+      const reserved = movePieceUnchecked(next, {
+        playerId: input.playerId,
+        pieceId: old.id,
+        x: area.x + 20,
+        y: area.y + AREA_LABEL_HEIGHT + 10,
+        ...(input.at === undefined ? {} : { at: input.at }),
+      })
+      if (reserved !== undefined) next = reserved
+      continue
+    }
+    const index = next.board.pieces.findIndex((piece) => piece.id === old.id)
+    next = record(input, {
+      state: next,
+      pieces: next.board.pieces.filter((piece) => piece.id !== old.id),
+      change: { kind: 'remove', piece: old, index },
+      description: `removed ${old.label} from ${locationOf(next.board, areasFor(next), old)}, replaced by ${person.label}`,
+    })
+  }
+  return next
+}
+
+/**
+ * The pieces a Great Person standing where `person` is would replace (base rules p. 18): the
+ * buildings, wonders and Great People on that map square, when it is in the outskirts of a city of
+ * the mover's colour; never another player's wonder, and nothing when `person` is not a Great
+ * Person or is off the map. Pure and read-only, so the web asks the same question before it sends a
+ * drop that would destroy a wonder.
+ */
+export function piecesReplacedByGreatPerson(
+  state: Pick<GameState, 'board' | 'players'>,
+  mover: { readonly playerId: string; readonly colour: string },
+  person: BoardPiece,
+): readonly BoardPiece[] {
+  if (person.category !== 'greatperson') return []
+  const cell = mapCellOf(state.board, person)
+  if (cell === null) return []
+  const inOwnOutskirts = cityFootprintsOf(state, mover.colour).some((footprint) =>
+    footprint.outskirts.some((candidate) => candidate.column === cell.column && candidate.row === cell.row),
+  )
+  if (!inOwnOutskirts) return []
+  return state.board.pieces.filter((piece) => {
+    if (piece.id === person.id) return false
+    if (piece.category !== 'building' && piece.category !== 'wonder' && piece.category !== 'greatperson') return false
+    if (piece.category === 'wonder' && piece.ownerId !== undefined && piece.ownerId !== null && piece.ownerId !== mover.playerId) return false
+    const at = mapCellOf(state.board, piece)
+    return at !== null && at.column === cell.column && at.row === cell.row
   })
 }
 
@@ -644,6 +732,39 @@ export function removePieceAsSystem(state: GameState, pieceId: string): GameStat
   )
 }
 
+/**
+ * Turns a piece over to another asset, as one history entry: the city marker to its walled side.
+ * The piece keeps its id, its owner data and its centre, so everything that refers to it (a typed
+ * production, a build's record) still does. Without the access check and without a Result, like
+ * {@link placeUnchecked}: the caller is an engine action that has checked access. `undefined`
+ * when the piece or the asset is not there.
+ */
+export function flipPieceUnchecked(
+  state: GameState,
+  input: { readonly playerId: string; readonly pieceId: string; readonly assetId: string; readonly at?: string },
+): GameState | undefined {
+  const piece = state.board.pieces.find((candidate) => candidate.id === input.pieceId)
+  const asset = findBoardAsset(input.assetId)
+  if (piece === undefined || asset === undefined) return undefined
+  const to = {
+    assetId: asset.id,
+    path: asset.path,
+    label: asset.label,
+    // The two faces differ by a few pixels, so the centre is kept: the marker stays on its squares
+    x: piece.x + piece.width / 2 - asset.width / 2,
+    y: piece.y + piece.height / 2 - asset.height / 2,
+    width: asset.width,
+    height: asset.height,
+  }
+  const change: BoardChange = { kind: 'flip', pieceId: piece.id, from: faceOf(piece), to }
+  return record(input, {
+    state,
+    pieces: applyChange(state.board.pieces, change),
+    change,
+    description: `turned ${piece.label} over to ${asset.label} at ${locationOf(state.board, areasFor(state), piece)}`,
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Undo
 // ---------------------------------------------------------------------------
@@ -668,7 +789,7 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     if (record.status !== 'applied') return false
     const effect = record.effect
     // A build placed a building or a figure and used up the Building Program marker: neither can be taken back alone.
-    // A unit placed nothing, so only a marker is on the board.
+    // A unit placed nothing, so only a marker is on the board; City Walls only turned the city marker over.
     if (effect.kind === 'build') {
       return (
         ('historyId' in effect && effect.historyId === entry.id) ||
@@ -676,6 +797,10 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
         ('wonder' in effect && effect.wonder?.ownerHistoryId === entry.id) ||
         // and so did the wonder it drew into the market: its card is out of the deck
         ('drawn' in effect && effect.drawn?.historyId === entry.id) ||
+        // a building or wonder it replaced was taken off the board, a Great Person it replaced was put in the player's area, and the city marker City Walls turned over
+        ('replaced' in effect && effect.replaced?.historyId === entry.id) ||
+        ('reserved' in effect && effect.reserved?.historyId === entry.id) ||
+        ('walls' in effect && effect.walls.historyId === entry.id) ||
         effect.marker?.historyId === entry.id
       )
     }

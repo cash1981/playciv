@@ -106,7 +106,7 @@ const extraFields = (body: Record<string, unknown>, allowed: readonly string[]):
  * with it. Only the shape is checked here (ids, a known building or unit type,
  * whole numbers, a boolean, no extra fields in the body or the item); whether the city, the
  * item and the square are legal is the engine's decision, made from the fresh
- * state. A building, a wonder or a figure needs a target, a unit must not have one.
+ * state. A building, a wonder or a figure needs a target, a unit and City Walls must not have one.
  */
 function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string {
   const extra = extraFields(body, BUILD_FIELDS)
@@ -135,12 +135,14 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
   } else if (item['kind'] === 'unit' && hasOnly('kind', 'unitType')) {
     const unitType = UNIT_TYPES.find((candidate) => candidate === item['unitType'])
     if (unitType !== undefined) parsed = { kind: 'unit', unitType }
+  } else if (item['kind'] === 'walls' && hasOnly('kind')) {
+    parsed = { kind: 'walls' }
   }
   if (parsed === undefined) {
     return (
       `item must be { kind: "building", assetId } with the asset id of a building that can be built, ` +
       `{ kind: "wonder", assetId } with the asset id of a wonder, ` +
-      `{ kind: "army" }, { kind: "scout" } or { kind: "unit", unitType } with unitType one of ${UNIT_TYPES.join(', ')}; no other fields`
+      `{ kind: "army" }, { kind: "scout" }, { kind: "walls" } or { kind: "unit", unitType } with unitType one of ${UNIT_TYPES.join(', ')}; no other fields`
     )
   }
   const rush = body['rush']
@@ -150,6 +152,11 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
   if (parsed.kind === 'unit') {
     // A unit is a card in the hand: there is no square to name
     if (body['target'] !== undefined) return 'a unit has no target: it is a card, not placed on a square'
+    return { cityPieceId, item: parsed, ...optionalRush }
+  }
+  if (parsed.kind === 'walls') {
+    // City Walls turn the city marker over: there is no square to name either
+    if (body['target'] !== undefined) return 'City Walls have no target: they turn the city marker over'
     return { cityPieceId, item: parsed, ...optionalRush }
   }
   const target = asRecord(body['target'])

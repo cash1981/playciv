@@ -125,12 +125,49 @@ export function FaqView(): React.JSX.Element {
             one to see its list, and <strong>Back</strong> to return to the buttons. Only what you
             can really build is listed. A wonder shows what it costs, the printed amount or less if you know the tech on its
             card, but the cost is not checked against the city&rsquo;s production: cards and Great
-            Persons can add hammers, so you count that yourself. A city holds one wonder. The reasons for the others are behind the link{' '}
+            Persons can add hammers, so you count that yourself. A city holds one wonder, and a second one can only go on the
+            first one&rsquo;s square and takes its place. The reasons for the others are behind the link{' '}
             <strong>Why not the others</strong>. If the estimate of the city&rsquo;s production is
             too low, set the production by hand in the same card. When production is short but the
             trade covers it, the list says how much trade you pay. When you build a wonder, the next
             one is drawn into the market for you: four wonders of each era, the ancient ones
             first, then the medieval ones, then the modern ones.
+          </p>
+        </CollapsiblePanel>
+
+        <CollapsiblePanel
+          id="faq-replace"
+          title="Can I build on top of a building or a wonder? What about City Walls?"
+          defaultOpen={false}
+        >
+          <p className="faq-answer">
+            Yes, on your own. When you pick a square for a building or a wonder, a square that holds
+            one of your buildings, wonders or Great People is marked <strong>Replace</strong>, and the note
+            says what goes. The old piece is taken off the board first: a building goes back to the
+            supply, a wonder is destroyed and cannot be built again for the rest of the game, and a Great
+            Person goes back to your player area. A wonder can replace a building and the other way round. A city holds one wonder and one limited building, so a
+            second one can only take the place of the first. When the supply of a building is empty you can
+            still build it on one of your own from the same supply, for example an Aqueduct on a Granary. You cannot replace
+            another player&rsquo;s wonder, and a square with a city-state is taken.
+            Because a replacement cannot be taken for granted, it needs <strong>Confirm</strong>, and the
+            Undo vote puts the old piece back.
+          </p>
+          <p className="faq-answer">
+            A Great Person replaces too. When you place a Great Person marker on a square in the
+            outskirts of one of your cities, the building or wonder there is removed (a wonder is
+            destroyed), and a Great Person already there goes back to your player area. Each is a step of
+            its own in the board history, so <strong>Undo</strong> gives them back one at a time. A drop
+            that would destroy a wonder asks first. A Great
+            Person that has been replaced has no effect until you place it again at the start of a
+            turn. A building you drag onto a Great Person by hand does not replace it: use Build.
+          </p>
+          <p className="faq-answer">
+            <strong>City Walls</strong> need the Masonry tech and cost 7 production. They are listed
+            with the buildings in Build, and a city can have only one. No square is picked: the city
+            marker is turned over to its walled side. The Undo vote turns it back. The +4 for defending a
+            walled city is not counted anywhere. Upgrades (a Granary to an Aqueduct) are done with the{' '}
+            <strong>Upgrades</strong> block at the top of Your cities, which flips every building of the
+            family at once.
           </p>
         </CollapsiblePanel>
 

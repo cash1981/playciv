@@ -8,8 +8,9 @@
  *   that city can build now, in groups (buildings, wonders, figures placed on the
  *   map, units that are a private card), and, behind a link, why the others can not;
  * - {@link BuildBar}, above the board: the choice, the cost, the square picked on
- *   the board, Confirm and Cancel. A unit has no square, so its bar opens with
- *   Confirm ready.
+ *   the board, Confirm and Cancel. A unit and City Walls have no square, so their bar
+ *   opens with Confirm ready. A square where the item replaces a building or wonder of
+ *   the player carries the engine's note, so it needs Confirm too.
  *
  * Neither adds a rule. The choices, costs, trade and squares come from
  * `view.you.buildOptions`, and the server checks it all again on Confirm.
@@ -53,7 +54,8 @@ const GROUPS = [
 type GroupId = (typeof GROUPS)[number]['id']
 
 function groupOf(choice: BuildChoice): GroupId {
-  if (choice.item.kind === 'building') return 'building'
+  // City Walls are a building (base rules p. 17, FAQ), listed with the others
+  if (choice.item.kind === 'building' || choice.item.kind === 'walls') return 'building'
   if (choice.item.kind === 'wonder') return 'wonder'
   return choice.item.kind === 'unit' ? 'unit' : 'figure'
 }
@@ -360,13 +362,14 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
   const target = plan.target
   const rush = plan.tradeToPay > 0
   const placed = plan.placement === 'square'
-  // A unit has no square to wait for: Confirm is ready at once.
+  // A unit and City Walls have no square to wait for: Confirm is ready at once.
   const ready = !placed || target !== null
   // What goes on the map (a building, a wonder, a figure) is placed by the tap on its
   // square, with no Confirm: it can be moved, and removing it before the turn ends takes
   // the whole build back. The exception is a square the engine has a note for (an enemy
-  // figure stands there, so the outcome is settled by hand): its note is read first, and
-  // Confirm places the figure. A unit has no square, so it keeps Confirm.
+  // figure stands there, so the outcome is settled by hand, or the item replaces a building,
+  // wonder or Great Person of the player's): its note is read first, and Confirm builds.
+  // A unit and City Walls have no square, so they keep Confirm.
   const immediate = placed && target?.note === undefined
 
   function confirm(): void {
@@ -374,14 +377,14 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     const item = plan.item
     const rushPart = rush ? { rush: true as const } : {}
     let payload: BuildPayload
-    if (item.kind === 'unit') {
+    if (item.kind === 'unit' || item.kind === 'walls') {
       payload = { cityPieceId: plan.cityPieceId, item, ...rushPart }
     } else if (target !== null) {
       payload = { cityPieceId: plan.cityPieceId, item, target: { column: target.column, row: target.row }, ...rushPart }
     } else {
       return
     }
-    // The key says which press this is: the same item and square (a unit has none)
+    // The key says which press this is: the same item and square (a unit and City Walls have none)
     // while the outcome is unknown reuses the request id, another is a new press.
     const where = target === null ? 'card' : `${target.column},${target.row}`
     const key = `${gameId}:${playerId}:build:${plan.cityPieceId}:${itemKeyOf(item)}:${where}`
@@ -448,7 +451,11 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
         {plan.costNote !== undefined && <> ({plan.costNote})</>}
         {rush && <>. Pays {plan.tradeToPay} trade</>}.{' '}
         {!placed ? (
-          <>A private card is drawn, nothing is placed on the map.</>
+          plan.item.kind === 'walls' ? (
+            <>The city marker is turned over to its walled side, nothing else is placed on the map.</>
+          ) : (
+            <>A private card is drawn, nothing is placed on the map.</>
+          )
         ) : target === null ? (
           <>Tap a highlighted square on the board to place it.</>
         ) : (
@@ -457,7 +464,7 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
           </>
         )}
       </p>
-      {/* What the engine says about the chosen square: an army put where an enemy figure stands is not automated. A live region, so it is read out when the square is picked. */}
+      {/* What the engine says about the chosen square: an army put where an enemy figure stands is not automated, or what the item replaces. A live region, so it is read out when the square is picked. */}
       {target?.note !== undefined && (
         <p role="status" className="build-bar-square-note">
           <strong>Note for {target.label}:</strong> {target.note}

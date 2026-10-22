@@ -208,7 +208,7 @@ const cellsOf = (squares: readonly Cell[] | undefined) => (squares ?? []).map((s
 
 function payloadFor(state: GameState, item: BuildItem, at?: Cell, rush?: boolean): BuildPayload {
   const base = { cityPieceId: cityOf(state).id, ...(rush === undefined ? {} : { rush }) }
-  if (item.kind === 'unit') return { ...base, item }
+  if (item.kind === 'unit' || item.kind === 'walls') return { ...base, item }
   if (at === undefined) throw new Error('a figure needs a square')
   return { ...base, item, target: at }
 }

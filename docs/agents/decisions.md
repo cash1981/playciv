@@ -430,8 +430,9 @@ private card, nothing placed).
   Building Program marker is still used up. Angkor Wat is 15 with Theology, not the 10 the sheet
   has (`SHEET_CORRECTIONS`, until the spreadsheet is fixed); the United Nations at 20 with no
   discount is right. It goes in the city's outskirts on any terrain but water, on a square with
-  nothing on it and no enemy figure; one wonder per city, whoever owns the one there, and it does
-  not count against the limited building. The build moves the market piece onto the square (it
+  nothing on it or one of the player's own buildings or wonders (see "Replacing" below) and no
+  enemy figure; one wonder per city, whoever owns the one there, and it does not count against
+  the limited building. The build moves the market piece onto the square (it
   is not a new piece) and makes the player its owner, as two board history entries. **The next
   wonder is drawn into the market by the build** (the human): a game has four wonders of each era,
   so it comes from the ancient deck until four ancient wonders are out, then from the medieval deck
@@ -446,8 +447,74 @@ private card, nothing placed).
   and then the board Undo is floored (`undoFloor`), so it cannot bring the drawn piece back while
   its card is in the deck. The vote undo is refused when the drawn wonder is no longer in the
   Wonders area or has an owner; the take-back then becomes a plain removal, so removing the wonder
-  after another player took the one drawn after it is an ordinary removal, with no refund. The log reads "built the Colossus in City B2 on square C2". Not built: replacing a
-  building or wonder, and the wonder abilities.
+  after another player took the one drawn after it is an ordinary removal, with no refund. The log reads "built the Colossus in City B2 on square C2". Not built: the wonder abilities.
+
+**Replacing, Great People and City Walls (the human, after trying Build).**
+
+- **Replacing** (base rules p. 17 and 18, the human): a building or wonder may be built on a square that
+  holds one of the player's own buildings, wonders or Great People; a wonder may replace a building and
+  the other way round. The old piece is removed first (`removeReplaced`, a board history entry of its own), then the
+  new one goes on the empty square, and the new piece must be legal there (terrain, no blockade). A
+  building goes back to the supply; a wonder is destroyed: its piece leaves the board and it is not
+  put in the market or the deck again (the deck is counted from the cards that left it, so nothing
+  takes its place). A Great Person is held in reserve instead (see below). Another player's wonder
+  (`ownerId` set to another player) and a city-state keep a square taken. A building or Great Person
+  in a city's outskirts counts as the city owner's, whoever put it there, as for Upgrade. The square says what it replaces (`BuildSquare.replaces` and
+  `note`), and a square with a note is not placed by the tap but needs Confirm, so a destroyed wonder
+  is never a mis-tap; the board marks it "Replace".
+- **One wonder and one limited building per city** now means a new one may only take the place of the
+  one already there: for a wonder the only square is the existing wonder's, for a limited building
+  the existing limited building's (`onlyReplacingOf`). The reason in Why not the others says so.
+- **The supply**: with none of a building left, it can still be built on one of the player's own
+  buildings of the same supply group (a Granary and an Aqueduct share one), since the old one goes
+  back first (`sameSupply`).
+- **A Great Person replaces, it does not cover** (base rules p. 18, which the human chose over his first
+  description, where the person only disabled the building under it and the building worked again when
+  the marker went). A Great Person placed on a building or wonder replaces it as on p. 17: the building
+  is removed (back to the supply), a wonder is destroyed. A Great Person that is itself replaced, by a
+  building or wonder built on its square or by another Great Person placed there, is held in reserve:
+  its marker goes to the owner's own player area (the civilization sheet) and has no effect off the map;
+  it can be placed again at the start of any turn, which is a manual move as before. Taking a marker off
+  a square later does not bring back what it replaced.
+  - **Build over a Great Person** (`removeReplaced`, `reserved` in the `build` effect): the person is
+    moved to the player's area as a board history entry, the new piece goes on the empty square, and
+    the undo vote moves it back to its square exactly (refused when it has been moved out of the area
+    since); removing the new piece by hand is then a plain removal with no refund, as when the wonder
+    drawn after a wonder build is gone.
+  - **A Great Person dropped on a square** (`replaceUnderGreatPerson`, `actions/board.ts`, called by
+    `placePiece` and `movePiece`): when the marker arrives on a square (it was placed there, or it came
+    from another square or from the player area; a nudge or a re-drop on its own square replaces nothing,
+    so a building left beside a marker on purpose stays) in the outskirts of a city of the
+    player who placed it, the building or wonder there is removed and any other Great Person there is
+    moved to that player's area, each as a history entry after the move, so the board Undo gives them
+    back one step at a time and Redo goes forward again. Another player's wonder is left alone, and a
+    marker dropped anywhere else is the plain move it was. A building dropped on a Great Person by hand
+    is not automated: Build is how a building replaces one. A drop that would destroy a wonder is asked
+    about first (the human's choice): `BoardView`'s `terrainAllows` uses the same read-only query as the
+    engine (`piecesReplacedByGreatPerson`) and shows "Placing the Artist here destroys the Colossus, which
+    cannot be built again for the rest of the game. Place it anyway?" before it sends the drop, on every
+    path (palette, drag, tap, arrow-key nudge). Buildings and Great People are replaced without a question,
+    since the board Undo gives them back. A drop onto a blockaded own square still replaces: the board does
+    not enforce placement rules, as before.
+- **City Walls** (base rules p. 17, Masonry card: 7 production): a building in the city centre, offered
+  in the Buildings list as `walls` with no square (`placement: 'none'`). Building them flips the city
+  marker to its walled asset (`cities/<colour><kind>walled2`) as a new board change, `flip`: the same
+  piece id, the same centre, only another asset and size, so a typed production, the city's record and
+  the city's other actions stay. One per city; a walled marker (China's capital, or an earlier build) says
+  so in Why not the others. The build costs production, rush trade and the Building Program marker like
+  any building and is the city's action. The +4 when defending a walled city is not counted anywhere. A
+  take-back by removing the piece is not offered (the piece is the city); the undo vote flips it back.
+- **Upgrade** (base rules p. 22) is unchanged: learning the tech flips every basic building of the family
+  at once, the "Upgrade buildings" block. Building the upgraded form on a basic one replaces it like any
+  other building.
+- The undo vote and the take-back put the replaced piece back exactly as it was (`replaced` in the
+  `build` effect, `reserved` for a Great Person); the board Undo cannot take back the removal alone.
+  Known gap: a take-back puts the old piece back on its old square even when another piece has been put
+  there by hand since (the vote undo has the same check as other builds: the new piece must still be
+  on its square). A building may also replace an identical one (a Library on a Library), which costs
+  production and changes nothing; it is not blocked. Tests: `assisted-build.test.ts`,
+  `assisted-wonders.test.ts`, `assisted-walls.test.ts`, `great-person-replace.test.ts`, the server
+  `assisted-walls-api.test.ts` and `BuildPicker.test.tsx`.
 
 **Figures and units (#264 parts 3 and 4).**
 

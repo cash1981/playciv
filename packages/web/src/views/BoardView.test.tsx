@@ -2140,3 +2140,215 @@ describe('BoardView square picking for a Build', () => {
     expect(reducedScroll.mock.calls[0]?.[0]).toMatchObject({ behavior: 'auto' })
   })
 })
+
+describe('BoardView Great Person on a wonder (base rules p. 18)', () => {
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  // Aztec has every terrain; the city, the wonder and the squares are found by search so a corrected
+  // tile file does not break the tests. Zoom is 100 % and jsdom reports a zero-size surface, so a client
+  // coordinate is a board coordinate.
+  const tileId = 'tiles/Aztec'
+  const grid = tileTerrainGrid(tileId) as readonly (readonly Terrain[])[]
+  const board0 = createBoard()
+  const [tileX, tileY] = slotOrigin(board0, board0.slots[0] as { x: number; y: number })
+  const centreOf = (row: number, column: number): readonly [number, number] => [
+    tileX + column * SQUARE_SIZE + SQUARE_SIZE / 2,
+    tileY + row * SQUARE_SIZE + SQUARE_SIZE / 2,
+  ]
+  const land = (row: number, column: number): boolean => grid[row]?.[column] !== undefined && grid[row]?.[column] !== 'water'
+
+  /** A city on (cityRow, cityColumn) with a land square east of it (in its outskirts) and a land square outside them. */
+  const layout = (() => {
+    for (const cityRow of [1, 2]) {
+      for (const cityColumn of [1, 2]) {
+        const outside = [[0, 0], [0, 3], [3, 0], [3, 3]].find(
+          ([row, column]) => land(row as number, column as number) && Math.max(Math.abs((row as number) - cityRow), Math.abs((column as number) - cityColumn)) > 1,
+        )
+        if (land(cityRow, cityColumn + 1) && outside !== undefined) {
+          return { city: [cityRow, cityColumn] as const, inside: [cityRow, cityColumn + 1] as const, outside: [outside[0] as number, outside[1] as number] as const }
+        }
+      }
+    }
+    throw new Error('no usable layout on the Aztec tile')
+  })()
+
+  const mapTile = {
+    ...piece(tileId, 'aztec'),
+    category: 'tile' as const,
+    label: 'Aztec',
+    path: 'tiles/Aztec.png',
+    x: tileX,
+    y: tileY,
+    width: TILE_SQUARES * SQUARE_SIZE,
+    height: TILE_SQUARES * SQUARE_SIZE,
+  }
+  const asset = (id: string): BoardAsset => {
+    const found = findBoardAsset(id)
+    if (found === undefined) throw new Error(`${id} missing from manifest`)
+    return found
+  }
+  /** A piece of the real size whose centre is at the given board point. */
+  const at = (id: string, pieceId: string, [cx, cy]: readonly [number, number], extra: Partial<BoardPiece> = {}): BoardPiece => {
+    const { width, height, label, path, category } = asset(id)
+    return { ...piece(id, pieceId), label, path, category, width, height, x: cx - width / 2, y: cy - height / 2, ...extra }
+  }
+
+  const pointer = (target: HTMLElement, type: string, clientX: number, clientY: number) => {
+    const event = new Event(type, { bubbles: true })
+    for (const [name, value] of Object.entries({ pointerId: 7, pointerType: 'touch', isPrimary: true, button: 0, clientX, clientY })) {
+      Object.defineProperty(event, name, { value })
+    }
+    target.dispatchEvent(event)
+  }
+  const tap = (target: HTMLElement, [x, y]: readonly [number, number]) => {
+    pointer(target, 'pointerdown', x, y)
+    pointer(target, 'pointerup', x, y)
+  }
+
+  const setup = (extra: readonly BoardPiece[]) => {
+    vi.spyOn(api, 'boardAssets').mockResolvedValue([asset('great people/artist')])
+    const placePiece = vi.spyOn(api, 'placePiece').mockResolvedValue({} as PlayerView)
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const all = [mapTile, at('cities/redcity2', 'city', centreOf(...layout.city)), ...extra]
+    const utils = render(
+      <BoardView
+        gameId="game"
+        board={{ ...board0, pieces: all }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        youId="p1"
+        viewerColor="Red"
+        run={async action => { await action() }}
+      />,
+    )
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    const surface = utils.container.querySelector('.board-surface') as HTMLElement
+    return { placePiece, movePiece, confirm, surface, container: utils.container, all }
+  }
+  const armArtist = async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Great People' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Artist/ }))
+  }
+
+  it('asks before a tapped Great Person destroys a wonder in the outskirts of the viewer\'s city, and places it on OK', async () => {
+    const mocks = setup([at('wonders/stonehenge', 'henge', centreOf(...layout.inside))])
+    const artist = asset('great people/artist')
+    const [x, y] = centreOf(...layout.inside)
+    await armArtist()
+    tap(mocks.surface, [x, y])
+
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledWith('game', artist.id, x - artist.width / 2, y - artist.height / 2))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      `Placing ${artist.label} here destroys ${asset('wonders/stonehenge').label}, which cannot be built again for the rest of the game. Place it anyway?`,
+    )
+  })
+
+  it('places nothing when the question is cancelled, and keeps the marker armed', async () => {
+    const mocks = setup([at('wonders/stonehenge', 'henge', centreOf(...layout.inside))])
+    mocks.confirm.mockReturnValue(false)
+    await armArtist()
+    tap(mocks.surface, centreOf(...layout.inside))
+    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce())
+    expect(mocks.placePiece).not.toHaveBeenCalled()
+    // Armed still: another square can be tapped without the palette again
+    tap(mocks.surface, centreOf(...layout.outside))
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledOnce())
+  })
+
+  it('does not ask for a building, which is replaced without a question', async () => {
+    const mocks = setup([at('buildings/temple', 'temple', centreOf(...layout.inside))])
+    await armArtist()
+    tap(mocks.surface, centreOf(...layout.inside))
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).not.toHaveBeenCalled()
+  })
+
+  it('does not ask outside the outskirts of the viewer\'s cities, or for another player\'s wonder', async () => {
+    const mocks = setup([
+      at('wonders/stonehenge', 'far', centreOf(...layout.outside)),
+      at('wonders/pyramids', 'theirs', centreOf(...layout.inside), { ownerId: 'p2' }),
+    ])
+    await armArtist()
+    tap(mocks.surface, centreOf(...layout.outside))
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).not.toHaveBeenCalled()
+  })
+
+  it('asks when an existing marker is tapped to move from outside the outskirts onto the wonder, and moves it on OK', async () => {
+    const [wx, wy] = centreOf(...layout.inside)
+    const [ox, oy] = centreOf(...layout.outside)
+    const mocks = setup([at('wonders/stonehenge', 'henge', [wx, wy]), at('great people/artist', 'artist', [ox, oy])])
+    const marker = mocks.container.querySelectorAll<HTMLElement>('.board-piece')[mocks.all.length - 1] as HTMLElement
+    // A tap selects and arms the marker, and a tap on the board then moves it there
+    tap(marker, [ox, oy])
+    await waitFor(() => expect(marker.classList.contains('selected')).toBe(true))
+    tap(mocks.surface, [wx, wy])
+    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce())
+    expect(mocks.confirm.mock.calls[0]?.[0]).toContain('destroys')
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledOnce())
+  })
+
+  it('moves nothing when the question about the wonder is cancelled, for a tapped move', async () => {
+    const [wx, wy] = centreOf(...layout.inside)
+    const [ox, oy] = centreOf(...layout.outside)
+    const mocks = setup([at('wonders/stonehenge', 'henge', [wx, wy]), at('great people/artist', 'artist', [ox, oy])])
+    mocks.confirm.mockReturnValue(false)
+    const marker = mocks.container.querySelectorAll<HTMLElement>('.board-piece')[mocks.all.length - 1] as HTMLElement
+    tap(marker, [ox, oy])
+    await waitFor(() => expect(marker.classList.contains('selected')).toBe(true))
+    tap(mocks.surface, [wx, wy])
+    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce())
+    expect(mocks.movePiece).not.toHaveBeenCalled()
+  })
+
+  it('judges a drop past the left edge of the board on the square the server clamps it into', async () => {
+    // A wonder on column A of the board and a city next to it; the drop centre is left of the board
+    const column = 0
+    const row = 1
+    const board = { ...board0 }
+    const wonderCentre: readonly [number, number] = [column * SQUARE_SIZE + SQUARE_SIZE / 2, mapTop(board) + row * SQUARE_SIZE + SQUARE_SIZE / 2]
+    const cityCentre: readonly [number, number] = [wonderCentre[0] + SQUARE_SIZE, wonderCentre[1]]
+    vi.spyOn(api, 'boardAssets').mockResolvedValue([asset('great people/artist')])
+    vi.spyOn(api, 'placePiece').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...board, pieces: [at('cities/redcity2', 'city', cityCentre), at('wonders/stonehenge', 'henge', wonderCentre)] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        youId="p1"
+        viewerColor="Red"
+        run={async action => { await action() }}
+      />,
+    )
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Great People' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Artist/ }))
+    // The raw centre is a few pixels left of the board, which the server clamps to column A
+    tap(container.querySelector('.board-surface') as HTMLElement, [-6, wonderCentre[1]])
+    await waitFor(() => expect(confirm).toHaveBeenCalledOnce())
+    expect(confirm.mock.calls[0]?.[0]).toContain('destroys')
+  })
+
+  it('does not ask when a marker that already stands on the wonder\'s square is nudged within it', async () => {
+    const [x, y] = centreOf(...layout.inside)
+    const mocks = setup([
+      at('wonders/stonehenge', 'henge', [x, y]),
+      at('great people/artist', 'artist', [x, y]),
+    ])
+    const marker = mocks.container.querySelectorAll<HTMLElement>('.board-piece')[mocks.all.length - 1] as HTMLElement
+    tap(marker, [x, y])
+    await waitFor(() => expect(marker.classList.contains('selected')).toBe(true))
+    fireEvent.keyDown(document, { key: 'ArrowRight' })
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledTimes(1))
+    expect(mocks.confirm).not.toHaveBeenCalled()
+  })
+})
