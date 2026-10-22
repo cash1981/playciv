@@ -27,6 +27,7 @@ import {
   techCoinSource,
   withCoinSource,
 } from '../coins.js'
+import { cultureCardsHeld, cultureHandSizeOf, isCultureHandOver } from '../culture-hand.js'
 import { applyCoinPurchase } from '../assisted.js'
 import { blockadedPieceIds } from '../blockade.js'
 import type { EngineError } from '../errors.js'
@@ -875,6 +876,19 @@ export function tradeToPlayer(state: GameState, input: TradeInput): ActionResult
     tradable.find((item) => item.sheetName === input.sheetName && matchesName(item))
 
   if (found === undefined) return err({ kind: 'ITEM_NOT_FOUND', sheetName: input.sheetName })
+
+  // A culture card cannot be given to a hand that already holds more than its size
+  if (
+    (found.kind === 'cultureI' || found.kind === 'cultureII' || found.kind === 'cultureIII') &&
+    isCultureHandOver(state, toPlayer)
+  ) {
+    return err({
+      kind: 'CULTURE_HAND_OVER',
+      playerId: toPlayer.playerId,
+      held: cultureCardsHeld(toPlayer),
+      size: cultureHandSizeOf(state, toPlayer),
+    })
+  }
 
   const traded: Item = { ...found, ownerId: toPlayer.playerId }
 

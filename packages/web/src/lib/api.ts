@@ -617,11 +617,22 @@ export const api = {
 
   // `confirmedOutOfTurn` is sent only after the player answered yes to the
   // out-of-turn warning (issue #215); wonders go through this route as well.
-  draw: (gameId: string, sheetName: SheetName, confirmedOutOfTurn?: boolean) =>
-    post<PlayerView>(
+  // `confirmedOverLimit` likewise follows a yes to the culture hand limit warning.
+  draw: (
+    gameId: string,
+    sheetName: SheetName,
+    confirmedOutOfTurn?: boolean,
+    confirmedOverLimit?: boolean,
+  ) => {
+    const confirmed = {
+      ...(confirmedOutOfTurn === true ? { confirmedOutOfTurn: true } : {}),
+      ...(confirmedOverLimit === true ? { confirmedOverLimit: true } : {}),
+    }
+    return post<PlayerView>(
       `/api/games/${gameId}/draw/${sheetName}`,
-      confirmedOutOfTurn === true ? { confirmedOutOfTurn: true } : undefined,
-    ),
+      Object.keys(confirmed).length === 0 ? undefined : confirmed,
+    )
+  },
   loot: (gameId: string, category: LootCategory, targetPlayerId: string) =>
     post<PlayerView>(`/api/games/${gameId}/loot/${category}/${targetPlayerId}`),
   discardGreatPerson: (gameId: string, type: string) =>

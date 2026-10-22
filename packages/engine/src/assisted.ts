@@ -74,7 +74,7 @@ import {
   rewardDrawCount,
 } from './culture-track.js'
 import type { CultureAdvanceCost, CultureLevel, CultureMarker, CultureSpace } from './culture-track.js'
-import { cultureHandWarning } from './culture-hand.js'
+import { cultureHandBlock, cultureHandWarning } from './culture-hand.js'
 import type { EngineError } from './errors.js'
 import { itemName } from './item.js'
 import type { Item } from './item.js'
@@ -825,6 +825,12 @@ function planAdvance(state: GameState, player: Playerhand): Result<AdvancePlan, 
   const where = `Advance to ${describeSpace(to)}: ${describeCost(cost)}.`
   if (livePendingRewards(player).length > 0) {
     return err(blocked('unavailable', `${where} Choose the card to keep from your last advance first.`))
+  }
+
+  // A culture event gives a culture card: the hand must be down to its size first
+  if (to.kind === 'event') {
+    const full = cultureHandBlock(state, player)
+    if (full !== undefined) return err(blocked('unavailable', `${where} ${full}`))
   }
 
   const lackingCulture = Math.max(0, cost.culture - player.stats.culture)

@@ -17,6 +17,7 @@ import {
   activePlayerOf,
   chatAuthorsOf,
   HandItem,
+  cultureLevelQuestion,
   gameMenuGate,
   winnerCandidatesOf,
   loadAfterKnownRevision,
@@ -347,9 +348,11 @@ describe('primary game panel order', () => {
     })
     await renderOrder(orderView({ you: you(3, 2) }))
     expect(screen.getByText(/Culture hand limit: you hold 3 culture cards, over your culture hand size of 2/)).toBeTruthy()
+    expect(screen.getByText('Your culture hand is over its size. Drawing a culture card asks first.')).toBeTruthy()
     cleanup()
     await renderOrder(orderView({ you: you(2, 2) }))
     expect(screen.queryByText(/Culture hand limit/)).toBeNull()
+    expect(screen.queryByText(/Drawing a culture card asks first/)).toBeNull()
   })
 
   it('has Your actions directly under the board and Your cards right after it', async () => {
@@ -1157,6 +1160,79 @@ describe('the game page (issue #215)', () => {
       fireEvent.click(drawButton('Ancient wonder'))
 
       await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'ANCIENT_WONDERS', true))
+    })
+
+    describe('culture cards', () => {
+      const cultureCards = (count: number) =>
+        Array.from({ length: count }, (_, index) => ({
+          id: `c${index}`,
+          kind: 'cultureI',
+          sheetName: 'CULTURE_1',
+          name: `card ${index}`,
+          hidden: true,
+          ownerId: 'id-Alice',
+        }))
+      const aliceWith = (marker: number, cards: number, size = 5) =>
+        chatView('Alice', {}, { cultureMarkerLevel: marker, items: cultureCards(cards), stats: { cultureHandSize: size } })
+
+      it('asks "Are you sure?" for a deck that is not the level of the marker, and draws only after Yes', async () => {
+        const draw = vi.spyOn(api, 'draw').mockResolvedValue(aliceWith(9, 0))
+        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+        await renderGame(aliceWith(9, 0))
+
+        fireEvent.click(drawButton('Culture I'))
+
+        expect(confirm).toHaveBeenCalledExactlyOnceWith(cultureLevelQuestion(1, 2))
+        await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'CULTURE_1'))
+      })
+
+      it('draws nothing after No to the level question', async () => {
+        const draw = vi.spyOn(api, 'draw').mockResolvedValue(aliceWith(9, 0))
+        vi.spyOn(window, 'confirm').mockReturnValue(false)
+        await renderGame(aliceWith(9, 0))
+
+        fireEvent.click(drawButton('Culture III'))
+
+        expect(window.confirm).toHaveBeenCalledExactlyOnceWith(cultureLevelQuestion(3, 2))
+        await Promise.resolve()
+        expect(draw).not.toHaveBeenCalled()
+      })
+
+      it('does not ask for the level of the marker, for Start (level I) or for other decks', async () => {
+        const draw = vi.spyOn(api, 'draw').mockResolvedValue(aliceWith(9, 0))
+        const confirm = vi.spyOn(window, 'confirm')
+        await renderGame(aliceWith(9, 0))
+        fireEvent.click(drawButton('Culture II'))
+        await waitFor(() => expect(draw).toHaveBeenCalledTimes(1))
+        await waitFor(() => expect(drawButton('Infantry').disabled).toBe(false))
+        fireEvent.click(drawButton('Infantry'))
+        await waitFor(() => expect(draw).toHaveBeenCalledTimes(2))
+        expect(confirm).not.toHaveBeenCalled()
+        cleanup()
+        await renderGame(aliceWith(0, 0))
+        fireEvent.click(drawButton('Culture I'))
+        expect(confirm).not.toHaveBeenCalled()
+      })
+
+      it('asks before a culture card when the hand is over its size, and sends the confirmation after Yes', async () => {
+        const draw = vi.spyOn(api, 'draw').mockResolvedValue(aliceWith(9, 3, 2))
+        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+        await renderGame(aliceWith(9, 3, 2))
+
+        fireEvent.click(drawButton('Culture II'))
+
+        expect(confirm).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(/over its size of 2/))
+        await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'CULTURE_2', false, true))
+      })
+
+      it('does not ask about the hand for other decks', async () => {
+        const draw = vi.spyOn(api, 'draw').mockResolvedValue(aliceWith(9, 3, 2))
+        const confirm = vi.spyOn(window, 'confirm')
+        await renderGame(aliceWith(9, 3, 2))
+        fireEvent.click(drawButton('Infantry'))
+        await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'INFANTRY'))
+        expect(confirm).not.toHaveBeenCalled()
+      })
     })
 
     it('does not ask, or send the flag, when the viewer is the one who is up', async () => {

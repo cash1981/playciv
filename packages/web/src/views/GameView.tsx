@@ -753,16 +753,63 @@ interface PanelProps {
   readonly view: PlayerView
 }
 
+const CULTURE_SHEETS: ReadonlySet<SheetName> = new Set<SheetName>(['CULTURE_1', 'CULTURE_2', 'CULTURE_3'])
+
+/** 1, 2 or 3 for a culture deck, `null` for any other. */
+function cultureLevelOf(sheet: SheetName): 1 | 2 | 3 | null {
+  return sheet === 'CULTURE_1' ? 1 : sheet === 'CULTURE_2' ? 2 : sheet === 'CULTURE_3' ? 3 : null
+}
+
+/** The culture level of the space the viewer's leader marker stands on (Start counts as 1), or `null` with no marker. */
+function cultureMarkerSheetLevel(view: PlayerView): 1 | 2 | 3 | null {
+  const step = view.you?.cultureMarkerLevel
+  if (step === null || step === undefined) return null
+  return step <= 7 ? 1 : step <= 14 ? 2 : 3
+}
+
+export const cultureLevelQuestion = (drawn: number, marker: number): string =>
+  `Your leader marker is on culture level ${marker}, but you are drawing a culture ${'I'.repeat(drawn)} card. Are you sure?`
+
+function cultureHandQuestion(view: PlayerView): string {
+  const size = view.you?.stats?.cultureHandSize ?? 0
+  return `Your culture hand is over its size of ${size}. You should discard down or increase your culture hand size before you receive another culture card. Draw anyway?`
+}
+
+/** The viewer holds more culture cards than the culture hand size. */
+function cultureHandIsOver(view: PlayerView): boolean {
+  const size = view.you?.stats?.cultureHandSize
+  if (size === undefined) return false
+  const held = (view.you?.items ?? []).filter((item) => CULTURE_SHEETS.has(item.sheetName)).length
+  return held > size
+}
+
 function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   // There is no baton, so the panel is never disabled for turn reasons. Out of
   // turn the player is asked first, and the server hears `confirmedOutOfTurn`
   // only after a yes. It still refuses without it.
   const question = outOfTurnQuestion(view)
   const canDraw = view.you !== null
+  const handOver = cultureHandIsOver(view)
   const draw = (sheet: SheetName): void => {
-    if (question === null) {
+    // Each warning is its own question; a no to any of them draws nothing.
+    if (question !== null && !window.confirm(question)) return
+    const level = cultureLevelOf(sheet)
+    const markerLevel = cultureMarkerSheetLevel(view)
+    if (level !== null && handOver && !window.confirm(cultureHandQuestion(view))) return
+    if (
+      level !== null &&
+      markerLevel !== null &&
+      level !== markerLevel &&
+      !window.confirm(cultureLevelQuestion(level, markerLevel))
+    ) {
+      return
+    }
+    const confirmedOverLimit = level !== null && handOver
+    if (confirmedOverLimit) {
+      void run(() => api.draw(gameId, sheet, question !== null, true))
+    } else if (question === null) {
       void run(() => api.draw(gameId, sheet))
-    } else if (window.confirm(question)) {
+    } else {
       void run(() => api.draw(gameId, sheet, true))
     }
   }
@@ -775,6 +822,11 @@ function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
             ? 'It is your turn.'
             : 'It is not your turn. You will be asked before you draw.'}
       </p>
+      {handOver && (
+        <p role="status" className="assisted-warning">
+          Your culture hand is over its size. Drawing a culture card asks first.
+        </p>
+      )}
       <div className="row">
         {DRAWABLE.map(({ sheet, label }) => (
           <button
@@ -813,7 +865,8 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
       {cultureSize !== undefined && cultureHeld > cultureSize && (
         <p role="status" className="assisted-warning culture-hand-warning">
           Culture hand limit: you hold {cultureHeld} culture cards, over your culture hand size
-          of {cultureSize}. Discard a culture card or increase your culture hand size.
+          of {cultureSize}. Discard down to {cultureSize} or increase your culture hand size
+          before you can advance, draw or receive another culture card.
         </p>
       )}
       <LootControls

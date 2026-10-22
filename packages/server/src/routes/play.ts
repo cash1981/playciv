@@ -313,14 +313,16 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
 
     // Chat orders (issue #215): the client asks before drawing out of turn and
     // sends this on the second try. Ignored by the engine when the setting is off.
-    const confirmedOutOfTurn =
-      asRecord(await c.req.json().catch(() => ({})))['confirmedOutOfTurn'] === true
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const confirmedOutOfTurn = body['confirmedOutOfTurn'] === true
+    // The same for a culture card drawn while the culture hand is over its size
+    const confirmedOverLimit = body['confirmedOverLimit'] === true
 
     return applyToGame(context, c, gameId, (state) => {
       const playerId = currentPlayer(c).id
       return ALL_WONDERS.has(sheetName)
         ? drawWonder(state, { playerId, sheetName, confirmedOutOfTurn })
-        : draw(state, { playerId, sheetName, confirmedOutOfTurn })
+        : draw(state, { playerId, sheetName, confirmedOutOfTurn, confirmedOverLimit })
     })
   })
 

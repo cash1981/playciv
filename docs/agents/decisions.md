@@ -216,15 +216,23 @@ buttons and the culture marker. Assisted actions are added beside them.
   Management. Event spaces draw 1 card (2 with Mysticism); Great Person spaces
   draw 1 plus 1 for Organized Religion plus 1 for the Greeks. The player keeps
   one in a private `pendingRewards` choice.
-- Culture hand limit (#248): a culture event advance warns, and never refuses, when the
-  new card takes the culture cards in the hand above `cultureHandSizeOf` (a player may
-  hold size + 1 while deciding what to discard). The warning is `warning` on the
-  viewer's own `availableActions` entry, shown beside Advance culture, and Your hand
-  shows a notice while the culture cards exceed the size. A Great Person space gives a
-  marker, not a culture card, so it never warns. Moving the leader marker by hand
-  charges and awards nothing (test `assisted-culture-hand-limit.test.ts`). The count
-  includes every culture card in the hand, revealed or not, and the size counts only
-  revealed cards, so an unrevealed Pottery or Valmiki can make the warning early.
+- Culture hand limit (#248): a hand with more culture cards than `cultureHandSizeOf`
+  takes no culture card by a culture event advance (the button is unavailable with the
+  reason) or a gift (`tradeToPlayer`, error `CULTURE_HAND_OVER`, 409) until it has
+  discarded down or raised its size. A Draw of a culture deck asks first, like a used
+  card or an out of turn draw: the client confirms, then sends `confirmedOverLimit`, and
+  the server refuses a culture draw without it (409). A hand exactly at its size may take
+  one more and sit one over while the player decides what to discard; the advance then
+  warns (`warning` on the viewer's own `availableActions` entry) and Your hand shows a
+  notice while over. Great Person spaces give a marker, not a culture card, so they are
+  never blocked. Trade offers record an agreement only and are not checked.
+- Drawing a culture deck whose level differs from the level of the space the leader
+  marker stands on (Start counts as level I, spaces 1 to 7 are I, 8 to 14 II, 15 to 21
+  III) asks "Are you sure?" first. Client-side only, no server flag: the Draw button is a
+  manual path. Moving the leader marker by hand charges and awards nothing.
+  The card count includes every culture card in the hand, revealed or not, and the size
+  counts only revealed cards, so an unrevealed Pottery or Valmiki can block early.
+  Tests `assisted-culture-hand-limit.test.ts`, `GameView.test.tsx`, `chat-orders.test.ts`.
 - A Great Person card is valid only when its marker type has supply (3 per
   type). Invalid draws are discarded faceup. With no marker of any type left,
   nothing is drawn. The kept card stays hidden in the hand and the marker piece

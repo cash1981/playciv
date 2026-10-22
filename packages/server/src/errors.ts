@@ -56,6 +56,7 @@ export function statusFor(error: EngineError): number {
       return 400
     case 'BOARD_ASSET_LIMIT_REACHED':
     case 'BATTLE_ALREADY_ACTIVE':
+    case 'CULTURE_HAND_OVER':
     case 'UNIT_ALREADY_IN_BATTLE':
     case 'ARENA_POSITION_OCCUPIED':
     case 'PLAYER_COLOR_TAKEN':

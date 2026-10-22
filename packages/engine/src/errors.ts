@@ -166,6 +166,8 @@ export type EngineError =
   | { readonly kind: 'TRADE_OFFER_NOT_FOUND'; readonly offerId: string }
   | { readonly kind: 'TRADE_OFFER_NOT_PENDING'; readonly offerId: string }
   | { readonly kind: 'TRADE_OFFER_NOT_ALLOWED'; readonly offerId: string }
+  /** A culture card cannot come in while the hand holds more culture cards than its size. */
+  | { readonly kind: 'CULTURE_HAND_OVER'; readonly playerId: string; readonly held: number; readonly size: number }
 
 export function describeError(error: EngineError): string {
   switch (error.kind) {
@@ -279,6 +281,8 @@ export function describeError(error: EngineError): string {
       }[error.reason]
     case 'ASSISTED_ACTION_REJECTED':
       return error.reason
+    case 'CULTURE_HAND_OVER':
+      return `The culture hand holds ${error.held} culture cards, over the culture hand size of ${error.size}. Discard down to ${error.size} or increase the culture hand size before another culture card can be received.`
     case 'ASSISTED_ACTION_ALREADY_UNDONE':
       return 'This action has already been undone'
     case 'ASSISTED_UNDO_BLOCKED':
