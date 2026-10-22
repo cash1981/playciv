@@ -14,6 +14,7 @@ import tileIcons from '../data/tile-icons.json' with { type: 'json' }
 import tileTerrain from '../data/tile-terrain.json' with { type: 'json' }
 
 import { placePiece, undoLastBoardChange } from '../src/actions/board.js'
+import { chooseSocialPolicy, revealSocialPolicy } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { PHASE_REASON, findResourceToken, performAssistedAction, spendResource } from '../src/assisted.js'
@@ -237,7 +238,7 @@ describe('what a city offers: devote to the arts', () => {
     expect(option.culture).toBe(1)
     expect(option.parts).toEqual([{ label: 'The city itself', amount: 1 }])
     expect(option.scouts).toEqual([])
-    expect(option.notes.join(' ')).toContain('Culture from civilization, government, tech and card effects is not counted.')
+    expect(option.notes.join(' ')).toContain('Culture from other civilization, government, tech and card effects is not counted.')
   })
 
   it('outside City Management it says wrong-phase with the phase reason', () => {
@@ -270,11 +271,77 @@ describe('what a city offers: devote to the arts', () => {
     expect(option.parts.map((part) => part.label)).toEqual(['The city itself'])
   })
 
-  it('a wonder or a Great Person on a square counts nothing and is named', () => {
+  it('a wonder gives the culture of its era: 1 ancient, 2 medieval, 3 modern', () => {
+    for (const [assetId, name, culture] of [
+      ['wonders/stonehenge', 'Stonehenge', 1],
+      ['wonders/louvre', 'The Louvre', 2],
+      ['wonders/bigben', 'Big Ben', 3],
+    ] as const) {
+      const option = optionOf(put(america(), CASH1981, assetId, 0, 0)).devoteToTheArts
+      expect(option.culture, assetId).toBe(1 + culture)
+      expect(option.parts, assetId).toContainEqual({ label: `${name} at A1`, amount: culture })
+    }
+  })
+
+  it('an obsolete wonder keeps its culture: it is a marker on the board, whatever its card shows', () => {
+    // Nothing on the board changes when a wonder is obsoleted (base rules p. 27), so the sum does not either
+    const state = put(america(), CASH1981, 'wonders/colossus', 0, 0)
+    expect(optionOf(state).devoteToTheArts.culture).toBe(2)
+  })
+
+  it('a Great Person gives the culture on its marker: Artist 2, Merchant 2, Humanitarian 1, the rest none', () => {
+    for (const [assetId, culture] of [
+      ['great people/artist', 2],
+      ['great people/merchant', 2],
+      ['great people/humanitarian', 1],
+      ['great people/builder', 0],
+      ['great people/general', 0],
+      ['great people/scientist', 0],
+    ] as const) {
+      const option = optionOf(put(america(), CASH1981, assetId, 0, 0)).devoteToTheArts
+      expect(option.culture, assetId).toBe(1 + culture)
+      const label = `${findBoardAsset(assetId)?.label ?? ''} (Great Person) at A1`
+      if (culture > 0) expect(option.parts, assetId).toContainEqual({ label, amount: culture })
+      else expect(option.parts.map((part) => part.label), assetId).toEqual(['The city itself'])
+    }
+  })
+
+  it('a wonder or a Great Person replaces the culture icon of the square it stands on', () => {
     const state = put(tile01Close(), CASH1981, 'great people/artist', 1, 3)
     const option = optionOf(state).devoteToTheArts
+    expect(option.culture).toBe(1 + 2)
+    expect(option.parts.map((part) => part.label)).toEqual(['The city itself', 'Artist (Great Person) at B4'])
+    expect(option.notes.join(' ')).not.toContain('Great Person')
+  })
+
+  it('the culture of buildings, wonders and Great People adds up', () => {
+    let state = america()
+    state = put(state, CASH1981, 'buildings/temple', 0, 2)
+    state = put(state, CASH1981, 'wonders/louvre', 2, 1)
+    state = put(state, CASH1981, 'great people/merchant', 1, 0)
+    const option = optionOf(state).devoteToTheArts
+    expect(option.culture).toBe(1 + 2 + 2 + 2)
+    expect(option.parts.map((part) => part.label).sort()).toEqual(
+      ['Merchant (Great Person) at B1', 'The Louvre at C2', 'The city itself', 'Temple at A3'].sort(),
+    )
+  })
+
+  it('a wonder or a Great Person outside the outskirts adds nothing', () => {
+    let state = america()
+    state = put(state, CASH1981, 'wonders/bigben', 3, 3)
+    state = put(state, CASH1981, 'great people/artist', 3, 0)
+    expect(optionOf(state).devoteToTheArts.culture).toBe(1)
+  })
+
+  it('an enemy figure on a wonder or a Great Person blockades its culture too', () => {
+    let state = america()
+    state = put(state, CASH1981, 'wonders/bigben', 0, 0)
+    state = put(state, CASH1981, 'great people/artist', 2, 2)
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 0, 0)
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 2, 2)
+    const option = optionOf(state).devoteToTheArts
     expect(option.culture).toBe(1)
-    expect(option.notes.join(' ')).toContain('B4 holds a wonder or a Great Person')
+    expect(option.notes.join(' ')).toContain('A1 and C3 are blockaded and give nothing.')
   })
 
   it('an enemy figure in a square blockades it, and the note says so', () => {
@@ -320,6 +387,177 @@ describe('what a city offers: devote to the arts', () => {
     const state = put(tile01(), KARANDRAS1, 'figures/bluescout', 1, 3)
     expect(optionOf(state).devoteToTheArts.scouts).toEqual([])
   })
+
+  it('names what a scout stands on: a wonder, a Great Person, a building in another city or a culture icon', () => {
+    // The city on B2 has its outskirts on A1 to C3; D1 to D4 are outside them. A player has two scouts.
+    const scoutsOn = (assetIds: readonly string[]) => {
+      let state = america()
+      assetIds.forEach((assetId, row) => {
+        state = put(state, CASH1981, assetId, 3, row)
+        state = put(state, CASH1981, 'figures/redscout', 3, row)
+      })
+      const option = optionOf(state).devoteToTheArts
+      // None of it is in the city's own sum: the player says which scout goes to which city
+      expect(option.culture).toBe(1)
+      return option.scouts.map((scout) => [scout.square, scout.source, scout.culture])
+    }
+    expect(scoutsOn(['wonders/louvre', 'great people/artist'])).toEqual([
+      ['D1', 'The Louvre', 2],
+      ['D2', 'Artist (Great Person)', 2],
+    ])
+    expect(scoutsOn(['buildings/temple', 'buildings/granary'])).toEqual([['D1', 'Temple', 2]])
+    // The Builder has no culture, so its scout is not offered
+    expect(scoutsOn(['great people/builder'])).toEqual([])
+
+    const icon = put(tile01(), CASH1981, 'figures/redscout', 1, 3)
+    expect(optionOf(icon).devoteToTheArts.scouts[0]).toMatchObject({ square: 'B4', source: 'Culture icon', culture: 1 })
+  })
+
+  it('a scout on a wonder gathers its culture even when an enemy stands there too', () => {
+    // A scout's square is read with no blockade, as it is for the culture icon of a natural wonder
+    let state = america()
+    state = put(state, CASH1981, 'wonders/bigben', 3, 0)
+    state = put(state, CASH1981, 'figures/redscout', 3, 0)
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 3, 0)
+    expect(optionOf(state).devoteToTheArts.scouts[0]).toMatchObject({ square: 'D1', culture: 3 })
+  })
+})
+
+describe('Urban Development', () => {
+  const withPolicy = (state: GameState, reveal: boolean): GameState => {
+    const chosen = unwrap(chooseSocialPolicy(state, { playerId: CASH1981, name: 'Urban Development' }))
+    return reveal ? unwrap(revealSocialPolicy(chosen, { playerId: CASH1981, name: 'Urban Development' })) : chosen
+  }
+  const urban = (state: GameState) => optionOf(state).devoteToTheArts
+
+  /** The city on B2 with a Temple on A3 and a Library on C2: 1 + 2 + 1 culture before the policy. */
+  const twoBuildings = (): GameState => {
+    let state = america()
+    state = put(state, CASH1981, 'buildings/temple', 0, 2)
+    return put(state, CASH1981, 'buildings/library', 2, 1)
+  }
+
+  it('adds 2 culture to a city with two different buildings in its outskirts', () => {
+    const state = withPolicy(twoBuildings(), true)
+    expect(urban(state).culture).toBe(1 + 2 + 1 + 2)
+    expect(urban(state).parts).toContainEqual({ label: 'Urban Development (Temple and Library)', amount: 2 })
+    expect(urban(state).notes.join(' ')).not.toContain('Urban Development')
+  })
+
+  it('does not count a policy that is chosen but not revealed', () => {
+    const state = withPolicy(twoBuildings(), false)
+    expect(me(state).socialPolicies[0]?.hidden).toBe(true)
+    expect(urban(state).culture).toBe(1 + 2 + 1)
+    expect(urban(state).notes.join(' ')).not.toContain('Urban Development')
+  })
+
+  it('counts a wonder as one of the buildings, but not a Great Person', () => {
+    let state = withPolicy(america(), true)
+    state = put(state, CASH1981, 'buildings/temple', 0, 2)
+    state = put(state, CASH1981, 'great people/artist', 2, 1)
+    expect(urban(state).culture).toBe(1 + 2 + 2)
+    expect(urban(state).notes.join(' ')).toContain('Urban Development needs 2 different buildings or wonders in the outskirts, and this city has one.')
+
+    state = put(state, CASH1981, 'wonders/stonehenge', 1, 0)
+    expect(urban(state).culture).toBe(1 + 2 + 2 + 1 + 2)
+    expect(urban(state).parts).toContainEqual({ label: 'Urban Development (Temple and Stonehenge)', amount: 2 })
+  })
+
+  it('does not count two of the same building twice, and says how many it found', () => {
+    let state = withPolicy(america(), true)
+    state = put(state, CASH1981, 'buildings/temple', 0, 2)
+    state = put(state, CASH1981, 'buildings/temple', 1, 2)
+    expect(urban(state).culture).toBe(1 + 2 + 2)
+    expect(urban(state).notes.join(' ')).toContain('and this city has one.')
+    expect(urban(withPolicy(america(), true)).notes.join(' ')).toContain('and this city has none.')
+  })
+
+  it('needs the buildings in the outskirts of the city itself', () => {
+    let state = withPolicy(america(), true)
+    state = put(state, CASH1981, 'buildings/temple', 0, 2)
+    state = put(state, CASH1981, 'buildings/library', 3, 3)
+    expect(urban(state).culture).toBe(1 + 2)
+  })
+
+  it('does not count a blockaded square, as the city cannot use it', () => {
+    const state = put(withPolicy(twoBuildings(), true), KARANDRAS1, 'figures/bluearmy', 2, 1)
+    expect(urban(state).culture).toBe(1 + 2)
+    expect(urban(state).notes.join(' ')).toContain('has one')
+  })
+
+  it('does nothing without the policy, and says nothing about it', () => {
+    expect(urban(twoBuildings()).culture).toBe(1 + 2 + 1)
+    expect(urban(twoBuildings()).parts.map((part) => part.label).join(' ')).not.toContain('Urban Development')
+    expect(urban(twoBuildings()).notes.join(' ')).not.toContain('Urban Development')
+  })
+
+  it('does nothing under Anarchy, when social policies have no effect', () => {
+    const state = withPolicy(twoBuildings(), true)
+    const anarchy: GameState = {
+      ...state,
+      players: state.players.map((p) => (p.playerId === CASH1981 ? { ...p, government: 'Anarchy' } : p)),
+    }
+    expect(urban(anarchy).culture).toBe(1 + 2 + 1)
+  })
+
+  it('does not count the square of a scout among the buildings', () => {
+    let state = withPolicy(america(), true)
+    state = put(state, CASH1981, 'buildings/temple', 0, 2)
+    state = put(state, CASH1981, 'wonders/louvre', 3, 0)
+    state = put(state, CASH1981, 'figures/redscout', 3, 0)
+    expect(urban(state).culture).toBe(1 + 2)
+  })
+
+  it('does not count the flipside of the card, Expansionism', () => {
+    const state = unwrap(chooseSocialPolicy(twoBuildings(), { playerId: CASH1981, name: 'Expansionsim' }))
+    expect(urban(state).culture).toBe(1 + 2 + 1)
+  })
+
+  it('is added to what Devote to the Arts takes, and a number typed by the player still wins', () => {
+    const state = withPolicy(twoBuildings(), true)
+    const before = me(state).stats.culture
+    const next = unwrap(devote(state))
+    expect(me(next).stats.culture).toBe(before + 6)
+    expect(lastLine(next)).toBe('cash1981 devoted City B2 to the arts and gained 6 culture')
+
+    const typed = unwrap(devote(state, { culture: 3 }))
+    expect(me(typed).stats.culture).toBe(before + 3)
+    expect(lastLine(typed)).toBe('cash1981 devoted City B2 to the arts and gained 3 culture (set by the player; the estimate was 6)')
+  })
+
+  it('is added to the squares of the scouts the player sends', () => {
+    let state = withPolicy(twoBuildings(), true)
+    state = put(state, CASH1981, 'wonders/louvre', 3, 0)
+    state = put(state, CASH1981, 'figures/redscout', 3, 0)
+    const scout = optionOf(state).devoteToTheArts.scouts[0]
+    if (scout === undefined) throw new Error('no scout offered')
+    const next = unwrap(devote(state, { scoutPieceIds: [scout.pieceId] }))
+    // The city 1, Temple 2, Library 1, Urban Development 2, and the Louvre under the scout 2
+    expect(me(next).stats.culture).toBe(me(state).stats.culture + 8)
+  })
+})
+
+describe('the Indians', () => {
+  const indians = (state: GameState): GameState => ({
+    ...state,
+    players: state.players.map((p) =>
+      p.playerId === CASH1981 ? { ...p, civilization: { ...(p.civilization as object), name: 'Indians' } as never } : p,
+    ),
+  })
+
+  it('get 1 culture for each outskirts square with a resource', () => {
+    // America: iron on A1 and incense on C3 are in the outskirts; silk is under the city
+    const option = optionOf(indians(america())).devoteToTheArts
+    expect(option.culture).toBe(1 + 2)
+    expect(option.parts).toContainEqual({ label: 'Indians: resources at A1 and C3', amount: 2 })
+    expect(optionOf(america()).devoteToTheArts.culture).toBe(1)
+  })
+
+  it('get nothing for a covered or blockaded resource', () => {
+    let state = put(indians(america()), CASH1981, 'buildings/granary', 0, 0)
+    state = put(state, KARANDRAS1, 'figures/bluearmy', 2, 2)
+    expect(optionOf(state).devoteToTheArts.culture).toBe(1)
+  })
 })
 
 describe('what a city offers: harvest', () => {
@@ -357,11 +595,13 @@ describe('what a city offers: harvest', () => {
     expect(refusal(harvest(state, 'iron'))).toContain('has no iron icon')
   })
 
-  it('a wonder on the square covers its resource and counts no culture, and the note names it', () => {
+  it('a wonder on the square covers its resource, and the note names it', () => {
     const state = put(america(), CASH1981, 'wonders/bigben', 0, 0)
     const option = optionOf(state)
     expect(option.harvest.choices.map((choice) => choice.resource)).toEqual(['incense'])
-    expect(option.devoteToTheArts.notes.join(' ')).toContain('A1 holds a wonder or a Great Person')
+    expect(option.harvest.notes.join(' ')).toContain('Iron at A1 is covered by a building, wonder, Great Person or disaster token')
+    // The wonder's own culture is counted in the Devote sum instead
+    expect(option.devoteToTheArts.culture).toBe(1 + 3)
   })
 
   it('a disaster token covers the culture icon of its square too, and the Devote total drops by it', () => {
@@ -480,6 +720,17 @@ describe('devoting a city to the arts', () => {
     const next = unwrap(devote(state, { scoutPieceIds: [scout.pieceId] }))
     expect(me(next).stats.culture).toBe(me(state).stats.culture + 2)
     expect(lastLine(next)).toBe('cash1981 devoted City B1 to the arts and gained 2 culture, with the squares of the scouts at B4')
+  })
+
+  it('adds the culture of a wonder under a scout the player sends', () => {
+    let state = america()
+    state = put(state, CASH1981, 'wonders/louvre', 3, 0)
+    state = put(state, CASH1981, 'figures/redscout', 3, 0)
+    const scout = optionOf(state).devoteToTheArts.scouts[0]
+    if (scout === undefined) throw new Error('no scout offered')
+    const next = unwrap(devote(state, { scoutPieceIds: [scout.pieceId] }))
+    expect(me(next).stats.culture).toBe(me(state).stats.culture + 1 + 2)
+    expect(lastLine(next)).toBe('cash1981 devoted City B2 to the arts and gained 3 culture, with the squares of the scouts at D1')
   })
 
   it('takes the number the player typed and says what the estimate was', () => {

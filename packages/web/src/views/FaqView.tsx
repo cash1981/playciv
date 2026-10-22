@@ -164,12 +164,16 @@ export function FaqView(): React.JSX.Element {
           <p className="faq-answer">
             In your open City Management phase, press <strong>Devote to the Arts</strong> on your
             city in Your actions. The panel adds up the culture: one for the city (two for a
-            metropolis), what the buildings in the outskirts give, and the culture icon of a natural
-            wonder. A scout of yours on another square can be sent to the city with a tick. Press{' '}
-            <strong>Devote and take N culture</strong> and the culture is added to your status.
-            Wonders, Great People and the effects of your civilization, government and cards are
-            not counted, so you can type another number: the log then says the estimate was
-            something else.
+            metropolis), what the buildings, wonders and Great People in the outskirts give, and
+            the culture icon of a natural wonder. If you have revealed Urban Development and the city
+            has two different buildings or wonders in its outskirts, it adds two more, and the
+            Indians get one more for each outskirts square with a resource. A scout of
+            yours on another square, for example on a building in another city, can be sent to the
+            city with a tick. Press <strong>Devote and take N culture</strong> and the culture is
+            added to your status. The effects of your civilization, government, techs and cards are
+            not counted, nor is the culture a Great Person card gives when you reveal or discard
+            it, so you can type another number: the log then says the estimate was something
+            else.
           </p>
           <p className="faq-answer">
             <strong>Harvest</strong> lists the resources whose icon is in the city&rsquo;s

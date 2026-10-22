@@ -9,7 +9,17 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { BOARD_ASSETS, wonderAssetId } from '../src/board.js'
-import { SHEET_CORRECTIONS, WONDERS_PER_ERA, WONDER_ASSET_IDS, WONDER_DATA, WONDER_ERAS, wonderCostFor, wonderDataOf } from '../src/wonder-data.js'
+import {
+  SHEET_CORRECTIONS,
+  WONDERS_PER_ERA,
+  WONDER_ASSET_IDS,
+  WONDER_CULTURE,
+  WONDER_DATA,
+  WONDER_ERAS,
+  wonderCostFor,
+  wonderCultureOf,
+  wonderDataOf,
+} from '../src/wonder-data.js'
 
 type Sheet = readonly (readonly (string | undefined)[])[]
 
@@ -83,5 +93,41 @@ describe('the wonder cost table', () => {
   it('knows no wonder under another name, nor one inherited from Object', () => {
     expect(wonderDataOf('wonders/nothing')).toBeUndefined()
     expect(wonderDataOf('toString')).toBeUndefined()
+  })
+
+  it('knows the culture on each marker, as read from the 27 images: 1 ancient, 2 medieval, 3 modern', () => {
+    const read: Readonly<Record<string, number>> = {
+      'wonders/chichenitza': 1,
+      'wonders/colossus': 1,
+      'wonders/greatlighthouse': 1,
+      'wonders/greatwall': 1,
+      'wonders/hanginggardens': 1,
+      'wonders/oracle': 1,
+      'wonders/pyramids': 1,
+      'wonders/statueofzeus': 1,
+      'wonders/stonehenge': 1,
+      'wonders/angkorwat': 2,
+      'wonders/brandenburggate': 2,
+      'wonders/himejisamuraicastle': 2,
+      "wonders/leonardo'sworkshop": 2,
+      'wonders/louvre': 2,
+      'wonders/machupichu': 2,
+      'wonders/notredame': 2,
+      'wonders/porcelaintower': 2,
+      'wonders/tajmahal': 2,
+      'wonders/bigben': 3,
+      'wonders/cristoredentor': 3,
+      'wonders/internet': 3,
+      'wonders/kremlin': 3,
+      'wonders/panamacanal': 3,
+      'wonders/pentagon': 3,
+      'wonders/statueofliberty': 3,
+      'wonders/sydneyoperahouse': 3,
+      'wonders/unitednations': 3,
+    }
+    expect(Object.keys(read).sort()).toEqual([...WONDER_ASSET_IDS].sort())
+    for (const [assetId, culture] of Object.entries(read)) expect(wonderCultureOf(assetId), assetId).toBe(culture)
+    expect(WONDER_CULTURE).toEqual({ Ancient: 1, Medieval: 2, Modern: 3 })
+    expect(wonderCultureOf('wonders/nothing')).toBeUndefined()
   })
 })

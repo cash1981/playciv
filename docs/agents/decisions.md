@@ -520,11 +520,24 @@ adds the status (phase, market supply) and the projection carries it in `you.cit
   shape and the rotation.
 - **Devote to the Arts** (base rules p. 17; metropolis base 2 from Fame and Fortune): 1 culture
   for the city (2 for a metropolis) plus the culture of each outskirts square: a building gives
-  its row of `building-data.ts` (it replaces the square's icons, p. 16), a bare square gives its
-  natural wonder icon. A square an enemy figure stands in gives nothing. The culture of a wonder or
-  a Great Person square, and the effects of a civilization, government, tech or card, are not known
-  and are named in the panel. The culture goes to `stats.culture`. The player may type another
-  number (0 to 99, `MAX_DEVOTE_CULTURE`); the log then says the estimate was something else.
+  its row of `building-data.ts`, a wonder marker 1 (ancient), 2 (medieval) or 3 (modern) culture
+  (`WONDER_CULTURE`, also when the wonder is obsolete, p. 27) and a Great Person marker its icons
+  (`great-person-data.ts`: Artist 2, Merchant 2, Humanitarian 1, the others none). Each replaces
+  the square's printed icons (p. 16); a bare square gives its natural wonder icon. The marker
+  culture was read by eye from the 33 images, the Great Person icons by a second reader as well, and
+  is not in any sheet. A square an enemy figure stands in gives nothing, a wonder's marker included
+  (p. 27). The effects of a civilization, government, tech or card, and the culture a Great Person
+  card gives when it is revealed or discarded, are not counted and are named in the panel. The
+  culture goes to `stats.culture`. The player may type another number (0 to 99,
+  `MAX_DEVOTE_CULTURE`), as before; the log then says the estimate was something else.
+- **Urban Development** (social policy, the human's reading of the card): a city with at least two
+  different buildings or wonders in its outskirts gets 2 extra culture when devoted. "Different"
+  is read as different kinds: two Temples count once, a wonder always counts as one more, a Great
+  Person is not a building, a blockaded square is not used and does not count, a building outside
+  the outskirts does not. Only a revealed policy counts (the human's ruling); one that is chosen but still hidden
+  does not, and none does under Anarchy ("Your social policies have no effect"). The sum is in the owner's view only (`hidden-info.test.ts`).
+  When the policy is chosen but the city falls short, the panel says how many it found. The
+  production half of the card (3 extra production) is still only named in the production notes.
 - **Harvest** (p. 18): one token of a resource whose icon is in the city's outskirts goes to the
   player's area as a `resources/<name>` piece, which is where a resource is paid from. A blockaded
   square gives nothing. A resource under a building, a wonder, a Great Person or a disaster token is
@@ -532,8 +545,11 @@ adds the status (phase, market supply) and the projection carries it in `you.cit
   names it. A disaster token covers the square's culture icon in Devote too (the human's ruling). The market is the supply of `board.ts` (as many as there are players, at most five, the
   pieces on the board being what is gone); a kind that is out is listed disabled. Angkor Wat's
   second harvest is not built.
+- **Indians** (civilization sheet): +1 culture for each outskirts square with an uncovered, unblockaded
+  resource icon when devoted.
 - **Scouts** (p. 26): a scout of the player's outside the city's own outskirts is offered with its
-  square's culture or resource. Which city a scout is sent to, and whether it was placed the turn
+  square's culture or resource, and what it stands on: a building (also one in another city's
+  outskirts), a wonder, a Great Person or a culture icon. Which city a scout is sent to, and whether it was placed the turn
   before, are not tracked, so every city offers every scout and the player chooses; the panel
   says so. A scout's square is read with no blockade.
 - **One action per city per turn** (base rules p. 15; the human's ruling after the first version
@@ -553,7 +569,8 @@ adds the status (phase, market supply) and the projection carries it in `you.cit
   cannot take the token back alone (`isAssistedBoardChange`).
 - **Payloads** are parsed strictly (`parseDevotePayload`, `parseHarvestPayload`).
 
-Source: `engine/src/city-gather.ts`, `tile-icons.ts`, `terrain.ts` (`tileSquareAt`),
+Source: `engine/src/city-gather.ts`, `tile-icons.ts`, `wonder-data.ts`, `great-person-data.ts`,
+`terrain.ts` (`tileSquareAt`),
 `city-actions.ts`, `assisted.ts`, `web/src/views/CityGather.tsx`, tests `assisted-gather.test.ts`,
 `CityGather.test.tsx` and `assisted-city-actions-api.test.ts`. Brief `tasks/assisted-gather.md`.
 

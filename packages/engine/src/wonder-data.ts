@@ -83,6 +83,22 @@ export const WONDERS_IN_ERA: Readonly<Record<WonderEra, number>> = {
   Modern: Object.values(WONDER_DATA).filter((data) => data.era === 'Modern').length,
 }
 
+/**
+ * The culture icons printed on a wonder's marker, by era: one on an ancient wonder, two on
+ * a medieval one and three on a modern one. Read by eye from the 27 marker images (the
+ * icons are not in the sheet); the era rule holds for every one of them, and
+ * `wonder-data.test.ts` lists each wonder's count. The marker gives them to the city whose
+ * outskirts it stands in when that city is devoted to the arts, also when the wonder is
+ * obsolete (base rules p. 27).
+ */
+export const WONDER_CULTURE: Readonly<Record<WonderEra, number>> = { Ancient: 1, Medieval: 2, Modern: 3 }
+
+/** The culture on a wonder's marker, or `undefined` when the id is not a wonder in the table. */
+export function wonderCultureOf(assetId: string): number | undefined {
+  const data = wonderDataOf(assetId)
+  return data === undefined ? undefined : WONDER_CULTURE[data.era]
+}
+
 /** Every wonder asset id in the table: what a `build` request may name as a wonder. */
 export const WONDER_ASSET_IDS: readonly string[] = Object.keys(WONDER_DATA)
 

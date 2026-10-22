@@ -4,9 +4,12 @@
  *
  * Read from the board only, never stored, so every view agrees and a move of a piece
  * is seen at once. The icons come from `tile-icons.json` (read by eye from the tile
- * images) and from the building table. Two things are never known: the culture of a
- * wonder or a Great Person on a square, and the one scout that is sent to a city this
- * turn, so a scout is offered to every city and the player says which.
+ * images), from the building table, and from the culture on wonder and Great Person
+ * markers (`wonder-data.ts`, `great-person-data.ts`). The player's social policy
+ * Urban Development adds culture to a city with two different buildings or wonders in its
+ * outskirts. One thing is never known: the scout that is sent to a city this turn (it is
+ * assigned at the start of the turn), so a scout is offered to every city and the player
+ * says which.
  *
  * Pure: the phase and the supply of tokens are decided by the caller, not here.
  */
@@ -16,10 +19,21 @@ import type { Cell, CityFootprintView } from './blockade.js'
 import { WHITE_SCOUT_ID, isMapCell, whiteFigureFor } from './board.js'
 import type { BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
-import { buildingDataOf } from './building-data.js'
+import { buildingDataOf, buildingNameOf } from './building-data.js'
+import { greatPersonCultureOf } from './great-person-data.js'
 import type { GameState, Playerhand } from './state.js'
 import { RESOURCE_KINDS, resourceName, squareIconsOfCell } from './tile-icons.js'
 import type { ResourceKind } from './tile-icons.js'
+import { wonderCultureOf } from './wonder-data.js'
+
+/** The social policy that adds culture to a Devote to the Arts. Its card is `Urban Development` on the sheet. */
+const URBAN_DEVELOPMENT = 'Urban Development'
+/** What Urban Development adds to a city that has the buildings it asks for. */
+const URBAN_DEVELOPMENT_CULTURE = 2
+/** How many different buildings or wonders in the outskirts Urban Development asks for. */
+const URBAN_DEVELOPMENT_TILES = 2
+/** The civilization whose cities produce 1 extra culture for each square with a resource in the outskirts when devoted. */
+const INDIANS = 'Indians'
 
 const sameCell = (a: Cell, b: Cell): boolean => a.column === b.column && a.row === b.row
 
@@ -35,6 +49,8 @@ export interface ScoutSquare {
   readonly pieceId: string
   /** For example "E5". */
   readonly square: string
+  /** What gives the culture: a building's or wonder's name, a Great Person's type, or "Culture icon". */
+  readonly source: string
   readonly culture: number
   readonly resource: ResourceKind | null
 }
@@ -76,10 +92,12 @@ interface SquareReading {
   readonly label: string
   /** What stands on it and replaces its culture icons. */
   readonly covered: 'building' | 'wonder' | 'great person' | null
-  /** The name of the building that gives `culture`, when it is a building. */
+  /** What gives `culture`: the name of the building or wonder, the type of Great Person, or "Culture icon". */
   readonly source: string
   /** Culture the square gives to a city that is not blockaded in it. */
   readonly culture: number
+  /** The building or wonder tile on it, which Urban Development counts; `null` when there is none. */
+  readonly tile: { readonly assetId: string; readonly name: string } | null
   /** The resource icon, unless something stands on the square: a building, wonder, Great Person or disaster token covers it (the human's ruling). */
   readonly resource: ResourceKind | null
   /** The resource that is printed on the square but covered, so it cannot be harvested. */
@@ -88,7 +106,22 @@ interface SquareReading {
   readonly known: boolean
 }
 
-/** What a map square gives: the building's culture, else a natural wonder's icon, plus any resource. */
+/** The culture on a building, wonder or Great Person marker; 0 for an asset the tables do not know. */
+function cultureOfPiece(piece: BoardPiece): number {
+  if (piece.category === 'building') return buildingDataOf(piece.assetId)?.culture ?? 0
+  if (piece.category === 'wonder') return wonderCultureOf(piece.assetId) ?? 0
+  return greatPersonCultureOf(piece.assetId) ?? 0
+}
+
+/** "Temple", "The Louvre" or "Artist": the name a line of the sum gives its source. */
+const nameOfPiece = (piece: BoardPiece): string =>
+  piece.category === 'building' ? (buildingNameOf(piece.assetId) ?? piece.label) : piece.label
+
+/**
+ * What a map square gives: the culture of the building, wonder or Great Person that stands
+ * on it (which replaces the icons printed there), else a natural wonder's icon, plus any
+ * resource.
+ */
 function readSquare(state: GameState, cell: Cell): SquareReading {
   const { board } = state
   const label = squareLabel(cell)
@@ -110,32 +143,26 @@ function readSquare(state: GameState, cell: Cell): SquareReading {
   const resource = here.length > 0 ? null : printed
   const coveredResource = here.length > 0 ? printed : null
 
-  const buildings = here.filter((piece) => piece.category === 'building')
-  if (buildings.length > 0) {
-    const best = buildings.reduce((top, candidate) =>
-      (buildingDataOf(candidate.assetId)?.culture ?? 0) > (buildingDataOf(top.assetId)?.culture ?? 0) ? candidate : top,
-    )
+  const standing = here.filter((piece) => piece.category !== 'disaster')
+  if (standing.length > 0) {
+    // One piece to a square; should old data hold two, the one that gives most culture is read
+    const best = standing.reduce((top, candidate) => (cultureOfPiece(candidate) > cultureOfPiece(top) ? candidate : top))
+    const tilePiece = best.category === 'greatperson' ? undefined : best
     return {
       cell,
       label,
-      covered: 'building',
-      source: best.label,
-      culture: buildingDataOf(best.assetId)?.culture ?? 0,
+      covered: best.category === 'building' ? 'building' : best.category === 'wonder' ? 'wonder' : 'great person',
+      source: nameOfPiece(best),
+      culture: cultureOfPiece(best),
+      tile: tilePiece === undefined ? null : { assetId: tilePiece.assetId, name: nameOfPiece(tilePiece) },
       resource,
       coveredResource,
       known: true,
     }
   }
-  if (here.length > 0) {
-    const wonder = here.some((piece) => piece.category === 'wonder')
-    const person = here.some((piece) => piece.category === 'greatperson')
-    // A disaster token alone covers the square's art, and with it the culture icon (the human's ruling). It is not named as a wonder or a person.
-    if (!wonder && !person) {
-      return { cell, label, covered: null, source: 'Culture icon', culture: 0, resource, coveredResource, known: icons !== null }
-    }
-    return { cell, label, covered: wonder ? 'wonder' : 'great person', source: '', culture: 0, resource, coveredResource, known: true }
-  }
-  return { cell, label, covered: null, source: 'Culture icon', culture: icons?.culture ?? 0, resource, coveredResource, known: icons !== null }
+  // A disaster token alone covers the square's art, and with it the culture icon (the human's ruling)
+  const culture = here.length > 0 ? 0 : (icons?.culture ?? 0)
+  return { cell, label, covered: null, source: 'Culture icon', culture, tile: null, resource, coveredResource, known: icons !== null }
 }
 
 /** Whether the piece is a scout of this player: their colour's, or the white one of the Spanish. */
@@ -147,6 +174,10 @@ function isOwnScout(piece: BoardPiece, player: Playerhand): boolean {
   return player.color !== null && pieceColorOf(piece) === player.color.toLowerCase()
 }
 
+/** "Temple", "The Louvre", "Artist (Great Person)" or "Culture icon": what a line of the sum names as the source. */
+const sourceLabel = (reading: SquareReading): string =>
+  reading.covered === 'great person' ? `${reading.source} (Great Person)` : reading.source
+
 const listSquares = (squares: readonly string[]): string =>
   squares.length <= 1 ? squares.join('') : `${squares.slice(0, -1).join(', ')} and ${squares.at(-1) ?? ''}`
 
@@ -155,6 +186,11 @@ const listSquares = (squares: readonly string[]): string =>
  * stands in give nothing (base rules p. 27); a scout gathers from its own square even if
  * it is blockaded, so a scout's square is read with no blockade. A scout inside this
  * city's own outskirts adds nothing, as the square is already counted.
+ *
+ * Urban Development (a social policy the player has revealed; a chosen one that is still hidden does not count, nor does any policy under Anarchy) adds 2 culture
+ * when two different buildings or wonders stand in the outskirts: two of the same building
+ * count once, a Great Person is not a building, and a blockaded square is not used by the
+ * city, so it does not count.
  */
 export function cityGatheringOf(state: GameState, player: Playerhand, footprint: CityFootprintView): CityGathering {
   const { board } = state
@@ -165,7 +201,8 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
   const parts: CultureShare[] = [{ label: isMetropolis ? 'The metropolis itself' : 'The city itself', amount: isMetropolis ? 2 : 1 }]
   const notes: string[] = []
   const blockadedWithIcons: string[] = []
-  const coveredBy: string[] = []
+  const urbanTiles = new Map<string, string>()
+  const resourceSquares: string[] = []
   const unknown: string[] = []
   const coveredResources: string[] = []
   const found = new Map<ResourceKind, string[]>()
@@ -177,15 +214,11 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
       if (reading.culture > 0 || reading.resource !== null) blockadedWithIcons.push(reading.label)
       continue
     }
-    if (reading.covered === 'wonder' || reading.covered === 'great person') coveredBy.push(reading.label)
     if (!reading.known) unknown.push(reading.label)
-    if (reading.culture > 0) {
-      parts.push({
-        label: reading.covered === 'building' ? `${reading.source} at ${reading.label}` : `Culture icon at ${reading.label}`,
-        amount: reading.culture,
-      })
-    }
+    if (reading.tile !== null) urbanTiles.set(reading.tile.assetId, reading.tile.name)
+    if (reading.culture > 0) parts.push({ label: `${sourceLabel(reading)} at ${reading.label}`, amount: reading.culture })
     if (reading.coveredResource !== null) coveredResources.push(`${resourceName(reading.coveredResource)} at ${reading.label}`)
+    if (reading.resource !== null) resourceSquares.push(reading.label)
     if (reading.resource !== null) found.set(reading.resource, [...(found.get(reading.resource) ?? []), reading.label])
   }
 
@@ -194,13 +227,22 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
       ? null
       : `${listSquares(blockadedWithIcons)} ${blockadedWithIcons.length === 1 ? 'is blockaded and gives' : 'are blockaded and give'} nothing.`
   if (blockadeNote !== null) notes.push(blockadeNote)
-  if (coveredBy.length > 0) {
-    notes.push(`${listSquares(coveredBy)} hold${coveredBy.length === 1 ? 's' : ''} a wonder or a Great Person. Its culture is not counted.`)
-  }
   if (unknown.length > 0) {
     notes.push(`The icons of ${listSquares(unknown)} are not in the map data and count as none.`)
   }
-  notes.push('Culture from civilization, government, tech and card effects is not counted.')
+  if (player.civilization?.name === INDIANS && resourceSquares.length > 0) {
+    parts.push({ label: `Indians: resources at ${listSquares(resourceSquares)}`, amount: resourceSquares.length })
+  }
+  if (player.socialPolicies.some((policy) => policy.name === URBAN_DEVELOPMENT && !policy.hidden) && player.government !== 'Anarchy') {
+    if (urbanTiles.size >= URBAN_DEVELOPMENT_TILES) {
+      parts.push({ label: `${URBAN_DEVELOPMENT} (${listSquares([...urbanTiles.values()])})`, amount: URBAN_DEVELOPMENT_CULTURE })
+    } else {
+      notes.push(
+        `${URBAN_DEVELOPMENT} needs ${URBAN_DEVELOPMENT_TILES} different buildings or wonders in the outskirts, and this city has ${urbanTiles.size === 0 ? 'none' : 'one'}.`,
+      )
+    }
+  }
+  notes.push('Culture from other civilization, government, tech and card effects is not counted.')
 
   const scouts: ScoutSquare[] = []
   const scoutChoices: HarvestChoiceView[] = []
@@ -209,7 +251,13 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
     const cell = mapCellOf(board, piece)
     if (cell === null || own.some((mine) => sameCell(mine, cell))) continue
     const reading = readSquare(state, cell)
-    if (reading.culture > 0) scouts.push({ pieceId: piece.id, square: reading.label, culture: reading.culture, resource: reading.resource })
+    if (reading.culture > 0) scouts.push({
+        pieceId: piece.id,
+        square: reading.label,
+        source: sourceLabel(reading),
+        culture: reading.culture,
+        resource: reading.resource,
+      })
     if (reading.resource !== null) {
       scoutChoices.push({
         resource: reading.resource,

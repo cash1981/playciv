@@ -223,7 +223,7 @@ export function DevotePanel({
                 }}
               />
               <span>
-                Scout at {scout.square}: +{scout.culture} culture
+                Scout at {scout.square} ({scout.source}): +{scout.culture} culture
               </span>
             </label>
           ))}

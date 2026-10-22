@@ -40,8 +40,8 @@ const DEVOTE: CityActionOptions['devoteToTheArts'] = {
     { label: 'The city itself', amount: 1 },
     { label: 'Temple at A3', amount: 2 },
   ],
-  notes: ['Culture from civilization, government, tech and card effects is not counted.'],
-  scouts: [{ pieceId: 'scout-1', square: 'E5', culture: 1, resource: null }],
+  notes: ['Culture from other civilization, government, tech and card effects is not counted.'],
+  scouts: [{ pieceId: 'scout-1', square: 'E5', source: 'Culture icon', culture: 1, resource: null }],
 }
 
 const HARVEST: CityActionOptions['harvest'] = {
@@ -132,7 +132,7 @@ describe('Devote to the Arts', () => {
     const send = vi.spyOn(api, 'devoteToTheArts').mockResolvedValue({} as PlayerView)
     renderPanel(viewOf([options()]))
     fireEvent.click(devoteButton())
-    fireEvent.click(screen.getByLabelText('Scout at E5: +1 culture'))
+    fireEvent.click(screen.getByLabelText('Scout at E5 (Culture icon): +1 culture'))
     expect((screen.getByLabelText('Culture to take') as HTMLInputElement).value).toBe('4')
     fireEvent.click(screen.getByRole('button', { name: 'Devote and take 4 culture' }))
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))

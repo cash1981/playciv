@@ -28,7 +28,9 @@ The human's wish: read how much culture and which resources lie around the city 
 
 **Added later, by the human:** one action per city per turn. The game lists what a city has done this turn and asks before a second action (Build, Start Building Program, Devote, Harvest); see "One action per city per turn" in decisions.
 
-**Out:** the one-icon-per-turn rule, the scout-to-city assignment, the culture of wonders and Great Persons, civilization, government and card effects on culture, Angkor Wat's second harvest, coin and trade icons.
+**Added later, by the human:** the culture of wonder and Great Person markers in the outskirts and under scouts, and Urban Development (+2 culture with two different buildings or wonders); see "Devote to the Arts" and "Urban Development" in decisions.
+
+**Out:** the one-icon-per-turn rule, the scout-to-city assignment (made at the start of the turn, to come), civilization, government and card effects on culture (also the culture a Great Person card gives when revealed or discarded), Angkor Wat's second harvest, coin and trade icons.
 
 ## Claimed paths
 
