@@ -370,6 +370,10 @@ private card, nothing placed).
 - The picker shows no count of squares and no "Draws a card in secret"; the groups are
   Buildings, Wonders, Figures (placed on the map) and Units. The bar still says that a
   unit is a private card.
+- **Build opens with a button per group** (the human): Buildings, Wonders, Figures, Units,
+  only those with something to pick. A button shows that list, with Back to the buttons; a
+  group that is alone is shown at once. The choice is local to the picker and the engine is
+  unchanged.
 - A figure is placed by the tap on its square, with no Confirm (the human): it can be
   moved, and removing it takes the build back. The exception is a square with a note (an
   enemy figure stands there, so the outcome is settled by hand): its note is read first and

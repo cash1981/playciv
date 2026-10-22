@@ -89,6 +89,21 @@
   margin: 0 0 0.5rem;
 }
 
+.build-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.3rem 0 0.5rem;
+}
+
+.build-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
 .build-group-heading {
   margin: 0.4rem 0 0.25rem;
   font-size: 0.85rem;
@@ -173,6 +188,8 @@
   }
 
   .build-choice button,
+  .build-categories button,
+  .build-group-head button,
   .build-picker > button,
   .build-bar-buttons button {
     min-height: 2.75rem;

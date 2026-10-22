@@ -1317,7 +1317,7 @@ describe('the Build flow in the game page', () => {
       viewWith({ you: { playerId: 'p1', username: 'viewer', items: [], pendingRewards: [], cities: [city], buildOptions: withUnit } }),
     )
     fireEvent.click(screen.getByRole('button', { name: 'Build in Capital D5' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Units' })); fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
     expect(screen.getByRole('group', { name: 'Build' }).textContent).toContain('Build an infantry unit in Capital D5')
     expect((within(screen.getByRole('group', { name: 'Build' })).getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(false)
     // Nothing to pick: the board gets no squares

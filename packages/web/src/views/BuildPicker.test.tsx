@@ -15,6 +15,15 @@ import { BuildBar, BuildPicker } from './BuildPicker.js'
 import { OPTIONS_CHANGED, SQUARE_GONE, useBuildFlow } from './buildFlow.js'
 import type { Run } from './GameView.js'
 
+/** Opens the category an item is under, when the picker shows buttons for them, and chooses it. */
+function choose(name: string): void {
+  if (screen.queryByRole('button', { name: `Choose ${name}` }) === null) {
+    const category = /figure$/.test(name) ? 'Figures' : /unit$/.test(name) ? 'Units' : /^The /.test(name) ? 'Wonders' : 'Buildings'
+    fireEvent.click(within(screen.getByRole('group', { name: /^What .* can build$/ })).getByRole('button', { name: category }))
+  }
+  fireEvent.click(screen.getByRole('button', { name: `Choose ${name}` }))
+}
+
 beforeEach(() => {
   localStorage.setItem('civ.panel.actions', 'true')
   resetPendingRequestIds()
@@ -243,7 +252,7 @@ describe('BuildPicker', () => {
 
   it('hands the chosen building to the caller', () => {
     const { onChoose, onClose } = renderPicker(options())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Harbor' }))
+    choose('Harbor')
     expect(onChoose).toHaveBeenCalledWith(HARBOR)
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(onClose).toHaveBeenCalledOnce()
@@ -369,11 +378,11 @@ describe('the Build button in Your actions', () => {
 describe('square picking and Confirm', () => {
   const startHarbor = (): void => {
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Harbor' }))
+    choose('Harbor')
   }
   const startLibrary = (): void => {
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
+    choose('Library')
   }
 
   it('has no square buttons until a choice is made', () => {
@@ -669,7 +678,7 @@ describe('Back to the picker', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
+    choose('Library')
     const toggle = document.querySelector<HTMLElement>('[aria-controls="actions-content"]')
     if (toggle === null) throw new Error('Your actions toggle missing')
     fireEvent.click(toggle)
@@ -691,7 +700,7 @@ describe('Back to the picker', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
+    choose('Library')
     act(() => handle.setView(viewOf([options({ choices: [HARBOR] })], { rev: 9 })))
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to the picker' }))
@@ -707,7 +716,7 @@ describe('a refresh while planning', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
+    choose('Library')
     fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))
 
     // New objects, a new revision, the same options: what auto refresh brings.
@@ -722,7 +731,7 @@ describe('a refresh while planning', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
+    choose('Library')
     fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))
 
     act(() => handle.setView(viewOf([options({ choices: [HARBOR] })], { rev: 9 })))
@@ -735,7 +744,7 @@ describe('a refresh while planning', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
+    choose('Library')
 
     act(() => handle.setView(viewOf([options({ status: 'wrong-phase', reason: 'Not now.', choices: [], unavailable: [] })], { rev: 9 })))
     expect(overlays()).toHaveLength(0)
@@ -746,7 +755,7 @@ describe('a refresh while planning', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
+    choose('Library')
     expect(overlays().length).toBeGreaterThan(0)
 
     act(() => handle.setView(viewOf([], { rev: 9 })))
@@ -770,7 +779,7 @@ describe('a refresh while planning', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
+    choose('Library')
     fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))
 
     act(() => handle.setView(viewOf([options({ choices: [{ ...LIBRARY, squares: [LIBRARY.squares[1] as BuildChoice['squares'][number]] }, HARBOR] })], { rev: 9 })))
@@ -783,7 +792,7 @@ describe('a refresh while planning', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
+    choose('Library')
     expect(bar().textContent).not.toContain('Pays')
 
     act(() => handle.setView(viewOf([options({ choices: [{ ...LIBRARY, tradeToPay: 6 }, HARBOR] })], { rev: 9 })))
@@ -793,7 +802,7 @@ describe('a refresh while planning', () => {
   it('clears everything when the viewer can no longer build, as in a replay', () => {
     const { rerender } = render(<Harness initial={viewOf([options()])} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
+    choose('Library')
     expect(overlays()).toHaveLength(2)
 
     rerender(<Harness initial={viewOf([options()])} readOnly />)
@@ -809,23 +818,55 @@ const ALL_KINDS = (): CityBuildOptions => options({ choices: [LIBRARY, ARMY, SCO
 describe('the picker groups', () => {
   const renderPicker = (city: CityBuildOptions) =>
     render(<BuildPicker city={city} note={null} message={null} busy={false} onChoose={() => undefined} onClose={() => undefined} />)
-  const headings = (): string[] => screen.getAllByRole('heading', { level: 6 }).map((heading) => heading.textContent ?? '')
+  const headings = (): string[] => screen.queryAllByRole('heading', { level: 6 }).map((heading) => heading.textContent ?? '')
+  const categories = (): string[] =>
+    within(screen.getByRole('group', { name: 'What Capital D5 can build' }))
+      .getAllByRole('button')
+      .map((button) => button.textContent ?? '')
+  const open = (category: string): void => {
+    fireEvent.click(within(screen.getByRole('group', { name: 'What Capital D5 can build' })).getByRole('button', { name: category }))
+  }
+  const names = (list: string): (string | null | undefined)[] =>
+    within(screen.getByRole('list', { name: list }))
+      .getAllByRole('listitem')
+      .map((item) => item.querySelector('strong')?.textContent)
 
-  it('lists buildings, figures and units under their own headings, in that order', () => {
+  it('opens with a button for each kind, in that order, and lists nothing until one is pressed', () => {
     renderPicker(ALL_KINDS())
-    expect(headings()).toEqual(['Buildings', 'Figures (placed on the map)', 'Units'])
-    const names = (list: string): (string | null | undefined)[] =>
-      within(screen.getByRole('list', { name: list }))
-        .getAllByRole('listitem')
-        .map((item) => item.querySelector('strong')?.textContent)
+    expect(categories()).toEqual(['Buildings', 'Figures', 'Units'])
+    expect(screen.queryByRole('button', { name: /^Choose/ })).toBeNull()
+    expect(headings()).toEqual([])
+  })
+
+  it('shows the list of a kind when its button is pressed, and Back returns to the buttons', () => {
+    renderPicker(ALL_KINDS())
+    open('Buildings')
+    expect(headings()).toEqual(['Buildings'])
     expect(names('Buildings Capital D5 can build')).toEqual(['Library'])
+    expect(screen.queryByRole('group', { name: 'What Capital D5 can build' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(categories()).toEqual(['Buildings', 'Figures', 'Units'])
+    open('Figures')
+    expect(headings()).toEqual(['Figures (placed on the map)'])
     expect(names('Figures Capital D5 can build')).toEqual(['Army figure', 'Scout figure'])
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    open('Units')
     expect(names('Units Capital D5 can build')).toEqual(['Infantry unit', 'Mounted unit'])
   })
 
-  it('hides a group that has nothing in it', () => {
+  it('moves focus into the list that was opened, and back to its button on Back', () => {
+    renderPicker(ALL_KINDS())
+    open('Figures')
+    expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Figures' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(document.activeElement).toBe(within(screen.getByRole('group', { name: 'What Capital D5 can build' })).getByRole('button', { name: 'Figures' }))
+  })
+
+  it('has no button for a kind that has nothing in it, and shows a kind that is alone at once', () => {
     const { unmount } = renderPicker(options({ choices: [LIBRARY] }))
     expect(headings()).toEqual(['Buildings'])
+    expect(screen.queryByRole('group', { name: 'What Capital D5 can build' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
     unmount()
 
     const units = renderPicker(options({ choices: [INFANTRY] }))
@@ -834,15 +875,28 @@ describe('the picker groups', () => {
     expect(screen.queryByRole('list', { name: 'Figures Capital D5 can build' })).toBeNull()
     units.unmount()
 
-    renderPicker(options({ choices: [ARMY] }))
-    expect(headings()).toEqual(['Figures (placed on the map)'])
+    const two = renderPicker(options({ choices: [INFANTRY, ARMY] }))
+    expect(categories()).toEqual(['Figures', 'Units'])
+    two.unmount()
+  })
+
+  it('falls back to the buttons when the opened kind is no longer offered', () => {
+    const view = renderPicker(ALL_KINDS())
+    open('Figures')
+    view.rerender(
+      <BuildPicker city={options({ choices: [LIBRARY, INFANTRY] })} note={null} message={null} busy={false} onChoose={() => undefined} onClose={() => undefined} />,
+    )
+    expect(categories()).toEqual(['Buildings', 'Units'])
   })
 
   it('shows cost and trade for a figure and a unit, and nothing else', () => {
     renderPicker(ALL_KINDS())
+    open('Figures')
     const [army] = within(screen.getByRole('list', { name: 'Figures Capital D5 can build' })).getAllByRole('listitem')
     expect(army?.textContent).toContain('Cost 4')
     expect(army?.textContent).not.toMatch(/square/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    open('Units')
     const [infantry, mounted] = within(screen.getByRole('list', { name: 'Units Capital D5 can build' })).getAllByRole('listitem')
     expect(infantry?.textContent).toContain('Cost 5')
     // "Draws a card in secret" is noise: the bar says what a unit is when it is picked.
@@ -871,7 +925,7 @@ describe('the picker groups', () => {
 describe('building a unit', () => {
   const startUnit = (name: string): void => {
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: `Choose ${name}` }))
+    choose(name)
   }
 
   it('goes straight to the confirm bar: no squares, no board pick, Confirm ready at once', () => {
@@ -956,7 +1010,7 @@ describe('building a unit', () => {
 describe('building a figure', () => {
   const startFigure = (name: string): void => {
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: `Choose ${name}` }))
+    choose(name)
   }
 
   const confirmButton = (): HTMLElement | null => within(bar()).queryByRole('button', { name: /^Confirm/ })
@@ -1111,7 +1165,7 @@ describe('the request key tells the items and squares apart', () => {
       if (cancel !== null) fireEvent.click(cancel)
       const open = screen.queryByRole('region', { name: 'Build in Capital D5' })
       if (open === null) fireEvent.click(buildButton())
-      fireEvent.click(screen.getByRole('button', { name: `Choose ${choice}` }))
+      choose(choice)
       if (square !== null) fireEvent.click(screen.getByRole('button', { name: square }))
       // A figure on a plain square is sent by the tap; a note on the square or a unit needs Confirm.
       const sendIt = within(bar()).queryByRole('button', { name: /^Confirm/ })
@@ -1142,7 +1196,7 @@ describe('a refresh compares choices by item', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Army figure' }))
+    choose('Army figure')
     fireEvent.click(screen.getByRole('button', { name: 'Place Army figure on D5' }))
 
     // The list key is only a key: the item is what the choice is.
@@ -1157,7 +1211,7 @@ describe('a refresh compares choices by item', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Army figure' }))
+    choose('Army figure')
 
     const scoutUnderArmyKey = { ...SCOUT, assetId: ARMY.assetId }
     act(() => handle.setView(viewOf([options({ choices: [scoutUnderArmyKey] })], { rev: 9 })))
@@ -1170,7 +1224,7 @@ describe('a refresh compares choices by item', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
+    choose('Infantry unit')
 
     act(() => handle.setView(viewOf([options({ choices: [MOUNTED] })], { rev: 9 })))
     expect(screen.queryByRole('group', { name: 'Build' })?.textContent ?? '').not.toContain('infantry')
@@ -1181,7 +1235,7 @@ describe('a refresh compares choices by item', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
+    choose('Infantry unit')
 
     act(() => handle.setView(viewOf([ALL_KINDS()], { rev: 9 })))
     expect(bar().textContent).toContain('Build an infantry unit in Capital D5')
@@ -1198,7 +1252,7 @@ describe('a refresh compares choices by item', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
+    choose('Infantry unit')
 
     act(() => handle.setView(viewOf([options({ choices: [LIBRARY] })], { rev: 9 })))
     expect(screen.getByRole('status').textContent).toBe(OPTIONS_CHANGED)
@@ -1209,19 +1263,17 @@ describe('a refresh compares choices by item', () => {
 describe('building a wonder', () => {
   const startWonder = (): void => {
     fireEvent.click(buildButton())
-    fireEvent.click(screen.getByRole('button', { name: 'Choose The Colossus' }))
+    choose('The Colossus')
   }
   const withWonder = (): CityBuildOptions => options({ choices: [LIBRARY, COLOSSUS, ARMY] })
 
-  it('has its own group between the buildings and the figures, with cost and nothing else', () => {
+  it('has its own button between the buildings and the figures, with cost and nothing else', () => {
     render(
       <BuildPicker city={withWonder()} note={null} message={null} busy={false} onChoose={() => undefined} onClose={() => undefined} />,
     )
-    expect(screen.getAllByRole('heading', { level: 6 }).map((heading) => heading.textContent)).toEqual([
-      'Buildings',
-      'Wonders',
-      'Figures (placed on the map)',
-    ])
+    const kinds = within(screen.getByRole('group', { name: 'What Capital D5 can build' }))
+    expect(kinds.getAllByRole('button').map((button) => button.textContent)).toEqual(['Buildings', 'Wonders', 'Figures'])
+    fireEvent.click(kinds.getByRole('button', { name: 'Wonders' }))
     const [colossus] = within(screen.getByRole('list', { name: 'Wonders Capital D5 can build' })).getAllByRole('listitem')
     expect(colossus?.textContent).toContain('The Colossus')
     expect(colossus?.textContent).toContain('Cost 10 (15 without Metalworking)')

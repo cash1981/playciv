@@ -104,14 +104,33 @@ interface PickerProps {
 }
 
 /**
- * What one city can build now. Choosing a building, a wonder or a figure starts
- * picking a square on the board; choosing a unit goes straight to the confirm bar.
+ * What one city can build now. It opens with a button for each kind (buildings,
+ * wonders, figures, units) that has something to pick, and the button shows that
+ * list; a kind that is alone is shown at once. Choosing a building, a wonder or a
+ * figure starts picking a square on the board; choosing a unit goes straight to the
+ * confirm bar.
  */
 export function BuildPicker({ city, note, message, busy, onChoose, onClose }: PickerProps): React.JSX.Element {
   const ref = useRef<HTMLElement>(null)
   // Opening the picker is a press on Build right above it: put keyboard focus in it.
   useEffect(() => ref.current?.focus({ preventScroll: true }), [])
   const ready = city.status === 'ready'
+  const [picked, setPicked] = useState<GroupId | null>(null)
+  const groupRef = useRef<HTMLElement>(null)
+  // The groups with something to pick. One alone is shown at once: a button for it would only be a click.
+  const filled = GROUPS.filter((group) => city.choices.some((choice) => groupOf(choice) === group.id))
+  const open = filled.length === 1 ? filled[0]! : (filled.find((group) => group.id === picked) ?? null)
+  // Opening a group moves focus into it, and coming back puts focus on the button that opened it.
+  const lastOpen = useRef<GroupId | null>(null)
+  const openId = open?.id ?? null
+  useEffect(() => {
+    const before = lastOpen.current
+    lastOpen.current = openId
+    if (openId !== null && before !== openId) groupRef.current?.focus({ preventScroll: true })
+    else if (openId === null && before !== null) {
+      ref.current?.querySelector<HTMLElement>(`[data-group="${before}"]`)?.focus({ preventScroll: true })
+    }
+  }, [openId])
 
   return (
     <section
@@ -139,41 +158,66 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
         </p>
       )}
 
-      {ready &&
-        GROUPS.map((group) => {
-          const choices = city.choices.filter((choice) => groupOf(choice) === group.id)
-          // An empty group has no heading: nothing says "Units" when there is none to pick.
-          if (choices.length === 0) return null
-          return (
-            <section key={group.id} className="build-group">
-              <h6 className="build-group-heading">{group.heading}</h6>
-              {'note' in group && <p className="build-group-note muted">{group.note}</p>}
-              <ul className="build-choices" aria-label={`${group.noun} ${city.label} can build`}>
-                {choices.map((choice) => (
-                  <li key={choice.assetId} className="build-choice">
-                    <span className="build-choice-text">
-                      <strong>{choice.label}</strong>
-                      <span>
-                        Cost {choice.cost}
-                        {choice.costNote !== undefined && <> ({choice.costNote})</>}
-                        {choice.tradeToPay > 0 && <>, pays {choice.tradeToPay} trade</>}
-                      </span>
+      {ready && open === null && filled.length > 0 && (
+        <div className="build-categories" role="group" aria-label={`What ${city.label} can build`}>
+          {filled.map((group) => (
+            <button
+              key={group.id}
+              type="button"
+              className="small"
+              data-group={group.id}
+              onClick={() => setPicked(group.id)}
+            >
+              {group.noun}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {ready && open !== null && (
+        <section
+          key={open.id}
+          ref={groupRef}
+          className="build-group"
+          tabIndex={-1}
+          aria-label={open.noun}
+        >
+          <div className="build-group-head">
+            <h6 className="build-group-heading">{open.heading}</h6>
+            {filled.length > 1 && (
+              <button type="button" className="small" onClick={() => setPicked(null)}>
+                Back
+              </button>
+            )}
+          </div>
+          {'note' in open && <p className="build-group-note muted">{open.note}</p>}
+          <ul className="build-choices" aria-label={`${open.noun} ${city.label} can build`}>
+            {city.choices
+              .filter((choice) => groupOf(choice) === open.id)
+              .map((choice) => (
+                <li key={choice.assetId} className="build-choice">
+                  <span className="build-choice-text">
+                    <strong>{choice.label}</strong>
+                    <span>
+                      Cost {choice.cost}
+                      {choice.costNote !== undefined && <> ({choice.costNote})</>}
+                      {choice.tradeToPay > 0 && <>, pays {choice.tradeToPay} trade</>}
                     </span>
-                    <button
-                      type="button"
-                      className="small"
-                      aria-label={`Choose ${choice.label}`}
-                      disabled={busy}
-                      onClick={() => onChoose(choice)}
-                    >
-                      Choose
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )
-        })}
+                  </span>
+                  <button
+                    type="button"
+                    className="small"
+                    aria-label={`Choose ${choice.label}`}
+                    disabled={busy}
+                    onClick={() => onChoose(choice)}
+                  >
+                    Choose
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </section>
+      )}
 
       {ready && city.unavailable.length > 0 && <WhyNot city={city} />}
 

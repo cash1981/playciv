@@ -121,8 +121,10 @@ export function FaqView(): React.JSX.Element {
             the squares are small at the default zoom, so zoom the board in to tap one.
           </p>
           <p className="faq-answer">
-            Only what you can really build is listed, in groups: buildings, wonders, figures and
-            units. A wonder shows what it costs, the printed amount or less if you know the tech on its
+            Build opens with a button for each kind of thing the city can build now: buildings,
+            wonders, figures and units, with no button for a kind that has nothing to pick. Press
+            one to see its list, and <strong>Back</strong> to return to the buttons. Only what you
+            can really build is listed. A wonder shows what it costs, the printed amount or less if you know the tech on its
             card, but the cost is not checked against the city&rsquo;s production: cards and Great
             Persons can add hammers, so you count that yourself. A city holds one wonder. The reasons for the others are behind the link{' '}
             <strong>Why not the others</strong>. If the estimate of the city&rsquo;s production is
