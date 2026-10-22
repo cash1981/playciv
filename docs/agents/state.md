@@ -55,6 +55,10 @@ old test counts and past deployment reports do not establish present health.
   opponents' cities only. Brief `tasks/cities-in-actions.md`; see "Assisted play"
   in decisions.
 
+- End turn (it ends the viewer's open phase) is a button in "Your actions", the first
+  Order tab control to move there; the Order tab keeps its own for now. Brief
+  `tasks/end-turn-actions.md`; see "Assisted play" in decisions.
+
 Read [current decisions](decisions.md) for the relevant compatibility/rationale
 and [limitations](limitations.md) for known gaps. Archived Mongo games remaining
 nonplayable is separate from the completed single-chat migration.

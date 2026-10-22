@@ -25,6 +25,7 @@ import { ApiError, api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import type { BuildFlow } from './buildFlow.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { EndTurn, endTurnState } from './EndTurn.js'
 import { ItemCard } from './ItemCard.js'
 import type { Run } from './GameView.js'
 import { YourCities } from './YourCities.js'
@@ -253,11 +254,13 @@ interface PanelProps {
 
 /**
  * Whether "Your actions" is on the page: the viewer has an action for a card they
- * hold, a card choice waiting, or a city on the map. Never for a spectator. The
- * game page asks too, so the Actions shortcut is not a dead button.
+ * hold, a card choice waiting, a city on the map, or a turn to end (a player in a
+ * game that is running). Never for a spectator. The game page asks too, so the
+ * Actions shortcut is not a dead button.
  */
 export function hasActionsPanel(view: PlayerView): boolean {
   return (
+    endTurnState(view) !== null ||
     (view.you?.availableActions ?? []).some((candidate) => candidate.status !== 'not-owned') ||
     (view.you?.pendingRewards?.length ?? 0) > 0 ||
     (view.you?.cities?.length ?? 0) > 0
@@ -265,12 +268,12 @@ export function hasActionsPanel(view: PlayerView): boolean {
 }
 
 /**
- * "Your actions": the viewer's assisted actions with their state, the card choice
- * waiting after a culture advance, and "Your cities" (see `YourCities.tsx`), in
- * that order, so a waiting choice stays above the long city list. Actions for a
- * card the player does not hold are left out, so the list stays short, and the
- * panel is not rendered at all for a spectator or when there is nothing to show
- * (see {@link hasActionsPanel}).
+ * "Your actions": End turn, the viewer's assisted actions with their state, the
+ * card choice waiting after a culture advance, and "Your cities" (see
+ * `YourCities.tsx`), in that order, so a waiting choice stays above the long city
+ * list and End turn is always at the same place. Actions for a card the player does
+ * not hold are left out, so the list stays short, and the panel is not rendered at
+ * all for a spectator or when there is nothing to show (see {@link hasActionsPanel}).
  */
 export function AssistedActionsPanel({
   gameId,
@@ -303,6 +306,7 @@ export function AssistedActionsPanel({
         role="group"
         aria-label="Your actions"
       >
+        <EndTurn gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
         {actions.length > 0 && (
           <ul className="assisted-actions">
             {actions.map((candidate) => (

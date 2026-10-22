@@ -1074,7 +1074,7 @@ function WithFlow({ view }: { readonly view: PlayerView }): React.JSX.Element {
 describe('hasActionsPanel', () => {
   it.each([
     ['a spectator', spectatorView, false],
-    ['a player with nothing to show', viewWith([]), false],
+    ['a player with nothing to show, in a game with no turn yet', viewWith([]), false],
     ['a player with only an action for a card they do not hold', viewWith([chivalry('not-owned', 'No.')]), false],
     ['a player with an action for a card they hold', viewWith([READY]), true],
     ['a player with a card choice waiting', viewWithRewards([reward()]), true],

@@ -424,7 +424,7 @@ describe('game page shortcuts', () => {
     expect(shortcutLabels()).toEqual(['Board', 'Your cards', 'Tech tree'])
   })
 
-  it('offers no Actions button to a player with nothing in Your actions yet', async () => {
+  it('offers no Actions button to a player with nothing in Your actions yet, before the game has a turn', async () => {
     await renderOrder(orderView({ you: { playerId: 'p1', username: 'viewer', items: [], pendingRewards: [], cities: [] } }))
     expect(screen.queryByRole('heading', { name: 'Your actions' })).toBeNull()
     expect(shortcutLabels()).toEqual(['Board', 'Your cards', 'Tech tree'])
@@ -1013,11 +1013,40 @@ describe('the game page (issue #215)', () => {
       expect(screen.getByRole('list', { name: 'Turn progress' }).textContent).toContain('BobSOT')
     })
 
-    it('has no End turn or Take the turn buttons, because there is no baton', async () => {
+    it('has no Take the turn button, because there is no baton', async () => {
       await renderGame(chatView('Alice'))
 
-      expect(screen.queryByText('End turn')).toBeNull()
       expect(screen.queryByText('Take the turn')).toBeNull()
+    })
+
+    it('ends the viewer’s phase from End turn in Your actions, then shows the next one', async () => {
+      const markDone = vi.spyOn(api, 'markDone').mockResolvedValue({} as PlayerView)
+      await renderGame(chatView('Alice'))
+      const panel = screen.getByRole('group', { name: 'Your actions' })
+
+      // The reload after the press reads the projection the server would send
+      const later = chatView('Alice', {
+        activeTurn: {
+          playerId: 'id-Alice',
+          username: 'Alice',
+          turnNumber: 4,
+          phase: 'MOVEMENT',
+          startPlayer: 'Bob',
+          waitingFor: [
+            { username: 'Alice', phase: 'MOVEMENT' },
+            { username: 'Bob', phase: 'SOT' },
+          ],
+        },
+      })
+      vi.spyOn(api, 'game').mockResolvedValue(later)
+      fireEvent.click(within(panel).getByRole('button', { name: 'End turn: mark City management as done' }))
+
+      await waitFor(() => expect(markDone).toHaveBeenCalledExactlyOnceWith('game-1', 'CM', 4))
+      expect(
+        await within(screen.getByRole('group', { name: 'Your actions' })).findByRole('button', {
+          name: 'End turn: mark Movement as done',
+        }),
+      ).toBeTruthy()
     })
 
     it('shows a signed-out spectator the log but not the timeline, which needs a player', async () => {

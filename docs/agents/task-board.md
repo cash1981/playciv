@@ -39,10 +39,10 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/engine/src/assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/turn.ts`
   - `packages/engine/test/assisted*.test.ts`
   - `packages/server/src/routes/play.ts`, `packages/server/test/assisted*.test.ts`
-  - `packages/web/src/views/AssistedActions.tsx`, `TechPanel.tsx`, `GameView.tsx`, `PhaseSummary.tsx`, `BoardView.tsx`, `styles.css`, `FaqView.tsx` and tests
+  - `packages/web/src/views/AssistedActions.tsx`, `AssistedActions.css`, `EndTurn.tsx`, `TechPanel.tsx`, `GameView.tsx`, `PhaseSummary.tsx`, `BoardView.tsx`, `styles.css`, `FaqView.tsx` and tests
   - `packages/web/src/views/ChatOrdersPanel.css`, its tests in `ChatOrdersPanel.test.tsx`, and the trade offer handlers and a comment in `ChatOrdersPanel.tsx` (composer overflow fix and the fixes for Copilot's review; the trade offers from #274 are already merged here)
-  - `docs/agents/decisions.md`, `state.md`, `README.md`
-- **Notes:** parts 1 to 8 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout, city production, Build for buildings, figures and units, Start Building Program and Upgrade buildings). The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
+  - `docs/agents/decisions.md`, `state.md`, `README.md`, `docs/agents/tasks/end-turn-actions.md`
+- **Notes:** parts 1 to 9 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout, city production, Build for buildings, figures and units, Start Building Program and Upgrade buildings, End turn in Your actions). The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
 
 ### aircraft-unlocked
 

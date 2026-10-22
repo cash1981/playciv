@@ -44,8 +44,9 @@ export function FaqView(): React.JSX.Element {
           <p className="faq-answer">
             Check the turn indicator at the top of the game. The Draw buttons work for every
             player. When it is not your turn, the game asks &ldquo;Draw anyway?&rdquo; before it
-            draws, so a draw out of turn is never an accident. When you have finished your own
-            turn, select <strong>End turn</strong> so the next player can continue.
+            draws, so a draw out of turn is never an accident. When you have finished a phase,
+            select <strong>End turn</strong> in Your actions so the next player can continue
+            in it. Ending Research starts the next turn once every player has done it.
           </p>
         </CollapsiblePanel>
 

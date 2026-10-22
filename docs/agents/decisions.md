@@ -253,9 +253,28 @@ buttons and the culture marker. Assisted actions are added beside them.
   opponent has a city, and "Cities (N)" with every city for a spectator. The card
   is one component, `CityCard.tsx`, for both. The Build picker is now inline in
   Your actions, so "Back to the picker" reopens that panel, not the Cities panel.
+- **End turn** is a button at the top of "Your actions" (task `end-turn-actions`,
+  `EndTurn.tsx`), the first Order tab control to move over: the human wants to
+  migrate to an action panel step by step. It ends one phase, not the whole turn:
+  it marks the viewer's earliest open phase in the active turn done, the same
+  request as the Order tab button, and the turn and the phase go in the request. The
+  other players then carry on in that phase, and ending Research for everybody
+  starts the next turn, as before. The label stays "End turn" (aria-label "End turn:
+  mark City management as done"), with a line saying which phase it marks, and on
+  Research that the next turn starts when every player has ended it. Once the viewer
+  has no open phase the button gives way to "You have ended turn N. Waiting for ...".
+  A player in a running game now always has the panel, so it is shown even with no
+  card action, choice or city; not for a spectator, before the game starts or after
+  it ends. A player with no city yet therefore sees End turn above "Your cities: No
+  cities of yours on the map yet." (the line the cities task allowed "when the panel
+  is shown for another reason"). After the last press the button gives way to a line
+  that takes focus, but only if focus was lost, so a refresh from another device does
+  not steal it. The Order tab keeps its End turn and "Not done" button for now; there is
+  no undo in the panel yet, and it does not work ahead into the next turn the way the
+  Order tab's Turn picker does.
 
 Source: `engine/src/assisted.ts`, `culture-track.ts`, `server/src/routes/play.ts`,
-`web/src/views/AssistedActions.tsx`, `PhaseSummary.tsx`, `turnFocus.ts`,
+`web/src/views/AssistedActions.tsx`, `EndTurn.tsx`, `PhaseSummary.tsx`, `turnFocus.ts`,
 `YourCities.tsx`, `CityCard.tsx`, `CitiesPanel.tsx`, and the `assisted*`
 tests. Not built: Great Person abilities that need a map marker, killing
 markers, map tile 16a, free advances, hand limit.
