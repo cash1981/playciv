@@ -77,7 +77,7 @@ må kunne overstyres".
   on the own view (everything is derived from the public board and revealed items;
   use `!hidden` for techs, great person items and social policies). Add the hidden
   information tests.
-- Web: a collapsed "Cities" panel after Status. For the viewer's cities: the label,
+- Web: a collapsed "Cities" panel after Status [Moved to Your actions, see decisions.md]. For the viewer's cities: the label,
   "Estimated production 11, not a complete count" with a details element showing the
   squares and modifiers, the building program figure when present, the notes, and a
   "Set by hand" number field with a "Use the estimate" button. Opponents' cities

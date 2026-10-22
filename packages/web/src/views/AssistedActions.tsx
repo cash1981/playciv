@@ -9,6 +9,10 @@
  * Two entry points use the same {@link AssistedActionButton}: the "Your actions"
  * panel and the tech detail dialog. Neither fires anything by rendering; only a
  * press does.
+ *
+ * The panel is also where the viewer's own cities live (`YourCities.tsx`): the
+ * production figures, Build, Start Building Program, Upgrades and the field to
+ * set production by hand.
  */
 
 import { useId, useRef, useState } from 'react'
@@ -19,9 +23,11 @@ import type { AssistedActionKind, PendingRewardView } from '@civ/engine'
 
 import { ApiError, api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
+import type { BuildFlow } from './buildFlow.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { ItemCard } from './ItemCard.js'
 import type { Run } from './GameView.js'
+import { YourCities } from './YourCities.js'
 import './AssistedActions.css'
 
 type Status = NonNullable<PlayerView['you']>['availableActions'][number]['status']
@@ -241,13 +247,32 @@ interface PanelProps {
   readonly busy: boolean
   readonly readOnly: boolean
   readonly run: Run
+  /** The Build flow GameView shares with the board. Without it the city cards have no Build button. */
+  readonly build?: BuildFlow | undefined
 }
 
 /**
- * "Your actions": the viewer's assisted actions with their state, and the card
- * choice waiting after a culture advance. Actions for a card the player does not
- * hold are left out, so the list stays short, and the panel is not rendered at
- * all for a spectator or when there is nothing to show.
+ * Whether "Your actions" is on the page: the viewer has an action for a card they
+ * hold, a card choice waiting, or a city on the map. Never for a spectator. The
+ * game page asks too, so the Actions shortcut is not a dead button.
+ */
+export function hasActionsPanel(view: PlayerView): boolean {
+  const you = view.you
+  if (you === null) return false
+  return (
+    (you.availableActions ?? []).some((candidate) => candidate.status !== 'not-owned') ||
+    (you.pendingRewards?.length ?? 0) > 0 ||
+    (you.cities?.length ?? 0) > 0
+  )
+}
+
+/**
+ * "Your actions": the viewer's assisted actions with their state, the card choice
+ * waiting after a culture advance, and "Your cities" (see `YourCities.tsx`), in
+ * that order, so a waiting choice stays above the long city list. Actions for a
+ * card the player does not hold are left out, so the list stays short, and the
+ * panel is not rendered at all for a spectator or when there is nothing to show
+ * (see {@link hasActionsPanel}).
  */
 export function AssistedActionsPanel({
   gameId,
@@ -255,6 +280,7 @@ export function AssistedActionsPanel({
   busy,
   readOnly,
   run,
+  build,
 }: PanelProps): React.JSX.Element | null {
   const actions = (view.you?.availableActions ?? []).filter(
     (candidate) => candidate.status !== 'not-owned',
@@ -264,7 +290,7 @@ export function AssistedActionsPanel({
   const pending = view.you?.pendingRewards?.[0]
   // After a successful Keep the choice unmounts and focus would fall to the page.
   const bodyRef = useRef<HTMLDivElement>(null)
-  if (view.you === null || (actions.length === 0 && pending === undefined)) return null
+  if (view.you === null || !hasActionsPanel(view)) return null
   // A collapsed panel must not hide the choice, so the title says it is waiting.
   const title =
     waiting > 0
@@ -311,6 +337,7 @@ export function AssistedActionsPanel({
             onKept={() => bodyRef.current?.focus()}
           />
         )}
+        <YourCities gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} build={build} />
       </div>
     </CollapsiblePanel>
   )

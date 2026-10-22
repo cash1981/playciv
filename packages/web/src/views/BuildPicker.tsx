@@ -4,7 +4,7 @@
  *
  * Two pieces that share one {@link BuildFlow}, owned by GameView:
  *
- * - {@link BuildPicker}, in the Cities panel under a city: what the engine says
+ * - {@link BuildPicker}, in Your actions under a city: what the engine says
  *   that city can build now, in three groups (buildings, figures placed on the
  *   map, units that are a private card), and, folded away, why the others can not;
  * - {@link BuildBar}, above the board: the choice, the cost, the square picked on
@@ -56,12 +56,12 @@ function unitNameOf(unitType: string): string {
 }
 
 /**
- * Back to the picker, which sits in the Cities panel. That panel may have been
+ * Back to the picker, which sits in Your actions. That panel may have been
  * collapsed since the Build started, and a collapsed panel keeps its content
  * hidden, so it is opened first.
  */
 function goBackToPicker(): void {
-  const toggle = document.querySelector<HTMLElement>('[aria-controls="cities-content"]')
+  const toggle = document.querySelector<HTMLElement>('[aria-controls="actions-content"]')
   const collapsed = toggle?.getAttribute('aria-expanded') === 'false'
   if (collapsed) toggle?.click()
   const show = (): void => {

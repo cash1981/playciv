@@ -15,6 +15,7 @@ import type { PlayerView, UpgradeFamilyOption } from '../lib/api.js'
 import { api } from '../lib/api.js'
 import { isPressInFlight, pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
+import './CityCard.css'
 
 /**
  * One press of an assisted city action, with the refusal kept for the caller to
@@ -80,11 +81,12 @@ export function familyLine(family: UpgradeFamilyOption): string {
 }
 
 /**
- * The Upgrades block of the Cities panel: one line and one button per family the
- * viewer can flip now, and "Upgrade all" when there is more than one. Nothing for
- * a spectator, a replay or a locked game (`readOnly`), and nothing when there is
- * nothing to flip, except a refusal still on show: a co-player may have flipped the
- * pieces, so the reload that follows the press can leave no options. It works in any phase: the engine has no phase gate for it.
+ * The Upgrades block of "Your cities" in Your actions: one line and one button per
+ * family the viewer can flip now, and "Upgrade all" when there is more than one.
+ * Nothing for a spectator, a replay or a locked game (`readOnly`), and nothing when
+ * there is nothing to flip, except a refusal still on show: a co-player may have
+ * flipped the pieces, so the reload that follows the press can leave no options. It
+ * works in any phase: the engine has no phase gate for it.
  */
 export function CityActions({
   gameId,
@@ -114,7 +116,8 @@ export function CityActions({
 
   return (
     <div className="city-upgrades">
-      <h3 className="cities-owner">Upgrades</h3>
+      {/* An h4: the block sits inside the "Your cities" section, next to the city labels. */}
+      <h4 className="cities-owner">Upgrades</h4>
       {options.length > 0 && (
         <>
           <p className="muted">Flips your basic buildings to the new form. Undo works like the other actions.</p>

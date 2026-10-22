@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TechItem } from '@civ/engine'
 
 import { ApiError, api } from '../lib/api.js'
-import type { PlayerView } from '../lib/api.js'
-import { AssistedActionButton, AssistedActionsPanel, resetPendingRequestIds } from './AssistedActions.js'
+import type { CityBuildOptions, CityProduction, PlayerView } from '../lib/api.js'
+import { AssistedActionButton, AssistedActionsPanel, hasActionsPanel, resetPendingRequestIds } from './AssistedActions.js'
+import { useBuildFlow } from './buildFlow.js'
+import { CitiesPanel } from './CitiesPanel.js'
 import type { Run } from './GameView.js'
 import { TechPanel } from './TechPanel.js'
 
@@ -1013,5 +1015,182 @@ describe('the pending card choice', () => {
     await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false))
 
     expect(document.activeElement).toBe(button)
+  })
+})
+
+// --- Your cities (task cities-in-actions) -------------------------------------
+
+const cityOf = (overrides: Partial<CityProduction> = {}): CityProduction => ({
+  pieceId: 'city-1',
+  label: 'Capital D5',
+  outskirts: 4,
+  outskirtsDetail: [],
+  modifiers: [],
+  buildingProgram: true,
+  estimate: 4,
+  withBuildingProgram: 8,
+  override: null,
+  effective: 4,
+  notes: [],
+  ...overrides,
+})
+
+const buildOptionsOf = (overrides: Partial<CityBuildOptions> = {}): CityBuildOptions => ({
+  cityPieceId: 'city-1',
+  label: 'Capital D5',
+  status: 'ready',
+  reason: 'Ready to build.',
+  production: 4,
+  productionSource: 'estimate',
+  choices: [
+    {
+      assetId: 'buildings/library',
+      item: { kind: 'building', assetId: 'buildings/library' },
+      placement: 'square',
+      label: 'Library',
+      cost: 4,
+      tradeToPay: 0,
+      squares: [{ column: 3, row: 4, label: 'D5' }],
+    },
+  ],
+  unavailable: [],
+  ...overrides,
+})
+
+/** A view with the given parts of `you` added. */
+const withYou = (view: PlayerView, extra: Record<string, unknown>, opponents: readonly unknown[] = []): PlayerView =>
+  ({ ...view, you: { ...view.you!, ...extra }, opponents }) as unknown as PlayerView
+
+/** A spectator's view, with opponents on the map that have cities. */
+const spectatorWith = (opponents: readonly unknown[]): PlayerView =>
+  ({ ...spectatorView, opponents }) as unknown as PlayerView
+
+/** Your actions with the Build flow GameView shares with the board. */
+function WithFlow({ view }: { readonly view: PlayerView }): React.JSX.Element {
+  const flow = useBuildFlow(view.you?.buildOptions ?? null)
+  return <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} build={flow} />
+}
+
+describe('hasActionsPanel', () => {
+  it.each([
+    ['a spectator', spectatorView, false],
+    ['a player with nothing to show', viewWith([]), false],
+    ['a player with only an action for a card they do not hold', viewWith([chivalry('not-owned', 'No.')]), false],
+    ['a player with an action for a card they hold', viewWith([READY]), true],
+    ['a player with a card choice waiting', viewWithRewards([reward()]), true],
+    ['a player with a city on the map', withYou(viewWith([]), { cities: [cityOf()] }), true],
+    ['a player whose view lists no cities', withYou(viewWith([]), { cities: [] }), false],
+    ['a spectator, whatever cities are on the map', spectatorWith([{ playerId: 'x', cities: [cityOf()] }]), false],
+  ])('is %s: %s', (_who, view, expected) => {
+    expect(hasActionsPanel(view)).toBe(expected)
+  })
+})
+
+describe('Your cities in the panel', () => {
+  const viewWithCity = (extra: Record<string, unknown> = {}): PlayerView =>
+    withYou(viewWith([]), { cities: [cityOf()], buildOptions: [buildOptionsOf()], ...extra })
+
+  it('shows Build for a player with a city and no assisted action and no waiting choice', () => {
+    render(<WithFlow view={viewWithCity()} />)
+
+    expect(screen.getByRole('heading', { name: 'Your actions' })).toBeTruthy()
+    const panel = screen.getByRole('group', { name: 'Your actions' })
+    const cities = within(panel).getByRole('region', { name: 'Your cities' })
+    expect(within(cities).getByRole('heading', { level: 3, name: 'Your cities' })).toBeTruthy()
+    expect(within(cities).getByRole('heading', { name: 'Capital D5' })).toBeTruthy()
+    expect((within(cities).getByRole('button', { name: 'Build in Capital D5' }) as HTMLButtonElement).disabled).toBe(false)
+    // No action list and no card choice: nothing else is in the panel.
+    expect(panel.querySelector('.assisted-actions')).toBeNull()
+    expect(within(panel).queryByText('Choose a card to keep')).toBeNull()
+  })
+
+  it('opens the Build picker inside the panel', () => {
+    render(<WithFlow view={viewWithCity()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Build in Capital D5' }))
+    const picker = screen.getByRole('region', { name: 'Build in Capital D5' })
+    expect(screen.getByRole('group', { name: 'Your actions' }).contains(picker)).toBe(true)
+  })
+
+  it('has the production figure with its popup, the Building Program line and the form to set it by hand', () => {
+    render(<WithFlow view={viewWithCity()} />)
+    const panel = within(screen.getByRole('group', { name: 'Your actions' }))
+    expect(panel.getByText('Estimated production: 4')).toBeTruthy()
+    expect(panel.getByText('Building Program in place: 8 if this city produces now')).toBeTruthy()
+    expect(panel.getByRole('textbox', { name: 'Production, set by hand, Capital D5' })).toBeTruthy()
+    fireEvent.click(panel.getByRole('button', { name: 'Not a complete count: Capital D5' }))
+    expect(screen.getByRole('dialog', { name: 'Capital D5: how the estimate is counted' })).toBeTruthy()
+  })
+
+  it('renders nothing for a spectator, even when players have cities on the map', () => {
+    const crowded = spectatorWith([{ playerId: 'x', username: 'Bob', cities: [cityOf()] }])
+    expect(renderPanel(crowded).container.textContent).toBe('')
+  })
+
+  it('is not rendered only to say that the viewer has no city', () => {
+    const none = withYou(viewWith([]), { cities: [] })
+    expect(renderPanel(none).container.textContent).toBe('')
+    expect(screen.queryByText('No cities of yours on the map yet.')).toBeNull()
+  })
+
+  it('says that the viewer has no city when the panel is there for another reason', () => {
+    renderPanel(withYou(viewWith([READY]), { cities: [] }))
+    expect(screen.getByRole('region', { name: 'Your cities' })).toBeTruthy()
+    expect(screen.getByText('No cities of yours on the map yet.')).toBeTruthy()
+  })
+
+  it('keeps the waiting choice in the title, and puts the action list, the choice and the cities in that order', () => {
+    const view = withYou(viewWithRewards([reward()], [READY]), { cities: [cityOf()], buildOptions: [buildOptionsOf()] })
+    render(<WithFlow view={view} />)
+
+    expect(screen.getByRole('heading', { name: 'Your actions (1 choice waiting)' })).toBeTruthy()
+    const action = screen.getByRole('button', { name: 'Use Chivalry' })
+    const choice = screen.getByRole('heading', { name: 'Choose a card to keep' })
+    const cities = screen.getByRole('heading', { level: 3, name: 'Your cities' })
+    const follows = (first: Node, second: Node): boolean =>
+      Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(follows(action, choice)).toBe(true)
+    expect(follows(choice, cities)).toBe(true)
+  })
+
+  it('shows the cities with their controls disabled or hidden when the game is read only', () => {
+    render(
+      <AssistedActionsPanel
+        gameId="game-1"
+        view={viewWithCity()}
+        busy={false}
+        readOnly
+        run={run}
+      />,
+    )
+    expect(screen.getByRole('heading', { name: 'Capital D5' })).toBeTruthy()
+    expect(screen.getByText('Estimated production: 4')).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
+  })
+
+  it('leaves the viewer’s cities out of the Cities panel, which lists the opponents’ only, with no id twice', () => {
+    localStorage.setItem('civ.panel.cities', 'true')
+    const theirs = cityOf({ pieceId: 'city-9', label: 'City H9', buildingProgram: true, withBuildingProgram: 6 })
+    const view = viewWithCity()
+    const both = (
+      <>
+        <AssistedActionsPanel gameId="game-1" view={withYou(view, {}, [{ playerId: 'x', username: 'Bob', cities: [theirs] }])} busy={false} readOnly={false} run={run} />
+        <CitiesPanel view={withYou(view, {}, [{ playerId: 'x', username: 'Bob', cities: [theirs] }])} />
+      </>
+    )
+    const { container } = render(both)
+    try {
+      expect(screen.getAllByRole('heading', { name: 'Capital D5' })).toHaveLength(1)
+      expect(screen.getAllByRole('heading', { name: 'City H9' })).toHaveLength(1)
+      const opponents = screen.getByRole('heading', { name: "Opponents' cities (1)" }).closest('section') as HTMLElement
+      expect(within(opponents).queryByRole('heading', { name: 'Capital D5' })).toBeNull()
+      // Open a popup in each panel: their title ids must differ too.
+      fireEvent.click(screen.getByRole('button', { name: 'Not a complete count: Capital D5' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Not a complete count: City H9' }))
+      const ids = Array.from(container.ownerDocument.querySelectorAll('[id]')).map((element) => element.id)
+      expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([])
+    } finally {
+      localStorage.removeItem('civ.panel.cities')
+    }
   })
 })

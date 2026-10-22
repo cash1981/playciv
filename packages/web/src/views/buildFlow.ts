@@ -1,5 +1,5 @@
 /**
- * The state a Build shares between the Cities panel (where it starts), the board
+ * The state a Build shares between Your actions (where it starts), the board
  * (where the square is picked) and the confirm bar, all rendered by GameView.
  *
  * The flow holds only what the player chose. What is legal comes from the
@@ -45,7 +45,7 @@ export interface BuildPlan {
 }
 
 export interface BuildFlow {
-  /** The city whose picker is open in the Cities panel. */
+  /** The city whose picker is open in Your actions. */
   readonly pickerCityId: string | null
   readonly plan: BuildPlan | null
   /** Why the flow went back a step, for example "The options changed, pick again." */

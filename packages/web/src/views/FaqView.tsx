@@ -85,13 +85,16 @@ export function FaqView(): React.JSX.Element {
 
         <CollapsiblePanel
           id="faq-cities"
-          title="What does the Cities panel show?"
+          title="Where do I see what my cities produce?"
           defaultOpen={false}
         >
           <p className="faq-answer">
-            The Cities panel estimates how much production each city on the map has, and
-            shows how the number was counted. The estimate is not a complete count, because the
-            map data does not hold every icon, and a number you type in by hand always wins.
+            Your cities are in <strong>Your actions</strong>, the panel at the top of the game
+            page, in the section <strong>Your cities</strong>. Each city shows an estimate of its
+            production and a link that shows how the number was counted. The estimate is not a
+            complete count, because the map data does not hold every icon, and a number you type
+            in by hand always wins. The <strong>Opponents&rsquo; cities</strong> panel further down
+            lists the other players&rsquo; cities with the same figures, to read only.
           </p>
         </CollapsiblePanel>
 
@@ -101,8 +104,8 @@ export function FaqView(): React.JSX.Element {
           defaultOpen={false}
         >
           <p className="faq-answer">
-            In your open City Management phase, press <strong>Build</strong> on your city in the
-            Cities panel and pick what to build. A city can build a building, an army or a scout
+            In your open City Management phase, press <strong>Build</strong> on your city in
+            Your actions and pick what to build. A city can build a building, an army or a scout
             figure, or a military unit. A building and a figure are placed on the map: tap one of
             the highlighted squares around the city and press <strong>Confirm</strong>. A military
             unit is not placed. It draws a private card into your hand, so there is no square, and
@@ -129,14 +132,14 @@ export function FaqView(): React.JSX.Element {
         >
           <p className="faq-answer">
             In your open City Management phase, press <strong>Start Building Program</strong> on
-            your city in the Cities panel. The marker is put on the city centre, so the next build
+            your city in Your actions. The marker is put on the city centre, so the next build
             in that city doubles its outskirts production. A city can have only one marker, and the
             build removes it. The button is greyed out, with the reason shown on the city card, when the phase is
             not open or the marker is already there.
           </p>
           <p className="faq-answer">
             When you have revealed the tech of an upgraded building, an <strong>Upgrades</strong>{' '}
-            block at the top of the Cities panel lists your basic buildings that can be flipped,
+            block at the top of Your cities lists your basic buildings that can be flipped,
             for example Granary to Aqueduct, with their squares. Press the button of one family, or{' '}
             <strong>Upgrade all</strong>. The buildings keep their squares and nothing is paid. It
             works in any phase of the game. Both actions can be taken back with the same Undo vote

@@ -1,5 +1,6 @@
-/* The Cities panel (task city-production). Everything wraps, so it never forces
-   a horizontal scroll at 320 px, and nothing has a fixed width. */
+/* City cards and the Upgrades block: "Your cities" in Your actions and the
+   Cities panel (tasks city-production, cities-in-actions). Everything wraps, so
+   it never forces a horizontal scroll at 320 px, and nothing has a fixed width. */
 .cities-group {
   margin-top: 1rem;
   min-width: 0;

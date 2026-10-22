@@ -121,18 +121,23 @@ export function goToPanel(key: string): void {
   panel.focus.focus({ preventScroll: true })
 }
 
-const SHORTCUTS: readonly { readonly key: string; readonly label: string }[] = [
+const SHORTCUTS: readonly { readonly key: string; readonly label: string; readonly onlyWithActions?: true }[] = [
   { key: 'board', label: 'Board' },
+  // The panel id, not its title: "Your actions" is too long for a button.
+  { key: 'actions', label: 'Actions', onlyWithActions: true },
   { key: 'hand', label: 'Your cards' },
   { key: 'techs', label: 'Tech tree' },
-  { key: 'cities', label: 'Cities' },
 ]
 
-/** Buttons that jump to the main parts of the page. Chat and History are left out on purpose, for now. */
-export function PageShortcuts(): React.JSX.Element {
+/**
+ * Buttons that jump to the main parts of the page. Chat and History are left out on purpose, for now.
+ * `actions` says whether "Your actions" is on the page (a spectator has none, and a
+ * player with nothing to do there has none either), so the button is never dead.
+ */
+export function PageShortcuts({ actions }: { readonly actions: boolean }): React.JSX.Element {
   return (
     <nav className="page-shortcuts" aria-label="Go to">
-      {SHORTCUTS.map((shortcut) => (
+      {SHORTCUTS.filter((shortcut) => actions || shortcut.onlyWithActions !== true).map((shortcut) => (
         <button
           key={shortcut.key}
           type="button"

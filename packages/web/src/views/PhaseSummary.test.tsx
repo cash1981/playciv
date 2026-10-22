@@ -256,18 +256,18 @@ describe('PageShortcuts', () => {
     delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
   })
 
-  const page = (): React.JSX.Element => (
+  const page = (actions = true): React.JSX.Element => (
     <>
-      <PageShortcuts />
+      <PageShortcuts actions={actions} />
       <section id={BOARD_PANEL_ID} tabIndex={-1} aria-label="Board panel" />
+      <CollapsiblePanel id="actions" title="Your actions" defaultOpen>
+        <p>actions</p>
+      </CollapsiblePanel>
       <CollapsiblePanel id="hand" title="Hand" defaultOpen>
         <p>cards</p>
       </CollapsiblePanel>
       <CollapsiblePanel id="techs" title="Tech panel" defaultOpen>
         <p>techs</p>
-      </CollapsiblePanel>
-      <CollapsiblePanel id="cities" title="Cities (2)" defaultOpen={false}>
-        <p>cities</p>
       </CollapsiblePanel>
     </>
   )
@@ -276,21 +276,26 @@ describe('PageShortcuts', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches, media: query }))
   }
 
-  it('offers Board, Your cards, Tech tree and Cities as buttons, and no Chat or History', () => {
+  const labels = (): (string | null)[] =>
+    Array.from(screen.getByRole('navigation', { name: 'Go to' }).querySelectorAll('button')).map(
+      (button) => button.textContent,
+    )
+
+  it('offers Board, Actions, Your cards and Tech tree as buttons, and no Chat, History or Cities', () => {
     render(page())
-    const nav = screen.getByRole('navigation', { name: 'Go to' })
-    expect(Array.from(nav.querySelectorAll('button')).map((button) => button.textContent)).toEqual([
-      'Board',
-      'Your cards',
-      'Tech tree',
-      'Cities',
-    ])
+    expect(labels()).toEqual(['Board', 'Actions', 'Your cards', 'Tech tree'])
+  })
+
+  it('leaves Actions out when Your actions is not on the page, so there is no dead button', () => {
+    render(page(false))
+    expect(labels()).toEqual(['Board', 'Your cards', 'Tech tree'])
+    expect(screen.queryByRole('button', { name: 'Actions' })).toBeNull()
   })
 
   it.each([
+    ['Actions', 'Your actions'],
     ['Your cards', 'Hand'],
     ['Tech tree', 'Tech panel'],
-    ['Cities', 'Cities (2)'],
   ])('%s scrolls its panel into view and focuses the panel heading button', (label, title) => {
     render(page())
     fireEvent.click(screen.getByRole('button', { name: label }))
@@ -308,13 +313,14 @@ describe('PageShortcuts', () => {
   })
 
   it('still lands on the heading of a collapsed panel, without opening it', () => {
+    localStorage.setItem('civ.panel.actions', 'false')
     render(page())
-    const toggle = screen.getByRole('heading', { name: 'Cities (2)' }).querySelector('button')
+    const toggle = screen.getByRole('heading', { name: 'Your actions' }).querySelector('button')
     expect(toggle?.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(screen.getByRole('button', { name: 'Cities' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
     expect(document.activeElement).toBe(toggle)
     expect(toggle?.getAttribute('aria-expanded')).toBe('false')
-    expect(localStorage.getItem('civ.panel.cities')).toBe('false')
+    expect(localStorage.getItem('civ.panel.actions')).toBe('false')
   })
 
   it('scrolls smoothly by default', () => {
@@ -343,8 +349,9 @@ describe('PageShortcuts', () => {
   })
 
   it('does nothing, and does not throw, when the target is not on the page', () => {
-    render(<PageShortcuts />)
+    render(<PageShortcuts actions />)
     fireEvent.click(screen.getByRole('button', { name: 'Tech tree' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
     expect(scrolled).toEqual([])
   })
 })

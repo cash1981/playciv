@@ -234,13 +234,26 @@ buttons and the culture marker. Assisted actions are added beside them.
   is alone there. The engine's turn holder is unchanged: the lobby row (the
   server's `nameOfUsersTurn`) and the out of turn question before a Draw still use
   it, on purpose. The status strip shows everyone.
-- The page shortcuts are Board, Your cards, Tech tree and Cities. Chat and
-  History are removed for now, on purpose; the chat and the log are still on the
-  page.
+- The page shortcuts are Board, Actions, Your cards and Tech tree. Actions is shown
+  only when the Your actions panel is on the page (`hasActionsPanel`), so a spectator
+  and a player with nothing in the panel get no dead button. Chat and History are
+  removed for now, on purpose; the chat and the log are still on the page.
+- The viewer's city cards and the city actions (Upgrades, Build, Start Building
+  Program, the production figure with its popup, and the field to set production by
+  hand) live in "Your actions", in a section "Your cities" below the action list and
+  a waiting card choice (task `cities-in-actions`). The human could not find them in
+  the collapsed Cities panel at the bottom of the page. The panel is shown for a
+  player who has a city on the map even when no card action and no choice is
+  waiting; it never shows for a spectator, and it is not shown only to say "No
+  cities of yours on the map yet." The Cities panel keeps the other players'
+  cities, read only: "Opponents' cities (N)" for a player, left out when no
+  opponent has a city, and "Cities (N)" with every city for a spectator. The card
+  is one component, `CityCard.tsx`, for both. The Build picker is now inline in
+  Your actions, so "Back to the picker" reopens that panel, not the Cities panel.
 
 Source: `engine/src/assisted.ts`, `culture-track.ts`, `server/src/routes/play.ts`,
 `web/src/views/AssistedActions.tsx`, `PhaseSummary.tsx`, `turnFocus.ts`,
-`CitiesPanel.tsx`, and the `assisted*`
+`YourCities.tsx`, `CityCard.tsx`, `CitiesPanel.tsx`, and the `assisted*`
 tests. Not built: Great Person abilities that need a map marker, killing
 markers, map tile 16a, free advances, hand limit.
 
@@ -283,7 +296,7 @@ typed by hand (`BoardPiece.productionOverride`, any player in the game may set i
   notes, not computed. A square in two of the player's own cities counts for each
   and says so (cities may not overlap when built, so this is old data).
 - A city piece off the map is not listed, so the status board's city count can
-  be higher than the Cities panel.
+  be higher than the lists of cities (Your cities and the Cities panel).
 - The per city arithmetic (outskirts squares, modifiers, notes) is no longer an
   always present details block on each card. The figure line carries a link,
   "Not a complete count" ("How the estimate is counted" when the figure is set by
@@ -292,12 +305,13 @@ typed by hand (`BoardPiece.productionOverride`, any player in the game may set i
 
 Source: `engine/src/city-production.ts`, `building-data.ts`, `blockade.ts`
 (`cityFootprintsOf`), `actions/board.ts` (`setCityProductionOverride`),
-`web/src/views/CitiesPanel.tsx` and the `city-production*` tests.
+`web/src/views/CityCard.tsx` (the card), `YourCities.tsx`, `CitiesPanel.tsx` and the
+`city-production*` tests.
 
 ## Assisted build
 
-Issue #264, part 2: a city builds a building from the Build button in the Cities
-panel. `buildOptionsOf` (`engine/src/build-options.ts`) works out, for the own view
+Issue #264, part 2: a city builds a building from the Build button on its card in
+Your actions. `buildOptionsOf` (`engine/src/build-options.ts`) works out, for the own view
 only, what each city may build and where; the `build` assisted action places the
 piece, pays and logs in one step, and the everyone votes undo reverses it. The same
 action builds army and scout figures (placed like a building) and military units (a
@@ -379,7 +393,7 @@ private card, nothing placed).
 
 Source: `engine/src/build-options.ts`, `city-actions.ts`, `building-data.ts`, `assisted.ts` (the `build`,
 `startBuildingProgram` and `upgradeBuildings` actions), `actions/board.ts` (`isAssistedBoardChange`), `web/src/views/BuildPicker.tsx`,
-`CityActions.tsx`, `CitiesPanel.tsx`, `buildFlow.ts` and the `assisted-build*` tests.
+`CityActions.tsx`, `CityCard.tsx`, `YourCities.tsx`, `buildFlow.ts` and the `assisted-build*` tests.
 
 ## Accounts, mail and ratings
 

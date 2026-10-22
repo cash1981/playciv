@@ -69,6 +69,12 @@ td .assisted-action {
   max-width: 100%;
 }
 
+/* "Your cities" (YourCities.tsx, styled in CityCard.css) is the only content when
+   the viewer has no action and no choice waiting: no gap above it then. */
+.assisted-panel-body > .cities-group:first-child {
+  margin-top: 0;
+}
+
 /* Focus lands here after a card choice is kept, because the choice itself is gone.
    The container is not interactive, so it gets no ring. */
 .assisted-panel-body:focus {
