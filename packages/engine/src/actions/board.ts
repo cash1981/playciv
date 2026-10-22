@@ -674,6 +674,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
         ('historyId' in effect && effect.historyId === entry.id) ||
         // A wonder also became the player's: that entry belongs to the build too
         ('wonder' in effect && effect.wonder?.ownerHistoryId === entry.id) ||
+        // and so did the wonder it drew into the market: its card is out of the deck
+        ('drawn' in effect && effect.drawn?.historyId === entry.id) ||
         effect.marker?.historyId === entry.id
       )
     }

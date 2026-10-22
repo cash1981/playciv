@@ -97,6 +97,8 @@ export interface BuildChoice {
   readonly label: string
   /** Production the item costs. */
   readonly cost: number
+  /** Only for a wonder with a discount: the other price, for example "15 without Metalworking". Costs are not checked for a wonder, so this is what the player reads. */
+  readonly costNote?: string
   /** Trade the player pays to cover what the city's production lacks. 0 when the production is enough. */
   readonly tradeToPay: number
   /** Every square the item may be put on, in reading order. Never empty when `placement` is `square`, always empty when it is `none`. */
@@ -743,7 +745,7 @@ function optionsForCity(
     choices.push({ assetId, item, placement: 'square', label, cost: data.cost, tradeToPay: payment.tradeToPay, squares })
   }
 
-  // Wonders from the market: one per city, on any terrain but water, paid like a building
+  // Wonders from the market: one per city, on any terrain but water. Their cost is shown, not enforced
   const wonderHere = wonderIn(scene, outskirts)
   for (const piece of shared.market) {
     const item = { kind: 'wonder', assetId: piece.assetId } as const
@@ -774,20 +776,26 @@ function optionsForCity(
       continue
     }
 
+    // The cost is only told, not checked against the city's production or paid with trade:
+    // cards, Great Persons and other effects add hammers, and how to count them is not settled.
     const cost = wonderCostFor(data, techs.revealed)
     const discount = data.discount
-    const costText =
+    const costNote =
       discount === undefined
-        ? `Costs ${cost} production`
+        ? undefined
         : cost === discount.cost
-          ? `Costs ${cost} production (${data.cost} without ${discount.tech})`
-          : `Costs ${cost} production (${discount.cost} with ${discount.tech})`
-    const payment = paymentFor(cost, costText, city, production, player)
-    if ('short' in payment) {
-      skip(payment.short)
-      continue
-    }
-    choices.push({ assetId: piece.assetId, item, placement: 'square', label, cost, tradeToPay: payment.tradeToPay, squares })
+          ? `${data.cost} without ${discount.tech}`
+          : `${discount.cost} with ${discount.tech}`
+    choices.push({
+      assetId: piece.assetId,
+      item,
+      placement: 'square',
+      label,
+      cost,
+      ...(costNote === undefined ? {} : { costNote }),
+      tradeToPay: 0,
+      squares,
+    })
   }
 
   // Army and scout figures: put on a square of the outskirts like a building

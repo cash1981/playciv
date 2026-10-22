@@ -644,7 +644,7 @@ describe('wonders over HTTP', () => {
     const table = await wonderTable('WonderOptions')
     const mine = await view(table.gameId, table.starter)
     const wonder = mine.you?.buildOptions?.[0]?.choices.find((choice) => choice.item.kind === 'wonder')
-    expect(wonder).toMatchObject({ assetId: COLOSSUS, item: { kind: 'wonder', assetId: COLOSSUS }, placement: 'square', label: 'The Colossus', cost: 15, tradeToPay: 0 })
+    expect(wonder).toMatchObject({ assetId: COLOSSUS, item: { kind: 'wonder', assetId: COLOSSUS }, placement: 'square', label: 'The Colossus', cost: 15, costNote: '10 with Metalworking', tradeToPay: 0 })
     expect(wonder?.squares.map((square) => square.label)).toContain('C2')
     // The other player has no city, so no options; a spectator has no `you` at all
     expect((await view(table.gameId, table.other)).you?.buildOptions ?? []).toEqual([])
@@ -659,7 +659,9 @@ describe('wonders over HTTP', () => {
     const colossus = piecesOf(state, COLOSSUS)
     expect(colossus).toHaveLength(1)
     expect(colossus[0]?.ownerId).toBe(table.starterId)
-    expect(state.log.at(-1)?.publicLog).toBe(`${table.starterName} built the Colossus in City B2 on square C2`)
+    expect(state.log.some((entry) => entry.publicLog === `${table.starterName} built the Colossus in City B2 on square C2`)).toBe(true)
+    // The next wonder is drawn into the market, and named in a line of its own
+    expect(state.log.at(-1)?.publicLog).toMatch(/^System: drew .+ and placed it in the Wonders area$/)
   })
 
   it('refuses an asset id that is not a wonder and one with extra fields, as a bad request', async () => {
@@ -683,5 +685,30 @@ describe('wonders over HTTP', () => {
     expect(back.ownerId ?? null).toBeNull()
     expect(after.assistedActions[0]?.status).toBe('undone')
     expect(after.log.at(-1)?.publicLog).toContain('the wonder was put back in the market')
+  })
+
+  it('removing the wonder is a plain removal when somebody took the wonder drawn after it', async () => {
+    const table = await wonderTable('WonderTaken')
+    expect((await sendWonder(table, 'req-1', (await view(table.gameId, table.starter)).rev)).status).toBe(200)
+    const built = await stored(table)
+    const effect = built.assistedActions[0]?.effect
+    const drawnId = effect?.kind === 'build' && 'drawn' in effect ? effect.drawn?.pieceId : undefined
+    expect(drawnId).toBeDefined()
+    // The other player makes the drawn wonder theirs
+    await repo.saveGame({
+      ...built,
+      board: {
+        ...built.board,
+        pieces: built.board.pieces.map((piece) => (piece.id === drawnId ? { ...piece, ownerId: built.players.find((player) => player.playerId !== table.starterId)?.playerId ?? null } : piece)),
+      },
+    })
+    const colossus = piecesOf(await stored(table), COLOSSUS)[0] as BoardPiece
+
+    expect((await post(table.starter, `/api/games/${table.gameId}/board/pieces/${colossus.id}/remove`, {})).status).toBe(200)
+    const after = await stored(table)
+    expect(piecesOf(after, COLOSSUS)).toEqual([])
+    // Nothing was taken back: the record stays and no new line was written
+    expect(after.assistedActions[0]?.status).toBe('applied')
+    expect(after.log).toHaveLength(built.log.length)
   })
 })

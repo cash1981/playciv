@@ -1,7 +1,7 @@
 /**
  * The wonder cost table against the Wonders sheet it was read from, so the two cannot
- * drift: every wonder of the deck has a row, the cost and the discount are the sheet's,
- * and every row has board art to move.
+ * drift: every wonder of the deck has a row, the cost, the discount and the era are the
+ * sheet's (but for the corrections listed in the table), and every row has board art to move.
  */
 
 import { readFileSync } from 'node:fs'
@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { BOARD_ASSETS, wonderAssetId } from '../src/board.js'
-import { WONDER_ASSET_IDS, WONDER_DATA, wonderCostFor, wonderDataOf } from '../src/wonder-data.js'
+import { SHEET_CORRECTIONS, WONDERS_PER_ERA, WONDER_ASSET_IDS, WONDER_DATA, WONDER_ERAS, wonderCostFor, wonderDataOf } from '../src/wonder-data.js'
 
 type Sheet = readonly (readonly (string | undefined)[])[]
 
@@ -28,16 +28,42 @@ describe('the wonder cost table', () => {
     expect([...WONDER_ASSET_IDS].sort()).toEqual(rows.map((row) => wonderAssetId(row[0] as string)).sort())
   })
 
-  it('has the cost and the discount of the sheet for each', () => {
+  it('has the cost and the discount of the sheet for each, but for the listed corrections', () => {
     for (const row of rows) {
-      const data = wonderDataOf(wonderAssetId(row[0] as string))
+      const assetId = wonderAssetId(row[0] as string)
+      const data = wonderDataOf(assetId)
       expect(data, row[0]).toBeDefined()
       expect(data?.cost, row[0]).toBe(Number(row[2]))
       const discount = row[3]?.trim() ?? ''
       const match = /^(\d+) w\/ (.+)$/.exec(discount)
+      if (Object.hasOwn(SHEET_CORRECTIONS, assetId)) {
+        // A correction differs from the sheet in the discount only, and says why
+        expect(data?.discount, row[0]).not.toEqual({ tech: match?.[2], cost: Number(match?.[1]) })
+        expect(data?.discount?.tech, row[0]).toBe(match?.[2])
+        continue
+      }
       if (discount === '') expect(data?.discount, row[0]).toBeUndefined()
       else expect(data?.discount, row[0]).toEqual({ tech: match?.[2], cost: Number(match?.[1]) })
     }
+    expect(Object.keys(SHEET_CORRECTIONS)).toEqual(['wonders/angkorwat'])
+    expect(wonderDataOf('wonders/angkorwat')?.discount).toEqual({ tech: 'Theology', cost: 15 })
+  })
+
+  it('has the era of the block of the sheet the wonder is in, nine of each', () => {
+    let era = 0
+    const eras = WONDER_ERAS
+    for (const row of sheet) {
+      if (row[1] === 'Description') {
+        era = eras.findIndex((name) => row[0]?.startsWith(name))
+        continue
+      }
+      if (row[0] === undefined) continue
+      expect(wonderDataOf(wonderAssetId(row[0]))?.era, row[0]).toBe(eras[era])
+    }
+    for (const name of eras) {
+      expect(Object.values(WONDER_DATA).filter((data) => data.era === name)).toHaveLength(9)
+    }
+    expect(WONDERS_PER_ERA).toBe(4)
   })
 
   it('has board art for every wonder, so it can be moved onto the map', () => {

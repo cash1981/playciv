@@ -387,25 +387,38 @@ private card, nothing placed).
   another player's removal, it is a plain removal as before, with no refund. A take-back closes an
   undo vote open on the line (it could never pass any more) and sets `board.undoFloor`, as taking
   back a civilization reveal does, so the owner's board Undo cannot bring the piece back while the
-  build stays undone and the trade refunded (the vote undo has no such floor; that is as before). Upgrades and units are not taken back this way (an
+  build stays undone and the trade refunded (the vote undo has no such floor, except after a wonder
+  build, whose drawn card it puts back in the deck). Upgrades and units are not taken back this way (an
   upgrade is several pieces, a unit a drawn card); the vote undo still covers every action.
   The web calls the same remove route; the server decides.
 - **Wonders** (base rules p. 17): any city can produce a wonder that is faceup in the market,
   which is the wonder pieces in the shared Wonders area that nobody owns (`marketWondersOf`).
-  It costs the printed cost, or the lower cost when the player has revealed the tech on the
-  card (`wonder-data.ts`, read from the `Wonders` sheet; a test keeps the two equal; Angkor Wat
-  drops from 20 to 10 and the United Nations costs 20 with no discount, as the sheet has them).
-  Production, rush with trade and the Building Program marker work as for a building. It goes in
-  the city's outskirts on any terrain but water, on a square with nothing on it and no enemy
-  figure; one wonder per city, whoever owns the one there, and it does not count against the
-  limited building. The build moves the market piece onto the square (it is not a new piece) and
-  makes the player its owner, as two board history entries; the vote undo and the take-back
-  return it to where it stood in the market (the next free spot when another wonder has been drawn
-  into that one) and clear the owner. The board Undo refuses both
-  entries. The log reads "built the Colossus in City B2 on square C2". Not built: replacing a
-  building or wonder, and drawing the next wonder into the market, which the rules do after a
-  wonder is produced: the player draws it with the Draw panel as before (no ruling on the deck
-  order, which the engine does not keep).
+  The picker tells what it costs: the printed cost, or the lower cost when the player has revealed
+  the tech on the card, with the other price beside it (`wonder-data.ts`, read from the `Wonders`
+  sheet; a test keeps the two equal). **The cost is not enforced** (the human): cards, scouts,
+  Great Persons and other effects add hammers and how to count them is not settled, so a wonder
+  is offered whatever the city produces, no trade is paid for it and a rush flag pays nothing. The
+  Building Program marker is still used up. Angkor Wat is 15 with Theology, not the 10 the sheet
+  has (`SHEET_CORRECTIONS`, until the spreadsheet is fixed); the United Nations at 20 with no
+  discount is right. It goes in the city's outskirts on any terrain but water, on a square with
+  nothing on it and no enemy figure; one wonder per city, whoever owns the one there, and it does
+  not count against the limited building. The build moves the market piece onto the square (it
+  is not a new piece) and makes the player its owner, as two board history entries. **The next
+  wonder is drawn into the market by the build** (the human): a game has four wonders of each era,
+  so it comes from the ancient deck until four ancient wonders are out, then from the medieval deck
+  until four medieval ones are out, then from the modern one. "Out" is a card that has left the deck
+  (the nine of an era less what is still in it), wherever it went: the market, an owner, the map,
+  Egypt's own area or a hand. It is counted from the deck so that a wonder piece taken off the board
+  does not make room for another. An era with no card left is skipped, and nothing is drawn when
+  twelve are out. The draw is a System line of its own ("drew X and placed it in the Wonders
+  area") and its board entry is guarded from the board Undo. The vote undo and the take-back
+  return the wonder to where it stood in the market (the next free spot when another wonder has
+  been placed on it), clear the owner and put the drawn wonder back as the next card of its deck,
+  and then the board Undo is floored (`undoFloor`), so it cannot bring the drawn piece back while
+  its card is in the deck. The vote undo is refused when the drawn wonder is no longer in the
+  Wonders area or has an owner; the take-back then becomes a plain removal, so removing the wonder
+  after another player took the one drawn after it is an ordinary removal, with no refund. The log reads "built the Colossus in City B2 on square C2". Not built: replacing a
+  building or wonder, and the wonder abilities.
 
 **Figures and units (#264 parts 3 and 4).**
 

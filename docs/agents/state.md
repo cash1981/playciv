@@ -55,7 +55,7 @@ old test counts and past deployment reports do not establish present health.
   hand. There is no panel for the opponents' cities. Briefs `tasks/cities-in-actions.md`
   and `tasks/build-polish-wonders.md`; see "Assisted play" in decisions.
 
-- Build: wonders from the market are built like a building; a figure is placed by the tap
+- Build: wonders from the market are built like a building (cost shown, not enforced; the next wonder is drawn into the market); a figure is placed by the tap
   on its square; removing a built piece before End turn takes the build back with a new log
   line. Brief `tasks/build-polish-wonders.md`; see "Build polish and wonders" in decisions.
 

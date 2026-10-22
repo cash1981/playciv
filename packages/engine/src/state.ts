@@ -415,6 +415,12 @@ export type AssistedEffect =
        * board history entry that made the player its owner. Absent for a building and a figure.
        */
       readonly wonder?: { readonly from: { readonly x: number; readonly y: number }; readonly ownerHistoryId: string }
+      /**
+       * A wonder only: the wonder the build drew into the market to replace it, so an undo can put it
+       * back in the deck. The card, the piece that was placed and the board history entry that placed it.
+       * Absent when no wonder was left to draw. Server side only, like every effect.
+       */
+      readonly drawn?: DrawnWonder
       /** The trade paid for the missing production; 0 when the city's production was enough. */
       readonly trade: number
       /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
@@ -464,6 +470,13 @@ export type AssistedEffect =
         readonly placedHistoryId: string
       }[]
     }
+
+/** The wonder a wonder build drew into the market, for its undo: the card, the piece that was placed and the history entry that placed it. */
+export interface DrawnWonder {
+  readonly item: Item
+  readonly pieceId: string
+  readonly historyId: string
+}
 
 /**
  * One applied assisted action. `id` is the client's `requestId`, which is what

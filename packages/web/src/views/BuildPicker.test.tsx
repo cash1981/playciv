@@ -59,6 +59,7 @@ const COLOSSUS: BuildChoice = {
   placement: 'square',
   label: 'The Colossus',
   cost: 10,
+  costNote: '15 without Metalworking',
   tradeToPay: 0,
   squares: [{ column: 3, row: 4, label: 'D5' }],
 }
@@ -1223,8 +1224,10 @@ describe('building a wonder', () => {
     ])
     const [colossus] = within(screen.getByRole('list', { name: 'Wonders Capital D5 can build' })).getAllByRole('listitem')
     expect(colossus?.textContent).toContain('The Colossus')
-    expect(colossus?.textContent).toContain('Cost 10')
+    expect(colossus?.textContent).toContain('Cost 10 (15 without Metalworking)')
     expect(colossus?.textContent).not.toMatch(/square/i)
+    // The group says that the cost is only told: other effects add hammers
+    expect(screen.getByText('The cost is not checked against the city’s production.')).toBeTruthy()
   })
 
   it('enters square picking like a building, and needs Confirm', async () => {
@@ -1232,11 +1235,12 @@ describe('building a wonder', () => {
     render(<Harness initial={viewOf([withWonder()])} />)
     startWonder()
     expect(bar().textContent).toContain('Build the Colossus in Capital D5')
+    expect(bar().textContent).toContain('Cost 10 (15 without Metalworking)')
     expect(bar().textContent).toContain('Tap a highlighted square on the board.')
     expect(overlays().map((button) => button.getAttribute('aria-label'))).toEqual(['Place The Colossus on D5'])
     expect(confirm().disabled).toBe(true)
 
-    // A wonder is not sent by the tap: it is paid for in production, so Confirm places it
+    // A wonder is not sent by the tap, so Confirm places it
     fireEvent.click(overlays()[0] as HTMLElement)
     expect(send).not.toHaveBeenCalled()
     expect(confirm().disabled).toBe(false)

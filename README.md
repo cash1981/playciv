@@ -533,7 +533,7 @@ each of your cities lists what that city can build now, in groups: buildings, wo
 the market, army and scout figures, and
 military units, with the trade to pay for a rush; the reasons for the rest are behind a link.
 A figure is placed by tapping a highlighted square, a building or a wonder by tapping one and
-confirming, and a unit is a private card that is
+confirming (a wonder's cost is shown but not checked, and building one draws the next wonder into the market), and a unit is a private card that is
 drawn into your hand with no square, and only its type is public. The piece or
 card, the trade and the log line are one step the vote undo can take back, and so does removing
 the piece yourself before you press End turn (a new line says so). A **Start

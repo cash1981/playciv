@@ -38,7 +38,13 @@ const SOURCE_TEXT: Readonly<Record<CityBuildOptions['productionSource'], string>
 /** The groups of the picker, in the order they are shown. */
 const GROUPS = [
   { id: 'building', noun: 'Buildings', heading: 'Buildings' },
-  { id: 'wonder', noun: 'Wonders', heading: 'Wonders' },
+  {
+    id: 'wonder',
+    noun: 'Wonders',
+    heading: 'Wonders',
+    // Cards and Great Persons can add hammers, and how to count them is not settled: only the cost is told
+    note: 'The cost is not checked against the city’s production.',
+  },
   { id: 'figure', noun: 'Figures', heading: 'Figures (placed on the map)' },
   { id: 'unit', noun: 'Units', heading: 'Units' },
 ] as const
@@ -141,6 +147,7 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
           return (
             <section key={group.id} className="build-group">
               <h6 className="build-group-heading">{group.heading}</h6>
+              {'note' in group && <p className="build-group-note muted">{group.note}</p>}
               <ul className="build-choices" aria-label={`${group.noun} ${city.label} can build`}>
                 {choices.map((choice) => (
                   <li key={choice.assetId} className="build-choice">
@@ -148,6 +155,7 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
                       <strong>{choice.label}</strong>
                       <span>
                         Cost {choice.cost}
+                        {choice.costNote !== undefined && <> ({choice.costNote})</>}
                         {choice.tradeToPay > 0 && <>, pays {choice.tradeToPay} trade</>}
                       </span>
                     </span>
@@ -385,6 +393,7 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
       </p>
       <p className="build-bar-facts">
         Cost {plan.cost}
+        {plan.costNote !== undefined && <> ({plan.costNote})</>}
         {rush && <>. Pays {plan.tradeToPay} trade</>}.{' '}
         {!placed ? (
           <>A private card is drawn, nothing is placed on the map.</>

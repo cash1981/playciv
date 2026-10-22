@@ -39,6 +39,8 @@ export interface BuildPlan {
   readonly placement: BuildChoice['placement']
   readonly label: string
   readonly cost: number
+  /** A wonder with a discount: the other price, for the bar to read. */
+  readonly costNote?: string | undefined
   readonly tradeToPay: number
   readonly squares: readonly BuildSquare[]
   readonly target: BuildSquare | null
@@ -81,6 +83,7 @@ const samePlan = (a: BuildPlan, b: BuildPlan): boolean =>
   a.placement === b.placement &&
   a.label === b.label &&
   a.cost === b.cost &&
+  a.costNote === b.costNote &&
   a.tradeToPay === b.tradeToPay &&
   a.squares.length === b.squares.length &&
   a.squares.every((square, index) => {
@@ -128,6 +131,7 @@ function reconcile(state: State, options: readonly CityBuildOptions[]): State {
     placement: choice.placement,
     label: choice.label,
     cost: choice.cost,
+    costNote: choice.costNote,
     tradeToPay: choice.tradeToPay,
     squares: choice.squares,
     target,
@@ -165,6 +169,7 @@ export function useBuildFlow(options: readonly CityBuildOptions[] | null): Build
         placement: choice.placement,
         label: choice.label,
         cost: choice.cost,
+        costNote: choice.costNote,
         tradeToPay: choice.tradeToPay,
         squares: choice.squares,
         target: null,

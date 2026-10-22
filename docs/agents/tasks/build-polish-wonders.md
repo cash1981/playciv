@@ -29,22 +29,25 @@ server; one new data file.
    upgrades or units. It closes an undo vote open on the line and sets `board.undoFloor`, so the
    owner's board Undo cannot bring the piece back (review finding).
 7. **Wonders** from the market are built like a building (`wonder-data.ts`, `marketWondersOf`, item
-   `{ kind: "wonder", assetId }`): printed cost or the discount with the tech on the card, one wonder
-   per city, any terrain but water. The market piece moves onto the square and the player becomes its
-   owner. Rules in "Build polish and wonders" in `decisions.md`.
+   `{ kind: "wonder", assetId }`): any terrain but water, one wonder per city. The cost (the printed
+   one, or the discount with the tech on the card) is shown and **not enforced**: no check against
+   production, no trade. The market piece moves onto the square and the player becomes its owner.
+8. **The next wonder is drawn into the market** by the build: four wonders of each era, ancient first,
+   then medieval, then modern. The vote undo and the take-back return the drawn card to its deck.
+   Rules in "Build polish and wonders" in `decisions.md`.
 
 ## Not changed
 
-- Replacing buildings or wonders, drawing the next wonder into the market (the Draw panel does
-  that), Hanging Gardens and the other wonder abilities.
+- Replacing buildings or wonders, Hanging Gardens and the other wonder abilities. Costs of buildings,
+  figures and units are still checked against production, as decided earlier.
 - The vote undo, the board Undo guard (it also covers the new owner entry), the Order tab.
 
-## Open question for the human
+## Decided with the human
 
-- After a wonder is produced the rules draw the next one from the deck into the market. The app
-  keeps no deck order, so the player still draws it. Should the build draw it, and from which era?
-- The sheet has Angkor Wat at 20 (10 with Theology) and the United Nations at 20 with no discount,
-  unlike the other wonders of their era. Used as written.
+- The build draws the next wonder, four of each era in the order ancient, medieval, modern.
+- Angkor Wat is 15 with Theology (the sheet has 10; corrected in `wonder-data.ts`); the United Nations
+  is right at 20 with no discount.
+- The cost of a wonder is only told for now.
 
 ## Files
 

@@ -26,7 +26,7 @@
  */
 
 import { movePieceUnchecked, placeUnchecked, removePiece, setWonderOwner } from './actions/board.js'
-import { reshuffleItems } from './actions/draw.js'
+import { drawWonderToBoard, reshuffleItems } from './actions/draw.js'
 import { GREAT_PERSON_CARD_TYPES, blockadedPieceIds, cityFootprintsOf, mapCellOf } from './blockade.js'
 import {
   AREA_LABEL_HEIGHT,
@@ -63,6 +63,8 @@ import {
   upgradePlanOf,
 } from './city-actions.js'
 import { BUILDING_UPGRADES, buildingNameOf } from './building-data.js'
+import { WONDERS_IN_ERA, WONDERS_PER_ERA, WONDER_ERAS } from './wonder-data.js'
+import type { WonderEra } from './wonder-data.js'
 import { BUILDING_PROGRAM_ASSET_ID } from './city-production.js'
 import { activeWonderOwnerIds, coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
 import {
@@ -88,6 +90,7 @@ import type {
   AssistedStatus,
   AvailableAction,
   CultureCardKind,
+  DrawnWonder,
   GameLogEntry,
   GameState,
   GreatPersonMarker,
@@ -1517,6 +1520,45 @@ function marketSpotTaken(board: Board, pieceId: string, spot: { readonly x: numb
   )
 }
 
+const WONDER_SHEET: Readonly<Record<WonderEra, SheetName>> = {
+  Ancient: 'ANCIENT_WONDERS',
+  Medieval: 'MEDIEVAL_WONDERS',
+  Modern: 'MODERN_WONDERS',
+}
+
+/**
+ * The deck the next wonder for the market comes from. A game has four wonders of each
+ * era: once four ancient wonders are out the medieval ones follow, and after four
+ * medieval ones the modern. "Out" is a card that has left the deck (the nine of an era
+ * less what is still in it), wherever it went: the market, an owner, the map, Egypt's own
+ * area or a hand. Counted from the deck, so a wonder piece taken off the board does not
+ * make room for another. An era with no card left in the deck is skipped. `undefined` when
+ * twelve wonders are out or the deck has none of the eras that are still open.
+ */
+function nextWonderSheet(state: GameState): SheetName | undefined {
+  return WONDER_ERAS.map((era) => WONDER_SHEET[era]).find((sheet, index) => {
+    const left = state.items.filter((item) => item.sheetName === sheet).length
+    return left > 0 && WONDERS_IN_ERA[WONDER_ERAS[index] as WonderEra] - left < WONDERS_PER_ERA
+  })
+}
+
+/**
+ * The wonder a build drew into the market, when it can no longer be taken back out of it:
+ * it was built or owned by somebody, moved out of the Wonders area, or removed.
+ */
+function drawnWonderGone(state: GameState, drawn: DrawnWonder | undefined): DrawnWonder | undefined {
+  if (drawn === undefined) return undefined
+  const piece = state.board.pieces.find((candidate) => candidate.id === drawn.pieceId)
+  return piece === undefined || !isInWondersArea(state.board, piece) || (piece.ownerId ?? null) !== null ? drawn : undefined
+}
+
+/** The card of a wonder that went back, put at the front of its deck again, where the next draw takes it from. */
+function wonderBackInDeck(state: GameState, card: Item): GameState {
+  const at = state.items.findIndex((item) => item.sheetName === card.sheetName)
+  const items = at === -1 ? [...state.items, card] : [...state.items.slice(0, at), card, ...state.items.slice(at)]
+  return { ...state, items }
+}
+
 const withArticle = (label: string): string => `${/^[aeiou]/i.test(label) && !/^uni/i.test(label) ? 'an' : 'a'} ${label}`
 
 /** The `build` payload, or `undefined` when the payload is another action's or missing. */
@@ -1830,8 +1872,23 @@ const build: AssistedActionDefinition = {
       })
     }
     if (payload.item.kind === 'unit') return err(failed('A unit is not put on a square.'))
+
+    // A wonder leaves the market, so the next one is drawn into it (base rules p. 17), from the
+    // era the deck is at; the draw's own line follows the build's, and its entry is counted in
+    let refilled = counted
+    let drawn: DrawnWonder | undefined
+    if (payload.item.kind === 'wonder') {
+      const sheet = nextWonderSheet(counted)
+      const card = sheet === undefined ? undefined : counted.items.find((item) => item.sheetName === sheet)
+      const refill = sheet === undefined || card === undefined ? undefined : drawWonderToBoard(counted, player.playerId, sheet, 'system')
+      const entry = refill?.ok ? refill.value.board.history.at(-1) : undefined
+      if (refill?.ok && card !== undefined && entry !== undefined && entry.change.kind === 'place') {
+        refilled = countLinesIn(refill.value, [entry.id])
+        drawn = { item: card, pieceId: entry.change.piece.id, historyId: entry.id }
+      }
+    }
     return ok({
-      state: counted,
+      state: refilled,
       effect: {
         kind: 'build',
         cityPieceId: city.cityPieceId,
@@ -1841,6 +1898,7 @@ const build: AssistedActionDefinition = {
         position: { x: made.piece.x, y: made.piece.y },
         historyId: made.historyId,
         ...(made.wonder === undefined ? {} : { wonder: made.wonder }),
+        ...(drawn === undefined ? {} : { drawn }),
         trade: choice.tradeToPay,
         marker: removal,
       },
@@ -1901,10 +1959,24 @@ const build: AssistedActionDefinition = {
       return err(refused(`${subject} has left ${effect.square.label}. Move it back first.`))
     }
 
-    // A wonder goes back to the market where it stood, and nobody owns it any more
+    // A wonder goes back to the market where it stood, and nobody owns it any more. The wonder
+    // the build drew into the market goes back in its deck first, if it is still there to take.
     if (effect.wonder !== undefined) {
       const stamp = at === null ? {} : { at }
-      const unowned = setWonderOwner(withPlayerHand(state, refunded), {
+      const drawn = effect.drawn
+      const gone = drawnWonderGone(state, drawn)
+      if (gone !== undefined) {
+        return err(
+          refused(`${itemName(gone.item)} was drawn into the market after this build and is no longer there, so the build cannot be undone.`),
+        )
+      }
+      let base = withPlayerHand(state, refunded)
+      if (drawn !== undefined) {
+        const cleared = removePiece(base, { playerId: record.playerId, pieceId: drawn.pieceId, ...stamp })
+        if (!cleared.ok) return err(refused(`${itemName(drawn.item)} could not be taken out of the market.`))
+        base = wonderBackInDeck(cleared.value, drawn.item)
+      }
+      const unowned = setWonderOwner(base, {
         playerId: record.playerId,
         pieceId: effect.pieceId,
         ownerId: null,
@@ -1917,7 +1989,7 @@ const build: AssistedActionDefinition = {
             x: effect.wonder.from.x,
             y: effect.wonder.from.y,
             // Where it stood, unless another wonder has been drawn into that spot since: then the next free one
-            snap: marketSpotTaken(state.board, effect.pieceId, effect.wonder.from),
+            snap: marketSpotTaken(base.board, effect.pieceId, effect.wonder.from),
             ...stamp,
           })
         : undefined
@@ -1927,6 +1999,7 @@ const build: AssistedActionDefinition = {
         state: withMarker,
         text:
           `${player.username}'s ${label.replace(/^The /, '')} on ${effect.square.label} was undone: the wonder was put back in the market` +
+          (drawn === undefined ? '' : ` and ${itemName(drawn.item)} went back in the deck`) +
           tradeText +
           markerText,
       })
@@ -2584,16 +2657,25 @@ export function reverseAssistedAction(
   // count the line in, so stepping through the history shows them with it (the
   // same as the start player line in `actions/board.ts`).
   const firstNew = state.board.history.length
-  if (logged.board.history.length === firstNew) return ok(logged)
-  return ok({
-    ...logged,
-    board: {
-      ...logged.board,
-      history: logged.board.history.map((entry, index) =>
-        index < firstNew ? entry : { ...entry, logLength: logged.log.length },
-      ),
-    },
-  })
+  const counted: GameState =
+    logged.board.history.length === firstNew
+      ? logged
+      : {
+          ...logged,
+          board: {
+            ...logged.board,
+            history: logged.board.history.map((entry, index) =>
+              index < firstNew ? entry : { ...entry, logLength: logged.log.length },
+            ),
+          },
+        }
+  // A wonder build that put its drawn card back in the deck: the board Undo must not bring the
+  // drawn piece back while its card is in the deck, or the next draw would make a second one
+  const effect = record.effect
+  if (effect.kind === 'build' && 'drawn' in effect && effect.drawn !== undefined) {
+    return ok({ ...counted, board: { ...counted.board, redo: [], undoFloor: counted.board.history.length } })
+  }
+  return ok(counted)
 }
 
 /**
@@ -2626,9 +2708,10 @@ function openBuildOf(state: GameState, playerId: string, pieceId: string): Assis
  * since; it is taken off wherever it is.
  *
  * `undefined` when the piece is not a build's piece, when it is not the owner who removes
- * it, or when End turn has been pressed for that turn's City Management: the caller then
- * removes it as any other piece, and from then on it is a plain removal. A unit places
- * nothing and is never taken back this way. After a take-back the board Undo cannot go back
+ * it, when End turn has been pressed for that turn's City Management, or when the wonder
+ * drawn into the market after a wonder is no longer there: the caller then removes it as any
+ * other piece, and from then on it is a plain removal. A unit places nothing and is never
+ * taken back this way. After a take-back the board Undo cannot go back
  * past it (`undoFloor`, as after taking back a civilization reveal), so it cannot restore the
  * piece alone.
  */
@@ -2638,6 +2721,11 @@ export function takeBackOpenBuild(
 ): Result<GameState, EngineError> | undefined {
   const record = openBuildOf(state, input.playerId, input.pieceId)
   if (record === undefined) return undefined
+  // The wonder drawn after this one has been taken, so this one cannot go back with it: the
+  // piece is removed as any other, which is what the player asked for
+  if (record.effect.kind === 'build' && 'drawn' in record.effect && drawnWonderGone(state, record.effect.drawn) !== undefined) {
+    return undefined
+  }
   const reversed = reverseAssistedAction(state, record.id, input.at, true)
   if (!reversed.ok) return reversed
 
