@@ -11,6 +11,7 @@ import type { CityBuildOptions, CityProduction, PlayerView } from '../lib/api.js
 import { AssistedActionButton, AssistedActionsPanel, hasActionsPanel, resetPendingRequestIds } from './AssistedActions.js'
 import { useBuildFlow } from './buildFlow.js'
 import type { Run } from './GameView.js'
+import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { TechPanel } from './TechPanel.js'
 
 beforeEach(() => {
@@ -1115,7 +1116,7 @@ describe('Your cities in the panel', () => {
     const panel = within(screen.getByRole('group', { name: 'Your actions' }))
     expect(panel.getByText('Estimated production: 4')).toBeTruthy()
     expect(panel.getByText('Building Program in place: 8 if this city produces now')).toBeTruthy()
-    expect(panel.getByRole('textbox', { name: 'Production, set by hand, Capital D5' })).toBeTruthy()
+    expect(panel.getByRole('textbox', { name: 'Production override, Capital D5' })).toBeTruthy()
     fireEvent.click(panel.getByRole('button', { name: 'Not a complete count: Capital D5' }))
     expect(screen.getByRole('dialog', { name: 'Capital D5: how the estimate is counted' })).toBeTruthy()
   })
@@ -1168,5 +1169,120 @@ describe('Your cities in the panel', () => {
     // The same view and flow without readOnly has the button, so the assertion above can fail.
     render(<Panel readOnly={false} />)
     expect(screen.getByRole('button', { name: 'Build in Capital D5' })).toBeTruthy()
+  })
+})
+
+describe('Possible actions', () => {
+  it('puts the actions in a box under their own heading, above Your cities', () => {
+    const view = withYou(viewWith([advance('needs-resource', 'You are missing 3 culture.'), READY]), {
+      cities: [cityOf()],
+      buildOptions: [buildOptionsOf()],
+    })
+    render(<WithFlow view={view} />)
+    const panel = screen.getByRole('group', { name: 'Your actions' })
+    const possible = within(panel).getByRole('region', { name: 'Possible actions' })
+    expect(within(possible).getByRole('heading', { level: 3, name: 'Possible actions' })).toBeTruthy()
+    expect(within(possible).getByRole('button', { name: 'Advance culture' })).toBeTruthy()
+    expect(within(possible).getByText('You are missing 3 culture.')).toBeTruthy()
+    expect(possible.querySelector('.assisted-possible-box')?.contains(within(possible).getByRole('button', { name: 'Advance culture' }))).toBe(true)
+    const cities = within(panel).getByRole('region', { name: 'Your cities' })
+    expect(possible.compareDocumentPosition(cities) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('is not there when no action is listed', () => {
+    render(<WithFlow view={withYou(viewWith([]), { cities: [cityOf()], buildOptions: [buildOptionsOf()] })} />)
+    expect(screen.queryByRole('region', { name: 'Possible actions' })).toBeNull()
+  })
+})
+
+describe('Build and Start Building Program on a city card', () => {
+  it('share one row of buttons, and the picker opens under it', () => {
+    const view = withYou(viewWith([]), {
+      cities: [cityOf()],
+      buildOptions: [buildOptionsOf()],
+      cityActions: [
+        {
+          cityPieceId: 'city-1',
+          label: 'Capital D5',
+          startBuildingProgram: { status: 'ready', reason: 'Ready.', hasMarker: false },
+        },
+      ],
+    })
+    render(<WithFlow view={view} />)
+    const build = screen.getByRole('button', { name: 'Build in Capital D5' })
+    const start = screen.getByRole('button', { name: 'Start Building Program in Capital D5' })
+    const row = build.closest('.city-buttons')
+    expect(row).not.toBeNull()
+    expect(row?.contains(start)).toBe(true)
+
+    fireEvent.click(build)
+    const picker = screen.getByRole('region', { name: 'Build in Capital D5' })
+    expect(row?.contains(picker)).toBe(false)
+    expect(row?.compareDocumentPosition(picker)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+  })
+})
+
+describe('after Advance culture', () => {
+  const READY_ADVANCE = advance('ready', 'Advance to space 4 (culture I event): 3 culture.')
+  const handSection = (): HTMLElement => {
+    const section = document.getElementById('hand-content')?.closest('section')
+    if (section === null || section === undefined) throw new Error('hand missing')
+    return section
+  }
+  const scrolls = (): HTMLElement[] => {
+    const scrolled: HTMLElement[] = []
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this as HTMLElement)
+    }
+    return scrolled
+  }
+  const page = (view: PlayerView): React.JSX.Element => (
+    <>
+      <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />
+      <CollapsiblePanel id="hand" title="Your hand (0)" defaultOpen>
+        <p>cards</p>
+      </CollapsiblePanel>
+    </>
+  )
+  afterEach(() => {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+  })
+
+  it('scrolls to Your hand once the advance has gone through', async () => {
+    const scrolled = scrolls()
+    vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    render(page(viewWith([READY_ADVANCE])))
+    expect(scrolled).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
+    await waitFor(() => expect(scrolled).toEqual([handSection()]))
+  })
+
+  it('does not scroll when the advance is refused, or for another action', async () => {
+    const scrolled = scrolls()
+    const perform = vi.spyOn(api, 'performAction').mockRejectedValueOnce(new ApiError(422, 'REFUSED', 'No.'))
+    perform.mockResolvedValue({} as PlayerView)
+    render(page(viewWith([READY_ADVANCE, READY])))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: /Chivalry/ }))
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(2))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(scrolled).toHaveLength(0)
+  })
+
+  it('waits while a card choice is open, and goes to Your hand when it has been kept', async () => {
+    const scrolled = scrolls()
+    vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    const { rerender } = render(page(viewWith([READY_ADVANCE])))
+    fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
+    // The advance comes back with a choice to make, which is above the hand
+    rerender(page(viewWithRewards([reward()], [READY_ADVANCE])))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(scrolled).toHaveLength(0)
+
+    rerender(page(viewWithRewards([], [READY_ADVANCE], 6)))
+    await waitFor(() => expect(scrolled).toEqual([handSection()]))
   })
 })

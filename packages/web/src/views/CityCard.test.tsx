@@ -76,7 +76,7 @@ function renderCards(cities: readonly CityProduction[], options: Options = {}): 
 }
 
 const productionField = (): HTMLInputElement =>
-  screen.getByRole('textbox', { name: /^Production, set by hand/ }) as HTMLInputElement
+  screen.getByRole('textbox', { name: /^Production override/ }) as HTMLInputElement
 
 describe('CityCard, the figure', () => {
   it('shows the estimate with a "Not a complete count" link to the arithmetic', () => {
@@ -288,7 +288,7 @@ describe('CityCard, setting a number by hand', () => {
     const setProduction = vi.spyOn(api, 'setCityProduction').mockResolvedValue(view)
     renderCards([city(), city({ pieceId: 'city-2', label: 'City B2' })])
     expect(screen.getAllByRole('textbox')).toHaveLength(2)
-    fireEvent.change(screen.getByRole('textbox', { name: 'Production, set by hand, City B2' }), { target: { value: '4' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Production override, City B2' }), { target: { value: '4' } })
     fireEvent.click(screen.getByRole('button', { name: 'Set production of City B2' }))
     expect(setProduction).toHaveBeenCalledWith('g1', 'city-2', 4)
   })

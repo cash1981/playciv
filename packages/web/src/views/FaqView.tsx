@@ -106,10 +106,9 @@ export function FaqView(): React.JSX.Element {
           <p className="faq-answer">
             In your open City Management phase, press <strong>Build</strong> on your city in
             Your actions and pick what to build. A city can build a building, a wonder from the
-            wonders market, an army or a scout figure, or a military unit. A figure is placed as
-            soon as you tap one of the highlighted squares around the city. A building and a wonder
-            are placed the same way, and then you press <strong>Confirm</strong>. A military unit is
-            not placed. It draws a private card into your hand, so there is no square, and
+            wonders market, an army or a scout figure, or a military unit. A building, a wonder
+            or a figure is placed as soon as you tap one of the highlighted squares around the
+            city, with no Confirm. A military unit is not placed. It draws a private card into your hand, so there is no square, and
             Confirm is ready at once; the log names only the type of unit. An army put on a
             square where an enemy figure stands is not automated: you settle any battle or loot by hand, and the bar says so.{' '}
             <strong>Cancel</strong> or Escape changes nothing. What is built, any trade you pay and

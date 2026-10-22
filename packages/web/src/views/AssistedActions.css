@@ -40,6 +40,26 @@ td .assisted-action {
   align-items: flex-start;
 }
 
+/* "Possible actions": a heading and a box that look like "Your cities" and a city card,
+   so the two sections read the same. */
+.assisted-possible {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.assisted-possible-title {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.assisted-possible-box {
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
 /* The card choice after a culture advance. The cards reuse .card-grid.small,
    which reflows to one or two columns at 320 px. */
 .assisted-reward {

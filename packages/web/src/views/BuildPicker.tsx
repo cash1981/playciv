@@ -30,7 +30,7 @@ import './BuildPicker.css'
 export const BUILD_PICKER_ID = 'build-picker'
 
 const SOURCE_TEXT: Readonly<Record<CityBuildOptions['productionSource'], string>> = {
-  override: 'set by hand',
+  override: 'override',
   'building-program': 'with the Building Program',
   estimate: 'estimate',
 }
@@ -142,7 +142,9 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
     >
       <h5 className="build-picker-title">Build in {city.label}</h5>
       <p className="build-picker-production">
-        Production {city.production}, {SOURCE_TEXT[city.productionSource]}.
+        {city.productionSource === 'override'
+          ? `Production override: ${city.production}.`
+          : `Production ${city.production}, ${SOURCE_TEXT[city.productionSource]}.`}
       </p>
 
       {/* Plain text: the bar above the board is the live region that announces these. */}
@@ -344,7 +346,7 @@ interface PlanBarProps {
 function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   const [sending, setSending] = useState(false)
-  // The square a figure was sent on by the tap, so Confirm can come back for it if that did not go through
+  // The square a build was sent on by the tap, so Confirm can come back for it if that did not go through
   const [autoSent, setAutoSent] = useState<string | null>(null)
   // A new plan mounts a new bar: put focus on it once, without scrolling. The page
   // is scrolled by the board (BoardView), which brings its panel into view under
@@ -359,12 +361,12 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
   const placed = plan.placement === 'square'
   // A unit has no square to wait for: Confirm is ready at once.
   const ready = !placed || target !== null
-  // A figure is placed by the tap on its square, with no Confirm: it can be moved,
-  // and removing it before the turn ends takes the whole build back. The exception is
-  // a square the engine has a note for (an enemy figure stands there, so the outcome is
-  // settled by hand): its note is read first, and Confirm places the figure.
-  const figure = plan.item.kind === 'army' || plan.item.kind === 'scout'
-  const immediate = figure && target?.note === undefined
+  // What goes on the map (a building, a wonder, a figure) is placed by the tap on its
+  // square, with no Confirm: it can be moved, and removing it before the turn ends takes
+  // the whole build back. The exception is a square the engine has a note for (an enemy
+  // figure stands there, so the outcome is settled by hand): its note is read first, and
+  // Confirm places the figure. A unit has no square, so it keeps Confirm.
+  const immediate = placed && target?.note === undefined
 
   function confirm(): void {
     if (!ready || sending) return
@@ -411,7 +413,7 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     })
   }
 
-  // Picking a square for a figure sends the build, and only the pick does: a square that
+  // Picking a square for a piece on the map sends the build, and only the pick does: a square that
   // loses its note on a refresh is not sent, and a second tap on the same square is no new pick.
   // Confirm is there for both, and after a refusal, so the square can always be sent.
   const pickedColumn = target?.column
@@ -427,8 +429,8 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
       confirm()
     }
   }, [immediate, pickedKey])
-  // A figure shows Confirm for a square once it has one, except while the tap's own request is out
-  const showConfirm = !figure || (pickedKey !== null && !(sending && autoSent === pickedKey))
+  // A piece on the map shows Confirm for a square once it has one, except while the tap's own request is out
+  const showConfirm = !placed || (pickedKey !== null && !(sending && autoSent === pickedKey))
 
   return (
     <div ref={ref} className="build-bar" role="group" aria-label="Build" tabIndex={-1}>
@@ -442,10 +444,10 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
         {!placed ? (
           <>A private card is drawn, nothing is placed on the map.</>
         ) : target === null ? (
-          <>{figure ? 'Tap a highlighted square on the board to place it.' : 'Tap a highlighted square on the board.'}</>
+          <>Tap a highlighted square on the board to place it.</>
         ) : (
           <>
-            Square <strong>{target.label}</strong>.{sending && figure ? ' Placing it.' : ''}
+            Square <strong>{target.label}</strong>.{sending ? ' Placing it.' : ''}
           </>
         )}
       </p>

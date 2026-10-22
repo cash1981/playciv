@@ -158,13 +158,13 @@ describe('YourCities', () => {
     expect(screen.queryByRole('button', { name: 'Build in Capital D5' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Start Building Program in Capital D5' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Start Building Program in City B2' })).toBeNull()
-    expect(screen.getByRole('textbox', { name: 'Production, set by hand, City B2' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Production override, City B2' })).toBeTruthy()
   })
 
   it('has no Build button without a flow', () => {
     renderSection(viewOf({ cities: [city()], buildOptions: [buildOptions('city-1', 'Capital D5')] }))
     expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
-    expect(screen.getByRole('textbox', { name: 'Production, set by hand, Capital D5' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Production override, Capital D5' })).toBeTruthy()
   })
 
   it('keeps the figures and the popup links, and drops every control, when read only', () => {

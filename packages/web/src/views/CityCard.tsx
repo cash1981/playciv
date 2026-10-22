@@ -72,6 +72,8 @@ export function CityCard({
   const countLinkText = city.override === null ? 'Not a complete count' : 'How the estimate is counted'
   const programShown = city.buildingProgram && city.withBuildingProgram !== null
   const controls = own !== undefined && !own.readOnly ? own : undefined
+  const buildFlow = controls?.build
+  const buildOptions = controls?.buildOptions
   const countLink = (
     <button
       ref={countLinkRef}
@@ -123,19 +125,33 @@ export function CityCard({
         </p>
       )}
 
-      {controls !== undefined && controls.build !== undefined && controls.buildOptions !== undefined && (
-        <BuildEntry city={city} options={controls.buildOptions} busy={controls.busy} build={controls.build} />
+      {/* Build and Start Building Program share a line when there is room; the picker opens under both. */}
+      {((buildFlow !== undefined && buildOptions !== undefined) || controls?.cityActions !== undefined) && (
+        <div className="city-buttons">
+          {controls !== undefined && buildFlow !== undefined && buildOptions !== undefined && (
+            <BuildEntry city={city} options={buildOptions} busy={controls.busy} build={buildFlow} />
+          )}
+          {controls?.cityActions !== undefined && (
+            <StartProgramEntry
+              city={city}
+              gameId={controls.gameId}
+              view={controls.view}
+              options={controls.cityActions.startBuildingProgram}
+              markerLineId={programShown ? programId : undefined}
+              busy={controls.busy}
+              run={controls.run}
+            />
+          )}
+        </div>
       )}
-
-      {controls !== undefined && controls.cityActions !== undefined && (
-        <StartProgramEntry
-          city={city}
-          gameId={controls.gameId}
-          view={controls.view}
-          options={controls.cityActions.startBuildingProgram}
-          markerLineId={programShown ? programId : undefined}
+      {controls !== undefined && buildFlow !== undefined && buildOptions !== undefined && buildFlow.pickerCityId === city.pieceId && (
+        <BuildPicker
+          city={buildOptions}
+          note={buildFlow.note}
+          message={buildFlow.message}
           busy={controls.busy}
-          run={controls.run}
+          onChoose={(choice: BuildChoice) => buildFlow.start(buildOptions, choice)}
+          onClose={buildFlow.closePicker}
         />
       )}
 
@@ -146,7 +162,7 @@ export function CityCard({
   )
 }
 
-/** The Build button of one of the viewer's cities, and its picker while it is open. */
+/** The Build button of one of the viewer's cities. Its picker is shown by the card, under the buttons. */
 function BuildEntry({
   city,
   options,
@@ -181,16 +197,6 @@ function BuildEntry({
           </span>
         )}
       </div>
-      {open && (
-        <BuildPicker
-          city={options}
-          note={build.note}
-          message={build.message}
-          busy={busy}
-          onChoose={(choice: BuildChoice) => build.start(options, choice)}
-          onClose={build.closePicker}
-        />
-      )}
     </div>
   )
 }
@@ -352,7 +358,7 @@ function OverrideForm({
       }}
     >
       <label htmlFor={inputId} className="city-edit-label">
-        Production, set by hand
+        Production override
       </label>
       <div className="city-edit-row">
         <input
@@ -362,7 +368,7 @@ function OverrideForm({
           inputMode="numeric"
           pattern="[0-9]*"
           autoComplete="off"
-          aria-label={`Production, set by hand, ${city.label}`}
+          aria-label={`Production override, ${city.label}`}
           aria-invalid={invalid}
           aria-describedby={invalid ? errorId : undefined}
           value={draft}

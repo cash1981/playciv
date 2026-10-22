@@ -15,7 +15,7 @@
  * set production by hand.
  */
 
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { itemName } from '@civ/engine'
@@ -28,6 +28,7 @@ import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { EndTurn, endTurnState } from './EndTurn.js'
 import { ItemCard } from './ItemCard.js'
 import type { Run } from './GameView.js'
+import { goToPanel } from './PhaseSummary.js'
 import { YourCities } from './YourCities.js'
 import './AssistedActions.css'
 
@@ -164,6 +165,8 @@ interface ButtonProps {
   readonly className?: string
   /** Replaces the default "Use <label>" text. */
   readonly children?: ReactNode
+  /** Called after a press that went through, once the page has the fresh view. */
+  readonly onDone?: (() => void) | undefined
 }
 
 /**
@@ -191,6 +194,7 @@ export function AssistedActionButton({
   detail = 'full',
   className = 'small',
   children,
+  onDone,
 }: ButtonProps): React.JSX.Element | null {
   const reasonId = useId()
   const state = view.you?.availableActions?.find((candidate) => candidate.action === action)
@@ -218,7 +222,9 @@ export function AssistedActionButton({
           ? api.performAction(gameId, action, requestId, rev, true)
           : api.performAction(gameId, action, requestId, rev),
       view,
-    )
+    ).then((done) => {
+      if (done) onDone?.()
+    })
   }
 
   return (
@@ -268,7 +274,7 @@ export function hasActionsPanel(view: PlayerView): boolean {
 }
 
 /**
- * "Your actions": End turn, the viewer's assisted actions with their state, the
+ * "Your actions": End turn, "Possible actions" (the viewer's assisted actions with their state, in a box like a city's), the
  * card choice waiting after a culture advance, and "Your cities" (see
  * `YourCities.tsx`), in that order, so a waiting choice stays above the long city
  * list and End turn is always at the same place. Actions for a card the player does
@@ -291,6 +297,16 @@ export function AssistedActionsPanel({
   const pending = view.you?.pendingRewards?.[0]
   // After a successful Keep the choice unmounts and focus would fall to the page.
   const bodyRef = useRef<HTMLDivElement>(null)
+  const possibleId = useId()
+  // A culture advance puts its cards in the hand: after it, and after a waiting card choice has been
+  // kept, the page goes to Your hand. Left alone while a choice is waiting, which is above the hand.
+  const [toHand, setToHand] = useState(false)
+  useEffect(() => {
+    if (toHand && waiting === 0) {
+      setToHand(false)
+      goToPanel('hand')
+    }
+  }, [toHand, waiting])
   if (view.you === null || !hasActionsPanel(view)) return null
   // A collapsed panel must not hide the choice, so the title says it is waiting.
   const title =
@@ -308,24 +324,32 @@ export function AssistedActionsPanel({
       >
         <EndTurn gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
         {actions.length > 0 && (
-          <ul className="assisted-actions">
-            {actions.map((candidate) => (
-              <li key={candidate.action}>
-                {/* A button with its own text (Advance culture) names the row itself. */}
-                {BUTTON_TEXT[candidate.action] === undefined && (
-                  <span className="assisted-name">{candidate.label}</span>
-                )}
-                <AssistedActionButton
-                  action={candidate.action}
-                  gameId={gameId}
-                  view={view}
-                  busy={busy}
-                  readOnly={readOnly}
-                  run={run}
-                />
-              </li>
-            ))}
-          </ul>
+          <section className="assisted-possible" aria-labelledby={possibleId}>
+            <h3 id={possibleId} className="assisted-possible-title">
+              Possible actions
+            </h3>
+            <div className="assisted-possible-box">
+              <ul className="assisted-actions">
+                {actions.map((candidate) => (
+                  <li key={candidate.action}>
+                    {/* A button with its own text (Advance culture) names the row itself. */}
+                    {BUTTON_TEXT[candidate.action] === undefined && (
+                      <span className="assisted-name">{candidate.label}</span>
+                    )}
+                    <AssistedActionButton
+                      action={candidate.action}
+                      gameId={gameId}
+                      view={view}
+                      busy={busy}
+                      readOnly={readOnly}
+                      run={run}
+                      onDone={candidate.action === 'cultureAdvance' ? () => setToHand(true) : undefined}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
         )}
         {pending !== undefined && (
           <RewardChoice

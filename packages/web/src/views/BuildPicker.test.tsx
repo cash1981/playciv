@@ -24,6 +24,11 @@ function choose(name: string): void {
   fireEvent.click(screen.getByRole('button', { name: `Choose ${name}` }))
 }
 
+/** A build request that never gets an answer: the tap on a square has sent it, and the bar waits. */
+function holdBuild(): ReturnType<typeof vi.spyOn> {
+  return vi.spyOn(api, 'build').mockImplementation(() => new Promise<PlayerView>(() => undefined))
+}
+
 beforeEach(() => {
   localStorage.setItem('civ.panel.actions', 'true')
   resetPendingRequestIds()
@@ -204,7 +209,7 @@ describe('BuildPicker', () => {
   })
 
   it.each([
-    ['override', 'Production 4, set by hand.'],
+    ['override', 'Production override: 4.'],
     ['building-program', 'Production 4, with the Building Program.'],
     ['estimate', 'Production 4, estimate.'],
   ] as const)('says where the production figure comes from: %s', (source, line) => {
@@ -393,16 +398,15 @@ describe('square picking and Confirm', () => {
     expect(screen.queryByRole('group', { name: 'Build' })).toBeNull()
   })
 
-  it('choosing shows the squares, a bar with the item, city, cost and trade, and a Confirm that waits for a square', () => {
+  it('choosing shows the squares and a bar with the item, city, cost and trade, and no Confirm', () => {
     render(<Harness initial={viewOf([options()])} />)
     startHarbor()
     expect(overlays().map((button) => button.getAttribute('aria-label'))).toEqual(['Place Harbor on C4'])
     expect(bar().textContent).toContain('Build Harbor in Capital D5')
     expect(bar().textContent).toContain('Cost 5')
     expect(bar().textContent).toContain('Pays 3 trade')
-    expect(bar().textContent).toContain('Tap a highlighted square')
-    expect(confirm().disabled).toBe(true)
-    expect(confirm().textContent).toBe('Confirm and pay 3 trade')
+    expect(bar().textContent).toContain('Tap a highlighted square on the board to place it.')
+    expect(within(bar()).queryByRole('button', { name: /^Confirm/ })).toBeNull()
     // The picker has done its job and is gone.
     expect(screen.queryByRole('region', { name: 'Build in Capital D5' })).toBeNull()
   })
@@ -490,25 +494,24 @@ describe('square picking and Confirm', () => {
     expect(scrolled).toHaveLength(2)
   })
 
-  it('selects a square with a click, shows it, and Confirm opens; the squares are real buttons a keyboard can reach', () => {
+  it('places the piece with the tap on a square, which sends the build; the squares are real buttons a keyboard can reach', () => {
+    const send = holdBuild()
     render(<Harness initial={viewOf([options()])} />)
     startLibrary()
-    const [d5, e5] = overlays()
-    if (d5 === undefined || e5 === undefined) throw new Error('squares missing')
+    const [d5] = overlays()
+    if (d5 === undefined) throw new Error('squares missing')
     expect(d5.tagName).toBe('BUTTON')
     d5.focus()
     expect(document.activeElement).toBe(d5)
     expect(d5.getAttribute('aria-pressed')).toBe('false')
+    expect(send).not.toHaveBeenCalled()
 
     fireEvent.click(d5)
     expect(d5.getAttribute('aria-pressed')).toBe('true')
     expect(bar().textContent).toContain('Square D5')
-    expect(confirm().disabled).toBe(false)
-
-    fireEvent.click(e5)
-    expect(d5.getAttribute('aria-pressed')).toBe('false')
-    expect(e5.getAttribute('aria-pressed')).toBe('true')
-    expect(bar().textContent).toContain('Square E5')
+    expect(send).toHaveBeenCalledTimes(1)
+    // The tap is the request: no Confirm to press while it is out
+    expect(within(bar()).queryByRole('button', { name: /^Confirm/ })).toBeNull()
   })
 
   it('sends exactly one build request with the payload, no rush when no trade is due, then clears', async () => {
@@ -516,8 +519,8 @@ describe('square picking and Confirm', () => {
     render(<Harness initial={viewOf([options()])} />)
     startLibrary()
     fireEvent.click(screen.getByRole('button', { name: 'Place Library on E5' }))
-    fireEvent.click(confirm())
-    fireEvent.click(confirm())
+    // A second tap on the same square is no new pick
+    fireEvent.click(screen.getByRole('button', { name: 'Place Library on E5' }))
 
     await waitFor(() => expect(screen.queryByRole('group', { name: 'Build' })).toBeNull())
     expect(send).toHaveBeenCalledTimes(1)
@@ -534,12 +537,11 @@ describe('square picking and Confirm', () => {
     expect(overlays()).toHaveLength(0)
   })
 
-  it('agrees to the rush when trade is due', async () => {
+  it('pays the rush with the tap when trade is due', async () => {
     const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
     render(<Harness initial={viewOf([options()])} />)
     startHarbor()
     fireEvent.click(screen.getByRole('button', { name: 'Place Harbor on C4' }))
-    fireEvent.click(confirm())
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0]?.[3]).toEqual({
       cityPieceId: 'city-1',
@@ -554,7 +556,6 @@ describe('square picking and Confirm', () => {
     render(<Harness initial={viewOf([options()])} />)
 
     startLibrary()
-    fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))
     fireEvent.click(within(bar()).getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('group', { name: 'Build' })).toBeNull()
     expect(overlays()).toHaveLength(0)
@@ -570,7 +571,7 @@ describe('square picking and Confirm', () => {
   it('Escape in a text field belongs to the field', () => {
     render(<Harness initial={viewOf([options()])} />)
     startLibrary()
-    const field = screen.getByRole('textbox', { name: /^Production, set by hand/ })
+    const field = screen.getByRole('textbox', { name: /^Production override/ })
     field.focus()
     fireEvent.keyDown(field, { key: 'Escape' })
     expect(overlays()).toHaveLength(2)
@@ -581,12 +582,11 @@ describe('square picking and Confirm', () => {
     render(<Harness initial={viewOf([options()])} refresh={() => viewOf([options()], { rev: 8 })} />)
     startLibrary()
     fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))
-    fireEvent.click(confirm())
 
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe('That square was taken a moment ago.')
     expect(bar().contains(alert)).toBe(true)
-    // Still planning: squares, the chosen one and Confirm are as they were.
+    // Still planning: squares and the chosen one are as they were, and Confirm is there to try it again.
     expect(overlays()).toHaveLength(2)
     expect(screen.getByRole('button', { name: 'Place Library on D5' }).getAttribute('aria-pressed')).toBe('true')
     expect(confirm().disabled).toBe(false)
@@ -598,7 +598,6 @@ describe('square picking and Confirm', () => {
     render(<Harness initial={viewOf([options()])} refresh={() => fresh} />)
     startLibrary()
     fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))
-    fireEvent.click(confirm())
 
     await waitFor(() => expect(overlays()).toHaveLength(0))
     expect((await screen.findByRole('alert')).textContent).toBe('Supply of Library is used up.')
@@ -618,7 +617,6 @@ describe('square picking and Confirm', () => {
     render(<Harness initial={viewOf([options()])} refresh={() => viewOf([options()], { rev: 8 })} />)
     startLibrary()
     fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))
-    fireEvent.click(confirm())
     await screen.findByRole('alert')
     expect(overlays()).toHaveLength(2)
 
@@ -634,7 +632,6 @@ describe('square picking and Confirm', () => {
     startLibrary()
     const press = async (label: string, calls: number): Promise<void> => {
       fireEvent.click(screen.getByRole('button', { name: label }))
-      fireEvent.click(confirm())
       await waitFor(() => expect(send).toHaveBeenCalledTimes(calls))
       await screen.findByRole('alert')
     }
@@ -655,14 +652,12 @@ describe('square picking and Confirm', () => {
     render(<Harness initial={viewOf([options()])} />)
     startLibrary()
     fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))
-    fireEvent.click(confirm())
     expect(send).toHaveBeenCalledTimes(1)
 
     // Cancel and choose the same square again while the first request has no answer.
     fireEvent.click(within(bar()).getByRole('button', { name: 'Cancel' }))
     startLibrary()
     fireEvent.click(screen.getByRole('button', { name: 'Place Library on D5' }))
-    fireEvent.click(confirm())
     await act(async () => { await Promise.resolve() })
 
     expect(send).toHaveBeenCalledTimes(1)
@@ -713,6 +708,7 @@ describe('Back to the picker', () => {
 
 describe('a refresh while planning', () => {
   it('keeps the plan and the chosen square when the options are the same', () => {
+    holdBuild()
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
@@ -724,10 +720,10 @@ describe('a refresh while planning', () => {
     expect(overlays()).toHaveLength(2)
     expect(screen.getByRole('button', { name: 'Place Library on D5' }).getAttribute('aria-pressed')).toBe('true')
     expect(screen.queryByRole('status')).toBeNull()
-    expect(confirm().disabled).toBe(false)
   })
 
   it('drops the plan with a note when the choice is no longer offered, and reopens the picker', () => {
+    holdBuild()
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
@@ -776,6 +772,7 @@ describe('a refresh while planning', () => {
   })
 
   it('keeps the plan but forgets a chosen square that is no longer legal', () => {
+    holdBuild()
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
@@ -785,7 +782,7 @@ describe('a refresh while planning', () => {
     act(() => handle.setView(viewOf([options({ choices: [{ ...LIBRARY, squares: [LIBRARY.squares[1] as BuildChoice['squares'][number]] }, HARBOR] })], { rev: 9 })))
     expect(overlays().map((button) => button.getAttribute('aria-label'))).toEqual(['Place Library on E5'])
     expect(screen.getByRole('status').textContent).toBe(SQUARE_GONE)
-    expect(confirm().disabled).toBe(true)
+    expect(within(bar()).queryByRole('button', { name: /^Confirm/ })).toBeNull()
   })
 
   it('takes a changed cost from the fresh options', () => {
@@ -1282,21 +1279,17 @@ describe('building a wonder', () => {
     expect(screen.getByText('The cost is not checked against the city’s production.')).toBeTruthy()
   })
 
-  it('enters square picking like a building, and needs Confirm', async () => {
+  it('enters square picking like a building, and is placed by the tap with no Confirm', async () => {
     const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
     render(<Harness initial={viewOf([withWonder()])} />)
     startWonder()
     expect(bar().textContent).toContain('Build the Colossus in Capital D5')
     expect(bar().textContent).toContain('Cost 10 (15 without Metalworking)')
-    expect(bar().textContent).toContain('Tap a highlighted square on the board.')
+    expect(bar().textContent).toContain('Tap a highlighted square on the board to place it.')
     expect(overlays().map((button) => button.getAttribute('aria-label'))).toEqual(['Place The Colossus on D5'])
-    expect(confirm().disabled).toBe(true)
+    expect(within(bar()).queryByRole('button', { name: /^Confirm/ })).toBeNull()
 
-    // A wonder is not sent by the tap, so Confirm places it
     fireEvent.click(overlays()[0] as HTMLElement)
-    expect(send).not.toHaveBeenCalled()
-    expect(confirm().disabled).toBe(false)
-    fireEvent.click(confirm())
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0]?.[3]).toEqual({
       cityPieceId: 'city-1',
@@ -1308,6 +1301,7 @@ describe('building a wonder', () => {
   it('tells a wonder and a building of the same asset id apart in the request key and in a refresh', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([withWonder()])} handle={handle} />)
+    holdBuild()
     startWonder()
     fireEvent.click(overlays()[0] as HTMLElement)
 

@@ -626,6 +626,9 @@ describe('wonders over HTTP', () => {
     state = unwrap(placePiece(state, { playerId: table.starterId, assetId: COLOSSUS, x: area.x + 8, y: area.y + 40 }))
     state = {
       ...state,
+      // A wonder piece on the board has left the deck: without this the draw that follows a build
+      // can pick the Colossus card again, a second Colossus piece
+      items: state.items.filter((item) => !(item.kind === 'wonder' && (item as { name: string }).name === 'The Colossus')),
       board: {
         ...state.board,
         pieces: state.board.pieces.map((piece) => (piece.id === table.cityId ? { ...piece, productionOverride: 15 } : piece)),

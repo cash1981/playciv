@@ -374,12 +374,20 @@ private card, nothing placed).
   only those with something to pick. A button shows that list, with Back to the buttons; a
   group that is alone is shown at once. The choice is local to the picker and the engine is
   unchanged.
-- A figure is placed by the tap on its square, with no Confirm (the human): it can be
-  moved, and removing it takes the build back. The exception is a square with a note (an
-  enemy figure stands there, so the outcome is settled by hand): its note is read first and
-  Confirm places the army. A building, a wonder and a unit keep Confirm. A rush pays its
-  trade at the tap too; removing the figure gives it back. After a refusal Confirm shows,
-  so the same square can be tried again.
+- A building, a wonder or a figure is placed by the tap on its square, with no Confirm
+  (the human; first only figures, then all three): it can be moved, and removing it takes
+  the build back. The exception is a square with a note (an enemy figure stands there, so
+  the outcome is settled by hand): its note is read first and Confirm places the army. A
+  unit has no square and keeps Confirm. A rush pays its trade at the tap too; removing the
+  piece gives it back. After a refusal Confirm shows, so the same square can be tried again.
+- **"Possible actions" box in Your actions** (the human): the assisted actions (Advance
+  culture and the card buttons) sit in a box under their own heading, above Your cities,
+  styled like a city card. After a successful Advance culture the page scrolls to Your hand
+  (it waits for a card choice that is open, which is above the hand, and goes when it has
+  been kept). The city name is the larger text on a city card and the production figure the
+  smaller; Build and Start Building Program share a row when there is room.
+- The city card says "Production override" for the hand-set figure, and the picker "Production
+  override: N" (it said "set by hand").
 - **Removing a built piece before End turn takes the build back** (the human): the owner
   removes the building, wonder, figure or Building Program marker a build or a start put on
   the board, while their City Management is not marked done. `takeBackOpenBuild` then does
