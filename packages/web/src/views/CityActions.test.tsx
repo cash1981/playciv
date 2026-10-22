@@ -8,6 +8,20 @@ import type { CityActionOptions, CityProduction, PlayerView, UpgradeFamilyOption
 import { AssistedActionsPanel, resetPendingRequestIds } from './AssistedActions.js'
 import type { Run } from './GameView.js'
 
+/** The two gather options every city has; these tests are about the Building Program and the Upgrades. */
+const GATHER: Pick<CityActionOptions, 'devoteToTheArts' | 'harvest'> = {
+  devoteToTheArts: {
+    status: 'ready',
+    reason: 'Ready to devote this city to the arts.',
+    culture: 1,
+    parts: [{ label: 'The city itself', amount: 1 }],
+    notes: [],
+    scouts: [],
+  },
+  harvest: { status: 'unavailable', reason: 'No resource icon in the outskirts.', choices: [], notes: [] },
+}
+
+
 beforeEach(() => {
   localStorage.setItem('civ.panel.actions', 'true')
   resetPendingRequestIds()
@@ -38,16 +52,19 @@ function city(overrides: Partial<CityProduction> = {}): CityProduction {
 const READY: CityActionOptions = {
   cityPieceId: 'city-1',
   label: 'Capital B3',
+  ...GATHER,
   startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
 }
 const WRONG_PHASE: CityActionOptions = {
   cityPieceId: 'city-1',
   label: 'Capital B3',
+  ...GATHER,
   startBuildingProgram: { status: 'wrong-phase', reason: 'It is not your City Management phase.', hasMarker: false },
 }
 const MARKER: CityActionOptions = {
   cityPieceId: 'city-1',
   label: 'Capital B3',
+  ...GATHER,
   startBuildingProgram: {
     status: 'unavailable',
     reason: 'This city already has a Building Program marker.',
@@ -204,6 +221,7 @@ describe('Start Building Program', () => {
     const secondOptions: CityActionOptions = {
       cityPieceId: 'city-2',
       label: 'City D6',
+      ...GATHER,
       startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
     }
     const send = vi.spyOn(api, 'startBuildingProgram').mockResolvedValue({} as PlayerView)

@@ -1221,6 +1221,8 @@ describe('Build and Start Building Program on a city card', () => {
           cityPieceId: 'city-1',
           label: 'Capital D5',
           startBuildingProgram: { status: 'ready', reason: 'Ready.', hasMarker: false },
+          devoteToTheArts: { status: 'ready', reason: 'Ready.', culture: 1, parts: [], notes: [], scouts: [] },
+          harvest: { status: 'unavailable', reason: 'Nothing to harvest.', choices: [], notes: [] },
         },
       ],
     })

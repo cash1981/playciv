@@ -1448,6 +1448,8 @@ describe('the city actions in the game page', () => {
       cityPieceId: 'city-1',
       label: 'Capital B3',
       startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
+      devoteToTheArts: { status: 'ready', reason: 'Ready.', culture: 1, parts: [], notes: [], scouts: [] },
+      harvest: { status: 'unavailable', reason: 'Nothing to harvest.', choices: [], notes: [] },
     },
   ]
   const upgradeOptions = [

@@ -18,9 +18,12 @@ import { PHASE_REASON, openCityManagementTurn } from './assisted.js'
 import { cityFootprintsOf, mapCellOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
 import type { BoardPiece } from './board.js'
+import { findBoardAsset, remainingBoardAssetCount } from './board.js'
 import { squareLabel } from './build-options.js'
 import type { BuildSquare } from './build-options.js'
 import { BUILDING_UPGRADES, buildingNameOf, techsUnlocking } from './building-data.js'
+import { cityGatheringOf } from './city-gather.js'
+import type { DevoteGathering, HarvestChoiceView, HarvestGathering } from './city-gather.js'
 import { BUILDING_PROGRAM_ASSET_ID, cityProductionsOf } from './city-production.js'
 import type { Result } from './result.js'
 import { err, ok } from './result.js'
@@ -42,11 +45,52 @@ export interface StartBuildingProgramOption {
   readonly hasMarker: boolean
 }
 
+/** Devote to the Arts for one city: the culture it would give and how that adds up. */
+export interface DevoteToTheArtsOption extends DevoteGathering {
+  /** `wrong-phase` outside the player's open City Management phase. */
+  readonly status: 'ready' | 'wrong-phase'
+  readonly reason: string
+}
+
+/** Harvest a resource for one city: what its outskirts and the player's scouts offer. */
+export interface HarvestOption extends HarvestGathering {
+  /** `unavailable` when there is nothing to harvest or the market has none of it left. */
+  readonly status: 'ready' | 'wrong-phase' | 'unavailable'
+  readonly reason: string
+}
+
 export interface CityActionOptions {
   readonly cityPieceId: string
   /** For example "Capital B3", as the production figure labels it. */
   readonly label: string
   readonly startBuildingProgram: StartBuildingProgramOption
+  readonly devoteToTheArts: DevoteToTheArtsOption
+  readonly harvest: HarvestOption
+}
+
+/** Whether the market still has a token of the resource. The pieces on the board are the supply that is gone. */
+function marketHas(state: GameState, resource: string): boolean {
+  const asset = findBoardAsset(`resources/${resource}`)
+  if (asset === undefined) return false
+  const remaining = remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)
+  return remaining === undefined || remaining > 0
+}
+
+function harvestOptionOf(state: GameState, gathering: HarvestGathering, label: string, open: boolean): HarvestOption {
+  const choices = gathering.choices.map((choice): HarvestChoiceView =>
+    marketHas(state, choice.resource)
+      ? choice
+      : { ...choice, available: false, unavailableReason: `The market has no ${choice.resource} token left.` },
+  )
+  const base = { choices, notes: gathering.notes }
+  if (!open) return { ...base, status: 'wrong-phase', reason: PHASE_REASON }
+  if (choices.length === 0) {
+    return { ...base, status: 'unavailable', reason: `No resource icon in the outskirts of ${label}, and none under a scout of yours.` }
+  }
+  if (!choices.some((choice) => choice.available)) {
+    return { ...base, status: 'unavailable', reason: 'The market has no token left of the resources there.' }
+  }
+  return { ...base, status: 'ready', reason: 'Choose a resource.' }
 }
 
 /**
@@ -93,7 +137,12 @@ export function cityActionsOf(state: GameState, player: Playerhand): readonly Ci
       : hasMarker
         ? { status: 'unavailable', reason: MARKER_PRESENT_REASON, hasMarker }
         : { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker }
-    return [{ cityPieceId: city.pieceId, label: city.label, startBuildingProgram }]
+    const gathering = cityGatheringOf(state, player, footprint)
+    const devoteToTheArts: DevoteToTheArtsOption = open
+      ? { ...gathering.devote, status: 'ready', reason: 'Ready to devote this city to the arts.' }
+      : { ...gathering.devote, status: 'wrong-phase', reason: PHASE_REASON }
+    const harvest = harvestOptionOf(state, gathering.harvest, city.label, open)
+    return [{ cityPieceId: city.pieceId, label: city.label, startBuildingProgram, devoteToTheArts, harvest }]
   })
 }
 

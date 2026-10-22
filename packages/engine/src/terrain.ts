@@ -57,13 +57,20 @@ function printedSquare(
   }
 }
 
+/** A square of a tile asset, by the row and column it has in the printed orientation. */
+export interface TileSquare {
+  readonly assetId: string
+  readonly row: number
+  readonly column: number
+}
+
 /**
- * The terrain of the map square under board point (x, y). `null` when there is
- * no tile under it, the tile has no data (the tile back), or the point is not
- * on the map: like `squareOf`, a point in the hole or outside a stepped board,
- * where no slot covers it, has no terrain. When tiles overlap, the topmost one wins.
+ * The printed square of the tile under board point (x, y), with the tile's rotation
+ * undone. `null` when the point is not on the map or no tile lies under it. When
+ * tiles overlap, the topmost one wins. The terrain and the icons of a square are both
+ * looked up with this.
  */
-export function terrainAt(board: Board, x: number, y: number): Terrain | null {
+export function tileSquareAt(board: Board, x: number, y: number): TileSquare | null {
   const column = Math.floor(x / board.squareSize)
   const row = Math.floor((y - mapTop(board)) / board.squareSize)
   if (!isMapCell(board, column, row)) return null
@@ -81,15 +88,24 @@ export function terrainAt(board: Board, x: number, y: number): Terrain | null {
     )
   if (tile === undefined) return null
 
-  const grid = TILE_TERRAIN[tile.assetId]
-  if (grid === undefined) return null
-
   const [printedRow, printedColumn] = printedSquare(
     Math.floor((y - tile.y) / board.squareSize),
     Math.floor((x - tile.x) / board.squareSize),
     tile.rotation,
   )
-  return grid[printedRow]?.[printedColumn] ?? null
+  return { assetId: tile.assetId, row: printedRow, column: printedColumn }
+}
+
+/**
+ * The terrain of the map square under board point (x, y). `null` when there is
+ * no tile under it, the tile has no data (the tile back), or the point is not
+ * on the map: like `squareOf`, a point in the hole or outside a stepped board,
+ * where no slot covers it, has no terrain. When tiles overlap, the topmost one wins.
+ */
+export function terrainAt(board: Board, x: number, y: number): Terrain | null {
+  const square = tileSquareAt(board, x, y)
+  if (square === null) return null
+  return TILE_TERRAIN[square.assetId]?.[square.row]?.[square.column] ?? null
 }
 
 const NOT_WATER: readonly Terrain[] = ['grassland', 'forest', 'mountain', 'desert']

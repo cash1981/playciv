@@ -182,3 +182,41 @@
     min-height: 2.75rem;
   }
 }
+
+/* Devote to the Arts and Harvest: the panel under the card's buttons. */
+.gather-parts,
+.gather-notes {
+  margin: 0.3rem 0;
+  padding-left: 1.2rem;
+}
+
+.gather-notes {
+  font-size: 0.85rem;
+}
+
+.gather-scouts {
+  margin: 0.4rem 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.gather-scout {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.2rem 0;
+}
+
+/* The global input rule makes a field full width; a checkbox keeps its own size. */
+.gather-scout input {
+  flex: none;
+  width: auto;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .gather-panel button {
+    min-height: 2.75rem;
+  }
+}

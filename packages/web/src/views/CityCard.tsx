@@ -6,7 +6,7 @@
  * presented as complete: the map data does not hold every icon. A number typed
  * by hand always wins, and any player in the game may set it, like other board
  * edits. The viewer's own card gets the controls (`own`): Build, Start Building
- * Program and the field to set production by hand. Without `own` the card has
+ * Program, Devote to the Arts, Harvest and the field to set production by hand. Without `own` the card has
  * the figure and the popup, nothing to press; the game page no longer lists the
  * opponents' cities (the board shows them), so only the viewer's cards are used
  * there, in "Your actions" (`YourCities.tsx`).
@@ -21,6 +21,8 @@ import { api } from '../lib/api.js'
 import { BuildPicker } from './BuildPicker.js'
 import type { BuildFlow } from './buildFlow.js'
 import { useCityActionPress } from './CityActions.js'
+import { DevoteButton, DevotePanel, HarvestButton, HarvestPanel } from './CityGather.js'
+import type { GatherPanel } from './CityGather.js'
 import type { Run } from './GameView.js'
 import { ReferenceDialog } from './ReferenceDialog.js'
 import './CityCard.css'
@@ -68,6 +70,15 @@ export function CityCard({
   // section are not valid in a p. Focus goes back to the link on close.
   const [countOpen, setCountOpen] = useState(false)
   const countTitleId = useId()
+  const [gather, setGather] = useState<GatherPanel | null>(null)
+  const devoteReady = own?.cityActions?.devoteToTheArts.status === 'ready'
+  const harvestReady = own?.cityActions?.harvest.status === 'ready'
+  // A panel whose action stopped being ready (the phase ended) must not come back by itself in the next phase
+  // Nor may one outlive the controls (a replay or a locked game takes them away)
+  const hasControls = own !== undefined && !own.readOnly
+  useEffect(() => {
+    if (!hasControls || (gather === 'devote' && !devoteReady) || (gather === 'harvest' && !harvestReady)) setGather(null)
+  }, [gather, hasControls, devoteReady, harvestReady])
   const countLinkRef = useRef<HTMLButtonElement | null>(null)
   const countLinkText = city.override === null ? 'Not a complete count' : 'How the estimate is counted'
   const programShown = city.buildingProgram && city.withBuildingProgram !== null
@@ -142,7 +153,47 @@ export function CityCard({
               run={controls.run}
             />
           )}
+          {controls?.cityActions !== undefined && (
+            <>
+              <DevoteButton
+                city={city}
+                options={controls.cityActions.devoteToTheArts}
+                open={gather === 'devote'}
+                busy={controls.busy}
+                onToggle={() => setGather(gather === 'devote' ? null : 'devote')}
+              />
+              <HarvestButton
+                city={city}
+                options={controls.cityActions.harvest}
+                open={gather === 'harvest'}
+                busy={controls.busy}
+                onToggle={() => setGather(gather === 'harvest' ? null : 'harvest')}
+              />
+            </>
+          )}
         </div>
+      )}
+      {controls?.cityActions !== undefined && gather === 'devote' && controls.cityActions.devoteToTheArts.status === 'ready' && (
+        <DevotePanel
+          city={city}
+          options={controls.cityActions.devoteToTheArts}
+          gameId={controls.gameId}
+          view={controls.view}
+          busy={controls.busy}
+          run={controls.run}
+          onClose={() => setGather(null)}
+        />
+      )}
+      {controls?.cityActions !== undefined && gather === 'harvest' && controls.cityActions.harvest.status === 'ready' && (
+        <HarvestPanel
+          city={city}
+          options={controls.cityActions.harvest}
+          gameId={controls.gameId}
+          view={controls.view}
+          busy={controls.busy}
+          run={controls.run}
+          onClose={() => setGather(null)}
+        />
       )}
       {controls !== undefined && buildFlow !== undefined && buildOptions !== undefined && buildFlow.pickerCityId === city.pieceId && (
         <BuildPicker
@@ -236,7 +287,7 @@ function StartProgramEntry({
 
   function start(): void {
     const key = `${gameId}:${playerId}:startBuildingProgram:${city.pieceId}`
-    press(key, (requestId) => api.startBuildingProgram(gameId, requestId, view.rev, city.pieceId))
+    void press(key, (requestId) => api.startBuildingProgram(gameId, requestId, view.rev, city.pieceId))
   }
 
   return (

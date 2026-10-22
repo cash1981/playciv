@@ -323,6 +323,8 @@ export type AssistedActionKind =
   | 'build'
   | 'startBuildingProgram'
   | 'upgradeBuildings'
+  | 'devoteToTheArts'
+  | 'harvest'
 
 /** The cards that spend a resource token for culture: "Incense, City Management: gain N culture". */
 export type CultureCardKind = 'chivalry' | 'currency' | 'metalCasting'
@@ -453,6 +455,23 @@ export type AssistedEffect =
       /** The marker that was placed, where it went and the board history entry that placed it. */
       readonly pieceId: string
       readonly position: { readonly x: number; readonly y: number }
+      readonly historyId: string
+    }
+  | {
+      readonly kind: 'devoteToTheArts'
+      readonly cityPieceId: string
+      readonly cityLabel: string
+      /** The culture added to the player's stock, which an undo takes off again. */
+      readonly culture: number
+    }
+  | {
+      readonly kind: 'harvest'
+      readonly cityPieceId: string
+      readonly cityLabel: string
+      /** The resource token that was put in the player's area: `wheat`, `silk`, `incense` or `iron`. */
+      readonly resource: string
+      /** The token that was placed and the board history entry that placed it. */
+      readonly pieceId: string
       readonly historyId: string
     }
   | {
@@ -1003,8 +1022,9 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
    */
   readonly buildOptions: readonly CityBuildOptions[]
   /**
-   * What the viewer can do with each city besides building: for now, start a
-   * Building Program. Own view only, like `buildOptions`.
+   * What the viewer can do with each city besides building: start a Building
+   * Program, devote it to the arts and harvest a resource. Own view only, like
+   * `buildOptions`.
    */
   readonly cityActions: readonly CityActionOptions[]
   /**

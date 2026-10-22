@@ -25,6 +25,10 @@ import type {
   CityModifier,
   CityProduction,
   CoinSourceKey,
+  CultureShare,
+  DevoteToTheArtsOption,
+  HarvestChoiceView,
+  HarvestOption,
   HighscoreResult,
   Government,
   Item,
@@ -33,6 +37,8 @@ import type {
   PlayerStats,
   PlayerView,
   RevealedEntry,
+  ResourceKind,
+  ScoutSquare,
   SheetName,
   SocialPolicyItem,
   StartBuildingProgramOption,
@@ -65,6 +71,10 @@ export type {
   CityModifier,
   CityProduction,
   CoinSourceKey,
+  CultureShare,
+  DevoteToTheArtsOption,
+  HarvestChoiceView,
+  HarvestOption,
   HighscoreResult,
   Government,
   Item,
@@ -73,6 +83,8 @@ export type {
   PlayerStats,
   PlayerView,
   RevealedEntry,
+  ResourceKind,
+  ScoutSquare,
   SheetName,
   SocialPolicyItem,
   StartBuildingProgramOption,
@@ -827,6 +839,43 @@ export const api = {
       requestId,
       rev,
       cityPieceId,
+    }),
+  /**
+   * Devote one of the viewer's cities to the arts (assisted city action). `scoutPieceIds` are the
+   * scouts whose squares are sent to the city; `culture` is a number typed by hand instead of the
+   * estimate. Both are left out when not given.
+   */
+  devoteToTheArts: (
+    gameId: string,
+    requestId: string,
+    rev: number,
+    cityPieceId: string,
+    extra: { readonly scoutPieceIds?: readonly string[]; readonly culture?: number } = {},
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'devoteToTheArts',
+      requestId,
+      rev,
+      cityPieceId,
+      ...(extra.scoutPieceIds === undefined || extra.scoutPieceIds.length === 0 ? {} : { scoutPieceIds: extra.scoutPieceIds }),
+      ...(extra.culture === undefined ? {} : { culture: extra.culture }),
+    }),
+  /** Harvest one resource token with one of the viewer's cities; `scoutPieceId` when it is under a scout. */
+  harvest: (
+    gameId: string,
+    requestId: string,
+    rev: number,
+    cityPieceId: string,
+    resource: ResourceKind,
+    scoutPieceId?: string,
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'harvest',
+      requestId,
+      rev,
+      cityPieceId,
+      resource,
+      ...(scoutPieceId === undefined ? {} : { scoutPieceId }),
     }),
   /**
    * Flip the viewer's basic buildings to their upgraded form. `family` is the

@@ -282,7 +282,7 @@ const blockedReason = (result: ReturnType<typeof vote>): string => {
 
 describe('what a city offers: start a Building Program', () => {
   it('a city in an open City Management phase is ready and has no marker', () => {
-    expect(optionOf(ready())).toEqual({
+    expect(optionOf(ready())).toMatchObject({
       cityPieceId: cityOf(ready()).id,
       label: 'City B2',
       startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },

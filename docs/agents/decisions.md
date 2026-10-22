@@ -502,6 +502,52 @@ Source: `engine/src/build-options.ts`, `city-actions.ts`, `building-data.ts`, `w
 (remove), `web/src/views/BuildPicker.tsx`,
 `CityActions.tsx`, `CityCard.tsx`, `YourCities.tsx`, `buildFlow.ts` and the `assisted-build*` tests.
 
+## Devote to the Arts and Harvest
+
+Follow-up of issue #264, same branch and PR as the other city actions. Two buttons on the city
+card in Your actions, `devoteToTheArts` and `harvest` in `engine/src/assisted.ts`, with the same
+`/actions` route, request id rules and undo vote as every assisted action. `cityGatheringOf`
+(`engine/src/city-gather.ts`) reads what a city can gather from the board only; `cityActionsOf`
+adds the status (phase, market supply) and the projection carries it in `you.cityActions`.
+
+- **Icon data.** The resource icons (wheat, silk, incense, iron) and the culture icon of a natural
+  wonder are printed on the tile images only. `engine/data/tile-icons.json` records them, read by
+  eye from every tile image against the key on p. 7 of the base rulebook, in the printed
+  orientation like `tile-terrain.json` (`squareIconsOfCell` undoes the rotation). It is not checked
+  against a printed list: a wrong entry gives a wrong offer, and the manual path (drag the token,
+  edit the counter) is still there. A tile with no entry is unknown, not empty. Trade, production
+  and coin icons, huts and villages are not in it. Test `assisted-gather.test.ts` checks the file's
+  shape and the rotation.
+- **Devote to the Arts** (base rules p. 17; metropolis base 2 from Fame and Fortune): 1 culture
+  for the city (2 for a metropolis) plus the culture of each outskirts square: a building gives
+  its row of `building-data.ts` (it replaces the square's icons, p. 16), a bare square gives its
+  natural wonder icon. A square an enemy figure stands in gives nothing. The culture of a wonder or
+  a Great Person square, and the effects of a civilization, government, tech or card, are not known
+  and are named in the panel. The culture goes to `stats.culture`. The player may type another
+  number (0 to 99, `MAX_DEVOTE_CULTURE`); the log then says the estimate was something else.
+- **Harvest** (p. 18): one token of a resource whose icon is in the city's outskirts goes to the
+  player's area as a `resources/<name>` piece, which is where a resource is paid from. A blockaded
+  square gives nothing. A resource under a building, a wonder, a Great Person or a disaster token is
+  covered and cannot be harvested (the human's ruling, for the city and for a scout); the panel
+  names it. A disaster token covers the square's culture icon in Devote too (the human's ruling). The market is the supply of `board.ts` (as many as there are players, at most five, the
+  pieces on the board being what is gone); a kind that is out is listed disabled. Angkor Wat's
+  second harvest is not built.
+- **Scouts** (p. 26): a scout of the player's outside the city's own outskirts is offered with its
+  square's culture or resource. Which city a scout is sent to, and whether it was placed the turn
+  before, are not tracked, so every city offers every scout and the player chooses; the panel
+  says so. A scout's square is read with no blockade.
+- **Not tracked**, as the human decided for city actions: a city that has acted this turn, and the
+  rule that one resource icon cannot be harvested twice in a turn (FAQ). Both actions are
+  repeatable and the harvest panel and the FAQ say so.
+- **Undo.** Devote: refused when the culture has been spent (less than was added is left).
+  Harvest: refused when the token is gone or has left the player's area. The plain board Undo
+  cannot take the token back alone (`isAssistedBoardChange`).
+- **Payloads** are parsed strictly (`parseDevotePayload`, `parseHarvestPayload`).
+
+Source: `engine/src/city-gather.ts`, `tile-icons.ts`, `terrain.ts` (`tileSquareAt`),
+`city-actions.ts`, `assisted.ts`, `web/src/views/CityGather.tsx`, tests `assisted-gather.test.ts`,
+`CityGather.test.tsx` and `assisted-city-actions-api.test.ts`. Brief `tasks/assisted-gather.md`.
+
 ## Accounts, mail and ratings
 
 Legacy SHA-1 accounts upgrade to scrypt on successful login. Password reset

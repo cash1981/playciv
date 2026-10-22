@@ -32,6 +32,7 @@ import {
   AREA_LABEL_HEIGHT,
   CULTURE_VICTORY_STEP,
   areaAt,
+  areaSlotRegion,
   boardAreas,
   cultureCellCenter,
   cultureStepOf,
@@ -76,6 +77,7 @@ import {
 import type { CultureAdvanceCost, CultureLevel, CultureMarker, CultureSpace } from './culture-track.js'
 import { cultureHandBlock, cultureHandWarning } from './culture-hand.js'
 import type { EngineError } from './errors.js'
+import { MAX_DEVOTE_CULTURE } from './limits.js'
 import { itemName } from './item.js'
 import type { Item } from './item.js'
 import { appendLog } from './log.js'
@@ -83,6 +85,8 @@ import { nextId, shuffle } from './random.js'
 import type { Result } from './result.js'
 import { err, ok } from './result.js'
 import { SHEET_LABEL } from './sheet-name.js'
+import { RESOURCE_KINDS } from './tile-icons.js'
+import type { ResourceKind } from './tile-icons.js'
 import type { SheetName } from './sheet-name.js'
 import type {
   AssistedActionKind,
@@ -386,6 +390,23 @@ export interface StartBuildingProgramPayload {
 }
 
 /**
+ * What `devoteToTheArts` carries: the city, the scouts whose squares are sent to it, and
+ * optionally the culture the player typed instead of the estimate.
+ */
+export interface DevoteToTheArtsPayload {
+  readonly cityPieceId: string
+  readonly scoutPieceIds?: readonly string[]
+  readonly culture?: number
+}
+
+/** What `harvest` carries: the city, the resource, and the scout when the resource is under one rather than in the outskirts. */
+export interface HarvestPayload {
+  readonly cityPieceId: string
+  readonly resource: string
+  readonly scoutPieceId?: string
+}
+
+/**
  * What `upgradeBuildings` carries: the asset id of one basic building to flip
  * (`buildings/granary`), or nothing to flip every family that can be flipped.
  */
@@ -402,12 +423,14 @@ export type AssistedPayload =
   | ChooseRewardPayload
   | BuildPayload
   | StartBuildingProgramPayload
+  | DevoteToTheArtsPayload
+  | HarvestPayload
   | UpgradeBuildingsPayload
 
 interface ApplyContext {
   readonly requestId: string
   readonly at: string | undefined
-  /** Only `chooseReward`, `build`, `startBuildingProgram` and `upgradeBuildings` read it, each its own shape; every other action ignores it. */
+  /** Only `chooseReward`, `build`, `startBuildingProgram`, `devoteToTheArts`, `harvest` and `upgradeBuildings` read it, each its own shape; every other action ignores it. */
   readonly payload: AssistedPayload | undefined
   /**
    * True when the action was `used` this turn and the player confirmed using it
@@ -2158,6 +2181,230 @@ const startBuildingProgram: AssistedActionDefinition = {
   },
 }
 
+// -- Devote to the Arts -------------------------------------------------------------
+
+/** The `devoteToTheArts` payload, or `undefined` when the payload is another action's or missing. */
+const devotePayloadOf = (payload: AssistedPayload | undefined): DevoteToTheArtsPayload | undefined =>
+  payload !== undefined && 'cityPieceId' in payload && !('item' in payload) && !('resource' in payload)
+    ? payload
+    : undefined
+
+/** "B3", "B3 and C4", "B3, C4 and D5". */
+const listLabels = (labels: readonly string[]): string =>
+  labels.length <= 1 ? labels.join('') : `${labels.slice(0, -1).join(', ')} and ${labels.at(-1) ?? ''}`
+
+/**
+ * A city's action: take one culture token (two for a metropolis) plus one for each culture
+ * icon in its outskirts (base rules p. 17), here the sum `cityGatheringOf` reads off the
+ * board and the building table, plus the squares of the scouts the player sends to the city.
+ * The player may type another number when the estimate misses something it cannot see (a
+ * wonder, a card), as with the production figure: the log then says so. It is not once per
+ * turn and not marked on the city, as with the other city actions. The culture goes to the
+ * stock (`stats.culture`) and an undo takes it off again unless it has been spent.
+ */
+const devoteToTheArts: AssistedActionDefinition = {
+  kind: 'devoteToTheArts',
+  techName: null,
+  label: 'Devote to the Arts',
+  button: false,
+  usageKey: null,
+
+  availability(state, playerId) {
+    const player = playerOf(state, playerId)
+    if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
+    if (openCityManagementTurn(state, player) === undefined) return blocked('wrong-phase', PHASE_REASON)
+    if (cityActionsOf(state, player).length === 0) {
+      return blocked('unavailable', 'You have no city on the map to devote to the arts.')
+    }
+    return { status: 'ready', reason: 'Choose a city.' }
+  },
+
+  apply(state, player, context) {
+    const failed = (reason: string): EngineError => rejected('devoteToTheArts', blocked('unavailable', reason))
+    const payload = devotePayloadOf(context.payload)
+    if (payload === undefined) return err(failed('Say which city.'))
+
+    const city = cityActionsOf(state, player).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
+    if (city === undefined) return err(failed('That city is not yours, or it is no longer on the map.'))
+    const option = city.devoteToTheArts
+    if (option.status === 'wrong-phase') return err(rejected('devoteToTheArts', blocked('wrong-phase', option.reason)))
+
+    // The server checks the shape; the engine is also called with whatever a caller sent
+    const scoutIds: unknown = payload.scoutPieceIds ?? []
+    if (!Array.isArray(scoutIds) || scoutIds.some((id) => typeof id !== 'string') || new Set(scoutIds).size !== scoutIds.length) {
+      return err(failed('scoutPieceIds must be a list of different scout ids.'))
+    }
+    const scouts = (scoutIds as readonly string[]).map((id) => option.scouts.find((scout) => scout.pieceId === id))
+    const chosen = scouts.flatMap((scout) => (scout === undefined ? [] : [scout]))
+    if (chosen.length !== scouts.length) {
+      return err(failed(`A scout is not yours, stands inside ${city.label} or is on a square with no culture.`))
+    }
+    const typed: unknown = payload.culture
+    if (typed !== undefined && (typeof typed !== 'number' || !Number.isInteger(typed) || typed < 0 || typed > MAX_DEVOTE_CULTURE)) {
+      return err(failed(`culture must be a whole number from 0 to ${MAX_DEVOTE_CULTURE}.`))
+    }
+    const estimate = option.culture + chosen.reduce((total, scout) => total + scout.culture, 0)
+    const culture = typeof typed === 'number' ? typed : estimate
+
+    const stats = { ...player.stats, culture: player.stats.culture + culture }
+    const scoutText = chosen.length === 0 ? '' : `, with the squares of the scouts at ${listLabels(chosen.map((scout) => scout.square))}`
+    const handText = culture === estimate ? '' : ` (set by the player; the estimate was ${estimate})`
+    const logged = appendLog(withPlayerHand(state, { ...player, stats }), {
+      username: player.username,
+      playerId: player.playerId,
+      publicLog: `${player.username} devoted ${city.label} to the arts and gained ${culture} culture${scoutText}${handText}`,
+      privateLog: '',
+      createdAt: context.at ?? null,
+      assistedActionId: context.requestId,
+    })
+    return ok({
+      state: logged,
+      effect: { kind: 'devoteToTheArts', cityPieceId: city.cityPieceId, cityLabel: city.label, culture },
+      logId: lastLogId(logged),
+    })
+  },
+
+  reverse(state, player, record) {
+    const effect = record.effect
+    if (effect.kind !== 'devoteToTheArts') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+    if (player.stats.culture < effect.culture) {
+      return err({
+        kind: 'ASSISTED_UNDO_BLOCKED',
+        logId: record.logId,
+        reason: `Only ${player.stats.culture} culture is left, so the ${effect.culture} culture from ${effect.cityLabel} cannot be taken back. It has been spent, or the counter was changed by hand.`,
+      })
+    }
+    const stats = { ...player.stats, culture: player.stats.culture - effect.culture }
+    return ok({
+      state: withPlayerHand(state, { ...player, stats }),
+      text: `${player.username}'s devotion of ${effect.cityLabel} to the arts was undone: ${effect.culture} culture removed`,
+    })
+  },
+}
+
+// -- Harvest a resource -------------------------------------------------------------
+
+/** The `harvest` payload, or `undefined` when the payload is another action's or missing. */
+const harvestPayloadOf = (payload: AssistedPayload | undefined): HarvestPayload | undefined =>
+  payload !== undefined && 'cityPieceId' in payload && 'resource' in payload && !('item' in payload) ? payload : undefined
+
+/**
+ * A city's action: take one resource token of a kind whose icon is in its outskirts, or on the
+ * square of a scout the player sends to it, from the market to the player's area (base rules
+ * p. 18). One token per action; the market holds as many of a kind as there are players, up to
+ * five, and the pieces on the board are what is gone. The token is a board piece put in the
+ * player's own area, which is where a resource is paid from. Not once per turn, and the game
+ * does not stop the same icon from being harvested twice in a turn. An undo takes the token
+ * away again, unless it has been spent.
+ */
+const harvest: AssistedActionDefinition = {
+  kind: 'harvest',
+  techName: null,
+  label: 'Harvest a resource',
+  button: false,
+  usageKey: null,
+
+  availability(state, playerId) {
+    const player = playerOf(state, playerId)
+    if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
+    if (openCityManagementTurn(state, player) === undefined) return blocked('wrong-phase', PHASE_REASON)
+    if (cityActionsOf(state, player).length === 0) {
+      return blocked('unavailable', 'You have no city on the map to harvest with.')
+    }
+    return { status: 'ready', reason: 'Choose a city.' }
+  },
+
+  apply(state, player, context) {
+    const failed = (reason: string): EngineError => rejected('harvest', blocked('unavailable', reason))
+    const payload = harvestPayloadOf(context.payload)
+    if (payload === undefined) return err(failed('Say which city and which resource.'))
+    const resource: unknown = payload.resource
+    if (typeof resource !== 'string' || !RESOURCE_KINDS.includes(resource as ResourceKind)) {
+      return err(failed(`resource must be one of ${RESOURCE_KINDS.join(', ')}.`))
+    }
+    const scoutPieceId: unknown = payload.scoutPieceId
+    if (scoutPieceId !== undefined && typeof scoutPieceId !== 'string') return err(failed('scoutPieceId must be a scout id.'))
+
+    const city = cityActionsOf(state, player).find((candidate) => candidate.cityPieceId === payload.cityPieceId)
+    if (city === undefined) return err(failed('That city is not yours, or it is no longer on the map.'))
+    const option = city.harvest
+    if (option.status === 'wrong-phase') return err(rejected('harvest', blocked('wrong-phase', option.reason)))
+
+    const choice = option.choices.find(
+      (candidate) => candidate.resource === resource && candidate.scoutPieceId === (scoutPieceId ?? null),
+    )
+    if (choice === undefined) {
+      return err(
+        failed(
+          scoutPieceId === undefined
+            ? `${city.label} has no ${resource} icon in its outskirts.`
+            : `That scout is not yours, stands inside ${city.label} or is not on a ${resource} square.`,
+        ),
+      )
+    }
+    if (!choice.available) return err(failed(choice.unavailableReason ?? `The market has no ${resource} token left.`))
+
+    const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === player.playerId)
+    if (area === undefined) return err(failed('You have no player area to put the token in.'))
+    const region = areaSlotRegion(area)
+    const placed = placeUnchecked(state, {
+      playerId: player.playerId,
+      assetId: `resources/${resource}`,
+      x: region.x,
+      y: region.y,
+      ...(context.at === undefined ? {} : { at: context.at }),
+    })
+    const entry = placed?.board.history.at(-1)
+    if (placed === undefined || entry === undefined || entry.change.kind !== 'place') {
+      return err(failed(`The ${resource} token has no artwork to put on the board.`))
+    }
+    const piece = entry.change.piece
+
+    const logged = appendLog(placed, {
+      username: player.username,
+      playerId: player.playerId,
+      publicLog: `${player.username} harvested ${resource} with ${city.label} (${choice.label})`,
+      privateLog: '',
+      createdAt: context.at ?? null,
+      assistedActionId: context.requestId,
+    })
+    return ok({
+      state: countLinesIn(logged, [entry.id]),
+      effect: {
+        kind: 'harvest',
+        cityPieceId: city.cityPieceId,
+        cityLabel: city.label,
+        resource,
+        pieceId: piece.id,
+        historyId: entry.id,
+      },
+      logId: lastLogId(logged),
+    })
+  },
+
+  reverse(state, player, record, at) {
+    const effect = record.effect
+    if (effect.kind !== 'harvest') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+    const refused = (reason: string): EngineError => ({ kind: 'ASSISTED_UNDO_BLOCKED', logId: record.logId, reason })
+    const piece = state.board.pieces.find((candidate) => candidate.id === effect.pieceId)
+    if (piece === undefined) {
+      return err(refused(`The ${effect.resource} token from ${effect.cityLabel} is no longer on the board (it may have been spent), so this cannot be undone.`))
+    }
+    const inArea =
+      areaAt(playerAreas(state.board, state.players), piece.x + piece.width / 2, piece.y + piece.height / 2)?.playerId ===
+      player.playerId
+    if (!inArea) {
+      return err(refused(`The ${effect.resource} token has left your player area. Move it back first.`))
+    }
+    const removed = removePiece(state, { playerId: record.playerId, pieceId: effect.pieceId, ...(at === null ? {} : { at }) })
+    if (!removed.ok) return err(refused(`The ${effect.resource} token could not be taken off the board.`))
+    return ok({
+      state: removed.value,
+      text: `${player.username}'s harvest of ${effect.resource} with ${effect.cityLabel} was undone: the token was removed`,
+    })
+  },
+}
+
 // -- Upgrade buildings -------------------------------------------------------------
 
 /** The `upgradeBuildings` payload, or `undefined` when there is none or it is another action's. No payload means every family. */
@@ -2437,6 +2684,8 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   chooseReward,
   build,
   startBuildingProgram,
+  devoteToTheArts,
+  harvest,
   upgradeBuildings,
 ]
 

@@ -155,6 +155,35 @@ export function FaqView(): React.JSX.Element {
             as your other actions.
           </p>
         </CollapsiblePanel>
+
+        <CollapsiblePanel
+          id="faq-gather"
+          title="How do I devote a city to the arts or harvest a resource?"
+          defaultOpen={false}
+        >
+          <p className="faq-answer">
+            In your open City Management phase, press <strong>Devote to the Arts</strong> on your
+            city in Your actions. The panel adds up the culture: one for the city (two for a
+            metropolis), what the buildings in the outskirts give, and the culture icon of a natural
+            wonder. A scout of yours on another square can be sent to the city with a tick. Press{' '}
+            <strong>Devote and take N culture</strong> and the culture is added to your status.
+            Wonders, Great People and the effects of your civilization, government and cards are
+            not counted, so you can type another number: the log then says the estimate was
+            something else.
+          </p>
+          <p className="faq-answer">
+            <strong>Harvest</strong> lists the resources whose icon is in the city&rsquo;s
+            outskirts, or under one of your scouts. Press <strong>Take</strong> next to one and the
+            token is put in your player area, ready to pay for a card. A resource the market has
+            run out of is greyed out. An enemy figure on a square blockades it, and a building, wonder, Great Person or disaster token on a square covers its resource, so it cannot be harvested. A disaster token also covers the square's culture icon. The game does not
+            keep track of which city has acted or which scout has been sent where, and the rules say
+            one resource icon may be harvested only once a turn, so you watch that yourself. The map
+            icons were read by eye from the tile images and may be wrong; if so, place the token or
+            change the culture by hand as before. Both can be taken back with the same Undo vote as
+            your other actions, as long as the culture is not spent and the token is still in your
+            area.
+          </p>
+        </CollapsiblePanel>
       </div>
     </main>
   )

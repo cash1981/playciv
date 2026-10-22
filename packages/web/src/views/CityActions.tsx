@@ -32,7 +32,8 @@ export function useCityActionPress(
 ): {
   readonly sending: boolean
   readonly message: string | null
-  readonly press: (key: string, send: (requestId: string) => Promise<PlayerView>) => void
+  /** Resolves to true when the request went through, so the caller can close what it opened. */
+  readonly press: (key: string, send: (requestId: string) => Promise<PlayerView>) => Promise<boolean>
 } {
   const [sending, setSending] = useState(false)
   const [shown, setShown] = useState<{ readonly text: string; readonly rev: number } | null>(null)
@@ -40,8 +41,8 @@ export function useCityActionPress(
   const latestRev = useRef(view.rev)
   latestRev.current = view.rev
 
-  function press(key: string, send: (requestId: string) => Promise<PlayerView>): void {
-    if (sending || isPressInFlight(key)) return
+  function press(key: string, send: (requestId: string) => Promise<PlayerView>): Promise<boolean> {
+    if (sending || isPressInFlight(key)) return Promise.resolve(false)
     let failure: unknown = null
     const quietRun: Run = (action) =>
       run(async () => {
@@ -56,9 +57,10 @@ export function useCityActionPress(
       })
     setSending(true)
     setShown(null)
-    void pressOnce(key, quietRun, send, view).then(() => {
+    return pressOnce(key, quietRun, send, view).then((done) => {
       setSending(false)
       if (failure !== null) setShown({ text: errorMessage(failure), rev: latestRev.current })
+      return done
     })
   }
 
@@ -109,7 +111,7 @@ export function CityActions({
 
   function upgrade(family: UpgradeFamilyOption | null): void {
     const key = `${gameId}:${playerId}:upgradeBuildings:${family === null ? 'all' : family.basicAssetId}`
-    press(key, (requestId) =>
+    void press(key, (requestId) =>
       api.upgradeBuildings(gameId, requestId, rev, family === null ? undefined : family.basicAssetId),
     )
   }

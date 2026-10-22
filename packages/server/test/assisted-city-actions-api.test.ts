@@ -51,6 +51,16 @@ interface CityActionJson {
   readonly cityPieceId: string
   readonly label: string
   readonly startBuildingProgram: { readonly status: string; readonly reason: string; readonly hasMarker: boolean }
+  readonly devoteToTheArts: {
+    readonly status: string
+    readonly culture: number
+    readonly parts: readonly { readonly label: string; readonly amount: number }[]
+    readonly scouts: readonly { readonly pieceId: string; readonly square: string; readonly culture: number }[]
+  }
+  readonly harvest: {
+    readonly status: string
+    readonly choices: readonly { readonly resource: string; readonly label: string; readonly scoutPieceId: string | null; readonly available: boolean }[]
+  }
 }
 
 interface UpgradeJson {
@@ -64,6 +74,7 @@ interface UpgradeJson {
 interface View {
   readonly rev: number
   readonly you: {
+    readonly stats: { readonly culture: number }
     readonly cityActions?: readonly CityActionJson[]
     readonly upgradeOptions?: readonly UpgradeJson[]
   } | null
@@ -220,6 +231,8 @@ describe('the city actions in the projection', () => {
         cityPieceId: table.cityId,
         label: 'City B2',
         startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
+        devoteToTheArts: expect.objectContaining({ status: 'ready', culture: 2 }),
+        harvest: expect.objectContaining({ status: 'ready' }),
       },
     ])
     expect(mine.you?.upgradeOptions).toEqual([
@@ -801,5 +814,273 @@ describe('undo over HTTP', () => {
     expect(after.rev).toBe(upgraded.rev)
     expect(piecesOf(after, AQUEDUCT)).toHaveLength(2)
     expect(piecesOf(after, MARKER)).toHaveLength(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Devote to the Arts and Harvest
+// ---------------------------------------------------------------------------
+
+const TEMPLE = 'buildings/temple'
+
+const devoteBody = (table: Table, requestId: string, rev: number, extra: Record<string, unknown> = {}) => ({
+  action: 'devoteToTheArts',
+  requestId,
+  rev,
+  cityPieceId: table.cityId,
+  ...extra,
+})
+
+const harvestBody = (table: Table, requestId: string, rev: number, resource: string, extra: Record<string, unknown> = {}) => ({
+  action: 'harvest',
+  requestId,
+  rev,
+  cityPieceId: table.cityId,
+  resource,
+  ...extra,
+})
+
+describe('what the viewer is offered', () => {
+  it('lists the culture with its parts and the resources of the outskirts, for the owner only', async () => {
+    const table = await buildTable('Offer', { buildings: [[TEMPLE, 0, 2]] })
+    const mine = (await view(table.gameId, table.starter)).you?.cityActions?.[0]
+    expect(mine?.devoteToTheArts.culture).toBe(3)
+    expect(mine?.devoteToTheArts.parts).toEqual([
+      { label: 'The city itself', amount: 1 },
+      { label: 'Temple at A3', amount: 2 },
+    ])
+    // America: iron on A1 and incense on C3 are in the outskirts; the silk on B2 is under the city
+    expect(mine?.harvest.choices.map((choice) => [choice.resource, choice.label])).toEqual([
+      ['incense', 'Incense at C3'],
+      ['iron', 'Iron at A1'],
+    ])
+    const theirs = await view(table.gameId, table.other)
+    expect(theirs.you?.cityActions ?? []).toEqual([])
+    const spectator = await view(table.gameId)
+    expect(spectator.you).toBeNull()
+  })
+})
+
+describe('devoting a city to the arts over HTTP', () => {
+  it('adds the culture, answers with the projection and logs one public line', async () => {
+    const table = await buildTable('Devote', { buildings: [[TEMPLE, 0, 2]] })
+    const before = await view(table.gameId, table.starter)
+    const response = await post(table.starter, actions(table), devoteBody(table, 'devote-1', before.rev))
+    expect(response.status).toBe(200)
+    const after = await response.json<View>()
+    expect(after.rev).toBe(before.rev + 1)
+    expect(after.you?.stats.culture).toBe((before.you?.stats.culture ?? 0) + 3)
+    expect(after.assistedActions).toEqual([
+      expect.objectContaining({
+        id: 'devote-1',
+        kind: 'devoteToTheArts',
+        label: 'Devote to the Arts',
+        status: 'applied',
+        text: `${table.starterName} devoted City B2 to the arts and gained 3 culture`,
+      }),
+    ])
+    const publicLog = await inject(app, { url: `/api/games/${table.gameId}/log/public`, headers: bearer(table.other) })
+    expect(publicLog.body).toContain('devoted City B2 to the arts and gained 3 culture')
+  })
+
+  it('adds the culture of a scout that is sent, and refuses a scout that is not offered', async () => {
+    const table = await buildTable('DevoteScout')
+    let state = await stored(table)
+    const colour = (state.players.find((player) => player.playerId === table.starterId)?.color ?? '').toLowerCase()
+    const at = (assetId: string, column: number, row: number): void => {
+      state = unwrap(placePiece(state, {
+        playerId: table.starterId,
+        assetId,
+        x: column * SQUARE_SIZE + 4,
+        y: mapTop(state.board) + row * SQUARE_SIZE + 4,
+      }))
+    }
+    // A Temple (2 culture) far from the city, with a scout of the starter's on it
+    at(TEMPLE, 6, 6)
+    at(`figures/${colour}scout`, 6, 6)
+    await repo.saveGame(state)
+
+    const offered = (await view(table.gameId, table.starter)).you?.cityActions?.[0]?.devoteToTheArts.scouts ?? []
+    expect(offered).toHaveLength(1)
+    expect(offered[0]).toMatchObject({ square: 'G7', culture: 2 })
+
+    const before = await view(table.gameId, table.starter)
+    const bad = await post(table.starter, actions(table), devoteBody(table, 'devote-bad', before.rev, { scoutPieceIds: ['nope'] }))
+    expect(bad.status).toBe(400)
+    expect(await bad.json()).toMatchObject({ message: expect.stringContaining('A scout is not yours') })
+
+    const ok = await post(table.starter, actions(table), devoteBody(table, 'devote-1', before.rev, { scoutPieceIds: [offered[0]?.pieceId] }))
+    expect(ok.status).toBe(200)
+    expect((await ok.json<View>()).you?.stats.culture).toBe((before.you?.stats.culture ?? 0) + 3)
+    expect((await stored(table)).log.at(-1)?.publicLog).toContain('gained 3 culture, with the squares of the scouts at G7')
+  })
+
+  it('takes the number typed by hand', async () => {
+    const table = await buildTable('DevoteHand')
+    const response = await post(table.starter, actions(table), devoteBody(table, 'devote-1', await revOf(table), { culture: 7 }))
+    expect(response.status).toBe(200)
+    expect((await stored(table)).log.at(-1)?.publicLog).toContain('gained 7 culture (set by the player; the estimate was 1)')
+  })
+
+  it('a retry with the same request id adds once and creates no revision', async () => {
+    const table = await buildTable('DevoteRetry')
+    const rev = await revOf(table)
+    const first = await (await post(table.starter, actions(table), devoteBody(table, 'devote-1', rev))).json<View>()
+    const again = await post(table.starter, actions(table), devoteBody(table, 'devote-1', first.rev))
+    expect(again.status).toBe(200)
+    expect((await again.json<View>()).rev).toBe(first.rev)
+    expect((await again.json<View>()).you?.stats.culture).toBe(first.you?.stats.culture)
+  })
+
+  it('a stale rev is a 409 and adds nothing', async () => {
+    const table = await buildTable('DevoteStale')
+    const rev = await revOf(table)
+    await post(table.starter, actions(table), devoteBody(table, 'devote-1', rev))
+    const stale = await post(table.starter, actions(table), devoteBody(table, 'devote-2', rev))
+    expect(stale.status).toBe(409)
+  })
+
+  it('outside City Management it is a 400 with the phase reason, and a stranger gets 403', async () => {
+    const table = await buildTable('DevotePhase', { closed: true })
+    const rev = await revOf(table)
+    const closed = await post(table.starter, actions(table), devoteBody(table, 'devote-1', rev))
+    expect(closed.status).toBe(400)
+    expect(await closed.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED', message: 'Only available during your open City Management phase.' })
+    const outsider = await register('DevotePhase-spectator')
+    expect((await post(outsider, actions(table), devoteBody(table, 'devote-2', rev))).status).toBe(403)
+  })
+
+  it('the other player cannot devote the starter\'s city', async () => {
+    const table = await buildTable('DevoteTheirs')
+    const response = await post(table.other, actions(table), devoteBody(table, 'devote-1', await revOf(table)))
+    expect(response.status).toBeGreaterThanOrEqual(400)
+    expect((await stored(table)).assistedActions).toEqual([])
+  })
+
+  it('is undone by the vote, which takes the culture off again', async () => {
+    const table = await buildTable('DevoteUndo')
+    const before = await view(table.gameId, table.starter)
+    await post(table.starter, actions(table), devoteBody(table, 'devote-1', before.rev))
+    const logId = (await view(table.gameId, table.other)).assistedActions[0]?.logId as string
+    expect((await post(table.other, `/api/games/${table.gameId}/undo/${logId}`, {})).status).toBe(200)
+    const voted = await post(table.starter, `/api/games/${table.gameId}/undo/${logId}/vote`, { vote: true })
+    expect(voted.status).toBe(200)
+    const after = await voted.json<View>()
+    expect(after.assistedActions[0]?.status).toBe('undone')
+    expect(after.you?.stats.culture).toBe(before.you?.stats.culture)
+  })
+})
+
+describe('harvesting a resource over HTTP', () => {
+  it('puts the token in the starter\'s area, answers with the projection and logs one public line', async () => {
+    const table = await buildTable('Harvest')
+    const before = await view(table.gameId, table.starter)
+    const response = await post(table.starter, actions(table), harvestBody(table, 'harvest-1', before.rev, 'iron'))
+    expect(response.status).toBe(200)
+    const after = await response.json<View>()
+    expect(after.rev).toBe(before.rev + 1)
+    expect(after.board.pieces.filter((piece) => piece.assetId === 'resources/iron')).toHaveLength(1)
+    expect(after.assistedActions).toEqual([
+      expect.objectContaining({
+        id: 'harvest-1',
+        kind: 'harvest',
+        label: 'Harvest a resource',
+        status: 'applied',
+        text: `${table.starterName} harvested iron with City B2 (Iron at A1)`,
+      }),
+    ])
+  })
+
+  it('a retry with the same request id harvests once', async () => {
+    const table = await buildTable('HarvestRetry')
+    const rev = await revOf(table)
+    const first = await (await post(table.starter, actions(table), harvestBody(table, 'harvest-1', rev, 'iron'))).json<View>()
+    const again = await post(table.starter, actions(table), harvestBody(table, 'harvest-1', first.rev, 'iron'))
+    expect(again.status).toBe(200)
+    expect(piecesOf(await stored(table), 'resources/iron')).toHaveLength(1)
+  })
+
+  it('a resource the city has no icon for is a 400 with the reason, and nothing is placed', async () => {
+    const table = await buildTable('HarvestNone')
+    const response = await post(table.starter, actions(table), harvestBody(table, 'harvest-1', await revOf(table), 'wheat'))
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: 'ASSISTED_ACTION_REJECTED',
+      message: expect.stringContaining('has no wheat icon in its outskirts'),
+    })
+    expect(piecesOf(await stored(table), 'resources/wheat')).toEqual([])
+  })
+
+  it('outside City Management it is a 400 with the phase reason', async () => {
+    const table = await buildTable('HarvestPhase', { closed: true })
+    const response = await post(table.starter, actions(table), harvestBody(table, 'harvest-1', await revOf(table), 'iron'))
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({ message: 'Only available during your open City Management phase.' })
+  })
+
+  it('is undone by the vote, which takes the token away again', async () => {
+    const table = await buildTable('HarvestUndo')
+    await post(table.starter, actions(table), harvestBody(table, 'harvest-1', await revOf(table), 'iron'))
+    const logId = (await view(table.gameId, table.other)).assistedActions[0]?.logId as string
+    expect((await post(table.other, `/api/games/${table.gameId}/undo/${logId}`, {})).status).toBe(200)
+    const voted = await post(table.starter, `/api/games/${table.gameId}/undo/${logId}/vote`, { vote: true })
+    expect(voted.status).toBe(200)
+    expect(piecesOf(await stored(table), 'resources/iron')).toEqual([])
+  })
+})
+
+describe('the devote and harvest payloads', () => {
+  const refused = async (name: string, body: (table: Table, rev: number) => Record<string, unknown>): Promise<string> => {
+    const table = await buildTable(name)
+    const response = await post(table.starter, actions(table), body(table, await revOf(table)))
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({ error: 'BAD_REQUEST' })
+    const state = await stored(table)
+    expect(state.assistedActions).toEqual([])
+    return JSON.stringify(await response.json())
+  }
+
+  it('devoteToTheArts wants a city piece id, scouts that are a short list of ids and a culture from 0 to 99', async () => {
+    await refused('DNoCity', (table, rev) => ({ ...devoteBody(table, 'd-1', rev), cityPieceId: undefined }))
+    await refused('DOddCity', (table, rev) => devoteBody(table, 'd-1', rev, { cityPieceId: 'a city' }))
+    await refused('DScouts', (table, rev) => devoteBody(table, 'd-1', rev, { scoutPieceIds: 'scout-1' }))
+    await refused('DScoutNumber', (table, rev) => devoteBody(table, 'd-1', rev, { scoutPieceIds: [1] }))
+    await refused('DScoutMany', (table, rev) => devoteBody(table, 'd-1', rev, { scoutPieceIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }))
+    for (const [index, culture] of [-1, 100, 1.5, '3', null].entries()) {
+      expect(await refused(`DCulture${index}`, (table, rev) => devoteBody(table, 'd-1', rev, { culture }))).toContain(
+        'culture must be a whole number from 0 to 99',
+      )
+    }
+  })
+
+  it('devoteToTheArts takes no other field', async () => {
+    for (const [name, extra] of [['Item', { item: { kind: 'army' } }], ['Resource', { resource: 'iron' }], ['Family', { family: GRANARY }], ['Unknown', { colour: 'red' }]] as const) {
+      expect(await refused(`DExtra${name}`, (table, rev) => devoteBody(table, 'd-1', rev, extra))).toContain('devoteToTheArts takes only')
+    }
+  })
+
+  it('harvest wants a city piece id, one of the four resources and a scout id of plain characters', async () => {
+    await refused('HNoResource', (table, rev) => ({ ...harvestBody(table, 'h-1', rev, 'iron'), resource: undefined }))
+    await refused('HOddResource', (table, rev) => harvestBody(table, 'h-1', rev, 'gold'))
+    await refused('HUranium', (table, rev) => harvestBody(table, 'h-1', rev, 'uranium'))
+    await refused('HNumberResource', (table, rev) => harvestBody(table, 'h-1', rev, '', { resource: 3 }))
+    await refused('HOddScout', (table, rev) => harvestBody(table, 'h-1', rev, 'iron', { scoutPieceId: 'a scout' }))
+    await refused('HNumberScout', (table, rev) => harvestBody(table, 'h-1', rev, 'iron', { scoutPieceId: 4 }))
+  })
+
+  it('harvest takes no other field', async () => {
+    for (const [name, extra] of [['Culture', { culture: 3 }], ['Scouts', { scoutPieceIds: [] }], ['Item', { item: { kind: 'army' } }]] as const) {
+      expect(await refused(`HExtra${name}`, (table, rev) => harvestBody(table, 'h-1', rev, 'iron', extra))).toContain('harvest takes only')
+    }
+  })
+
+  it('their fields are refused on any other action', async () => {
+    const table = await buildTable('Stray2')
+    const rev = await revOf(table)
+    for (const extra of [{ resource: 'iron' }, { scoutPieceId: 'scout-1' }, { scoutPieceIds: [] }, { culture: 2 }]) {
+      const response = await post(table.starter, actions(table), { action: 'cultureAdvance', requestId: 'req-1', rev, ...extra })
+      expect(response.status).toBe(400)
+      expect(JSON.stringify(await response.json())).toContain('only belong to devoteToTheArts')
+    }
   })
 })

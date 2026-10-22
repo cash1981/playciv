@@ -7,3 +7,6 @@
 
 /** The largest production a player may type in for a city. */
 export const MAX_PRODUCTION_OVERRIDE = 99
+
+/** The largest culture a player may type in when devoting a city to the arts. */
+export const MAX_DEVOTE_CULTURE = 99

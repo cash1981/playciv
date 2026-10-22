@@ -8,6 +8,20 @@ import type { BuildFlow } from './buildFlow.js'
 import type { Run } from './GameView.js'
 import { YourCities } from './YourCities.js'
 
+/** The two gather options every city has; these tests are about the Building Program and the Upgrades. */
+const GATHER: Pick<CityActionOptions, 'devoteToTheArts' | 'harvest'> = {
+  devoteToTheArts: {
+    status: 'ready',
+    reason: 'Ready to devote this city to the arts.',
+    culture: 1,
+    parts: [{ label: 'The city itself', amount: 1 }],
+    notes: [],
+    scouts: [],
+  },
+  harvest: { status: 'unavailable', reason: 'No resource icon in the outskirts.', choices: [], notes: [] },
+}
+
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
@@ -46,6 +60,7 @@ const buildOptions = (cityPieceId: string, label: string): CityBuildOptions => (
 const startProgram = (cityPieceId: string, label: string): CityActionOptions => ({
   cityPieceId,
   label,
+  ...GATHER,
   startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
 })
 

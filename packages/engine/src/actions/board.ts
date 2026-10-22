@@ -681,6 +681,8 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     }
     // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip
     if (effect.kind === 'startBuildingProgram') return effect.historyId === entry.id
+    // A harvest put one resource token in the player's area
+    if (effect.kind === 'harvest') return effect.historyId === entry.id
     if (effect.kind === 'upgradeBuildings') {
       return effect.flipped.some((flip) => flip.removedHistoryId === entry.id || flip.placedHistoryId === entry.id)
     }
