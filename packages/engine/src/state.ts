@@ -402,7 +402,7 @@ export type AssistedEffect =
   | {
       readonly kind: 'build'
       readonly cityPieceId: string
-      /** What was built: a building or a figure, which stands on the map. */
+      /** What was built: a building, a wonder or a figure, which stands on the map. */
       readonly item: PlacedBuildItem
       /** The map square, as numbers from the map's top left corner, and the label the log used. */
       readonly square: { readonly column: number; readonly row: number; readonly label: string }
@@ -410,6 +410,11 @@ export type AssistedEffect =
       readonly pieceId: string
       readonly position: { readonly x: number; readonly y: number }
       readonly historyId: string
+      /**
+       * A wonder is not placed but moved out of the market: where it stood there, and the
+       * board history entry that made the player its owner. Absent for a building and a figure.
+       */
+      readonly wonder?: { readonly from: { readonly x: number; readonly y: number }; readonly ownerHistoryId: string }
       /** The trade paid for the missing production; 0 when the city's production was enough. */
       readonly trade: number
       /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */

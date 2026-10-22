@@ -25,7 +25,7 @@
  * `openCityManagementTurn` back.
  */
 
-import { movePieceUnchecked, placeUnchecked, removePiece } from './actions/board.js'
+import { movePieceUnchecked, placeUnchecked, removePiece, setWonderOwner } from './actions/board.js'
 import { reshuffleItems } from './actions/draw.js'
 import { GREAT_PERSON_CARD_TYPES, blockadedPieceIds, cityFootprintsOf, mapCellOf } from './blockade.js'
 import {
@@ -36,11 +36,12 @@ import {
   cultureCellCenter,
   cultureStepOf,
   findBoardAsset,
+  isInWondersArea,
   locationOf,
   playerAreas,
   remainingBoardAssetCount,
 } from './board.js'
-import type { BoardPiece } from './board.js'
+import type { Board, BoardPiece } from './board.js'
 import { sameBuildItem } from './build-item.js'
 import type { PlacedBuildItem, UnitType } from './build-item.js'
 import {
@@ -48,6 +49,7 @@ import {
   buildOptionsOf,
   buildSquareRefusal,
   figureAssetIdOf,
+  marketWondersOf,
   squareCentre,
   squareLabel,
   unitSheetOf,
@@ -428,11 +430,17 @@ type AssistedActionDefinition = {
   readonly usageKey: string | null
   availability(state: GameState, playerId: string): AssistedAvailability
   apply(state: GameState, player: Playerhand, context: ApplyContext): Result<Applied, EngineError>
+  /**
+   * Takes the action back. `pieceMayHaveMoved` is set when the owner removes the
+   * placed piece by hand: the piece is then wherever it was moved to, so a build
+   * and a Building Program start do not insist that it is still on its square.
+   */
   reverse(
     state: GameState,
     player: Playerhand,
     record: AssistedActionRecord,
     at: string | null,
+    pieceMayHaveMoved?: boolean,
   ): Result<Reversed, EngineError>
 }
 
@@ -1497,6 +1505,18 @@ const cultureAdvance: AssistedActionDefinition = {
 // -- Build ---------------------------------------------------------------------
 
 /** "a Library", "an Academy", "an army", "a mounted unit": by the first letter, with "a University" as the exception since it starts with a vowel but is said with a consonant. */
+/** Whether a wonder other than `pieceId` sits in the Wonders area at (or on top of) the spot a wonder is to be put back to. */
+function marketSpotTaken(board: Board, pieceId: string, spot: { readonly x: number; readonly y: number }): boolean {
+  return board.pieces.some(
+    (other) =>
+      other.id !== pieceId &&
+      other.category === 'wonder' &&
+      isInWondersArea(board, other) &&
+      Math.abs(other.x - spot.x) < other.width / 2 &&
+      Math.abs(other.y - spot.y) < other.height / 2,
+  )
+}
+
 const withArticle = (label: string): string => `${/^[aeiou]/i.test(label) && !/^uni/i.test(label) ? 'an' : 'a'} ${label}`
 
 /** The `build` payload, or `undefined` when the payload is another action's or missing. */
@@ -1511,6 +1531,8 @@ type Made =
       readonly square: { readonly column: number; readonly row: number; readonly label: string }
       readonly piece: BoardPiece
       readonly historyId: string
+      /** Only for a wonder, which was moved out of the market: see the `build` effect. */
+      readonly wonder?: { readonly from: { readonly x: number; readonly y: number }; readonly ownerHistoryId: string }
     }
   | {
       readonly kind: 'card'
@@ -1531,6 +1553,7 @@ function placeBuilt(
   square: BuildSquare,
   at: { readonly at?: string },
 ): Result<Made, string> {
+  if (item.kind === 'wonder') return placeWonder(state, player, item.assetId, square, at)
   const assetId =
     item.kind === 'building'
       ? item.assetId
@@ -1564,6 +1587,55 @@ function placeBuilt(
     square: { column: square.column, row: square.row, label: square.label },
     piece,
     historyId: entry.id,
+  })
+}
+
+/**
+ * Takes a wonder out of the market, centred on its square, and makes the player its
+ * owner: two board history entries, the move and the owner. The wonder is a piece that
+ * is already on the board, in the shared Wonders area, so nothing new is placed. `Err`
+ * is a sentence for the player and nothing is changed.
+ */
+function placeWonder(
+  state: GameState,
+  player: Playerhand,
+  assetId: string,
+  square: BuildSquare,
+  at: { readonly at?: string },
+): Result<Made, string> {
+  const name = buildItemName({ kind: 'wonder', assetId })
+  const piece = marketWondersOf(state.board, state.board.pieces).find((candidate) => candidate.assetId === assetId)
+  if (piece === undefined) return err(`${name} is not in the market.`)
+
+  const centre = squareCentre(state.board, square)
+  const moved = movePieceUnchecked(state, {
+    playerId: player.playerId,
+    pieceId: piece.id,
+    x: centre.x - piece.width / 2,
+    y: centre.y - piece.height / 2,
+    snap: false,
+    ...at,
+  })
+  const placed = moved?.board.pieces.find((candidate) => candidate.id === piece.id)
+  const moveEntry = moved?.board.history.at(-1)
+  if (moved === undefined || placed === undefined || moveEntry === undefined || moveEntry.change.kind !== 'move') {
+    return err(`${name} could not be placed.`)
+  }
+  const landed = mapCellOf(moved.board, placed)
+  if (landed === null || landed.column !== square.column || landed.row !== square.row) {
+    return err(`${name} could not be placed on ${square.label}.`)
+  }
+
+  const owned = setWonderOwner(moved, { playerId: player.playerId, pieceId: piece.id, ownerId: player.playerId, ...at })
+  const ownerEntry = owned.ok ? owned.value.board.history.at(-1) : undefined
+  if (!owned.ok || ownerEntry === undefined) return err(`${name} could not be given to you.`)
+  return ok({
+    kind: 'placed',
+    state: owned.value,
+    square: { column: square.column, row: square.row, label: square.label },
+    piece: placed,
+    historyId: moveEntry.id,
+    wonder: { from: { x: piece.x, y: piece.y }, ownerHistoryId: ownerEntry.id },
   })
 }
 
@@ -1622,7 +1694,7 @@ const build: AssistedActionDefinition = {
     if (payload === undefined) return err(failed('Say which city, what to build and which square.'))
     const { item } = payload
     // The server checks the shape; the engine is also called with whatever a caller sent
-    if (!['building', 'army', 'scout', 'unit'].includes(item.kind)) {
+    if (!['building', 'wonder', 'army', 'scout', 'unit'].includes(item.kind)) {
       return err(failed('That is not something that can be built.'))
     }
 
@@ -1639,7 +1711,9 @@ const build: AssistedActionDefinition = {
           why === undefined
             ? item.kind === 'building'
               ? `${item.assetId} is not a building that can be built.`
-              : `A ${label} cannot be built.`
+              : item.kind === 'wonder'
+                ? `${label} is not a wonder that can be built: it is not in the market.`
+                : `A ${label} cannot be built.`
             : `${why.label} cannot be built in ${city.label} now. ${why.reason}`,
         ),
       )
@@ -1712,7 +1786,7 @@ const build: AssistedActionDefinition = {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        `${player.username} built ${withArticle(label)} in ${city.label}${where}` +
+        `${player.username} built ${payload.item.kind === 'wonder' ? label.replace(/^The /, 'the ') : withArticle(label)} in ${city.label}${where}` +
         (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} trade for the missing production` : '') +
         (removal === null ? '' : ', using up the Building Program marker'),
       privateLog: '',
@@ -1731,7 +1805,11 @@ const build: AssistedActionDefinition = {
           })
         : logged
     // The board changes were recorded before the line existed: count it in, as the culture advance does
-    const counted = countLinesIn(withPrivate, [made.kind === 'placed' ? made.historyId : undefined, removal?.historyId])
+    const counted = countLinesIn(withPrivate, [
+      made.kind === 'placed' ? made.historyId : undefined,
+      made.kind === 'placed' ? made.wonder?.ownerHistoryId : undefined,
+      removal?.historyId,
+    ])
 
     if (made.kind === 'card') {
       if (payload.item.kind !== 'unit') return err(failed('That is not a unit.'))
@@ -1762,6 +1840,7 @@ const build: AssistedActionDefinition = {
         pieceId: made.piece.id,
         position: { x: made.piece.x, y: made.piece.y },
         historyId: made.historyId,
+        ...(made.wonder === undefined ? {} : { wonder: made.wonder }),
         trade: choice.tradeToPay,
         marker: removal,
       },
@@ -1769,7 +1848,7 @@ const build: AssistedActionDefinition = {
     })
   },
 
-  reverse(state, player, record, at) {
+  reverse(state, player, record, at, pieceMayHaveMoved = false) {
     const effect = record.effect
     if (effect.kind !== 'build') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const refused = (reason: string): EngineError => ({
@@ -1812,12 +1891,45 @@ const build: AssistedActionDefinition = {
 
     // Everything is checked before anything is changed, so a refusal leaves the game as it was.
     const piece = state.board.pieces.find((candidate) => candidate.id === effect.pieceId)
+    // A wonder's name already is a name ("The Colossus"): "The Library" and "The army", but not "The The Colossus"
+    const subject = effect.item.kind === 'wonder' ? label : `The ${label}`
     if (piece === undefined) {
-      return err(refused(`The ${label} is no longer on the board, so the build cannot be undone.`))
+      return err(refused(`${subject} is no longer on the board, so the build cannot be undone.`))
     }
     const cell = mapCellOf(state.board, piece)
-    if (cell === null || cell.column !== effect.square.column || cell.row !== effect.square.row) {
-      return err(refused(`The ${label} has left ${effect.square.label}. Move it back first.`))
+    if (!pieceMayHaveMoved && (cell === null || cell.column !== effect.square.column || cell.row !== effect.square.row)) {
+      return err(refused(`${subject} has left ${effect.square.label}. Move it back first.`))
+    }
+
+    // A wonder goes back to the market where it stood, and nobody owns it any more
+    if (effect.wonder !== undefined) {
+      const stamp = at === null ? {} : { at }
+      const unowned = setWonderOwner(withPlayerHand(state, refunded), {
+        playerId: record.playerId,
+        pieceId: effect.pieceId,
+        ownerId: null,
+        ...stamp,
+      })
+      const returned = unowned.ok
+        ? movePieceUnchecked(unowned.value, {
+            playerId: record.playerId,
+            pieceId: effect.pieceId,
+            x: effect.wonder.from.x,
+            y: effect.wonder.from.y,
+            // Where it stood, unless another wonder has been drawn into that spot since: then the next free one
+            snap: marketSpotTaken(state.board, effect.pieceId, effect.wonder.from),
+            ...stamp,
+          })
+        : undefined
+      if (returned === undefined) return err(refused(`${subject} could not be put back in the market.`))
+      const withMarker = effect.marker === null ? returned : placeBack(returned, refunded, effect.marker.piece, at)
+      return ok({
+        state: withMarker,
+        text:
+          `${player.username}'s ${label.replace(/^The /, '')} on ${effect.square.label} was undone: the wonder was put back in the market` +
+          tradeText +
+          markerText,
+      })
     }
 
     const removed = removePiece(withPlayerHand(state, refunded), {
@@ -1928,7 +2040,7 @@ const startBuildingProgram: AssistedActionDefinition = {
     })
   },
 
-  reverse(state, player, record, at) {
+  reverse(state, player, record, at, pieceMayHaveMoved = false) {
     const effect = record.effect
     if (effect.kind !== 'startBuildingProgram') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const refused = (reason: string): EngineError => ({
@@ -1946,7 +2058,7 @@ const startBuildingProgram: AssistedActionDefinition = {
       )
     }
     const cell = mapCellOf(state.board, piece)
-    if (cell === null || cell.column !== effect.square.column || cell.row !== effect.square.row) {
+    if (!pieceMayHaveMoved && (cell === null || cell.column !== effect.square.column || cell.row !== effect.square.row)) {
       return err(refused(`The Building Program marker has left the centre of ${effect.cityLabel}. Move it back first.`))
     }
     const removed = removePiece(state, {
@@ -2427,6 +2539,7 @@ export function reverseAssistedAction(
   state: GameState,
   recordId: string,
   at?: string,
+  removedByHand = false,
 ): Result<GameState, EngineError> {
   const record = state.assistedActions.find((candidate) => candidate.id === recordId)
   if (record === undefined) return err({ kind: 'NOTHING_TO_UNDO', logId: recordId })
@@ -2438,7 +2551,7 @@ export function reverseAssistedAction(
   if (definition === undefined) return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
   if (player === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId: record.playerId })
 
-  const reversed = definition.reverse(state, player, record, at ?? null)
+  const reversed = definition.reverse(state, player, record, at ?? null, removedByHand)
   if (!reversed.ok) return reversed
 
   const current = playerOf(reversed.value.state, record.playerId) ?? player
@@ -2463,7 +2576,8 @@ export function reverseAssistedAction(
       : freeTurnAction(marked, current, record.turnNumber, record.usageKey)
   const logged = appendLog(freed, {
     username: 'System',
-    publicLog: `System: ${reversed.value.text}`,
+    // The original line stays; a piece taken off by hand adds this one, so the log shows what happened to it
+    publicLog: `System: ${reversed.value.text}${removedByHand ? '. It was removed before End turn.' : ''}`,
     createdAt: at ?? null,
   })
   // The board changes the reversal made were recorded before this line existed:
@@ -2480,4 +2594,67 @@ export function reverseAssistedAction(
       ),
     },
   })
+}
+
+/**
+ * The applied build or Building Program start that put this piece on the board, while
+ * its City Management is still open: the owner has not pressed End turn for that phase.
+ * Only the owner's own piece counts. `undefined` for any other piece.
+ */
+function openBuildOf(state: GameState, playerId: string, pieceId: string): AssistedActionRecord | undefined {
+  const currentTurn = turnStatus(state).currentTurn
+  // The newest first: a wonder keeps its piece id from one build to the next
+  return [...state.assistedActions].reverse().find((record) => {
+    if (record.status !== 'applied' || record.playerId !== playerId) return false
+    const effect = record.effect
+    const placedHere =
+      (effect.kind === 'build' && 'pieceId' in effect && effect.pieceId === pieceId) ||
+      (effect.kind === 'startBuildingProgram' && effect.pieceId === pieceId)
+    if (!placedHere) return false
+    // Only the turn that is being played: a phase unmarked in an older turn does not reopen its builds
+    if (record.turnNumber !== currentTurn) return false
+    const turn = playerOf(state, playerId)?.playerTurns.find((candidate) => candidate.turnNumber === record.turnNumber)
+    return turn?.done?.[record.phase] !== true
+  })
+}
+
+/**
+ * The owner takes a piece that a build put on the board off it again, before pressing
+ * End turn for City Management: the whole build is taken back, as an undo vote would, so
+ * the trade comes back and a used Building Program marker is put back, and a new System
+ * line says so. The line that reported the build stays. The piece may have been moved
+ * since; it is taken off wherever it is.
+ *
+ * `undefined` when the piece is not a build's piece, when it is not the owner who removes
+ * it, or when End turn has been pressed for that turn's City Management: the caller then
+ * removes it as any other piece, and from then on it is a plain removal. A unit places
+ * nothing and is never taken back this way. After a take-back the board Undo cannot go back
+ * past it (`undoFloor`, as after taking back a civilization reveal), so it cannot restore the
+ * piece alone.
+ */
+export function takeBackOpenBuild(
+  state: GameState,
+  input: { readonly playerId: string; readonly pieceId: string; readonly at?: string },
+): Result<GameState, EngineError> | undefined {
+  const record = openBuildOf(state, input.playerId, input.pieceId)
+  if (record === undefined) return undefined
+  const reversed = reverseAssistedAction(state, record.id, input.at, true)
+  if (!reversed.ok) return reversed
+
+  // A vote that was asked on the build's line is answered by this: close it, or it would
+  // stay on every player's list of votes waiting and no vote could ever pass.
+  const next = reversed.value
+  const asked = next.log.find((entry) => entry.id === record.logId)
+  const closed =
+    asked === undefined || asked.undo === null || asked.undo.done
+      ? next
+      : {
+          ...next,
+          log: next.log.map((entry) =>
+            entry.id === asked.id && entry.undo !== null ? { ...entry, undo: { ...entry.undo, done: true } } : entry,
+          ),
+        }
+  // The board Undo must not bring the piece back while the build stays undone and the trade
+  // refunded: nothing made before this may be reverted by it, and Redo is cleared
+  return ok({ ...closed, board: { ...closed.board, redo: [], undoFloor: closed.board.history.length } })
 }

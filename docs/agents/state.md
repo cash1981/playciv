@@ -51,9 +51,13 @@ old test counts and past deployment reports do not establish present health.
   `tasks/phase-cities-polish.md`; see "Assisted play" in decisions.
 
 - The viewer's own cities (cards, Build, Start Building Program, Upgrades, the
-  production figure) are in "Your actions"; the collapsed Cities panel lists the
-  opponents' cities only. Brief `tasks/cities-in-actions.md`; see "Assisted play"
-  in decisions.
+  production figure) are in "Your actions", which sits under the board, before Your
+  hand. There is no panel for the opponents' cities. Briefs `tasks/cities-in-actions.md`
+  and `tasks/build-polish-wonders.md`; see "Assisted play" in decisions.
+
+- Build: wonders from the market are built like a building; a figure is placed by the tap
+  on its square; removing a built piece before End turn takes the build back with a new log
+  line. Brief `tasks/build-polish-wonders.md`; see "Build polish and wonders" in decisions.
 
 - End turn (it ends the viewer's open phase) is a button in "Your actions", the first
   Order tab control to move there; the Order tab keeps its own for now. Brief

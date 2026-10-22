@@ -468,7 +468,7 @@ export function BoardView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picking])
 
-  // The Build picker sits in Your actions, above the board. Entering pick mode
+  // The Build picker sits in Your actions, under the board. Entering pick mode
   // closes it and brings the board panel into the page, under the sticky confirm bar.
   // Only on entering: a refresh that keeps the plan, or leaving, does not scroll.
   useEffect(() => {

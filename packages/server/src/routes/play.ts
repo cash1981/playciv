@@ -20,6 +20,7 @@ import {
   BUILDING_UPGRADES,
   CULTURE_CARD,
   UNIT_TYPES,
+  WONDER_ASSET_IDS,
   chooseSocialPolicy,
   chooseTech,
   discardBarbarians,
@@ -101,7 +102,7 @@ const extraFields = (body: Record<string, unknown>, allowed: readonly string[]):
  * with it. Only the shape is checked here (ids, a known building or unit type,
  * whole numbers, a boolean, no extra fields in the body or the item); whether the city, the
  * item and the square are legal is the engine's decision, made from the fresh
- * state. A building or a figure needs a target, a unit must not have one.
+ * state. A building, a wonder or a figure needs a target, a unit must not have one.
  */
 function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string {
   const extra = extraFields(body, BUILD_FIELDS)
@@ -120,6 +121,11 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
     if (typeof assetId === 'string' && BUILDABLE_BUILDING_IDS.includes(assetId)) {
       parsed = { kind: 'building', assetId }
     }
+  } else if (item['kind'] === 'wonder' && hasOnly('kind', 'assetId')) {
+    const assetId = item['assetId']
+    if (typeof assetId === 'string' && WONDER_ASSET_IDS.includes(assetId)) {
+      parsed = { kind: 'wonder', assetId }
+    }
   } else if ((item['kind'] === 'army' || item['kind'] === 'scout') && hasOnly('kind')) {
     parsed = { kind: item['kind'] }
   } else if (item['kind'] === 'unit' && hasOnly('kind', 'unitType')) {
@@ -129,6 +135,7 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
   if (parsed === undefined) {
     return (
       `item must be { kind: "building", assetId } with the asset id of a building that can be built, ` +
+      `{ kind: "wonder", assetId } with the asset id of a wonder, ` +
       `{ kind: "army" }, { kind: "scout" } or { kind: "unit", unitType } with unitType one of ${UNIT_TYPES.join(', ')}; no other fields`
     )
   }

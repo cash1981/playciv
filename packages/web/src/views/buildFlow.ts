@@ -17,12 +17,12 @@ export const OPTIONS_CHANGED = 'The options changed, pick again.'
 export const SQUARE_GONE = 'That square is no longer available, pick another.'
 
 /**
- * A short, stable text for an item: `building:<asset id>`, `army`, `scout` or
- * `unit:<type>`. For React keys and request keys; the engine's `assetId` of a
- * choice is only a list key, and an item is what the server takes.
+ * A short, stable text for an item: `building:<asset id>`, `wonder:<asset id>`,
+ * `army`, `scout` or `unit:<type>`. For React keys and request keys; the engine's
+ * `assetId` of a choice is only a list key, and an item is what the server takes.
  */
 export function itemKeyOf(item: BuildItem): string {
-  if (item.kind === 'building') return `building:${item.assetId}`
+  if (item.kind === 'building' || item.kind === 'wonder') return `${item.kind}:${item.assetId}`
   if (item.kind === 'unit') return `unit:${item.unitType}`
   return item.kind
 }

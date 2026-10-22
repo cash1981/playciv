@@ -221,7 +221,8 @@ buttons and the culture marker. Assisted actions are added beside them.
   nothing is drawn. The kept card stays hidden in the hand and the marker piece
   goes into the owner's area.
 - The game page shows a phase summary and shortcuts, and the order is board,
-  Your cards, then the rest. The piece palette sits below the board at every
+  Your actions, Your cards, then the rest (Your actions sat above the board for a
+  while; the human moved it right under it, before Your hand). The piece palette sits below the board at every
   width; this is unconfirmed by the human and reversible in `styles.css`.
 - The header shows the player furthest behind as the one who is up
   (`web/src/views/turnFocus.ts`): the title, the colour chips, the "turn" tag in
@@ -248,11 +249,11 @@ buttons and the culture marker. Assisted actions are added beside them.
   the collapsed Cities panel at the bottom of the page. The panel is shown for a
   player who has a city on the map even when no card action and no choice is
   waiting; it never shows for a spectator, and it is not shown only to say "No
-  cities of yours on the map yet." The Cities panel keeps the other players'
-  cities, read only: "Opponents' cities (N)" for a player, left out when no
-  opponent has a city, and "Cities (N)" with every city for a spectator. The card
-  is one component, `CityCard.tsx`, for both. The Build picker is now inline in
-  Your actions, so "Back to the picker" reopens that panel, not the Cities panel.
+  cities of yours on the map yet." The Cities panel for the other players' cities
+  was removed later (task `build-polish-wonders`): the human saw no use in it, and
+  the board shows every city. The projection still carries the opponents' `cities`;
+  nothing reads it on the page. The Build picker is inline in Your actions, so "Back
+  to the picker" reopens that panel.
 - **End turn** is a button at the top of "Your actions" (task `end-turn-actions`,
   `EndTurn.tsx`), the first Order tab control to move over: the human wants to
   migrate to an action panel step by step. It ends one phase, not the whole turn:
@@ -275,7 +276,7 @@ buttons and the culture marker. Assisted actions are added beside them.
 
 Source: `engine/src/assisted.ts`, `culture-track.ts`, `server/src/routes/play.ts`,
 `web/src/views/AssistedActions.tsx`, `EndTurn.tsx`, `PhaseSummary.tsx`, `turnFocus.ts`,
-`YourCities.tsx`, `CityCard.tsx`, `CitiesPanel.tsx`, and the `assisted*`
+`YourCities.tsx`, `CityCard.tsx`, and the `assisted*`
 tests. Not built: Great Person abilities that need a map marker, killing
 markers, map tile 16a, free advances, hand limit.
 
@@ -318,16 +319,15 @@ typed by hand (`BoardPiece.productionOverride`, any player in the game may set i
   notes, not computed. A square in two of the player's own cities counts for each
   and says so (cities may not overlap when built, so this is old data).
 - A city piece off the map is not listed, so the status board's city count can
-  be higher than the lists of cities (Your cities and the Cities panel).
+  be higher than the list of cities (Your cities).
 - The per city arithmetic (outskirts squares, modifiers, notes) is no longer an
   always present details block on each card. The figure line carries a link,
   "Not a complete count" ("How the estimate is counted" when the figure is set by
-  hand), that opens the same content in a small dialog. The opponents' cards have
-  the link too.
+  hand), that opens the same content in a small dialog.
 
 Source: `engine/src/city-production.ts`, `building-data.ts`, `blockade.ts`
 (`cityFootprintsOf`), `actions/board.ts` (`setCityProductionOverride`),
-`web/src/views/CityCard.tsx` (the card), `YourCities.tsx`, `CitiesPanel.tsx` and the
+`web/src/views/CityCard.tsx` (the card), `YourCities.tsx` and the
 `city-production*` tests.
 
 ## Assisted build
@@ -339,8 +339,8 @@ piece, pays and logs in one step, and the everyone votes undo reverses it. The s
 action builds army and scout figures (placed like a building) and military units (a
 private card, nothing placed).
 
-- Only legal choices are listed. Everything else is under "Why not the others" with
-  a reason. A cost above the city's production is such a reason; the way out is to
+- Only legal choices are listed. Everything else is behind a "Why not the others"
+  link that opens the reasons in a popup, with a reason each. A cost above the city's production is such a reason; the way out is to
   set the city's production by hand (decided with the human). Trade can cover a
   shortfall (rush, base rules p. 15): 3 trade for 1 production, the Americans get 2
   production per 3 trade, paid in whole steps and never more than needed.
@@ -364,6 +364,48 @@ private card, nothing placed).
   the doubled figure, then the estimate.
 - No automatic "city action used" marker: techs, culture cards and Great Persons
   allow several actions, so the player ends the phase themselves (the human).
+
+**Build polish and wonders (task `build-polish-wonders`).**
+
+- The picker shows no count of squares and no "Draws a card in secret"; the groups are
+  Buildings, Wonders, Figures (placed on the map) and Units. The bar still says that a
+  unit is a private card.
+- A figure is placed by the tap on its square, with no Confirm (the human): it can be
+  moved, and removing it takes the build back. The exception is a square with a note (an
+  enemy figure stands there, so the outcome is settled by hand): its note is read first and
+  Confirm places the army. A building, a wonder and a unit keep Confirm. A rush pays its
+  trade at the tap too; removing the figure gives it back. After a refusal Confirm shows,
+  so the same square can be tried again.
+- **Removing a built piece before End turn takes the build back** (the human): the owner
+  removes the building, wonder, figure or Building Program marker a build or a start put on
+  the board, while their City Management is not marked done. `takeBackOpenBuild` then does
+  what the undo vote does (the piece goes, the trade comes back, a used Building Program marker
+  is put back, the record is `undone`) and adds a System line ending "It was removed before
+  End turn."; the line that reported the build stays (the human allowed that instead of
+  deleting a log line, which would also have meant renumbering the board history's line counts).
+  The piece may have been moved first. After End turn, for the phase of an older turn, and for
+  another player's removal, it is a plain removal as before, with no refund. A take-back closes an
+  undo vote open on the line (it could never pass any more) and sets `board.undoFloor`, as taking
+  back a civilization reveal does, so the owner's board Undo cannot bring the piece back while the
+  build stays undone and the trade refunded (the vote undo has no such floor; that is as before). Upgrades and units are not taken back this way (an
+  upgrade is several pieces, a unit a drawn card); the vote undo still covers every action.
+  The web calls the same remove route; the server decides.
+- **Wonders** (base rules p. 17): any city can produce a wonder that is faceup in the market,
+  which is the wonder pieces in the shared Wonders area that nobody owns (`marketWondersOf`).
+  It costs the printed cost, or the lower cost when the player has revealed the tech on the
+  card (`wonder-data.ts`, read from the `Wonders` sheet; a test keeps the two equal; Angkor Wat
+  drops from 20 to 10 and the United Nations costs 20 with no discount, as the sheet has them).
+  Production, rush with trade and the Building Program marker work as for a building. It goes in
+  the city's outskirts on any terrain but water, on a square with nothing on it and no enemy
+  figure; one wonder per city, whoever owns the one there, and it does not count against the
+  limited building. The build moves the market piece onto the square (it is not a new piece) and
+  makes the player its owner, as two board history entries; the vote undo and the take-back
+  return it to where it stood in the market (the next free spot when another wonder has been drawn
+  into that one) and clear the owner. The board Undo refuses both
+  entries. The log reads "built the Colossus in City B2 on square C2". Not built: replacing a
+  building or wonder, and drawing the next wonder into the market, which the rules do after a
+  wonder is produced: the player draws it with the Draw panel as before (no ruling on the deck
+  order, which the engine does not keep).
 
 **Figures and units (#264 parts 3 and 4).**
 
@@ -413,8 +455,9 @@ private card, nothing placed).
 - Known gaps: a square in the outskirts of two players' cities lets both list the building and
   the first press wins; the record's `phase` reads CM when every phase of the turn is done.
 
-Source: `engine/src/build-options.ts`, `city-actions.ts`, `building-data.ts`, `assisted.ts` (the `build`,
-`startBuildingProgram` and `upgradeBuildings` actions), `actions/board.ts` (`isAssistedBoardChange`), `web/src/views/BuildPicker.tsx`,
+Source: `engine/src/build-options.ts`, `city-actions.ts`, `building-data.ts`, `wonder-data.ts`, `assisted.ts` (the `build`,
+`startBuildingProgram` and `upgradeBuildings` actions and `takeBackOpenBuild`), `actions/board.ts` (`isAssistedBoardChange`), `server/src/routes/board.ts`
+(remove), `web/src/views/BuildPicker.tsx`,
 `CityActions.tsx`, `CityCard.tsx`, `YourCities.tsx`, `buildFlow.ts` and the `assisted-build*` tests.
 
 ## Accounts, mail and ratings

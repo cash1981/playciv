@@ -1,6 +1,7 @@
 /**
  * What a player can build with each of their cities (assisted Build, parts 2 to 4
- * of #264: buildings, army and scout figures, and military units).
+ * of #264: buildings, army and scout figures, and military units; and wonders from
+ * the market).
  *
  * For every city on the map: whether the player may build now, the production the
  * city has, and what can be built split in two lists. `choices` holds only items
@@ -37,6 +38,7 @@ import {
   boardAssetLimit,
   columnLabel,
   findBoardAsset,
+  isInWondersArea,
   isMapCell,
   mapTop,
   remainingBoardAssetCount,
@@ -47,8 +49,9 @@ import type { CityProduction } from './city-production.js'
 import { SHUFFLABLE_ITEMS } from './sheet-name.js'
 import type { SheetName } from './sheet-name.js'
 import type { GameState, Playerhand } from './state.js'
-import { BUILDING_TERRAIN, describeAllowed, terrainAt } from './terrain.js'
+import { BUILDING_TERRAIN, CATEGORY_TERRAIN, describeAllowed, terrainAt } from './terrain.js'
 import type { Terrain } from './terrain.js'
+import { wonderCostFor, wonderDataOf } from './wonder-data.js'
 
 /** A map square as column and row numbers, zero based from the map's top left corner. */
 export interface BuildTarget {
@@ -250,7 +253,7 @@ type SquareProblem =
   | { readonly kind: 'occupied'; readonly by: string }
   | { readonly kind: 'blockaded' }
   | { readonly kind: 'unknown-terrain' }
-  | { readonly kind: 'wrong-terrain'; readonly terrain: Terrain; readonly assetId: string }
+  | { readonly kind: 'wrong-terrain'; readonly terrain: Terrain; readonly name: string; readonly allowed: readonly Terrain[] }
   | { readonly kind: 'city-state' }
   | { readonly kind: 'marker'; readonly marker: string }
   | { readonly kind: 'water' }
@@ -264,19 +267,32 @@ type SquareProblem =
 function squareProblem(
   scene: Scene,
   footprint: CityFootprintView,
-  assetId: string,
+  rules: PlacementRules,
   cell: Cell,
 ): SquareProblem | undefined {
   if (scene.centres.has(keyOf(cell))) return { kind: 'centre' }
   const by = scene.occupiers.get(keyOf(cell))
   if (by !== undefined) return { kind: 'occupied', by }
-  // Base rules p. 27: a building cannot be placed in a blockaded square
+  // Base rules p. 27: buildings and wonders cannot be placed in a blockaded square
   if (footprint.hasEnemyFigureAt(cell)) return { kind: 'blockaded' }
   const terrain = terrainOf(scene, cell)
   if (terrain === null) return { kind: 'unknown-terrain' }
-  const allowed = BUILDING_TERRAIN[assetId] ?? []
-  if (!allowed.includes(terrain)) return { kind: 'wrong-terrain', terrain, assetId }
+  if (!rules.allowed.includes(terrain)) return { kind: 'wrong-terrain', terrain, name: rules.name, allowed: rules.allowed }
   return undefined
+}
+
+/** What decides where a building or a wonder may stand: the terrains, and the noun the reasons use. */
+interface PlacementRules {
+  /** "Library", "wonder": follows "a" in the reasons. */
+  readonly name: string
+  readonly allowed: readonly Terrain[]
+}
+
+/** A building has its own terrain; every wonder goes on any terrain but water (base rules p. 17). */
+function placementRulesOf(item: { readonly kind: 'building' | 'wonder'; readonly assetId: string }): PlacementRules {
+  return item.kind === 'wonder'
+    ? { name: 'wonder', allowed: CATEGORY_TERRAIN.wonder ?? [] }
+    : { name: buildingNameOf(item.assetId) ?? 'building', allowed: BUILDING_TERRAIN[item.assetId] ?? [] }
 }
 
 /** The techs that let a figure end its movement in water (base rules p. 15; `techText.ts`). */
@@ -370,7 +386,7 @@ function describeProblem(cell: Cell, problem: SquareProblem): string {
     case 'unknown-terrain':
       return `The terrain of ${square} is not known.`
     case 'wrong-terrain':
-      return `${square} is ${problem.terrain}, and a ${buildingNameOf(problem.assetId) ?? 'building'} needs ${describeAllowed(BUILDING_TERRAIN[problem.assetId] ?? [])}.`
+      return `${square} is ${problem.terrain}, and a ${problem.name} needs ${describeAllowed(problem.allowed)}.`
     case 'city-state':
       return `${square} is a city-state square.`
     case 'marker':
@@ -412,8 +428,7 @@ function noSquareReason(intro: string | null, problems: readonly SquareProblem[]
   return `No legal square. ${intro === null ? '' : `${intro}: `}${parts.join(', ')}.`
 }
 
-const buildingIntro = (assetId: string): string =>
-  `A ${buildingNameOf(assetId) ?? 'building'} needs ${describeAllowed(BUILDING_TERRAIN[assetId] ?? [])}`
+const placementIntro = (rules: PlacementRules): string => `A ${rules.name} needs ${describeAllowed(rules.allowed)}`
 
 /**
  * Why `cell` is not a legal square for the item in this city, as a sentence,
@@ -440,8 +455,8 @@ export function buildSquareRefusal(
     return `${square} is not in the outskirts of that city.`
   }
   const scene = sceneOf(state)
-  if (item.kind === 'building') {
-    const problem = squareProblem(scene, footprint, item.assetId, cell)
+  if (item.kind === 'building' || item.kind === 'wonder') {
+    const problem = squareProblem(scene, footprint, placementRulesOf(item), cell)
     return problem === undefined ? undefined : describeProblem(cell, problem)
   }
   const rules = figureRulesOf(player, item.kind, techViewOf(player))
@@ -502,6 +517,17 @@ function limitedBuildingIn(scene: Scene, outskirts: readonly Cell[]): string | u
   return found === undefined ? undefined : (buildingNameOf(found.assetId) ?? found.label)
 }
 
+/** The name of the first wonder standing in the city's outskirts, whoever's it is: a city holds one. */
+function wonderIn(scene: Scene, outskirts: readonly Cell[]): string | undefined {
+  const keys = new Set(outskirts.map(keyOf))
+  const found = scene.state.board.pieces.find((piece) => {
+    if (piece.category !== 'wonder') return false
+    const cell = mapCellOf(scene.state.board, piece)
+    return cell !== null && keys.has(keyOf(cell))
+  })
+  return found?.label
+}
+
 // ---------------------------------------------------------------------------
 // Figures and units
 // ---------------------------------------------------------------------------
@@ -544,6 +570,8 @@ export function buildItemName(item: BuildItem): string {
   switch (item.kind) {
     case 'building':
       return buildingNameOf(item.assetId) ?? item.assetId
+    case 'wonder':
+      return findBoardAsset(item.assetId)?.label ?? item.assetId
     case 'army':
     case 'scout':
       return item.kind
@@ -586,8 +614,26 @@ function paymentFor(
   }
 }
 
-/** What does not depend on the city, worked out once per call: the card supply of each unit type and the figures left in the box. */
+/**
+ * The wonders a city can produce (base rules p. 17: "the wonders that are faceup in
+ * the market"): the wonder pieces in the shared Wonders area that nobody owns. The
+ * market is that area, as `drawWonderToBoard` fills it. A wonder in a player's own
+ * area (Egypt's start wonder) or on the map is not in the market. By name, so the order
+ * does not depend on how the pieces were dropped.
+ */
+export function marketWondersOf(board: Board, pieces: readonly BoardPiece[]): readonly BoardPiece[] {
+  return pieces
+    .filter((piece) => piece.category === 'wonder' && isInWondersArea(board, piece) && (piece.ownerId ?? null) === null)
+    .sort((a, b) => nameOfWonder(a).localeCompare(nameOfWonder(b)))
+}
+
+/** A wonder's label without the leading "The", so "The Colossus" sorts under C. */
+const nameOfWonder = (piece: BoardPiece): string => piece.label.replace(/^The /, '')
+
+/** What does not depend on the city, worked out once per call: the wonders in the market, the card supply of each unit type and the figures left in the box. */
 interface SharedSupply {
+  /** The wonders faceup in the market: on the board in the shared Wonders area and owned by nobody, by name. */
+  readonly market: readonly BoardPiece[]
   readonly unitCards: Readonly<Record<UnitType, boolean>>
   readonly figures: Readonly<Record<'army' | 'scout', { readonly asset: ReturnType<typeof findBoardAsset>; readonly remaining: number | undefined }>>
 }
@@ -601,6 +647,7 @@ function sharedSupplyOf(state: GameState, colour: string): SharedSupply {
     }
   }
   return {
+    market: marketWondersOf(state.board, state.board.pieces),
     unitCards: {
       infantry: unitCardAvailable(state, UNIT_SHEET.infantry),
       artillery: unitCardAvailable(state, UNIT_SHEET.artillery),
@@ -675,15 +722,16 @@ function optionsForCity(
       continue
     }
 
+    const rules = placementRulesOf({ kind: 'building', assetId })
     const squares: BuildSquare[] = []
     const problems: SquareProblem[] = []
     for (const cell of outskirts) {
-      const problem = squareProblem(scene, footprint, assetId, cell)
+      const problem = squareProblem(scene, footprint, rules, cell)
       if (problem === undefined) squares.push({ column: cell.column, row: cell.row, label: squareLabel(cell) })
       else problems.push(problem)
     }
     if (squares.length === 0) {
-      skip(noSquareReason(buildingIntro(assetId), problems))
+      skip(noSquareReason(placementIntro(rules), problems))
       continue
     }
 
@@ -693,6 +741,53 @@ function optionsForCity(
       continue
     }
     choices.push({ assetId, item, placement: 'square', label, cost: data.cost, tradeToPay: payment.tradeToPay, squares })
+  }
+
+  // Wonders from the market: one per city, on any terrain but water, paid like a building
+  const wonderHere = wonderIn(scene, outskirts)
+  for (const piece of shared.market) {
+    const item = { kind: 'wonder', assetId: piece.assetId } as const
+    const label = piece.label
+    const skip = (reason: string): void => {
+      unavailable.push({ assetId: piece.assetId, item, label, reason })
+    }
+    const data = wonderDataOf(piece.assetId)
+    if (data === undefined) {
+      skip('This wonder is not in the game data.')
+      continue
+    }
+    if (wonderHere !== undefined) {
+      skip(`${city.label} already has ${wonderHere}. A city may hold only one wonder, and may also hold one limited building.`)
+      continue
+    }
+
+    const rules = placementRulesOf(item)
+    const squares: BuildSquare[] = []
+    const problems: SquareProblem[] = []
+    for (const cell of outskirts) {
+      const problem = squareProblem(scene, footprint, rules, cell)
+      if (problem === undefined) squares.push({ column: cell.column, row: cell.row, label: squareLabel(cell) })
+      else problems.push(problem)
+    }
+    if (squares.length === 0) {
+      skip(noSquareReason(placementIntro(rules), problems))
+      continue
+    }
+
+    const cost = wonderCostFor(data, techs.revealed)
+    const discount = data.discount
+    const costText =
+      discount === undefined
+        ? `Costs ${cost} production`
+        : cost === discount.cost
+          ? `Costs ${cost} production (${data.cost} without ${discount.tech})`
+          : `Costs ${cost} production (${discount.cost} with ${discount.tech})`
+    const payment = paymentFor(cost, costText, city, production, player)
+    if ('short' in payment) {
+      skip(payment.short)
+      continue
+    }
+    choices.push({ assetId: piece.assetId, item, placement: 'square', label, cost, tradeToPay: payment.tradeToPay, squares })
   }
 
   // Army and scout figures: put on a square of the outskirts like a building

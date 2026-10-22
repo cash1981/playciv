@@ -21,7 +21,6 @@ import { BoardView } from './BoardView.js'
 import type { PickSquares } from './BoardView.js'
 import { BuildBar } from './BuildPicker.js'
 import { useBuildFlow } from './buildFlow.js'
-import { CitiesPanel } from './CitiesPanel.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
 import { ItemCard } from './ItemCard.js'
@@ -583,18 +582,9 @@ export function GameView({
 
       {error !== null && <div className="error">{error}</div>}
 
-      {/* The page runs: header and summary, Your actions (the card buttons, a waiting
-          choice and the viewer's own cities), the board, Your cards, then the rest. The
-          board has the whole content width at every size. */}
-      <AssistedActionsPanel
-        gameId={gameId}
-        view={displayedView}
-        busy={interactionBusy}
-        readOnly={displayedView.you === null || replaying || locked}
-        run={run}
-        build={buildFlow}
-      />
-
+      {/* The page runs: header and summary, the board, Your actions (End turn, the card
+          buttons, a waiting choice and the viewer's own cities), Your cards, then the
+          rest. The board has the whole content width at every size. */}
       <BuildBar gameId={gameId} view={displayedView} flow={buildFlow} busy={interactionBusy} run={run} />
 
       <BoardView
@@ -611,8 +601,17 @@ export function GameView({
         run={run}
       />
 
+      <AssistedActionsPanel
+        gameId={gameId}
+        view={displayedView}
+        busy={interactionBusy}
+        readOnly={displayedView.you === null || replaying || locked}
+        run={run}
+        build={buildFlow}
+      />
+
       <div className="panel-stack">
-        {/* Your cards sit directly under the board; the log and the revealed feed are last. */}
+        {/* Your cards sit directly under Your actions; the log and the revealed feed are last. */}
         <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <DrawPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
@@ -640,7 +639,6 @@ export function GameView({
           readOnly={displayedView.you === null || replaying || locked}
           run={run}
         />
-        <CitiesPanel view={displayedView} />
         <WondersPanel
           gameId={gameId}
           view={displayedView}

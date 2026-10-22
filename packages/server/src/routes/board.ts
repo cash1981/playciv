@@ -18,6 +18,7 @@ import {
   rotatePiece,
   setCityProductionOverride,
   setWonderOwner,
+  takeBackOpenBuild,
   sendToBack,
   undoLastBoardChange,
 } from '@civ/engine'
@@ -172,9 +173,14 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
   app.post('/api/games/:gameId/board/pieces/:pieceId/remove', auth, async (c) => {
     const gameId = c.req.param('gameId')
     const pieceId = c.req.param('pieceId')
-    return applyToGame(context, c, gameId, (state) =>
-      removePiece(state, { playerId: currentPlayer(c).id, pieceId, at: now() }),
-    )
+    // A piece the player's own build put on the board, removed before they press End turn
+    // for City Management, takes the whole build back (trade, marker, a System line). Any
+    // other removal, and every one after End turn, is a plain removal.
+    return applyToGame(context, c, gameId, (state) => {
+      const playerId = currentPlayer(c).id
+      const at = now()
+      return takeBackOpenBuild(state, { playerId, pieceId, at }) ?? removePiece(state, { playerId, pieceId, at })
+    })
   })
 
   /** Takes back the current player's own last board change. */

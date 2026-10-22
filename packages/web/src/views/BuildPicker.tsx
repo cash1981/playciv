@@ -1,12 +1,12 @@
 /**
- * Assisted Build in the browser (#264: buildings, army and scout figures, and
- * military units).
+ * Assisted Build in the browser (#264: buildings, wonders from the market, army and
+ * scout figures, and military units).
  *
  * Two pieces that share one {@link BuildFlow}, owned by GameView:
  *
  * - {@link BuildPicker}, in Your actions under a city: what the engine says
- *   that city can build now, in three groups (buildings, figures placed on the
- *   map, units that are a private card), and, folded away, why the others can not;
+ *   that city can build now, in groups (buildings, wonders, figures placed on the
+ *   map, units that are a private card), and, behind a link, why the others can not;
  * - {@link BuildBar}, above the board: the choice, the cost, the square picked on
  *   the board, Confirm and Cancel. A unit has no square, so its bar opens with
  *   Confirm ready.
@@ -15,7 +15,7 @@
  * `view.you.buildOptions`, and the server checks it all again on Confirm.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import type { BuildChoice, BuildPayload, CityBuildOptions, PlayerView } from '../lib/api.js'
@@ -24,6 +24,7 @@ import { isPressInFlight, pressOnce } from './AssistedActions.js'
 import { itemKeyOf } from './buildFlow.js'
 import type { BuildFlow, BuildPlan } from './buildFlow.js'
 import type { Run } from './GameView.js'
+import { ReferenceDialog } from './ReferenceDialog.js'
 import './BuildPicker.css'
 
 export const BUILD_PICKER_ID = 'build-picker'
@@ -34,19 +35,19 @@ const SOURCE_TEXT: Readonly<Record<CityBuildOptions['productionSource'], string>
   estimate: 'estimate',
 }
 
-const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`
-
-/** The three groups of the picker, in the order they are shown. */
+/** The groups of the picker, in the order they are shown. */
 const GROUPS = [
   { id: 'building', noun: 'Buildings', heading: 'Buildings' },
+  { id: 'wonder', noun: 'Wonders', heading: 'Wonders' },
   { id: 'figure', noun: 'Figures', heading: 'Figures (placed on the map)' },
-  { id: 'unit', noun: 'Units', heading: 'Units (a private card, nothing is placed)' },
+  { id: 'unit', noun: 'Units', heading: 'Units' },
 ] as const
 
 type GroupId = (typeof GROUPS)[number]['id']
 
 function groupOf(choice: BuildChoice): GroupId {
   if (choice.item.kind === 'building') return 'building'
+  if (choice.item.kind === 'wonder') return 'wonder'
   return choice.item.kind === 'unit' ? 'unit' : 'figure'
 }
 
@@ -97,8 +98,8 @@ interface PickerProps {
 }
 
 /**
- * What one city can build now. Choosing a building or a figure starts picking a
- * square on the board; choosing a unit goes straight to the confirm bar.
+ * What one city can build now. Choosing a building, a wonder or a figure starts
+ * picking a square on the board; choosing a unit goes straight to the confirm bar.
  */
 export function BuildPicker({ city, note, message, busy, onChoose, onClose }: PickerProps): React.JSX.Element {
   const ref = useRef<HTMLElement>(null)
@@ -127,7 +128,7 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
 
       {ready && city.choices.length === 0 && (
         <p className="build-picker-empty">
-          Nothing can be built in this city right now. The reasons are under Why not the others. If the
+          Nothing can be built in this city right now. The reasons are behind the Why not the others link. If the
           production above is too low, set the city&rsquo;s production by hand.
         </p>
       )}
@@ -149,11 +150,6 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
                         Cost {choice.cost}
                         {choice.tradeToPay > 0 && <>, pays {choice.tradeToPay} trade</>}
                       </span>
-                      <span className="muted">
-                        {choice.placement === 'none'
-                          ? 'Draws a card in secret'
-                          : plural(choice.squares.length, 'square')}
-                      </span>
                     </span>
                     <button
                       type="button"
@@ -171,9 +167,44 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
           )
         })}
 
-      {ready && city.unavailable.length > 0 && (
-        <details className="build-why">
-          <summary>Why not the others ({city.unavailable.length})</summary>
+      {ready && city.unavailable.length > 0 && <WhyNot city={city} />}
+
+      <button type="button" className="small" onClick={onClose}>
+        Close
+      </button>
+    </section>
+  )
+}
+
+/**
+ * "Why not the others": a link that opens the reasons in a popup, the way the
+ * production count does, so the long list does not push the choices down the page.
+ */
+function WhyNot({ city }: { readonly city: CityBuildOptions }): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const titleId = useId()
+  const linkRef = useRef<HTMLButtonElement | null>(null)
+  return (
+    <>
+      <p className="build-why">
+        <button
+          ref={linkRef}
+          type="button"
+          className="build-why-link"
+          aria-haspopup="dialog"
+          onClick={() => setOpen(true)}
+        >
+          Why not the others ({city.unavailable.length})
+        </button>
+      </p>
+      {open && (
+        <ReferenceDialog
+          titleId={titleId}
+          title={`${city.label}: why not the others`}
+          onClose={() => setOpen(false)}
+          returnFocusTo={linkRef}
+          className="build-why-dialog"
+        >
           <ul aria-label={`Items ${city.label} cannot build`}>
             {city.unavailable.map((entry) => (
               <li key={entry.assetId}>
@@ -181,13 +212,9 @@ export function BuildPicker({ city, note, message, busy, onChoose, onClose }: Pi
               </li>
             ))}
           </ul>
-        </details>
+        </ReferenceDialog>
       )}
-
-      <button type="button" className="small" onClick={onClose}>
-        Close
-      </button>
-    </section>
+    </>
   )
 }
 
@@ -265,6 +292,8 @@ interface PlanBarProps {
 function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   const [sending, setSending] = useState(false)
+  // The square a figure was sent on by the tap, so Confirm can come back for it if that did not go through
+  const [autoSent, setAutoSent] = useState<string | null>(null)
   // A new plan mounts a new bar: put focus on it once, without scrolling. The page
   // is scrolled by the board (BoardView), which brings its panel into view under
   // this sticky bar, so the two never pull the page in different directions.
@@ -278,6 +307,12 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
   const placed = plan.placement === 'square'
   // A unit has no square to wait for: Confirm is ready at once.
   const ready = !placed || target !== null
+  // A figure is placed by the tap on its square, with no Confirm: it can be moved,
+  // and removing it before the turn ends takes the whole build back. The exception is
+  // a square the engine has a note for (an enemy figure stands there, so the outcome is
+  // settled by hand): its note is read first, and Confirm places the figure.
+  const figure = plan.item.kind === 'army' || plan.item.kind === 'scout'
+  const immediate = figure && target?.note === undefined
 
   function confirm(): void {
     if (!ready || sending) return
@@ -324,10 +359,29 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     })
   }
 
+  // Picking a square for a figure sends the build, and only the pick does: a square that
+  // loses its note on a refresh is not sent, and a second tap on the same square is no new pick.
+  // Confirm is there for both, and after a refusal, so the square can always be sent.
+  const pickedColumn = target?.column
+  const pickedRow = target?.row
+  const pickedKey = pickedColumn === undefined || pickedRow === undefined ? null : `${pickedColumn},${pickedRow}`
+  const lastPicked = useRef<string | null>(null)
+  useEffect(() => {
+    const justPicked = pickedKey !== null && lastPicked.current !== pickedKey
+    lastPicked.current = pickedKey
+    if (justPicked && immediate) {
+      setAutoSent(pickedKey)
+      // `confirm` reads the plan of this render, which is the one whose square was just picked.
+      confirm()
+    }
+  }, [immediate, pickedKey])
+  // A figure shows Confirm for a square once it has one, except while the tap's own request is out
+  const showConfirm = !figure || (pickedKey !== null && !(sending && autoSent === pickedKey))
+
   return (
     <div ref={ref} className="build-bar" role="group" aria-label="Build" tabIndex={-1}>
       <p className="build-bar-title">
-        <strong>Build {plan.item.kind === 'unit' ? unitNameOf(plan.item.unitType) : plan.label}</strong> in {plan.cityLabel}
+        <strong>Build {plan.item.kind === 'unit' ? unitNameOf(plan.item.unitType) : plan.item.kind === 'wonder' ? plan.label.replace(/^The /, 'the ') : plan.label}</strong> in {plan.cityLabel}
       </p>
       <p className="build-bar-facts">
         Cost {plan.cost}
@@ -335,10 +389,10 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
         {!placed ? (
           <>A private card is drawn, nothing is placed on the map.</>
         ) : target === null ? (
-          <>Tap a highlighted square on the board ({plural(plan.squares.length, 'square')}).</>
+          <>{figure ? 'Tap a highlighted square on the board to place it.' : 'Tap a highlighted square on the board.'}</>
         ) : (
           <>
-            Square <strong>{target.label}</strong>.
+            Square <strong>{target.label}</strong>.{sending && figure ? ' Placing it.' : ''}
           </>
         )}
       </p>
@@ -355,14 +409,16 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
       )}
       {flow.note !== null && <p role="status">{flow.note}</p>}
       <div className="build-bar-buttons">
-        <button
-          type="button"
-          className="small primary"
-          disabled={busy || sending || !ready}
-          onClick={confirm}
-        >
-          {rush ? `Confirm and pay ${plan.tradeToPay} trade` : 'Confirm'}
-        </button>
+        {showConfirm && (
+          <button
+            type="button"
+            className="small primary"
+            disabled={busy || sending || !ready}
+            onClick={confirm}
+          >
+            {rush ? `Confirm and pay ${plan.tradeToPay} trade` : 'Confirm'}
+          </button>
+        )}
         <button type="button" className="small" onClick={flow.clear}>
           Cancel
         </button>

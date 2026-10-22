@@ -269,11 +269,8 @@ const pageOrder = (container: HTMLElement): string[] =>
     .map((element) => (element.getAttribute('data-testid') === 'board' ? 'Board' : (element.textContent ?? '').replace(/[−+]$/, '')))
 
 describe('primary game panel order', () => {
-  afterEach(() => localStorage.removeItem('civ.panel.cities'))
-
-  // Changed on purpose (#260): the board no longer follows the header directly.
-  // It was header, board, Draw, Chat and orders, Log, Your hand, and so on.
-  it('runs Your actions, the board, Your cards, Draw, the tech tree, chat, the rest, then the log and the revealed feed', async () => {
+  // Changed on purpose (#260): Your actions sat above the board for a while, and now sits right under it, before Your hand.
+  it('runs the board, Your actions, Your cards, Draw, the tech tree, chat, the rest, then the log and the revealed feed', async () => {
     const view = orderView({
       you: {
         playerId: 'p1',
@@ -286,8 +283,8 @@ describe('primary game panel order', () => {
     const { container } = await renderOrder(view)
 
     expect(pageOrder(container)).toEqual([
-      'Your actions',
       'Board',
+      'Your actions',
       'Your hand (0)',
       'Draw',
       'Techs',
@@ -302,9 +299,7 @@ describe('primary game panel order', () => {
     ])
   })
 
-  it('puts the viewer’s own cities in Your actions and the opponents’ cities in their own panel further down', async () => {
-    // The opponents' panel is collapsed by default, and a collapsed panel hides its cards from the queries below.
-    localStorage.setItem('civ.panel.cities', 'true')
+  it('puts the viewer’s own cities in Your actions and has no panel for the opponents’ cities', async () => {
     const view = orderView({
       you: {
         playerId: 'p1',
@@ -318,8 +313,8 @@ describe('primary game panel order', () => {
     const { container } = await renderOrder(view)
 
     expect(pageOrder(container)).toEqual([
-      'Your actions',
       'Board',
+      'Your actions',
       'Your hand (0)',
       'Draw',
       'Techs',
@@ -328,20 +323,38 @@ describe('primary game panel order', () => {
       'Battle',
       'Social policy',
       'Player status',
-      "Opponents' cities (1)",
       'Wonders',
       'Log',
       'Revealed',
     ])
     const actions = screen.getByRole('heading', { name: 'Your actions' }).closest('section') as HTMLElement
-    const opponents = screen.getByRole('heading', { name: "Opponents' cities (1)" }).closest('section') as HTMLElement
     expect(within(actions).getByRole('heading', { name: 'Capital D5' })).toBeTruthy()
-    expect(within(actions).queryByRole('heading', { name: 'City H8' })).toBeNull()
-    expect(within(opponents).getByRole('heading', { name: 'City H8' })).toBeTruthy()
-    expect(within(opponents).queryByRole('heading', { name: 'Capital D5' })).toBeNull()
-    // No id is on the page twice, with both panels showing a city each.
+    // The opponent's city is on the board and nowhere else: no panel lists it.
+    expect(screen.queryByRole('heading', { name: 'City H8' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: /cities \(/i })).toBeNull()
     const ids = Array.from(container.querySelectorAll('[id]')).map((element) => element.id)
     expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([])
+  })
+
+  it('has Your actions directly under the board and Your cards right after it', async () => {
+    const view = orderView({
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        items: [],
+        pendingRewards: [],
+        availableActions: [{ action: 'cultureAdvance', label: 'Culture', status: 'ready', reason: 'Ready' }],
+      },
+    })
+    const { container } = await renderOrder(view)
+    const board = screen.getByTestId('board')
+    const actions = screen.getByRole('heading', { name: 'Your actions' }).closest('section')
+    const panelStack = container.querySelector('.panel-stack')
+    const hand = screen.getByRole('heading', { name: 'Your hand (0)' }).closest('section')
+
+    expect(board.nextElementSibling).toBe(actions)
+    expect(actions?.nextElementSibling).toBe(panelStack)
+    expect(panelStack?.children[0]).toBe(hand)
   })
 
   it('has Your cards directly under the board, and no Your actions panel when there is nothing to show', async () => {

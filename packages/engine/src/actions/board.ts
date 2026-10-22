@@ -670,7 +670,12 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     // A build placed a building or a figure and used up the Building Program marker: neither can be taken back alone.
     // A unit placed nothing, so only a marker is on the board.
     if (effect.kind === 'build') {
-      return ('historyId' in effect && effect.historyId === entry.id) || effect.marker?.historyId === entry.id
+      return (
+        ('historyId' in effect && effect.historyId === entry.id) ||
+        // A wonder also became the player's: that entry belongs to the build too
+        ('wonder' in effect && effect.wonder?.ownerHistoryId === entry.id) ||
+        effect.marker?.historyId === entry.id
+      )
     }
     // Starting a Building Program placed one marker; an upgrade removed and placed one building per flip
     if (effect.kind === 'startBuildingProgram') return effect.historyId === entry.id

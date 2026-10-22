@@ -67,13 +67,19 @@
   margin: 0 0 0.5rem;
 }
 
-.build-why summary {
-  cursor: pointer;
+/* A link that opens the reasons in a popup, like "Not a complete count" on a city. */
+.build-why-link {
   padding: 0.2rem 0;
+  background: none;
+  border: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
 }
 
-.build-why ul {
-  margin: 0.2rem 0 0;
+.build-why-dialog ul {
+  margin: 0;
   padding-left: 1.2rem;
 }
 
@@ -167,9 +173,7 @@
     min-height: 2.75rem;
   }
 
-  .build-why summary {
+  .build-why-link {
     min-height: 2.75rem;
-    display: flex;
-    align-items: center;
   }
 }

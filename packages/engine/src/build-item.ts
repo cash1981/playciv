@@ -11,9 +11,13 @@
 export const UNIT_TYPES = ['infantry', 'artillery', 'mounted', 'aircraft'] as const
 export type UnitType = (typeof UNIT_TYPES)[number]
 
-/** An item that is put on a map square: a building, an army figure or a scout figure. */
+/**
+ * An item that is put on a map square: a building, a wonder from the market, an army
+ * figure or a scout figure. A wonder's `assetId` is the wonder's own board asset.
+ */
 export type PlacedBuildItem =
   | { readonly kind: 'building'; readonly assetId: string }
+  | { readonly kind: 'wonder'; readonly assetId: string }
   | { readonly kind: 'army' }
   | { readonly kind: 'scout' }
 
@@ -31,7 +35,7 @@ export type BuildItem = PlacedBuildItem | UnitBuildItem
 
 /** Whether two items are the same thing to build. */
 export function sameBuildItem(a: BuildItem, b: BuildItem): boolean {
-  if (a.kind === 'building') return b.kind === 'building' && a.assetId === b.assetId
+  if (a.kind === 'building' || a.kind === 'wonder') return b.kind === a.kind && a.assetId === b.assetId
   if (a.kind === 'unit') return b.kind === 'unit' && a.unitType === b.unitType
   return a.kind === b.kind
 }

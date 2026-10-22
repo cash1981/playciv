@@ -526,13 +526,17 @@ the reward of that space: a culture event card (two to choose from with Mysticis
 or a Great Person card (more to choose from with Organized Religion and the
 Greeks). The cards to choose between are private and a refresh shows the same
 ones. Your cities are in the same "Your actions" panel, each with an estimate of its
-production (not a complete count; you can type a number by hand); the other players'
-cities are in an "Opponents' cities" panel lower down, to read only. A **Build** button on
-each of your cities lists what that city can build now, in three groups: buildings, army and scout figures, and
-military units, with the trade to pay for a rush. A building or a figure goes on
-a highlighted square you tap, then you confirm; a unit is a private card that is
+production (not a complete count; you can type a number by hand). The panel sits under
+the board, before your hand, and starts with **End turn**, which ends your open phase.
+A **Build** button on
+each of your cities lists what that city can build now, in groups: buildings, wonders from
+the market, army and scout figures, and
+military units, with the trade to pay for a rush; the reasons for the rest are behind a link.
+A figure is placed by tapping a highlighted square, a building or a wonder by tapping one and
+confirming, and a unit is a private card that is
 drawn into your hand with no square, and only its type is public. The piece or
-card, the trade and the log line are one step the vote undo can take back. A **Start
+card, the trade and the log line are one step the vote undo can take back, and so does removing
+the piece yourself before you press End turn (a new line says so). A **Start
 Building Program** button on each of your cities puts the Building Program marker on
 the city centre, and an **Upgrades** block in the same panel flips your basic
 buildings to the upgraded form once you have revealed its tech; both are one step

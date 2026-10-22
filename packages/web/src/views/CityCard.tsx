@@ -2,16 +2,14 @@
  * One city with what it produces and the arithmetic behind it (tasks
  * `city-production` and `cities-in-actions`).
  *
- * The numbers come from the engine (`cityProductionsOf`, carried on every
- * player's view), so the viewer's cities and the opponents' look the same. The
- * estimate is never presented as complete: the map data does not hold every
- * icon. A number typed by hand always wins, and any player in the game may set
- * it, like other board edits. Only the viewer's own card gets the controls
- * (`own`): Build, Start Building Program and the field to set production by
- * hand. An opponent's card has the figure and the popup, nothing to press.
- *
- * The viewer's cards sit in "Your actions" (`YourCities.tsx`) and the
- * opponents' in the Cities panel (`CitiesPanel.tsx`); this is the card both use.
+ * The numbers come from the engine (`cityProductionsOf`). The estimate is never
+ * presented as complete: the map data does not hold every icon. A number typed
+ * by hand always wins, and any player in the game may set it, like other board
+ * edits. The viewer's own card gets the controls (`own`): Build, Start Building
+ * Program and the field to set production by hand. Without `own` the card has
+ * the figure and the popup, nothing to press; the game page no longer lists the
+ * opponents' cities (the board shows them), so only the viewer's cards are used
+ * there, in "Your actions" (`YourCities.tsx`).
  */
 
 import { useEffect, useId, useRef, useState } from 'react'

@@ -90,12 +90,11 @@ export function FaqView(): React.JSX.Element {
           defaultOpen={false}
         >
           <p className="faq-answer">
-            Your cities are in <strong>Your actions</strong>, the panel at the top of the game
-            page, in the section <strong>Your cities</strong>. Each city shows an estimate of its
+            Your cities are in <strong>Your actions</strong>, the panel right under the board, in
+            the section <strong>Your cities</strong>. Each city shows an estimate of its
             production and a link that shows how the number was counted. The estimate is not a
             complete count, because the map data does not hold every icon, and a number you type
-            in by hand always wins. The <strong>Opponents&rsquo; cities</strong> panel further down
-            lists the other players&rsquo; cities with the same figures, to read only.
+            in by hand always wins.
           </p>
         </CollapsiblePanel>
 
@@ -106,23 +105,28 @@ export function FaqView(): React.JSX.Element {
         >
           <p className="faq-answer">
             In your open City Management phase, press <strong>Build</strong> on your city in
-            Your actions and pick what to build. A city can build a building, an army or a scout
-            figure, or a military unit. A building and a figure are placed on the map: tap one of
-            the highlighted squares around the city and press <strong>Confirm</strong>. A military
-            unit is not placed. It draws a private card into your hand, so there is no square, and
+            Your actions and pick what to build. A city can build a building, a wonder from the
+            wonders market, an army or a scout figure, or a military unit. A figure is placed as
+            soon as you tap one of the highlighted squares around the city. A building and a wonder
+            are placed the same way, and then you press <strong>Confirm</strong>. A military unit is
+            not placed. It draws a private card into your hand, so there is no square, and
             Confirm is ready at once; the log names only the type of unit. An army put on a
             square where an enemy figure stands is not automated: you settle any battle or loot by hand, and the bar says so.{' '}
             <strong>Cancel</strong> or Escape changes nothing. What is built, any trade you pay and
-            the log line happen together, and the same Undo vote takes them back like your other
-            actions. On a phone the squares are small at the default zoom, so zoom the board in to
-            tap one.
+            the log line happen together. If you change your mind before you press{' '}
+            <strong>End turn</strong>, remove the piece from the board: the build is taken back, the
+            trade is returned and a new line in the log says so. After End turn, removing it is an
+            ordinary removal. The Undo vote takes a build back like your other actions. On a phone
+            the squares are small at the default zoom, so zoom the board in to tap one.
           </p>
           <p className="faq-answer">
-            Only what you can really build is listed, in three groups: buildings, figures and
-            units. The reasons for the others are under{' '}
+            Only what you can really build is listed, in groups: buildings, wonders, figures and
+            units. A wonder costs the printed amount, or less if you know the tech on its card, and a
+            city holds one wonder. The reasons for the others are behind the link{' '}
             <strong>Why not the others</strong>. If the estimate of the city&rsquo;s production is
             too low, set the production by hand in the same card. When production is short but the
-            trade covers it, the list says how much trade you pay.
+            trade covers it, the list says how much trade you pay. After you build a wonder, draw
+            the next one into the market with the Draw panel.
           </p>
         </CollapsiblePanel>
 

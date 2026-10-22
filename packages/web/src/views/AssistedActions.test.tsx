@@ -10,7 +10,6 @@ import { ApiError, api } from '../lib/api.js'
 import type { CityBuildOptions, CityProduction, PlayerView } from '../lib/api.js'
 import { AssistedActionButton, AssistedActionsPanel, hasActionsPanel, resetPendingRequestIds } from './AssistedActions.js'
 import { useBuildFlow } from './buildFlow.js'
-import { CitiesPanel } from './CitiesPanel.js'
 import type { Run } from './GameView.js'
 import { TechPanel } from './TechPanel.js'
 
@@ -1169,31 +1168,5 @@ describe('Your cities in the panel', () => {
     // The same view and flow without readOnly has the button, so the assertion above can fail.
     render(<Panel readOnly={false} />)
     expect(screen.getByRole('button', { name: 'Build in Capital D5' })).toBeTruthy()
-  })
-
-  it('leaves the viewer’s cities out of the Cities panel, which lists the opponents’ only, with no id twice', () => {
-    localStorage.setItem('civ.panel.cities', 'true')
-    const theirs = cityOf({ pieceId: 'city-9', label: 'City H9', buildingProgram: true, withBuildingProgram: 6 })
-    const view = viewWithCity()
-    const both = (
-      <>
-        <AssistedActionsPanel gameId="game-1" view={withYou(view, {}, [{ playerId: 'x', username: 'Bob', cities: [theirs] }])} busy={false} readOnly={false} run={run} />
-        <CitiesPanel view={withYou(view, {}, [{ playerId: 'x', username: 'Bob', cities: [theirs] }])} />
-      </>
-    )
-    const { container } = render(both)
-    try {
-      expect(screen.getAllByRole('heading', { name: 'Capital D5' })).toHaveLength(1)
-      expect(screen.getAllByRole('heading', { name: 'City H9' })).toHaveLength(1)
-      const opponents = screen.getByRole('heading', { name: "Opponents' cities (1)" }).closest('section') as HTMLElement
-      expect(within(opponents).queryByRole('heading', { name: 'Capital D5' })).toBeNull()
-      // Open a popup in each panel: their title ids must differ too.
-      fireEvent.click(screen.getByRole('button', { name: 'Not a complete count: Capital D5' }))
-      fireEvent.click(screen.getByRole('button', { name: 'Not a complete count: City H9' }))
-      const ids = Array.from(container.ownerDocument.querySelectorAll('[id]')).map((element) => element.id)
-      expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([])
-    } finally {
-      localStorage.removeItem('civ.panel.cities')
-    }
   })
 })

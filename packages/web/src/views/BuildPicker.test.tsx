@@ -13,19 +13,16 @@ import { BoardView } from './BoardView.js'
 import type { PickSquares } from './BoardView.js'
 import { BuildBar, BuildPicker } from './BuildPicker.js'
 import { OPTIONS_CHANGED, SQUARE_GONE, useBuildFlow } from './buildFlow.js'
-import { CitiesPanel } from './CitiesPanel.js'
 import type { Run } from './GameView.js'
 
 beforeEach(() => {
   localStorage.setItem('civ.panel.actions', 'true')
-  localStorage.setItem('civ.panel.cities', 'true')
   resetPendingRequestIds()
   vi.spyOn(api, 'boardAssets').mockResolvedValue([])
 })
 afterEach(() => {
   cleanup()
   localStorage.removeItem('civ.panel.actions')
-  localStorage.removeItem('civ.panel.cities')
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
@@ -54,6 +51,16 @@ const HARBOR: BuildChoice = {
   cost: 5,
   tradeToPay: 3,
   squares: [{ column: 2, row: 3, label: 'C4' }],
+}
+
+const COLOSSUS: BuildChoice = {
+  assetId: 'wonders/colossus',
+  item: { kind: 'wonder', assetId: 'wonders/colossus' },
+  placement: 'square',
+  label: 'The Colossus',
+  cost: 10,
+  tradeToPay: 0,
+  squares: [{ column: 3, row: 4, label: 'D5' }],
 }
 
 const BATTLE_NOTE = 'An enemy figure stands here. Placing the army here is not automated: resolve any battle or loot by hand.'
@@ -173,17 +180,17 @@ describe('BuildPicker', () => {
     return { onChoose, onClose }
   }
 
-  it('lists each choice with its cost, the trade it pays and its number of squares', () => {
+  it('lists each choice with its cost and the trade it pays, and no count of squares', () => {
     renderPicker(options())
     const list = screen.getByRole('list', { name: 'Buildings Capital D5 can build' })
     const [library, harbor] = within(list).getAllByRole('listitem')
     expect(library?.textContent).toContain('Library')
     expect(library?.textContent).toContain('Cost 6')
     expect(library?.textContent).not.toContain('trade')
-    expect(library?.textContent).toContain('2 squares')
     expect(harbor?.textContent).toContain('Cost 5, pays 3 trade')
-    expect(harbor?.textContent).toContain('1 square')
-    expect(harbor?.textContent).not.toContain('1 squares')
+    // How many squares there are is noise: the squares are on the board when one is picked.
+    expect(library?.textContent).not.toMatch(/square/i)
+    expect(harbor?.textContent).not.toMatch(/square/i)
   })
 
   it.each([
@@ -195,14 +202,27 @@ describe('BuildPicker', () => {
     expect(screen.getByText(line)).toBeTruthy()
   })
 
-  it('keeps the reasons for the other buildings folded under Why not the others', () => {
+  it('keeps the reasons for the other buildings in a popup behind Why not the others', () => {
     renderPicker(options())
-    const details = screen.getByText('Why not the others (2)').closest('details')
-    expect(details).not.toBeNull()
-    expect(details?.open).toBe(false)
-    const reasons = within(details as HTMLElement).getByRole('list', { hidden: true })
+    const link = screen.getByRole('button', { name: 'Why not the others (2)' })
+    expect(link.getAttribute('aria-haspopup')).toBe('dialog')
+    // Nothing of the reasons is on the page until the link is pressed.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.body.textContent).not.toContain('Needs the Currency tech.')
+
+    fireEvent.click(link)
+    const dialog = screen.getByRole('dialog', { name: 'Capital D5: why not the others' })
+    const reasons = within(dialog).getByRole('list')
     expect(reasons.textContent).toContain('Market: Needs the Currency tech.')
     expect(reasons.textContent).toContain('Granary: No legal square: D4 is forest.')
+
+    // Close and Escape both put it away and give focus back to the link.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(link)
+    fireEvent.click(link)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('says plainly when nothing can be built, and points at the reasons and at setting production by hand', () => {
@@ -211,7 +231,7 @@ describe('BuildPicker', () => {
     expect(screen.getByText(/Nothing can be built in this city right now/).textContent).toMatch(
       /Why not the others.*set the city.s production by hand/s,
     )
-    expect(screen.getByText('Why not the others (2)')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Why not the others (2)' })).toBeTruthy()
   })
 
   it('shows the reason instead of a list when the phase is wrong', () => {
@@ -273,7 +293,6 @@ function Harness({
   return (
     <>
       <AssistedActionsPanel gameId="g1" view={view} busy={false} readOnly={readOnly} run={run} build={flow} />
-      <CitiesPanel view={view} />
       <BuildBar gameId="g1" view={view} flow={flow} busy={false} run={run} />
       <BoardView
         gameId="g1"
@@ -325,7 +344,8 @@ describe('the Build button in Your actions', () => {
     const { unmount } = render(
       <Harness initial={viewOf([options({ cityPieceId: 'city-9', label: 'City H9' })], { theirs: [theirs] })} />,
     )
-    expect(screen.getByText('City H9')).toBeTruthy()
+    // The opponent's city is not listed anywhere on the page, so it has no button either.
+    expect(screen.queryByText('City H9')).toBeNull()
     expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
     unmount()
 
@@ -792,11 +812,7 @@ describe('the picker groups', () => {
 
   it('lists buildings, figures and units under their own headings, in that order', () => {
     renderPicker(ALL_KINDS())
-    expect(headings()).toEqual([
-      'Buildings',
-      'Figures (placed on the map)',
-      'Units (a private card, nothing is placed)',
-    ])
+    expect(headings()).toEqual(['Buildings', 'Figures (placed on the map)', 'Units'])
     const names = (list: string): (string | null | undefined)[] =>
       within(screen.getByRole('list', { name: list }))
         .getAllByRole('listitem')
@@ -812,7 +828,7 @@ describe('the picker groups', () => {
     unmount()
 
     const units = renderPicker(options({ choices: [INFANTRY] }))
-    expect(headings()).toEqual(['Units (a private card, nothing is placed)'])
+    expect(headings()).toEqual(['Units'])
     expect(screen.queryByRole('list', { name: 'Buildings Capital D5 can build' })).toBeNull()
     expect(screen.queryByRole('list', { name: 'Figures Capital D5 can build' })).toBeNull()
     units.unmount()
@@ -821,15 +837,16 @@ describe('the picker groups', () => {
     expect(headings()).toEqual(['Figures (placed on the map)'])
   })
 
-  it('shows cost, trade and squares for a figure, and says a unit draws a card in secret', () => {
+  it('shows cost and trade for a figure and a unit, and nothing else', () => {
     renderPicker(ALL_KINDS())
     const [army] = within(screen.getByRole('list', { name: 'Figures Capital D5 can build' })).getAllByRole('listitem')
     expect(army?.textContent).toContain('Cost 4')
-    expect(army?.textContent).toContain('2 squares')
+    expect(army?.textContent).not.toMatch(/square/i)
     const [infantry, mounted] = within(screen.getByRole('list', { name: 'Units Capital D5 can build' })).getAllByRole('listitem')
     expect(infantry?.textContent).toContain('Cost 5')
-    expect(infantry?.textContent).toContain('Draws a card in secret')
-    expect(infantry?.textContent).not.toContain('square')
+    // "Draws a card in secret" is noise: the bar says what a unit is when it is picked.
+    expect(infantry?.textContent).not.toContain('secret')
+    expect(infantry?.textContent).not.toMatch(/square/i)
     expect(mounted?.textContent).toContain('Cost 7, pays 3 trade')
   })
 
@@ -843,8 +860,8 @@ describe('the picker groups', () => {
         ],
       }),
     )
-    const details = screen.getByText('Why not the others (2)').closest('details') as HTMLElement
-    const reasons = within(details).getByRole('list', { hidden: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Why not the others (2)' }))
+    const reasons = within(screen.getByRole('dialog')).getByRole('list')
     expect(reasons.textContent).toContain('Scout figure: All 2 scouts are on the board.')
     expect(reasons.textContent).toContain('Aircraft unit: Aircraft need the Flight tech.')
   })
@@ -941,7 +958,9 @@ describe('building a figure', () => {
     fireEvent.click(screen.getByRole('button', { name: `Choose ${name}` }))
   }
 
-  it('an army enters square picking and sends its item with the chosen square', async () => {
+  const confirmButton = (): HTMLElement | null => within(bar()).queryByRole('button', { name: /^Confirm/ })
+
+  it('an army enters square picking and is placed by the tap on its square, with no Confirm', async () => {
     const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
     render(<Harness initial={viewOf([ALL_KINDS()])} />)
     startFigure('Army figure')
@@ -950,12 +969,11 @@ describe('building a figure', () => {
       'Place Army figure on E5, enemy figure there, resolve by hand',
     ])
     expect(bar().textContent).toContain('Build Army figure in Capital D5')
-    expect(bar().textContent).toContain('Tap a highlighted square')
-    expect(confirm().disabled).toBe(true)
+    expect(bar().textContent).toContain('Tap a highlighted square on the board to place it.')
+    expect(confirmButton()).toBeNull()
+    expect(send).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Place Army figure on D5' }))
-    expect(confirm().disabled).toBe(false)
-    fireEvent.click(confirm())
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0]?.[3]).toEqual({
       cityPieceId: 'city-1',
@@ -964,14 +982,13 @@ describe('building a figure', () => {
     })
   })
 
-  it('a scout enters square picking and sends its item with the chosen square', async () => {
+  it('a scout enters square picking and sends its item with the tapped square', async () => {
     const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
     render(<Harness initial={viewOf([ALL_KINDS()])} />)
     startFigure('Scout figure')
     expect(overlays().map((button) => button.getAttribute('aria-label'))).toEqual(['Place Scout figure on D5'])
     expect(document.getElementById('game-board')?.classList.contains('build-picking')).toBe(true)
     fireEvent.click(overlays()[0] as HTMLElement)
-    fireEvent.click(confirm())
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send.mock.calls[0]?.[3]).toEqual({
       cityPieceId: 'city-1',
@@ -980,7 +997,8 @@ describe('building a figure', () => {
     })
   })
 
-  it('shows and announces the enemy figure note for a blockaded square, and not for a plain one', () => {
+  it('shows and announces the enemy figure note for a blockaded square, which keeps Confirm', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
     render(<Harness initial={viewOf([ALL_KINDS()])} />)
     startFigure('Army figure')
     const plain = screen.getByRole('button', { name: 'Place Army figure on D5' })
@@ -991,31 +1009,94 @@ describe('building a figure', () => {
     expect(plain.classList.contains('noted')).toBe(false)
     expect(plain.textContent).not.toContain('Enemy')
 
-    fireEvent.click(plain)
-    expect(screen.queryByRole('status')).toBeNull()
-
+    // The square with a note is read first: tapping it sends nothing, and Confirm places the army.
     fireEvent.click(noted)
     // role="status" is a live region: a screen reader reads the note out when the square is picked.
     const status = within(bar()).getByRole('status')
     expect(status.textContent).toContain('Note for E5:')
     expect(status.textContent).toContain(BATTLE_NOTE)
     expect(confirm().disabled).toBe(false)
+    expect(send).not.toHaveBeenCalled()
 
+    // Another, plain square is placed at once and the note goes with the choice.
     fireEvent.click(plain)
-    expect(screen.queryByRole('status')).toBeNull()
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toMatchObject({ target: { column: 3, row: 4 } })
   })
 
-  it('a note that appears on the chosen square after a refresh is shown', () => {
+  it('Confirm places the army on a square with a note', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([ALL_KINDS()])} />)
+    startFigure('Army figure')
+    fireEvent.click(screen.getByRole('button', { name: 'Place Army figure on E5, enemy figure there, resolve by hand' }))
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toEqual({ cityPieceId: 'city-1', item: { kind: 'army' }, target: { column: 4, row: 4 } })
+  })
+
+  it('a note that appears on the chosen square after a refresh is shown, and the square is not sent by it', async () => {
+    const pending = new Promise<PlayerView>(() => undefined)
+    const send = vi.spyOn(api, 'build').mockReturnValue(pending)
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
     startFigure('Scout figure')
     fireEvent.click(screen.getByRole('button', { name: 'Place Scout figure on D5' }))
     expect(screen.queryByRole('status')).toBeNull()
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
     const noted = { ...SCOUT, squares: [{ column: 3, row: 4, label: 'D5', note: 'A note.' }] }
     act(() => handle.setView(viewOf([options({ choices: [LIBRARY, ARMY, noted, INFANTRY] })], { rev: 9 })))
     expect(screen.getByRole('status').textContent).toContain('A note.')
     expect(screen.getByRole('button', { name: 'Place Scout figure on D5, enemy figure there, resolve by hand' })).toBeTruthy()
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  it('after a refusal, Confirm tries the same square again, and the tap is not sent twice', async () => {
+    const send = vi.spyOn(api, 'build').mockRejectedValueOnce(new ApiError(422, 'BUILD_REFUSED', 'Not now.')).mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([ALL_KINDS()])} refresh={() => viewOf([ALL_KINDS()], { rev: 8 })} />)
+    startFigure('Army figure')
+    fireEvent.click(screen.getByRole('button', { name: 'Place Army figure on D5' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('Not now.')
+    expect(send).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Build' })).toBeNull())
+  })
+
+  it('tapping the same square again after a refusal is no new pick, and Confirm is still there', async () => {
+    const send = vi.spyOn(api, 'build').mockRejectedValue(new ApiError(422, 'BUILD_REFUSED', 'Not now.'))
+    render(<Harness initial={viewOf([ALL_KINDS()])} refresh={() => viewOf([ALL_KINDS()], { rev: 8 })} />)
+    startFigure('Army figure')
+    const plain = screen.getByRole('button', { name: 'Place Army figure on D5' })
+    fireEvent.click(plain)
+    await screen.findByRole('alert')
+    expect(send).toHaveBeenCalledTimes(1)
+
+    // The tap clears the message, but the square is the same: nothing is sent, and Confirm stays
+    fireEvent.click(plain)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(confirmButton()).not.toBeNull()
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(2))
+  })
+
+  it('a note that disappears from a picked square leaves Confirm to send it, and nothing is sent by itself', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
+    startFigure('Army figure')
+    fireEvent.click(screen.getByRole('button', { name: 'Place Army figure on E5, enemy figure there, resolve by hand' }))
+    expect(send).not.toHaveBeenCalled()
+
+    // The enemy figure leaves: the square has no note any more
+    const plainArmy = { ...ARMY, squares: [{ column: 3, row: 4, label: 'D5' }, { column: 4, row: 4, label: 'E5' }] }
+    act(() => handle.setView(viewOf([options({ choices: [LIBRARY, plainArmy, SCOUT, INFANTRY, MOUNTED] })], { rev: 9 })))
+    expect(send).not.toHaveBeenCalled()
+    expect(screen.queryByRole('status')).toBeNull()
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toMatchObject({ item: { kind: 'army' }, target: { column: 4, row: 4 } })
   })
 })
 
@@ -1031,7 +1112,9 @@ describe('the request key tells the items and squares apart', () => {
       if (open === null) fireEvent.click(buildButton())
       fireEvent.click(screen.getByRole('button', { name: `Choose ${choice}` }))
       if (square !== null) fireEvent.click(screen.getByRole('button', { name: square }))
-      fireEvent.click(confirm())
+      // A figure on a plain square is sent by the tap; a note on the square or a unit needs Confirm.
+      const sendIt = within(bar()).queryByRole('button', { name: /^Confirm/ })
+      if (sendIt !== null) fireEvent.click(sendIt)
       await waitFor(() => expect(send).toHaveBeenCalledTimes(calls))
       await screen.findByRole('alert')
     }
@@ -1053,6 +1136,8 @@ describe('the request key tells the items and squares apart', () => {
 
 describe('a refresh compares choices by item', () => {
   it('keeps the plan when the same item comes back under another list key', () => {
+    // The tap sends the army; the request is still out, so the plan stays.
+    vi.spyOn(api, 'build').mockReturnValue(new Promise<PlayerView>(() => undefined))
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([ALL_KINDS()])} handle={handle} />)
     fireEvent.click(buildButton())
@@ -1065,7 +1150,6 @@ describe('a refresh compares choices by item', () => {
     expect(overlays()).toHaveLength(2)
     expect(screen.getByRole('button', { name: 'Place Army figure on D5' }).getAttribute('aria-pressed')).toBe('true')
     expect(screen.queryByRole('status')).toBeNull()
-    expect(confirm().disabled).toBe(false)
   })
 
   it('treats a different item under the same list key as another choice and goes back to the picker', () => {
@@ -1118,5 +1202,63 @@ describe('a refresh compares choices by item', () => {
     act(() => handle.setView(viewOf([options({ choices: [LIBRARY] })], { rev: 9 })))
     expect(screen.getByRole('status').textContent).toBe(OPTIONS_CHANGED)
     expect(screen.getByRole('region', { name: 'Build in Capital D5' })).toBeTruthy()
+  })
+})
+
+describe('building a wonder', () => {
+  const startWonder = (): void => {
+    fireEvent.click(buildButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Choose The Colossus' }))
+  }
+  const withWonder = (): CityBuildOptions => options({ choices: [LIBRARY, COLOSSUS, ARMY] })
+
+  it('has its own group between the buildings and the figures, with cost and nothing else', () => {
+    render(
+      <BuildPicker city={withWonder()} note={null} message={null} busy={false} onChoose={() => undefined} onClose={() => undefined} />,
+    )
+    expect(screen.getAllByRole('heading', { level: 6 }).map((heading) => heading.textContent)).toEqual([
+      'Buildings',
+      'Wonders',
+      'Figures (placed on the map)',
+    ])
+    const [colossus] = within(screen.getByRole('list', { name: 'Wonders Capital D5 can build' })).getAllByRole('listitem')
+    expect(colossus?.textContent).toContain('The Colossus')
+    expect(colossus?.textContent).toContain('Cost 10')
+    expect(colossus?.textContent).not.toMatch(/square/i)
+  })
+
+  it('enters square picking like a building, and needs Confirm', async () => {
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([withWonder()])} />)
+    startWonder()
+    expect(bar().textContent).toContain('Build the Colossus in Capital D5')
+    expect(bar().textContent).toContain('Tap a highlighted square on the board.')
+    expect(overlays().map((button) => button.getAttribute('aria-label'))).toEqual(['Place The Colossus on D5'])
+    expect(confirm().disabled).toBe(true)
+
+    // A wonder is not sent by the tap: it is paid for in production, so Confirm places it
+    fireEvent.click(overlays()[0] as HTMLElement)
+    expect(send).not.toHaveBeenCalled()
+    expect(confirm().disabled).toBe(false)
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[3]).toEqual({
+      cityPieceId: 'city-1',
+      item: { kind: 'wonder', assetId: 'wonders/colossus' },
+      target: { column: 3, row: 4 },
+    })
+  })
+
+  it('tells a wonder and a building of the same asset id apart in the request key and in a refresh', () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([withWonder()])} handle={handle} />)
+    startWonder()
+    fireEvent.click(overlays()[0] as HTMLElement)
+
+    // The same asset id as a building is another choice, so the plan goes back to the picker
+    const asBuilding = { ...COLOSSUS, item: { kind: 'building', assetId: 'wonders/colossus' } as const }
+    act(() => handle.setView(viewOf([options({ choices: [asBuilding] })], { rev: 9 })))
+    expect(overlays()).toHaveLength(0)
+    expect(screen.getByRole('status').textContent).toBe(OPTIONS_CHANGED)
   })
 })

@@ -6,18 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, api } from '../lib/api.js'
 import type { CityActionOptions, CityProduction, PlayerView, UpgradeFamilyOption } from '../lib/api.js'
 import { AssistedActionsPanel, resetPendingRequestIds } from './AssistedActions.js'
-import { CitiesPanel } from './CitiesPanel.js'
 import type { Run } from './GameView.js'
 
 beforeEach(() => {
   localStorage.setItem('civ.panel.actions', 'true')
-  localStorage.setItem('civ.panel.cities', 'true')
   resetPendingRequestIds()
 })
 afterEach(() => {
   cleanup()
   localStorage.removeItem('civ.panel.actions')
-  localStorage.removeItem('civ.panel.cities')
   vi.restoreAllMocks()
 })
 
@@ -111,19 +108,16 @@ const run: Run = async (action) => {
   await action()
 }
 
-/** The page as GameView lays it out: the city actions are in Your actions, the opponents' cities in the Cities panel. */
+/** The page as GameView lays it out: the city actions are in Your actions. */
 function page(view: PlayerView, options: { busy?: boolean; readOnly?: boolean; run?: Run } = {}): React.JSX.Element {
   return (
-    <>
-      <AssistedActionsPanel
-        gameId="g1"
-        view={view}
-        busy={options.busy ?? false}
-        readOnly={options.readOnly ?? false}
-        run={options.run ?? run}
-      />
-      <CitiesPanel view={view} />
-    </>
+    <AssistedActionsPanel
+      gameId="g1"
+      view={view}
+      busy={options.busy ?? false}
+      readOnly={options.readOnly ?? false}
+      run={options.run ?? run}
+    />
   )
 }
 
@@ -237,9 +231,9 @@ describe('Start Building Program', () => {
     expect(send).toHaveBeenNthCalledWith(2, 'g1', expect.any(String), 3, 'city-2')
   })
 
-  it('has no button for an opponent’s city', () => {
+  it('has no button for an opponent’s city, which is not listed at all', () => {
     renderPanel(viewOf({ own: [], others: [city({ pieceId: 'theirs', label: 'City H8' })], cityActions: [] }))
-    expect(screen.getByRole('heading', { name: 'City H8' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'City H8' })).toBeNull()
     expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
   })
 

@@ -29,9 +29,9 @@ import {
   undoLastBoardChange,
 } from '../src/actions/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
-import { markPhasesDone } from '../src/actions/turn.js'
+import { markPhasesDone, unmarkPhaseDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
-import { performAssistedAction } from '../src/assisted.js'
+import { performAssistedAction, takeBackOpenBuild } from '../src/assisted.js'
 import { mapCellOf } from '../src/blockade.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop, piecesAtStep, slotOrigin } from '../src/board.js'
 import type { BoardPiece, Rotation } from '../src/board.js'
@@ -1078,5 +1078,206 @@ describe('replay and the board history', () => {
     for (const entry of last) expect(entry.logLength).toBe(undone.log.length)
     const lengths = undone.board.history.map((entry) => entry.logLength)
     expect(lengths).toEqual([...lengths].sort((a, b) => a - b))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Removing the piece by hand, before End turn
+// ---------------------------------------------------------------------------
+
+describe('removing a built piece by hand', () => {
+  const takeBack = (state: GameState, pieceId: string, playerId = CASH1981) =>
+    takeBackOpenBuild(state, { playerId, pieceId, at: AT })
+  /** The state after the build was taken back; a failure if the piece is not an open build's. */
+  const takenBack = (state: GameState, pieceId: string): GameState => {
+    const result = takeBack(state, pieceId)
+    if (result === undefined) throw new Error('the piece is not an open build')
+    return unwrap(result)
+  }
+  const endTurn = (state: GameState): GameState =>
+    unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'CM' }))
+
+  it('takes the whole build back before End turn: the piece, the trade and a System line, and keeps the old line', () => {
+    const done = build(ready(['Printing Press'], 12), UNIVERSITY, C2, 'req-1', true)
+    const piece = piecesOf(done, UNIVERSITY)[0] as BoardPiece
+    expect(me(done).stats.trade).toBe(3)
+
+    const taken = takenBack(done, piece.id)
+    expect(piecesOf(taken, UNIVERSITY)).toEqual([])
+    expect(me(taken).stats.trade).toBe(12)
+    expect(taken.assistedActions[0]?.status).toBe('undone')
+    // The line that reported the build stays, and a new one says what happened to it
+    expect(taken.log.find((entry) => entry.assistedActionId === 'req-1')?.publicLog).toContain('built a University')
+    expect(taken.log.at(-1)?.publicLog).toBe(
+      "System: cash1981's University on C2 was undone: the building was removed, 9 trade returned. It was removed before End turn.",
+    )
+    expect(taken.log).toHaveLength(done.log.length + 1)
+    // The board history has the removal, and the building can be built again
+    expect(taken.board.history.at(-1)?.change).toMatchObject({ kind: 'remove', piece: { id: piece.id } })
+    expect(taken.board.history.at(-1)?.logLength).toBe(taken.log.length)
+  })
+
+  it('puts a used Building Program marker back', () => {
+    const marked = put(ready(['Writing']), CASH1981, 'markers/Building Program', 1, 1)
+    const marker = piecesOf(marked, 'markers/Building Program')[0] as BoardPiece
+    const done = build(marked, LIBRARY, C2)
+    const library = piecesOf(done, LIBRARY)[0] as BoardPiece
+
+    const taken = takenBack(done, library.id)
+    expect(piecesOf(taken, LIBRARY)).toEqual([])
+    expect(piecesOf(taken, 'markers/Building Program')).toEqual([marker])
+    expect(taken.log.at(-1)?.publicLog).toBe(
+      "System: cash1981's Library on C2 was undone: the building was removed and the Building Program marker was put back. It was removed before End turn.",
+    )
+  })
+
+  it('works on a piece that was moved to another square first', () => {
+    const done = build(ready(['Writing']), LIBRARY, C2)
+    const piece = piecesOf(done, LIBRARY)[0] as BoardPiece
+    const moved = unwrap(
+      movePiece(done, {
+        playerId: CASH1981,
+        pieceId: piece.id,
+        x: 3 * SQUARE_SIZE + 4,
+        y: mapTop(done.board) + 3 * SQUARE_SIZE + 4,
+      }),
+    )
+    const taken = takenBack(moved, piece.id)
+    expect(piecesOf(taken, LIBRARY)).toEqual([])
+    expect(taken.assistedActions[0]?.status).toBe('undone')
+  })
+
+  it('takes an army back too, wherever it was moved to', () => {
+    const state = ready([], 0)
+    const options = buildOptionsOf(state, me(state))[0]
+    const army = options?.choices.find((choice) => choice.item.kind === 'army')
+    const square = army?.squares[0]
+    if (army === undefined || square === undefined) throw new Error('no army choice')
+    const done = unwrap(
+      performAssistedAction(state, {
+        playerId: CASH1981,
+        action: 'build',
+        requestId: 'req-army',
+        at: AT,
+        payload: { cityPieceId: cityOf(state).id, item: { kind: 'army' }, target: { column: square.column, row: square.row } },
+      }),
+    )
+    const piece = piecesOf(done, army.assetId)[0] as BoardPiece
+    const moved = unwrap(movePiece(done, { playerId: CASH1981, pieceId: piece.id, x: piece.x + 2 * SQUARE_SIZE, y: piece.y, snap: false }))
+
+    const taken = takenBack(moved, piece.id)
+    expect(piecesOf(taken, army.assetId)).toEqual([])
+    expect(taken.log.at(-1)?.publicLog).toMatch(/^System: cash1981's army on .+ was undone: the figure was removed\. It was removed before End turn\.$/)
+  })
+
+  it('is a plain removal after End turn: nothing is refunded and the record stays applied', () => {
+    const done = endTurn(build(ready(['Printing Press'], 12), UNIVERSITY, C2, 'req-1', true))
+    const piece = piecesOf(done, UNIVERSITY)[0] as BoardPiece
+
+    expect(takeBack(done, piece.id)).toBeUndefined()
+    // The caller then removes it as any other piece
+    const removed = unwrap(removePiece(done, { playerId: CASH1981, pieceId: piece.id, at: AT }))
+    expect(piecesOf(removed, UNIVERSITY)).toEqual([])
+    expect(removed.assistedActions[0]?.status).toBe('applied')
+    expect(me(removed).stats.trade).toBe(3)
+    expect(removed.log).toHaveLength(done.log.length)
+  })
+
+  it('is only for the owner: another player removing the piece gets a plain removal', () => {
+    const done = build(ready(['Writing']), LIBRARY, C2)
+    const piece = piecesOf(done, LIBRARY)[0] as BoardPiece
+    expect(takeBack(done, piece.id, KARANDRAS1)).toBeUndefined()
+  })
+
+  it('is not for a piece that no build put on the board', () => {
+    const state = put(ready(['Writing']), CASH1981, LIBRARY, 5, 5)
+    const piece = piecesOf(state, LIBRARY)[0] as BoardPiece
+    expect(takeBack(state, piece.id)).toBeUndefined()
+    expect(takeBack(state, 'no-such-piece')).toBeUndefined()
+  })
+
+  it('cannot take the same build back twice, and a retaken build can be made again', () => {
+    const done = build(ready(['Writing']), LIBRARY, C2)
+    const piece = piecesOf(done, LIBRARY)[0] as BoardPiece
+    const taken = takenBack(done, piece.id)
+    expect(takeBack(taken, piece.id)).toBeUndefined()
+    const again = build(taken, LIBRARY, C2, 'req-2')
+    expect(piecesOf(again, LIBRARY)).toHaveLength(1)
+  })
+
+  it('the vote undo is refused once the piece was taken back', () => {
+    const done = build(ready(['Writing']), LIBRARY, C2)
+    const piece = piecesOf(done, LIBRARY)[0] as BoardPiece
+    const taken = takenBack(done, piece.id)
+    expect(unwrapErr(initiateUndo(taken, { logId: logIdOf(taken, 'req-1'), playerId: CASH1981 })).kind).toBe(
+      'ASSISTED_ACTION_ALREADY_UNDONE',
+    )
+  })
+
+  it('takes back a started Building Program by removing its marker, before End turn only', () => {
+    const state = ready([])
+    const started = unwrap(
+      performAssistedAction(state, {
+        playerId: CASH1981,
+        action: 'startBuildingProgram',
+        requestId: 'req-start',
+        at: AT,
+        payload: { cityPieceId: cityOf(state).id },
+      }),
+    )
+    const marker = piecesOf(started, 'markers/Building Program')[0] as BoardPiece
+    expect(marker).toBeDefined()
+
+    const taken = takenBack(started, marker.id)
+    expect(piecesOf(taken, 'markers/Building Program')).toEqual([])
+    expect(taken.assistedActions[0]?.status).toBe('undone')
+    expect(taken.log.at(-1)?.publicLog).toBe(
+      "System: cash1981's Building Program in City B2 was undone: the marker was removed. It was removed before End turn.",
+    )
+
+    expect(takeBack(endTurn(started), marker.id)).toBeUndefined()
+  })
+
+  it('cannot be brought back by the board Undo: the build stays undone and the trade refunded', () => {
+    const marked = put(ready(['Printing Press'], 12), CASH1981, 'markers/Building Program', 1, 1)
+    const done = build(withOverride(marked, 5), UNIVERSITY, C2, 'req-1', true)
+    const piece = piecesOf(done, UNIVERSITY)[0] as BoardPiece
+    const taken = takenBack(done, piece.id)
+
+    // The owner's board Undo and Redo have nothing to go back to
+    expect(unwrapErr(undoLastBoardChange(taken, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+    expect(piecesOf(taken, UNIVERSITY)).toEqual([])
+    expect(taken.board.redo).toEqual([])
+    // A later ordinary change can still be taken back, and only that one
+    const moved = unwrap(movePiece(taken, { playerId: CASH1981, pieceId: cityOf(taken).id, x: cityOf(taken).x + 3, y: cityOf(taken).y, snap: false }))
+    const back = unwrap(undoLastBoardChange(moved, CASH1981))
+    expect(back.board.history).toHaveLength(taken.board.history.length)
+    expect(unwrapErr(undoLastBoardChange(back, CASH1981)).kind).toBe('NOTHING_TO_UNDO_ON_BOARD')
+  })
+
+  it('answers an undo vote that was open on the build, so it does not stay on the lists of votes', () => {
+    const done = build(ready(['Writing']), LIBRARY, C2)
+    const piece = piecesOf(done, LIBRARY)[0] as BoardPiece
+    const asked = unwrap(initiateUndo(done, { logId: logIdOf(done, 'req-1'), playerId: KARANDRAS1 }))
+    expect(asked.log.find((entry) => entry.assistedActionId === 'req-1')?.undo).toMatchObject({ done: false })
+
+    const taken = takenBack(asked, piece.id)
+    expect(taken.log.find((entry) => entry.assistedActionId === 'req-1')?.undo).toMatchObject({ done: true })
+    // Voting on it is refused as already undone, as for any other undone action
+    expect(unwrapErr(vote(taken, { logId: logIdOf(taken, 'req-1'), playerId: ITCHI, vote: true, at: AT })).kind).toBe(
+      'ASSISTED_ACTION_ALREADY_UNDONE',
+    )
+  })
+
+  it('is only for the turn being played: a phase unmarked in an older turn does not reopen its builds', () => {
+    const done = build(ready(['Writing']), LIBRARY, C2)
+    const piece = piecesOf(done, LIBRARY)[0] as BoardPiece
+    // Everybody finishes turn 1, so turn 2 is the current one, then City Management of turn 1 is unmarked
+    let later = done
+    for (const playerId of [CASH1981, ...OTHERS]) {
+      later = unwrap(markPhasesDone(later, { playerId, turnNumber: 1, upToPhase: 'RESEARCH' }))
+    }
+    later = unwrap(unmarkPhaseDone(later, { playerId: CASH1981, turnNumber: 1, phase: 'CM' }))
+    expect(takeBackOpenBuild(later, { playerId: CASH1981, pieceId: piece.id, at: AT })).toBeUndefined()
   })
 })
