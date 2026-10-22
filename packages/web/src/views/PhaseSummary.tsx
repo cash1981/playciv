@@ -7,7 +7,7 @@
  * server. A spectator gets the round and who is waited for, no resources.
  */
 
-import { TURN_PHASES, TURN_PHASE_LABEL, totalCoins } from '@civ/engine'
+import { TURN_PHASE_LABEL } from '@civ/engine'
 import type { TurnPhase } from '@civ/engine'
 
 import type { PlayerView } from '../lib/api.js'
@@ -32,7 +32,7 @@ export function viewerPhaseText(view: PlayerView): string | null {
   if (you === null || turn === null) return null
   const mine = turn.waitingFor.find((entry) => entry.username === you.username)
   if (mine === undefined) return 'You: all phases done'
-  return `You: ${phaseLabel(mine.phase)} (${TURN_PHASES.indexOf(mine.phase) + 1} of ${TURN_PHASES.length})`
+  return `You: ${phaseLabel(mine.phase)}`
 }
 
 /**
@@ -57,7 +57,6 @@ export function PhaseSummary({ view }: { readonly view: PlayerView }): React.JSX
   const round = view.activeTurn?.turnNumber
   const mine = viewerPhaseText(view)
   const waiting = waitingText(view)
-  const stats = you?.stats
   const waitingChoices = you?.pendingRewards?.length ?? 0
 
   return (
@@ -73,15 +72,6 @@ export function PhaseSummary({ view }: { readonly view: PlayerView }): React.JSX
         >
           {waitingChoices === 1 ? '1 card choice waiting' : `${waitingChoices} card choices waiting`}
         </button>
-      )}
-      {stats !== undefined && (
-        <ul className="phase-summary-resources" aria-label="Your resources">
-          <li>Culture <strong>{stats.culture}</strong></li>
-          <li>Trade <strong>{stats.trade}</strong></li>
-          {stats.coinSources !== undefined && (
-            <li>Coins <strong>{totalCoins(stats.coinSources)}</strong></li>
-          )}
-        </ul>
       )}
     </div>
   )

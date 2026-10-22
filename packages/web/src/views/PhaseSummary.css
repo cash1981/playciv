@@ -40,21 +40,6 @@
   outline-offset: 2px;
 }
 
-.phase-summary-resources {
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.2rem 0.9rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--muted);
-}
-
-.phase-summary-resources strong {
-  color: var(--text);
-}
-
 .page-shortcuts {
   display: flex;
   flex-wrap: wrap;

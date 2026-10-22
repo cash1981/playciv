@@ -51,11 +51,11 @@ const text = (container: HTMLElement): string => container.textContent ?? ''
 
 describe('PhaseSummary: the round and the viewer\'s phase', () => {
   const expected: Readonly<Record<TurnPhase, string>> = {
-    SOT: 'You: Start of turn (1 of 5)',
-    TRADE: 'You: Trade (2 of 5)',
-    CM: 'You: City management (3 of 5)',
-    MOVEMENT: 'You: Movement (4 of 5)',
-    RESEARCH: 'You: Research (5 of 5)',
+    SOT: 'You: Start of turn',
+    TRADE: 'You: Trade',
+    CM: 'You: City management',
+    MOVEMENT: 'You: Movement',
+    RESEARCH: 'You: Research',
   }
 
   it.each(TURN_PHASES)('says the viewer is on %s, as the first phase not done', (phase) => {
@@ -88,7 +88,7 @@ describe('PhaseSummary: the round and the viewer\'s phase', () => {
         })}
       />,
     )
-    expect(screen.getByText('You: City management (3 of 5)')).toBeTruthy()
+    expect(screen.getByText('You: City management')).toBeTruthy()
     // carol is ahead of bob, so only bob holds the round up
     expect(screen.getByText('Waiting for bob (trade)')).toBeTruthy()
     expect(text(container)).not.toContain('carol')
@@ -121,7 +121,7 @@ describe('PhaseSummary: the round and the viewer\'s phase', () => {
         })}
       />,
     )
-    expect(screen.getByText('You: City management (3 of 5)')).toBeTruthy()
+    expect(screen.getByText('You: City management')).toBeTruthy()
     expect(text(container)).not.toContain('Waiting for')
   })
 
@@ -159,18 +159,15 @@ describe('PhaseSummary: the round and the viewer\'s phase', () => {
     const { container } = render(<PhaseSummary view={viewOf({ waitingFor: [], noActiveTurn: true })} />)
     expect(text(container)).not.toContain('Round')
     expect(text(container)).not.toContain('You:')
-    expect(screen.getByRole('list', { name: 'Your resources' })).toBeTruthy()
+    expect(screen.queryByRole('list', { name: 'Your resources' })).toBeNull()
   })
 })
 
 describe('PhaseSummary: resources', () => {
-  it('shows culture, trade and the coin total of the viewer', () => {
-    render(<PhaseSummary view={viewOf({ waitingFor: [{ username: 'viewer', phase: 'SOT' }] })} />)
-    const items = Array.from(screen.getByRole('list', { name: 'Your resources' }).querySelectorAll('li')).map(
-      (item) => item.textContent,
-    )
-    // Coins add up the sources: bank 3 and education 4
-    expect(items).toEqual(['Culture 12', 'Trade 5', 'Coins 7'])
+  it('does not list culture, trade or coins', () => {
+    const { container } = render(<PhaseSummary view={viewOf({ waitingFor: [{ username: 'viewer', phase: 'SOT' }] })} />)
+    expect(screen.queryByRole('list', { name: 'Your resources' })).toBeNull()
+    expect(text(container)).not.toContain('Culture')
   })
 })
 
