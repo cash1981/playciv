@@ -9,7 +9,7 @@
  * the opponents' are read only, as is everything for a spectator.
  */
 
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import { MAX_PRODUCTION_OVERRIDE } from '@civ/engine'
 
@@ -20,6 +20,7 @@ import type { BuildFlow } from './buildFlow.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { CityActions, useCityActionPress } from './CityActions.js'
 import type { Run } from './GameView.js'
+import { ReferenceDialog } from './ReferenceDialog.js'
 import './CitiesPanel.css'
 
 /** The data mixes "forest" (terrain) and "Workshop" (a building's label); show both the same way. */
@@ -135,7 +136,25 @@ function CityCard({
   readonly build?: BuildFlow | undefined
 }): React.JSX.Element {
   const programId = useId()
+  // The dialog is a sibling of the figure paragraph, not inside it: a div and a
+  // section are not valid in a p. Focus goes back to the link on close.
+  const [countOpen, setCountOpen] = useState(false)
+  const countTitleId = useId()
+  const countLinkRef = useRef<HTMLButtonElement | null>(null)
+  const countLinkText = city.override === null ? 'Not a complete count' : 'How the estimate is counted'
   const programShown = city.buildingProgram && city.withBuildingProgram !== null
+  const countLink = (
+    <button
+      ref={countLinkRef}
+      type="button"
+      className="city-count-link"
+      aria-haspopup="dialog"
+      aria-label={`${countLinkText}: ${city.label}`}
+      onClick={() => setCountOpen(true)}
+    >
+      {countLinkText}
+    </button>
+  )
   return (
     <li className="city-card">
       <h4 className="city-label">{city.label}</h4>
@@ -143,16 +162,29 @@ function CityCard({
       <p className="city-figure">
         {city.override === null ? (
           <>
-            <strong className="city-number">Estimated production: {city.estimate}</strong>
-            <span>, not a complete count</span>
+            <strong className="city-number">Estimated production: {city.estimate}</strong>{' '}
+            {countLink}
           </>
         ) : (
           <>
             <strong className="city-number">Set by hand: {city.override}</strong>{' '}
-            <small className="muted">estimate was {city.estimate}</small>
+            <small className="muted">estimate was {city.estimate}</small>{' '}
+            {countLink}
           </>
         )}
       </p>
+
+      {countOpen && (
+        <ReferenceDialog
+          titleId={countTitleId}
+          title={`${city.label}: how the estimate is counted`}
+          onClose={() => setCountOpen(false)}
+          returnFocusTo={countLinkRef}
+          className="city-count-dialog"
+        >
+          <CityArithmetic city={city} />
+        </ReferenceDialog>
+      )}
 
       {city.buildingProgram && city.withBuildingProgram !== null && (
         <p id={programId} className="city-program">
@@ -161,11 +193,6 @@ function CityCard({
             : 'Building Program in place. The figure above is set by hand, so no doubled figure is shown.'}
         </p>
       )}
-
-      <details className="city-details">
-        <summary>How it is counted</summary>
-        <CityArithmetic city={city} />
-      </details>
 
       {editable && build !== undefined && buildOptions !== undefined && (
         <BuildEntry city={city} options={buildOptions} busy={busy} build={build} />

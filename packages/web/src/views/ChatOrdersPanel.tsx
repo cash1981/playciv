@@ -26,6 +26,7 @@ import { colorClass } from './playerColor.js'
 import { PrivateLogWorkspace } from './PrivateLogWorkspace.js'
 import type { SaveStatus } from './PrivateLogWorkspace.js'
 import { handleTabKeyDown } from './tabKeys.js'
+import { focusPlayer } from './turnFocus.js'
 import './ChatOrdersPanel.css'
 
 const TIMELINE_REFRESH_MS = 10_000
@@ -175,15 +176,17 @@ export function firstOpenPhase(view: PlayerView, turnNumber: number): TurnPhase 
 
 /**
  * `Turn 4 · Alice's turn — city management phase`, or `Turn 4 · Your turn — ...`
- * for the holder. Only whose turn it is and which phase they are on: the full
- * list of who is missing what is the status strip below the title.
+ * when the player in focus (see `focusPlayer`) is the viewer, with that
+ * player's own phase. The full list of who is missing what is the status strip
+ * below the title.
  */
-export function turnTitle(activeTurn: ActiveTurnStatus | null, viewerId?: string): string {
+export function turnTitle(activeTurn: ActiveTurnStatus | null, viewerUsername?: string): string {
   if (activeTurn === null) return 'Nobody is up'
   const turn = `Turn ${activeTurn.turnNumber}`
-  if (activeTurn.waitingFor.length === 0) return `${turn} · everyone is done`
-  const who = viewerId !== undefined && activeTurn.playerId === viewerId ? 'Your turn' : `${activeTurn.username}'s turn`
-  return `${turn} · ${who} — ${TURN_PHASE_LABEL[activeTurn.phase]} phase`
+  const focus = focusPlayer(activeTurn)
+  if (focus === null) return `${turn} · everyone is done`
+  const who = focus.username === viewerUsername ? 'Your turn' : `${focus.username}'s turn`
+  return `${turn} · ${who} — ${TURN_PHASE_LABEL[focus.phase]} phase`
 }
 
 /**

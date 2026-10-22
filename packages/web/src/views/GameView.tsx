@@ -34,6 +34,7 @@ import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
 import { WondersPanel } from './WondersPanel.js'
 import { TechPanel } from './TechPanel.js'
+import { focusPlayer } from './turnFocus.js'
 import { AutoRefreshSwitch } from './AutoRefresh.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { DigitInput } from './DigitInput.js'
@@ -43,14 +44,15 @@ import './BattleMobile.css'
 type Seat = NonNullable<PlayerView['you']> | PlayerView['opponents'][number]
 
 /**
- * The player whose turn it is, from `you` and the opponents: the holder of the
- * active turn. `undefined` when nobody is on turn.
+ * The player the header puts in focus, from `you` and the opponents: the one
+ * furthest behind (see `focusPlayer`), found by username. `undefined` when
+ * nobody is waited for, or the player has left.
  */
 export function activePlayerOf(view: PlayerView): Seat | undefined {
   const seats: readonly Seat[] = view.you === null ? view.opponents : [view.you, ...view.opponents]
-  const holder = view.activeTurn
-  if (holder === null) return undefined
-  return seats.find((seat) => seat.playerId === holder.playerId)
+  const focus = focusPlayer(view.activeTurn)
+  if (focus === null) return undefined
+  return seats.find((seat) => seat.username === focus.username)
 }
 
 /**
@@ -531,13 +533,14 @@ export function GameView({
     <>
       <div className="panel">
         <div className="row" style={{ alignItems: 'baseline' }}>
-          {/* Civ, then colour, then the name in the title: whose turn it is,
-              not who is looking. They wrap above the title on a phone. */}
+          {/* Civ, then colour, then the name in the title: who is up (the
+              player furthest behind, the turn holder in a tie), not who is
+              looking. They wrap above the title on a phone. */}
           {!ended && activePlayer !== undefined && <PlayerChips player={activePlayer} />}
           <h1 style={{ margin: 0 }}>
             {ended
               ? gameEndedTitle(displayedView.winner)
-              : turnTitle(displayedView.activeTurn, you?.playerId)}
+              : turnTitle(displayedView.activeTurn, you?.username)}
           </h1>
           <span className="muted" style={{ fontSize: '0.9rem' }}>{displayedView.name}</span>
           {ended && displayedView.winner !== null && <span className="tag">ended</span>}
@@ -558,7 +561,7 @@ export function GameView({
           </div>
         )}
 
-        <PageShortcuts chat={player !== null} />
+        <PageShortcuts />
       </div>
 
       <GlobalReplayBar

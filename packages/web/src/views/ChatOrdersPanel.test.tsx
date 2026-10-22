@@ -1184,20 +1184,52 @@ describe('safe markdown in the timeline', () => {
 
 describe('header helpers', () => {
   it('names whose turn it is and which phase they are on, not everyone', () => {
+    // Alice is on City management, Bob on Start of turn: Bob is furthest behind.
     const view = makeView()
-    expect(turnTitle(view.activeTurn)).toBe(
-      `Turn 4 · ${view.activeTurn?.username}'s turn — ${TURN_PHASE_LABEL[view.activeTurn?.phase ?? 'SOT']} phase`,
-    )
+    expect(turnTitle(view.activeTurn)).toBe(`Turn 4 · Bob's turn — ${TURN_PHASE_LABEL.SOT} phase`)
     expect(turnTitle(view.activeTurn)).not.toContain('waiting for')
     expect(turnTitle(view.activeTurn)).not.toContain('started')
   })
 
-  it('says Your turn when the viewer is the one up', () => {
+  it('says Your turn when the viewer is the player in focus', () => {
     const view = makeView({
       activeTurn: { playerId: 'p1', username: 'Alice', turnNumber: 2, phase: 'CM', startPlayer: 'Bob', waitingFor: [{ username: 'Alice', phase: 'CM' }] },
     })
-    expect(turnTitle(view.activeTurn, 'p1')).toBe('Turn 2 · Your turn — city management phase')
+    expect(turnTitle(view.activeTurn, 'Alice')).toBe('Turn 2 · Your turn — city management phase')
     expect(turnTitle(view.activeTurn, 'someone-else')).toBe("Turn 2 · Alice's turn — city management phase")
+  })
+
+  it('names the player furthest behind, with that player\'s phase, not the holder', () => {
+    const active = {
+      playerId: 'id-admin',
+      username: 'admin',
+      turnNumber: 1,
+      phase: 'MOVEMENT' as const,
+      startPlayer: 'admin',
+      waitingFor: [
+        { username: 'admin', phase: 'MOVEMENT' as const },
+        { username: 'cash1981', phase: 'CM' as const },
+      ],
+    }
+    expect(turnTitle(active, 'cash1981')).toBe('Turn 1 · Your turn — city management phase')
+    expect(turnTitle(active, 'admin')).toBe("Turn 1 · cash1981's turn — city management phase")
+    expect(turnTitle(active)).toBe("Turn 1 · cash1981's turn — city management phase")
+  })
+
+  it('names the turn holder in a tie, for the viewer too', () => {
+    const active = {
+      playerId: 'id-admin',
+      username: 'admin',
+      turnNumber: 1,
+      phase: 'SOT' as const,
+      startPlayer: 'admin',
+      waitingFor: [
+        { username: 'cash1981', phase: 'SOT' as const },
+        { username: 'admin', phase: 'SOT' as const },
+      ],
+    }
+    expect(turnTitle(active, 'cash1981')).toBe("Turn 1 · admin's turn — start of turn phase")
+    expect(turnTitle(active, 'admin')).toBe('Turn 1 · Your turn — start of turn phase')
   })
 
   it('says so when everyone is done, and when nobody is up', () => {
