@@ -29,6 +29,7 @@ import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
 import { PageShortcuts, PhaseSummary } from './PhaseSummary.js'
+import { focusPlayer } from './turnFocus.js'
 import { RevealedPanel } from './RevealedPanel.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
@@ -43,14 +44,15 @@ import './BattleMobile.css'
 type Seat = NonNullable<PlayerView['you']> | PlayerView['opponents'][number]
 
 /**
- * The player whose turn it is, from `you` and the opponents: the holder of the
- * active turn. `undefined` when nobody is on turn.
+ * The player the header puts in focus, from `you` and the opponents: the one
+ * furthest behind (see `focusPlayer`), found by username. `undefined` when
+ * nobody is waited for, or the player has left.
  */
 export function activePlayerOf(view: PlayerView): Seat | undefined {
   const seats: readonly Seat[] = view.you === null ? view.opponents : [view.you, ...view.opponents]
-  const holder = view.activeTurn
-  if (holder === null) return undefined
-  return seats.find((seat) => seat.playerId === holder.playerId)
+  const focus = focusPlayer(view.activeTurn, view.you?.username)
+  if (focus === null) return undefined
+  return seats.find((seat) => seat.username === focus.username)
 }
 
 /**
@@ -537,7 +539,7 @@ export function GameView({
           <h1 style={{ margin: 0 }}>
             {ended
               ? gameEndedTitle(displayedView.winner)
-              : turnTitle(displayedView.activeTurn, you?.playerId)}
+              : turnTitle(displayedView.activeTurn, you?.username)}
           </h1>
           <span className="muted" style={{ fontSize: '0.9rem' }}>{displayedView.name}</span>
           {ended && displayedView.winner !== null && <span className="tag">ended</span>}
@@ -558,7 +560,7 @@ export function GameView({
           </div>
         )}
 
-        <PageShortcuts chat={player !== null} />
+        <PageShortcuts />
       </div>
 
       <GlobalReplayBar

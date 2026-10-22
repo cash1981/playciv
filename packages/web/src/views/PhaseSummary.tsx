@@ -11,6 +11,7 @@ import { TURN_PHASES, TURN_PHASE_LABEL, totalCoins } from '@civ/engine'
 import type { TurnPhase } from '@civ/engine'
 
 import type { PlayerView } from '../lib/api.js'
+import { earliestOthers } from './turnFocus.js'
 import './PhaseSummary.css'
 
 /** The DOM id of the board panel; BoardView puts it on its section. */
@@ -35,20 +36,19 @@ export function viewerPhaseText(view: PlayerView): string | null {
 }
 
 /**
- * Who the round waits for besides the viewer, with their phase. `null` when
- * the round is finished, `''` when only the viewer is left (their own line
- * already says so).
+ * Who holds the round up besides the viewer: the players at the earliest open
+ * phase, with that phase. `null` when the round is finished, `''` when the
+ * viewer is the one furthest behind (their own line already says so). Players
+ * who are ahead are not listed.
  */
 export function waitingText(view: PlayerView): string | null {
   const turn = view.activeTurn
   if (turn === null) return null
   // Defensive: the engine clears the active turn once nobody is waited for. Mirrors `turnTitle` in ChatOrdersPanel.
   if (turn.waitingFor.length === 0) return 'Everyone is done'
-  const others = turn.waitingFor.filter((entry) => entry.username !== view.you?.username)
-  if (others.length === 0) return ''
-  return `Waiting for ${others
-    .map((entry) => `${entry.username} (${TURN_PHASE_LABEL[entry.phase]})`)
-    .join(', ')}`
+  const behind = earliestOthers(turn, view.you?.username)
+  if (behind === null) return ''
+  return `Waiting for ${behind.usernames.join(', ')} (${TURN_PHASE_LABEL[behind.phase]})`
 }
 
 export function PhaseSummary({ view }: { readonly view: PlayerView }): React.JSX.Element {
@@ -120,22 +120,18 @@ export function goToPanel(key: string): void {
   panel.focus.focus({ preventScroll: true })
 }
 
-const SHORTCUTS: readonly { readonly key: string; readonly label: string; readonly chat?: true }[] = [
+const SHORTCUTS: readonly { readonly key: string; readonly label: string }[] = [
   { key: 'board', label: 'Board' },
   { key: 'hand', label: 'Your cards' },
   { key: 'techs', label: 'Tech tree' },
-  { key: 'chat-orders', label: 'Chat', chat: true },
-  { key: 'log', label: 'History' },
+  { key: 'cities', label: 'Cities' },
 ]
 
-/**
- * Buttons that jump to the main parts of the page. `chat` is false when the
- * chat panel is not on the page (a spectator without an account).
- */
-export function PageShortcuts({ chat }: { readonly chat: boolean }): React.JSX.Element {
+/** Buttons that jump to the main parts of the page. Chat and History are left out on purpose, for now. */
+export function PageShortcuts(): React.JSX.Element {
   return (
     <nav className="page-shortcuts" aria-label="Go to">
-      {SHORTCUTS.filter((shortcut) => shortcut.chat !== true || chat).map((shortcut) => (
+      {SHORTCUTS.map((shortcut) => (
         <button
           key={shortcut.key}
           type="button"

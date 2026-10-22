@@ -45,6 +45,11 @@ old test counts and past deployment reports do not establish present health.
   `tasks/assisted-build.md`, `tasks/assisted-units.md` and `tasks/assisted-city-actions.md`;
   see "Assisted build" in decisions.
 
+- The game header names the player furthest behind as the one who is up and lists
+  only the earliest open phase under "Waiting for"; the shortcuts are Board, Your
+  cards, Tech tree and Cities; a city's arithmetic opens in a popup. Brief
+  `tasks/phase-cities-polish.md`; see "Assisted play" in decisions.
+
 Read [current decisions](decisions.md) for the relevant compatibility/rationale
 and [limitations](limitations.md) for known gaps. Archived Mongo games remaining
 nonplayable is separate from the completed single-chat migration.

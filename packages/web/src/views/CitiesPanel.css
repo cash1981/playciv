@@ -48,13 +48,24 @@
   color: var(--accent);
 }
 
-.city-details {
-  margin: 0.4rem 0;
+/* Looks like a text link; the ".reference" dialog styles come from styles.css. */
+.city-count-link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
-.city-details summary {
-  cursor: pointer;
-  padding: 0.2rem 0;
+.reference.city-count-dialog {
+  width: min(92vw, 28rem);
+  max-height: 85vh;
+  padding: 1rem;
+  overflow-wrap: anywhere;
 }
 
 .city-arithmetic {

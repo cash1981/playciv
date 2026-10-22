@@ -223,6 +223,17 @@ buttons and the culture marker. Assisted actions are added beside them.
 - The game page shows a phase summary and shortcuts, and the order is board,
   Your cards, then the rest. The piece palette sits below the board at every
   width; this is unconfirmed by the human and reversible in `styles.css`.
+- The header shows the player furthest behind as the one who is up (`turnFocus.ts`):
+  the title, the colour chips and "Waiting for" read the lowest phase in
+  `activeTurn.waitingFor`, so a player who is ahead is never named as the one
+  everyone waits for. A tie goes to the viewer, then the turn holder, then the
+  first in the list. "Waiting for" lists only the other players at the earliest
+  open phase, and is empty when the viewer is alone there. The engine's turn
+  holder is unchanged, and `outOfTurnQuestion` still uses it. The status strip
+  shows everyone.
+- The page shortcuts are Board, Your cards, Tech tree and Cities. Chat and
+  History are removed for now, on purpose; the chat and the log are still on the
+  page.
 
 Source: `engine/src/assisted.ts`, `culture-track.ts`, `server/src/routes/play.ts`,
 `web/src/views/AssistedActions.tsx`, `PhaseSummary.tsx`, and the `assisted*`

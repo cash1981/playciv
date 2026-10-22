@@ -9,7 +9,7 @@
  * the opponents' are read only, as is everything for a spectator.
  */
 
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import { MAX_PRODUCTION_OVERRIDE } from '@civ/engine'
 
@@ -20,6 +20,7 @@ import type { BuildFlow } from './buildFlow.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { CityActions, useCityActionPress } from './CityActions.js'
 import type { Run } from './GameView.js'
+import { ReferenceDialog } from './ReferenceDialog.js'
 import './CitiesPanel.css'
 
 /** The data mixes "forest" (terrain) and "Workshop" (a building's label); show both the same way. */
@@ -143,13 +144,14 @@ function CityCard({
       <p className="city-figure">
         {city.override === null ? (
           <>
-            <strong className="city-number">Estimated production: {city.estimate}</strong>
-            <span>, not a complete count</span>
+            <strong className="city-number">Estimated production: {city.estimate}</strong>{' '}
+            <CountDialogLink city={city} linkText="Not a complete count" />
           </>
         ) : (
           <>
             <strong className="city-number">Set by hand: {city.override}</strong>{' '}
-            <small className="muted">estimate was {city.estimate}</small>
+            <small className="muted">estimate was {city.estimate}</small>{' '}
+            <CountDialogLink city={city} linkText="How the estimate is counted" />
           </>
         )}
       </p>
@@ -161,11 +163,6 @@ function CityCard({
             : 'Building Program in place. The figure above is set by hand, so no doubled figure is shown.'}
         </p>
       )}
-
-      <details className="city-details">
-        <summary>How it is counted</summary>
-        <CityArithmetic city={city} />
-      </details>
 
       {editable && build !== undefined && buildOptions !== undefined && (
         <BuildEntry city={city} options={buildOptions} busy={busy} build={build} />
@@ -304,6 +301,46 @@ function StartProgramEntry({
         </p>
       )}
     </div>
+  )
+}
+
+/**
+ * A link styled button that opens the arithmetic of one city in a small dialog.
+ * Focus goes back to the link when the dialog closes.
+ */
+function CountDialogLink({
+  city,
+  linkText,
+}: {
+  readonly city: CityProduction
+  readonly linkText: string
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const titleId = useId()
+  const linkRef = useRef<HTMLButtonElement | null>(null)
+  return (
+    <>
+      <button
+        ref={linkRef}
+        type="button"
+        className="city-count-link"
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
+      >
+        {linkText}
+      </button>
+      {open && (
+        <ReferenceDialog
+          titleId={titleId}
+          title={`${city.label}: how the estimate is counted`}
+          onClose={() => setOpen(false)}
+          returnFocusTo={linkRef}
+          className="city-count-dialog"
+        >
+          <CityArithmetic city={city} />
+        </ReferenceDialog>
+      )}
+    </>
   )
 }
 

@@ -351,6 +351,7 @@ const headerView = (
   youSeat: Record<string, unknown> | null,
   opponents: readonly Record<string, unknown>[],
   activeUsername: string | null,
+  waitingFor?: readonly { readonly username: string; readonly phase: string }[],
 ): PlayerView =>
   ({
     rev: 1,
@@ -360,7 +361,7 @@ const headerView = (
     activeTurn:
       activeUsername === null
         ? null
-        : { playerId: `id-${activeUsername}`, username: activeUsername, turnNumber: 1, phase: 'SOT', waitingFor: [{ username: activeUsername, phase: 'SOT' }] },
+        : { playerId: `id-${activeUsername}`, username: activeUsername, turnNumber: 1, phase: 'SOT', waitingFor: waitingFor ?? [{ username: activeUsername, phase: 'SOT' }] },
     you: youSeat,
     opponents,
     board: {},
@@ -421,6 +422,22 @@ describe('game header chips (issue #206)', () => {
     )
     expect(chipTexts(container)).toEqual(['Romans', 'Red'])
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Your turn')
+  })
+
+  it('puts the chips and the title on the player furthest behind, not the holder', async () => {
+    const container = await renderHeader(
+      headerView(
+        seat('viewer', { civilization: { name: 'Romans' }, color: 'Red' }),
+        [seat('s3s3', { civilization: greeks, color: 'Green' })],
+        'viewer',
+        [
+          { username: 'viewer', phase: 'MOVEMENT' },
+          { username: 's3s3', phase: 'CM' },
+        ],
+      ),
+    )
+    expect(chipTexts(container)).toEqual(['Greeks', 'Green'])
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("Turn 1 · s3s3's turn — city management phase")
   })
 
   it('has no civ chip while the civilization is not revealed', async () => {
@@ -589,6 +606,19 @@ describe('chatAuthorsOf and activePlayerOf (issue #206)', () => {
     const view = headerView(seat('viewer'), [seat('s3s3')], 's3s3')
     expect(activePlayerOf(view)?.username).toBe('s3s3')
     expect(activePlayerOf(headerView(seat('viewer'), [seat('s3s3')], 'viewer'))?.username).toBe('viewer')
+  })
+
+  it('finds the player furthest behind, not the holder of the turn', () => {
+    const view = headerView(seat('viewer'), [seat('s3s3')], 'viewer', [
+      { username: 'viewer', phase: 'MOVEMENT' },
+      { username: 's3s3', phase: 'CM' },
+    ])
+    expect(activePlayerOf(view)?.username).toBe('s3s3')
+    const behind = headerView(seat('viewer'), [seat('s3s3')], 's3s3', [
+      { username: 'viewer', phase: 'CM' },
+      { username: 's3s3', phase: 'MOVEMENT' },
+    ])
+    expect(activePlayerOf(behind)?.username).toBe('viewer')
   })
 
   it('names nobody when the active turn belongs to someone who left, or there is none', () => {
@@ -843,11 +873,12 @@ describe('the game page (issue #215)', () => {
     screen.getByRole('button', { name: label }) as HTMLButtonElement
 
   describe('the page', () => {
-    it('shows the timeline and says whose turn it is and the phase', async () => {
+    it('shows the timeline and names the player furthest behind with their phase', async () => {
       await renderGame(chatView('Bob'))
 
+      // Alice is on City management, Bob is still on Start of turn: Bob holds the round up.
       expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-        "Turn 4 · Bob's turn — city management phase",
+        "Turn 4 · Bob's turn — start of turn phase",
       )
       expect(screen.getByRole('heading', { name: 'Chat and orders' })).toBeTruthy()
       // The log stays
