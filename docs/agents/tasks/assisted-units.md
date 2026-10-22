@@ -55,7 +55,7 @@ The same Build button also produces an army figure, a scout figure, or a militar
 - `packages/engine/src/build-options.ts`, `building-data.ts`, `assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/board.ts`
 - `packages/engine/test/assisted-units*.test.ts`, `hidden-info.test.ts`
 - `packages/server/src/routes/play.ts`, `packages/server/test/assisted-units*.test.ts`
-- `packages/web/src/lib/api.ts`, `views/BuildPicker.tsx`, `buildFlow.ts`, `CitiesPanel.tsx`, their css and tests, `FaqView.tsx`
+- `packages/web/src/lib/api.ts`, `views/BuildPicker.tsx`, `buildFlow.ts`, `CitiesPanel.tsx`, their css (`CitiesPanel.css`, now `CityCard.css`) and tests, `FaqView.tsx`
 - `docs/agents/decisions.md`, `state.md`, `README.md`
 
 ## Acceptance criteria

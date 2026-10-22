@@ -257,12 +257,10 @@ interface PanelProps {
  * game page asks too, so the Actions shortcut is not a dead button.
  */
 export function hasActionsPanel(view: PlayerView): boolean {
-  const you = view.you
-  if (you === null) return false
   return (
-    (you.availableActions ?? []).some((candidate) => candidate.status !== 'not-owned') ||
-    (you.pendingRewards?.length ?? 0) > 0 ||
-    (you.cities?.length ?? 0) > 0
+    (view.you?.availableActions ?? []).some((candidate) => candidate.status !== 'not-owned') ||
+    (view.you?.pendingRewards?.length ?? 0) > 0 ||
+    (view.you?.cities?.length ?? 0) > 0
   )
 }
 

@@ -1059,7 +1059,7 @@ const buildOptionsOf = (overrides: Partial<CityBuildOptions> = {}): CityBuildOpt
 
 /** A view with the given parts of `you` added. */
 const withYou = (view: PlayerView, extra: Record<string, unknown>, opponents: readonly unknown[] = []): PlayerView =>
-  ({ ...view, you: { ...view.you!, ...extra }, opponents }) as unknown as PlayerView
+  ({ ...view, you: { ...view.you, ...extra }, opponents }) as unknown as PlayerView
 
 /** A spectator's view, with opponents on the map that have cities. */
 const spectatorWith = (opponents: readonly unknown[]): PlayerView =>
@@ -1152,20 +1152,23 @@ describe('Your cities in the panel', () => {
     expect(follows(choice, cities)).toBe(true)
   })
 
-  it('shows the cities with their controls disabled or hidden when the game is read only', () => {
-    render(
-      <AssistedActionsPanel
-        gameId="game-1"
-        view={viewWithCity()}
-        busy={false}
-        readOnly
-        run={run}
-      />,
-    )
+  it('shows the cities with their controls hidden when the game is read only', () => {
+    // With a Build flow and the options, so the Build button would be there if readOnly were ignored.
+    const view = viewWithCity()
+    function Panel({ readOnly }: { readonly readOnly: boolean }): React.JSX.Element {
+      const flow = useBuildFlow(view.you?.buildOptions ?? null)
+      return <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={readOnly} run={run} build={flow} />
+    }
+    render(<Panel readOnly />)
     expect(screen.getByRole('heading', { name: 'Capital D5' })).toBeTruthy()
     expect(screen.getByText('Estimated production: 4')).toBeTruthy()
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
+    cleanup()
+
+    // The same view and flow without readOnly has the button, so the assertion above can fail.
+    render(<Panel readOnly={false} />)
+    expect(screen.getByRole('button', { name: 'Build in Capital D5' })).toBeTruthy()
   })
 
   it('leaves the viewer’s cities out of the Cities panel, which lists the opponents’ only, with no id twice', () => {

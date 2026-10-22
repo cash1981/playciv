@@ -37,6 +37,7 @@ engine and the server are unchanged.
 6. **Shortcuts:** `Cities` is replaced by `Actions` (key `actions`). A player sees
    Board, Actions, Your cards, Tech tree; a spectator sees Board, Your cards, Tech
    tree. `PageShortcuts` gets an `actions` prop, true when the panel is rendered.
+   `goToPanel('actions')` also opens the panel when it is collapsed (review nit).
 7. **Scrolling:** choosing a square mode still scrolls the board into view (the
    board sits right below the panel). "Back to the picker" now opens the Your
    actions panel, not the Cities panel, when it was collapsed. `goToPanel('actions')`
@@ -68,9 +69,10 @@ engine and the server are unchanged.
   cities" first would push a waiting choice off the screen on a phone.
 - The note "Cities that are not on the map are not listed." stays in the
   Opponents' cities panel only; Your cities does not repeat it.
-- A viewer who collapsed Your actions earlier keeps it collapsed (the open state
-  is remembered per browser), so the city controls hide with it until they open it.
-  The "Actions" shortcut lands on the heading but does not open it.
+- A viewer who collapsed Your actions earlier keeps it collapsed on page load (the
+  open state is remembered per browser). The Actions shortcut and the card choice
+  button open it, and the open state is remembered; the other shortcuts do not
+  open the panel they land on.
 
 ## Handover
 

@@ -58,7 +58,7 @@ A city can build a building from a Build button. The player picks a city, picks 
 - `packages/engine/src/build-options.ts` (new), `building-data.ts`, `assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/board.ts`
 - `packages/engine/test/assisted-build*.test.ts`, `hidden-info.test.ts`
 - `packages/server/src/routes/play.ts`, `routes/games.ts`, `errors.ts`, `packages/server/test/assisted-build*.test.ts`
-- `packages/web/src/lib/api.ts`, `views/CitiesPanel.tsx`, `BuildPicker.tsx` (new) and its css and tests, `BoardView.tsx`, `GameView.tsx`, `styles.css`, `FaqView.tsx`
+- `packages/web/src/lib/api.ts`, `views/CitiesPanel.tsx` (its css, `CitiesPanel.css`, is now `CityCard.css`), `BuildPicker.tsx` (new) and its css and tests, `BoardView.tsx`, `GameView.tsx`, `styles.css`, `FaqView.tsx`
 - `docs/agents/decisions.md`, `state.md`, `README.md`
 
 ## Acceptance criteria

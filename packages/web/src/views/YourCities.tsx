@@ -12,8 +12,8 @@ import { useId } from 'react'
 
 import type { PlayerView } from '../lib/api.js'
 import type { BuildFlow } from './buildFlow.js'
-import { CityCard } from './CityCard.js'
 import { CityActions } from './CityActions.js'
+import { CityCard } from './CityCard.js'
 import type { Run } from './GameView.js'
 
 export function YourCities({

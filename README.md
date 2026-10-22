@@ -515,7 +515,7 @@ short groups do not leave empty space. `useritems.html` rendered a heading per
 kind. See [historical interface decisions](docs/history/README.md).
 
 **Cards can be used with a button.** A player with Chivalry, Democracy or
-Printing Press sees a "Your actions" panel, and the same button in the card's
+Printing Press, or with a city on the map, sees a "Your actions" panel, and the same button in the card's
 detail dialog, that does the bookkeeping for the card: Chivalry spends an
 incense (a hut in hand first, otherwise the piece in the player's own area,
 back to the stock) and adds 5 culture; the two coin cards pay and add a coin.

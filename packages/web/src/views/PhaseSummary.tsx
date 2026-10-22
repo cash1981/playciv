@@ -93,7 +93,8 @@ export function PhaseSummary({ view }: { readonly view: PlayerView }): React.JSX
 
 /**
  * A panel on the page by its `CollapsiblePanel` id, or the board. A collapsed
- * panel still has its heading on the page, so that is where the shortcut lands.
+ * panel still has its heading on the page, so that is where the shortcut lands
+ * ({@link goToPanel} opens Your actions as well).
  */
 function findPanel(key: string): { readonly section: HTMLElement; readonly focus: HTMLElement } | null {
   if (key === 'board') {
@@ -110,10 +111,16 @@ function findPanel(key: string): { readonly section: HTMLElement; readonly focus
  * Scrolls a panel into view and moves focus to it. The scroll is smooth unless
  * the user asks for reduced motion. Focus does not scroll on its own, so the
  * page moves once.
+ *
+ * Your actions (`actions`) is opened when it is collapsed: the city controls and
+ * a waiting card choice are in it, and a saved collapsed state would hide them
+ * behind a button that says it goes there. The click on its toggle is a manual
+ * one, so the open state is remembered. Every other panel is left as it is.
  */
 export function goToPanel(key: string): void {
   const panel = findPanel(key)
   if (panel === null) return
+  if (key === 'actions' && panel.focus.getAttribute('aria-expanded') === 'false') panel.focus.click()
   const reduced =
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches

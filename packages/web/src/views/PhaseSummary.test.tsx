@@ -312,15 +312,40 @@ describe('PageShortcuts', () => {
     expect(document.activeElement).toBe(board)
   })
 
-  it('still lands on the heading of a collapsed panel, without opening it', () => {
+  it.each([
+    ['Your cards', 'Hand', 'hand'],
+    ['Tech tree', 'Tech panel', 'techs'],
+  ])('%s still lands on the heading of a collapsed panel, without opening it', (label, title, id) => {
+    localStorage.setItem(`civ.panel.${id}`, 'false')
+    render(page())
+    const toggle = screen.getByRole('heading', { name: title }).querySelector('button')
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: label }))
+    expect(document.activeElement).toBe(toggle)
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false')
+    expect(localStorage.getItem(`civ.panel.${id}`)).toBe('false')
+  })
+
+  it('Actions opens Your actions when it is collapsed, remembers that, and lands on its heading', () => {
     localStorage.setItem('civ.panel.actions', 'false')
     render(page())
     const toggle = screen.getByRole('heading', { name: 'Your actions' }).querySelector('button')
     expect(toggle?.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true')
+    expect(localStorage.getItem('civ.panel.actions')).toBe('true')
     expect(document.activeElement).toBe(toggle)
-    expect(toggle?.getAttribute('aria-expanded')).toBe('false')
-    expect(localStorage.getItem('civ.panel.actions')).toBe('false')
+    expect(scrolled.map((entry) => entry.element)).toEqual([toggle?.closest('section')])
+  })
+
+  it('Actions leaves Your actions open when it is already open, however often it is pressed', () => {
+    render(page())
+    const toggle = screen.getByRole('heading', { name: 'Your actions' }).querySelector('button')
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true')
+    expect(localStorage.getItem('civ.panel.actions')).toBe('true')
   })
 
   it('scrolls smoothly by default', () => {

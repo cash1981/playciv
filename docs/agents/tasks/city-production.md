@@ -135,7 +135,7 @@ derived public value goes.
 - `packages/engine/test/city-production*.test.ts` (new), `hidden-info.test.ts`
 - `packages/server/src/routes/board.ts`, `packages/server/test/city-production*.test.ts`
 - `packages/web/src/lib/api.ts`, `packages/web/src/views/CitiesPanel.tsx` (new), its css
-  and tests, `GameView.tsx`, `FaqView.tsx`
+  (`CitiesPanel.css`, now `CityCard.css`) and tests, `GameView.tsx`, `FaqView.tsx`
 - `docs/agents/decisions.md`, `state.md`
 
 ## Acceptance criteria

@@ -46,7 +46,7 @@ Two more things a player does with a city, as buttons, with the same undo vote a
 - `packages/engine/src/build-options.ts`, `city-actions.ts` (new, optional), `assisted.ts`, `state.ts`, `index.ts`, `actions/board.ts`
 - `packages/engine/test/assisted-city-actions*.test.ts`, `hidden-info.test.ts`
 - `packages/server/src/routes/play.ts`, `routes/games.ts`, `packages/server/test/assisted-city-actions*.test.ts`
-- `packages/web/src/lib/api.ts`, `views/CitiesPanel.tsx`, `CitiesPanel.css`, `CityActions.tsx` (new) and tests, `FaqView.tsx`
+- `packages/web/src/lib/api.ts`, `views/CitiesPanel.tsx`, `CitiesPanel.css` (now `CityCard.css`), `CityActions.tsx` (new) and tests, `FaqView.tsx`
 - `docs/agents/decisions.md`, `state.md`, `README.md`
 
 ## Acceptance criteria

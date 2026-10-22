@@ -236,7 +236,10 @@ buttons and the culture marker. Assisted actions are added beside them.
   it, on purpose. The status strip shows everyone.
 - The page shortcuts are Board, Actions, Your cards and Tech tree. Actions is shown
   only when the Your actions panel is on the page (`hasActionsPanel`), so a spectator
-  and a player with nothing in the panel get no dead button. Chat and History are
+  and a player with nothing in the panel get no dead button. Actions, and the "card
+  choice waiting" button, open Your actions when a saved collapsed state hides it,
+  and that open state is remembered like a manual click; the other shortcuts land
+  on the heading of a collapsed panel without opening it. Chat and History are
   removed for now, on purpose; the chat and the log are still on the page.
 - The viewer's city cards and the city actions (Upgrades, Build, Start Building
   Program, the production figure with its popup, and the field to set production by
