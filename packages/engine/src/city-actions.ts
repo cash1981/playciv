@@ -14,7 +14,7 @@
  * call each other inside functions, never while the modules load.
  */
 
-import { PHASE_REASON, openCityManagementTurn } from './assisted.js'
+import { PHASE_REASON, cityActionsTakenThisTurn, openCityManagementTurn } from './assisted.js'
 import { cityFootprintsOf, mapCellOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
 import type { BoardPiece } from './board.js'
@@ -66,6 +66,11 @@ export interface CityActionOptions {
   readonly startBuildingProgram: StartBuildingProgramOption
   readonly devoteToTheArts: DevoteToTheArtsOption
   readonly harvest: HarvestOption
+  /**
+   * What this city has already done this turn, by name ("Build", "Harvest"), oldest first. A city takes
+   * one action a turn as a rule; the client asks the player to confirm before another.
+   */
+  readonly actedThisTurn: readonly string[]
 }
 
 /** Whether the market still has a token of the resource. The pieces on the board are the supply that is gone. */
@@ -142,7 +147,8 @@ export function cityActionsOf(state: GameState, player: Playerhand): readonly Ci
       ? { ...gathering.devote, status: 'ready', reason: 'Ready to devote this city to the arts.' }
       : { ...gathering.devote, status: 'wrong-phase', reason: PHASE_REASON }
     const harvest = harvestOptionOf(state, gathering.harvest, city.label, open)
-    return [{ cityPieceId: city.pieceId, label: city.label, startBuildingProgram, devoteToTheArts, harvest }]
+    const actedThisTurn = cityActionsTakenThisTurn(state, player, city.pieceId)
+    return [{ cityPieceId: city.pieceId, label: city.label, startBuildingProgram, devoteToTheArts, harvest, actedThisTurn }]
   })
 }
 

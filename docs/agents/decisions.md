@@ -536,9 +536,18 @@ adds the status (phase, market supply) and the projection carries it in `you.cit
   square's culture or resource. Which city a scout is sent to, and whether it was placed the turn
   before, are not tracked, so every city offers every scout and the player chooses; the panel
   says so. A scout's square is read with no blockade.
-- **Not tracked**, as the human decided for city actions: a city that has acted this turn, and the
-  rule that one resource icon cannot be harvested twice in a turn (FAQ). Both actions are
-  repeatable and the harvest panel and the FAQ say so.
+- **One action per city per turn** (base rules p. 15; the human's ruling after the first version
+  tracked nothing). Build, Start Building Program, Devote to the Arts and Harvest are the city's
+  action; Upgrade buildings is not. `cityActionsTakenThisTurn` (`assisted.ts`) lists the applied,
+  not undone records of this turn for the city; `CityActionOptions.actedThisTurn` carries it to the
+  client. The game does not forbid a second action: the client asks (`window.confirm`, "has already
+  acted this turn (...). Do it anyway?") when Build, Devote or Harvest is opened and when Start
+  Building Program is pressed, then sends `confirmedRepeat`. The engine refuses a second action
+  without it (status `used`, HTTP 409), after every check that makes the action impossible, so a
+  refusal says what is wrong first. A confirmed one is logged "(a second action of this city this
+  turn, confirmed by the player)". An undone action and an earlier turn do not count.
+- **Not tracked:** the rule that one resource icon cannot be harvested twice in a turn (FAQ). The
+  harvest panel and the FAQ say so.
 - **Undo.** Devote: refused when the culture has been spent (less than was added is left).
   Harvest: refused when the token is gone or has left the player's area. The plain board Undo
   cannot take the token back alone (`isAssistedBoardChange`).

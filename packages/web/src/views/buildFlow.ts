@@ -54,7 +54,9 @@ export interface BuildFlow {
   readonly note: string | null
   /** What the server said when it refused the build. */
   readonly message: string | null
-  openPicker(cityPieceId: string): void
+  /** The player said yes to "this city has already acted this turn, act again?" when the picker was opened. */
+  readonly confirmedAgain: boolean
+  openPicker(cityPieceId: string, confirmedAgain?: boolean): void
   closePicker(): void
   start(city: CityBuildOptions, choice: BuildChoice): void
   pick(square: BuildSquare): void
@@ -68,9 +70,10 @@ interface State {
   readonly plan: BuildPlan | null
   readonly note: string | null
   readonly message: string | null
+  readonly confirmedAgain: boolean
 }
 
-const EMPTY: State = { pickerCityId: null, plan: null, note: null, message: null }
+const EMPTY: State = { pickerCityId: null, plan: null, note: null, message: null, confirmedAgain: false }
 
 const sameSquare = (a: BuildSquare, b: BuildSquare): boolean => a.column === b.column && a.row === b.row
 
@@ -155,12 +158,13 @@ export function useBuildFlow(options: readonly CityBuildOptions[] | null): Build
     })
   }, [options])
 
-  const openPicker = useCallback((cityPieceId: string) => {
-    setState({ pickerCityId: cityPieceId, plan: null, note: null, message: null })
+  const openPicker = useCallback((cityPieceId: string, confirmedAgain = false) => {
+    setState({ pickerCityId: cityPieceId, plan: null, note: null, message: null, confirmedAgain })
   }, [])
   const closePicker = useCallback(() => setState(EMPTY), [])
   const start = useCallback((city: CityBuildOptions, choice: BuildChoice) => {
-    setState({
+    setState((current) => ({
+      confirmedAgain: current.confirmedAgain,
       pickerCityId: null,
       plan: {
         cityPieceId: city.cityPieceId,
@@ -176,7 +180,7 @@ export function useBuildFlow(options: readonly CityBuildOptions[] | null): Build
       },
       note: null,
       message: null,
-    })
+    }))
   }, [])
   const pick = useCallback((square: BuildSquare) => {
     setState((current) =>

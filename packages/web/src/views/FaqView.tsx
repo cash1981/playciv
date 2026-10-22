@@ -176,8 +176,10 @@ export function FaqView(): React.JSX.Element {
             outskirts, or under one of your scouts. Press <strong>Take</strong> next to one and the
             token is put in your player area, ready to pay for a card. A resource the market has
             run out of is greyed out. An enemy figure on a square blockades it, and a building, wonder, Great Person or disaster token on a square covers its resource, so it cannot be harvested. A disaster token also covers the square's culture icon. The game does not
-            keep track of which city has acted or which scout has been sent where, and the rules say
-            one resource icon may be harvested only once a turn, so you watch that yourself. The map
+            keep track of which scout has been sent where, and the rules say one resource icon may
+            be harvested only once a turn, so you watch that yourself. A city takes one action each
+            turn: Build, Start Building Program, Devote to the Arts or Harvest. If the city has
+            already acted, the game asks whether you are sure, and you can say yes. The map
             icons were read by eye from the tile images and may be wrong; if so, place the token or
             change the culture by hand as before. Both can be taken back with the same Undo vote as
             your other actions, as long as the culture is not spent and the token is still in your

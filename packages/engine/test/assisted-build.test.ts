@@ -211,6 +211,7 @@ const tryBuild = (
   requestId = 'req-1',
   rush?: boolean,
   playerId = CASH1981,
+  again = false,
 ) =>
   performAssistedAction(state, {
     playerId,
@@ -218,6 +219,7 @@ const tryBuild = (
     requestId,
     at: AT,
     payload: payloadFor(state, assetId, at, rush),
+    ...(again ? { confirmedRepeat: true } : {}),
   })
 
 const build = (
@@ -226,7 +228,8 @@ const build = (
   at: { readonly column: number; readonly row: number },
   requestId = 'req-1',
   rush?: boolean,
-): GameState => unwrap(tryBuild(state, assetId, at, requestId, rush))
+  again = false,
+): GameState => unwrap(tryBuild(state, assetId, at, requestId, rush, CASH1981, again))
 
 const refusal = (result: ReturnType<typeof tryBuild>): string => describeError(unwrapErr(result))
 
@@ -734,7 +737,7 @@ describe('building', () => {
 
   it('does not use up a turn action: the same player can build again with a new request id', () => {
     const first = build(withOverride(ready(['Currency', 'Writing'], 99), 20), LIBRARY, C2)
-    const second = build(first, MARKET, { column: 0, row: 0 }, 'req-2')
+    const second = build(first, MARKET, { column: 0, row: 0 }, 'req-2', undefined, true)
     expect(second.board.pieces.filter((piece) => piece.category === 'building')).toHaveLength(2)
     expect(me(second).playerTurns.every((turn) => turn.usedActions.length === 0)).toBe(true)
   })

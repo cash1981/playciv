@@ -967,7 +967,8 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     if (body['rev'] !== undefined && (clientRev === undefined || !Number.isInteger(clientRev) || clientRev < 0)) {
       return sendError(c, 400, 'BAD_REQUEST', 'rev must be a non-negative integer')
     }
-    // `confirmedRepeat` is the player's yes to "use it again?". It must be a real boolean:
+    // `confirmedRepeat` is the player's yes to "use it again?" (a card) or "this city has already acted, act
+    // again?" (a city action). It must be a real boolean:
     // a string such as "true" is refused, the same as for `confirmedOutOfTurn` elsewhere.
     if (body['confirmedRepeat'] !== undefined && typeof body['confirmedRepeat'] !== 'boolean') {
       return sendError(c, 400, 'BAD_REQUEST', 'confirmedRepeat must be a boolean')

@@ -26,7 +26,9 @@ The human's wish: read how much culture and which resources lie around the city 
 
 **In:** `data/tile-icons.json` (read by eye from the 43 tile images, key on base rules p. 7), `tile-icons.ts`, `city-gather.ts`, the two options on `CityActionOptions`, the two assisted actions with undo, strict payload parsing, `CityGather.tsx` (two buttons and their panels), tests at engine, server and web level, FAQ and decisions.
 
-**Out:** a "used this turn" marker and the one-icon-per-turn rule (the human decided against tracking city actions), the scout-to-city assignment, the culture of wonders and Great Persons, civilization, government and card effects on culture, Angkor Wat's second harvest, coin and trade icons.
+**Added later, by the human:** one action per city per turn. The game lists what a city has done this turn and asks before a second action (Build, Start Building Program, Devote, Harvest); see "One action per city per turn" in decisions.
+
+**Out:** the one-icon-per-turn rule, the scout-to-city assignment, the culture of wonders and Great Persons, civilization, government and card effects on culture, Angkor Wat's second harvest, coin and trade icons.
 
 ## Claimed paths
 

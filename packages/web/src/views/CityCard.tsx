@@ -18,10 +18,11 @@ import { MAX_PRODUCTION_OVERRIDE } from '@civ/engine'
 
 import type { BuildChoice, CityActionOptions, CityBuildOptions, CityProduction, PlayerView } from '../lib/api.js'
 import { api } from '../lib/api.js'
+import { isPressInFlight } from './AssistedActions.js'
 import { BuildPicker } from './BuildPicker.js'
 import type { BuildFlow } from './buildFlow.js'
 import { useCityActionPress } from './CityActions.js'
-import { DevoteButton, DevotePanel, HarvestButton, HarvestPanel } from './CityGather.js'
+import { DevoteButton, DevotePanel, HarvestButton, HarvestPanel, cityAgainQuestion } from './CityGather.js'
 import type { GatherPanel } from './CityGather.js'
 import type { Run } from './GameView.js'
 import { ReferenceDialog } from './ReferenceDialog.js'
@@ -71,11 +72,24 @@ export function CityCard({
   const [countOpen, setCountOpen] = useState(false)
   const countTitleId = useId()
   const [gather, setGather] = useState<GatherPanel | null>(null)
+  // The player said yes to a second action of this city when the open panel was opened
+  const [gatherAgain, setGatherAgain] = useState(false)
   const devoteReady = own?.cityActions?.devoteToTheArts.status === 'ready'
   const harvestReady = own?.cityActions?.harvest.status === 'ready'
   // A panel whose action stopped being ready (the phase ended) must not come back by itself in the next phase
   // Nor may one outlive the controls (a replay or a locked game takes them away)
   const hasControls = own !== undefined && !own.readOnly
+  const acted = own?.cityActions?.actedThisTurn ?? []
+  /** Opens a panel, after asking when the city has already acted this turn. A "no" opens nothing. */
+  function toggleGather(panel: GatherPanel): void {
+    if (gather === panel) {
+      setGather(null)
+      return
+    }
+    if (acted.length > 0 && !window.confirm(cityAgainQuestion(city.label, acted))) return
+    setGatherAgain(acted.length > 0)
+    setGather(panel)
+  }
   useEffect(() => {
     if (!hasControls || (gather === 'devote' && !devoteReady) || (gather === 'harvest' && !harvestReady)) setGather(null)
   }, [gather, hasControls, devoteReady, harvestReady])
@@ -140,7 +154,7 @@ export function CityCard({
       {((buildFlow !== undefined && buildOptions !== undefined) || controls?.cityActions !== undefined) && (
         <div className="city-buttons">
           {controls !== undefined && buildFlow !== undefined && buildOptions !== undefined && (
-            <BuildEntry city={city} options={buildOptions} busy={controls.busy} build={buildFlow} />
+            <BuildEntry city={city} options={buildOptions} busy={controls.busy} build={buildFlow} acted={acted} />
           )}
           {controls?.cityActions !== undefined && (
             <StartProgramEntry
@@ -149,6 +163,7 @@ export function CityCard({
               view={controls.view}
               options={controls.cityActions.startBuildingProgram}
               markerLineId={programShown ? programId : undefined}
+              acted={acted}
               busy={controls.busy}
               run={controls.run}
             />
@@ -160,14 +175,14 @@ export function CityCard({
                 options={controls.cityActions.devoteToTheArts}
                 open={gather === 'devote'}
                 busy={controls.busy}
-                onToggle={() => setGather(gather === 'devote' ? null : 'devote')}
+                onToggle={() => toggleGather('devote')}
               />
               <HarvestButton
                 city={city}
                 options={controls.cityActions.harvest}
                 open={gather === 'harvest'}
                 busy={controls.busy}
-                onToggle={() => setGather(gather === 'harvest' ? null : 'harvest')}
+                onToggle={() => toggleGather('harvest')}
               />
             </>
           )}
@@ -182,6 +197,8 @@ export function CityCard({
           busy={controls.busy}
           run={controls.run}
           onClose={() => setGather(null)}
+          confirmedAgain={gatherAgain}
+          acted={acted}
         />
       )}
       {controls?.cityActions !== undefined && gather === 'harvest' && controls.cityActions.harvest.status === 'ready' && (
@@ -193,6 +210,8 @@ export function CityCard({
           busy={controls.busy}
           run={controls.run}
           onClose={() => setGather(null)}
+          confirmedAgain={gatherAgain}
+          acted={acted}
         />
       )}
       {controls !== undefined && buildFlow !== undefined && buildOptions !== undefined && buildFlow.pickerCityId === city.pieceId && (
@@ -219,11 +238,14 @@ function BuildEntry({
   options,
   busy,
   build,
+  acted,
 }: {
   readonly city: CityProduction
   readonly options: CityBuildOptions
   readonly busy: boolean
   readonly build: BuildFlow
+  /** What the city has already done this turn. */
+  readonly acted: readonly string[]
 }): React.JSX.Element {
   const reasonId = useId()
   const ready = options.status === 'ready'
@@ -238,7 +260,15 @@ function BuildEntry({
           aria-expanded={ready ? open : undefined}
           aria-describedby={ready ? undefined : reasonId}
           disabled={busy || !ready}
-          onClick={() => (open ? build.closePicker() : build.openPicker(city.pieceId))}
+          onClick={() => {
+            if (open) {
+              build.closePicker()
+              return
+            }
+            // A second action of a city in one turn needs a yes first; a no opens nothing
+            if (acted.length > 0 && !window.confirm(cityAgainQuestion(city.label, acted))) return
+            build.openPicker(city.pieceId, acted.length > 0)
+          }}
         >
           Build
         </button>
@@ -263,12 +293,14 @@ function StartProgramEntry({
   view,
   options,
   markerLineId,
+  acted,
   busy,
   run,
 }: {
   readonly city: CityProduction
   readonly gameId: string
   readonly view: PlayerView
+  readonly acted: readonly string[]
   readonly options: CityActionOptions['startBuildingProgram']
   /** The id of the card's "Building Program in place" line, when it is shown. */
   readonly markerLineId: string | undefined
@@ -287,7 +319,14 @@ function StartProgramEntry({
 
   function start(): void {
     const key = `${gameId}:${playerId}:startBuildingProgram:${city.pieceId}`
-    void press(key, (requestId) => api.startBuildingProgram(gameId, requestId, view.rev, city.pieceId))
+    // A second action of a city in one turn needs a yes first; the press already on its way is not asked again
+    const again = acted.length > 0
+    if (again && !isPressInFlight(key) && !window.confirm(cityAgainQuestion(city.label, acted))) return
+    void press(key, (requestId) =>
+      again
+        ? api.startBuildingProgram(gameId, requestId, view.rev, city.pieceId, true)
+        : api.startBuildingProgram(gameId, requestId, view.rev, city.pieceId),
+    )
   }
 
   return (

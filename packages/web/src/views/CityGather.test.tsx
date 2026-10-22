@@ -61,6 +61,7 @@ const options = (overrides: Partial<CityActionOptions> = {}): CityActionOptions 
   startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
   devoteToTheArts: DEVOTE,
   harvest: HARVEST,
+  actedThisTurn: [],
   ...overrides,
 })
 
@@ -266,5 +267,81 @@ describe('Harvest', () => {
     render(<AssistedActionsPanel gameId="g1" view={viewOf([options()])} busy={false} readOnly={true} run={run} />)
     expect(screen.queryByRole('button', { name: 'Harvest a resource in Capital B3' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Devote to the Arts in Capital B3' })).toBeNull()
+  })
+})
+
+describe('a second action of the same city this turn', () => {
+  const question = 'Capital B3 has already acted this turn (Build, Harvest). A city takes one action each turn. Do it anyway?'
+  const acted = (): PlayerView => viewOf([options({ actedThisTurn: ['Build', 'Harvest'] })])
+
+  it('Devote asks before the panel opens, and a no opens nothing', () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderPanel(acted())
+    fireEvent.click(devoteButton())
+    expect(ask).toHaveBeenCalledWith(question)
+    expect(screen.queryByRole('group', { name: 'Devote Capital B3 to the arts' })).toBeNull()
+  })
+
+  it('Devote with a yes sends confirmedRepeat', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const send = vi.spyOn(api, 'devoteToTheArts').mockResolvedValue({} as PlayerView)
+    renderPanel(acted())
+    fireEvent.click(devoteButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Devote and take 3 culture' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', expect.any(String), 7, 'city-1', { scoutPieceIds: [], confirmedRepeat: true })
+  })
+
+  it('Harvest asks, and a yes sends confirmedRepeat', async () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true)
+    const send = vi.spyOn(api, 'harvest').mockResolvedValue({} as PlayerView)
+    renderPanel(acted())
+    fireEvent.click(harvestButton())
+    expect(screen.queryByRole('group', { name: 'Harvest a resource in Capital B3' })).toBeNull()
+    fireEvent.click(harvestButton())
+    expect(ask).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Take Incense at C3' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', expect.any(String), 7, 'city-1', 'incense', undefined, true)
+  })
+
+  it('Start Building Program asks, a no sends nothing, a yes sends confirmedRepeat', async () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true)
+    const send = vi.spyOn(api, 'startBuildingProgram').mockResolvedValue({} as PlayerView)
+    renderPanel(acted())
+    const start = screen.getByRole('button', { name: 'Start Building Program in Capital B3' })
+    fireEvent.click(start)
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.click(start)
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(ask).toHaveBeenCalledWith(question)
+    expect(send).toHaveBeenCalledWith('g1', expect.any(String), 7, 'city-1', true)
+  })
+
+  it('a panel opened before the city acted asks when it sends, and a no sends nothing', async () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true)
+    const send = vi.spyOn(api, 'devoteToTheArts').mockResolvedValue({} as PlayerView)
+    const { rerender } = render(<AssistedActionsPanel gameId="g1" view={viewOf([options()])} busy={false} readOnly={false} run={run} />)
+    fireEvent.click(devoteButton())
+    expect(ask).not.toHaveBeenCalled()
+    // Another action of the city lands while the panel is open
+    rerender(<AssistedActionsPanel gameId="g1" view={acted()} busy={false} readOnly={false} run={run} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Devote and take 3 culture' }))
+    expect(ask).toHaveBeenCalledWith(question)
+    expect(send).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Devote and take 3 culture' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', expect.any(String), 7, 'city-1', { scoutPieceIds: [], confirmedRepeat: true })
+  })
+
+  it('nothing is asked of a city that has not acted', async () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const send = vi.spyOn(api, 'startBuildingProgram').mockResolvedValue({} as PlayerView)
+    renderPanel(viewOf([options()]))
+    fireEvent.click(screen.getByRole('button', { name: 'Start Building Program in Capital B3' }))
+    fireEvent.click(devoteButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(ask).not.toHaveBeenCalled()
+    expect(send).toHaveBeenCalledWith('g1', expect.any(String), 7, 'city-1')
   })
 })

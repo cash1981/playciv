@@ -233,6 +233,7 @@ describe('the city actions in the projection', () => {
         startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
         devoteToTheArts: expect.objectContaining({ status: 'ready', culture: 2 }),
         harvest: expect.objectContaining({ status: 'ready' }),
+        actedThisTurn: [],
       },
     ])
     expect(mine.you?.upgradeOptions).toEqual([
@@ -364,6 +365,7 @@ describe('starting a Building Program over HTTP', () => {
       action: 'build',
       requestId: 'build-1',
       rev: await revOf(table),
+      confirmedRepeat: true,
       cityPieceId: table.cityId,
       item: { kind: 'building', assetId: LIBRARY },
       target: C2,
@@ -732,6 +734,7 @@ describe('undo over HTTP', () => {
       action: 'build',
       requestId: 'build-1',
       rev: await revOf(table),
+      confirmedRepeat: true,
       cityPieceId: table.cityId,
       item: { kind: 'building', assetId: LIBRARY },
       target: C2,
@@ -1082,5 +1085,34 @@ describe('the devote and harvest payloads', () => {
       expect(response.status).toBe(400)
       expect(JSON.stringify(await response.json())).toContain('only belong to devoteToTheArts')
     }
+  })
+})
+
+describe('one action per city per turn over HTTP', () => {
+  it('a second action of the city is a 409 with the reason, until confirmedRepeat is sent', async () => {
+    const table = await buildTable('Twice2')
+    const first = await post(table.starter, actions(table), harvestBody(table, 'harvest-1', await revOf(table), 'iron'))
+    expect(first.status).toBe(200)
+    expect((await first.json<View>()).you?.cityActions?.[0]).toMatchObject({ actedThisTurn: ['Harvest'] })
+
+    const second = await post(table.starter, actions(table), devoteBody(table, 'devote-1', await revOf(table)))
+    expect(second.status).toBe(409)
+    expect(await second.json()).toMatchObject({
+      error: 'ASSISTED_ACTION_REJECTED',
+      message: expect.stringContaining('City B2 has already acted this turn (Harvest)'),
+    })
+    expect((await stored(table)).assistedActions).toHaveLength(1)
+
+    const confirmed = await post(table.starter, actions(table), { ...devoteBody(table, 'devote-1', await revOf(table)), confirmedRepeat: true })
+    expect(confirmed.status).toBe(200)
+    const after = await confirmed.json<View>()
+    expect(after.you?.cityActions?.[0]).toMatchObject({ actedThisTurn: ['Harvest', 'Devote to the Arts'] })
+    expect((await stored(table)).log.at(-1)?.publicLog).toContain('(a second action of this city this turn, confirmed by the player)')
+  })
+
+  it('a confirmedRepeat that is not a boolean is still refused', async () => {
+    const table = await buildTable('Twice3')
+    const response = await post(table.starter, actions(table), { ...devoteBody(table, 'devote-1', await revOf(table)), confirmedRepeat: 'true' })
+    expect(response.status).toBe(400)
   })
 })

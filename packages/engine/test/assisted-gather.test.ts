@@ -112,21 +112,23 @@ const optionOf = (state: GameState) => {
 
 const lastLine = (state: GameState): string => state.log.at(-1)?.publicLog ?? ''
 
-const devote = (state: GameState, payload: Partial<AssistedPayload> = {}, requestId = 'devote-1') =>
+const devote = (state: GameState, payload: Partial<AssistedPayload> = {}, requestId = 'devote-1', again = false) =>
   performAssistedAction(state, {
     playerId: CASH1981,
     action: 'devoteToTheArts',
     requestId,
     at: AT,
+    ...(again ? { confirmedRepeat: true } : {}),
     payload: { cityPieceId: firstCityId(state), ...payload } as AssistedPayload,
   })
 
-const harvest = (state: GameState, resource: string, extra: Record<string, unknown> = {}, requestId = 'harvest-1') =>
+const harvest = (state: GameState, resource: string, extra: Record<string, unknown> = {}, requestId = 'harvest-1', again = false) =>
   performAssistedAction(state, {
     playerId: CASH1981,
     action: 'harvest',
     requestId,
     at: AT,
+    ...(again ? { confirmedRepeat: true } : {}),
     payload: { cityPieceId: firstCityId(state), resource, ...extra } as AssistedPayload,
   })
 
@@ -465,9 +467,9 @@ describe('devoting a city to the arts', () => {
     expect(next.assistedActions[0]?.usageKey).toBeNull()
   })
 
-  it('may be done again at once: it is not once per turn', () => {
+  it('may be done again once the player has confirmed it', () => {
     const once = unwrap(devote(america()))
-    const twice = unwrap(devote(once, {}, 'devote-2'))
+    const twice = unwrap(devote(once, {}, 'devote-2', true))
     expect(me(twice).stats.culture).toBe(me(once).stats.culture + 1)
   })
 
@@ -619,7 +621,7 @@ describe('harvesting a resource', () => {
 
   it('a second harvest puts the next token in the next free slot, not on top of the first', () => {
     const one = unwrap(harvest(america(), 'iron'))
-    const two = unwrap(harvest(one, 'incense', {}, 'harvest-2'))
+    const two = unwrap(harvest(one, 'incense', {}, 'harvest-2', true))
     const [a, b] = [piecesOf(two, 'resources/iron')[0], piecesOf(two, 'resources/incense')[0]] as BoardPiece[]
     expect([a?.x, a?.y]).not.toEqual([b?.x, b?.y])
   })

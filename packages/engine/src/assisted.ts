@@ -437,6 +437,11 @@ interface ApplyContext {
    * again. It pays and applies as a first use; only the log line says so.
    */
   readonly confirmedRepeat: boolean
+  /**
+   * The player answered yes to "this city has already acted this turn, act again?". Read only by the
+   * four city actions, which refuse a second action of one city without it.
+   */
+  readonly confirmedAnotherCityAction: boolean
 }
 
 type AssistedActionDefinition = {
@@ -494,6 +499,61 @@ const usedReason = (label: string): string =>
   `${label} has already been used this turn. The rules allow it once per turn; you will be asked to confirm before using it again.`
 
 export const PHASE_REASON = 'Only available during your open City Management phase.'
+
+/** The assisted actions that are a city's action for the turn (base rules p. 15: build, devote to the arts or harvest; W&W p. 7: start a Building Program). */
+const CITY_ACTION_LABELS: Readonly<Partial<Record<AssistedActionKind, string>>> = {
+  build: 'Build',
+  startBuildingProgram: 'Start Building Program',
+  devoteToTheArts: 'Devote to the Arts',
+  harvest: 'Harvest',
+}
+
+/**
+ * The city actions this city has taken this turn that are still in force (not undone), by name, oldest
+ * first. A city may take one a turn as a rule; the game does not forbid more, it asks first.
+ */
+export function cityActionsTakenThisTurn(state: GameState, player: Playerhand, cityPieceId: string): readonly string[] {
+  const turn = turnStatus(state).currentTurn
+  return state.assistedActions.flatMap((record) => {
+    const label = CITY_ACTION_LABELS[record.kind]
+    const effect = record.effect
+    if (
+      label === undefined ||
+      record.status !== 'applied' ||
+      record.playerId !== player.playerId ||
+      record.turnNumber !== turn ||
+      !('cityPieceId' in effect) ||
+      effect.cityPieceId !== cityPieceId
+    ) {
+      return []
+    }
+    return [label]
+  })
+}
+
+const SECOND_ACTION_NOTE = ' (a second action of this city this turn, confirmed by the player)'
+
+/**
+ * What the city's earlier actions this turn mean for one more: nothing to say, a note for the log
+ * when the player confirmed it, or the refusal that makes the client ask first.
+ */
+function earlierCityActions(
+  state: GameState,
+  player: Playerhand,
+  city: { readonly cityPieceId: string; readonly label: string },
+  confirmed: boolean,
+): { readonly refusal: BlockedAvailability | undefined; readonly note: string } {
+  const taken = cityActionsTakenThisTurn(state, player, city.cityPieceId)
+  if (taken.length === 0) return { refusal: undefined, note: '' }
+  if (confirmed) return { refusal: undefined, note: SECOND_ACTION_NOTE }
+  return {
+    refusal: blocked(
+      'used',
+      `${city.label} has already acted this turn (${taken.join(', ')}). A city takes one action each turn; you are asked to confirm before it takes another.`,
+    ),
+    note: '',
+  }
+}
 
 // -- Incense cards: Chivalry, Currency, Metal Casting -----------------------
 
@@ -1817,6 +1877,9 @@ const build: AssistedActionDefinition = {
         ),
       )
     }
+    // After everything that makes the build impossible, so that a refusal says what is wrong and the question only comes for a build that would go through
+    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction)
+    if (again.refusal !== undefined) return err(rejected('build', again.refusal))
     const at = context.at === undefined ? {} : { at: context.at }
 
     // The marker a city with the Building Program must use (Wisdom and Warfare p. 7), found before anything is placed
@@ -1864,7 +1927,8 @@ const build: AssistedActionDefinition = {
       publicLog:
         `${player.username} built ${payload.item.kind === 'wonder' ? label.replace(/^The /, 'the ') : withArticle(label)} in ${city.label}${where}` +
         (choice.tradeToPay > 0 ? `, paying ${choice.tradeToPay} trade for the missing production` : '') +
-        (removal === null ? '' : ', using up the Building Program marker'),
+        (removal === null ? '' : ', using up the Building Program marker') +
+        again.note,
       privateLog: '',
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,
@@ -2102,6 +2166,8 @@ const startBuildingProgram: AssistedActionDefinition = {
     const option = city.startBuildingProgram
     if (option.status === 'wrong-phase') return err(rejected('startBuildingProgram', blocked('wrong-phase', option.reason)))
     if (option.status !== 'ready') return err(failed(`${city.label}: ${option.reason}`))
+    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction)
+    if (again.refusal !== undefined) return err(rejected('startBuildingProgram', again.refusal))
 
     const asset = findBoardAsset(BUILDING_PROGRAM_ASSET_ID)
     if (asset === undefined) return err(failed('The Building Program marker has no artwork to put on the board.'))
@@ -2127,7 +2193,7 @@ const startBuildingProgram: AssistedActionDefinition = {
     const logged = appendLog(placed, {
       username: player.username,
       playerId: player.playerId,
-      publicLog: `${player.username} started a Building Program in ${city.label}`,
+      publicLog: `${player.username} started a Building Program in ${city.label}${again.note}`,
       privateLog: '',
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,
@@ -2198,8 +2264,8 @@ const listLabels = (labels: readonly string[]): string =>
  * icon in its outskirts (base rules p. 17), here the sum `cityGatheringOf` reads off the
  * board and the building table, plus the squares of the scouts the player sends to the city.
  * The player may type another number when the estimate misses something it cannot see (a
- * wonder, a card), as with the production figure: the log then says so. It is not once per
- * turn and not marked on the city, as with the other city actions. The culture goes to the
+ * wonder, a card), as with the production figure: the log then says so. A city takes one
+ * action a turn: a second one is refused until the player confirms (`earlierCityActions`). The culture goes to the
  * stock (`stats.culture`) and an undo takes it off again unless it has been spent.
  */
 const devoteToTheArts: AssistedActionDefinition = {
@@ -2243,6 +2309,8 @@ const devoteToTheArts: AssistedActionDefinition = {
     if (typed !== undefined && (typeof typed !== 'number' || !Number.isInteger(typed) || typed < 0 || typed > MAX_DEVOTE_CULTURE)) {
       return err(failed(`culture must be a whole number from 0 to ${MAX_DEVOTE_CULTURE}.`))
     }
+    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction)
+    if (again.refusal !== undefined) return err(rejected('devoteToTheArts', again.refusal))
     const estimate = option.culture + chosen.reduce((total, scout) => total + scout.culture, 0)
     const culture = typeof typed === 'number' ? typed : estimate
 
@@ -2252,7 +2320,7 @@ const devoteToTheArts: AssistedActionDefinition = {
     const logged = appendLog(withPlayerHand(state, { ...player, stats }), {
       username: player.username,
       playerId: player.playerId,
-      publicLog: `${player.username} devoted ${city.label} to the arts and gained ${culture} culture${scoutText}${handText}`,
+      publicLog: `${player.username} devoted ${city.label} to the arts and gained ${culture} culture${scoutText}${handText}${again.note}`,
       privateLog: '',
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,
@@ -2293,8 +2361,9 @@ const harvestPayloadOf = (payload: AssistedPayload | undefined): HarvestPayload 
  * square of a scout the player sends to it, from the market to the player's area (base rules
  * p. 18). One token per action; the market holds as many of a kind as there are players, up to
  * five, and the pieces on the board are what is gone. The token is a board piece put in the
- * player's own area, which is where a resource is paid from. Not once per turn, and the game
- * does not stop the same icon from being harvested twice in a turn. An undo takes the token
+ * player's own area, which is where a resource is paid from. A city takes one action a turn (a
+ * second is refused until the player confirms), and the game does not stop the same icon from
+ * being harvested twice in a turn. An undo takes the token
  * away again, unless it has been spent.
  */
 const harvest: AssistedActionDefinition = {
@@ -2343,9 +2412,10 @@ const harvest: AssistedActionDefinition = {
       )
     }
     if (!choice.available) return err(failed(choice.unavailableReason ?? `The market has no ${resource} token left.`))
-
     const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === player.playerId)
     if (area === undefined) return err(failed('You have no player area to put the token in.'))
+    const again = earlierCityActions(state, player, city, context.confirmedAnotherCityAction)
+    if (again.refusal !== undefined) return err(rejected('harvest', again.refusal))
     const region = areaSlotRegion(area)
     const placed = placeUnchecked(state, {
       playerId: player.playerId,
@@ -2363,7 +2433,7 @@ const harvest: AssistedActionDefinition = {
     const logged = appendLog(placed, {
       username: player.username,
       playerId: player.playerId,
-      publicLog: `${player.username} harvested ${resource} with ${city.label} (${choice.label})`,
+      publicLog: `${player.username} harvested ${resource} with ${city.label} (${choice.label})${again.note}`,
       privateLog: '',
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,
@@ -2772,8 +2842,9 @@ export interface PerformAssistedActionInput {
   /** What `chooseReward` needs (which reward and which card) or `build` needs (which city, item and square). Other actions take none. */
   readonly payload?: AssistedPayload
   /**
-   * The player answered yes to "you have already used this, use it again?". It
-   * lifts exactly one refusal, `used`; every other refusal stands.
+   * The player answered yes to "you have already used this, use it again?" for a card, or to "this city
+   * has already acted this turn, act again?" for a build, a Building Program, a devote or a harvest. It
+   * lifts exactly that one refusal, `used`; every other refusal stands.
    */
   readonly confirmedRepeat?: boolean
 }
@@ -2816,6 +2887,7 @@ export function performAssistedAction(
     at: input.at,
     payload: input.payload,
     confirmedRepeat: repeat,
+    confirmedAnotherCityAction: input.confirmedRepeat === true,
   })
   if (!applied.ok) return applied
 

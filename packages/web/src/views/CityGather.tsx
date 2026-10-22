@@ -21,6 +21,24 @@ import './CityCard.css'
 
 export type GatherPanel = 'devote' | 'harvest'
 
+/**
+ * What the player is asked before a city acts a second time in a turn: a city takes one action a turn
+ * (build, devote, harvest or start a Building Program) and the game lets it do more only after a yes.
+ */
+export const cityAgainQuestion = (cityLabel: string, acted: readonly string[]): string =>
+  `${cityLabel} has already acted this turn (${acted.join(', ')}). A city takes one action each turn. Do it anyway?`
+
+/**
+ * Whether the request is sent with `confirmedRepeat`, decided when it is sent. A yes given when the panel or
+ * picker was opened stands; a city that has acted since (a panel left open while another action landed, or a
+ * stale view) is asked now. `null` when the player says no: nothing is sent.
+ */
+export function resolveAgain(cityLabel: string, acted: readonly string[], confirmedBefore: boolean): boolean | null {
+  if (confirmedBefore) return true
+  if (acted.length === 0) return false
+  return window.confirm(cityAgainQuestion(cityLabel, acted)) ? true : null
+}
+
 /** A whole number from 0 to the engine's cap, or `null` for anything else. */
 function parseCulture(typed: string): number | null {
   const trimmed = typed.trim()
@@ -126,6 +144,10 @@ interface PanelProps {
   readonly busy: boolean
   readonly run: Run
   readonly onClose: () => void
+  /** The player said yes to a second action of this city this turn when the panel was opened. */
+  readonly confirmedAgain: boolean
+  /** What the city has done this turn, as the view now says. */
+  readonly acted: readonly string[]
 }
 
 /**
@@ -140,6 +162,8 @@ export function DevotePanel({
   busy,
   run,
   onClose,
+  confirmedAgain,
+  acted,
 }: PanelProps & { readonly options: CityActionOptions['devoteToTheArts'] }): React.JSX.Element | null {
   const { sending, message, press } = useCityActionPress(run, view)
   const [sent, setSent] = useState<readonly string[]>([])
@@ -157,12 +181,15 @@ export function DevotePanel({
 
   function confirm(): void {
     if (amount === null || sending) return
+    const again = resolveAgain(city.label, acted, confirmedAgain)
+    if (again === null) return
     const scoutPieceIds = chosen.map((scout) => scout.pieceId)
     const key = `${gameId}:${playerId}:devoteToTheArts:${city.pieceId}:${scoutPieceIds.join('+')}:${amount}`
     void press(key, (requestId) =>
       api.devoteToTheArts(gameId, requestId, view.rev, city.pieceId, {
         scoutPieceIds,
         ...(amount === total ? {} : { culture: amount }),
+        ...(again ? { confirmedRepeat: true } : {}),
       }),
     ).then((done) => {
       if (done) onClose()
@@ -259,6 +286,8 @@ export function HarvestPanel({
   busy,
   run,
   onClose,
+  confirmedAgain,
+  acted,
 }: PanelProps & { readonly options: CityActionOptions['harvest'] }): React.JSX.Element | null {
   const { sending, message, press } = useCityActionPress(run, view)
   const reasonPrefix = useId()
@@ -267,9 +296,13 @@ export function HarvestPanel({
 
   function take(choice: CityActionOptions['harvest']['choices'][number]): void {
     if (!choice.available || sending) return
+    const again = resolveAgain(city.label, acted, confirmedAgain)
+    if (again === null) return
     const key = `${gameId}:${playerId}:harvest:${city.pieceId}:${choice.resource}:${choice.scoutPieceId ?? 'outskirts'}`
     void press(key, (requestId) =>
-      api.harvest(gameId, requestId, view.rev, city.pieceId, choice.resource, choice.scoutPieceId ?? undefined),
+      again
+        ? api.harvest(gameId, requestId, view.rev, city.pieceId, choice.resource, choice.scoutPieceId ?? undefined, true)
+        : api.harvest(gameId, requestId, view.rev, city.pieceId, choice.resource, choice.scoutPieceId ?? undefined),
     ).then((done) => {
       if (done) onClose()
     })

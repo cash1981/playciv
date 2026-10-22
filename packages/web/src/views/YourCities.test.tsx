@@ -9,7 +9,7 @@ import type { Run } from './GameView.js'
 import { YourCities } from './YourCities.js'
 
 /** The two gather options every city has; these tests are about the Building Program and the Upgrades. */
-const GATHER: Pick<CityActionOptions, 'devoteToTheArts' | 'harvest'> = {
+const GATHER: Pick<CityActionOptions, 'devoteToTheArts' | 'harvest' | 'actedThisTurn'> = {
   devoteToTheArts: {
     status: 'ready',
     reason: 'Ready to devote this city to the arts.',
@@ -19,6 +19,7 @@ const GATHER: Pick<CityActionOptions, 'devoteToTheArts' | 'harvest'> = {
     scouts: [],
   },
   harvest: { status: 'unavailable', reason: 'No resource icon in the outskirts.', choices: [], notes: [] },
+  actedThisTurn: [],
 }
 
 
@@ -80,6 +81,7 @@ const flow: BuildFlow = {
   plan: null,
   note: null,
   message: null,
+  confirmedAgain: false,
   openPicker: () => undefined,
   closePicker: () => undefined,
   start: () => undefined,

@@ -822,23 +822,25 @@ export const api = {
    * sends its `target` square; a unit is a private card and sends none (the
    * server refuses a target on one).
    */
-  build: (gameId: string, requestId: string, rev: number, payload: BuildPayload) =>
+  build: (gameId: string, requestId: string, rev: number, payload: BuildPayload, confirmedRepeat?: boolean) =>
     post<PlayerView>(`/api/games/${gameId}/actions`, {
       action: 'build',
       requestId,
       rev,
+      ...(confirmedRepeat === true ? { confirmedRepeat: true } : {}),
       cityPieceId: payload.cityPieceId,
       item: payload.item,
       ...(payload.target === undefined ? {} : { target: payload.target }),
       ...(payload.rush === undefined ? {} : { rush: payload.rush }),
     }),
   /** Put the Building Program marker on one of the viewer's cities (assisted city action). */
-  startBuildingProgram: (gameId: string, requestId: string, rev: number, cityPieceId: string) =>
+  startBuildingProgram: (gameId: string, requestId: string, rev: number, cityPieceId: string, confirmedRepeat?: boolean) =>
     post<PlayerView>(`/api/games/${gameId}/actions`, {
       action: 'startBuildingProgram',
       requestId,
       rev,
       cityPieceId,
+      ...(confirmedRepeat === true ? { confirmedRepeat: true } : {}),
     }),
   /**
    * Devote one of the viewer's cities to the arts (assisted city action). `scoutPieceIds` are the
@@ -850,13 +852,14 @@ export const api = {
     requestId: string,
     rev: number,
     cityPieceId: string,
-    extra: { readonly scoutPieceIds?: readonly string[]; readonly culture?: number } = {},
+    extra: { readonly scoutPieceIds?: readonly string[]; readonly culture?: number; readonly confirmedRepeat?: boolean } = {},
   ) =>
     post<PlayerView>(`/api/games/${gameId}/actions`, {
       action: 'devoteToTheArts',
       requestId,
       rev,
       cityPieceId,
+      ...(extra.confirmedRepeat === true ? { confirmedRepeat: true } : {}),
       ...(extra.scoutPieceIds === undefined || extra.scoutPieceIds.length === 0 ? {} : { scoutPieceIds: extra.scoutPieceIds }),
       ...(extra.culture === undefined ? {} : { culture: extra.culture }),
     }),
@@ -868,6 +871,7 @@ export const api = {
     cityPieceId: string,
     resource: ResourceKind,
     scoutPieceId?: string,
+    confirmedRepeat?: boolean,
   ) =>
     post<PlayerView>(`/api/games/${gameId}/actions`, {
       action: 'harvest',
@@ -876,6 +880,7 @@ export const api = {
       cityPieceId,
       resource,
       ...(scoutPieceId === undefined ? {} : { scoutPieceId }),
+      ...(confirmedRepeat === true ? { confirmedRepeat: true } : {}),
     }),
   /**
    * Flip the viewer's basic buildings to their upgraded form. `family` is the

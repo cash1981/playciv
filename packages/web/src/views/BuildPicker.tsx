@@ -22,6 +22,7 @@ import type { BuildChoice, BuildPayload, CityBuildOptions, PlayerView } from '..
 import { api } from '../lib/api.js'
 import { isPressInFlight, pressOnce } from './AssistedActions.js'
 import { itemKeyOf } from './buildFlow.js'
+import { resolveAgain } from './CityGather.js'
 import type { BuildFlow, BuildPlan } from './buildFlow.js'
 import type { Run } from './GameView.js'
 import { ReferenceDialog } from './ReferenceDialog.js'
@@ -387,6 +388,10 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     // The same press is already on its way (this bar was closed and opened again):
     // its outcome is not known yet, so this click says nothing and sends nothing.
     if (isPressInFlight(key)) return
+    // A yes given when the picker was opened stands; a city that has acted since is asked now
+    const acted = view.you?.cityActions?.find((candidate) => candidate.cityPieceId === plan.cityPieceId)?.actedThisTurn ?? []
+    const again = resolveAgain(plan.cityLabel, acted, flow.confirmedAgain)
+    if (again === null) return
     let failure: unknown = null
     // The refusal is shown here, so it is kept out of GameView's banner. `run`
     // still reloads afterwards, which is what brings the fresh options.
@@ -404,7 +409,8 @@ function PlanBar({ gameId, playerId, view, plan, flow, busy, run }: PlanBarProps
     void pressOnce(
       key,
       quietRun,
-      (requestId) => api.build(gameId, requestId, view.rev, payload),
+      (requestId) =>
+        again ? api.build(gameId, requestId, view.rev, payload, true) : api.build(gameId, requestId, view.rev, payload),
       view,
     ).then((done) => {
       setSending(false)

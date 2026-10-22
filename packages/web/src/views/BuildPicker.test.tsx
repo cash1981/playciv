@@ -160,7 +160,7 @@ function cityProduction(overrides: Partial<CityProduction> = {}): CityProduction
 
 function viewOf(
   build: readonly CityBuildOptions[] | undefined,
-  extra: { rev?: number; spectator?: boolean; theirs?: readonly CityProduction[] } = {},
+  extra: { rev?: number; spectator?: boolean; theirs?: readonly CityProduction[]; acted?: readonly string[] } = {},
 ): PlayerView {
   return {
     rev: extra.rev ?? 7,
@@ -171,6 +171,20 @@ function viewOf(
           username: 'Alice',
           cities: [cityProduction()],
           ...(build === undefined ? {} : { buildOptions: build }),
+          ...(extra.acted === undefined
+            ? {}
+            : {
+                cityActions: [
+                  {
+                    cityPieceId: 'city-1',
+                    label: 'Capital D5',
+                    startBuildingProgram: { status: 'ready', reason: 'Ready.', hasMarker: false },
+                    devoteToTheArts: { status: 'ready', reason: 'Ready.', culture: 1, parts: [], notes: [], scouts: [] },
+                    harvest: { status: 'unavailable', reason: 'Nothing to harvest.', choices: [], notes: [] },
+                    actedThisTurn: extra.acted,
+                  },
+                ],
+              }),
         },
     opponents: [{ playerId: 'them', username: 'Bob', cities: extra.theirs ?? [] }],
   } as unknown as PlayerView
@@ -1310,5 +1324,76 @@ describe('building a wonder', () => {
     act(() => handle.setView(viewOf([options({ choices: [asBuilding] })], { rev: 9 })))
     expect(overlays()).toHaveLength(0)
     expect(screen.getByRole('status').textContent).toBe(OPTIONS_CHANGED)
+  })
+})
+
+describe('a second action of the same city this turn', () => {
+  const question = 'Capital D5 has already acted this turn (Harvest). A city takes one action each turn. Do it anyway?'
+
+  it('asks before the picker opens, and a no opens nothing', () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<Harness initial={viewOf([ALL_KINDS()], { acted: ['Harvest'] })} />)
+    fireEvent.click(buildButton())
+    expect(ask).toHaveBeenCalledWith(question)
+    expect(screen.queryByRole('region', { name: 'Build in Capital D5' })).toBeNull()
+    ask.mockRestore()
+  })
+
+  it('a yes opens the picker, and the build is sent with confirmedRepeat', async () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([ALL_KINDS()], { acted: ['Harvest'] })} />)
+    fireEvent.click(buildButton())
+    choose('Infantry unit')
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(ask).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]?.[4]).toBe(true)
+  })
+
+  it('asks nothing of a city that has not acted, and sends no confirmedRepeat', async () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    render(<Harness initial={viewOf([ALL_KINDS()], { acted: [] })} />)
+    fireEvent.click(buildButton())
+    choose('Infantry unit')
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(ask).not.toHaveBeenCalled()
+    expect(send.mock.calls[0]).toHaveLength(4)
+  })
+
+  it('a yes for a build does not carry over to the next one once the flow was closed', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    // The refresh after the first build brings a view where the city has not acted
+    const fresh = viewOf([ALL_KINDS()], { acted: [] })
+    render(<Harness initial={viewOf([ALL_KINDS()], { acted: ['Harvest'] })} refresh={() => fresh} />)
+    fireEvent.click(buildButton())
+    choose('Infantry unit')
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toBe(true)
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Build' })).toBeNull())
+    fireEvent.click(buildButton())
+    choose('Infantry unit')
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(2))
+    expect(send.mock.calls[1]).toHaveLength(4)
+  })
+
+  it('a picker opened before the city acted asks when it sends', async () => {
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const send = vi.spyOn(api, 'build').mockResolvedValue({} as PlayerView)
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([ALL_KINDS()], { acted: [] })} handle={handle} />)
+    fireEvent.click(buildButton())
+    choose('Infantry unit')
+    expect(ask).not.toHaveBeenCalled()
+    act(() => handle.setView(viewOf([ALL_KINDS()], { acted: ['Harvest'] })))
+    fireEvent.click(confirm())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(ask).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]?.[4]).toBe(true)
   })
 })
