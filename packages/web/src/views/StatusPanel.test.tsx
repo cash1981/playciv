@@ -286,6 +286,7 @@ describe('StatusPanel Coins section', () => {
             },
           ]
     return {
+      activeTurn: null,
       board: { ...board, pieces },
       you: {
         playerId: 'player-me',

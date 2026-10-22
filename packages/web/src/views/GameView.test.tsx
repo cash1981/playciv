@@ -440,7 +440,7 @@ describe('game header chips (issue #206)', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("Turn 1 · s3s3's turn — city management phase")
   })
 
-  it('keeps naming the start player in a tie, so the viewer does not read "Your turn" at the start of a round', async () => {
+  it('keeps naming the turn holder in a tie, so the viewer does not read "Your turn" at the start of a round', async () => {
     await renderHeader(
       headerView(seat('viewer'), [seat('s3s3')], 's3s3', [
         { username: 'viewer', phase: 'SOT' },

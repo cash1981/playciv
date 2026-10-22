@@ -370,8 +370,10 @@ describe('CitiesPanel, who may edit', () => {
     expect(screen.getByText('Estimated production: 5')).toBeTruthy()
     // One field only: Alice's. Bob's city has none.
     expect(screen.getAllByRole('textbox')).toHaveLength(1)
-    // Only the count link names the city: no Build, Start or Set button.
-    expect(screen.queryByRole('button', { name: /^(Build|Start|Set|Use).*Capital J10/ })).toBeNull()
+    // Read only: the count link is the only button named for the opponent's city.
+    const opponentButtons = screen.getAllByRole('button', { name: /Capital J10/ })
+    expect(opponentButtons).toHaveLength(1)
+    expect(opponentButtons[0]?.getAttribute('aria-label')).toMatch(/^Not a complete count/)
     // The arithmetic is still there for the opponent's city.
     expect(screen.getAllByRole('button', { name: /^Not a complete count/ })).toHaveLength(2)
     fireEvent.click(screen.getByRole('button', { name: 'Not a complete count: Capital J10' }))

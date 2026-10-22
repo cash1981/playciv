@@ -14,7 +14,7 @@ Great Person one before it, is merged into that branch only when the human says 
 The game page explains where the game stands and gives the board the space it
 needs. At the top: the round, the viewer's own phase, who is waited for, a short
 resource line and any card choice that is waiting. Below the header: shortcuts
-to Board, Your cards, Tech tree and Chat and history. On every screen size the
+to Board, Your cards, Tech tree and Chat and history. On every screen size the [Superseded by decisions.md: now Board, Your cards, Tech tree, Cities.]
 order is the board, then Your cards directly under it, then the other controls.
 
 ## Why
@@ -47,7 +47,7 @@ fetched, so the text is the spec):
   resource line (culture, trade, coins total) and "1 card choice waiting" (a link
   to it) when `pendingRewards` is non-empty. A spectator sees the round and who
   is waited for, nothing about resources.
-- Shortcut buttons (Board, Your cards, Tech tree, Chat, History) that scroll the
+- Shortcut buttons (Board, Your cards, Tech tree, Chat, History) that scroll the [Superseded by decisions.md: now Board, Your cards, Tech tree, Cities.]
   panel into view and move focus to it, with smooth scrolling off when the user
   prefers reduced motion. They are real buttons, keyboard reachable, readable at
   320 px.
@@ -84,7 +84,7 @@ fetched, so the text is the spec):
 
 - [ ] The header shows round, the viewer's phase, who is waited for, resources and
       a waiting card choice; a spectator sees only the round and who is waited for.
-- [ ] Shortcuts scroll to and focus Board, Your cards, Tech tree, Chat and History.
+- [ ] Shortcuts scroll to and focus Board, Your cards, Tech tree, Chat and History. [Superseded by decisions.md: now Board, Your cards, Tech tree, Cities.]
 - [ ] At 1280 px the board is as wide as the content column (nothing beside it),
       Your cards is directly below it, and the same holds at 390 px and 320 px with
       no horizontal page scroll.

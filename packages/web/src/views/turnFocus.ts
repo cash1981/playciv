@@ -19,11 +19,11 @@ export interface FocusEntry {
 
 /**
  * The entries at the earliest open phase, in list order. Empty when there is no
- * active turn or nobody is waited for. A projection without a waiting list
- * counts as nobody waited for.
+ * active turn or nobody is waited for.
  */
 function earliestEntries(activeTurn: ActiveTurnStatus | null): readonly FocusEntry[] {
-  const waiting = activeTurn?.waitingFor ?? []
+  if (activeTurn === null) return []
+  const waiting = activeTurn.waitingFor
   const index = (phase: TurnPhase): number => TURN_PHASES.indexOf(phase)
   const earliest = Math.min(...waiting.map((entry) => index(entry.phase)))
   return waiting.filter((entry) => index(entry.phase) === earliest)
@@ -33,7 +33,7 @@ function earliestEntries(activeTurn: ActiveTurnStatus | null): readonly FocusEnt
  * The player furthest behind: the lowest phase among those waited for. Among a
  * tie the turn holder comes first when they are in it, else the first in the
  * list. The viewer gets no preference, so at the start of a round, when
- * everyone is tied, the title keeps naming the start player for everybody.
+ * everyone is tied, the title keeps naming the turn holder for everybody.
  * `null` when there is no active turn or everyone is done.
  */
 export function focusPlayer(activeTurn: ActiveTurnStatus | null): FocusEntry | null {
