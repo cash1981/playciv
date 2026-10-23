@@ -468,13 +468,19 @@ The red box that sat in the page is gone (it stays only while the game has not
 loaded), so an error is seen wherever the player has scrolled to.
 
 The green text is the player's own words for what they did, from
-`GET /api/games/:gameId/confirmation?after=<revision>`: their private log text for the
-revisions after the one the page held, else the public line of a revision they made,
-else "Done". The route reads by the caller's id and needs a sign-in, so another
-player's private text cannot be in the answer; `api.test.ts` pins it. It is a
+`GET /api/games/:gameId/confirmation?after=<revision>`: for the revisions after the
+one the page held that the player made themself, their private log text, else the
+public line; else "Done". Revisions by others never count, even when they wrote a
+private line for this player (a trade handing them an item), so a toast is never
+another player's action presented as theirs. The route reads by the caller's id and
+needs a sign-in, so another player's private text cannot be in the answer;
+`api.test.ts` pins both. It is a
 separate route on purpose: the history list names things as the public log does,
 even to its owner, and that stays so. Fetching the text can fail without failing the
-action: the toast then says "Done".
+action: the toast then says "Done". Toasts are cleared when the player leaves the
+game or signs out, and an error from a poll or a replay is a red toast too. The two
+live regions (status for green, alert for red) stay mounted so screen readers
+announce what arrives in them.
 
 Source: `packages/web/src/lib/toasts.ts`, `confirmation.ts`, `views/ToastRegion.tsx`,
 `GameView.tsx` (`run`), `packages/server/src/routes/games.ts`.

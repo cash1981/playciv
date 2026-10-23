@@ -13,7 +13,7 @@ import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, PlayableCard, Sh
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { confirmationText } from '../lib/confirmation.js'
-import { showToast } from '../lib/toasts.js'
+import { clearToasts, showToast } from '../lib/toasts.js'
 import { useActivity } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
@@ -405,6 +405,10 @@ export function GameView({
     void reload()
   }, [reload])
 
+  // What a toast says belongs to this game and this player: leaving, or signing out,
+  // takes it away so the next page or the next person on the device does not see it.
+  useEffect(() => clearToasts, [gameId])
+
   /** Runs an action, then reloads a consistent live game/history pair. */
   const run = useCallback(
     async (action: () => Promise<PlayerView | unknown>) => {
@@ -417,7 +421,12 @@ export function GameView({
         const reloaded = await reload()
         if (activeGameIdRef.current !== gameId) return
         // A failed reload has set its own error; do not also say "Done".
-        if (reloaded) showToast('ok', await confirmationFor(gameId, revisionBefore, player !== null))
+        if (reloaded) {
+          const text = await confirmationFor(gameId, revisionBefore, player !== null)
+          // The player may have gone to another game while this was asked
+          if (activeGameIdRef.current !== gameId) return
+          showToast('ok', text)
+        }
       } catch (caught) {
         if (activeGameIdRef.current !== gameId) return
         if (isUnauthorized(caught) && player !== null) return onUnauthorized()

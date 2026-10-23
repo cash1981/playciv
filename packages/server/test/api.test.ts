@@ -1146,6 +1146,38 @@ describe('the confirmation of an action', () => {
     expect((await confirmation('missing', starter, 0)).status).toBe(404)
   })
 
+  it('does not turn what another player did to you into your confirmation', async () => {
+    const { gameId, starter, waiting } = await startedGame('Bekreft-gave')
+    const draw = await inject(app, {
+      method: 'POST', url: `/api/games/${gameId}/draw/CULTURE_1`, headers: bearer(starter), payload: {},
+    })
+    expect(draw.status).toBe(200)
+    const state = await repo.findGame(gameId)
+    const giver = state?.players.find((player) => player.yourTurn)
+    const receiver = state?.players.find((player) => !player.yourTurn)
+    const item = giver?.items[0]
+    if (giver === undefined || receiver === undefined || item === undefined) throw new Error('no setup')
+    const before = state?.rev ?? 0
+
+    const trade = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/items/trade`,
+      headers: bearer(starter),
+      payload: {
+        sheetName: item.sheetName,
+        itemNumber: item.itemNumber,
+        name: (item as { name: string }).name,
+        targetPlayerId: receiver.playerId,
+      },
+    })
+    expect(trade.status).toBe(200)
+
+    // The receiver did nothing since `before`: their confirmation is empty
+    expect(await (await confirmation(gameId, waiting, before)).json()).toEqual({ lines: [] })
+    // The giver's own is not
+    expect((await (await confirmation(gameId, starter, before)).json<{ lines: string[] }>()).lines).not.toEqual([])
+  })
+
   it('keeps private words out of the history list', async () => {
     const { gameId, starter } = await startedGame('Bekreftliste')
     await inject(app, { method: 'POST', url: `/api/games/${gameId}/draw/CULTURE_1`, headers: bearer(starter), payload: {} })

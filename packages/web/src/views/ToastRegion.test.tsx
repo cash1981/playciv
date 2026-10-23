@@ -27,7 +27,7 @@ describe('ToastRegion', () => {
   it('shows a failure as an alert that stays longer, and can be closed', () => {
     render(<ToastRegion />)
     act(() => void showToast('error', 'Failed to fetch'))
-    expect(screen.getByRole('alert').className).toContain('toast-error')
+    expect(screen.getByRole('alert').querySelector('.toast')?.className).toContain('toast-error')
     act(() => vi.advanceTimersByTime(TOAST_MS.ok + 1))
     expect(screen.queryByText('Failed to fetch')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
@@ -37,7 +37,7 @@ describe('ToastRegion', () => {
   it('keeps a toast while the pointer is over it', () => {
     render(<ToastRegion />)
     act(() => void showToast('ok', 'Held'))
-    const toast = screen.getByRole('status')
+    const toast = screen.getByRole('status').querySelector('.toast') as HTMLElement
     fireEvent.pointerEnter(toast)
     act(() => vi.advanceTimersByTime(TOAST_MS.ok * 3))
     expect(screen.queryByText('Held')).not.toBeNull()
@@ -56,13 +56,42 @@ describe('ToastRegion', () => {
     act(() => {
       for (let i = 0; i < MAX_TOASTS + 2; i++) showToast('ok', `Message ${i}`)
     })
-    expect(screen.getAllByRole('status')).toHaveLength(MAX_TOASTS)
+    expect(document.querySelectorAll('.toast')).toHaveLength(MAX_TOASTS)
     expect(screen.queryByText('Message 0')).toBeNull()
   })
 
   it('ignores an empty message', () => {
     render(<ToastRegion />)
     act(() => void showToast('ok', '   '))
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(document.querySelectorAll('.toast')).toHaveLength(0)
+  })
+
+  it('keeps a toast while focus is inside it', () => {
+    render(<ToastRegion />)
+    act(() => void showToast('error', 'Look at me'))
+    const close = screen.getByRole('button', { name: 'Dismiss' })
+    fireEvent.focus(close)
+    act(() => vi.advanceTimersByTime(TOAST_MS.error * 3))
+    expect(screen.queryByText('Look at me')).not.toBeNull()
+    fireEvent.blur(close)
+    act(() => vi.advanceTimersByTime(TOAST_MS.error + 1))
+    expect(screen.queryByText('Look at me')).toBeNull()
+  })
+
+  it('restarts the clock when the same message comes again', () => {
+    render(<ToastRegion />)
+    act(() => void showToast('ok', 'Again'))
+    act(() => vi.advanceTimersByTime(TOAST_MS.ok - 500))
+    act(() => void showToast('ok', 'Again'))
+    act(() => vi.advanceTimersByTime(TOAST_MS.ok - 500))
+    expect(screen.queryByText('Again')).not.toBeNull()
+    act(() => vi.advanceTimersByTime(600))
+    expect(screen.queryByText('Again')).toBeNull()
+  })
+
+  it('keeps both live regions mounted while there is nothing to say', () => {
+    render(<ToastRegion />)
+    expect(screen.getByRole('status').textContent).toBe('')
+    expect(screen.getByRole('alert').textContent).toBe('')
   })
 })

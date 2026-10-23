@@ -13,10 +13,12 @@
   flex-direction: column;
   gap: 0.5rem;
   width: min(34rem, calc(100vw - 2rem));
-  margin: 0;
-  padding: 0;
-  list-style: none;
   pointer-events: none;
+}
+
+/* The live regions are only for the screen reader; they take no space of their own */
+.toast-live {
+  display: contents;
 }
 
 .toast {
@@ -47,6 +49,8 @@
 
 .toast-close {
   flex: none;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
   padding: 0 0.3rem;
   border: 0;
   background: transparent;

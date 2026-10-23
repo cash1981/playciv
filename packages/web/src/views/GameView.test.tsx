@@ -1319,6 +1319,9 @@ describe('the game page (issue #215)', () => {
       fireEvent.click(drawButton('Civ'))
 
       expect(await screen.findByText('Player is not on turn')).toBeTruthy()
+      // A red toast, and no green one to contradict it
+      expect(screen.getByRole('alert').textContent).toContain('Player is not on turn')
+      expect(screen.getByRole('status').textContent).toBe('')
     })
 
     it('confirms a draw with a green toast carrying the player\'s own log text', async () => {

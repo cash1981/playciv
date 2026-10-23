@@ -33,8 +33,8 @@ function emit(): void {
 }
 
 /**
- * Shows a toast and returns its id. The same text twice in a row refreshes the one
- * on screen instead of stacking a second copy.
+ * Shows a toast and returns its id. The same text again refreshes the one on screen
+ * instead of stacking a second copy.
  */
 export function showToast(kind: ToastKind, text: string): number {
   const message = text.trim()
@@ -58,7 +58,7 @@ export function dismissToast(id: number): void {
   emit()
 }
 
-/** Removes every toast. For tests and for leaving a game. */
+/** Removes every toast. For leaving a game and for tests. */
 export function clearToasts(): void {
   if (toasts.length === 0) return
   toasts = []

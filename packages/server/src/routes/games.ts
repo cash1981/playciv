@@ -396,9 +396,10 @@ export function registerGameRoutes(app: App, context: AppContext): void {
 
   /**
    * What the viewer's own actions after revision `after` did, in their own words, for the
-   * green confirmation on the page. It is the viewer's private log text where there is
-   * any, else the public line of a revision they made. It is read by the viewer's id and
-   * never takes another player's private text, so it is kept out of the history list,
+   * green confirmation on the page. Only revisions the viewer made count: it is their
+   * private log text where there is any, else the public line. A revision by someone
+   * else, such as a trade that hands the viewer an item, is not what the viewer just
+   * did, so it never becomes their confirmation. It is kept out of the history list,
    * which names things the way the public log does, even to the player themself.
    */
   app.get('/api/games/:gameId/confirmation', auth, async (c) => {
@@ -412,11 +413,10 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     }
     const viewerId = currentPlayer(c).id
     const lines = (await context.repo.listGameRevisionSummaries(gameId))
-      .filter((revision) => revision.revision > after)
+      .filter((revision) => revision.revision > after && revision.actor.playerId === viewerId)
       .map((revision) => {
         const own = revision.privateDescriptions[viewerId]
-        if (own !== undefined && own !== '') return own
-        return revision.actor.playerId === viewerId ? revision.publicDescription : ''
+        return own !== undefined && own !== '' ? own : revision.publicDescription
       })
       .filter((line) => line !== '')
     return c.json({ lines })

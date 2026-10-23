@@ -21,9 +21,8 @@ function ToastItem({ toast }: { readonly toast: Toast }): React.JSX.Element {
   }, [toast, held])
 
   return (
-    <li
+    <div
       className={`toast toast-${toast.kind}`}
-      role={toast.kind === 'error' ? 'alert' : 'status'}
       onPointerEnter={() => setHeld(true)}
       onPointerLeave={() => setHeld(false)}
       onFocus={() => setHeld(true)}
@@ -38,18 +37,34 @@ function ToastItem({ toast }: { readonly toast: Toast }): React.JSX.Element {
       >
         ×
       </button>
-    </li>
+    </div>
   )
 }
 
-export function ToastRegion(): React.JSX.Element | null {
+/**
+ * The two live regions stay mounted when there is nothing to say: a polite one for
+ * the successes and an assertive one for the failures. A screen reader announces
+ * text that arrives in a region it already knows, but often not a region that
+ * appears with its text in it.
+ */
+export function ToastRegion(): React.JSX.Element {
   const toasts = useToasts()
-  if (toasts.length === 0) return null
   return (
-    <ul className="toast-region" aria-label="Notifications">
-      {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} />
-      ))}
-    </ul>
+    <div className="toast-region" aria-label="Notifications">
+      <div className="toast-live" role="status">
+        {toasts
+          .filter((toast) => toast.kind === 'ok')
+          .map((toast) => (
+            <ToastItem key={toast.id} toast={toast} />
+          ))}
+      </div>
+      <div className="toast-live" role="alert">
+        {toasts
+          .filter((toast) => toast.kind === 'error')
+          .map((toast) => (
+            <ToastItem key={toast.id} toast={toast} />
+          ))}
+      </div>
+    </div>
   )
 }
