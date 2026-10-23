@@ -38,6 +38,8 @@ import type { Government } from './government.js'
 import { availableActionsFor, publicAssistedActions } from './assisted.js'
 import { livePendingRewards } from './assisted-culture.js'
 import { playableCardsOf } from './assisted-cards.js'
+import { startOfTurnViewOf } from './assisted-sot.js'
+import type { GovernmentOption } from './sot.js'
 import type { PlayableCard } from './card-timing.js'
 import { cultureMarkerOf } from './culture-track.js'
 import type { CultureLevel, CultureSpaceKind } from './culture-track.js'
@@ -179,6 +181,30 @@ export interface Playerhand {
    * this list. Stored in the state, so a refresh resumes the choice and never draws again.
    */
   readonly pendingRewards: readonly PendingReward[]
+  /**
+   * Techs the player may learn now without researching them: paid for by Rationalism, or
+   * given by a card, a hut or an investment. The player picks and reveals the tech in
+   * the tech panel; revealing a tech that fits a grant spends it. Own view only.
+   */
+  readonly techGrants: readonly TechGrant[]
+  /**
+   * The turn each tech was first revealed, by tech name. A government is unlocked
+   * for a direct change during the Start of Turn of the next turn, so the turn a
+   * tech was learned decides whether switching to its government needs Anarchy.
+   * Techs revealed before this was recorded have no entry.
+   */
+  readonly techRevealTurns: Readonly<Record<string, number>>
+}
+
+/** A free tech to learn, with the level it must have (`null` for any level). */
+export interface TechGrant {
+  /** The `requestId` of the action that granted it. */
+  readonly id: string
+  /** What granted it, as the log names it: "Rationalism", "Teacher". */
+  readonly source: string
+  readonly level: 1 | 2 | 3 | 4 | 5 | null
+  /** The turn it was granted; it can only be used in that turn's Start of Turn. */
+  readonly turnNumber: number
 }
 
 /**
@@ -327,6 +353,19 @@ export type AssistedActionKind =
   | 'startBuildingProgram'
   | 'upgradeBuildings'
   | 'playCard'
+  | 'expansionism'
+  | 'pacifism'
+  | 'patronage'
+  | 'rationalismI'
+  | 'rationalismII'
+  | 'democracyTrade'
+  | 'fundamentalismCulture'
+  | 'feudalismHarvest'
+  | 'switchGovernment'
+  | 'invest'
+
+/** The four investment cards, by the status-board counter that holds their markers. */
+export type InvestmentCard = 'infra' | 'efta' | 'mic' | 'pe'
 
 /** The cards that spend a resource token for culture: "Incense, City Management: gain N culture". */
 export type CultureCardKind = 'chivalry' | 'currency' | 'metalCasting'
@@ -361,9 +400,92 @@ export interface GreatPersonMarker {
   readonly historyId: string
 }
 
+/**
+ * What a culture advance did, enough to take it back. A free advance granted by another
+ * action (the Romans' new city, the Arabs' invested coin) is stored in that action's
+ * effect under `advance`, and the card choice it leaves finds it there.
+ */
+export interface CultureAdvanceEffect {
+  readonly kind: 'cultureAdvance'
+  readonly fromStep: number
+  readonly toStep: number
+  /** What was paid, after the discounts. */
+  readonly culture: number
+  readonly trade: number
+  /** The leader piece that moved, where it was and where it went, and the board history entry of the move. */
+  readonly markerPieceId: string
+  readonly markerFrom: { readonly x: number; readonly y: number }
+  readonly markerTo: { readonly x: number; readonly y: number }
+  readonly historyId: string
+  readonly reward: CultureSpaceKind
+  readonly level: CultureLevel
+  readonly sheetName: SheetName
+  /** Every card drawn, in draw order. */
+  readonly drawn: readonly string[]
+  /** The card kept, or `null` while the choice is still pending. */
+  readonly kept: string | null
+  /**
+   * Great Person space only (absent on a culture event and on records saved
+   * before the markers existed): the faceup cards discarded because no marker of
+   * their type was left, and the marker taken once a card is kept.
+   */
+  readonly rejected?: readonly string[]
+  readonly marker?: GreatPersonMarker | null
+}
+
 /** What an action changed, enough to reverse it. Server side only, never in a view. */
 export type AssistedEffect =
   | { readonly kind: CultureCardKind; readonly culture: number; readonly spent: SpentResource }
+  | {
+      /** A Start of Turn ability that only adds trade and culture (a policy, a government, a wonder). */
+      readonly kind: 'statGain'
+      readonly trade: number
+      readonly culture: number
+      /** What it is called in the undo line: "Expansionism". */
+      readonly subject: string
+    }
+  | {
+      /** Culture spent on a card draw, with the cards drawn (Patronage). */
+      readonly kind: 'patronage'
+      readonly culture: number
+      readonly level: CultureLevel
+      readonly sheetName: SheetName
+      readonly drawn: readonly string[]
+      readonly kept: string | null
+    }
+  | {
+      /** Trade paid for a free tech to learn (Rationalism). */
+      readonly kind: 'techGrant'
+      readonly trade: number
+      readonly grantId: string
+      readonly subject: string
+    }
+  | {
+      readonly kind: 'switchGovernment'
+      readonly from: Government
+      readonly to: Government
+      /** The two coin counters a government holds, before the change, so an undo puts them back exactly. */
+      readonly democracyCoin: number
+      readonly religionCoin: number
+    }
+  | {
+      readonly kind: 'invest'
+      /** The coin counter the coin came from, and the investment card that got the marker. */
+      readonly source: string
+      readonly card: InvestmentCard
+      /** The free tech an activated Public Education gave, or `null`. */
+      readonly grantId: string | null
+      /** The free advance an Arab investment gave, or `null`. */
+      readonly advance: CultureAdvanceEffect | null
+    }
+  | {
+      /** A resource taken from the market by the Feudalism government. */
+      readonly kind: 'harvest'
+      readonly resource: string
+      readonly pieceId: string
+      readonly position: { readonly x: number; readonly y: number }
+      readonly historyId: string
+    }
   | {
       readonly kind: 'playCard'
       /** The card as it stood in the hand, so an undo puts the same one back. */
@@ -382,33 +504,7 @@ export type AssistedEffect =
       readonly resource: 'trade' | 'culture'
       readonly cost: number
     }
-  | {
-      readonly kind: 'cultureAdvance'
-      readonly fromStep: number
-      readonly toStep: number
-      /** What was paid, after the discounts. */
-      readonly culture: number
-      readonly trade: number
-      /** The leader piece that moved, where it was and where it went, and the board history entry of the move. */
-      readonly markerPieceId: string
-      readonly markerFrom: { readonly x: number; readonly y: number }
-      readonly markerTo: { readonly x: number; readonly y: number }
-      readonly historyId: string
-      readonly reward: CultureSpaceKind
-      readonly level: CultureLevel
-      readonly sheetName: SheetName
-      /** Every card drawn, in draw order. */
-      readonly drawn: readonly string[]
-      /** The card kept, or `null` while the choice is still pending. */
-      readonly kept: string | null
-      /**
-       * Great Person space only (absent on a culture event and on records saved
-       * before the markers existed): the faceup cards discarded because no marker of
-       * their type was left, and the marker taken once a card is kept.
-       */
-      readonly rejected?: readonly string[]
-      readonly marker?: GreatPersonMarker | null
-    }
+  | CultureAdvanceEffect
   | {
       readonly kind: 'chooseReward'
       readonly rewardId: string
@@ -970,6 +1066,52 @@ export function publicTradeOffers(state: GameState): readonly PublicTradeOffer[]
 }
 
 /** The viewer's own hand, plus the same derived board numbers opponents get. */
+/** An answer on whether something can be done now: the status of a button, and why. */
+export interface NowAnswer {
+  readonly status: AssistedStatus
+  readonly reason: string
+}
+
+/**
+ * The choices behind the Start of Turn actions that need one, with the engine's own
+ * answer on each. Own view only, blanked for a replayed revision.
+ */
+export interface StartOfTurnView {
+  readonly government: NowAnswer & {
+    readonly current: Government
+    /** The governments that can be taken now, and whether each goes through Anarchy. */
+    readonly options: readonly GovernmentOption[]
+    readonly canEnterAnarchy: boolean
+  }
+  /** The Feudalism harvest, only while the government is Feudalism. */
+  readonly feudalism:
+    | (NowAnswer & {
+        readonly cities: readonly { readonly pieceId: string; readonly label: string }[]
+        readonly resources: readonly string[]
+      })
+    | null
+  readonly invest: NowAnswer & {
+    /** The coin counters that hold a coin which can be invested. */
+    readonly coins: readonly { readonly key: string; readonly label: string; readonly coins: number }[]
+    readonly cards: readonly {
+      readonly key: InvestmentCard
+      readonly label: string
+      readonly ability: string
+      readonly thresholds: readonly number[]
+      /** The markers on the card now. */
+      readonly markers: number
+    }[]
+    /** Every coin the player has, printed ones included. */
+    readonly totalCoins: number
+  }
+  /** Free techs the player may learn in this Start of Turn. */
+  readonly techGrants: readonly {
+    readonly id: string
+    readonly source: string
+    readonly level: 1 | 2 | 3 | 4 | 5 | null
+  }[]
+}
+
 export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
   /**
    * The card choices waiting for the viewer, each with its candidate cards.
@@ -1002,6 +1144,8 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
    * for a replayed revision.
    */
   readonly playableCards: readonly PlayableCard[]
+  /** The choices behind the Start of Turn actions. Own view only; `null` for a replayed revision. */
+  readonly startOfTurn: StartOfTurnView | null
   /**
    * What each of the viewer's cities can build now (assisted Build). Derived
    * from the viewer's revealed techs and trade, so it exists on the own view only:
@@ -1137,6 +1281,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           blockadedGreatPersonTypes: blockadedGreatPersonTypes(state, player),
           availableActions: availableActionsFor(state, viewerId),
           playableCards: playableCardsOf(state, player),
+          startOfTurn: startOfTurnViewOf(state, player),
           buildOptions: buildOptionsOf(state, player),
           cityActions: cityActionsOf(state, player),
           upgradeOptions: upgradeOptionsOf(state, player),

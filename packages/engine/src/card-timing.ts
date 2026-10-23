@@ -46,8 +46,8 @@ export const CARD_TIMING_TEXT: Readonly<Record<CardTiming, string>> = {
  * such as "Research:" inside a sentence is not read as a timing. A card with no
  * timing (a passive Great Person such as Valmiki) has none.
  */
-export function timingsOf(description: string | null): readonly CardTiming[] {
-  if (description === null) return []
+export function timingsOf(description: string | null | undefined): readonly CardTiming[] {
+  if (description === null || description === undefined) return []
   const found: CardTiming[] = []
   for (const segment of description.split('/')) {
     const text = segment.trim()
@@ -161,8 +161,8 @@ const DEFAULT_RULE: CardPlayRule = optional('Who is targeted? (optional)')
 export const cardPlayRuleOf = (name: string): CardPlayRule => PLAY_RULES.get(name) ?? DEFAULT_RULE
 
 /** Whether using a Great Person card discards it: its text says "discard this card". */
-export const discardsWhenUsed = (description: string | null): boolean =>
-  description !== null && /discard this card/i.test(description)
+export const discardsWhenUsed = (description: string | null | undefined): boolean =>
+  description !== null && description !== undefined && /discard this card/i.test(description)
 
 /** Why a card cannot be played now, or that it can. */
 export type PlayableCardStatus = 'ready' | 'wrong-phase' | 'unavailable'

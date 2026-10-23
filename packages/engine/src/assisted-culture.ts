@@ -53,6 +53,7 @@ import { SHEET_LABEL } from './sheet-name.js'
 import type { SheetName } from './sheet-name.js'
 import type {
   AssistedActionRecord,
+  CultureAdvanceEffect,
   GameState,
   GreatPersonMarker,
   PendingReward,
@@ -106,6 +107,15 @@ export function livePendingRewards(player: Playerhand): readonly PendingReward[]
   )
 }
 
+/**
+ * `free`: the advance is a reward of something else (a city built by the Romans, a
+ * coin invested by the Arabs). It costs nothing and does not need City Management,
+ * because the action that grants it decides when it can be done.
+ */
+export interface AdvanceOptions {
+  readonly free?: boolean
+}
+
 interface AdvancePlan {
   readonly marker: CultureMarker
   readonly to: CultureSpace
@@ -120,8 +130,14 @@ interface AdvancePlan {
  * choice still waiting, the price, and last the deck, so the reason that comes
  * first is the one the player can do something about first.
  */
-function planAdvance(state: GameState, player: Playerhand): Result<AdvancePlan, BlockedAvailability> {
-  if (openCityManagementTurn(state, player) === undefined) return err(blocked('wrong-phase', PHASE_REASON))
+function planAdvance(
+  state: GameState,
+  player: Playerhand,
+  options: AdvanceOptions = {},
+): Result<AdvancePlan, BlockedAvailability> {
+  if (options.free !== true && openCityManagementTurn(state, player) === undefined) {
+    return err(blocked('wrong-phase', PHASE_REASON))
+  }
   const marker = cultureMarkerOf(state, player)
   if (marker === undefined) {
     return err(blocked('unavailable', 'Your leader marker is not on the culture track.'))
@@ -131,7 +147,7 @@ function planAdvance(state: GameState, player: Playerhand): Result<AdvancePlan, 
     return err(blocked('unavailable', 'Your marker is already on the Culture Victory space.'))
   }
 
-  const cost = cultureAdvanceCost(state, player, to.step)
+  const cost = options.free === true ? { culture: 0, trade: 0 } : cultureAdvanceCost(state, player, to.step)
   const where = `Advance to ${describeSpace(to)}: ${describeCost(cost)}.`
   if (livePendingRewards(player).length > 0) {
     return err(blocked('unavailable', `${where} Choose the card to keep from your last advance first.`))
@@ -216,7 +232,7 @@ export function drawCandidates(
 }
 
 /** Two shuffles of the deck, as an item undo does (`shuffleDeckTwice` in `actions/undo.ts`). */
-function shuffleDeckTwice(state: GameState): GameState {
+export function shuffleDeckTwice(state: GameState): GameState {
   const [once, afterFirst] = shuffle(state.items, state.rng)
   const [twice, rng] = shuffle(once, afterFirst)
   return { ...state, items: twice, rng }
@@ -266,7 +282,7 @@ function markersLeft(state: GameState, assetId: string): number {
 }
 
 /** "scientist" or "merchant": the marker's artwork label, as the public line names a marker type. */
-const markerLabelOf = (assetId: string): string =>
+export const markerLabelOf = (assetId: string): string =>
   (findBoardAsset(assetId)?.label ?? 'Great Person').toLowerCase()
 
 /** True while at least one Great Person marker type still has a piece in the supply. */
@@ -512,7 +528,7 @@ function gainGreatPerson(
  * a refusal changes nothing. A card that left the hand cannot be taken back, like a
  * missing hut.
  */
-function restoreDrawnCards(
+export function restoreDrawnCards(
   state: GameState,
   player: Playerhand,
   recordId: string,
@@ -565,6 +581,266 @@ function removeGreatPersonMarker(
 const removedMarkerText = (marker: GreatPersonMarker | null | undefined): string =>
   marker === null || marker === undefined ? '' : ` and the ${markerLabelOf(marker.assetId)} great person marker was removed`
 
+/** What a culture advance needs besides the player: the request that causes it, and when. */
+export interface AdvanceContext {
+  readonly requestId: string
+  readonly at: string | undefined
+}
+
+/**
+ * Moves the leader marker one space and gives what the space gives: the card choice,
+ * or the Great Person step. The press of the Advance button and the free advances that
+ * come with other actions (the Romans' new city, the Arabs' invested coin) share this
+ * body. With `tagLog: false` the line it writes does not carry the action's id, so
+ * only the line of the action that caused the advance is a target of the undo vote.
+ */
+export function performAdvance(
+  state: GameState,
+  player: Playerhand,
+  context: AdvanceContext,
+  options: AdvanceOptions & { readonly tagLog?: boolean } = {},
+): Result<{ readonly state: GameState; readonly effect: CultureAdvanceEffect; readonly logId: string }, EngineError> {
+  const plan = planAdvance(state, player, options)
+  if (!plan.ok) return err(rejected('cultureAdvance', plan.error))
+  const { marker, to, cost, count, sheetName } = plan.value
+  const failed = (reason: string): EngineError =>
+    rejected('cultureAdvance', blocked('unavailable', reason))
+  const at = context.at === undefined ? {} : { at: context.at }
+
+  // The marker moves exactly one space, through the board's own move so the
+  // history records it. Only the horizontal position changes, so it keeps its lane.
+  const target = cultureCellCenter(state.board, to.step)
+  const moved = movePieceUnchecked(state, {
+    playerId: player.playerId,
+    pieceId: marker.piece.id,
+    x: Math.round(target.x - marker.piece.width / 2),
+    y: marker.piece.y,
+    snap: false,
+    ...at,
+  })
+  const move = moved?.board.history.at(-1)
+  const placed = moved?.board.pieces.find((piece) => piece.id === marker.piece.id)
+  if (moved === undefined || move === undefined || placed === undefined) {
+    return err(failed('Your leader marker could not be moved.'))
+  }
+  if (cultureStepOf(moved.board, placed) !== to.step) {
+    return err(failed('Your leader marker could not be moved onto that space.'))
+  }
+
+  // A Great Person space goes through the Great Person step (valid cards, a marker);
+  // a culture event draws as before.
+  const paysWith = (state: GameState): GameState => {
+    const paying = playerOf(state, player.playerId) ?? player
+    return withPlayerHand(state, {
+      ...paying,
+      stats: {
+        ...paying.stats,
+        culture: paying.stats.culture - cost.culture,
+        trade: paying.stats.trade - cost.trade,
+      },
+    })
+  }
+  const prefix = `${player.username} advanced${options.free === true ? ' for free' : ''} on the culture track to space ${to.step} and `
+
+  let paid: GameState
+  let publicText: string
+  let privateText: string
+  let cards: {
+    readonly drawn: readonly string[]
+    readonly kept: string | null
+    readonly extra: { readonly rejected: readonly string[]; readonly marker: GreatPersonMarker | null } | null
+  }
+  if (to.kind === 'greatPerson') {
+    const gained = gainGreatPerson(moved, player, {
+      requestId: context.requestId,
+      at: context.at,
+      count,
+      level: to.level,
+      step: to.step,
+    })
+    if (!gained.ok) return err(failed(gained.error))
+    paid = paysWith(gained.value.state)
+    publicText = prefix + gained.value.phrase
+    privateText = gained.value.privateText
+    cards = {
+      drawn: gained.value.drawn,
+      kept: gained.value.kept,
+      extra: { rejected: gained.value.rejected, marker: gained.value.marker },
+    }
+  } else {
+    const drawn = drawCandidates(moved, sheetName, count)
+    if (!drawn.ok) return drawn
+    const candidates = drawn.value.items.map((item): Item => ({ ...item, ownerId: player.playerId, hidden: true }))
+    const paying = playerOf(drawn.value.state, player.playerId) ?? player
+    const resolved = candidates.length === 1
+    const reward: PendingReward = {
+      id: context.requestId,
+      kind: to.kind,
+      level: to.level,
+      step: to.step,
+      candidateIds: candidates.map((item) => item.id),
+      keep: 1,
+    }
+    paid = paysWith(
+      withPlayerHand(drawn.value.state, {
+        ...paying,
+        items: [...paying.items, ...candidates],
+        // A choice with no card left in the hand is dropped here, so it cannot pile up
+        pendingRewards: resolved
+          ? livePendingRewards(paying)
+          : [...livePendingRewards(paying), reward],
+      }),
+    )
+    const names = candidates.map(itemName).join(', ')
+    publicText = prefix + `drew ${plural(candidates.length, `${rewardLabel(to)} card`)}`
+    privateText = resolved
+      ? `${player.username} drew ${names} (${SHEET_LABEL[sheetName]}) and kept it`
+      : `${player.username} drew ${names} (${SHEET_LABEL[sheetName]}), keeps one`
+    cards = { drawn: reward.candidateIds, kept: resolved ? (reward.candidateIds[0] ?? null) : null, extra: null }
+  }
+
+  const publicLine = appendLog(paid, {
+    username: player.username,
+    playerId: player.playerId,
+    publicLog: publicText,
+    privateLog: '',
+    createdAt: context.at ?? null,
+    ...(options.tagLog === false ? {} : { assistedActionId: context.requestId }),
+  })
+  const logId = lastLogId(publicLine)
+  const withPrivate =
+    privateText === ''
+      ? publicLine
+      : appendLog(publicLine, {
+          username: player.username,
+          playerId: player.playerId,
+          privateLog: privateText,
+          createdAt: context.at ?? null,
+        })
+  // Reaching the last panel changes nothing else: no winner, no end of the game.
+  const logged =
+    to.step === CULTURE_VICTORY_STEP
+      ? appendLog(withPrivate, {
+          username: player.username,
+          playerId: player.playerId,
+          publicLog: `${player.username} has reached the Culture Victory space on the culture track`,
+          createdAt: context.at ?? null,
+        })
+      : withPrivate
+
+  // The marker move was recorded before the advance lines existed: count them in,
+  // so stepping through the board history shows the move with the advance line
+  // (reverseAssistedAction does the same for its own entry). So does the marker
+  // a Great Person space put in the area.
+  const counted = countLinesIn(logged, [move.id, cards.extra?.marker?.historyId])
+
+  return ok({
+    state: counted,
+    effect: {
+      kind: 'cultureAdvance',
+      fromStep: marker.step,
+      toStep: to.step,
+      culture: cost.culture,
+      trade: cost.trade,
+      markerPieceId: marker.piece.id,
+      markerFrom: { x: marker.piece.x, y: marker.piece.y },
+      markerTo: { x: placed.x, y: placed.y },
+      historyId: move.id,
+      reward: to.kind,
+      level: to.level,
+      sheetName,
+      drawn: cards.drawn,
+      kept: cards.kept,
+      ...(cards.extra === null ? {} : cards.extra),
+    },
+    logId,
+  })
+}
+
+/**
+ * Takes a culture advance back: the marker, the price, the cards drawn and the Great
+ * Person marker. `record` is the action that holds the advance, which is the
+ * advance's own record or the record of the action that granted it for free.
+ * Everything is checked first, so a refusal leaves the game as it was.
+ */
+export function reverseAdvanceEffect(
+  state: GameState,
+  player: Playerhand,
+  record: AssistedActionRecord,
+  effect: CultureAdvanceEffect,
+  at: string | null,
+): Result<{ readonly state: GameState; readonly text: string }, EngineError> {
+  const refused = (reason: string): EngineError => ({
+    kind: 'ASSISTED_UNDO_BLOCKED',
+    logId: record.logId,
+    reason,
+  })
+
+  // Everything is checked before anything is changed, so a refusal leaves the game as it was.
+  const marker = state.board.pieces.find((piece) => piece.id === effect.markerPieceId)
+  if (marker === undefined) {
+    return err(refused('The leader marker is no longer on the board, so the advance cannot be undone.'))
+  }
+  if (cultureStepOf(state.board, marker) !== effect.toStep) {
+    return err(
+      refused(
+        `The leader marker is no longer on space ${effect.toStep}. Move it back, or undo the later advances first.`,
+      ),
+    )
+  }
+
+  // A Great Person space also put a marker in the owner's area, which has to be
+  // there still. A record saved before the markers existed has none.
+  const greatPersonMarker = effect.marker ?? null
+  if (greatPersonMarker !== null) {
+    const blockedBy = markerUndoBlock(state, record.playerId, greatPersonMarker)
+    if (blockedBy !== undefined) return err(refused(blockedBy))
+  }
+
+  const paidBack: Playerhand = {
+    ...player,
+    stats: {
+      ...player.stats,
+      culture: player.stats.culture + effect.culture,
+      trade: player.stats.trade + effect.trade,
+    },
+  }
+  const restored = restoreDrawnCards(
+    withPlayerHand(state, paidBack),
+    paidBack,
+    record.id,
+    [...effect.drawn, ...(effect.rejected ?? [])],
+    effect.kept,
+    effect.sheetName,
+  )
+  if (!restored.ok) return restored
+
+  let deck = restored.value
+  if (greatPersonMarker !== null) {
+    const removed = removeGreatPersonMarker(deck, record, greatPersonMarker, at)
+    if (!removed.ok) return err(refused(removed.error))
+    deck = removed.value
+  }
+
+  const movedBack = movePieceUnchecked(deck, {
+    playerId: record.playerId,
+    pieceId: effect.markerPieceId,
+    x: effect.markerFrom.x,
+    y: effect.markerFrom.y,
+    snap: false,
+    ...(at === null ? {} : { at }),
+  })
+  if (movedBack === undefined) return err(refused('The leader marker could not be moved back.'))
+
+  return ok({
+    state: movedBack,
+    text:
+      `${player.username}'s culture advance was undone: the leader marker is back on space ${effect.fromStep}, ` +
+      `${describeCost(effect)} returned and the drawn cards were put back in the deck` +
+      removedMarkerText(greatPersonMarker),
+  })
+}
+
 export const cultureAdvance: AssistedActionDefinition = {
   kind: 'cultureAdvance',
   techName: null,
@@ -586,236 +862,42 @@ export const cultureAdvance: AssistedActionDefinition = {
   },
 
   apply(state, player, context) {
-    const plan = planAdvance(state, player)
-    if (!plan.ok) return err(rejected('cultureAdvance', plan.error))
-    const { marker, to, cost, count, sheetName } = plan.value
-    const failed = (reason: string): EngineError =>
-      rejected('cultureAdvance', blocked('unavailable', reason))
-    const at = context.at === undefined ? {} : { at: context.at }
-
-    // The marker moves exactly one space, through the board's own move so the
-    // history records it. Only the horizontal position changes, so it keeps its lane.
-    const target = cultureCellCenter(state.board, to.step)
-    const moved = movePieceUnchecked(state, {
-      playerId: player.playerId,
-      pieceId: marker.piece.id,
-      x: Math.round(target.x - marker.piece.width / 2),
-      y: marker.piece.y,
-      snap: false,
-      ...at,
-    })
-    const move = moved?.board.history.at(-1)
-    const placed = moved?.board.pieces.find((piece) => piece.id === marker.piece.id)
-    if (moved === undefined || move === undefined || placed === undefined) {
-      return err(failed('Your leader marker could not be moved.'))
-    }
-    if (cultureStepOf(moved.board, placed) !== to.step) {
-      return err(failed('Your leader marker could not be moved onto that space.'))
-    }
-
-    // A Great Person space goes through the Great Person step (valid cards, a marker);
-    // a culture event draws as before.
-    const paysWith = (state: GameState): GameState => {
-      const paying = playerOf(state, player.playerId) ?? player
-      return withPlayerHand(state, {
-        ...paying,
-        stats: {
-          ...paying.stats,
-          culture: paying.stats.culture - cost.culture,
-          trade: paying.stats.trade - cost.trade,
-        },
-      })
-    }
-    const prefix = `${player.username} advanced on the culture track to space ${to.step} and `
-
-    let paid: GameState
-    let publicText: string
-    let privateText: string
-    let cards: {
-      readonly drawn: readonly string[]
-      readonly kept: string | null
-      readonly extra: { readonly rejected: readonly string[]; readonly marker: GreatPersonMarker | null } | null
-    }
-    if (to.kind === 'greatPerson') {
-      const gained = gainGreatPerson(moved, player, {
-        requestId: context.requestId,
-        at: context.at,
-        count,
-        level: to.level,
-        step: to.step,
-      })
-      if (!gained.ok) return err(failed(gained.error))
-      paid = paysWith(gained.value.state)
-      publicText = prefix + gained.value.phrase
-      privateText = gained.value.privateText
-      cards = {
-        drawn: gained.value.drawn,
-        kept: gained.value.kept,
-        extra: { rejected: gained.value.rejected, marker: gained.value.marker },
-      }
-    } else {
-      const drawn = drawCandidates(moved, sheetName, count)
-      if (!drawn.ok) return drawn
-      const candidates = drawn.value.items.map((item): Item => ({ ...item, ownerId: player.playerId, hidden: true }))
-      const paying = playerOf(drawn.value.state, player.playerId) ?? player
-      const resolved = candidates.length === 1
-      const reward: PendingReward = {
-        id: context.requestId,
-        kind: to.kind,
-        level: to.level,
-        step: to.step,
-        candidateIds: candidates.map((item) => item.id),
-        keep: 1,
-      }
-      paid = paysWith(
-        withPlayerHand(drawn.value.state, {
-          ...paying,
-          items: [...paying.items, ...candidates],
-          // A choice with no card left in the hand is dropped here, so it cannot pile up
-          pendingRewards: resolved
-            ? livePendingRewards(paying)
-            : [...livePendingRewards(paying), reward],
-        }),
-      )
-      const names = candidates.map(itemName).join(', ')
-      publicText = prefix + `drew ${plural(candidates.length, `${rewardLabel(to)} card`)}`
-      privateText = resolved
-        ? `${player.username} drew ${names} (${SHEET_LABEL[sheetName]}) and kept it`
-        : `${player.username} drew ${names} (${SHEET_LABEL[sheetName]}), keeps one`
-      cards = { drawn: reward.candidateIds, kept: resolved ? (reward.candidateIds[0] ?? null) : null, extra: null }
-    }
-
-    const publicLine = appendLog(paid, {
-      username: player.username,
-      playerId: player.playerId,
-      publicLog: publicText,
-      privateLog: '',
-      createdAt: context.at ?? null,
-      assistedActionId: context.requestId,
-    })
-    const logId = lastLogId(publicLine)
-    const withPrivate =
-      privateText === ''
-        ? publicLine
-        : appendLog(publicLine, {
-            username: player.username,
-            playerId: player.playerId,
-            privateLog: privateText,
-            createdAt: context.at ?? null,
-          })
-    // Reaching the last panel changes nothing else: no winner, no end of the game.
-    const logged =
-      to.step === CULTURE_VICTORY_STEP
-        ? appendLog(withPrivate, {
-            username: player.username,
-            playerId: player.playerId,
-            publicLog: `${player.username} has reached the Culture Victory space on the culture track`,
-            createdAt: context.at ?? null,
-          })
-        : withPrivate
-
-    // The marker move was recorded before the advance lines existed: count them in,
-    // so stepping through the board history shows the move with the advance line
-    // (reverseAssistedAction does the same for its own entry). So does the marker
-    // a Great Person space put in the area.
-    const counted = countLinesIn(logged, [move.id, cards.extra?.marker?.historyId])
-
-    return ok({
-      state: counted,
-      effect: {
-        kind: 'cultureAdvance',
-        fromStep: marker.step,
-        toStep: to.step,
-        culture: cost.culture,
-        trade: cost.trade,
-        markerPieceId: marker.piece.id,
-        markerFrom: { x: marker.piece.x, y: marker.piece.y },
-        markerTo: { x: placed.x, y: placed.y },
-        historyId: move.id,
-        reward: to.kind,
-        level: to.level,
-        sheetName,
-        drawn: cards.drawn,
-        kept: cards.kept,
-        ...(cards.extra === null ? {} : cards.extra),
-      },
-      logId,
-    })
+    return performAdvance(state, player, { requestId: context.requestId, at: context.at })
   },
 
   reverse(state, player, record, at) {
     const effect = record.effect
     if (effect.kind !== 'cultureAdvance') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
-    const refused = (reason: string): EngineError => ({
-      kind: 'ASSISTED_UNDO_BLOCKED',
-      logId: record.logId,
-      reason,
-    })
-
-    // Everything is checked before anything is changed, so a refusal leaves the game as it was.
-    const marker = state.board.pieces.find((piece) => piece.id === effect.markerPieceId)
-    if (marker === undefined) {
-      return err(refused('The leader marker is no longer on the board, so the advance cannot be undone.'))
-    }
-    if (cultureStepOf(state.board, marker) !== effect.toStep) {
-      return err(
-        refused(
-          `The leader marker is no longer on space ${effect.toStep}. Move it back, or undo the later advances first.`,
-        ),
-      )
-    }
-
-    // A Great Person space also put a marker in the owner's area, which has to be
-    // there still. A record saved before the markers existed has none.
-    const greatPersonMarker = effect.marker ?? null
-    if (greatPersonMarker !== null) {
-      const blockedBy = markerUndoBlock(state, record.playerId, greatPersonMarker)
-      if (blockedBy !== undefined) return err(refused(blockedBy))
-    }
-
-    const paidBack: Playerhand = {
-      ...player,
-      stats: {
-        ...player.stats,
-        culture: player.stats.culture + effect.culture,
-        trade: player.stats.trade + effect.trade,
-      },
-    }
-    const restored = restoreDrawnCards(
-      withPlayerHand(state, paidBack),
-      paidBack,
-      record.id,
-      [...effect.drawn, ...(effect.rejected ?? [])],
-      effect.kept,
-      effect.sheetName,
-    )
-    if (!restored.ok) return restored
-
-    let deck = restored.value
-    if (greatPersonMarker !== null) {
-      const removed = removeGreatPersonMarker(deck, record, greatPersonMarker, at)
-      if (!removed.ok) return err(refused(removed.error))
-      deck = removed.value
-    }
-
-    const movedBack = movePieceUnchecked(deck, {
-      playerId: record.playerId,
-      pieceId: effect.markerPieceId,
-      x: effect.markerFrom.x,
-      y: effect.markerFrom.y,
-      snap: false,
-      ...(at === null ? {} : { at }),
-    })
-    if (movedBack === undefined) return err(refused('The leader marker could not be moved back.'))
-
-    return ok({
-      state: movedBack,
-      text:
-        `${player.username}'s culture advance was undone: the leader marker is back on space ${effect.fromStep}, ` +
-        `${describeCost(effect)} returned and the drawn cards were put back in the deck` +
-        removedMarkerText(greatPersonMarker),
-    })
+    return reverseAdvanceEffect(state, player, record, effect, at)
   },
+}
+
+/**
+ * The advance that holds the reward cards of a record: the record's own when it is a
+ * culture advance, or the free advance nested under `advance` in the effect of the
+ * action that granted it (a city the Romans built, a coin the Arabs invested).
+ */
+export function advanceEffectOf(record: AssistedActionRecord): CultureAdvanceEffect | undefined {
+  const effect = record.effect
+  if (effect.kind === 'cultureAdvance') return effect
+  if ('advance' in effect && effect.advance !== null && effect.advance !== undefined) return effect.advance
+  return undefined
+}
+
+/** The record with the card that was kept written into the effect that holds the cards, wherever it is. */
+function withKeptCard(
+  record: AssistedActionRecord,
+  kept: string,
+  marker: GreatPersonMarker | null,
+): AssistedActionRecord {
+  const effect = record.effect
+  const extra = marker === null ? {} : { marker }
+  if (effect.kind === 'cultureAdvance') return { ...record, effect: { ...effect, kept, ...extra } }
+  if (effect.kind === 'patronage') return { ...record, effect: { ...effect, kept } }
+  if ('advance' in effect && effect.advance !== null && effect.advance !== undefined) {
+    return { ...record, effect: { ...effect, advance: { ...effect.advance, kept, ...extra } } }
+  }
+  return record
 }
 
 export const chooseReward: AssistedActionDefinition = {
@@ -876,11 +958,9 @@ export const chooseReward: AssistedActionDefinition = {
     // A Great Person is kept together with its marker. A reward from before the
     // markers existed (its record has no `rejected` list) keeps the old, by-hand step.
     const origin = state.assistedActions.find((record) => record.id === reward.id)
+    const originAdvance = origin === undefined ? undefined : advanceEffectOf(origin)
     const takesMarker =
-      reward.kind === 'greatPerson' &&
-      origin !== undefined &&
-      origin.effect.kind === 'cultureAdvance' &&
-      origin.effect.rejected !== undefined
+      reward.kind === 'greatPerson' && originAdvance !== undefined && originAdvance.rejected !== undefined
     let board = state
     let marker: GreatPersonMarker | null = null
     if (takesMarker) {
@@ -903,12 +983,7 @@ export const chooseReward: AssistedActionDefinition = {
         ...board,
         discardedItems: [...board.discardedItems, ...others.map((item): Item => ({ ...item, hidden: true }))],
         assistedActions: board.assistedActions.map((record) =>
-          record.id === reward.id && record.effect.kind === 'cultureAdvance'
-            ? {
-                ...record,
-                effect: { ...record.effect, kept: kept.id, ...(marker === null ? {} : { marker }) },
-              }
-            : record,
+          record.id === reward.id ? withKeptCard(record, kept.id, marker) : record,
         ),
       },
       {

@@ -73,7 +73,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
   const blockaded = blockadedGreatPersonTypes(state, player)
   return player.items.flatMap((item): readonly PlayableCard[] => {
     const kind = KIND_OF[item.kind]
-    if (kind === undefined || item.description === null) return []
+    if (kind === undefined || item.description === null || item.description === undefined) return []
     const timings = timingsOf(item.description)
     if (timings.length === 0) return []
     const name = itemName(item)

@@ -42,6 +42,7 @@ import {
   withPlayerHand,
 } from './assisted-core.js'
 import { playCard } from './assisted-cards.js'
+import { SOT_ACTIONS } from './assisted-sot.js'
 import {
   chooseReward,
   countLinesIn,
@@ -1167,6 +1168,7 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   startBuildingProgram,
   upgradeBuildings,
   playCard,
+  ...SOT_ACTIONS,
 ]
 
 /** The actions that are buttons, in the order of `availableActions`. `chooseReward` answers a choice and is not one. */
@@ -1292,7 +1294,8 @@ export function performAssistedAction(
   // Some Great Persons and culture cards allow a second use and are not built, so
   // the player may override `used` and nothing else. The reducers re-check the
   // rest (resource, capacity, cost) when they apply.
-  const repeat = availability.status === 'used' && input.confirmedRepeat === true
+  const repeat =
+    availability.status === 'used' && input.confirmedRepeat === true && definition.strictOnce !== true
   if (availability.status !== 'ready' && !repeat) return err(rejected(input.action, availability))
 
   const applied = definition.apply(state, player, {

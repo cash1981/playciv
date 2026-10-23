@@ -243,6 +243,35 @@ describe('the phase tabs', () => {
     }
   })
 
+  it('puts the policy buttons and the government and investment choices in Start of turn only', () => {
+    const expansionism: Action = {
+      action: 'expansionism',
+      label: 'Expansionism',
+      phase: 'SOT',
+      group: 'Social policies',
+      status: 'ready',
+      reason: 'Gain 2 trade: 1 for each of your 2 cities and 1 for each of your 0 city-states.',
+    }
+    const startOfTurn = {
+      government: { status: 'ready', reason: 'You may change government once in your Start of Turn.', current: 'Despotism', options: [], canEnterAnarchy: true },
+      feudalism: null,
+      invest: { status: 'needs-resource', reason: 'You have no coin token to invest.', coins: [], cards: [], totalCoins: 0 },
+      techGrants: [],
+    }
+    renderPanel(viewIn('SOT', [expansionism, chivalry], { startOfTurn }))
+    expect(screen.getByRole('button', { name: 'Use Expansionism' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Social policies' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Change government' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Invest a coin' })).toBeTruthy()
+    // The City Management ability is not in this tab
+    expect(screen.queryByRole('button', { name: 'Use Chivalry' })).toBeNull()
+    fireEvent.click(tab(/^City management/))
+    expect(screen.queryByRole('button', { name: 'Use Expansionism' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Change government' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Invest a coin' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Use Chivalry' })).toBeTruthy()
+  })
+
   it('renders nothing for a spectator', () => {
     const { container } = renderPanel({ rev: 1, you: null, activeTurn: null, opponents: [] } as unknown as PlayerView)
     expect(container.textContent).toBe('')

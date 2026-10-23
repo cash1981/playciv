@@ -125,6 +125,8 @@ export function emptyPlayerhand(player: NewPlayer, playernumber: number): Player
     stats: DEFAULT_PLAYER_STATS,
     government: DEFAULT_GOVERNMENT,
     pendingRewards: [],
+    techGrants: [],
+    techRevealTurns: {},
   }
 }
 

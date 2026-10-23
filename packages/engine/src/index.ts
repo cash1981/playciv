@@ -33,6 +33,17 @@ export * from './culture-track.js'
 export * from './log.js'
 export * from './assisted.js'
 export { playableCardsOf } from './assisted-cards.js'
+export {
+  GOVERNMENT_UNLOCK_TECH,
+  INVESTABLE_COIN_SOURCES,
+  INVESTMENT_CARDS,
+  canEnterAnarchy,
+  governmentOptionsOf,
+  isImmuneToAnarchy,
+  unlockedGovernments,
+} from './sot.js'
+export type { GovernmentOption, InvestmentCardInfo } from './sot.js'
+export { HARVESTABLE_RESOURCES } from './assisted-sot.js'
 export { livePendingRewards } from './assisted-culture.js'
 export * from './card-timing.js'
 export { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
@@ -41,6 +52,9 @@ export type {
   AssistedPayload,
   BlockedAvailability,
   ChooseRewardPayload,
+  GovernmentPayload,
+  HarvestPayload,
+  InvestPayload,
   PlayCardPayload,
   StartBuildingProgramPayload,
   UpgradeBuildingsPayload,

@@ -11,6 +11,7 @@
 
 import type { BuildPayload } from './build-options.js'
 import type { EngineError } from './errors.js'
+import type { Government } from './government.js'
 import type { Result } from './result.js'
 import type {
   AssistedActionKind,
@@ -18,6 +19,7 @@ import type {
   AssistedEffect,
   AssistedStatus,
   GameState,
+  InvestmentCard,
   Playerhand,
   PlayerStats,
 } from './state.js'
@@ -103,9 +105,11 @@ export function useTurnAction(
   const updatedTurn = turn.usedActions.includes(usageKey)
     ? turn
     : { ...turn, usedActions: [...turn.usedActions, usageKey] }
-  const playerTurns = player.playerTurns.map((candidate) =>
-    sameTurn(candidate, updatedTurn) ? updatedTurn : candidate,
-  )
+  // The record does not exist yet in a Start of Turn before the player wrote or marked anything
+  const known = player.playerTurns.some((candidate) => sameTurn(candidate, updatedTurn))
+  const playerTurns = known
+    ? player.playerTurns.map((candidate) => (sameTurn(candidate, updatedTurn) ? updatedTurn : candidate))
+    : [...player.playerTurns, updatedTurn]
   return {
     ...withPlayerHand(state, { ...player, playerTurns, stats }),
     publicTurns: { ...state.publicTurns, [publicTurnKey(updatedTurn)]: publicTurn(updatedTurn) },
@@ -183,12 +187,32 @@ export interface PlayCardPayload {
  * the city, item and square, `startBuildingProgram` the city, `upgradeBuildings`
  * an optional family and `playCard` the card, who it names and its resource.
  */
+/** What `switchGovernment` carries: the government to become, or `Anarchy`. */
+export interface GovernmentPayload {
+  readonly government: Government
+}
+
+/** What `invest` carries: the coin counter the coin comes from, and the card that gets the marker. */
+export interface InvestPayload {
+  readonly source: string
+  readonly card: InvestmentCard
+}
+
+/** What `feudalismHarvest` carries: the city whose outskirts are harvested, and the resource. */
+export interface HarvestPayload {
+  readonly cityPieceId: string
+  readonly resource: string
+}
+
 export type AssistedPayload =
   | ChooseRewardPayload
   | BuildPayload
   | StartBuildingProgramPayload
   | UpgradeBuildingsPayload
   | PlayCardPayload
+  | GovernmentPayload
+  | InvestPayload
+  | HarvestPayload
 
 export interface ApplyContext {
   readonly requestId: string
@@ -232,6 +256,11 @@ export type AssistedActionDefinition = {
    * Public, so it may name only what the log line already named.
    */
   readonly labelOf?: (record: AssistedActionRecord) => string
+  /**
+   * The rule allows it once and nothing grants another use (a government change, the
+   * invested coin), so a player cannot override `used` by confirming.
+   */
+  readonly strictOnce?: boolean
   availability(state: GameState, playerId: string): AssistedAvailability
   apply(state: GameState, player: Playerhand, context: ApplyContext): Result<Applied, EngineError>
   reverse(

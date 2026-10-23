@@ -8,7 +8,15 @@
  * `upgradeBuildings`) keep their own top-level fields in `play.ts`.
  */
 
-import type { AssistedPayload, PlayCardPayload } from '@civ/engine'
+import { isGovernment } from '@civ/engine'
+import type {
+  AssistedPayload,
+  GovernmentPayload,
+  HarvestPayload,
+  InvestPayload,
+  InvestmentCard,
+  PlayCardPayload,
+} from '@civ/engine'
 
 import { asRecord } from '../context.js'
 
@@ -43,9 +51,42 @@ function parsePlayCard(args: Record<string, unknown>): PlayCardPayload | string 
   }
 }
 
+function parseSwitchGovernment(args: Record<string, unknown>): GovernmentPayload | string {
+  const extra = extraKeys(args, ['government'])
+  if (extra.length > 0) return `switchGovernment takes only government, not ${extra.join(', ')}`
+  const government = args['government']
+  if (typeof government !== 'string' || !isGovernment(government)) return 'government must be a known government'
+  return { government }
+}
+
+const INVESTMENT_KEYS: readonly InvestmentCard[] = ['infra', 'efta', 'mic', 'pe']
+
+function parseInvest(args: Record<string, unknown>): InvestPayload | string {
+  const extra = extraKeys(args, ['source', 'card'])
+  if (extra.length > 0) return `invest takes only source and card, not ${extra.join(', ')}`
+  const { source, card } = args
+  if (typeof source !== 'string' || source.length === 0 || source.length > 30) return 'source must be a short text'
+  if (typeof card !== 'string' || !(INVESTMENT_KEYS as readonly string[]).includes(card)) {
+    return `card must be one of ${INVESTMENT_KEYS.join(', ')}`
+  }
+  return { source, card: card as InvestmentCard }
+}
+
+function parseHarvest(args: Record<string, unknown>): HarvestPayload | string {
+  const extra = extraKeys(args, ['cityPieceId', 'resource'])
+  if (extra.length > 0) return `feudalismHarvest takes only cityPieceId and resource, not ${extra.join(', ')}`
+  const { cityPieceId, resource } = args
+  if (!isId(cityPieceId)) return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+  if (typeof resource !== 'string' || resource.length === 0 || resource.length > 20) return 'resource must be a short text'
+  return { cityPieceId, resource }
+}
+
 /** The actions whose payload is `args`, with the parser of each. */
 const PARSERS: Readonly<Record<string, (args: Record<string, unknown>) => AssistedPayload | string>> = {
   playCard: parsePlayCard,
+  switchGovernment: parseSwitchGovernment,
+  invest: parseInvest,
+  feudalismHarvest: parseHarvest,
 }
 
 /** Whether `action` takes `args`. */

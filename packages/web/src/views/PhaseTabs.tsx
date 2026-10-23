@@ -25,6 +25,7 @@ import { CityOrders } from './CityOrders.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import type { Run } from './GameView.js'
 import { PlayableCardList } from './PlayableCards.js'
+import { StartOfTurnChoices } from './SotPanel.js'
 import './PhaseTabs.css'
 
 const capitalized = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
@@ -209,6 +210,9 @@ function PhaseBody({
         readOnly={readOnly}
         run={run}
       />
+      {phase === 'SOT' && (
+        <StartOfTurnChoices gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
+      )}
       <PlayableCardList
         phase={phase}
         gameId={gameId}

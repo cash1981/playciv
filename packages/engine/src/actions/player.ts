@@ -28,6 +28,8 @@ import {
   withCoinSource,
 } from '../coins.js'
 import { applyCoinPurchase } from '../assisted.js'
+import { openPhaseOf, statsAfterGovernmentChange } from '../sot.js'
+import { turnStatus } from '../turn.js'
 import { blockadedPieceIds } from '../blockade.js'
 import type { EngineError } from '../errors.js'
 import type { Government } from '../government.js'
@@ -162,8 +164,25 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
   // counts, so revealing twice does not undo a counter the player has lowered,
   // and a hidden tech gives nothing because the counters are public.
   const source = tech.hidden ? techCoinSource(tech.name) : undefined
+  // The first reveal also records the turn (a government is unlocked for a direct
+  // change during the next Start of Turn) and spends a free tech the player was
+  // owed in this Start of Turn (Rationalism, a hut, an investment).
+  const turnNumber = turnStatus(state).currentTurn
+  const grant =
+    tech.hidden && openPhaseOf(state, player.playerId) === 'SOT'
+      ? player.techGrants.find(
+          (candidate) =>
+            candidate.turnNumber === turnNumber && (candidate.level === null || candidate.level === tech.level),
+        )
+      : undefined
   const next = withPlayer(state, {
     ...player,
+    ...(tech.hidden
+      ? { techRevealTurns: { ...player.techRevealTurns, [tech.name]: turnNumber } }
+      : {}),
+    ...(grant === undefined
+      ? {}
+      : { techGrants: player.techGrants.filter((candidate) => candidate !== grant) }),
     techsChosen: player.techsChosen.map((candidate) =>
       candidate.name === tech.name ? revealed : candidate,
     ),
@@ -179,7 +198,16 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
     },
   })
 
-  return ok(appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed))
+  const logged = appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed)
+  if (grant === undefined) return ok(logged)
+  return ok(
+    appendLog(logged, {
+      username: player.username,
+      playerId: player.playerId,
+      publicLog: `${player.username} learned ${tech.name} with ${grant.source}`,
+      privateLog: '',
+    }),
+  )
 }
 
 export interface SetTechSlotInput {
@@ -1212,37 +1240,7 @@ export function setPlayerGovernment(
     return err({ kind: 'UNKNOWN_GOVERNMENT', government: String(input.government) })
   }
 
-  // Issue #158: the government card holds its coin, so leaving Democracy clears
-  // the source instead of leaving a hidden value behind. Moving to Democracy
-  // starts it at 1; setting Democracy again leaves a lowered counter alone.
-  let coinSources = target.stats.coinSources
-  if (input.government !== 'Democracy') {
-    coinSources = withCoinSource(coinSources, 'democracyGovernment', 0)
-  } else if (target.government !== 'Democracy') {
-    coinSources = withCoinSource(
-      coinSources,
-      'democracyGovernment',
-      coinOnReveal('democracyGovernment'),
-    )
-  }
-  // Anarchy switches every social policy off, so the Organized Religion coin
-  // goes to 0 there. Leaving Anarchy brings it back, but only for a policy the
-  // player has revealed: a hidden policy must not show up in a public counter.
-  if (input.government === 'Anarchy') {
-    coinSources = withCoinSource(coinSources, 'organizedReligion', 0)
-  } else if (target.government === 'Anarchy') {
-    const hasPolicy = target.socialPolicies.some(
-      (policy) => !policy.hidden && socialPolicyCoinSource(policy.name) === 'organizedReligion',
-    )
-    if (hasPolicy) {
-      coinSources = withCoinSource(
-        coinSources,
-        'organizedReligion',
-        coinOnReveal('organizedReligion'),
-      )
-    }
-  }
-  const stats = { ...target.stats, coinSources }
+  const stats = statsAfterGovernmentChange(target, input.government)
 
   const next = withPlayer(state, { ...target, government: input.government, stats })
   const message =

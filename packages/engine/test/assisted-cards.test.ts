@@ -74,14 +74,21 @@ function touched(state: GameState) {
 }
 
 describe('the registry and the tech map', () => {
-  it('lists the three incense cards, Democracy, Printing Press and the culture advance as buttons', () => {
+  it('lists the three incense cards, Democracy, Printing Press, the culture advance and the Start of Turn abilities as buttons', () => {
     expect([...ASSISTED_ACTION_KINDS].sort()).toEqual([
       'chivalry',
       'cultureAdvance',
       'currency',
       'democracy',
+      'democracyTrade',
+      'expansionism',
+      'fundamentalismCulture',
       'metalCasting',
+      'pacifism',
+      'patronage',
       'printingPress',
+      'rationalismI',
+      'rationalismII',
     ])
     for (const [kind] of CARDS) expect(isAssistedActionKind(kind)).toBe(true)
   })

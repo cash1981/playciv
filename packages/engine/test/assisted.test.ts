@@ -39,14 +39,21 @@ const press = (state: GameState, requestId: string, action: 'chivalry' | 'democr
   performAssistedAction(state, { playerId: CASH1981, action, requestId })
 
 describe('the registry', () => {
-  it('lists the incense cards, Democracy and Printing Press', () => {
+  it('lists the incense cards, Democracy, Printing Press, the culture advance and the Start of Turn abilities', () => {
     expect([...ASSISTED_ACTION_KINDS].sort()).toEqual([
       'chivalry',
       'cultureAdvance',
       'currency',
       'democracy',
+      'democracyTrade',
+      'expansionism',
+      'fundamentalismCulture',
       'metalCasting',
+      'pacifism',
+      'patronage',
       'printingPress',
+      'rationalismI',
+      'rationalismII',
     ])
     expect(isAssistedActionKind('chivalry')).toBe(true)
     // Registered since the Currency and Metal Casting slice; Wheat and Silk are not
@@ -55,12 +62,13 @@ describe('the registry', () => {
     expect(isAssistedActionKind(7)).toBe(false)
   })
 
-  it('puts every button in a phase tab and a group, and every button so far is City Management', () => {
+  it('puts every button in a phase tab and a group, the card abilities in City Management and the policies and governments in Start of Turn', () => {
     const actions = availableActionsFor(firstCivGame(), CASH1981)
     expect(actions.length).toBeGreaterThan(0)
     for (const action of actions) {
-      expect(action.phase).toBe('CM')
       expect(action.group.length).toBeGreaterThan(0)
+      const startOfTurn = ['expansionism', 'pacifism', 'patronage', 'rationalismI', 'rationalismII', 'democracyTrade', 'fundamentalismCulture']
+      expect(action.phase).toBe(startOfTurn.includes(action.action) ? 'SOT' : 'CM')
     }
     expect(actions.find((action) => action.action === 'chivalry')?.group).toBe('Resource abilities')
     expect(actions.find((action) => action.action === 'democracy')?.group).toBe('Coins')
