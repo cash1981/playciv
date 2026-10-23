@@ -6,8 +6,13 @@
  * and the phase are read from the waiting list the engine derives from the done
  * marks, and they go in the request, so a press ends the phase the viewer saw
  * even if the turn has moved on since. Ending Research is the last press of a
- * turn: the next turn starts when every player has done it. Nothing here adds a
- * rule.
+ * turn: the next turn starts when every player has done it.
+ *
+ * "Reopen" takes the viewer's latest ended phase of the active turn back to not
+ * done (`api.unmarkDone`), for a player who forgot something. Nothing else moves:
+ * the turn is derived from the done marks, so the others keep waiting for whoever
+ * they waited for, and phases the viewer ended later stay ended. Nothing here adds
+ * a rule.
  */
 
 import { useEffect, useRef } from 'react'
@@ -39,6 +44,26 @@ export function endTurnState(view: PlayerView): EndTurnState | null {
   return mine === undefined
     ? { kind: 'done', turnNumber: turn.turnNumber }
     : { kind: 'open', turnNumber: turn.turnNumber, phase: mine.phase }
+}
+
+/**
+ * The phase "Reopen" takes back: the last one the viewer ended before the phase
+ * they have open, or Research once they are done. `null` when there is none. Only
+ * the active turn is offered: reopening Research of a turn everybody has finished
+ * would pull the whole game back to it.
+ */
+export function reopenPhase(view: PlayerView, state: EndTurnState): TurnPhase | null {
+  const done = view.you?.playerTurns?.find((turn) => turn.turnNumber === state.turnNumber)?.done
+  const before = state.kind === 'open' ? TURN_PHASES.slice(0, TURN_PHASES.indexOf(state.phase)) : TURN_PHASES
+  return [...before].reverse().find((phase) => done?.[phase] === true) ?? null
+}
+
+/** The viewer's open phase when they ended a later one in the same turn, else `null`. */
+function reopenedLater(view: PlayerView, state: EndTurnState): TurnPhase | null {
+  if (state.kind !== 'open') return null
+  const done = view.you?.playerTurns?.find((turn) => turn.turnNumber === state.turnNumber)?.done
+  const after = TURN_PHASES.slice(TURN_PHASES.indexOf(state.phase) + 1)
+  return after.find((phase) => done?.[phase] === true) ?? null
 }
 
 const capitalized = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
@@ -73,6 +98,20 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
 
   if (state === null) return null
 
+  const reopen = reopenPhase(view, state)
+  const reopenButton =
+    reopen === null ? null : (
+      <button
+        type="button"
+        className="small"
+        disabled={busy || readOnly}
+        aria-label={`Reopen: mark ${capitalized(TURN_PHASE_LABEL[reopen])} as not done`}
+        onClick={() => void run(() => api.unmarkDone(gameId, reopen, state.turnNumber))}
+      >
+        Reopen {TURN_PHASE_LABEL[reopen]}
+      </button>
+    )
+
   if (state.kind === 'done') {
     const behind = earliestOthers(view.activeTurn ?? null, view.you?.username)
     return (
@@ -82,12 +121,14 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
           {behind !== null &&
             ` Waiting for ${behind.usernames.join(', ')} (${TURN_PHASE_LABEL[behind.phase]}).`}
         </p>
+        {reopenButton}
       </div>
     )
   }
 
   const label = TURN_PHASE_LABEL[state.phase]
   const last = state.phase === TURN_PHASES[TURN_PHASES.length - 1]
+  const stillEnded = reopenedLater(view, state)
   return (
     <div className="assisted-endturn">
       <button
@@ -104,6 +145,12 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
         Turn {state.turnNumber}: marks your {label} phase done.
         {last && ' The next turn starts when every player has ended their research phase.'}
       </p>
+      {stillEnded !== null && (
+        <p className="assisted-endturn-text assisted-endturn-reopened">
+          Reopened: your {label} phase is open again. Your {TURN_PHASE_LABEL[stillEnded]} phase stays ended.
+        </p>
+      )}
+      {reopenButton}
     </div>
   )
 }

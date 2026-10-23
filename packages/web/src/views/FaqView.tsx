@@ -46,7 +46,9 @@ export function FaqView(): React.JSX.Element {
             player. When it is not your turn, the game asks &ldquo;Draw anyway?&rdquo; before it
             draws, so a draw out of turn is never an accident. When you have finished a phase,
             select <strong>End turn</strong> in Your actions so the next player can continue
-            in it. Ending Research starts the next turn once every player has done it.
+            in it. Ending Research starts the next turn once every player has done it. If you
+            forgot something, select <strong>Reopen</strong> to take your last ended phase
+            back, make the change and end it again. Nobody else is moved while you do.
           </p>
         </CollapsiblePanel>
 

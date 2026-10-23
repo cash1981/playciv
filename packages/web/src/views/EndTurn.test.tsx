@@ -277,3 +277,65 @@ describe('End turn in Your actions', () => {
     }
   })
 })
+
+describe('Reopen in Your actions', () => {
+  const withDone = (turn: ActiveTurnStatus, turnNumber: number, done: Partial<Record<TurnPhase, boolean>>) =>
+    viewIn(turn, {
+      you: {
+        playerId: 'me',
+        username: 'Alice',
+        color: 'Red',
+        civilization: { name: 'Rome' },
+        techsChosen: [],
+        pyramidPlacements: [],
+        availableActions: [],
+        playerTurns: [{ turnNumber, done }],
+      },
+    })
+
+  it('takes back the phase the viewer ended last, once they are done, and nothing else', async () => {
+    const unmarkDone = vi.spyOn(api, 'unmarkDone').mockResolvedValue({} as PlayerView)
+    const markDone = vi.spyOn(api, 'markDone').mockResolvedValue({} as PlayerView)
+    renderPanel(
+      withDone(activeTurn(4, [bob('TRADE')]), 4, {
+        SOT: true, CM: true, MOVEMENT: true, TRADE: true, RESEARCH: true,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen: mark Research as not done' }))
+
+    await waitFor(() => expect(unmarkDone).toHaveBeenCalledExactlyOnceWith('game-1', 'RESEARCH', 4))
+    expect(markDone).not.toHaveBeenCalled()
+  })
+
+  it('offers the phase before the open one, and says a later ended phase stays ended', () => {
+    renderPanel(withDone(activeTurn(4, [alice('CM'), bob('TRADE')]), 4, { SOT: true, MOVEMENT: true }))
+
+    expect(screen.getByRole('button', { name: 'Reopen: mark Start of turn as not done' })).toBeTruthy()
+    expect(
+      screen.getByText('Reopened: your city management phase is open again. Your movement phase stays ended.'),
+    ).toBeTruthy()
+    // End turn still ends the phase that is open, not the later one
+    expect(screen.getByRole('button', { name: 'End turn: mark City management as done' })).toBeTruthy()
+  })
+
+  it('offers the ended phase without a note on a normal turn, and nothing when none is ended', () => {
+    renderPanel(withDone(activeTurn(4, [alice('CM')]), 4, { SOT: true }))
+
+    expect(screen.getByRole('button', { name: /^Reopen/ })).toBeTruthy()
+    expect(document.body.textContent).not.toContain('Reopened:')
+    cleanup()
+    renderPanel(viewIn(activeTurn(4, [alice('SOT')])))
+    expect(screen.queryByRole('button', { name: /^Reopen/ })).toBeNull()
+  })
+
+  it('cannot be pressed while the page is busy', () => {
+    const unmarkDone = vi.spyOn(api, 'unmarkDone').mockResolvedValue({} as PlayerView)
+    renderPanel(withDone(activeTurn(4, [alice('CM')]), 4, { SOT: true }), { busy: true })
+
+    const button = screen.getByRole('button', { name: /^Reopen/ }) as HTMLButtonElement
+    fireEvent.click(button)
+    expect(button.disabled).toBe(true)
+    expect(unmarkDone).not.toHaveBeenCalled()
+  })
+})

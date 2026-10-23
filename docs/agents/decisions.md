@@ -442,6 +442,19 @@ Source: `web/src/views/AssistedActions.tsx`, `PlayableCards.tsx`, `SotPanel.tsx`
 `HelpHint.tsx`, `PhaseSummary.tsx`, `GameView.tsx`, `ItemCard.tsx` and their tests;
 `engine/src/state.ts` (`AvailableAction.techName`) and `assisted.ts`.
 
+## Reopening a phase (2026-10-23)
+
+- Your actions has **Reopen**: it marks the viewer's latest ended phase of the
+  active turn not done (the existing `/turns/undone` route, `unmarkPhaseDone`).
+  Nothing else moves. There is no turn marker to put back: the active turn and
+  who is waited for are derived from the done flags, so the others keep waiting
+  for whoever they waited for, and End turn on the reopened phase locks it again.
+- Phases the viewer ended later stay ended; reopening does not cascade. The panel
+  says so ("Reopened: ... stays ended"), and the log and chat show the "marked ...
+  not done" line.
+- Only the active turn is offered. Reopening Research of a turn every player has
+  finished would pull the whole game back to it.
+
 ## Toasts (2026-10-23)
 
 Every action a player takes on the game page ends in a toast at the top of the
