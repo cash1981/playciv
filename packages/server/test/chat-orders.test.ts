@@ -582,6 +582,22 @@ describe('out-of-turn draws through the API', () => {
   })
 })
 
+describe('culture draws over the culture hand size through the API', () => {
+  it('refuses a culture card to a hand over its size unless confirmedOverLimit is true', async () => {
+    const game = await startedGame('culture-over')
+    const url = `/api/games/${game.gameId}/draw/CULTURE_1`
+    // The base hand size is 2, and a hand at its size may still take one more
+    for (let draws = 0; draws < 3; draws += 1) expect((await post(game.seat1, url)).status).toBe(200)
+
+    const refused = await post(game.seat1, url)
+    expect(refused.status).toBe(409)
+    expect(JSON.parse(refused.body)).toMatchObject({ error: 'CULTURE_HAND_OVER' })
+    expect((await post(game.seat1, url, { confirmedOverLimit: 'true' })).status).toBe(409)
+    expect((await post(game.seat1, `/api/games/${game.gameId}/draw/INFANTRY`)).status).toBe(200)
+    expect((await post(game.seat1, url, { confirmedOverLimit: true })).status).toBe(200)
+  })
+})
+
 describe('hidden information', () => {
   it('an opponent sees flags and published orders but not the private log, note or an unpublished draft', async () => {
     const game = await startedGame('leak')

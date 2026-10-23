@@ -31,24 +31,47 @@ old test counts and past deployment reports do not establish present health.
 
 - Assisted play (#260) is on PR #271: card buttons, culture advance, Great Person
   markers, phase summary, confirm before reuse. See the "Assisted play" section
-  of decisions and `tasks/assisted-*.md`. Offers (#265) are not built.
+  of decisions and `tasks/assisted-*.md`. Free-text trade offers (#265, #274) are
+  built too; see "Trade offers (#265)" in decisions.
 
-- Phase tabs and Start of Turn (part 9) are on PR #271: the Your actions panel has a tab per
+- Phase tabs and Start of Turn (part 13) are on PR #271: the Your actions panel has a tab per
   phase, cards play from the tabs and the hand as log lines, and Start of Turn has buttons for
   policies, governments, investing, founding cities from scouts, scout squares, and wonder,
   Great Person, tech, hut and relic abilities. Brief `tasks/assisted-sot.md`; see "Phase tabs
   and Start of Turn" in decisions for the assumptions waiting for the human.
 
 - City production (#250 slice A, first part of #264) is on PR #271: a per-city
-  estimate with a hand-set override and a Cities panel.
+  estimate with a hand-set override, shown on each city card.
   Brief `tasks/city-production.md`; see "City production" in decisions.
 
 - Assisted build (#264) is on PR #271: a Build button per city for buildings, army and
   scout figures and military units, legal choices only, square picking on the board, trade
-  rush, undo by vote; also Start Building Program and Upgrade buildings. Harvest and devote
-  to the arts are not built (their icon data is not in the map data). Briefs
-  `tasks/assisted-build.md`, `tasks/assisted-units.md` and `tasks/assisted-city-actions.md`;
+  rush, undo by vote; also Start Building Program and Upgrade buildings. Devote to the Arts and
+  Harvest read the resource and culture icons from `engine/data/tile-icons.json` (read by eye from
+  the tile images; see "Devote to the Arts and Harvest" in decisions). Briefs
+  `tasks/assisted-build.md`, `tasks/assisted-units.md`, `tasks/assisted-city-actions.md` and `tasks/assisted-gather.md`;
   see "Assisted build" in decisions.
+
+- The game header names the player furthest behind as the one who is up and lists
+  only the earliest open phase under "Waiting for"; the shortcuts are Board, Actions,
+  Your cards and Tech tree; a city's arithmetic opens in a popup. Brief
+  `tasks/phase-cities-polish.md`; see "Assisted play" in decisions.
+
+- The viewer's own cities (cards, Build, Start Building Program, Upgrades, the
+  production figure) are in "Your actions", which sits under the board, before Your
+  hand. There is no panel for the opponents' cities. Briefs `tasks/cities-in-actions.md`
+  and `tasks/build-polish-wonders.md`; see "Assisted play" in decisions.
+
+- Build: Build opens with a button per group (buildings, wonders, figures, units); wonders from the market are built like a building (cost shown, not enforced; the next wonder is drawn into the market); a building, wonder or figure is placed by the tap
+  on its square; removing a built piece before End turn takes the build back with a new log
+  line. Brief `tasks/build-polish-wonders.md`; see "Build polish and wonders" in decisions.
+
+- Your actions has a "Possible actions" box (Advance culture and the card buttons) above Your cities;
+  Advance culture scrolls to Your hand afterwards.
+
+- End turn (it ends the viewer's open phase) is a button in "Your actions", the first
+  Order tab control to move there; the Order tab keeps its own for now. Brief
+  `tasks/end-turn-actions.md`; see "Assisted play" in decisions.
 
 Read [current decisions](decisions.md) for the relevant compatibility/rationale
 and [limitations](limitations.md) for known gaps. Archived Mongo games remaining

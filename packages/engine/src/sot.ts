@@ -1,5 +1,5 @@
 /**
- * What the Start of Turn phase allows, read off the state (assisted play, part 9).
+ * What the Start of Turn phase allows, read off the state (assisted play, part 13).
  *
  * Pure and read-only, like `culture-hand.ts`: everything is derived each time from the
  * board, the revealed cards and the turn marks, so the numbers follow the game and

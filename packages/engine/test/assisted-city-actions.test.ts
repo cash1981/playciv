@@ -184,6 +184,8 @@ const pieceAt = (state: GameState, assetId: string, column: number, row: number)
 
 // -- the Building Program ---------------------------------------------------------
 
+// These tests are about the marker and the build in sequence in one city, so a second action of the
+// city is confirmed here; the question itself is tested in `assisted-city-turn-action.test.ts`.
 const tryStart = (state: GameState, requestId = 'start-1', playerId = CASH1981, cityPieceId = cityOf(state).id) =>
   performAssistedAction(state, {
     playerId,
@@ -191,6 +193,7 @@ const tryStart = (state: GameState, requestId = 'start-1', playerId = CASH1981, 
     requestId,
     at: AT,
     payload: { cityPieceId },
+    confirmedRepeat: true,
   })
 
 const startProgram = (state: GameState, requestId = 'start-1', cityPieceId = cityOf(state).id): GameState =>
@@ -212,7 +215,7 @@ function tryBuild(state: GameState, assetId: string, at: { column: number; row: 
     item: { kind: 'building', assetId },
     target: at,
   }
-  return performAssistedAction(state, { playerId: CASH1981, action: 'build', requestId, at: AT, payload })
+  return performAssistedAction(state, { playerId: CASH1981, action: 'build', requestId, at: AT, payload, confirmedRepeat: true })
 }
 const build = (state: GameState, assetId: string, at: { column: number; row: number }, requestId = 'build-1') =>
   unwrap(tryBuild(state, assetId, at, requestId))
@@ -282,7 +285,7 @@ const blockedReason = (result: ReturnType<typeof vote>): string => {
 
 describe('what a city offers: start a Building Program', () => {
   it('a city in an open City Management phase is ready and has no marker', () => {
-    expect(optionOf(ready())).toEqual({
+    expect(optionOf(ready())).toMatchObject({
       cityPieceId: cityOf(ready()).id,
       label: 'City B2',
       startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
@@ -592,7 +595,9 @@ describe('the Building Program and the build action, in both orders', () => {
     expect(city?.production).toBe(10)
     const done = build(marked, LIBRARY, C2)
     expect(piecesOf(done, MARKER)).toEqual([])
-    expect(lastLine(done)).toBe('cash1981 built a Library in City B2 on square C2, using up the Building Program marker')
+    expect(lastLine(done)).toBe(
+      'cash1981 built a Library in City B2 on square C2, using up the Building Program marker (a second action of this city this turn, confirmed by the player)',
+    )
     expect(done.assistedActions[1]?.effect).toMatchObject({ kind: 'build', marker: { piece: { id: marker.id } } })
   })
 

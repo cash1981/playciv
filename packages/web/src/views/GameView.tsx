@@ -16,11 +16,11 @@ import { useActivity } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
 
+import { hasActionsPanel } from './AssistedActions.js'
 import { BoardView } from './BoardView.js'
 import type { PickSquares } from './BoardView.js'
 import { BuildBar } from './BuildPicker.js'
 import { useBuildFlow } from './buildFlow.js'
-import { CitiesPanel } from './CitiesPanel.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
 import { ItemCard } from './ItemCard.js'
@@ -35,6 +35,7 @@ import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
 import { WondersPanel } from './WondersPanel.js'
 import { TechPanel } from './TechPanel.js'
+import { focusPlayer } from './turnFocus.js'
 import { AutoRefreshSwitch } from './AutoRefresh.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { DigitInput } from './DigitInput.js'
@@ -44,14 +45,15 @@ import './BattleMobile.css'
 type Seat = NonNullable<PlayerView['you']> | PlayerView['opponents'][number]
 
 /**
- * The player whose turn it is, from `you` and the opponents: the holder of the
- * active turn. `undefined` when nobody is on turn.
+ * The player the header puts in focus, from `you` and the opponents: the one
+ * furthest behind (see `focusPlayer`), found by username. `undefined` when
+ * nobody is waited for, or the player has left.
  */
 export function activePlayerOf(view: PlayerView): Seat | undefined {
   const seats: readonly Seat[] = view.you === null ? view.opponents : [view.you, ...view.opponents]
-  const holder = view.activeTurn
-  if (holder === null) return undefined
-  return seats.find((seat) => seat.playerId === holder.playerId)
+  const focus = focusPlayer(view.activeTurn)
+  if (focus === null) return undefined
+  return seats.find((seat) => seat.username === focus.username)
 }
 
 /**
@@ -532,13 +534,14 @@ export function GameView({
     <>
       <div className="panel">
         <div className="row" style={{ alignItems: 'baseline' }}>
-          {/* Civ, then colour, then the name in the title: whose turn it is,
-              not who is looking. They wrap above the title on a phone. */}
+          {/* Civ, then colour, then the name in the title: who is up (the
+              player furthest behind, the turn holder in a tie), not who is
+              looking. They wrap above the title on a phone. */}
           {!ended && activePlayer !== undefined && <PlayerChips player={activePlayer} />}
           <h1 style={{ margin: 0 }}>
             {ended
               ? gameEndedTitle(displayedView.winner)
-              : turnTitle(displayedView.activeTurn, you?.playerId)}
+              : turnTitle(displayedView.activeTurn, you?.username)}
           </h1>
           <span className="muted" style={{ fontSize: '0.9rem' }}>{displayedView.name}</span>
           {ended && displayedView.winner !== null && <span className="tag">ended</span>}
@@ -559,7 +562,7 @@ export function GameView({
           </div>
         )}
 
-        <PageShortcuts chat={player !== null} />
+        <PageShortcuts actions={hasActionsPanel(displayedView)} />
       </div>
 
       <GlobalReplayBar
@@ -581,17 +584,9 @@ export function GameView({
 
       {error !== null && <div className="error">{error}</div>}
 
-      {/* The page runs: header and summary, Your actions, the board, Your cards,
-          then the rest. The board has the whole content width at every size. */}
-      <PhaseActionsPanel
-        gameId={gameId}
-        view={displayedView}
-        busy={interactionBusy}
-        readOnly={displayedView.you === null || replaying || locked}
-        run={run}
-        build={buildFlow}
-      />
-
+      {/* The page runs: header and summary, the board, Your actions (End turn, the card
+          buttons, a waiting choice and the viewer's own cities), Your cards, then the
+          rest. The board has the whole content width at every size. */}
       <BuildBar gameId={gameId} view={displayedView} flow={buildFlow} busy={interactionBusy} run={run} />
 
       <BoardView
@@ -604,12 +599,22 @@ export function GameView({
         readOnly={replaying || locked}
         youId={you?.playerId ?? null}
         viewerCivilization={you?.civilization?.name ?? null}
+        viewerColor={you?.color ?? null}
         {...(pickSquares === undefined ? {} : { pickSquares })}
         run={run}
       />
 
+      <PhaseActionsPanel
+        gameId={gameId}
+        view={displayedView}
+        busy={interactionBusy}
+        readOnly={displayedView.you === null || replaying || locked}
+        run={run}
+        build={buildFlow}
+      />
+
       <div className="panel-stack">
-        {/* Your cards sit directly under the board; the log and the revealed feed are last. */}
+        {/* Your cards sit directly under Your actions; the log and the revealed feed are last. */}
         <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <DrawPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
@@ -631,13 +636,6 @@ export function GameView({
         <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <SocialPolicyPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         <StatusPanel
-          gameId={gameId}
-          view={displayedView}
-          busy={interactionBusy}
-          readOnly={displayedView.you === null || replaying || locked}
-          run={run}
-        />
-        <CitiesPanel
           gameId={gameId}
           view={displayedView}
           busy={interactionBusy}
@@ -758,16 +756,63 @@ interface PanelProps {
   readonly view: PlayerView
 }
 
+const CULTURE_SHEETS: ReadonlySet<SheetName> = new Set<SheetName>(['CULTURE_1', 'CULTURE_2', 'CULTURE_3'])
+
+/** 1, 2 or 3 for a culture deck, `null` for any other. */
+function cultureLevelOf(sheet: SheetName): 1 | 2 | 3 | null {
+  return sheet === 'CULTURE_1' ? 1 : sheet === 'CULTURE_2' ? 2 : sheet === 'CULTURE_3' ? 3 : null
+}
+
+/** The culture level of the space the viewer's leader marker stands on (Start counts as 1), or `null` with no marker. */
+function cultureMarkerSheetLevel(view: PlayerView): 1 | 2 | 3 | null {
+  const step = view.you?.cultureMarkerLevel
+  if (step === null || step === undefined) return null
+  return step <= 7 ? 1 : step <= 14 ? 2 : 3
+}
+
+export const cultureLevelQuestion = (drawn: number, marker: number): string =>
+  `Your leader marker is on culture level ${marker}, but you are drawing a culture ${'I'.repeat(drawn)} card. Are you sure?`
+
+function cultureHandQuestion(view: PlayerView): string {
+  const size = view.you?.stats?.cultureHandSize ?? 0
+  return `Your culture hand is over its size of ${size}. You should discard down or increase your culture hand size before you receive another culture card. Draw anyway?`
+}
+
+/** The viewer holds more culture cards than the culture hand size. */
+function cultureHandIsOver(view: PlayerView): boolean {
+  const size = view.you?.stats?.cultureHandSize
+  if (size === undefined) return false
+  const held = (view.you?.items ?? []).filter((item) => CULTURE_SHEETS.has(item.sheetName)).length
+  return held > size
+}
+
 function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   // There is no baton, so the panel is never disabled for turn reasons. Out of
   // turn the player is asked first, and the server hears `confirmedOutOfTurn`
   // only after a yes. It still refuses without it.
   const question = outOfTurnQuestion(view)
   const canDraw = view.you !== null
+  const handOver = cultureHandIsOver(view)
   const draw = (sheet: SheetName): void => {
-    if (question === null) {
+    // Each warning is its own question; a no to any of them draws nothing.
+    if (question !== null && !window.confirm(question)) return
+    const level = cultureLevelOf(sheet)
+    const markerLevel = cultureMarkerSheetLevel(view)
+    if (level !== null && handOver && !window.confirm(cultureHandQuestion(view))) return
+    if (
+      level !== null &&
+      markerLevel !== null &&
+      level !== markerLevel &&
+      !window.confirm(cultureLevelQuestion(level, markerLevel))
+    ) {
+      return
+    }
+    const confirmedOverLimit = level !== null && handOver
+    if (confirmedOverLimit) {
+      void run(() => api.draw(gameId, sheet, question !== null, true))
+    } else if (question === null) {
       void run(() => api.draw(gameId, sheet))
-    } else if (window.confirm(question)) {
+    } else {
       void run(() => api.draw(gameId, sheet, true))
     }
   }
@@ -780,6 +825,11 @@ function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
             ? 'It is your turn.'
             : 'It is not your turn. You will be asked before you draw.'}
       </p>
+      {handOver && (
+        <p role="status" className="assisted-warning">
+          Your culture hand is over its size. Drawing a culture card asks first.
+        </p>
+      )}
       <div className="row">
         {DRAWABLE.map(({ sheet, label }) => (
           <button
@@ -808,9 +858,20 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   const items = view.you?.items ?? []
   const opponents = view.opponents
   const blockadedTypes = view.you?.blockadedGreatPersonTypes ?? []
+  const cultureHeld = items.filter(
+    (item) => item.kind === 'cultureI' || item.kind === 'cultureII' || item.kind === 'cultureIII',
+  ).length
+  const cultureSize = view.you?.stats?.cultureHandSize
 
   return (
     <CollapsiblePanel id="hand" title={`Your hand (${items.length})`} defaultOpen>
+      {cultureSize !== undefined && cultureHeld > cultureSize && (
+        <p role="status" className="assisted-warning culture-hand-warning">
+          Culture hand limit: you hold {cultureHeld} culture cards, over your culture hand size
+          of {cultureSize}. Discard down to {cultureSize} or increase your culture hand size
+          before you can advance, draw or receive another culture card.
+        </p>
+      )}
       <LootControls
         items={items}
         opponents={opponents}

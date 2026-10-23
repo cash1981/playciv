@@ -324,6 +324,28 @@ export interface BoardPiece {
 // History
 // ---------------------------------------------------------------------------
 
+/** What changes when a piece is turned over: which asset it shows and the box it fills. */
+export interface PieceFace {
+  readonly assetId: string
+  readonly path: string
+  readonly label: string
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
+/** The face a piece shows now. */
+export const faceOf = (piece: BoardPiece): PieceFace => ({
+  assetId: piece.assetId,
+  path: piece.path,
+  label: piece.label,
+  x: piece.x,
+  y: piece.y,
+  width: piece.width,
+  height: piece.height,
+})
+
 /**
  * One change to the pieces on the board.
  *
@@ -358,6 +380,13 @@ export type BoardChange =
       readonly pieceId: string
       readonly from: number | null
       readonly to: number | null
+    }
+  /** A piece turned over to its other face (the city marker to its walled side): the same piece, with another asset and size. */
+  | {
+      readonly kind: 'flip'
+      readonly pieceId: string
+      readonly from: PieceFace
+      readonly to: PieceFace
     }
   | {
       readonly kind: 'reorder'
@@ -1243,6 +1272,8 @@ export function applyChange(
       return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, coinTokens: change.to } : piece)
     case 'productionOverride':
       return pieces.map((piece) => piece.id === change.pieceId ? withProductionOverride(piece, change.to) : piece)
+    case 'flip':
+      return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ...change.to } : piece)
     case 'reorder': {
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces
@@ -1289,6 +1320,8 @@ export function revertChange(
       return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, coinTokens: change.from } : piece)
     case 'productionOverride':
       return pieces.map((piece) => piece.id === change.pieceId ? withProductionOverride(piece, change.from) : piece)
+    case 'flip':
+      return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ...change.from } : piece)
     case 'reorder': {
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces

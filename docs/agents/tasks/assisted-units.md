@@ -37,7 +37,7 @@ The same Build button also produces an army figure, a scout figure, or a militar
 - The `build` action handles the new items: figures place a figure piece centred on the chosen square through the board history (asset `figures/<colour>army` and `figures/<colour>scout`, colour from `player.color` lower case), units draw a card with no square. All other steps are shared with buildings: recompute from fresh state, pay trade, use up the Building Program marker, one public log line with `assistedActionId`, a record that stores what `reverse` needs. `reverse` removes the figure (refusing when it moved off its square) or returns the card, refunds the trade and restores the marker.
 - `isAssistedBoardChange` also covers the placed figure (the unit has no board change).
 - Projection and route: the payload parser accepts the new item shapes; nothing new is public except the log line; hidden information tests (the drawn card never appears in another viewer's projection, the public log line or the public record).
-- Web: the picker lists figures and units with clear labels and a heading that separates "Figures (placed on the map)" from "Units (private card)" and "Buildings". A figure enters square picking as buildings do. A unit has no square: choosing it shows the confirm bar at once (item, city, cost, trade) and Confirm builds it. The Cities panel keeps working. FAQ and README sentences.
+- Web: the picker lists figures and units with clear labels and a heading that separates "Figures (placed on the map)" from "Units (private card)" and "Buildings". A figure enters square picking as buildings do. A unit has no square: choosing it shows the confirm bar at once (item, city, cost, trade) and Confirm builds it. The Cities panel keeps working. [Moved to Your actions, see decisions.md] FAQ and README sentences.
 - Tests at engine, server and web level.
 
 **Out, and why:**
@@ -55,7 +55,7 @@ The same Build button also produces an army figure, a scout figure, or a militar
 - `packages/engine/src/build-options.ts`, `building-data.ts`, `assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/board.ts`
 - `packages/engine/test/assisted-units*.test.ts`, `hidden-info.test.ts`
 - `packages/server/src/routes/play.ts`, `packages/server/test/assisted-units*.test.ts`
-- `packages/web/src/lib/api.ts`, `views/BuildPicker.tsx`, `buildFlow.ts`, `CitiesPanel.tsx`, their css and tests, `FaqView.tsx`
+- `packages/web/src/lib/api.ts`, `views/BuildPicker.tsx`, `buildFlow.ts`, `CitiesPanel.tsx`, their css (`CitiesPanel.css`, now `CityCard.css`) and tests, `FaqView.tsx`
 - `docs/agents/decisions.md`, `state.md`, `README.md`
 
 ## Acceptance criteria

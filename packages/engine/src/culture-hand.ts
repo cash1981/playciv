@@ -83,3 +83,53 @@ export function cultureHandSizeOf(state: GameState, player: Playerhand): number 
 
   return Math.max(size, BASE_CULTURE_HAND_SIZE)
 }
+
+/** Culture cards in the player's hand, hidden or revealed: what the hand size is measured against. */
+export function cultureCardsHeld(player: Playerhand): number {
+  return player.items.filter(
+    (item) => item.kind === 'cultureI' || item.kind === 'cultureII' || item.kind === 'cultureIII',
+  ).length
+}
+
+/**
+ * Whether the hand holds more culture cards than its size. Such a player must
+ * discard (or raise the size) before any culture card comes in, by advance,
+ * draw or gift. A hand exactly at its size may take one more and sit one over
+ * while the player decides which to discard.
+ */
+export function isCultureHandOver(state: GameState, player: Playerhand): boolean {
+  return cultureCardsHeld(player) > cultureHandSizeOf(state, player)
+}
+
+/** Why a culture card cannot come in now, or `undefined` when the hand has room to take it. */
+export function cultureHandBlock(state: GameState, player: Playerhand): string | undefined {
+  if (!isCultureHandOver(state, player)) return undefined
+  const held = cultureCardsHeld(player)
+  const size = cultureHandSizeOf(state, player)
+  return `You hold ${held} culture cards, over the culture hand size of ${size}. Discard down to ${size} or increase the culture hand size before another culture card can be received.`
+}
+
+/**
+ * How many culture cards the hand would be over its size after `incoming` more. A
+ * player may hold one card above the size while deciding which to discard, so the
+ * callers warn rather than refuse. Zero when the hand fits.
+ */
+export function cultureHandOverflow(state: GameState, player: Playerhand, incoming = 0): number {
+  return Math.max(0, cultureCardsHeld(player) + incoming - cultureHandSizeOf(state, player))
+}
+
+/** The sentence that tells a player their culture hand is over its size, or `undefined` when it fits. */
+export function cultureHandWarning(
+  state: GameState,
+  player: Playerhand,
+  incoming = 0,
+): string | undefined {
+  const over = cultureHandOverflow(state, player, incoming)
+  if (over === 0) return undefined
+  const held = cultureCardsHeld(player) + incoming
+  const size = cultureHandSizeOf(state, player)
+  if (incoming > 0) {
+    return `Culture hand limit: this card brings your hand to ${held} culture cards, over your culture hand size of ${size}. You may hold it while you decide which to discard, but you must discard down to ${size} or increase your culture hand size before you can receive another culture card.`
+  }
+  return `Culture hand limit: you hold ${held} culture cards, over your culture hand size of ${size}. Discard down to ${size} or increase your culture hand size before you can advance, draw or receive another culture card.`
+}

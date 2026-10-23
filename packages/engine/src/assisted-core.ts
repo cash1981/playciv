@@ -49,7 +49,7 @@ export interface BlockedAvailability {
 
 /** Whether an action can be pressed now. A union, so `status !== 'ready'` narrows to the reason it is blocked. */
 export type AssistedAvailability =
-  | { readonly status: 'ready'; readonly reason: string }
+  | { readonly status: 'ready'; readonly reason: string; readonly warning?: string }
   | BlockedAvailability
 
 export const READY: AssistedAvailability = { status: 'ready', reason: 'Ready to use.' }
@@ -168,6 +168,23 @@ export interface StartBuildingProgramPayload {
 }
 
 /**
+ * What `devoteToTheArts` carries: the city, the scouts whose squares are sent to it, and
+ * optionally the culture the player typed instead of the estimate.
+ */
+export interface DevoteToTheArtsPayload {
+  readonly cityPieceId: string
+  readonly scoutPieceIds?: readonly string[]
+  readonly culture?: number
+}
+
+/** What `harvest` carries: the city, the resource, and the scout when the resource is under one rather than in the outskirts. */
+export interface HarvestPayload {
+  readonly cityPieceId: string
+  readonly resource: string
+  readonly scoutPieceId?: string
+}
+
+/**
  * What `upgradeBuildings` carries: the asset id of one basic building to flip
  * (`buildings/granary`), or nothing to flip every family that can be flipped.
  */
@@ -202,7 +219,7 @@ export interface InvestPayload {
 }
 
 /** What `feudalismHarvest` carries: the city whose outskirts are harvested, and the resource. */
-export interface HarvestPayload {
+export interface FeudalismHarvestPayload {
   readonly cityPieceId: string
   readonly resource: string
 }
@@ -222,11 +239,13 @@ export type AssistedPayload =
   | ChooseRewardPayload
   | BuildPayload
   | StartBuildingProgramPayload
+  | DevoteToTheArtsPayload
+  | HarvestPayload
   | UpgradeBuildingsPayload
   | PlayCardPayload
   | GovernmentPayload
   | InvestPayload
-  | HarvestPayload
+  | FeudalismHarvestPayload
   | FoundCityPayload
   | AssignScoutPayload
 
@@ -240,6 +259,11 @@ export interface ApplyContext {
    * again. It pays and applies as a first use; only the log line says so.
    */
   readonly confirmedRepeat: boolean
+  /**
+   * The player answered yes to "this city has already acted this turn, act again?". Read only by the
+   * four city actions, which refuse a second action of one city without it.
+   */
+  readonly confirmedAnotherCityAction: boolean
 }
 
 export type AssistedActionDefinition = {
@@ -279,11 +303,17 @@ export type AssistedActionDefinition = {
   readonly strictOnce?: boolean
   availability(state: GameState, playerId: string): AssistedAvailability
   apply(state: GameState, player: Playerhand, context: ApplyContext): Result<Applied, EngineError>
+  /**
+   * Takes the action back. `pieceMayHaveMoved` is set when the owner removes the
+   * placed piece by hand: the piece is then wherever it was moved to, so a build
+   * and a Building Program start do not insist that it is still on its square.
+   */
   reverse(
     state: GameState,
     player: Playerhand,
     record: AssistedActionRecord,
     at: string | null,
+    pieceMayHaveMoved?: boolean,
   ): Result<Reversed, EngineError>
 }
 
@@ -349,5 +379,60 @@ export function placeBack(
       ],
       redo: [],
     },
+  }
+}
+
+/** The assisted actions that are a city's action for the turn (base rules p. 15: build, devote to the arts or harvest; W&W p. 7: start a Building Program). */
+export const CITY_ACTION_LABELS: Readonly<Partial<Record<AssistedActionKind, string>>> = {
+  build: 'Build',
+  startBuildingProgram: 'Start Building Program',
+  devoteToTheArts: 'Devote to the Arts',
+  harvest: 'Harvest',
+}
+
+/**
+ * The city actions this city has taken this turn that are still in force (not undone), by name, oldest
+ * first. A city may take one a turn as a rule; the game does not forbid more, it asks first.
+ */
+export function cityActionsTakenThisTurn(state: GameState, player: Playerhand, cityPieceId: string): readonly string[] {
+  const turn = turnStatus(state).currentTurn
+  return state.assistedActions.flatMap((record) => {
+    const label = CITY_ACTION_LABELS[record.kind]
+    const effect = record.effect
+    if (
+      label === undefined ||
+      record.status !== 'applied' ||
+      record.playerId !== player.playerId ||
+      record.turnNumber !== turn ||
+      !('cityPieceId' in effect) ||
+      effect.cityPieceId !== cityPieceId
+    ) {
+      return []
+    }
+    return [label]
+  })
+}
+
+export const SECOND_ACTION_NOTE = ' (a second action of this city this turn, confirmed by the player)'
+
+/**
+ * What the city's earlier actions this turn mean for one more: nothing to say, a note for the log
+ * when the player confirmed it, or the refusal that makes the client ask first.
+ */
+export function earlierCityActions(
+  state: GameState,
+  player: Playerhand,
+  city: { readonly cityPieceId: string; readonly label: string },
+  confirmed: boolean,
+): { readonly refusal: BlockedAvailability | undefined; readonly note: string } {
+  const taken = cityActionsTakenThisTurn(state, player, city.cityPieceId)
+  if (taken.length === 0) return { refusal: undefined, note: '' }
+  if (confirmed) return { refusal: undefined, note: SECOND_ACTION_NOTE }
+  return {
+    refusal: blocked(
+      'used',
+      `${city.label} has already acted this turn (${taken.join(', ')}). A city takes one action each turn; you are asked to confirm before it takes another.`,
+    ),
+    note: '',
   }
 }

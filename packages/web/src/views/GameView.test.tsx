@@ -3,7 +3,7 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Item, PlayableCard } from '@civ/engine'
+import type { Item } from '@civ/engine'
 
 import { useIsBusy } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
@@ -17,6 +17,7 @@ import {
   activePlayerOf,
   chatAuthorsOf,
   HandItem,
+  cultureLevelQuestion,
   gameMenuGate,
   winnerCandidatesOf,
   loadAfterKnownRevision,
@@ -24,13 +25,7 @@ import {
 } from './GameView.js'
 
 vi.mock('./BoardView.js', () => ({
-  BoardView: ({
-    viewerCivilization,
-    pickSquares,
-  }: {
-    viewerCivilization?: string | null
-    pickSquares?: { cells: readonly unknown[] }
-  }) => (
+  BoardView: ({ viewerCivilization, pickSquares }: { viewerCivilization?: string | null; pickSquares?: { cells: readonly unknown[] } }) => (
     <section
       id={BOARD_PANEL_ID}
       tabIndex={-1}
@@ -252,6 +247,32 @@ const renderOrder = async (view: PlayerView, player: PlayerDto | null = { userna
   return rendered
 }
 
+/** Renders the page and opens the City Management tab of Your actions, where the cities and their orders are. */
+const renderOrderInCityManagement = async (
+  view: PlayerView,
+  player: PlayerDto | null = { username: 'viewer' } as unknown as PlayerDto,
+) => {
+  const rendered = await renderOrder(view, player)
+  const tab = screen.queryByRole('tab', { name: /^City management/ })
+  if (tab !== null) fireEvent.click(tab)
+  return rendered
+}
+
+/** A city of the projection's `cities` list, with the fields the card reads. */
+const cityOf = (pieceId: string, label: string): Record<string, unknown> => ({
+  pieceId,
+  label,
+  outskirts: 4,
+  outskirtsDetail: [],
+  modifiers: [],
+  buildingProgram: false,
+  estimate: 4,
+  withBuildingProgram: null,
+  override: null,
+  effective: 4,
+  notes: [],
+})
+
 /** The page top to bottom: each panel heading, and the board, after the header's own title. */
 const pageOrder = (container: HTMLElement): string[] =>
   Array.from(container.querySelectorAll('h1, h2, [data-testid="board"]'))
@@ -260,9 +281,8 @@ const pageOrder = (container: HTMLElement): string[] =>
     .map((element) => (element.getAttribute('data-testid') === 'board' ? 'Board' : (element.textContent ?? '').replace(/[−+]$/, '')))
 
 describe('primary game panel order', () => {
-  // Changed on purpose (#260): the board no longer follows the header directly.
-  // It was header, board, Draw, Chat and orders, Log, Your hand, and so on.
-  it('runs Your actions, the board, Your cards, Draw, the tech tree, chat, the rest, then the log and the revealed feed', async () => {
+  // Changed on purpose (#260): Your actions sat above the board for a while, and now sits right under it, before Your hand.
+  it('runs the board, Your actions, Your cards, Draw, the tech tree, chat, the rest, then the log and the revealed feed', async () => {
     const view = orderView({
       you: {
         playerId: 'p1',
@@ -275,8 +295,8 @@ describe('primary game panel order', () => {
     const { container } = await renderOrder(view)
 
     expect(pageOrder(container)).toEqual([
-      'Your actions',
       'Board',
+      'Your actions',
       'Your hand (0)',
       'Draw',
       'Techs',
@@ -285,11 +305,86 @@ describe('primary game panel order', () => {
       'Battle',
       'Social policy',
       'Player status',
-      'Cities (0)',
       'Wonders',
       'Log',
       'Revealed',
     ])
+  })
+
+  it('puts the viewer’s own cities in Your actions and has no panel for the opponents’ cities', async () => {
+    const view = orderView({
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        items: [],
+        pendingRewards: [],
+        cities: [cityOf('mine', 'Capital D5')],
+      },
+      opponents: [{ playerId: 'p2', username: 'rival', cities: [cityOf('theirs', 'City H8')] }],
+    })
+    const { container } = await renderOrderInCityManagement(view)
+
+    expect(pageOrder(container)).toEqual([
+      'Board',
+      'Your actions',
+      'Your hand (0)',
+      'Draw',
+      'Techs',
+      'Chat and orders',
+      "Other players' hands",
+      'Battle',
+      'Social policy',
+      'Player status',
+      'Wonders',
+      'Log',
+      'Revealed',
+    ])
+    const actions = screen.getByRole('heading', { name: 'Your actions' }).closest('section') as HTMLElement
+    expect(within(actions).getByRole('heading', { name: 'Capital D5' })).toBeTruthy()
+    // The opponent's city is on the board and nowhere else: no panel lists it.
+    expect(screen.queryByRole('heading', { name: 'City H8' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: /cities \(/i })).toBeNull()
+    const ids = Array.from(container.querySelectorAll('[id]')).map((element) => element.id)
+    expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([])
+  })
+
+  it('warns in Your hand when the culture cards exceed the culture hand size', async () => {
+    const cultureCard = (id: string) => ({ id, kind: 'cultureI', sheetName: 'CULTURE_1', name: id, hidden: true, ownerId: 'p1' })
+    const you = (cards: number, size: number) => ({
+      playerId: 'p1',
+      username: 'viewer',
+      items: Array.from({ length: cards }, (_, index) => cultureCard(`c${index}`)),
+      pendingRewards: [],
+      stats: { cultureHandSize: size },
+    })
+    await renderOrder(orderView({ you: you(3, 2) }))
+    expect(screen.getByText(/Culture hand limit: you hold 3 culture cards, over your culture hand size of 2/)).toBeTruthy()
+    expect(screen.getByText('Your culture hand is over its size. Drawing a culture card asks first.')).toBeTruthy()
+    cleanup()
+    await renderOrder(orderView({ you: you(2, 2) }))
+    expect(screen.queryByText(/Culture hand limit/)).toBeNull()
+    expect(screen.queryByText(/Drawing a culture card asks first/)).toBeNull()
+  })
+
+  it('has Your actions directly under the board and Your cards right after it', async () => {
+    const view = orderView({
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        items: [],
+        pendingRewards: [],
+        availableActions: [{ action: 'cultureAdvance', label: 'Culture', status: 'ready', reason: 'Ready' }],
+      },
+    })
+    const { container } = await renderOrder(view)
+    const board = screen.getByTestId('board')
+    const actions = screen.getByRole('heading', { name: 'Your actions' }).closest('section')
+    const panelStack = container.querySelector('.panel-stack')
+    const hand = screen.getByRole('heading', { name: 'Your hand (0)' }).closest('section')
+
+    expect(board.nextElementSibling).toBe(actions)
+    expect(actions?.nextElementSibling).toBe(panelStack)
+    expect(panelStack?.children[0]).toBe(hand)
   })
 
   it('has Your cards directly under the board, and no Your actions panel when there is nothing to show', async () => {
@@ -303,7 +398,7 @@ describe('primary game panel order', () => {
     expect(screen.queryByRole('heading', { name: 'Your actions' })).toBeNull()
   })
 
-  it('leaves the chat panel out for a spectator without an account, and its shortcut with it', async () => {
+  it('leaves the chat panel out for a spectator without an account, and keeps the shortcuts', async () => {
     const { container } = await renderOrder(orderView(), null)
     expect(pageOrder(container)).not.toContain('Chat and orders')
     expect(screen.getByRole('navigation', { name: 'Go to' })).toBeTruthy()
@@ -339,6 +434,56 @@ describe('game page shortcuts', () => {
     expect(scrolled).toEqual([heading.closest('section')])
     expect(document.activeElement).toBe(heading.querySelector('button'))
   })
+
+  const shortcutLabels = (): (string | null)[] =>
+    Array.from(screen.getByRole('navigation', { name: 'Go to' }).querySelectorAll('button')).map(
+      (button) => button.textContent,
+    )
+  const withCity = (overrides: Record<string, unknown> = {}): PlayerView =>
+    orderView({
+      you: { playerId: 'p1', username: 'viewer', items: [], pendingRewards: [], cities: [cityOf('mine', 'Capital D5')], ...overrides },
+    })
+
+  it('offers Board, Actions, Your cards and Tech tree to a player who has Your actions', async () => {
+    await renderOrder(withCity())
+    expect(shortcutLabels()).toEqual(['Board', 'Actions', 'Your cards', 'Tech tree'])
+  })
+
+  it('scrolls Your actions into view and focuses its heading button', async () => {
+    await renderOrder(withCity())
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+    const heading = screen.getByRole('heading', { name: 'Your actions' })
+    expect(scrolled).toEqual([heading.closest('section')])
+    expect(document.activeElement).toBe(heading.querySelector('button'))
+  })
+
+  it('offers no Actions button to a spectator, who has no Your actions panel', async () => {
+    await renderOrder(orderView(), null)
+    expect(shortcutLabels()).toEqual(['Board', 'Your cards', 'Tech tree'])
+    cleanup()
+
+    // Signed in but not seated in the game: the view has no `you`.
+    await renderOrder(orderView())
+    expect(shortcutLabels()).toEqual(['Board', 'Your cards', 'Tech tree'])
+  })
+
+  it('offers no Actions button to a player with nothing in Your actions yet, before the game has a turn', async () => {
+    await renderOrder(orderView({ you: { playerId: 'p1', username: 'viewer', items: [], pendingRewards: [], cities: [] } }))
+    expect(screen.queryByRole('heading', { name: 'Your actions' })).toBeNull()
+    expect(shortcutLabels()).toEqual(['Board', 'Your cards', 'Tech tree'])
+  })
+
+  it('the card choice button still goes to Your actions', async () => {
+    await renderOrder(
+      withCity({
+        pendingRewards: [{ id: 'adv-1', kind: 'event', level: 2, step: 9, keep: 1, candidates: [] }],
+        availableActions: [],
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: '1 card choice waiting' }))
+    const heading = screen.getByRole('heading', { name: 'Your actions (1 choice waiting)' })
+    expect(scrolled).toEqual([heading.closest('section')])
+  })
 })
 
 const seat = (
@@ -357,6 +502,7 @@ const headerView = (
   youSeat: Record<string, unknown> | null,
   opponents: readonly Record<string, unknown>[],
   activeUsername: string | null,
+  waitingFor?: readonly { readonly username: string; readonly phase: string }[],
 ): PlayerView =>
   ({
     rev: 1,
@@ -366,7 +512,7 @@ const headerView = (
     activeTurn:
       activeUsername === null
         ? null
-        : { playerId: `id-${activeUsername}`, username: activeUsername, turnNumber: 1, phase: 'SOT', waitingFor: [{ username: activeUsername, phase: 'SOT' }] },
+        : { playerId: `id-${activeUsername}`, username: activeUsername, turnNumber: 1, phase: 'SOT', waitingFor: waitingFor ?? [{ username: activeUsername, phase: 'SOT' }] },
     you: youSeat,
     opponents,
     board: {},
@@ -427,6 +573,32 @@ describe('game header chips (issue #206)', () => {
     )
     expect(chipTexts(container)).toEqual(['Romans', 'Red'])
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Your turn')
+  })
+
+  it('puts the chips and the title on the player furthest behind, not the holder', async () => {
+    const container = await renderHeader(
+      headerView(
+        seat('viewer', { civilization: { name: 'Romans' }, color: 'Red' }),
+        [seat('s3s3', { civilization: greeks, color: 'Green' })],
+        'viewer',
+        [
+          { username: 'viewer', phase: 'MOVEMENT' },
+          { username: 's3s3', phase: 'CM' },
+        ],
+      ),
+    )
+    expect(chipTexts(container)).toEqual(['Greeks', 'Green'])
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("Turn 1 · s3s3's turn — city management phase")
+  })
+
+  it('keeps naming the turn holder in a tie, so the viewer does not read "Your turn" at the start of a round', async () => {
+    await renderHeader(
+      headerView(seat('viewer'), [seat('s3s3')], 's3s3', [
+        { username: 'viewer', phase: 'SOT' },
+        { username: 's3s3', phase: 'SOT' },
+      ]),
+    )
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("Turn 1 · s3s3's turn — start of turn phase")
   })
 
   it('has no civ chip while the civilization is not revealed', async () => {
@@ -591,10 +763,32 @@ describe('chatAuthorsOf and activePlayerOf (issue #206)', () => {
     )
   })
 
-  it('finds the holder of the active turn among the seats, the viewer included', () => {
+  it('finds the player in focus among the seats, the viewer included, when only the holder is waited for', () => {
     const view = headerView(seat('viewer'), [seat('s3s3')], 's3s3')
     expect(activePlayerOf(view)?.username).toBe('s3s3')
     expect(activePlayerOf(headerView(seat('viewer'), [seat('s3s3')], 'viewer'))?.username).toBe('viewer')
+  })
+
+  it('finds the player furthest behind, not the holder of the turn', () => {
+    const view = headerView(seat('viewer'), [seat('s3s3')], 'viewer', [
+      { username: 'viewer', phase: 'MOVEMENT' },
+      { username: 's3s3', phase: 'CM' },
+    ])
+    expect(activePlayerOf(view)?.username).toBe('s3s3')
+    const behind = headerView(seat('viewer'), [seat('s3s3')], 's3s3', [
+      { username: 'viewer', phase: 'CM' },
+      { username: 's3s3', phase: 'MOVEMENT' },
+    ])
+    expect(activePlayerOf(behind)?.username).toBe('viewer')
+  })
+
+  it('names the turn holder in a tie, whoever is looking', () => {
+    const tie = [
+      { username: 'viewer', phase: 'SOT' },
+      { username: 's3s3', phase: 'SOT' },
+    ]
+    expect(activePlayerOf(headerView(seat('viewer'), [seat('s3s3')], 's3s3', tie))?.username).toBe('s3s3')
+    expect(activePlayerOf(headerView(seat('viewer'), [seat('s3s3')], 'viewer', tie))?.username).toBe('viewer')
   })
 
   it('names nobody when the active turn belongs to someone who left, or there is none', () => {
@@ -849,11 +1043,12 @@ describe('the game page (issue #215)', () => {
     screen.getByRole('button', { name: label }) as HTMLButtonElement
 
   describe('the page', () => {
-    it('shows the timeline and says whose turn it is and the phase', async () => {
+    it('shows the timeline and names the player furthest behind with their phase', async () => {
       await renderGame(chatView('Bob'))
 
+      // Alice is on City management, Bob is still on Start of turn: Bob holds the round up.
       expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-        "Turn 4 · Bob's turn — city management phase",
+        "Turn 4 · Bob's turn — start of turn phase",
       )
       expect(screen.getByRole('heading', { name: 'Chat and orders' })).toBeTruthy()
       // The log stays
@@ -861,11 +1056,40 @@ describe('the game page (issue #215)', () => {
       expect(screen.getByRole('list', { name: 'Turn progress' }).textContent).toContain('BobSOT')
     })
 
-    it('has no End turn or Take the turn buttons, because there is no baton', async () => {
+    it('has no Take the turn button, because there is no baton', async () => {
       await renderGame(chatView('Alice'))
 
-      expect(screen.queryByText('End turn')).toBeNull()
       expect(screen.queryByText('Take the turn')).toBeNull()
+    })
+
+    it('ends the viewer’s phase from End turn in Your actions, then shows the next one', async () => {
+      const markDone = vi.spyOn(api, 'markDone').mockResolvedValue({} as PlayerView)
+      await renderGame(chatView('Alice'))
+      const panel = screen.getByRole('group', { name: 'Your actions' })
+
+      // The reload after the press reads the projection the server would send
+      const later = chatView('Alice', {
+        activeTurn: {
+          playerId: 'id-Alice',
+          username: 'Alice',
+          turnNumber: 4,
+          phase: 'MOVEMENT',
+          startPlayer: 'Bob',
+          waitingFor: [
+            { username: 'Alice', phase: 'MOVEMENT' },
+            { username: 'Bob', phase: 'SOT' },
+          ],
+        },
+      })
+      vi.spyOn(api, 'game').mockResolvedValue(later)
+      fireEvent.click(within(panel).getByRole('button', { name: 'End turn: mark City management as done' }))
+
+      await waitFor(() => expect(markDone).toHaveBeenCalledExactlyOnceWith('game-1', 'CM', 4))
+      expect(
+        await within(screen.getByRole('group', { name: 'Your actions' })).findByRole('button', {
+          name: 'End turn: mark Movement as done',
+        }),
+      ).toBeTruthy()
     })
 
     it('shows a signed-out spectator the log but not the timeline, which needs a player', async () => {
@@ -947,6 +1171,79 @@ describe('the game page (issue #215)', () => {
       fireEvent.click(drawButton('Ancient wonder'))
 
       await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'ANCIENT_WONDERS', true))
+    })
+
+    describe('culture cards', () => {
+      const cultureCards = (count: number) =>
+        Array.from({ length: count }, (_, index) => ({
+          id: `c${index}`,
+          kind: 'cultureI',
+          sheetName: 'CULTURE_1',
+          name: `card ${index}`,
+          hidden: true,
+          ownerId: 'id-Alice',
+        }))
+      const aliceWith = (marker: number, cards: number, size = 5) =>
+        chatView('Alice', {}, { cultureMarkerLevel: marker, items: cultureCards(cards), stats: { cultureHandSize: size } })
+
+      it('asks "Are you sure?" for a deck that is not the level of the marker, and draws only after Yes', async () => {
+        const draw = vi.spyOn(api, 'draw').mockResolvedValue(aliceWith(9, 0))
+        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+        await renderGame(aliceWith(9, 0))
+
+        fireEvent.click(drawButton('Culture I'))
+
+        expect(confirm).toHaveBeenCalledExactlyOnceWith(cultureLevelQuestion(1, 2))
+        await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'CULTURE_1'))
+      })
+
+      it('draws nothing after No to the level question', async () => {
+        const draw = vi.spyOn(api, 'draw').mockResolvedValue(aliceWith(9, 0))
+        vi.spyOn(window, 'confirm').mockReturnValue(false)
+        await renderGame(aliceWith(9, 0))
+
+        fireEvent.click(drawButton('Culture III'))
+
+        expect(window.confirm).toHaveBeenCalledExactlyOnceWith(cultureLevelQuestion(3, 2))
+        await Promise.resolve()
+        expect(draw).not.toHaveBeenCalled()
+      })
+
+      it('does not ask for the level of the marker, for Start (level I) or for other decks', async () => {
+        const draw = vi.spyOn(api, 'draw').mockResolvedValue(aliceWith(9, 0))
+        const confirm = vi.spyOn(window, 'confirm')
+        await renderGame(aliceWith(9, 0))
+        fireEvent.click(drawButton('Culture II'))
+        await waitFor(() => expect(draw).toHaveBeenCalledTimes(1))
+        await waitFor(() => expect(drawButton('Infantry').disabled).toBe(false))
+        fireEvent.click(drawButton('Infantry'))
+        await waitFor(() => expect(draw).toHaveBeenCalledTimes(2))
+        expect(confirm).not.toHaveBeenCalled()
+        cleanup()
+        await renderGame(aliceWith(0, 0))
+        fireEvent.click(drawButton('Culture I'))
+        expect(confirm).not.toHaveBeenCalled()
+      })
+
+      it('asks before a culture card when the hand is over its size, and sends the confirmation after Yes', async () => {
+        const draw = vi.spyOn(api, 'draw').mockResolvedValue(aliceWith(9, 3, 2))
+        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+        await renderGame(aliceWith(9, 3, 2))
+
+        fireEvent.click(drawButton('Culture II'))
+
+        expect(confirm).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(/over its size of 2/))
+        await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'CULTURE_2', false, true))
+      })
+
+      it('does not ask about the hand for other decks', async () => {
+        const draw = vi.spyOn(api, 'draw').mockResolvedValue(aliceWith(9, 3, 2))
+        const confirm = vi.spyOn(window, 'confirm')
+        await renderGame(aliceWith(9, 3, 2))
+        fireEvent.click(drawButton('Infantry'))
+        await waitFor(() => expect(draw).toHaveBeenCalledExactlyOnceWith('game-1', 'INFANTRY'))
+        expect(confirm).not.toHaveBeenCalled()
+      })
     })
 
     it('does not ask, or send the flag, when the viewer is the one who is up', async () => {
@@ -1048,11 +1345,6 @@ describe('the ended-battle banner', () => {
   })
 })
 
-/** The build and city buttons are in the City Management tab; the viewer starts in Start of turn. */
-const openCityManagement = (): void => {
-  fireEvent.click(screen.getByRole('tab', { name: /^City management/ }))
-}
-
 describe('the Build flow in the game page', () => {
   const library = {
     assetId: 'buildings/library',
@@ -1097,12 +1389,11 @@ describe('the Build flow in the game page', () => {
       ...overrides,
     })
 
-  beforeEach(() => localStorage.setItem('civ.panel.cities', 'true'))
-  afterEach(() => localStorage.removeItem('civ.panel.cities'))
+  beforeEach(() => localStorage.setItem('civ.panel.actions', 'true'))
+  afterEach(() => localStorage.removeItem('civ.panel.actions'))
 
   it('puts the board in pick mode after a choice and takes it out on Cancel', async () => {
-    await renderOrder(viewWith())
-    openCityManagement()
+    await renderOrderInCityManagement(viewWith())
     expect(screen.getByTestId('board').getAttribute('data-pick-count')).toBe('off')
     fireEvent.click(screen.getByRole('button', { name: 'Build in Capital D5' }))
     fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
@@ -1125,12 +1416,11 @@ describe('the Build flow in the game page', () => {
       squares: [],
     }
     const withUnit = [{ ...buildOptions[0], choices: [library, infantry] }]
-    await renderOrder(
+    await renderOrderInCityManagement(
       viewWith({ you: { playerId: 'p1', username: 'viewer', items: [], pendingRewards: [], cities: [city], buildOptions: withUnit } }),
     )
-    openCityManagement()
     fireEvent.click(screen.getByRole('button', { name: 'Build in Capital D5' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Units' })); fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
     expect(screen.getByRole('group', { name: 'Build' }).textContent).toContain('Build an infantry unit in Capital D5')
     expect((within(screen.getByRole('group', { name: 'Build' })).getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(false)
     // Nothing to pick: the board gets no squares
@@ -1138,14 +1428,14 @@ describe('the Build flow in the game page', () => {
   })
 
   it('has no Build button once the game is locked, and none for a spectator', async () => {
-    const locked = await renderOrder(viewWith({ active: false }))
-    openCityManagement()
-    expect(screen.getByRole('heading', { name: 'Cities (1)' })).toBeTruthy()
+    const locked = await renderOrderInCityManagement(viewWith({ active: false }))
+    // The city card and its figure stay in Your actions; only the controls go.
+    expect(screen.getByRole('heading', { name: 'Capital D5' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
     locked.unmount()
 
     // A spectator's view has no `you`, so there are no cards of their own and no options.
-    await renderOrder(orderView(), null)
+    await renderOrderInCityManagement(orderView(), null)
     expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
   })
 })
@@ -1169,6 +1459,8 @@ describe('the city actions in the game page', () => {
       cityPieceId: 'city-1',
       label: 'Capital B3',
       startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
+      devoteToTheArts: { status: 'ready', reason: 'Ready.', culture: 1, parts: [], notes: [], scouts: [] },
+      harvest: { status: 'unavailable', reason: 'Nothing to harvest.', choices: [], notes: [] },
     },
   ]
   const upgradeOptions = [
@@ -1196,84 +1488,24 @@ describe('the city actions in the game page', () => {
       ...overrides,
     })
 
-  beforeEach(() => localStorage.setItem('civ.panel.cities', 'true'))
-  afterEach(() => localStorage.removeItem('civ.panel.cities'))
+  beforeEach(() => localStorage.setItem('civ.panel.actions', 'true'))
+  afterEach(() => localStorage.removeItem('civ.panel.actions'))
 
   it('shows the Start button and the Upgrades block to a player in a live game', async () => {
-    await renderOrder(viewWith())
-    openCityManagement()
+    await renderOrderInCityManagement(viewWith())
     expect(screen.getByRole('button', { name: 'Start Building Program in Capital B3' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (1)' })).toBeTruthy()
   })
 
   it('shows neither once the game is locked, and neither to a spectator', async () => {
-    const locked = await renderOrder(viewWith({ active: false }))
-    openCityManagement()
-    expect(screen.getByRole('heading', { name: 'Cities (1)' })).toBeTruthy()
+    const locked = await renderOrderInCityManagement(viewWith({ active: false }))
+    expect(screen.getByRole('heading', { name: 'Capital B3' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
     expect(screen.queryByRole('heading', { name: 'Upgrades' })).toBeNull()
     locked.unmount()
 
-    await renderOrder(orderView(), null)
+    await renderOrderInCityManagement(orderView(), null)
     expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
     expect(screen.queryByRole('heading', { name: 'Upgrades' })).toBeNull()
-  })
-})
-
-describe('HandItem: play a culture or Great Person card (assisted play, part 9)', () => {
-  const counterfeiters: Item = {
-    ...base,
-    id: 'cc-1',
-    sheetName: 'CULTURE_1',
-    kind: 'cultureI',
-    name: 'Counterfeiters',
-    type: null,
-  }
-  const ready: PlayableCard = {
-    itemId: 'cc-1',
-    name: 'Counterfeiters',
-    kind: 'culture',
-    description: 'Start of Turn: Choose another player.',
-    timings: ['SOT'],
-    targets: { kind: 'players', min: 1, max: 1 },
-    prompt: 'Which player discards a coin token?',
-    resources: [],
-    discards: true,
-    status: 'ready',
-    reason: 'Can be played in start of turn, which you are in.',
-  }
-  const view = {
-    rev: 3,
-    you: { playerId: 'me', username: 'Alice', playableCards: [ready] },
-    opponents: [{ playerId: 'bob', username: 'Bob' }],
-  } as unknown as PlayerView
-
-  it('has a Play button on a card that can be played at some time, enabled when it can be played now', () => {
-    render(<HandItem item={counterfeiters} gameId="g" busy={false} run={run} opponents={[]} view={view} playable={ready} />)
-    expect((screen.getByRole('button', { name: 'Play Counterfeiters' }) as HTMLButtonElement).disabled).toBe(false)
-  })
-
-  it('disables the button with the reason when the card cannot be played now', () => {
-    const waiting: PlayableCard = { ...ready, status: 'wrong-phase', reason: 'Played in start of turn. You are in trade.' }
-    render(<HandItem item={counterfeiters} gameId="g" busy={false} run={run} opponents={[]} view={view} playable={waiting} />)
-    expect((screen.getByRole('button', { name: 'Play Counterfeiters' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText('Played in start of turn. You are in trade.')).toBeTruthy()
-  })
-
-  it('has no Play button on a card the engine does not list, or without the viewer’s view', () => {
-    render(<HandItem item={counterfeiters} gameId="g" busy={false} run={run} opponents={[]} view={view} />)
-    expect(screen.queryByRole('button', { name: /^Play / })).toBeNull()
-    cleanup()
-    render(<HandItem item={counterfeiters} gameId="g" busy={false} run={run} opponents={[]} playable={ready} />)
-    expect(screen.queryByRole('button', { name: /^Play / })).toBeNull()
-  })
-
-  it('plays the card from the hand with the player the form names', async () => {
-    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
-    render(<HandItem item={counterfeiters} gameId="g" busy={false} run={run} opponents={[]} view={view} playable={ready} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Play Counterfeiters' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm play' }))
-    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
-    expect(send).toHaveBeenCalledWith('g', 'playCard', expect.any(String), 3, { itemId: 'cc-1', targets: ['bob'] })
   })
 })

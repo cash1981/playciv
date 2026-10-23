@@ -149,7 +149,7 @@ describe('the phase tabs', () => {
     const tabPanel = screen.getByRole('tabpanel')
     expect(within(tabPanel).getByRole('heading', { name: 'Resource abilities' })).toBeTruthy()
     expect(within(tabPanel).getByRole('heading', { name: 'Culture track' })).toBeTruthy()
-    expect(within(tabPanel).getByRole('heading', { name: 'Cities' })).toBeTruthy()
+    expect(within(tabPanel).getByRole('heading', { name: 'Your cities' })).toBeTruthy()
   })
 
   it('follows the viewer to the next phase, and stays where it is when the phase does not change', () => {
@@ -280,9 +280,11 @@ describe('the phase tabs', () => {
     expect(container.textContent).toBe('')
   })
 
-  it('tells a replay or a locked game that city orders are closed', () => {
+  it('keeps a replay or a locked game from ordering anything in the cities', () => {
     renderPanel(viewIn('CM'), { readOnly: true })
-    expect(screen.getByText('City orders are not available in a replay or a locked game.')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Your cities' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Build/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
   })
 })
 

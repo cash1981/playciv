@@ -515,7 +515,7 @@ short groups do not leave empty space. `useritems.html` rendered a heading per
 kind. See [historical interface decisions](docs/history/README.md).
 
 **Cards can be used with a button.** A player with Chivalry, Democracy or
-Printing Press sees a "Your actions" panel, and the same button in the card's
+Printing Press, or with a city on the map, sees a "Your actions" panel, and the same button in the card's
 detail dialog, that does the bookkeeping for the card: Chivalry spends an
 incense (a hut in hand first, otherwise the piece in the player's own area,
 back to the stock) and adds 5 culture; the two coin cards pay and add a coin.
@@ -525,14 +525,20 @@ pays the cost of the next space, moves the player's marker one space and deliver
 the reward of that space: a culture event card (two to choose from with Mysticism)
 or a Great Person card (more to choose from with Organized Religion and the
 Greeks). The cards to choose between are private and a refresh shows the same
-ones. A **Build** button on each of your cities in the Cities panel lists what that
-city can build now, in three groups: buildings, army and scout figures, and
-military units, with the trade to pay for a rush. A building or a figure goes on
-a highlighted square you tap, then you confirm; a unit is a private card that is
+ones. Your cities are in the same "Your actions" panel, each with an estimate of its
+production (not a complete count; you can type a number by hand). The panel sits under
+the board, before your hand, and starts with **End turn**, which ends your open phase.
+A **Build** button on
+each of your cities lists what that city can build now, in groups: buildings, wonders from
+the market, army and scout figures, and
+military units, with the trade to pay for a rush; the reasons for the rest are behind a link.
+A figure is placed by tapping a highlighted square, a building or a wonder by tapping one and
+confirming (a wonder's cost is shown but not checked, and building one draws the next wonder into the market), and a unit is a private card that is
 drawn into your hand with no square, and only its type is public. The piece or
-card, the trade and the log line are one step the vote undo can take back. A **Start
+card, the trade and the log line are one step the vote undo can take back, and so does removing
+the piece yourself before you press End turn (a new line says so). A **Start
 Building Program** button on each of your cities puts the Building Program marker on
-the city centre, and an **Upgrades** block in the Cities panel flips your basic
+the city centre, and an **Upgrades** block in the same panel flips your basic
 buildings to the upgraded form once you have revealed its tech; both are one step
 the vote undo can take back. Typing the
 same thing in chat or editing the counters by hand still works. See
@@ -907,7 +913,7 @@ message is chat or an order tagged with a turn and a phase, orders are public th
 moment they are sent, and a player ends a turn from the Order tab, which marks the
 chosen phase done (and can take it back). There is no baton to pass: anyone can
 write at any time, and Draw only asks for a confirmation when it is not your turn.
-The title says whose turn it is and which phase they are on, and a strip under it
+The title names the player furthest behind (the turn holder among a tie) and the phase they are on, and a strip under it
 shows what each player is missing; a finished game is titled with its winner
 instead, and its replay bar shows only who won. The start player is derived from
 the Start player marker on the board (the player whose area holds it), and the

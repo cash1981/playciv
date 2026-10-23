@@ -22,6 +22,7 @@ import {
   revealTech,
   slotOrigin,
   unwrap,
+  wondersArea,
 } from '@civ/engine'
 import type { BoardPiece, CivItem, GameState } from '@civ/engine'
 
@@ -288,10 +289,13 @@ describe('building over HTTP', () => {
     const after = await response.json<View>()
     expect(after.rev).toBe(before.rev + 1)
     expect(after.board.pieces.filter((piece) => piece.assetId === LIBRARY)).toHaveLength(1)
-    // The square is used, so the Library has no square left and is no choice any more
+    // The only square is the Library's own, which a new Library could only replace
     const city = after.you?.buildOptions?.[0]
-    expect(buildingChoices(city)).toEqual([])
-    expect(city?.unavailable.find((entry) => entry.assetId === LIBRARY)?.reason).toMatch(/^No legal square\./)
+    const again = buildingChoices(city)
+    expect(again.map((choice) => choice.assetId)).toEqual([LIBRARY])
+    expect(again[0]?.squares).toEqual([
+      expect.objectContaining({ label: 'C2', replaces: expect.objectContaining({ assetId: LIBRARY, kind: 'building' }) }),
+    ])
     expect(after.assistedActions).toEqual([
       expect.objectContaining({
         id: 'req-1', kind: 'build', status: 'applied', text: `${table.starterName} built a Library in City B2 on square C2`,
@@ -366,16 +370,23 @@ describe('building over HTTP', () => {
     expect(piecesOf(await stored(table), LIBRARY)).toEqual([])
   })
 
-  it('a second build on the same square is refused with the reason, and the board is unchanged', async () => {
+  it('a second build on the same square replaces the first, once the city is confirmed to act again', async () => {
     const table = await buildTable('Taken', { techs: ['Writing'] })
     const rev = (await view(table.gameId, table.starter)).rev
     const first = await (await sendBuild(table, 'req-1', rev)).json<View>()
-    const second = await sendBuild(table, 'req-2', first.rev)
-    expect(second.status).toBe(400)
-    expect(await second.json()).toMatchObject({
-      error: 'ASSISTED_ACTION_REJECTED',
-      message: expect.stringContaining('No legal square'),
+    // The city has acted: asked, not refused for good
+    const asked = await sendBuild(table, 'req-2', first.rev)
+    expect(asked.status).toBe(409)
+    expect(piecesOf(await stored(table), LIBRARY)).toHaveLength(1)
+
+    const confirmed = await post(table.starter, `/api/games/${table.gameId}/actions`, {
+      ...buildBody(table, 'req-3', first.rev),
+      confirmedRepeat: true,
     })
+    expect(confirmed.status).toBe(200)
+    const after = await confirmed.json<View>()
+    expect(after.assistedActions.at(-1)?.text).toContain('on square C2, replacing the Library')
+    // One Library still: the first was taken off and the second put in its place
     expect(piecesOf(await stored(table), LIBRARY)).toHaveLength(1)
   })
 
@@ -559,5 +570,158 @@ describe('undo over HTTP', () => {
     const after = await stored(table)
     expect(after.rev).toBe(before.rev)
     expect(piecesOf(after, LIBRARY)).toHaveLength(1)
+  })
+})
+
+describe('removing the built piece over HTTP', () => {
+  const remove = (token: string, table: Table, pieceId: string) =>
+    post(token, `/api/games/${table.gameId}/board/pieces/${pieceId}/remove`, {})
+
+  it('before End turn takes the whole build back and adds a line, keeping the old one', async () => {
+    const table = await buildTable('Remove', { techs: ['Printing Press'], trade: 12 })
+    expect((await sendBuild(table, 'req-1', (await view(table.gameId, table.starter)).rev, UNIVERSITY, C2, true)).status).toBe(200)
+    const built = await stored(table)
+    const piece = piecesOf(built, UNIVERSITY)[0] as BoardPiece
+    expect(tradeOf(built, table)).toBe(3)
+
+    const removed = await remove(table.starter, table, piece.id)
+    expect(removed.status).toBe(200)
+    const after = await stored(table)
+    expect(piecesOf(after, UNIVERSITY)).toEqual([])
+    expect(tradeOf(after, table)).toBe(12)
+    expect(after.assistedActions[0]?.status).toBe('undone')
+    expect(after.log.some((entry) => entry.publicLog.includes('built a University'))).toBe(true)
+    expect(after.log.at(-1)?.publicLog).toBe(
+      `System: ${table.starterName}'s University on C2 was undone: the building was removed, 9 trade returned. It was removed before End turn.`,
+    )
+    // The projection shows the undone record to everybody
+    expect((await view(table.gameId, table.other)).assistedActions[0]?.status).toBe('undone')
+  })
+
+  it('after End turn is a plain removal: the line stays alone and nothing is refunded', async () => {
+    const table = await buildTable('RemoveLate', { techs: ['Printing Press'], trade: 12 })
+    expect((await sendBuild(table, 'req-1', (await view(table.gameId, table.starter)).rev, UNIVERSITY, C2, true)).status).toBe(200)
+    expect((await post(table.starter, `/api/games/${table.gameId}/turns/done`, { phase: 'CM' })).status).toBe(200)
+    const built = await stored(table)
+    const piece = piecesOf(built, UNIVERSITY)[0] as BoardPiece
+
+    expect((await remove(table.starter, table, piece.id)).status).toBe(200)
+    const after = await stored(table)
+    expect(piecesOf(after, UNIVERSITY)).toEqual([])
+    expect(tradeOf(after, table)).toBe(3)
+    expect(after.assistedActions[0]?.status).toBe('applied')
+    expect(after.log.at(-1)?.publicLog).toBe(built.log.at(-1)?.publicLog)
+  })
+
+  it('another player removing the piece gets a plain removal', async () => {
+    const table = await buildTable('RemoveOther', { techs: ['Writing'] })
+    expect((await sendBuild(table, 'req-1', (await view(table.gameId, table.starter)).rev)).status).toBe(200)
+    const piece = piecesOf(await stored(table), LIBRARY)[0] as BoardPiece
+
+    expect((await remove(table.other, table, piece.id)).status).toBe(200)
+    const after = await stored(table)
+    expect(piecesOf(after, LIBRARY)).toEqual([])
+    expect(after.assistedActions[0]?.status).toBe('applied')
+  })
+})
+
+describe('wonders over HTTP', () => {
+  const COLOSSUS = 'wonders/colossus'
+
+  /** A table with the Colossus faceup in the market and a production of 15 set by hand on the city. */
+  async function wonderTable(name: string): Promise<Table> {
+    const table = await buildTable(name, { techs: ['Writing'] })
+    let state = await stored(table)
+    const area = wondersArea(state.board)
+    state = unwrap(placePiece(state, { playerId: table.starterId, assetId: COLOSSUS, x: area.x + 8, y: area.y + 40 }))
+    state = {
+      ...state,
+      // A wonder piece on the board has left the deck: without this the draw that follows a build
+      // can pick the Colossus card again, a second Colossus piece
+      items: state.items.filter((item) => !(item.kind === 'wonder' && (item as { name: string }).name === 'The Colossus')),
+      board: {
+        ...state.board,
+        pieces: state.board.pieces.map((piece) => (piece.id === table.cityId ? { ...piece, productionOverride: 15 } : piece)),
+      },
+    }
+    await repo.saveGame(state)
+    return table
+  }
+
+  const sendWonder = (table: Table, requestId: string, rev: number, item: unknown = { kind: 'wonder', assetId: COLOSSUS }, token = table.starter) =>
+    post(token, `/api/games/${table.gameId}/actions`, {
+      action: 'build', requestId, rev, cityPieceId: table.cityId, item, target: C2,
+    })
+
+  it('the owner is offered the wonders of the market, and nobody else sees the options', async () => {
+    const table = await wonderTable('WonderOptions')
+    const mine = await view(table.gameId, table.starter)
+    const wonder = mine.you?.buildOptions?.[0]?.choices.find((choice) => choice.item.kind === 'wonder')
+    expect(wonder).toMatchObject({ assetId: COLOSSUS, item: { kind: 'wonder', assetId: COLOSSUS }, placement: 'square', label: 'The Colossus', cost: 15, costNote: '10 with Metalworking', tradeToPay: 0 })
+    expect(wonder?.squares.map((square) => square.label)).toContain('C2')
+    // The other player has no city, so no options; a spectator has no `you` at all
+    expect((await view(table.gameId, table.other)).you?.buildOptions ?? []).toEqual([])
+    expect(JSON.stringify(await view(table.gameId))).not.toContain('buildOptions')
+  })
+
+  it('builds the wonder: it moves onto the square and the player owns it', async () => {
+    const table = await wonderTable('WonderBuild')
+    const response = await sendWonder(table, 'req-1', (await view(table.gameId, table.starter)).rev)
+    expect(response.status).toBe(200)
+    const state = await stored(table)
+    const colossus = piecesOf(state, COLOSSUS)
+    expect(colossus).toHaveLength(1)
+    expect(colossus[0]?.ownerId).toBe(table.starterId)
+    expect(state.log.some((entry) => entry.publicLog === `${table.starterName} built the Colossus in City B2 on square C2`)).toBe(true)
+    // The next wonder is drawn into the market, and named in a line of its own
+    expect(state.log.at(-1)?.publicLog).toMatch(/^System: drew .+ and placed it in the Wonders area$/)
+  })
+
+  it('refuses an asset id that is not a wonder and one with extra fields, as a bad request', async () => {
+    const table = await wonderTable('WonderBad')
+    const rev = (await view(table.gameId, table.starter)).rev
+    expect((await sendWonder(table, 'req-1', rev, { kind: 'wonder', assetId: 'buildings/library' })).status).toBe(400)
+    expect((await sendWonder(table, 'req-2', rev, { kind: 'wonder', assetId: COLOSSUS, extra: 1 })).status).toBe(400)
+    expect((await sendWonder(table, 'req-3', rev, { kind: 'wonder' })).status).toBe(400)
+    expect(piecesOf(await stored(table), COLOSSUS)[0]?.ownerId ?? null).toBeNull()
+  })
+
+  it('removing the wonder before End turn puts it back in the market', async () => {
+    const table = await wonderTable('WonderRemove')
+    expect((await sendWonder(table, 'req-1', (await view(table.gameId, table.starter)).rev)).status).toBe(200)
+    const piece = piecesOf(await stored(table), COLOSSUS)[0] as BoardPiece
+
+    expect((await post(table.starter, `/api/games/${table.gameId}/board/pieces/${piece.id}/remove`, {})).status).toBe(200)
+    const after = await stored(table)
+    const back = piecesOf(after, COLOSSUS)[0] as BoardPiece
+    expect(back.id).toBe(piece.id)
+    expect(back.ownerId ?? null).toBeNull()
+    expect(after.assistedActions[0]?.status).toBe('undone')
+    expect(after.log.at(-1)?.publicLog).toContain('the wonder was put back in the market')
+  })
+
+  it('removing the wonder is a plain removal when somebody took the wonder drawn after it', async () => {
+    const table = await wonderTable('WonderTaken')
+    expect((await sendWonder(table, 'req-1', (await view(table.gameId, table.starter)).rev)).status).toBe(200)
+    const built = await stored(table)
+    const effect = built.assistedActions[0]?.effect
+    const drawnId = effect?.kind === 'build' && 'drawn' in effect ? effect.drawn?.pieceId : undefined
+    expect(drawnId).toBeDefined()
+    // The other player makes the drawn wonder theirs
+    await repo.saveGame({
+      ...built,
+      board: {
+        ...built.board,
+        pieces: built.board.pieces.map((piece) => (piece.id === drawnId ? { ...piece, ownerId: built.players.find((player) => player.playerId !== table.starterId)?.playerId ?? null } : piece)),
+      },
+    })
+    const colossus = piecesOf(await stored(table), COLOSSUS)[0] as BoardPiece
+
+    expect((await post(table.starter, `/api/games/${table.gameId}/board/pieces/${colossus.id}/remove`, {})).status).toBe(200)
+    const after = await stored(table)
+    expect(piecesOf(after, COLOSSUS)).toEqual([])
+    // Nothing was taken back: the record stays and no new line was written
+    expect(after.assistedActions[0]?.status).toBe('applied')
+    expect(after.log).toHaveLength(built.log.length)
   })
 })

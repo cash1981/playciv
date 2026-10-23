@@ -25,6 +25,10 @@ import type {
   CityModifier,
   CityProduction,
   CoinSourceKey,
+  CultureShare,
+  DevoteToTheArtsOption,
+  HarvestChoiceView,
+  HarvestOption,
   HighscoreResult,
   Government,
   Item,
@@ -33,6 +37,8 @@ import type {
   PlayerStats,
   PlayerView,
   RevealedEntry,
+  ResourceKind,
+  ScoutSquare,
   SheetName,
   SocialPolicyItem,
   StartBuildingProgramOption,
@@ -65,6 +71,10 @@ export type {
   CityModifier,
   CityProduction,
   CoinSourceKey,
+  CultureShare,
+  DevoteToTheArtsOption,
+  HarvestChoiceView,
+  HarvestOption,
   HighscoreResult,
   Government,
   Item,
@@ -73,6 +83,8 @@ export type {
   PlayerStats,
   PlayerView,
   RevealedEntry,
+  ResourceKind,
+  ScoutSquare,
   SheetName,
   SocialPolicyItem,
   StartBuildingProgramOption,
@@ -617,11 +629,22 @@ export const api = {
 
   // `confirmedOutOfTurn` is sent only after the player answered yes to the
   // out-of-turn warning (issue #215); wonders go through this route as well.
-  draw: (gameId: string, sheetName: SheetName, confirmedOutOfTurn?: boolean) =>
-    post<PlayerView>(
+  // `confirmedOverLimit` likewise follows a yes to the culture hand limit warning.
+  draw: (
+    gameId: string,
+    sheetName: SheetName,
+    confirmedOutOfTurn?: boolean,
+    confirmedOverLimit?: boolean,
+  ) => {
+    const confirmed = {
+      ...(confirmedOutOfTurn === true ? { confirmedOutOfTurn: true } : {}),
+      ...(confirmedOverLimit === true ? { confirmedOverLimit: true } : {}),
+    }
+    return post<PlayerView>(
       `/api/games/${gameId}/draw/${sheetName}`,
-      confirmedOutOfTurn === true ? { confirmedOutOfTurn: true } : undefined,
-    ),
+      Object.keys(confirmed).length === 0 ? undefined : confirmed,
+    )
+  },
   loot: (gameId: string, category: LootCategory, targetPlayerId: string) =>
     post<PlayerView>(`/api/games/${gameId}/loot/${category}/${targetPlayerId}`),
   discardGreatPerson: (gameId: string, type: string) =>
@@ -812,23 +835,65 @@ export const api = {
    * sends its `target` square; a unit is a private card and sends none (the
    * server refuses a target on one).
    */
-  build: (gameId: string, requestId: string, rev: number, payload: BuildPayload) =>
+  build: (gameId: string, requestId: string, rev: number, payload: BuildPayload, confirmedRepeat?: boolean) =>
     post<PlayerView>(`/api/games/${gameId}/actions`, {
       action: 'build',
       requestId,
       rev,
+      ...(confirmedRepeat === true ? { confirmedRepeat: true } : {}),
       cityPieceId: payload.cityPieceId,
       item: payload.item,
       ...(payload.target === undefined ? {} : { target: payload.target }),
       ...(payload.rush === undefined ? {} : { rush: payload.rush }),
     }),
   /** Put the Building Program marker on one of the viewer's cities (assisted city action). */
-  startBuildingProgram: (gameId: string, requestId: string, rev: number, cityPieceId: string) =>
+  startBuildingProgram: (gameId: string, requestId: string, rev: number, cityPieceId: string, confirmedRepeat?: boolean) =>
     post<PlayerView>(`/api/games/${gameId}/actions`, {
       action: 'startBuildingProgram',
       requestId,
       rev,
       cityPieceId,
+      ...(confirmedRepeat === true ? { confirmedRepeat: true } : {}),
+    }),
+  /**
+   * Devote one of the viewer's cities to the arts (assisted city action). `scoutPieceIds` are the
+   * scouts whose squares are sent to the city; `culture` is a number typed by hand instead of the
+   * estimate. Both are left out when not given.
+   */
+  devoteToTheArts: (
+    gameId: string,
+    requestId: string,
+    rev: number,
+    cityPieceId: string,
+    extra: { readonly scoutPieceIds?: readonly string[]; readonly culture?: number; readonly confirmedRepeat?: boolean } = {},
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'devoteToTheArts',
+      requestId,
+      rev,
+      cityPieceId,
+      ...(extra.confirmedRepeat === true ? { confirmedRepeat: true } : {}),
+      ...(extra.scoutPieceIds === undefined || extra.scoutPieceIds.length === 0 ? {} : { scoutPieceIds: extra.scoutPieceIds }),
+      ...(extra.culture === undefined ? {} : { culture: extra.culture }),
+    }),
+  /** Harvest one resource token with one of the viewer's cities; `scoutPieceId` when it is under a scout. */
+  harvest: (
+    gameId: string,
+    requestId: string,
+    rev: number,
+    cityPieceId: string,
+    resource: ResourceKind,
+    scoutPieceId?: string,
+    confirmedRepeat?: boolean,
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'harvest',
+      requestId,
+      rev,
+      cityPieceId,
+      resource,
+      ...(scoutPieceId === undefined ? {} : { scoutPieceId }),
+      ...(confirmedRepeat === true ? { confirmedRepeat: true } : {}),
     }),
   /**
    * Flip the viewer's basic buildings to their upgraded form. `family` is the

@@ -1,6 +1,6 @@
 # Assisted play: phase tabs and Start of Turn
 
-- **Slug:** `assisted-sot` (part 9 of `assisted-play-contract`, same branch and PR #271 by the human's choice)
+- **Slug:** `assisted-sot` (part 13 of `assisted-play-contract`, same branch and PR #271 by the human's choice)
 - **Branch:** `feat/assisted-play-contract`
 - **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
 - **Status:** in review

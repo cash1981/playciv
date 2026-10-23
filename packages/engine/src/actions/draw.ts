@@ -29,6 +29,7 @@ import { shuffle } from '../random.js'
 import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 
+import { cultureCardsHeld, cultureHandSizeOf, isCultureHandOver } from '../culture-hand.js'
 import { placeUnchecked } from './board.js'
 import type { SheetName } from '../sheet-name.js'
 import { SHEET_LABEL, SHUFFLABLE_ITEMS, TECHS } from '../sheet-name.js'
@@ -62,11 +63,16 @@ function requireTurn(
   return err({ kind: 'NOT_YOUR_TURN', playerId: player.playerId })
 }
 
+/** The culture decks: a card from one of them counts against the culture hand size. */
+const CULTURE_SHEETS: ReadonlySet<SheetName> = new Set<SheetName>(['CULTURE_1', 'CULTURE_2', 'CULTURE_3'])
+
 export interface DrawInput {
   readonly playerId: string
   readonly sheetName: SheetName
   /** The player was warned that it is not their turn and chose to draw anyway. */
   readonly confirmedOutOfTurn?: boolean
+  /** The player was warned that the culture hand is over its size and chose to draw a culture card anyway. */
+  readonly confirmedOverLimit?: boolean
 }
 
 /**
@@ -86,6 +92,19 @@ export function draw(state: GameState, input: DrawInput): DrawResult {
   // Java logged a warning and returned Optional.empty() here
   if (TECHS.has(input.sheetName)) {
     return err({ kind: 'TECHS_ARE_CHOSEN_NOT_DRAWN', sheetName: input.sheetName })
+  }
+
+  if (
+    CULTURE_SHEETS.has(input.sheetName) &&
+    input.confirmedOverLimit !== true &&
+    isCultureHandOver(state, player)
+  ) {
+    return err({
+      kind: 'CULTURE_HAND_OVER',
+      playerId: player.playerId,
+      held: cultureCardsHeld(player),
+      size: cultureHandSizeOf(state, player),
+    })
   }
 
   const index = state.items.findIndex((item) => item.sheetName === input.sheetName)

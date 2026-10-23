@@ -1,6 +1,6 @@
 /**
  * The payload of the assisted actions that carry one in `args` (assisted play,
- * part 9). Each action has its own strict parser: a known shape, ids in the usual
+ * part 13). Each action has its own strict parser: a known shape, ids in the usual
  * safe set, nothing extra. Whether the card, the players or the square are legal is
  * the engine's decision, made from the fresh state.
  *

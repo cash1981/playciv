@@ -1,5 +1,5 @@
 /**
- * The state a Build shares between the Cities panel (where it starts), the board
+ * The state a Build shares between Your actions (where it starts), the board
  * (where the square is picked) and the confirm bar, all rendered by GameView.
  *
  * The flow holds only what the player chose. What is legal comes from the
@@ -17,12 +17,12 @@ export const OPTIONS_CHANGED = 'The options changed, pick again.'
 export const SQUARE_GONE = 'That square is no longer available, pick another.'
 
 /**
- * A short, stable text for an item: `building:<asset id>`, `army`, `scout` or
- * `unit:<type>`. For React keys and request keys; the engine's `assetId` of a
- * choice is only a list key, and an item is what the server takes.
+ * A short, stable text for an item: `building:<asset id>`, `wonder:<asset id>`,
+ * `army`, `scout` or `unit:<type>`. For React keys and request keys; the engine's
+ * `assetId` of a choice is only a list key, and an item is what the server takes.
  */
 export function itemKeyOf(item: BuildItem): string {
-  if (item.kind === 'building') return `building:${item.assetId}`
+  if (item.kind === 'building' || item.kind === 'wonder') return `${item.kind}:${item.assetId}`
   if (item.kind === 'unit') return `unit:${item.unitType}`
   return item.kind
 }
@@ -39,20 +39,24 @@ export interface BuildPlan {
   readonly placement: BuildChoice['placement']
   readonly label: string
   readonly cost: number
+  /** A wonder with a discount: the other price, for the bar to read. */
+  readonly costNote?: string | undefined
   readonly tradeToPay: number
   readonly squares: readonly BuildSquare[]
   readonly target: BuildSquare | null
 }
 
 export interface BuildFlow {
-  /** The city whose picker is open in the Cities panel. */
+  /** The city whose picker is open in Your actions. */
   readonly pickerCityId: string | null
   readonly plan: BuildPlan | null
   /** Why the flow went back a step, for example "The options changed, pick again." */
   readonly note: string | null
   /** What the server said when it refused the build. */
   readonly message: string | null
-  openPicker(cityPieceId: string): void
+  /** The player said yes to "this city has already acted this turn, act again?" when the picker was opened. */
+  readonly confirmedAgain: boolean
+  openPicker(cityPieceId: string, confirmedAgain?: boolean): void
   closePicker(): void
   start(city: CityBuildOptions, choice: BuildChoice): void
   pick(square: BuildSquare): void
@@ -66,9 +70,10 @@ interface State {
   readonly plan: BuildPlan | null
   readonly note: string | null
   readonly message: string | null
+  readonly confirmedAgain: boolean
 }
 
-const EMPTY: State = { pickerCityId: null, plan: null, note: null, message: null }
+const EMPTY: State = { pickerCityId: null, plan: null, note: null, message: null, confirmedAgain: false }
 
 const sameSquare = (a: BuildSquare, b: BuildSquare): boolean => a.column === b.column && a.row === b.row
 
@@ -81,6 +86,7 @@ const samePlan = (a: BuildPlan, b: BuildPlan): boolean =>
   a.placement === b.placement &&
   a.label === b.label &&
   a.cost === b.cost &&
+  a.costNote === b.costNote &&
   a.tradeToPay === b.tradeToPay &&
   a.squares.length === b.squares.length &&
   a.squares.every((square, index) => {
@@ -128,6 +134,7 @@ function reconcile(state: State, options: readonly CityBuildOptions[]): State {
     placement: choice.placement,
     label: choice.label,
     cost: choice.cost,
+    costNote: choice.costNote,
     tradeToPay: choice.tradeToPay,
     squares: choice.squares,
     target,
@@ -151,12 +158,13 @@ export function useBuildFlow(options: readonly CityBuildOptions[] | null): Build
     })
   }, [options])
 
-  const openPicker = useCallback((cityPieceId: string) => {
-    setState({ pickerCityId: cityPieceId, plan: null, note: null, message: null })
+  const openPicker = useCallback((cityPieceId: string, confirmedAgain = false) => {
+    setState({ pickerCityId: cityPieceId, plan: null, note: null, message: null, confirmedAgain })
   }, [])
   const closePicker = useCallback(() => setState(EMPTY), [])
   const start = useCallback((city: CityBuildOptions, choice: BuildChoice) => {
-    setState({
+    setState((current) => ({
+      confirmedAgain: current.confirmedAgain,
       pickerCityId: null,
       plan: {
         cityPieceId: city.cityPieceId,
@@ -165,13 +173,14 @@ export function useBuildFlow(options: readonly CityBuildOptions[] | null): Build
         placement: choice.placement,
         label: choice.label,
         cost: choice.cost,
+        costNote: choice.costNote,
         tradeToPay: choice.tradeToPay,
         squares: choice.squares,
         target: null,
       },
       note: null,
       message: null,
-    })
+    }))
   }, [])
   const pick = useCallback((square: BuildSquare) => {
     setState((current) =>

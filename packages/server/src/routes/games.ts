@@ -531,12 +531,18 @@ export function registerGameRoutes(app: App, context: AppContext): void {
   /** Java: `/{pbfId}/publiclog`. */
   app.get('/api/games/:gameId/log/public', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
-    return readGame(context, c, gameId, (state, viewerId) =>
-      newestFirst(
+    return readGame(context, c, gameId, (state, viewerId) => {
+      const assistedActionsById = new Map(
+        state.assistedActions.map((record) => [record.id, record] as const),
+      )
+      return newestFirst(
         state.log
           .filter((entry) => entry.publicLog !== '')
           .map((entry) => {
-            const assisted = state.assistedActions.find((record) => record.id === entry.assistedActionId)
+            const assisted =
+              entry.assistedActionId === undefined
+                ? undefined
+                : assistedActionsById.get(entry.assistedActionId)
             return {
               id: entry.id,
               username: entry.username,
@@ -558,8 +564,8 @@ export function registerGameRoutes(app: App, context: AppContext): void {
                   }),
             }
           }),
-      ),
-    )
+      )
+    })
   })
 
   /** Java: `/{pbfId}/privatelog` — the player's own entries only. */

@@ -1,5 +1,5 @@
 /**
- * Playing a culture event or Great Person card (assisted play, part 9).
+ * Playing a culture event or Great Person card (assisted play, part 13).
  *
  * Two places use the same {@link PlayCardControl}: the phase tabs, which list the
  * cards of the hand that can be played in that phase, and the hand itself, where each

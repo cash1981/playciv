@@ -1,5 +1,5 @@
 /**
- * The Start of Turn choices that are more than a button (assisted play, part 9): change
+ * The Start of Turn choices that are more than a button (assisted play, part 13): change
  * government, harvest with Feudalism, invest a coin, and the free techs waiting to be
  * learned. The buttons themselves (policies, government abilities) come from
  * `view.you.availableActions`; the choices behind these four come from

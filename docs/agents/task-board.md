@@ -36,13 +36,16 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Brief:** `docs/agents/tasks/assisted-play-contract.md`
 - **Status:** in progress
 - **Claimed paths:**
-  - `packages/engine/src/assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/turn.ts`
-  - `packages/engine/test/assisted*.test.ts`
-  - `packages/server/src/routes/play.ts`, `packages/server/test/assisted*.test.ts`
-  - `packages/web/src/views/AssistedActions.tsx`, `TechPanel.tsx`, `GameView.tsx`, `PhaseSummary.tsx`, `BoardView.tsx`, `styles.css`, `FaqView.tsx` and tests
-  - `docs/agents/decisions.md`, `state.md`, `README.md`
-  - Part 9 (`docs/agents/tasks/assisted-sot.md`): `packages/engine/src/assisted-core.ts`, `assisted-sot.ts`, `assisted-abilities.ts`, `assisted-resources.ts`, `assisted-cards.ts`, `assisted-culture.ts`, `assisted-city.ts`, `card-timing.ts`, `city-founding.ts`, `sot.ts`, `city-production.ts`, `migrate.ts`, `actions/player.ts`, `actions/board.ts` (the assisted check of the board Undo only); `packages/server/src/routes/assisted-args.ts`; `packages/web/src/lib/api.ts`, `views/PhaseTabs.tsx`, `SotPanel.tsx`, `PlayableCards.tsx`, `CitiesPanel.tsx`, `CityActions.tsx`
-- **Notes:** parts 1 to 8 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout, city production, Build for buildings, figures and units, Start Building Program and Upgrade buildings); part 9 is the phase tabs and Start of Turn. The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
+  - `packages/engine/src/assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/turn.ts`, `actions/board.ts`, `build-item.ts`, `build-options.ts`, `wonder-data.ts`, `terrain.ts`
+  - `packages/engine/test/assisted*.test.ts`, `wonder-data.test.ts`
+  - `packages/server/src/routes/play.ts`, `routes/board.ts`, `packages/server/test/assisted*.test.ts`
+  - `packages/web/src/views/AssistedActions.tsx`, `AssistedActions.css`, `EndTurn.tsx`, `TechPanel.tsx`, `GameView.tsx`, `PhaseSummary.tsx`, `BoardView.tsx`, `BuildPicker.tsx`, `BuildPicker.css`, `buildFlow.ts`, `CityCard.tsx`, `styles.css`, `FaqView.tsx` and tests (`CitiesPanel.tsx` is removed)
+  - `packages/web/src/views/ChatOrdersPanel.css`, its tests in `ChatOrdersPanel.test.tsx`, and the trade offer handlers and a comment in `ChatOrdersPanel.tsx` (composer overflow fix and the fixes for Copilot's review; the trade offers from #274 are already merged here)
+  - `docs/agents/decisions.md`, `state.md`, `README.md`, `docs/agents/tasks/end-turn-actions.md`, `docs/agents/tasks/build-polish-wonders.md`, `docs/agents/tasks/assisted-gather.md`
+  - Replacing, Great People and City Walls (part 12): `packages/engine/src/board.ts` (`flip` change), `actions/board.ts` (`replaceUnderGreatPerson`), `packages/engine/test/great-person-replace.test.ts`, `packages/server/test/assisted-walls-api.test.ts`
+  - Devote to the Arts and Harvest (part 11): `packages/engine/data/tile-icons.json`, `src/tile-icons.ts`, `great-person-data.ts`, `city-gather.ts`, `city-actions.ts`, `limits.ts`, `terrain.ts`, `actions/board.ts`, `packages/web/src/views/CityGather.tsx`, `CityGather.test.tsx`, `hidden-info.test.ts`, `great-person-data.test.ts` and the tests of those
+  - Part 13 (`docs/agents/tasks/assisted-sot.md`): `packages/engine/src/assisted-core.ts`, `assisted-sot.ts`, `assisted-abilities.ts`, `assisted-resources.ts`, `assisted-cards.ts`, `assisted-culture.ts`, `assisted-city.ts`, `card-timing.ts`, `city-founding.ts`, `sot.ts`, `city-production.ts`, `city-gather.ts` (scouts sent in Start of Turn only), `migrate.ts`, `actions/player.ts`, `actions/board.ts` (the assisted check of the board Undo only); `packages/server/src/routes/assisted-args.ts`; `packages/web/src/lib/api.ts`, `views/PhaseTabs.tsx`, `SotPanel.tsx`, `PlayableCards.tsx`, `CityActions.tsx` (the phase tabs replace the panel body of `AssistedActions.tsx`; `YourCities.tsx` moves into the City Management tab)
+- **Notes:** parts 1 to 13 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout, city production, Build for buildings, figures and units, Start Building Program and Upgrade buildings, End turn in Your actions, build polish and wonders, Devote to the Arts and Harvest, replacing, Great People and City Walls, and the phase tabs with Start of Turn). The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
 
 ### aircraft-unlocked
 

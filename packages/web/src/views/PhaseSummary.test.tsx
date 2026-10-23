@@ -51,11 +51,11 @@ const text = (container: HTMLElement): string => container.textContent ?? ''
 
 describe('PhaseSummary: the round and the viewer\'s phase', () => {
   const expected: Readonly<Record<TurnPhase, string>> = {
-    SOT: 'You: Start of turn (1 of 5)',
-    TRADE: 'You: Trade (2 of 5)',
-    CM: 'You: City management (3 of 5)',
-    MOVEMENT: 'You: Movement (4 of 5)',
-    RESEARCH: 'You: Research (5 of 5)',
+    SOT: 'You: Start of turn',
+    TRADE: 'You: Trade',
+    CM: 'You: City management',
+    MOVEMENT: 'You: Movement',
+    RESEARCH: 'You: Research',
   }
 
   it.each(TURN_PHASES)('says the viewer is on %s, as the first phase not done', (phase) => {
@@ -76,8 +76,8 @@ describe('PhaseSummary: the round and the viewer\'s phase', () => {
     expect(screen.getByText('Everyone is done')).toBeTruthy()
   })
 
-  it('lists the others with their phase and leaves the viewer out of the waiting line', () => {
-    render(
+  it('lists who is furthest behind and leaves the viewer and those ahead out of the waiting line', () => {
+    const { container } = render(
       <PhaseSummary
         view={viewOf({
           waitingFor: [
@@ -88,8 +88,65 @@ describe('PhaseSummary: the round and the viewer\'s phase', () => {
         })}
       />,
     )
-    expect(screen.getByText('You: City management (3 of 5)')).toBeTruthy()
-    expect(screen.getByText('Waiting for bob (trade), carol (movement)')).toBeTruthy()
+    expect(screen.getByText('You: City management')).toBeTruthy()
+    // carol is ahead of bob, so only bob holds the round up
+    expect(screen.getByText('Waiting for bob (trade)')).toBeTruthy()
+    expect(text(container)).not.toContain('carol')
+  })
+
+  it('names only the players at the earliest phase, together, with that phase', () => {
+    render(
+      <PhaseSummary
+        view={viewOf({
+          waitingFor: [
+            { username: 'viewer', phase: 'MOVEMENT' },
+            { username: 'bob', phase: 'CM' },
+            { username: 'carol', phase: 'CM' },
+            { username: 'dave', phase: 'RESEARCH' },
+          ],
+        })}
+      />,
+    )
+    expect(screen.getByText('Waiting for bob, carol (city management)')).toBeTruthy()
+  })
+
+  it('says nothing about players who are ahead when the viewer is the one furthest behind', () => {
+    const { container } = render(
+      <PhaseSummary
+        view={viewOf({
+          waitingFor: [
+            { username: 'viewer', phase: 'CM' },
+            { username: 'bob', phase: 'MOVEMENT' },
+          ],
+        })}
+      />,
+    )
+    expect(screen.getByText('You: City management')).toBeTruthy()
+    expect(text(container)).not.toContain('Waiting for')
+  })
+
+  it('lists the other player of a tie with the viewer', () => {
+    render(
+      <PhaseSummary
+        view={viewOf({
+          waitingFor: [
+            { username: 'viewer', phase: 'CM' },
+            { username: 'bob', phase: 'CM' },
+          ],
+        })}
+      />,
+    )
+    expect(screen.getByText('Waiting for bob (city management)')).toBeTruthy()
+  })
+
+  it('names the earlier phase when the other player is still in city management, not movement', () => {
+    // The viewer is done with Movement; bob is not.
+    const { rerender } = render(
+      <PhaseSummary view={viewOf({ waitingFor: [{ username: 'bob', phase: 'MOVEMENT' }] })} />,
+    )
+    expect(screen.getByText('Waiting for bob (movement)')).toBeTruthy()
+    rerender(<PhaseSummary view={viewOf({ waitingFor: [{ username: 'bob', phase: 'CM' }] })} />)
+    expect(screen.getByText('Waiting for bob (city management)')).toBeTruthy()
   })
 
   it('has no waiting line when only the viewer is left', () => {
@@ -102,18 +159,15 @@ describe('PhaseSummary: the round and the viewer\'s phase', () => {
     const { container } = render(<PhaseSummary view={viewOf({ waitingFor: [], noActiveTurn: true })} />)
     expect(text(container)).not.toContain('Round')
     expect(text(container)).not.toContain('You:')
-    expect(screen.getByRole('list', { name: 'Your resources' })).toBeTruthy()
+    expect(screen.queryByRole('list', { name: 'Your resources' })).toBeNull()
   })
 })
 
 describe('PhaseSummary: resources', () => {
-  it('shows culture, trade and the coin total of the viewer', () => {
-    render(<PhaseSummary view={viewOf({ waitingFor: [{ username: 'viewer', phase: 'SOT' }] })} />)
-    const items = Array.from(screen.getByRole('list', { name: 'Your resources' }).querySelectorAll('li')).map(
-      (item) => item.textContent,
-    )
-    // Coins add up the sources: bank 3 and education 4
-    expect(items).toEqual(['Culture 12', 'Trade 5', 'Coins 7'])
+  it('does not list culture, trade or coins', () => {
+    const { container } = render(<PhaseSummary view={viewOf({ waitingFor: [{ username: 'viewer', phase: 'SOT' }] })} />)
+    expect(screen.queryByRole('list', { name: 'Your resources' })).toBeNull()
+    expect(text(container)).not.toContain('Culture')
   })
 })
 
@@ -131,7 +185,7 @@ describe('PhaseSummary: a spectator', () => {
       />,
     )
     expect(screen.getByText('Round 4')).toBeTruthy()
-    expect(screen.getByText('Waiting for viewer (trade), bob (city management)')).toBeTruthy()
+    expect(screen.getByText('Waiting for viewer (trade)')).toBeTruthy()
     expect(text(container)).not.toContain('You:')
     expect(screen.queryByRole('list', { name: 'Your resources' })).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
@@ -199,21 +253,18 @@ describe('PageShortcuts', () => {
     delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
   })
 
-  const page = (chat = true): React.JSX.Element => (
+  const page = (actions = true): React.JSX.Element => (
     <>
-      <PageShortcuts chat={chat} />
+      <PageShortcuts actions={actions} />
       <section id={BOARD_PANEL_ID} tabIndex={-1} aria-label="Board panel" />
+      <CollapsiblePanel id="actions" title="Your actions" defaultOpen>
+        <p>actions</p>
+      </CollapsiblePanel>
       <CollapsiblePanel id="hand" title="Hand" defaultOpen>
         <p>cards</p>
       </CollapsiblePanel>
       <CollapsiblePanel id="techs" title="Tech panel" defaultOpen>
         <p>techs</p>
-      </CollapsiblePanel>
-      <CollapsiblePanel id="chat-orders" title="Chat panel" defaultOpen>
-        <p>chat</p>
-      </CollapsiblePanel>
-      <CollapsiblePanel id="log" title="Log panel" defaultOpen={false}>
-        <p>log</p>
       </CollapsiblePanel>
     </>
   )
@@ -222,29 +273,26 @@ describe('PageShortcuts', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches, media: query }))
   }
 
-  it('offers Board, Your cards, Tech tree, Chat and History as buttons', () => {
+  const labels = (): (string | null)[] =>
+    Array.from(screen.getByRole('navigation', { name: 'Go to' }).querySelectorAll('button')).map(
+      (button) => button.textContent,
+    )
+
+  it('offers Board, Actions, Your cards and Tech tree as buttons, and no Chat, History or Cities', () => {
     render(page())
-    const nav = screen.getByRole('navigation', { name: 'Go to' })
-    expect(Array.from(nav.querySelectorAll('button')).map((button) => button.textContent)).toEqual([
-      'Board',
-      'Your cards',
-      'Tech tree',
-      'Chat',
-      'History',
-    ])
+    expect(labels()).toEqual(['Board', 'Actions', 'Your cards', 'Tech tree'])
   })
 
-  it('leaves Chat out when there is no chat panel', () => {
+  it('leaves Actions out when Your actions is not on the page, so there is no dead button', () => {
     render(page(false))
-    expect(screen.queryByRole('button', { name: 'Chat' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'History' })).toBeTruthy()
+    expect(labels()).toEqual(['Board', 'Your cards', 'Tech tree'])
+    expect(screen.queryByRole('button', { name: 'Actions' })).toBeNull()
   })
 
   it.each([
+    ['Actions', 'Your actions'],
     ['Your cards', 'Hand'],
     ['Tech tree', 'Tech panel'],
-    ['Chat', 'Chat panel'],
-    ['History', 'Log panel'],
   ])('%s scrolls its panel into view and focuses the panel heading button', (label, title) => {
     render(page())
     fireEvent.click(screen.getByRole('button', { name: label }))
@@ -261,14 +309,40 @@ describe('PageShortcuts', () => {
     expect(document.activeElement).toBe(board)
   })
 
-  it('still lands on the heading of a collapsed panel, without opening it', () => {
+  it.each([
+    ['Your cards', 'Hand', 'hand'],
+    ['Tech tree', 'Tech panel', 'techs'],
+  ])('%s still lands on the heading of a collapsed panel, without opening it', (label, title, id) => {
+    localStorage.setItem(`civ.panel.${id}`, 'false')
     render(page())
-    const toggle = screen.getByRole('heading', { name: 'Log panel' }).querySelector('button')
+    const toggle = screen.getByRole('heading', { name: title }).querySelector('button')
     expect(toggle?.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(screen.getByRole('button', { name: 'History' }))
+    fireEvent.click(screen.getByRole('button', { name: label }))
     expect(document.activeElement).toBe(toggle)
     expect(toggle?.getAttribute('aria-expanded')).toBe('false')
-    expect(localStorage.getItem('civ.panel.log')).toBe('false')
+    expect(localStorage.getItem(`civ.panel.${id}`)).toBe('false')
+  })
+
+  it('Actions opens Your actions when it is collapsed, remembers that, and lands on its heading', () => {
+    localStorage.setItem('civ.panel.actions', 'false')
+    render(page())
+    const toggle = screen.getByRole('heading', { name: 'Your actions' }).querySelector('button')
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true')
+    expect(localStorage.getItem('civ.panel.actions')).toBe('true')
+    expect(document.activeElement).toBe(toggle)
+    expect(scrolled.map((entry) => entry.element)).toEqual([toggle?.closest('section')])
+  })
+
+  it('Actions leaves Your actions open when it is already open, however often it is pressed', () => {
+    render(page())
+    const toggle = screen.getByRole('heading', { name: 'Your actions' }).querySelector('button')
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true')
+    expect(localStorage.getItem('civ.panel.actions')).toBe('true')
   })
 
   it('scrolls smoothly by default', () => {
@@ -297,8 +371,9 @@ describe('PageShortcuts', () => {
   })
 
   it('does nothing, and does not throw, when the target is not on the page', () => {
-    render(<PageShortcuts chat />)
+    render(<PageShortcuts actions />)
     fireEvent.click(screen.getByRole('button', { name: 'Tech tree' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
     expect(scrolled).toEqual([])
   })
 })

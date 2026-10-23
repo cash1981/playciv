@@ -10,13 +10,13 @@
 import type { Item, SocialPolicyItem, TechItem, UnitItem, CivItem, PyramidPlacement } from './item.js'
 import { isUnit } from './item.js'
 import type { Rng } from './random.js'
-import type { Board, BoardArea, BoardPiece } from './board.js'
+import type { Board, BoardArea, BoardPiece, PieceFace } from './board.js'
 import { boardAreas } from './board.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './blockade.js'
 import { combatBonusOf } from './combat-bonus.js'
 import type { CityProduction } from './city-production.js'
 import { cityProductionsOf } from './city-production.js'
-import type { PlacedBuildItem, UnitBuildItem } from './build-item.js'
+import type { PlacedBuildItem, UnitBuildItem, WallsBuildItem } from './build-item.js'
 import type { CityBuildOptions } from './build-options.js'
 import { buildOptionsOf } from './build-options.js'
 import { cityActionsOf, upgradeOptionsOf } from './city-actions.js'
@@ -365,6 +365,8 @@ export type AssistedActionKind =
   | 'invest'
   | 'foundCity'
   | 'assignScout'
+  | 'devoteToTheArts'
+  | 'harvest'
   // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
   | `sot:${string}`
 
@@ -557,7 +559,7 @@ export type AssistedEffect =
     }
   | {
       /** A resource taken from the market by the Feudalism government. */
-      readonly kind: 'harvest'
+      readonly kind: 'feudalismHarvest'
       readonly resource: string
       readonly pieceId: string
       readonly position: { readonly x: number; readonly y: number }
@@ -591,7 +593,7 @@ export type AssistedEffect =
   | {
       readonly kind: 'build'
       readonly cityPieceId: string
-      /** What was built: a building or a figure, which stands on the map. */
+      /** What was built: a building, a wonder or a figure, which stands on the map. */
       readonly item: PlacedBuildItem
       /** The map square, as numbers from the map's top left corner, and the label the log used. */
       readonly square: { readonly column: number; readonly row: number; readonly label: string }
@@ -599,6 +601,29 @@ export type AssistedEffect =
       readonly pieceId: string
       readonly position: { readonly x: number; readonly y: number }
       readonly historyId: string
+      /**
+       * A wonder is not placed but moved out of the market: where it stood there, and the
+       * board history entry that made the player its owner. Absent for a building and a figure.
+       */
+      readonly wonder?: { readonly from: { readonly x: number; readonly y: number }; readonly ownerHistoryId: string }
+      /**
+       * A wonder only: the wonder the build drew into the market to replace it, so an undo can put it
+       * back in the deck. The card, the piece that was placed and the board history entry that placed it.
+       * Absent when no wonder was left to draw. Server side only, like every effect.
+       */
+      readonly drawn?: DrawnWonder
+      /**
+       * The building or wonder this one replaced (base rules p. 17): exactly as it stood, and the
+       * board history entry that removed it, so an undo puts the same piece back. Absent when the
+       * square was empty.
+       */
+      readonly replaced?: { readonly piece: BoardPiece; readonly historyId: string }
+      /**
+       * The Great Person this build replaced (base rules p. 18): held in reserve, which is moved to the
+       * player's area, and the board history entry that moved it. The piece as it stood, so an undo
+       * moves it back to its square. Absent when none was replaced.
+       */
+      readonly reserved?: { readonly piece: BoardPiece; readonly historyId: string }
       /** The trade paid for the missing production; 0 when the city's production was enough. */
       readonly trade: number
       /** The Building Program marker the build used up, exactly as it stood, and the history entry that removed it. `null` without one. */
@@ -622,6 +647,21 @@ export type AssistedEffect =
       readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
     }
   | {
+      readonly kind: 'build'
+      readonly cityPieceId: string
+      /** City Walls: no square and no new piece, the city marker is turned over to its walled side. */
+      readonly item: WallsBuildItem
+      /** The city marker (the same piece before and after), how it looked before and after, and the board history entry that turned it over. */
+      readonly walls: {
+        readonly pieceId: string
+        readonly from: PieceFace
+        readonly to: PieceFace
+        readonly historyId: string
+      }
+      readonly trade: number
+      readonly marker: { readonly piece: BoardPiece; readonly historyId: string } | null
+    }
+  | {
       readonly kind: 'startBuildingProgram'
       readonly cityPieceId: string
       /** The city as the log named it, for example "Capital B3", kept for the undo line. */
@@ -631,6 +671,23 @@ export type AssistedEffect =
       /** The marker that was placed, where it went and the board history entry that placed it. */
       readonly pieceId: string
       readonly position: { readonly x: number; readonly y: number }
+      readonly historyId: string
+    }
+  | {
+      readonly kind: 'devoteToTheArts'
+      readonly cityPieceId: string
+      readonly cityLabel: string
+      /** The culture added to the player's stock, which an undo takes off again. */
+      readonly culture: number
+    }
+  | {
+      readonly kind: 'harvest'
+      readonly cityPieceId: string
+      readonly cityLabel: string
+      /** The resource token that was put in the player's area: `wheat`, `silk`, `incense` or `iron`. */
+      readonly resource: string
+      /** The token that was placed and the board history entry that placed it. */
+      readonly pieceId: string
       readonly historyId: string
     }
   | {
@@ -648,6 +705,13 @@ export type AssistedEffect =
         readonly placedHistoryId: string
       }[]
     }
+
+/** The wonder a wonder build drew into the market, for its undo: the card, the piece that was placed and the history entry that placed it. */
+export interface DrawnWonder {
+  readonly item: Item
+  readonly pieceId: string
+  readonly historyId: string
+}
 
 /**
  * One applied assisted action. `id` is the client's `requestId`, which is what
@@ -686,6 +750,8 @@ export interface AvailableAction {
   readonly status: AssistedStatus
   /** A readable sentence, also when `status` is `ready`. */
   readonly reason: string
+  /** A ready action that the player should think twice about, for example a culture card over the hand size. */
+  readonly warning?: string
 }
 
 /** An assisted action as everybody may read it. No effect, no hut or piece identity. */
@@ -1259,8 +1325,9 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
    */
   readonly buildOptions: readonly CityBuildOptions[]
   /**
-   * What the viewer can do with each city besides building: for now, start a
-   * Building Program. Own view only, like `buildOptions`.
+   * What the viewer can do with each city besides building: start a Building
+   * Program, devote it to the arts and harvest a resource. Own view only, like
+   * `buildOptions`.
    */
   readonly cityActions: readonly CityActionOptions[]
   /**

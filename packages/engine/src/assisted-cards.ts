@@ -1,5 +1,5 @@
 /**
- * Playing a culture event or a Great Person card (assisted play, part 9).
+ * Playing a culture event or a Great Person card (assisted play, part 13).
  *
  * The game does exactly two things for the player: it takes the card out of the hand
  * (to the discard pile, or turned faceup for a Great Person that stays), and it

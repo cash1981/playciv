@@ -7,10 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TechItem } from '@civ/engine'
 
 import { ApiError, api } from '../lib/api.js'
-import type { PlayerView } from '../lib/api.js'
-import { AssistedActionButton, resetPendingRequestIds } from './AssistedActions.js'
+import type { CityBuildOptions, CityProduction, PlayerView } from '../lib/api.js'
+import { AssistedActionButton, hasActionsPanel, resetPendingRequestIds } from './AssistedActions.js'
+import { AssistedActionsPanel } from './panelForTests.js'
+import { useBuildFlow } from './buildFlow.js'
 import type { Run } from './GameView.js'
-import { PhaseActionsPanel } from './PhaseTabs.js'
+import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { TechPanel } from './TechPanel.js'
 
 beforeEach(() => {
@@ -69,8 +71,6 @@ function viewWith(
       pyramidPlacements: [],
       availableActions: actions,
     },
-    // The viewer is in City Management, where every action of these tests belongs
-    activeTurn: { turnNumber: 3, waitingFor: [{ username: 'Alice', phase: 'CM' }] },
     opponents: [],
   } as unknown as PlayerView
 }
@@ -88,7 +88,7 @@ const run: Run = async (action) => {
 
 const renderPanel = (view: PlayerView, props: { busy?: boolean; readOnly?: boolean } = {}) =>
   render(
-    <PhaseActionsPanel
+    <AssistedActionsPanel
       gameId="game-1"
       view={view}
       busy={props.busy ?? false}
@@ -97,7 +97,7 @@ const renderPanel = (view: PlayerView, props: { busy?: boolean; readOnly?: boole
     />,
   )
 
-describe('PhaseActionsPanel', () => {
+describe('AssistedActionsPanel', () => {
   it('shows a ready action with its status and reason, and the button is enabled', () => {
     renderPanel(viewWith([READY]))
 
@@ -130,12 +130,12 @@ describe('PhaseActionsPanel', () => {
     expect(perform).not.toHaveBeenCalled()
   })
 
-  it('leaves out an action for a card the viewer does not hold, and keeps the tab for the phase', () => {
-    renderPanel(viewWith([chivalry('not-owned', 'You do not have Chivalry.')]))
+  it('leaves out an action for a card the viewer does not hold, and the whole panel when none is left', () => {
+    const { container } = renderPanel(
+      viewWith([chivalry('not-owned', 'You do not have Chivalry.')]),
+    )
 
-    expect(screen.queryByRole('button', { name: 'Use Chivalry' })).toBeNull()
-    expect(screen.queryByRole('heading', { name: 'Resource abilities' })).toBeNull()
-    expect(screen.getByRole('tab', { name: /^City management/ }).getAttribute('aria-selected')).toBe('true')
+    expect(container.textContent).toBe('')
   })
 
   it('renders nothing for a spectator', () => {
@@ -144,11 +144,10 @@ describe('PhaseActionsPanel', () => {
     expect(container.textContent).toBe('')
   })
 
-  it('lists no action when the viewer has no availableActions, and still guides the phase', () => {
-    renderPanel(viewWith([]))
+  it('renders nothing when the viewer has no availableActions', () => {
+    const { container } = renderPanel(viewWith([]))
 
-    expect(screen.queryByRole('button', { name: /^Use / })).toBeNull()
-    expect(screen.getByText('This is your current phase.')).toBeTruthy()
+    expect(container.textContent).toBe('')
   })
 
   it('disables the button while another write runs or the game is read-only', () => {
@@ -163,7 +162,7 @@ describe('PhaseActionsPanel', () => {
     const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
     const { rerender } = renderPanel(viewWith([READY]))
     rerender(
-      <PhaseActionsPanel gameId="game-1" view={viewWith([READY], 6)} busy={false} readOnly={false} run={run} />,
+      <AssistedActionsPanel gameId="game-1" view={viewWith([READY], 6)} busy={false} readOnly={false} run={run} />,
     )
 
     expect(perform).not.toHaveBeenCalled()
@@ -291,7 +290,7 @@ describe('AssistedActionButton requests', () => {
       ...viewWith([advance('ready', 'Advance.')], 6),
       assistedActions: [{ id: lostId, kind: 'cultureAdvance' }],
     } as unknown as PlayerView
-    rerender(<PhaseActionsPanel gameId="game-1" view={landed} busy={false} readOnly={false} run={run} />)
+    rerender(<AssistedActionsPanel gameId="game-1" view={landed} busy={false} readOnly={false} run={run} />)
     await waitFor(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
       expect(perform.mock.calls.length).toBeGreaterThan(1)
@@ -313,7 +312,7 @@ describe('AssistedActionButton requests', () => {
       ...viewWith([advance('ready', 'Advance.')], 6),
       assistedActions: [{ id: 'some-other-id', kind: 'cultureAdvance' }],
     } as unknown as PlayerView
-    rerender(<PhaseActionsPanel gameId="game-1" view={other} busy={false} readOnly={false} run={run} />)
+    rerender(<AssistedActionsPanel gameId="game-1" view={other} busy={false} readOnly={false} run={run} />)
     await waitFor(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
       expect(perform.mock.calls.length).toBeGreaterThan(1)
@@ -353,7 +352,7 @@ describe('AssistedActionButton requests', () => {
     await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
     // The first press is unsettled in outcome, so its id is still kept for alice-id.
     rerender(
-      <PhaseActionsPanel
+      <AssistedActionsPanel
         gameId="game-1"
         view={viewWith([READY], 5, [], 'bob-id')}
         busy={false}
@@ -379,7 +378,7 @@ describe('AssistedActionButton requests', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use Chivalry' }))
     await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
     rerender(
-      <PhaseActionsPanel gameId="game-1" view={viewWith([READY], 6)} busy={false} readOnly={false} run={run} />,
+      <AssistedActionsPanel gameId="game-1" view={viewWith([READY], 6)} busy={false} readOnly={false} run={run} />,
     )
     await waitFor(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Use Chivalry' }))
@@ -396,14 +395,7 @@ describe('AssistedActionButton requests', () => {
         action="democracy"
         gameId="game-1"
         view={viewWith([
-          {
-            action: 'democracy',
-            label: 'Democracy',
-            phase: 'CM',
-            group: 'Coins',
-            status: 'ready',
-            reason: 'Spend 6 trade to add 1 coin to Democracy.',
-          },
+          { action: 'democracy', label: 'Democracy', phase: 'CM', group: 'Coins', status: 'ready', reason: 'Spend 6 trade to add 1 coin to Democracy.' },
         ])}
         busy={false}
         readOnly={false}
@@ -491,7 +483,7 @@ describe('a card that was already used this turn', () => {
 
     // The first use landed: the next view says used
     rerender(
-      <PhaseActionsPanel gameId="game-1" view={viewWith([USED], 6)} busy={false} readOnly={false} run={run} />,
+      <AssistedActionsPanel gameId="game-1" view={viewWith([USED], 6)} busy={false} readOnly={false} run={run} />,
     )
     await waitFor(() => {
       fireEvent.click(useButton())
@@ -517,7 +509,7 @@ describe('a card that was already used this turn', () => {
 
     // The response was lost; the view now says used (without the record of the kept id here)
     rerender(
-      <PhaseActionsPanel gameId="game-1" view={viewWith([USED], 6)} busy={false} readOnly={false} run={run} />,
+      <AssistedActionsPanel gameId="game-1" view={viewWith([USED], 6)} busy={false} readOnly={false} run={run} />,
     )
     // Wait until the failed press has settled, then cancel the question once
     await waitFor(() => {
@@ -584,7 +576,7 @@ describe('the same action from two entry points', () => {
     const view = viewWith([chivalry('needs-resource', reason)], 5, [tech('Chivalry')])
     render(
       <>
-        <PhaseActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />
+        <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />
         <TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />
       </>,
     )
@@ -612,7 +604,7 @@ describe('the same action from two entry points', () => {
     const view = viewWith([READY], 5, [tech('Chivalry')])
     render(
       <>
-        <PhaseActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />
+        <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />
         <TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />
       </>,
     )
@@ -768,6 +760,22 @@ describe('the Advance culture button', () => {
   })
 })
 
+describe('the culture hand limit warning', () => {
+  const READY_REASON = 'Advance to space 9 (culture II event): 5 culture and 3 trade.'
+  const WARNING = 'Culture hand limit: this card brings your hand to 3 culture cards, over your culture hand size of 2.'
+
+  it('shows the warning beside the ready Advance culture button, which stays pressable', () => {
+    renderPanel(viewWith([{ ...advance('ready', READY_REASON), warning: WARNING }]))
+    expect(screen.getByText(WARNING)).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Advance culture' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('shows no warning when the action has none', () => {
+    const { container } = renderPanel(viewWith([advance('ready', READY_REASON)]))
+    expect(container.querySelector('.assisted-warning')).toBeNull()
+  })
+})
+
 describe('the pending card choice', () => {
   it('shows the candidate cards with their names and one Keep button each', () => {
     renderPanel(viewWithRewards([reward()]))
@@ -816,9 +824,9 @@ describe('the pending card choice', () => {
     expect(screen.queryByText('Isaac Newton')).toBeNull()
   })
 
-  it('renders no choice for a view without pending rewards', () => {
-    renderPanel(viewWithRewards([]))
-    expect(screen.queryByText('Choose a card to keep')).toBeNull()
+  it('renders no choice for a view without pending rewards, and the panel stays away when nothing else is listed', () => {
+    const { container } = renderPanel(viewWithRewards([]))
+    expect(container.textContent).toBe('')
     cleanup()
     renderPanel(viewWith([advance('ready', 'Advance.')]))
     expect(screen.queryByText('Choose a card to keep')).toBeNull()
@@ -1004,7 +1012,7 @@ describe('the pending card choice', () => {
         await action()
         setView(viewWith([advance('ready', 'Advance.')], 6))
       }
-      return <PhaseActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={reloading} />
+      return <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={reloading} />
     }
     const { container } = render(<Harness />)
 
@@ -1028,5 +1036,278 @@ describe('the pending card choice', () => {
     await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false))
 
     expect(document.activeElement).toBe(button)
+  })
+})
+
+// --- Your cities (task cities-in-actions) -------------------------------------
+
+const cityOf = (overrides: Partial<CityProduction> = {}): CityProduction => ({
+  pieceId: 'city-1',
+  label: 'Capital D5',
+  outskirts: 4,
+  outskirtsDetail: [],
+  modifiers: [],
+  buildingProgram: true,
+  estimate: 4,
+  withBuildingProgram: 8,
+  override: null,
+  effective: 4,
+  notes: [],
+  ...overrides,
+})
+
+const buildOptionsOf = (overrides: Partial<CityBuildOptions> = {}): CityBuildOptions => ({
+  cityPieceId: 'city-1',
+  label: 'Capital D5',
+  status: 'ready',
+  reason: 'Ready to build.',
+  production: 4,
+  productionSource: 'estimate',
+  choices: [
+    {
+      assetId: 'buildings/library',
+      item: { kind: 'building', assetId: 'buildings/library' },
+      placement: 'square',
+      label: 'Library',
+      cost: 4,
+      tradeToPay: 0,
+      squares: [{ column: 3, row: 4, label: 'D5' }],
+    },
+  ],
+  unavailable: [],
+  ...overrides,
+})
+
+/** A view with the given parts of `you` added. */
+const withYou = (view: PlayerView, extra: Record<string, unknown>, opponents: readonly unknown[] = []): PlayerView =>
+  ({ ...view, you: { ...view.you, ...extra }, opponents }) as unknown as PlayerView
+
+/** A spectator's view, with opponents on the map that have cities. */
+const spectatorWith = (opponents: readonly unknown[]): PlayerView =>
+  ({ ...spectatorView, opponents }) as unknown as PlayerView
+
+/** Your actions with the Build flow GameView shares with the board. */
+function WithFlow({ view }: { readonly view: PlayerView }): React.JSX.Element {
+  const flow = useBuildFlow(view.you?.buildOptions ?? null)
+  return <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} build={flow} />
+}
+
+describe('hasActionsPanel', () => {
+  it.each([
+    ['a spectator', spectatorView, false],
+    ['a player with nothing to show, in a game with no turn yet', viewWith([]), false],
+    ['a player with only an action for a card they do not hold', viewWith([chivalry('not-owned', 'No.')]), false],
+    ['a player with an action for a card they hold', viewWith([READY]), true],
+    ['a player with a card choice waiting', viewWithRewards([reward()]), true],
+    ['a player with a city on the map', withYou(viewWith([]), { cities: [cityOf()] }), true],
+    ['a player whose view lists no cities', withYou(viewWith([]), { cities: [] }), false],
+    ['a spectator, whatever cities are on the map', spectatorWith([{ playerId: 'x', cities: [cityOf()] }]), false],
+  ])('is %s: %s', (_who, view, expected) => {
+    expect(hasActionsPanel(view)).toBe(expected)
+  })
+})
+
+describe('Your cities in the panel', () => {
+  const viewWithCity = (extra: Record<string, unknown> = {}): PlayerView =>
+    withYou(viewWith([]), { cities: [cityOf()], buildOptions: [buildOptionsOf()], ...extra })
+
+  it('shows Build for a player with a city and no assisted action and no waiting choice', () => {
+    render(<WithFlow view={viewWithCity()} />)
+
+    expect(screen.getByRole('heading', { name: 'Your actions' })).toBeTruthy()
+    const panel = screen.getByRole('group', { name: 'Your actions' })
+    const cities = within(panel).getByRole('region', { name: 'Your cities' })
+    expect(within(cities).getByRole('heading', { level: 3, name: 'Your cities' })).toBeTruthy()
+    expect(within(cities).getByRole('heading', { name: 'Capital D5' })).toBeTruthy()
+    expect((within(cities).getByRole('button', { name: 'Build in Capital D5' }) as HTMLButtonElement).disabled).toBe(false)
+    // No action list and no card choice: nothing else is in the panel.
+    expect(panel.querySelector('.assisted-actions')).toBeNull()
+    expect(within(panel).queryByText('Choose a card to keep')).toBeNull()
+  })
+
+  it('opens the Build picker inside the panel', () => {
+    render(<WithFlow view={viewWithCity()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Build in Capital D5' }))
+    const picker = screen.getByRole('region', { name: 'Build in Capital D5' })
+    expect(screen.getByRole('group', { name: 'Your actions' }).contains(picker)).toBe(true)
+  })
+
+  it('has the production figure with its popup, the Building Program line and the form to set it by hand', () => {
+    render(<WithFlow view={viewWithCity()} />)
+    const panel = within(screen.getByRole('group', { name: 'Your actions' }))
+    expect(panel.getByText('Estimated production: 4')).toBeTruthy()
+    expect(panel.getByText('Building Program in place: 8 if this city produces now')).toBeTruthy()
+    expect(panel.getByRole('textbox', { name: 'Production override, Capital D5' })).toBeTruthy()
+    fireEvent.click(panel.getByRole('button', { name: 'Not a complete count: Capital D5' }))
+    expect(screen.getByRole('dialog', { name: 'Capital D5: how the estimate is counted' })).toBeTruthy()
+  })
+
+  it('renders nothing for a spectator, even when players have cities on the map', () => {
+    const crowded = spectatorWith([{ playerId: 'x', username: 'Bob', cities: [cityOf()] }])
+    expect(renderPanel(crowded).container.textContent).toBe('')
+  })
+
+  it('is not rendered only to say that the viewer has no city', () => {
+    const none = withYou(viewWith([]), { cities: [] })
+    expect(renderPanel(none).container.textContent).toBe('')
+    expect(screen.queryByText('No cities of yours on the map yet.')).toBeNull()
+  })
+
+  it('says that the viewer has no city when the panel is there for another reason', () => {
+    renderPanel(withYou(viewWith([READY]), { cities: [] }))
+    expect(screen.getByRole('region', { name: 'Your cities' })).toBeTruthy()
+    expect(screen.getByText('No cities of yours on the map yet.')).toBeTruthy()
+  })
+
+  it('keeps the waiting choice in the title, and puts the choice above the action list and the cities', () => {
+    const view = withYou(viewWithRewards([reward()], [READY]), { cities: [cityOf()], buildOptions: [buildOptionsOf()] })
+    render(<WithFlow view={view} />)
+
+    expect(screen.getByRole('heading', { name: 'Your actions (1 choice waiting)' })).toBeTruthy()
+    const action = screen.getByRole('button', { name: 'Use Chivalry' })
+    const choice = screen.getByRole('heading', { name: 'Choose a card to keep' })
+    const cities = screen.getByRole('heading', { level: 3, name: 'Your cities' })
+    const follows = (first: Node, second: Node): boolean =>
+      Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING)
+    // A choice that waits is above the tabs, so it cannot hide behind the tab that is not open
+    expect(follows(choice, action)).toBe(true)
+    expect(follows(action, cities)).toBe(true)
+  })
+
+  it('shows the cities with their controls hidden when the game is read only', () => {
+    // With a Build flow and the options, so the Build button would be there if readOnly were ignored.
+    const view = viewWithCity()
+    function Panel({ readOnly }: { readonly readOnly: boolean }): React.JSX.Element {
+      const flow = useBuildFlow(view.you?.buildOptions ?? null)
+      return <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={readOnly} run={run} build={flow} />
+    }
+    render(<Panel readOnly />)
+    expect(screen.getByRole('heading', { name: 'Capital D5' })).toBeTruthy()
+    expect(screen.getByText('Estimated production: 4')).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
+    cleanup()
+
+    // The same view and flow without readOnly has the button, so the assertion above can fail.
+    render(<Panel readOnly={false} />)
+    expect(screen.getByRole('button', { name: 'Build in Capital D5' })).toBeTruthy()
+  })
+})
+
+describe('The actions of the open phase', () => {
+  it('puts the actions under the heading of their group, above Your cities', () => {
+    const view = withYou(viewWith([advance('needs-resource', 'You are missing 3 culture.'), READY]), {
+      cities: [cityOf()],
+      buildOptions: [buildOptionsOf()],
+    })
+    render(<WithFlow view={view} />)
+    const panel = screen.getByRole('group', { name: 'Your actions' })
+    const culture = within(panel).getByRole('region', { name: 'Culture track' })
+    expect(within(culture).getByRole('heading', { level: 3, name: 'Culture track' })).toBeTruthy()
+    expect(within(culture).getByRole('button', { name: 'Advance culture' })).toBeTruthy()
+    expect(within(culture).getByText('You are missing 3 culture.')).toBeTruthy()
+    expect(within(panel).getByRole('region', { name: 'Resource abilities' })).toBeTruthy()
+    const cities = within(panel).getByRole('region', { name: 'Your cities' })
+    expect(culture.compareDocumentPosition(cities) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('has no group when no action is listed', () => {
+    render(<WithFlow view={withYou(viewWith([]), { cities: [cityOf()], buildOptions: [buildOptionsOf()] })} />)
+    expect(screen.queryByRole('region', { name: 'Culture track' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Resource abilities' })).toBeNull()
+  })
+})
+
+describe('Build and Start Building Program on a city card', () => {
+  it('share one row of buttons, and the picker opens under it', () => {
+    const view = withYou(viewWith([]), {
+      cities: [cityOf()],
+      buildOptions: [buildOptionsOf()],
+      cityActions: [
+        {
+          cityPieceId: 'city-1',
+          label: 'Capital D5',
+          startBuildingProgram: { status: 'ready', reason: 'Ready.', hasMarker: false },
+          devoteToTheArts: { status: 'ready', reason: 'Ready.', culture: 1, parts: [], notes: [], scouts: [] },
+          harvest: { status: 'unavailable', reason: 'Nothing to harvest.', choices: [], notes: [] },
+        },
+      ],
+    })
+    render(<WithFlow view={view} />)
+    const build = screen.getByRole('button', { name: 'Build in Capital D5' })
+    const start = screen.getByRole('button', { name: 'Start Building Program in Capital D5' })
+    const row = build.closest('.city-buttons')
+    expect(row).not.toBeNull()
+    expect(row?.contains(start)).toBe(true)
+
+    fireEvent.click(build)
+    const picker = screen.getByRole('region', { name: 'Build in Capital D5' })
+    expect(row?.contains(picker)).toBe(false)
+    expect(row?.compareDocumentPosition(picker)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+  })
+})
+
+describe('after Advance culture', () => {
+  const READY_ADVANCE = advance('ready', 'Advance to space 4 (culture I event): 3 culture.')
+  const handSection = (): HTMLElement => {
+    const section = document.getElementById('hand-content')?.closest('section')
+    if (section === null || section === undefined) throw new Error('hand missing')
+    return section
+  }
+  const scrolls = (): HTMLElement[] => {
+    const scrolled: HTMLElement[] = []
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this as HTMLElement)
+    }
+    return scrolled
+  }
+  const page = (view: PlayerView): React.JSX.Element => (
+    <>
+      <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />
+      <CollapsiblePanel id="hand" title="Your hand (0)" defaultOpen>
+        <p>cards</p>
+      </CollapsiblePanel>
+    </>
+  )
+  afterEach(() => {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+  })
+
+  it('scrolls to Your hand once the advance has gone through', async () => {
+    const scrolled = scrolls()
+    vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    render(page(viewWith([READY_ADVANCE])))
+    expect(scrolled).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
+    await waitFor(() => expect(scrolled).toEqual([handSection()]))
+  })
+
+  it('does not scroll when the advance is refused, or for another action', async () => {
+    const scrolled = scrolls()
+    const perform = vi.spyOn(api, 'performAction').mockRejectedValueOnce(new ApiError(422, 'REFUSED', 'No.'))
+    perform.mockResolvedValue({} as PlayerView)
+    render(page(viewWith([READY_ADVANCE, READY])))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: /Chivalry/ }))
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(2))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(scrolled).toHaveLength(0)
+  })
+
+  it('waits while a card choice is open, and goes to Your hand when it has been kept', async () => {
+    const scrolled = scrolls()
+    vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    const { rerender } = render(page(viewWith([READY_ADVANCE])))
+    fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
+    // The advance comes back with a choice to make, which is above the hand
+    rerender(page(viewWithRewards([reward()], [READY_ADVANCE])))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(scrolled).toHaveLength(0)
+
+    rerender(page(viewWithRewards([], [READY_ADVANCE], 6)))
+    await waitFor(() => expect(scrolled).toEqual([handSection()]))
   })
 })

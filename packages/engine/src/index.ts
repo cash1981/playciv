@@ -14,6 +14,7 @@ export * from './item.js'
 export * from './coins.js'
 export * from './board.js'
 export * from './terrain.js'
+export * from './tile-icons.js'
 export * from './migrate.js'
 export * from './turn.js'
 export * from './highscore.js'
@@ -25,7 +26,10 @@ export * from './build-options.js'
 export * from './limits.js'
 export * from './assisted-techs.js'
 export * from './building-data.js'
+export * from './wonder-data.js'
+export * from './great-person-data.js'
 export * from './city-actions.js'
+export * from './city-gather.js'
 export * from './city-production.js'
 export * from './combat-bonus.js'
 export * from './culture-hand.js'
@@ -54,6 +58,8 @@ export type {
   BlockedAvailability,
   AssignScoutPayload,
   ChooseRewardPayload,
+  DevoteToTheArtsPayload,
+  FeudalismHarvestPayload,
   FoundCityPayload,
   GovernmentPayload,
   HarvestPayload,

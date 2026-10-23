@@ -1,6 +1,6 @@
 /**
  * The Start of Turn abilities of wonders, Great Persons, techs, huts and relics
- * (assisted play, part 9).
+ * (assisted play, part 13).
  *
  * One button each, with a log line and an undo through the vote the game already has.
  * They are built from tables, so a new wonder or tech that does the same is a row and
@@ -50,6 +50,7 @@ import type { StatGainSpec } from './assisted-sot.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds } from './blockade.js'
 import { findBoardAsset, remainingBoardAssetCount, whiteFigureFor } from './board.js'
 import { activeWonderOwnerIds, coinSourcesOf, totalCoins } from './coins.js'
+import { cultureHandBlock } from './culture-hand.js'
 import type { CultureLevel } from './culture-track.js'
 import { itemName } from './item.js'
 import type { GreatPersonItem, HutItem, Item } from './item.js'
@@ -678,9 +679,10 @@ function cristoRedentor(level: CultureLevel): AssistedActionDefinition {
     group: WONDERS,
     usageKey: 'wonder:cristoredentor',
     block: wonderBlock('wonders/cristoredentor', 'Cristo Redentor'),
-    check: (state) =>
+    check: (state, player) =>
       [...state.items, ...state.discardedItems].some((item) => item.sheetName === sheetName)
-        ? undefined
+        ? // Culture cards come in: the hand must be down to its size first
+          ((full) => (full === undefined ? undefined : blocked('unavailable', full)))(cultureHandBlock(state, player))
         : blocked('unavailable', `There are no ${SHEET_LABEL[sheetName]} cards left to draw.`),
   }
   return {

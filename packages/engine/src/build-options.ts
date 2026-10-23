@@ -1,6 +1,7 @@
 /**
  * What a player can build with each of their cities (assisted Build, parts 2 to 4
- * of #264: buildings, army and scout figures, and military units).
+ * of #264: buildings, army and scout figures, and military units; and wonders from
+ * the market).
  *
  * For every city on the map: whether the player may build now, the production the
  * city has, and what can be built split in two lists. `choices` holds only items
@@ -21,7 +22,7 @@
 
 import { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
 import { UNIT_TYPES } from './build-item.js'
-import type { BuildItem, PlacedBuildItem, UnitBuildItem, UnitType } from './build-item.js'
+import type { BuildItem, PlacedBuildItem, SquarelessBuildItem, UnitType } from './build-item.js'
 import { cityFootprintsOf, mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
 import {
@@ -37,6 +38,7 @@ import {
   boardAssetLimit,
   columnLabel,
   findBoardAsset,
+  isInWondersArea,
   isMapCell,
   mapTop,
   remainingBoardAssetCount,
@@ -47,8 +49,9 @@ import type { CityProduction } from './city-production.js'
 import { SHUFFLABLE_ITEMS } from './sheet-name.js'
 import type { SheetName } from './sheet-name.js'
 import type { GameState, Playerhand } from './state.js'
-import { BUILDING_TERRAIN, describeAllowed, terrainAt } from './terrain.js'
+import { BUILDING_TERRAIN, CATEGORY_TERRAIN, describeAllowed, terrainAt } from './terrain.js'
 import type { Terrain } from './terrain.js'
+import { wonderCostFor, wonderDataOf } from './wonder-data.js'
 
 /** A map square as column and row numbers, zero based from the map's top left corner. */
 export interface BuildTarget {
@@ -67,33 +70,45 @@ interface BuildPayloadBase {
 
 /**
  * What the `build` assisted action carries. A building or a figure needs the
- * square it goes on; a unit has none, and a target sent with one is refused.
+ * square it goes on; a unit and City Walls have none, and a target sent with one is refused.
  */
 export type BuildPayload =
   | (BuildPayloadBase & { readonly item: PlacedBuildItem; readonly target: BuildTarget })
-  | (BuildPayloadBase & { readonly item: UnitBuildItem; readonly target?: undefined })
+  | (BuildPayloadBase & { readonly item: SquarelessBuildItem; readonly target?: undefined })
+
+/** What a building or wonder put on a square takes the place of (base rules p. 17, and p. 18 for a Great Person, which goes back to the player's area). */
+export interface ReplacedPiece {
+  readonly assetId: string
+  /** "Library", "The Colossus", "Artist": the name the log uses. */
+  readonly label: string
+  readonly kind: 'building' | 'wonder' | 'greatperson'
+}
 
 export interface BuildSquare extends BuildTarget {
   /** The square's label, for example "D5". */
   readonly label: string
-  /** Something to tell the player about this square before they pick it: an army put in a square where an enemy figure stands, which is not automated. Absent for a plain square. */
+  /** Something to tell the player about this square before they pick it: an army put in a square where an enemy figure stands, which is not automated, or the building or wonder the item replaces. Absent for a plain square. */
   readonly note?: string
+  /** The player's own building, wonder or Great Person on the square, which the item replaces: it is taken off the square first. Absent for an empty square and for a figure. */
+  readonly replaces?: ReplacedPiece
 }
 
 export interface BuildChoice {
   /**
    * A stable key for lists: the asset id of a building or a figure (the figure's
-   * is of the player's colour), `units/<type>` for a unit, which has no asset.
+   * is of the player's colour), `units/<type>` for a unit, which has no asset, and `walls` for City Walls.
    * Send `item` back to the action, never this.
    */
   readonly assetId: string
   /** What the choice builds, in the shape the `build` payload takes. */
   readonly item: BuildItem
-  /** `square` for a building or a figure, which the player puts on a highlighted square; `none` for a unit, which is a private card. */
+  /** `square` for a building or a figure, which the player puts on a highlighted square; `none` for a unit, which is a private card, and for City Walls, which turn the city marker over. */
   readonly placement: 'square' | 'none'
   readonly label: string
   /** Production the item costs. */
   readonly cost: number
+  /** Only for a wonder with a discount: the other price, for example "15 without Metalworking". Costs are not checked for a wonder, so this is what the player reads. */
+  readonly costNote?: string
   /** Trade the player pays to cover what the city's production lacks. 0 when the production is enough. */
   readonly tradeToPay: number
   /** Every square the item may be put on, in reading order. Never empty when `placement` is `square`, always empty when it is `none`. */
@@ -170,8 +185,8 @@ interface Scene {
   readonly state: GameState
   /** Every city centre on the map, of every colour: a metropolis has two. */
   readonly centres: ReadonlySet<string>
-  /** The label of what stands on a square and keeps a building off it: a building, a wonder, a Great Person or a city-state. */
-  readonly occupiers: ReadonlyMap<string, string>
+  /** What stands on each square: buildings, wonders, Great People and city-states. A building, wonder or Great Person can be replaced by a new building or wonder; a city-state keeps it off. */
+  readonly standing: ReadonlyMap<string, readonly BoardPiece[]>
   /** The squares of city-states, which keep a figure off as well. */
   readonly cityStates: ReadonlySet<string>
   /** "hut" or "village" for each square holding such a marker. */
@@ -199,7 +214,7 @@ function sceneOf(state: GameState): Scene {
       for (const centre of footprint.centers) centres.add(keyOf(centre))
     }
   }
-  const occupiers = new Map<string, string>()
+  const standing = new Map<string, BoardPiece[]>()
   const cityStates = new Set<string>()
   const markers = new Map<string, string>()
   const figures = new Map<string, BoardPiece[]>()
@@ -225,10 +240,10 @@ function sceneOf(state: GameState): Scene {
       if (!markers.has(key)) markers.set(key, marker)
     } else {
       if (piece.category === 'citystate') cityStates.add(key)
-      if (!occupiers.has(key)) occupiers.set(key, piece.label)
+      standing.set(key, [...(standing.get(key) ?? []), piece])
     }
   }
-  return { state, centres, occupiers, cityStates, markers, figures, terrain: new Map() }
+  return { state, centres, standing, cityStates, markers, figures, terrain: new Map() }
 }
 
 function terrainOf(scene: Scene, cell: Cell): Terrain | null {
@@ -248,35 +263,133 @@ function terrainOf(scene: Scene, cell: Cell): Terrain | null {
 type SquareProblem =
   | { readonly kind: 'centre' }
   | { readonly kind: 'occupied'; readonly by: string }
+  /** A wonder of another player's: only a player's own building or wonder may be replaced. */
+  | { readonly kind: 'foreign'; readonly by: string }
+  /** The city already has its one wonder or limited building, and a new one may only replace that. */
+  | { readonly kind: 'limit'; readonly what: string; readonly holder: string }
   | { readonly kind: 'blockaded' }
   | { readonly kind: 'unknown-terrain' }
-  | { readonly kind: 'wrong-terrain'; readonly terrain: Terrain; readonly assetId: string }
+  | { readonly kind: 'wrong-terrain'; readonly terrain: Terrain; readonly name: string; readonly allowed: readonly Terrain[] }
   | { readonly kind: 'city-state' }
   | { readonly kind: 'marker'; readonly marker: string }
   | { readonly kind: 'water' }
   | { readonly kind: 'full'; readonly count: number; readonly limit: number }
 
+/** Where a building or wonder may go on a square: nowhere (the problem), or there, taking the place of `replaces` when something of the player's stands on it. */
+type Placement = { readonly problem: SquareProblem } | { readonly replaces?: BoardPiece }
+
 /**
- * Why a building cannot go on a map square, or `undefined` when it can. The
- * order is the order the reasons are given in: something that makes the square
- * unusable for every building comes before the terrain, which is about this one.
+ * Whether a building or wonder can go on a map square and what it takes the place of. The
+ * order is the order the reasons are given in: something that makes the square unusable
+ * for every building comes before the terrain, which is about this one. A square with a
+ * building, wonder or Great Person of the player's own is usable (base rules p. 17 and 18: it is
+ * replaced, if the new piece can stand there once the old one is gone); a city-state or another
+ * player's wonder keeps it off.
  */
-function squareProblem(
+function placementOf(
   scene: Scene,
   footprint: CityFootprintView,
-  assetId: string,
+  rules: PlacementRules,
   cell: Cell,
-): SquareProblem | undefined {
-  if (scene.centres.has(keyOf(cell))) return { kind: 'centre' }
-  const by = scene.occupiers.get(keyOf(cell))
-  if (by !== undefined) return { kind: 'occupied', by }
-  // Base rules p. 27: a building cannot be placed in a blockaded square
-  if (footprint.hasEnemyFigureAt(cell)) return { kind: 'blockaded' }
+  playerId: string,
+): Placement {
+  if (scene.centres.has(keyOf(cell))) return { problem: { kind: 'centre' } }
+  const standing = scene.standing.get(keyOf(cell)) ?? []
+  const blocker = standing.find((piece) => piece.category === 'citystate')
+  // One piece is replaced; old data with two on a square is left alone
+  if (blocker !== undefined || standing.length > 1) {
+    return { problem: { kind: 'occupied', by: (blocker === undefined ? standing : [blocker]).map((piece) => piece.label).join(' and ') } }
+  }
+  const here = standing[0]
+  if (here?.category === 'wonder' && here.ownerId !== undefined && here.ownerId !== null && here.ownerId !== playerId) {
+    return { problem: { kind: 'foreign', by: here.label } }
+  }
+  // Base rules p. 27: buildings and wonders cannot be placed in a blockaded square
+  if (footprint.hasEnemyFigureAt(cell)) return { problem: { kind: 'blockaded' } }
   const terrain = terrainOf(scene, cell)
-  if (terrain === null) return { kind: 'unknown-terrain' }
-  const allowed = BUILDING_TERRAIN[assetId] ?? []
-  if (!allowed.includes(terrain)) return { kind: 'wrong-terrain', terrain, assetId }
-  return undefined
+  if (terrain === null) return { problem: { kind: 'unknown-terrain' } }
+  if (!rules.allowed.includes(terrain)) {
+    return { problem: { kind: 'wrong-terrain', terrain, name: rules.name, allowed: rules.allowed } }
+  }
+  return here === undefined ? {} : { replaces: here }
+}
+
+/** The name a building, wonder or Great Person goes by in a sentence: "Library", "The Colossus", "Artist". */
+const pieceNameOf = (piece: BoardPiece): string =>
+  piece.category === 'building' ? (buildingNameOf(piece.assetId) ?? piece.label) : piece.label
+
+/** What a square tells the player when the new piece replaces one of theirs. */
+function replaceNoteOf(piece: BoardPiece): string {
+  if (piece.category === 'wonder') {
+    return `Replaces ${pieceNameOf(piece).replace(/^The /, 'the ')}, which is destroyed and cannot be built again for the rest of the game.`
+  }
+  if (piece.category === 'greatperson') {
+    return `Replaces your ${pieceNameOf(piece)} (Great Person), which goes back to your player area and can be placed again at the start of a turn.`
+  }
+  return `Replaces your ${pieceNameOf(piece)}, which is taken off the board and goes back to the supply.`
+}
+
+function squareOf(cell: Cell, replaces: BoardPiece | undefined): BuildSquare {
+  const base = { column: cell.column, row: cell.row, label: squareLabel(cell) }
+  if (replaces === undefined) return base
+  return {
+    ...base,
+    note: replaceNoteOf(replaces),
+    replaces: {
+      assetId: replaces.assetId,
+      label: pieceNameOf(replaces),
+      kind: replaces.category === 'wonder' ? 'wonder' : replaces.category === 'greatperson' ? 'greatperson' : 'building',
+    },
+  }
+}
+
+/**
+ * The wonder or limited building a city already holds, when the item is one of those: a city may
+ * hold only one of each, so a new one can only take its place.
+ */
+interface OnlyReplacing {
+  readonly piece: BoardPiece
+  /** "wonder" or "limited building": the noun the reasons use. */
+  readonly what: string
+}
+
+/** The squares an item may go on, each with what it replaces, and the reason for every other square of the outskirts. */
+function placedSquaresOf(
+  scene: Scene,
+  footprint: CityFootprintView,
+  rules: PlacementRules,
+  outskirts: readonly Cell[],
+  playerId: string,
+  only: OnlyReplacing | undefined,
+): { readonly squares: readonly BuildSquare[]; readonly problems: ReadonlyMap<string, SquareProblem> } {
+  const squares: BuildSquare[] = []
+  const problems = new Map<string, SquareProblem>()
+  for (const cell of outskirts) {
+    const placement = placementOf(scene, footprint, rules, cell, playerId)
+    if ('problem' in placement) {
+      problems.set(keyOf(cell), placement.problem)
+    } else if (only !== undefined && placement.replaces?.id !== only.piece.id) {
+      // The city already has its one wonder or limited building: a new one may only take its place
+      problems.set(keyOf(cell), { kind: 'limit', what: only.what, holder: pieceNameOf(only.piece) })
+    } else {
+      squares.push(squareOf(cell, placement.replaces))
+    }
+  }
+  return { squares, problems }
+}
+
+/** What decides where a building or a wonder may stand: the terrains, and the noun the reasons use. */
+interface PlacementRules {
+  /** "Library", "wonder": follows "a" in the reasons. */
+  readonly name: string
+  readonly allowed: readonly Terrain[]
+}
+
+/** A building has its own terrain; every wonder goes on any terrain but water (base rules p. 17). */
+function placementRulesOf(item: { readonly kind: 'building' | 'wonder'; readonly assetId: string }): PlacementRules {
+  return item.kind === 'wonder'
+    ? { name: 'wonder', allowed: CATEGORY_TERRAIN.wonder ?? [] }
+    : { name: buildingNameOf(item.assetId) ?? 'building', allowed: BUILDING_TERRAIN[item.assetId] ?? [] }
 }
 
 /** The techs that let a figure end its movement in water (base rules p. 15; `techText.ts`). */
@@ -365,12 +478,16 @@ function describeProblem(cell: Cell, problem: SquareProblem): string {
       return `${square} is a city centre.`
     case 'occupied':
       return `${square} is already taken: ${problem.by} stands there.`
+    case 'foreign':
+      return `${square} holds ${problem.by}, which belongs to another player and cannot be replaced.`
+    case 'limit':
+      return `${square} cannot be used: ${problem.holder} is the city's one ${problem.what}, and a new one can only replace it.`
     case 'blockaded':
       return `${square} is blockaded by an enemy figure.`
     case 'unknown-terrain':
       return `The terrain of ${square} is not known.`
     case 'wrong-terrain':
-      return `${square} is ${problem.terrain}, and a ${buildingNameOf(problem.assetId) ?? 'building'} needs ${describeAllowed(BUILDING_TERRAIN[problem.assetId] ?? [])}.`
+      return `${square} is ${problem.terrain}, and a ${problem.name} needs ${describeAllowed(problem.allowed)}.`
     case 'city-state':
       return `${square} is a city-state square.`
     case 'marker':
@@ -393,6 +510,9 @@ function noSquareReason(intro: string | null, problems: readonly SquareProblem[]
   const parts: string[] = []
   const wrong = count('wrong-terrain')
   const taken = count('occupied')
+  const foreign = count('foreign')
+  const limit = problems.find((problem) => problem.kind === 'limit')
+  const limited = count('limit')
   const blockaded = count('blockaded')
   const unknown = count('unknown-terrain')
   const centres = count('centre')
@@ -402,6 +522,10 @@ function noSquareReason(intro: string | null, problems: readonly SquareProblem[]
   const full = count('full')
   if (wrong > 0) parts.push(`${plural(wrong, 'square has', 'squares have')} the wrong terrain`)
   if (taken > 0) parts.push(`${plural(taken, 'square is', 'squares are')} taken`)
+  if (foreign > 0) parts.push(`${plural(foreign, 'square holds', 'squares hold')} another player's wonder, which cannot be replaced`)
+  if (limited > 0 && limit?.kind === 'limit') {
+    parts.push(`${plural(limited, 'square is', 'squares are')} not allowed because the city already has its one ${limit.what}, ${limit.holder}, which a new one can only replace`)
+  }
   if (blockaded > 0) parts.push(`${plural(blockaded, 'square is', 'squares are')} blockaded`)
   if (unknown > 0) parts.push(`${plural(unknown, 'square has', 'squares have')} unknown terrain`)
   if (centres > 0) parts.push(`${plural(centres, 'square is', 'squares are')} a city centre`)
@@ -412,8 +536,7 @@ function noSquareReason(intro: string | null, problems: readonly SquareProblem[]
   return `No legal square. ${intro === null ? '' : `${intro}: `}${parts.join(', ')}.`
 }
 
-const buildingIntro = (assetId: string): string =>
-  `A ${buildingNameOf(assetId) ?? 'building'} needs ${describeAllowed(BUILDING_TERRAIN[assetId] ?? [])}`
+const placementIntro = (rules: PlacementRules): string => `A ${rules.name} needs ${describeAllowed(rules.allowed)}`
 
 /**
  * Why `cell` is not a legal square for the item in this city, as a sentence,
@@ -440,8 +563,16 @@ export function buildSquareRefusal(
     return `${square} is not in the outskirts of that city.`
   }
   const scene = sceneOf(state)
-  if (item.kind === 'building') {
-    const problem = squareProblem(scene, footprint, item.assetId, cell)
+  if (item.kind === 'building' || item.kind === 'wonder') {
+    const { problems } = placedSquaresOf(
+      scene,
+      footprint,
+      placementRulesOf(item),
+      mapOutskirts(state.board, footprint),
+      player.playerId,
+      onlyReplacingOf(scene, mapOutskirts(state.board, footprint), item),
+    )
+    const problem = problems.get(keyOf(cell))
     return problem === undefined ? undefined : describeProblem(cell, problem)
   }
   const rules = figureRulesOf(player, item.kind, techViewOf(player))
@@ -491,20 +622,65 @@ function needsReason(techs: TechView, needed: readonly string[]): string {
 
 const unlockReason = (techs: TechView, assetId: string): string => needsReason(techs, techsUnlocking(assetId))
 
-/** The first limited building standing in the city's outskirts, whoever's it is. */
-function limitedBuildingIn(scene: Scene, outskirts: readonly Cell[]): string | undefined {
+/** The first piece of a category (and, for a building, a test) standing in the city's outskirts, whoever's it is. */
+function pieceIn(scene: Scene, outskirts: readonly Cell[], wanted: (piece: BoardPiece) => boolean): BoardPiece | undefined {
   const keys = new Set(outskirts.map(keyOf))
-  const found = scene.state.board.pieces.find((piece) => {
-    if (piece.category !== 'building' || !LIMITED_BUILDINGS.has(piece.assetId)) return false
+  return scene.state.board.pieces.find((piece) => {
+    if (!wanted(piece)) return false
     const cell = mapCellOf(scene.state.board, piece)
     return cell !== null && keys.has(keyOf(cell))
   })
-  return found === undefined ? undefined : (buildingNameOf(found.assetId) ?? found.label)
 }
+
+/** The first limited building standing in the city's outskirts, whoever's it is. */
+const limitedBuildingIn = (scene: Scene, outskirts: readonly Cell[]): BoardPiece | undefined =>
+  pieceIn(scene, outskirts, (piece) => piece.category === 'building' && LIMITED_BUILDINGS.has(piece.assetId))
+
+/** The first wonder standing in the city's outskirts, whoever's it is: a city holds one. */
+const wonderIn = (scene: Scene, outskirts: readonly Cell[]): BoardPiece | undefined =>
+  pieceIn(scene, outskirts, (piece) => piece.category === 'wonder')
+
+/**
+ * What a new building or wonder may only replace in this city (base rules p. 17: a city holds one
+ * wonder and one limited building, and a replaced piece is removed before the new one is placed):
+ * the wonder for a wonder, the limited building for a limited one. `undefined` when the city has
+ * none, or the item is neither.
+ */
+function onlyReplacingOf(
+  scene: Scene,
+  outskirts: readonly Cell[],
+  item: { readonly kind: 'building' | 'wonder'; readonly assetId: string },
+): OnlyReplacing | undefined {
+  if (item.kind === 'wonder') {
+    const piece = wonderIn(scene, outskirts)
+    return piece === undefined ? undefined : { piece, what: 'wonder' }
+  }
+  if (!LIMITED_BUILDINGS.has(item.assetId)) return undefined
+  const piece = limitedBuildingIn(scene, outskirts)
+  return piece === undefined ? undefined : { piece, what: 'limited building' }
+}
+
+/** Whether two buildings come from one supply: the basic and the upgraded form of a building share it. */
+const sameSupply = (a: string, b: string): boolean =>
+  a === b || BUILDING_UPGRADES[a] === b || BUILDING_UPGRADES[b] === a
 
 // ---------------------------------------------------------------------------
 // Figures and units
 // ---------------------------------------------------------------------------
+
+/** The key of City Walls in a list of choices: it has no asset of its own. */
+const WALLS_KEY = 'walls'
+/** Masonry lets a player build City Walls for 7 production (the tech card, `techText.ts`). */
+const WALLS_TECH = 'Masonry'
+const WALLS_COST = 7
+
+/**
+ * The asset id of a city marker's walled side (`cities/bluecity2` to `cities/bluecitywalled2`), or
+ * `undefined` when the marker is already walled.
+ */
+export function walledAssetIdOf(cityAssetId: string): string | undefined {
+  return cityAssetId.includes('walled') ? undefined : cityAssetId.replace(/(\d+)$/, 'walled$1')
+}
 
 /** Base rules p. 15 to 17: an army figure costs 4 production, a scout figure 6. */
 const FIGURE_COST = { army: 4, scout: 6 } as const
@@ -544,11 +720,15 @@ export function buildItemName(item: BuildItem): string {
   switch (item.kind) {
     case 'building':
       return buildingNameOf(item.assetId) ?? item.assetId
+    case 'wonder':
+      return findBoardAsset(item.assetId)?.label ?? item.assetId
     case 'army':
     case 'scout':
       return item.kind
     case 'unit':
       return `${item.unitType} unit`
+    case 'walls':
+      return 'City Walls'
   }
 }
 
@@ -586,8 +766,26 @@ function paymentFor(
   }
 }
 
-/** What does not depend on the city, worked out once per call: the card supply of each unit type and the figures left in the box. */
+/**
+ * The wonders a city can produce (base rules p. 17: "the wonders that are faceup in
+ * the market"): the wonder pieces in the shared Wonders area that nobody owns. The
+ * market is that area, as `drawWonderToBoard` fills it. A wonder in a player's own
+ * area (Egypt's start wonder) or on the map is not in the market. By name, so the order
+ * does not depend on how the pieces were dropped.
+ */
+export function marketWondersOf(board: Board, pieces: readonly BoardPiece[]): readonly BoardPiece[] {
+  return pieces
+    .filter((piece) => piece.category === 'wonder' && isInWondersArea(board, piece) && (piece.ownerId ?? null) === null)
+    .sort((a, b) => nameOfWonder(a).localeCompare(nameOfWonder(b)))
+}
+
+/** A wonder's label without the leading "The", so "The Colossus" sorts under C. */
+const nameOfWonder = (piece: BoardPiece): string => piece.label.replace(/^The /, '')
+
+/** What does not depend on the city, worked out once per call: the wonders in the market, the card supply of each unit type and the figures left in the box. */
 interface SharedSupply {
+  /** The wonders faceup in the market: on the board in the shared Wonders area and owned by nobody, by name. */
+  readonly market: readonly BoardPiece[]
   readonly unitCards: Readonly<Record<UnitType, boolean>>
   readonly figures: Readonly<Record<'army' | 'scout', { readonly asset: ReturnType<typeof findBoardAsset>; readonly remaining: number | undefined }>>
 }
@@ -601,6 +799,7 @@ function sharedSupplyOf(state: GameState, colour: string): SharedSupply {
     }
   }
   return {
+    market: marketWondersOf(state.board, state.board.pieces),
     unitCards: {
       infantry: unitCardAvailable(state, UNIT_SHEET.infantry),
       artillery: unitCardAvailable(state, UNIT_SHEET.artillery),
@@ -633,7 +832,6 @@ function optionsForCity(
   const { state } = scene
   const techs = techViewOf(player)
   const outskirts = mapOutskirts(state.board, footprint)
-  const limited = limitedBuildingIn(scene, outskirts)
   const choices: BuildChoice[] = []
   const unavailable: BuildUnavailable[] = []
 
@@ -659,31 +857,25 @@ function optionsForCity(
       skip('This building is not in the game data.')
       continue
     }
+    const rules = placementRulesOf({ kind: 'building', assetId })
+    const placed = placedSquaresOf(scene, footprint, rules, outskirts, player.playerId, onlyReplacingOf(scene, outskirts, item))
+    // With none left in the supply, a building can still replace one of the same supply: it goes back before the new one is placed (base rules p. 17)
     const remaining = remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers)
-    if (remaining !== undefined && remaining <= 0) {
+    const soldOut = remaining !== undefined && remaining <= 0
+    const squares = soldOut
+      ? placed.squares.filter((square) => square.replaces?.kind === 'building' && sameSupply(square.replaces.assetId, assetId))
+      : placed.squares
+    if (soldOut && squares.length === 0) {
       const shared = Object.hasOwn(BUILDING_UPGRADES, assetId) || Object.values(BUILDING_UPGRADES).includes(assetId)
       skip(
         `None left in the supply: all ${boardAssetLimit(asset, state.numOfPlayers) ?? 0} are on the board` +
-          (shared ? ' (the basic and the upgraded form share one supply).' : '.'),
+          (shared ? ' (the basic and the upgraded form share one supply).' : '.') +
+          ' One of yours of the same kind can be replaced, but none stands in this city.',
       )
       continue
-    }
-    if (LIMITED_BUILDINGS.has(assetId) && limited !== undefined) {
-      skip(
-        `${city.label} already has a ${limited}. A city may hold only one of Market, Bank, Temple, Cathedral, Barracks and Academy.`,
-      )
-      continue
-    }
-
-    const squares: BuildSquare[] = []
-    const problems: SquareProblem[] = []
-    for (const cell of outskirts) {
-      const problem = squareProblem(scene, footprint, assetId, cell)
-      if (problem === undefined) squares.push({ column: cell.column, row: cell.row, label: squareLabel(cell) })
-      else problems.push(problem)
     }
     if (squares.length === 0) {
-      skip(noSquareReason(buildingIntro(assetId), problems))
+      skip(noSquareReason(placementIntro(rules), [...placed.problems.values()]))
       continue
     }
 
@@ -693,6 +885,69 @@ function optionsForCity(
       continue
     }
     choices.push({ assetId, item, placement: 'square', label, cost: data.cost, tradeToPay: payment.tradeToPay, squares })
+  }
+
+  // City Walls (base rules p. 17, Masonry): a building in the city centre. They turn the city marker over, so no square is picked
+  {
+    const item: BuildItem = { kind: 'walls' }
+    const label = 'City Walls'
+    const skip = (reason: string): void => {
+      unavailable.push({ assetId: WALLS_KEY, item, label, reason })
+    }
+    const walled = walledAssetIdOf(footprint.piece.assetId)
+    if (!techs.revealed.has(WALLS_TECH)) {
+      skip(needsReason(techs, [WALLS_TECH]))
+    } else if (walled === undefined) {
+      skip(`${city.label} already has City Walls. A city may have only one.`)
+    } else if (findBoardAsset(walled) === undefined) {
+      skip('The walled city marker is not in the game data.')
+    } else {
+      const payment = paymentFor(WALLS_COST, `Costs ${WALLS_COST} production`, city, production, player)
+      if ('short' in payment) skip(payment.short)
+      else choices.push({ assetId: WALLS_KEY, item, placement: 'none', label, cost: WALLS_COST, tradeToPay: payment.tradeToPay, squares: [] })
+    }
+  }
+
+  // Wonders from the market: one per city, on any terrain but water; a second one replaces the first. Their cost is shown, not enforced
+  for (const piece of shared.market) {
+    const item = { kind: 'wonder', assetId: piece.assetId } as const
+    const label = piece.label
+    const skip = (reason: string): void => {
+      unavailable.push({ assetId: piece.assetId, item, label, reason })
+    }
+    const data = wonderDataOf(piece.assetId)
+    if (data === undefined) {
+      skip('This wonder is not in the game data.')
+      continue
+    }
+
+    const rules = placementRulesOf(item)
+    const { squares, problems } = placedSquaresOf(scene, footprint, rules, outskirts, player.playerId, onlyReplacingOf(scene, outskirts, item))
+    if (squares.length === 0) {
+      skip(noSquareReason(placementIntro(rules), [...problems.values()]))
+      continue
+    }
+
+    // The cost is only told, not checked against the city's production or paid with trade:
+    // cards, Great Persons and other effects add hammers, and how to count them is not settled.
+    const cost = wonderCostFor(data, techs.revealed)
+    const discount = data.discount
+    const costNote =
+      discount === undefined
+        ? undefined
+        : cost === discount.cost
+          ? `${data.cost} without ${discount.tech}`
+          : `${discount.cost} with ${discount.tech}`
+    choices.push({
+      assetId: piece.assetId,
+      item,
+      placement: 'square',
+      label,
+      cost,
+      ...(costNote === undefined ? {} : { costNote }),
+      tradeToPay: 0,
+      squares,
+    })
   }
 
   // Army and scout figures: put on a square of the outskirts like a building

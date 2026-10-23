@@ -1,19 +1,37 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '../lib/api.js'
 import type { CityActionOptions, CityProduction, PlayerView, UpgradeFamilyOption } from '../lib/api.js'
 import { resetPendingRequestIds } from './AssistedActions.js'
-import { CityOrders } from './CityOrders.js'
+import { AssistedActionsPanel } from './panelForTests.js'
 import type { Run } from './GameView.js'
 
+/** The two gather options every city has; these tests are about the Building Program and the Upgrades. */
+const GATHER: Pick<CityActionOptions, 'devoteToTheArts' | 'harvest' | 'actedThisTurn'> = {
+  devoteToTheArts: {
+    status: 'ready',
+    reason: 'Ready to devote this city to the arts.',
+    culture: 1,
+    parts: [{ label: 'The city itself', amount: 1 }],
+    notes: [],
+    scouts: [],
+  },
+  harvest: { status: 'unavailable', reason: 'No resource icon in the outskirts.', choices: [], notes: [] },
+  actedThisTurn: [],
+}
+
+
 beforeEach(() => {
+  localStorage.setItem('civ.panel.actions', 'true')
   resetPendingRequestIds()
 })
 afterEach(() => {
   cleanup()
+  localStorage.removeItem('civ.panel.actions')
   vi.restoreAllMocks()
 })
 
@@ -37,16 +55,19 @@ function city(overrides: Partial<CityProduction> = {}): CityProduction {
 const READY: CityActionOptions = {
   cityPieceId: 'city-1',
   label: 'Capital B3',
+  ...GATHER,
   startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
 }
 const WRONG_PHASE: CityActionOptions = {
   cityPieceId: 'city-1',
   label: 'Capital B3',
+  ...GATHER,
   startBuildingProgram: { status: 'wrong-phase', reason: 'It is not your City Management phase.', hasMarker: false },
 }
 const MARKER: CityActionOptions = {
   cityPieceId: 'city-1',
   label: 'Capital B3',
+  ...GATHER,
   startBuildingProgram: {
     status: 'unavailable',
     reason: 'This city already has a Building Program marker.',
@@ -107,16 +128,21 @@ const run: Run = async (action) => {
   await action()
 }
 
-function renderPanel(view: PlayerView, options: { busy?: boolean; readOnly?: boolean } = {}): void {
-  render(
-    <CityOrders
+/** The page as GameView lays it out: the city actions are in Your actions. */
+function page(view: PlayerView, options: { busy?: boolean; readOnly?: boolean; run?: Run } = {}): React.JSX.Element {
+  return (
+    <AssistedActionsPanel
       gameId="g1"
       view={view}
       busy={options.busy ?? false}
       readOnly={options.readOnly ?? false}
-      run={run}
-    />,
+      run={options.run ?? run}
+    />
   )
+}
+
+function renderPanel(view: PlayerView, options: { busy?: boolean; readOnly?: boolean; run?: Run } = {}): void {
+  render(page(view, options))
 }
 
 const startButton = (): HTMLButtonElement =>
@@ -198,6 +224,7 @@ describe('Start Building Program', () => {
     const secondOptions: CityActionOptions = {
       cityPieceId: 'city-2',
       label: 'City D6',
+      ...GATHER,
       startBuildingProgram: { status: 'ready', reason: 'Ready to start a Building Program.', hasMarker: false },
     }
     const send = vi.spyOn(api, 'startBuildingProgram').mockResolvedValue({} as PlayerView)
@@ -225,10 +252,9 @@ describe('Start Building Program', () => {
     expect(send).toHaveBeenNthCalledWith(2, 'g1', expect.any(String), 3, 'city-2')
   })
 
-  it('lists no city of an opponent and says so when the viewer has none', () => {
+  it('has no button for an opponent’s city, which is not listed at all', () => {
     renderPanel(viewOf({ own: [], others: [city({ pieceId: 'theirs', label: 'City H8' })], cityActions: [] }))
     expect(screen.queryByRole('heading', { name: 'City H8' })).toBeNull()
-    expect(screen.getByText('You have no city on the map.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
   })
 
@@ -240,7 +266,7 @@ describe('Start Building Program', () => {
 
     // GameView passes readOnly for a replay and for a locked game.
     renderPanel(viewOf({ cityActions: [READY] }), { readOnly: true })
-    expect(screen.getByText('City orders are not available in a replay or a locked game.')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Capital B3' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
   })
 
@@ -319,30 +345,36 @@ describe('Upgrades', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('Nothing can be upgraded now.')
   })
 
-  it('keeps a refusal on show when the refreshed view has no options', async () => {
+  it('keeps a stale refusal on the refreshed view until the next revision', async () => {
     vi.spyOn(api, 'upgradeBuildings').mockRejectedValue(
-      new ApiError(422, 'ACTION_REFUSED', 'Those buildings are already upgraded.'),
+      new ApiError(409, 'STALE_REVISION', 'Those buildings are already upgraded.'),
     )
     const before = viewOf({ upgradeOptions: [GRANARY], rev: 5 })
     const after = viewOf({ upgradeOptions: [], rev: 6 })
-    const element = (view: PlayerView): React.JSX.Element => (
-      <CityOrders gameId="g1" view={view} busy={false} readOnly={false} run={reloadingRun} />
-    )
-    // The reload that follows the press brings a view where a co-player has flipped the pieces.
-    const reloadingRun: Run = async (action) => {
-      await action()
-      rendered.rerender(element(after))
+    const later = viewOf({ upgradeOptions: [], rev: 7 })
+    function Harness(): React.JSX.Element {
+      const [view, setView] = useState(before)
+      const reloadingRun: Run = async (action) => {
+        await action()
+        // GameView queues the refreshed view; the action can settle before React commits it.
+        setTimeout(() => setView(after), 0)
+      }
+      return (
+        <>
+          {page(view, { run: reloadingRun })}
+          <button type="button" onClick={() => setView(later)}>Advance revision</button>
+        </>
+      )
     }
-    const rendered = render(element(before))
+    render(<Harness />)
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (3)' }))
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe('Those buildings are already upgraded.')
     expect(screen.getByRole('heading', { name: 'Upgrades' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Upgrade/ })).toBeNull()
 
-    // A later move changes the revision and clears the message.
-    rendered.rerender(element(viewOf({ upgradeOptions: [], rev: 7 })))
-    expect(screen.queryByRole('alert')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Advance revision' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
     expect(screen.queryByRole('heading', { name: 'Upgrades' })).toBeNull()
   })
 
@@ -370,7 +402,7 @@ describe('Upgrades', () => {
         signOut()
       }
     }
-    render(<CityOrders gameId="g1" view={viewOf({ upgradeOptions: [GRANARY] })} busy={false} readOnly={false} run={signingOutRun} />)
+    render(page(viewOf({ upgradeOptions: [GRANARY] }), { run: signingOutRun }))
     const button = screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (3)' }) as HTMLButtonElement
     fireEvent.click(button)
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1))

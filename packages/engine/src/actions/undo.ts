@@ -213,12 +213,12 @@ export function vote(state: GameState, input: VoteInput): ActionResult {
   const entry = findLogEntry(state, input.logId)
   if (entry === undefined) return err({ kind: 'LOG_ENTRY_NOT_FOUND', logId: input.logId })
   if (entry.undo === null) return err({ kind: 'UNDO_NOT_INITIATED', logId: input.logId })
+  // A vote that has run is over: a late yes would otherwise run the undo again.
+  // An assisted action says so with its own error, further down.
+  if (entry.item !== null && entry.undo.done) return err({ kind: 'UNDO_ALREADY_DONE', logId: input.logId })
   if (entry.item === null && !isAssistedEntry(entry)) {
     return err({ kind: 'NOTHING_TO_UNDO', logId: input.logId })
   }
-  // A vote that has run is over: a late yes would otherwise run the undo again.
-  // An assisted entry answers with its own error from its record, below.
-  if (entry.item !== null && entry.undo.done) return err({ kind: 'UNDO_ALREADY_DONE', logId: input.logId })
 
   const voter = findPlayer(state, input.playerId)
   if (voter === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId: input.playerId })

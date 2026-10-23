@@ -42,6 +42,7 @@ import {
   rewardDrawCount,
 } from './culture-track.js'
 import type { CultureAdvanceCost, CultureLevel, CultureMarker, CultureSpace } from './culture-track.js'
+import { cultureHandBlock, cultureHandWarning } from './culture-hand.js'
 import type { EngineError } from './errors.js'
 import { itemName } from './item.js'
 import type { Item } from './item.js'
@@ -151,6 +152,12 @@ function planAdvance(
   const where = `Advance to ${describeSpace(to)}: ${describeCost(cost)}.`
   if (livePendingRewards(player).length > 0) {
     return err(blocked('unavailable', `${where} Choose the card to keep from your last advance first.`))
+  }
+
+  // A culture event gives a culture card: the hand must be down to its size first
+  if (to.kind === 'event') {
+    const full = cultureHandBlock(state, player)
+    if (full !== undefined) return err(blocked('unavailable', `${where} ${full}`))
   }
 
   const lackingCulture = Math.max(0, cost.culture - player.stats.culture)
@@ -296,7 +303,7 @@ function hasMarkerLeft(state: GameState, item: Item): boolean {
 }
 
 /** The player's own area, where a marker is put. */
-const ownAreaOf = (state: GameState, playerId: string) =>
+export const ownAreaOf = (state: GameState, playerId: string) =>
   playerAreas(state.board, state.players).find((area) => area.playerId === playerId)
 
 /**
@@ -855,9 +862,12 @@ export const cultureAdvance: AssistedActionDefinition = {
     if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
     const plan = planAdvance(state, player)
     if (!plan.ok) return plan.error
+    // A culture event keeps one card (the Mysticism extra goes back); a Great Person goes to the markers.
+    const warning = plan.value.to.kind === 'event' ? cultureHandWarning(state, player, 1) : undefined
     return {
       status: 'ready',
       reason: `Advance to ${describeSpace(plan.value.to)}: ${describeCost(plan.value.cost)}.`,
+      ...(warning === undefined ? {} : { warning }),
     }
   },
 

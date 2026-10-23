@@ -1,5 +1,5 @@
 /**
- * The Start of Turn actions that change numbers (assisted play, part 9): social
+ * The Start of Turn actions that change numbers (assisted play, part 13): social
  * policies, government abilities, changing government and investing a coin. Rules and
  * sources: `docs/agents/tasks/assisted-sot.md`.
  */

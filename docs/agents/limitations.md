@@ -49,6 +49,12 @@ were made as part of the documentation cleanup.
 - **Revealed feed:** the expanding history fetch is capped at 100 items;
   it is not complete pagination. Revision-list pagination/caching and broader
   real-device testing were also deferred, not silently completed.
+- **Trade offer retries:** the chat panel holds one request id per exact offer
+  until a send succeeds, so a retry after a lost response cannot make a second
+  offer. If the server stored the offer but the response was lost and the player
+  never retried, that id stays held while the panel is open; sending the same
+  words much later then answers with the old outcome, and a second press makes
+  the new offer. The projection hides request ids, so the panel cannot tell.
 
 ## Storage and delivery
 

@@ -7,8 +7,10 @@ import type {
   AssistedPayload,
   BuildItem,
   BuildPayload,
+  DevoteToTheArtsPayload,
   GameState,
   Government,
+  HarvestPayload,
   PlayerStatKey,
   SheetName,
   StartBuildingProgramPayload,
@@ -19,7 +21,10 @@ import {
   BUILDABLE_BUILDING_IDS,
   BUILDING_UPGRADES,
   CULTURE_CARD,
+  MAX_DEVOTE_CULTURE,
+  RESOURCE_KINDS,
   UNIT_TYPES,
+  WONDER_ASSET_IDS,
   chooseSocialPolicy,
   chooseTech,
   discardBarbarians,
@@ -102,7 +107,7 @@ const extraFields = (body: Record<string, unknown>, allowed: readonly string[]):
  * with it. Only the shape is checked here (ids, a known building or unit type,
  * whole numbers, a boolean, no extra fields in the body or the item); whether the city, the
  * item and the square are legal is the engine's decision, made from the fresh
- * state. A building or a figure needs a target, a unit must not have one.
+ * state. A building, a wonder or a figure needs a target, a unit and City Walls must not have one.
  */
 function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string {
   const extra = extraFields(body, BUILD_FIELDS)
@@ -121,16 +126,24 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
     if (typeof assetId === 'string' && BUILDABLE_BUILDING_IDS.includes(assetId)) {
       parsed = { kind: 'building', assetId }
     }
+  } else if (item['kind'] === 'wonder' && hasOnly('kind', 'assetId')) {
+    const assetId = item['assetId']
+    if (typeof assetId === 'string' && WONDER_ASSET_IDS.includes(assetId)) {
+      parsed = { kind: 'wonder', assetId }
+    }
   } else if ((item['kind'] === 'army' || item['kind'] === 'scout') && hasOnly('kind')) {
     parsed = { kind: item['kind'] }
   } else if (item['kind'] === 'unit' && hasOnly('kind', 'unitType')) {
     const unitType = UNIT_TYPES.find((candidate) => candidate === item['unitType'])
     if (unitType !== undefined) parsed = { kind: 'unit', unitType }
+  } else if (item['kind'] === 'walls' && hasOnly('kind')) {
+    parsed = { kind: 'walls' }
   }
   if (parsed === undefined) {
     return (
       `item must be { kind: "building", assetId } with the asset id of a building that can be built, ` +
-      `{ kind: "army" }, { kind: "scout" } or { kind: "unit", unitType } with unitType one of ${UNIT_TYPES.join(', ')}; no other fields`
+      `{ kind: "wonder", assetId } with the asset id of a wonder, ` +
+      `{ kind: "army" }, { kind: "scout" }, { kind: "walls" } or { kind: "unit", unitType } with unitType one of ${UNIT_TYPES.join(', ')}; no other fields`
     )
   }
   const rush = body['rush']
@@ -140,6 +153,11 @@ function parseBuildPayload(body: Record<string, unknown>): BuildPayload | string
   if (parsed.kind === 'unit') {
     // A unit is a card in the hand: there is no square to name
     if (body['target'] !== undefined) return 'a unit has no target: it is a card, not placed on a square'
+    return { cityPieceId, item: parsed, ...optionalRush }
+  }
+  if (parsed.kind === 'walls') {
+    // City Walls turn the city marker over: there is no square to name either
+    if (body['target'] !== undefined) return 'City Walls have no target: they turn the city marker over'
     return { cityPieceId, item: parsed, ...optionalRush }
   }
   const target = asRecord(body['target'])
@@ -166,6 +184,70 @@ function parseStartBuildingProgramPayload(body: Record<string, unknown>): StartB
     return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
   }
   return { cityPieceId }
+}
+
+const DEVOTE_FIELDS = ['cityPieceId', 'scoutPieceIds', 'culture'] as const
+const HARVEST_FIELDS = ['cityPieceId', 'resource', 'scoutPieceId'] as const
+
+/** More scouts than a player owns (two a colour, one white) cannot be named, so a longer list is a mistake. */
+const MAX_SCOUTS = 6
+
+/**
+ * The `devoteToTheArts` payload, or a sentence saying what is wrong with it: the city, the
+ * scouts whose squares are sent to it and the culture typed by hand, the last two optional.
+ * Whether the city and scouts are the player's, and what the estimate is, is the engine's decision.
+ */
+function parseDevotePayload(body: Record<string, unknown>): DevoteToTheArtsPayload | string {
+  const extra = extraFields(body, DEVOTE_FIELDS)
+  if (extra.length > 0) return `devoteToTheArts takes only ${DEVOTE_FIELDS.join(', ')}, not ${extra.join(', ')}`
+  const cityPieceId = requireString(body, 'cityPieceId')
+  if (cityPieceId === undefined || !REQUEST_ID.test(cityPieceId)) {
+    return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+  }
+  const scoutPieceIds = body['scoutPieceIds']
+  if (
+    scoutPieceIds !== undefined &&
+    (!Array.isArray(scoutPieceIds) ||
+      scoutPieceIds.length > MAX_SCOUTS ||
+      !scoutPieceIds.every((id) => typeof id === 'string' && REQUEST_ID.test(id)))
+  ) {
+    return `scoutPieceIds must be a list of at most ${MAX_SCOUTS} scout ids`
+  }
+  const culture = body['culture']
+  if (
+    culture !== undefined &&
+    (typeof culture !== 'number' || !Number.isInteger(culture) || culture < 0 || culture > MAX_DEVOTE_CULTURE)
+  ) {
+    return `culture must be a whole number from 0 to ${MAX_DEVOTE_CULTURE}`
+  }
+  return {
+    cityPieceId,
+    ...(scoutPieceIds === undefined ? {} : { scoutPieceIds: scoutPieceIds as string[] }),
+    ...(culture === undefined ? {} : { culture: culture as number }),
+  }
+}
+
+/**
+ * The `harvest` payload, or a sentence saying what is wrong with it: the city, one of the four
+ * resources and, for a resource under a scout, the scout. Which resource the city can take is
+ * the engine's decision.
+ */
+function parseHarvestPayload(body: Record<string, unknown>): HarvestPayload | string {
+  const extra = extraFields(body, HARVEST_FIELDS)
+  if (extra.length > 0) return `harvest takes only ${HARVEST_FIELDS.join(', ')}, not ${extra.join(', ')}`
+  const cityPieceId = requireString(body, 'cityPieceId')
+  if (cityPieceId === undefined || !REQUEST_ID.test(cityPieceId)) {
+    return 'cityPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+  }
+  const resource = body['resource']
+  if (typeof resource !== 'string' || !(RESOURCE_KINDS as readonly string[]).includes(resource)) {
+    return `resource must be one of ${RESOURCE_KINDS.join(', ')}`
+  }
+  const scoutPieceId = body['scoutPieceId']
+  if (scoutPieceId !== undefined && (typeof scoutPieceId !== 'string' || !REQUEST_ID.test(scoutPieceId))) {
+    return 'scoutPieceId must be the id of a scout: 1 to 64 characters, letters, digits and . _ : -'
+  }
+  return { cityPieceId, resource, ...(scoutPieceId === undefined ? {} : { scoutPieceId }) }
 }
 
 /** The basic building asset ids that have an upgraded form: what `family` may name. */
@@ -307,14 +389,16 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
 
     // Chat orders (issue #215): the client asks before drawing out of turn and
     // sends this on the second try. Ignored by the engine when the setting is off.
-    const confirmedOutOfTurn =
-      asRecord(await c.req.json().catch(() => ({})))['confirmedOutOfTurn'] === true
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const confirmedOutOfTurn = body['confirmedOutOfTurn'] === true
+    // The same for a culture card drawn while the culture hand is over its size
+    const confirmedOverLimit = body['confirmedOverLimit'] === true
 
     return applyToGame(context, c, gameId, (state) => {
       const playerId = currentPlayer(c).id
       return ALL_WONDERS.has(sheetName)
         ? drawWonder(state, { playerId, sheetName, confirmedOutOfTurn })
-        : draw(state, { playerId, sheetName, confirmedOutOfTurn })
+        : draw(state, { playerId, sheetName, confirmedOutOfTurn, confirmedOverLimit })
     })
   })
 
@@ -891,13 +975,14 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     if (body['rev'] !== undefined && (clientRev === undefined || !Number.isInteger(clientRev) || clientRev < 0)) {
       return sendError(c, 400, 'BAD_REQUEST', 'rev must be a non-negative integer')
     }
-    // `confirmedRepeat` is the player's yes to "use it again?". It must be a real boolean:
+    // `confirmedRepeat` is the player's yes to "use it again?" (a card) or "this city has already acted, act
+    // again?" (a city action). It must be a real boolean:
     // a string such as "true" is refused, the same as for `confirmedOutOfTurn` elsewhere.
     if (body['confirmedRepeat'] !== undefined && typeof body['confirmedRepeat'] !== 'boolean') {
       return sendError(c, 400, 'BAD_REQUEST', 'confirmedRepeat must be a boolean')
     }
     const confirmedRepeat = body['confirmedRepeat'] === true
-    // `chooseReward`, `build`, `startBuildingProgram` and `upgradeBuildings` carry a payload in top-level fields, the newer actions in `args`; the others take none
+    // `chooseReward`, `build`, `startBuildingProgram`, `devoteToTheArts`, `harvest` and `upgradeBuildings` carry a payload in top-level fields, the newer actions in `args`; the others take none
     let payload: AssistedPayload | undefined
     if (action === 'chooseReward') {
       const rewardId = requireString(body, 'rewardId')
@@ -922,6 +1007,14 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       const parsed = parseStartBuildingProgramPayload(body)
       if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
       payload = parsed
+    } else if (action === 'devoteToTheArts') {
+      const parsed = parseDevotePayload(body)
+      if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
+      payload = parsed
+    } else if (action === 'harvest') {
+      const parsed = parseHarvestPayload(body)
+      if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
+      payload = parsed
     } else if (action === 'upgradeBuildings') {
       const parsed = parseUpgradeBuildingsPayload(body)
       if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
@@ -931,10 +1024,17 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
         c,
         400,
         'BAD_REQUEST',
-        'cityPieceId, item, target and rush only belong to build, and cityPieceId also to startBuildingProgram',
+        'cityPieceId, item, target and rush only belong to build, and cityPieceId also to startBuildingProgram, devoteToTheArts and harvest',
       )
     } else if (body['family'] !== undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'family only belongs to upgradeBuildings')
+    } else if (['scoutPieceIds', 'scoutPieceId', 'culture', 'resource'].some((field) => body[field] !== undefined)) {
+      return sendError(
+        c,
+        400,
+        'BAD_REQUEST',
+        'scoutPieceIds and culture only belong to devoteToTheArts, and resource and scoutPieceId to harvest',
+      )
     }
     // The newer actions carry one `args` object, checked by their own parser
     if (takesArgs(action)) {

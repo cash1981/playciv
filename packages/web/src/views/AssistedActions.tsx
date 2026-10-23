@@ -19,6 +19,8 @@ import type { AssistedActionKind, PendingRewardView, TurnPhase } from '@civ/engi
 
 import { ApiError, api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
+import type { BuildFlow } from './buildFlow.js'
+import { endTurnState } from './EndTurn.js'
 import { ItemCard } from './ItemCard.js'
 import type { Run } from './GameView.js'
 import './AssistedActions.css'
@@ -156,6 +158,8 @@ interface ButtonProps {
   readonly className?: string
   /** Replaces the default "Use <label>" text. */
   readonly children?: ReactNode
+  /** Called after a press that went through, once the page has the fresh view. */
+  readonly onDone?: (() => void) | undefined
 }
 
 /**
@@ -183,6 +187,7 @@ export function AssistedActionButton({
   detail = 'full',
   className = 'small',
   children,
+  onDone,
 }: ButtonProps): React.JSX.Element | null {
   const reasonId = useId()
   const state = view.you?.availableActions?.find((candidate) => candidate.action === action)
@@ -210,7 +215,9 @@ export function AssistedActionButton({
           ? api.performAction(gameId, action, requestId, rev, true)
           : api.performAction(gameId, action, requestId, rev),
       view,
-    )
+    ).then((done) => {
+      if (done) onDone?.()
+    })
   }
 
   return (
@@ -230,6 +237,11 @@ export function AssistedActionButton({
           {state.reason}
         </span>
       )}
+      {ready && state.warning !== undefined && (
+        <span role="status" className="assisted-warning">
+          {state.warning}
+        </span>
+      )}
     </span>
   )
 }
@@ -240,12 +252,30 @@ interface PanelProps {
   readonly busy: boolean
   readonly readOnly: boolean
   readonly run: Run
+  /** The Build flow GameView shares with the board. Without it the city cards have no Build button. */
+  readonly build?: BuildFlow | undefined
+}
+
+/**
+ * Whether "Your actions" is on the page: the viewer has an action for a card they
+ * hold, a card choice waiting, a city on the map, or a turn to end (a player in a
+ * game that is running). Never for a spectator. The game page asks too, so the
+ * Actions shortcut is not a dead button.
+ */
+export function hasActionsPanel(view: PlayerView): boolean {
+  return (
+    endTurnState(view) !== null ||
+    (view.you?.availableActions ?? []).some((candidate) => candidate.status !== 'not-owned') ||
+    (view.you?.pendingRewards?.length ?? 0) > 0 ||
+    (view.you?.cities?.length ?? 0) > 0
+  )
 }
 
 /**
  * The buttons of one phase, grouped under the heading each action names. Actions for
  * a card the player does not hold are left out, so the list stays short. `'ANY'`
- * actions are listed in every phase.
+ * actions are listed in every phase. `onDone` runs after a press that went through, with
+ * the action that was pressed.
  */
 export function AssistedActionGroups({
   gameId,
@@ -254,7 +284,11 @@ export function AssistedActionGroups({
   readOnly,
   run,
   phase,
-}: PanelProps & { readonly phase: TurnPhase }): React.JSX.Element | null {
+  onDone,
+}: PanelProps & {
+  readonly phase: TurnPhase
+  readonly onDone?: ((action: AssistedActionKind) => void) | undefined
+}): React.JSX.Element | null {
   const actions = (view.you?.availableActions ?? []).filter(
     (candidate) =>
       candidate.status !== 'not-owned' && (candidate.phase === phase || candidate.phase === 'ANY'),
@@ -282,6 +316,7 @@ export function AssistedActionGroups({
                     busy={busy}
                     readOnly={readOnly}
                     run={run}
+                    onDone={onDone === undefined ? undefined : () => onDone(candidate.action)}
                   />
                 </li>
               ))}

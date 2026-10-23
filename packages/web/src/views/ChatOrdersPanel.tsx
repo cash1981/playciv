@@ -26,6 +26,7 @@ import { colorClass } from './playerColor.js'
 import { PrivateLogWorkspace } from './PrivateLogWorkspace.js'
 import type { SaveStatus } from './PrivateLogWorkspace.js'
 import { handleTabKeyDown } from './tabKeys.js'
+import { focusPlayer } from './turnFocus.js'
 import './ChatOrdersPanel.css'
 
 const TIMELINE_REFRESH_MS = 10_000
@@ -175,15 +176,17 @@ export function firstOpenPhase(view: PlayerView, turnNumber: number): TurnPhase 
 
 /**
  * `Turn 4 · Alice's turn — city management phase`, or `Turn 4 · Your turn — ...`
- * for the holder. Only whose turn it is and which phase they are on: the full
- * list of who is missing what is the status strip below the title.
+ * when the player in focus (see `focusPlayer`) is the viewer, with that
+ * player's own phase. The full list of who is missing what is the status strip
+ * below the title.
  */
-export function turnTitle(activeTurn: ActiveTurnStatus | null, viewerId?: string): string {
+export function turnTitle(activeTurn: ActiveTurnStatus | null, viewerUsername?: string): string {
   if (activeTurn === null) return 'Nobody is up'
   const turn = `Turn ${activeTurn.turnNumber}`
-  if (activeTurn.waitingFor.length === 0) return `${turn} · everyone is done`
-  const who = viewerId !== undefined && activeTurn.playerId === viewerId ? 'Your turn' : `${activeTurn.username}'s turn`
-  return `${turn} · ${who} — ${TURN_PHASE_LABEL[activeTurn.phase]} phase`
+  const focus = focusPlayer(activeTurn)
+  if (focus === null) return `${turn} · everyone is done`
+  const who = focus.username === viewerUsername ? 'Your turn' : `${focus.username}'s turn`
+  return `${turn} · ${who} — ${TURN_PHASE_LABEL[focus.phase]} phase`
 }
 
 /**
@@ -346,6 +349,10 @@ export function ChatOrdersPanel({
   const composerEditorRef = useRef<MarkdownEditorHandle | null>(null)
   const privateEditorRef = useRef<MarkdownEditorHandle | null>(null)
   const privateDirtyRef = useRef(false)
+  // A lost response leaves the player not knowing whether the offer went through.
+  // Sending the same thing again reuses the request id, so the server answers with
+  // the first outcome instead of making a second offer. An id is dropped on success.
+  const requestIds = useRef(new Map<string, string>())
 
   const currentTurn = viewerTurn(view)
   const orderTurn = turnPick ?? currentTurn
@@ -435,9 +442,8 @@ export function ChatOrdersPanel({
     }
   }, [visible])
 
-  // The composer changes height when the editor finishes loading or the mode
-  // switches, and the timeline is what gives way. Keep the newest message in
-  // view when it was in view.
+  // The timeline changes height with the screen (dvh) and when messages fill it
+  // up to its cap. Keep the newest message in view when it was in view.
   useEffect(() => {
     const element = scrollRef.current
     if (element === null || typeof ResizeObserver === 'undefined') return
@@ -480,28 +486,48 @@ export function ChatOrdersPanel({
     })
   }
 
+  /** The request id for one exact request: the same key gives the same id until it succeeds. */
+  const requestIdFor = (key: string): string => {
+    const held = requestIds.current.get(key)
+    if (held !== undefined) return held
+    const fresh = newRequestId()
+    requestIds.current.set(key, fresh)
+    return fresh
+  }
+
+  // The offer controls are only drawn for a viewer who may write; the handlers check
+  // too, as a fallback.
   const sendOffer = (): void => {
     const terms = offerTerms.trim()
-    if (terms === '' || offerRecipientId === '') return
+    if (!canWrite || busy || terms === '' || offerRecipientId === '') return
+    const key = `offer\n${offerRecipientId}\n${terms}`
     void run(async () => {
-      await api.sendTradeOffer(gameId, offerRecipientId, terms, newRequestId(), view.rev)
-      setOfferTerms('')
+      await api.sendTradeOffer(gameId, offerRecipientId, terms, requestIdFor(key), view.rev)
+      requestIds.current.delete(key)
+      // What was typed while the request was out is a new draft and stays
+      setOfferTerms((current) => (current.trim() === terms ? '' : current))
       await load()
     })
   }
 
   const transitionOffer = (offerId: string, action: 'accept' | 'decline' | 'withdraw'): void => {
+    if (!canWrite || busy) return
+    const key = `${action}\n${offerId}`
     void run(async () => {
-      await api.transitionTradeOffer(gameId, offerId, action, newRequestId(), view.rev)
+      await api.transitionTradeOffer(gameId, offerId, action, requestIdFor(key), view.rev)
+      requestIds.current.delete(key)
       await load()
     })
   }
 
   const sendCounter = (offerId: string): void => {
     const terms = counterTerms.trim()
-    if (terms === '') return
+    if (!canWrite || busy || terms === '') return
+    const key = `counter\n${offerId}\n${terms}`
     void run(async () => {
-      await api.counterTradeOffer(gameId, offerId, terms, newRequestId(), view.rev)
+      await api.counterTradeOffer(gameId, offerId, terms, requestIdFor(key), view.rev)
+      requestIds.current.delete(key)
+      // The form closes with its offer answered, so its words go too
       setCounterOfferId(null)
       setCounterTerms('')
       await load()
@@ -643,7 +669,7 @@ export function ChatOrdersPanel({
                         {sender && <button type="button" disabled={busy} onClick={() => transitionOffer(offer.id, 'withdraw')}>Withdraw</button>}
                       </div>
                     )}
-                    {counterOfferId === offer.id && (
+                    {canWrite && counterOfferId === offer.id && (
                       <form className="chat-orders-counter" onSubmit={(event) => { event.preventDefault(); sendCounter(offer.id) }}>
                         <input
                           value={counterTerms}

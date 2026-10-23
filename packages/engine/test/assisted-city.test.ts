@@ -1,6 +1,6 @@
 /**
  * Founding a city from a scout and sending a scout's square to a city (assisted play,
- * part 9). The rules are the base rulebook p. 13 and 26 to 27 with the W&W and F&F
+ * part 13). The rules are the base rulebook p. 13 and 26 to 27 with the W&W and F&F
  * additions, summarised in `docs/agents/tasks/assisted-sot.md`.
  *
  * Every test uses the America tile in the first map slot, printed as (row by row):

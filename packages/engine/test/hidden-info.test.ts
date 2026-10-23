@@ -524,4 +524,31 @@ describe('city actions', () => {
     expect(owner.you?.cityActions[0]?.startBuildingProgram).toMatchObject({ status: 'unavailable', hasMarker: true })
     expect(owner.you?.upgradeOptions).toEqual([])
   })
+
+  it('Urban Development adds to the owner’s Devote sum once revealed, and the sum reaches no one else', () => {
+    let state = cityScene('none')
+    // A Temple beside the two Granaries: two different buildings in the outskirts
+    state = unwrap(
+      placePiece(state, { playerId: CASH1981, assetId: 'buildings/temple', x: 0 * SQUARE_SIZE + 2, y: mapTop(state.board) + 2 * SQUARE_SIZE + 2 }),
+    )
+    const sum = (viewed: typeof state) => toPlayerView(viewed, CASH1981).you?.cityActions[0]?.devoteToTheArts
+    expect(sum(state)?.culture).toBe(1 + 2)
+
+    // Chosen but hidden: not counted, and nothing of it is visible
+    state = unwrap(chooseSocialPolicy(state, { playerId: CASH1981, name: 'Urban Development' }))
+    expect(sum(state)?.culture).toBe(1 + 2)
+    for (const viewerId of [KARANDRAS1, ITCHI, 'spectator']) {
+      expect(JSON.stringify(toPlayerView(state, viewerId))).not.toContain('Urban Development')
+    }
+
+    state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name: 'Urban Development' }))
+    expect(sum(state)?.culture).toBe(1 + 2 + 2)
+    expect(sum(state)?.parts).toContainEqual({ label: 'Urban Development (Granary and Temple)', amount: 2 })
+    // The policy is public once revealed, but the owner's sum is still only theirs
+    for (const viewerId of [KARANDRAS1, ITCHI, 'spectator']) {
+      const json = JSON.stringify(toPlayerView(state, viewerId))
+      expect(json).not.toContain('"devoteToTheArts"')
+      expect(json).not.toContain('Urban Development (')
+    }
+  })
 })

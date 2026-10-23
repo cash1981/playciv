@@ -1,5 +1,5 @@
 /**
- * Founding a city and sending a scout's square to a city (assisted play, part 9).
+ * Founding a city and sending a scout's square to a city (assisted play, part 13).
  *
  * Both happen in the Start of Turn (base rulebook p. 13 and 26). A new city replaces the
  * scout that stood where it goes; a scout sends its square, and the icons on it, to one

@@ -8,13 +8,15 @@
  * state, and Undo is the vote every assisted action has.
  */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { errorMessage, isUnauthorized } from '../App.js'
+import { ApiError } from '../lib/api.js'
 import type { PlayerView, UpgradeFamilyOption } from '../lib/api.js'
 import { api } from '../lib/api.js'
 import { isPressInFlight, pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
+import './CityCard.css'
 
 /**
  * One press of an assisted city action, with the refusal kept for the caller to
@@ -31,16 +33,30 @@ export function useCityActionPress(
 ): {
   readonly sending: boolean
   readonly message: string | null
-  readonly press: (key: string, send: (requestId: string) => Promise<PlayerView>) => void
+  /** Resolves to true when the request went through, so the caller can close what it opened. */
+  readonly press: (key: string, send: (requestId: string) => Promise<PlayerView>) => Promise<boolean>
 } {
   const [sending, setSending] = useState(false)
-  const [shown, setShown] = useState<{ readonly text: string; readonly rev: number } | null>(null)
+  const [shown, setShown] = useState<{
+    readonly text: string
+    readonly rev: number
+    readonly awaitingRefresh: boolean
+  } | null>(null)
   // The revision after the reload that follows the press, read when the press settles.
   const latestRev = useRef(view.rev)
   latestRev.current = view.rev
 
-  function press(key: string, send: (requestId: string) => Promise<PlayerView>): void {
-    if (sending || isPressInFlight(key)) return
+  useEffect(() => {
+    setShown((current) => {
+      if (current === null || current.rev === view.rev) return current
+      if (current.awaitingRefresh) return { text: current.text, rev: view.rev, awaitingRefresh: false }
+      return null
+    })
+  }, [view.rev])
+
+  function press(key: string, send: (requestId: string) => Promise<PlayerView>): Promise<boolean> {
+    if (sending || isPressInFlight(key)) return Promise.resolve(false)
+    const pressedRev = view.rev
     let failure: unknown = null
     const quietRun: Run = (action) =>
       run(async () => {
@@ -55,13 +71,19 @@ export function useCityActionPress(
       })
     setSending(true)
     setShown(null)
-    void pressOnce(key, quietRun, send, view).then(() => {
+    return pressOnce(key, quietRun, send, view).then((done) => {
       setSending(false)
-      if (failure !== null) setShown({ text: errorMessage(failure), rev: latestRev.current })
+      if (failure !== null) {
+        const rev = latestRev.current
+        const awaitingRefresh =
+          failure instanceof ApiError && failure.code === 'STALE_REVISION' && rev === pressedRev
+        setShown({ text: errorMessage(failure), rev, awaitingRefresh })
+      }
+      return done
     })
   }
 
-  const message = shown !== null && shown.rev === view.rev ? shown.text : null
+  const message = shown !== null && !shown.awaitingRefresh && shown.rev === view.rev ? shown.text : null
   return { sending, message, press }
 }
 
@@ -80,11 +102,12 @@ export function familyLine(family: UpgradeFamilyOption): string {
 }
 
 /**
- * The Upgrades block of the Cities panel: one line and one button per family the
- * viewer can flip now, and "Upgrade all" when there is more than one. Nothing for
- * a spectator, a replay or a locked game (`readOnly`), and nothing when there is
- * nothing to flip, except a refusal still on show: a co-player may have flipped the
- * pieces, so the reload that follows the press can leave no options. It works in any phase: the engine has no phase gate for it.
+ * The Upgrades block of "Your cities" in Your actions: one line and one button per
+ * family the viewer can flip now, and "Upgrade all" when there is more than one.
+ * Nothing for a spectator, a replay or a locked game (`readOnly`), and nothing when
+ * there is nothing to flip, except a refusal still on show: a co-player may have
+ * flipped the pieces, so the reload that follows the press can leave no options. It
+ * works in any phase: the engine has no phase gate for it.
  */
 export function CityActions({
   gameId,
@@ -107,14 +130,15 @@ export function CityActions({
 
   function upgrade(family: UpgradeFamilyOption | null): void {
     const key = `${gameId}:${playerId}:upgradeBuildings:${family === null ? 'all' : family.basicAssetId}`
-    press(key, (requestId) =>
+    void press(key, (requestId) =>
       api.upgradeBuildings(gameId, requestId, rev, family === null ? undefined : family.basicAssetId),
     )
   }
 
   return (
     <div className="city-upgrades">
-      <h3 className="cities-owner">Upgrades</h3>
+      {/* An h4: the block sits inside the "Your cities" section, next to the city labels. */}
+      <h4 className="cities-owner">Upgrades</h4>
       {options.length > 0 && (
         <>
           <p className="muted">Flips your basic buildings to the new form. Undo works like the other actions.</p>

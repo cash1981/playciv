@@ -11,9 +11,13 @@
 export const UNIT_TYPES = ['infantry', 'artillery', 'mounted', 'aircraft'] as const
 export type UnitType = (typeof UNIT_TYPES)[number]
 
-/** An item that is put on a map square: a building, an army figure or a scout figure. */
+/**
+ * An item that is put on a map square: a building, a wonder from the market, an army
+ * figure or a scout figure. A wonder's `assetId` is the wonder's own board asset.
+ */
 export type PlacedBuildItem =
   | { readonly kind: 'building'; readonly assetId: string }
+  | { readonly kind: 'wonder'; readonly assetId: string }
   | { readonly kind: 'army' }
   | { readonly kind: 'scout' }
 
@@ -24,14 +28,25 @@ export interface UnitBuildItem {
 }
 
 /**
+ * City Walls (base rules p. 17): a building that stands in the city centre, so no square is
+ * picked. Building them turns the city marker over to its walled side; nothing new is placed.
+ */
+export interface WallsBuildItem {
+  readonly kind: 'walls'
+}
+
+/** An item with no square to pick: a military unit (a card) or City Walls (the city marker turned over). */
+export type SquarelessBuildItem = UnitBuildItem | WallsBuildItem
+
+/**
  * What a build creates. A figure carries no asset id: its artwork depends on the
  * player's colour, which the engine reads off the player.
  */
-export type BuildItem = PlacedBuildItem | UnitBuildItem
+export type BuildItem = PlacedBuildItem | SquarelessBuildItem
 
 /** Whether two items are the same thing to build. */
 export function sameBuildItem(a: BuildItem, b: BuildItem): boolean {
-  if (a.kind === 'building') return b.kind === 'building' && a.assetId === b.assetId
+  if (a.kind === 'building' || a.kind === 'wonder') return b.kind === a.kind && a.assetId === b.assetId
   if (a.kind === 'unit') return b.kind === 'unit' && a.unitType === b.unitType
   return a.kind === b.kind
 }

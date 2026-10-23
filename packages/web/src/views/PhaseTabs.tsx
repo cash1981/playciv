@@ -1,5 +1,5 @@
 /**
- * "Your actions": one tab per phase of the turn (assisted play, part 9).
+ * "Your actions": one tab per phase of the turn (assisted play, part 13).
  *
  * The tab for the viewer's current phase opens first and follows them when they
  * move on; any other tab can be opened to see what that phase allows. Each tab says
@@ -19,13 +19,15 @@ import { TURN_PHASES, TURN_PHASE_LABEL } from '@civ/engine'
 import type { TurnPhase } from '@civ/engine'
 
 import type { PlayerView } from '../lib/api.js'
-import { AssistedActionGroups, PendingRewardSection } from './AssistedActions.js'
+import { AssistedActionGroups, PendingRewardSection, hasActionsPanel } from './AssistedActions.js'
 import type { BuildFlow } from './buildFlow.js'
-import { CityOrders } from './CityOrders.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { EndTurn } from './EndTurn.js'
 import type { Run } from './GameView.js'
+import { goToPanel } from './PhaseSummary.js'
 import { PlayableCardList } from './PlayableCards.js'
 import { StartOfTurnChoices } from './SotPanel.js'
+import { YourCities } from './YourCities.js'
 import './PhaseTabs.css'
 
 const capitalized = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
@@ -48,7 +50,7 @@ export const PHASE_GUIDE: Readonly<Record<TurnPhase, string>> = {
  */
 export function currentPhaseOf(view: PlayerView): TurnPhase | null {
   const you = view.you
-  const turn = view.activeTurn
+  const turn = view.activeTurn ?? null
   if (you === null || turn === null) return null
   return turn.waitingFor.find((entry) => entry.username === you.username)?.phase ?? null
 }
@@ -70,6 +72,8 @@ interface Props {
   readonly run: Run
   /** The Build flow GameView shares with the board; City Management uses it for the Build buttons. */
   readonly build?: BuildFlow | undefined
+  /** The tab to open first, instead of the viewer's current phase. The tab then follows the viewer as usual. */
+  readonly initialPhase?: TurnPhase | undefined
 }
 
 export function PhaseActionsPanel({
@@ -79,9 +83,10 @@ export function PhaseActionsPanel({
   readOnly,
   run,
   build,
+  initialPhase,
 }: Props): React.JSX.Element | null {
   const current = currentPhaseOf(view)
-  const [selected, setSelected] = useState<TurnPhase>(current ?? 'SOT')
+  const [selected, setSelected] = useState<TurnPhase>(initialPhase ?? current ?? 'SOT')
   // The tab follows the viewer to their next phase, and stays where it is otherwise.
   const followed = useRef(current)
   useEffect(() => {
@@ -90,9 +95,18 @@ export function PhaseActionsPanel({
   }, [current])
   // After a successful Keep the choice unmounts and focus would fall to the page.
   const bodyRef = useRef<HTMLDivElement>(null)
+  // A culture advance puts its cards in the hand: after it, and after a waiting card choice has been
+  // kept, the page goes to Your hand. Left alone while a choice is waiting, which is above the hand.
+  const [toHand, setToHand] = useState(false)
+  const waiting = view.you?.pendingRewards?.length ?? 0
+  useEffect(() => {
+    if (toHand && waiting === 0) {
+      setToHand(false)
+      goToPanel('hand')
+    }
+  }, [toHand, waiting])
 
-  if (view.you === null) return null
-  const waiting = view.you.pendingRewards?.length ?? 0
+  if (view.you === null || !hasActionsPanel(view)) return null
   // A collapsed panel must not hide the choice, so the title says it is waiting.
   const title =
     waiting > 0
@@ -129,6 +143,8 @@ export function PhaseActionsPanel({
         role="group"
         aria-label="Your actions"
       >
+        <EndTurn gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
+
         <PendingRewardSection
           gameId={gameId}
           view={view}
@@ -180,6 +196,7 @@ export function PhaseActionsPanel({
             readOnly={readOnly}
             run={run}
             build={build}
+            onAdvanced={() => setToHand(true)}
           />
         </div>
       </div>
@@ -199,7 +216,8 @@ function PhaseBody({
   readOnly,
   run,
   build,
-}: Props & { readonly phase: TurnPhase }): React.JSX.Element {
+  onAdvanced,
+}: Props & { readonly phase: TurnPhase; readonly onAdvanced: () => void }): React.JSX.Element {
   return (
     <>
       <AssistedActionGroups
@@ -209,6 +227,9 @@ function PhaseBody({
         busy={busy}
         readOnly={readOnly}
         run={run}
+        onDone={(action) => {
+          if (action === 'cultureAdvance') onAdvanced()
+        }}
       />
       {phase === 'SOT' && (
         <StartOfTurnChoices gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
@@ -222,17 +243,7 @@ function PhaseBody({
         run={run}
       />
       {phase === 'CM' && (
-        <section className="phase-group" aria-label="Cities">
-          <h3 className="phase-group-title">Cities</h3>
-          <CityOrders
-            gameId={gameId}
-            view={view}
-            busy={busy}
-            readOnly={readOnly}
-            run={run}
-            build={build}
-          />
-        </section>
+        <YourCities gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} build={build} />
       )}
     </>
   )

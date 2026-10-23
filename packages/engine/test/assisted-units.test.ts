@@ -208,16 +208,23 @@ const cellsOf = (squares: readonly Cell[] | undefined) => (squares ?? []).map((s
 
 function payloadFor(state: GameState, item: BuildItem, at?: Cell, rush?: boolean): BuildPayload {
   const base = { cityPieceId: cityOf(state).id, ...(rush === undefined ? {} : { rush }) }
-  if (item.kind === 'unit') return { ...base, item }
+  if (item.kind === 'unit' || item.kind === 'walls') return { ...base, item }
   if (at === undefined) throw new Error('a figure needs a square')
   return { ...base, item, target: at }
 }
 
-const tryBuild = (state: GameState, item: BuildItem, at?: Cell, requestId = 'req-1', rush?: boolean, playerId = CASH1981) =>
-  performAssistedAction(state, { playerId, action: 'build', requestId, at: AT, payload: payloadFor(state, item, at, rush) })
+const tryBuild = (state: GameState, item: BuildItem, at?: Cell, requestId = 'req-1', rush?: boolean, playerId = CASH1981, again = false) =>
+  performAssistedAction(state, {
+    playerId,
+    action: 'build',
+    requestId,
+    at: AT,
+    payload: payloadFor(state, item, at, rush),
+    ...(again ? { confirmedRepeat: true } : {}),
+  })
 
-const build = (state: GameState, item: BuildItem, at?: Cell, requestId = 'req-1', rush?: boolean): GameState =>
-  unwrap(tryBuild(state, item, at, requestId, rush))
+const build = (state: GameState, item: BuildItem, at?: Cell, requestId = 'req-1', rush?: boolean, again = false): GameState =>
+  unwrap(tryBuild(state, item, at, requestId, rush, CASH1981, again))
 
 const refusal = (result: ReturnType<typeof tryBuild>): string => describeError(unwrapErr(result))
 
@@ -699,8 +706,8 @@ describe('building a figure', () => {
 
   it('a figure put on a square holding a friendly figure makes the next one see it full', () => {
     const first = build(ready(), ARMY, C2, 'req-1')
-    const second = build(first, ARMY, C2, 'req-2')
-    expect(refusal(tryBuild(second, ARMY, C2, 'req-3'))).toMatch(/^C2 already holds 2 of your figures, which is your stacking limit of 2\./)
+    const second = build(first, ARMY, C2, 'req-2', undefined, true)
+    expect(refusal(tryBuild(second, ARMY, C2, 'req-3', undefined, CASH1981, true))).toMatch(/^C2 already holds 2 of your figures, which is your stacking limit of 2\./)
   })
 
   it('one vote undo removes the figure again and writes the system line', () => {

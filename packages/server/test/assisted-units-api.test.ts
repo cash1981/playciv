@@ -301,8 +301,9 @@ describe('building a figure over HTTP', () => {
   it('a full square is refused with the stacking limit named', async () => {
     const table = await buildTable('Stack')
     expect((await send(table, 'req-1', await revOf(table), ARMY)).status).toBe(200)
-    expect((await send(table, 'req-2', await revOf(table), ARMY)).status).toBe(200)
-    const third = await send(table, 'req-3', await revOf(table), ARMY)
+    // A second and third action of the one city in a turn, confirmed
+    expect((await send(table, 'req-2', await revOf(table), ARMY, { confirmedRepeat: true })).status).toBe(200)
+    const third = await send(table, 'req-3', await revOf(table), ARMY, { confirmedRepeat: true })
     expect(third.status).toBe(400)
     expect(JSON.stringify(await third.json())).toContain('stacking limit of 2')
     expect(piecesOf(await stored(table), `figures/${table.colour}army`)).toHaveLength(2)

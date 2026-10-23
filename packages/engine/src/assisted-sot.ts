@@ -1,5 +1,5 @@
 /**
- * The Start of Turn actions that change numbers and ownership (assisted play, part 9):
+ * The Start of Turn actions that change numbers and ownership (assisted play, part 13):
  * social policies, government abilities, changing government and investing a coin.
  *
  * Every one is a button with a log line and an undo through the vote the game already
@@ -27,7 +27,7 @@ import type {
   AssistedPayload,
   BlockedAvailability,
   GovernmentPayload,
-  HarvestPayload,
+  FeudalismHarvestPayload,
   InvestPayload,
 } from './assisted-core.js'
 import {
@@ -43,6 +43,7 @@ import { cityFootprintsOf, pieceColorOf } from './blockade.js'
 import { cityProductionsOf } from './city-production.js'
 import { coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
 import type { CoinSourceKey } from './coins.js'
+import { cultureHandBlock, cultureHandWarning } from './culture-hand.js'
 import { cultureMarkerOf, rewardDrawCount } from './culture-track.js'
 import type { CultureLevel } from './culture-track.js'
 import { err, ok } from './result.js'
@@ -434,6 +435,9 @@ function planPatronage(
   if (player.stats.culture < 1) {
     return { blocked: blocked('needs-resource', 'Spend 1 culture to draw a culture event card. You have none.') }
   }
+  // A culture card comes in: the hand must be down to its size first
+  const full = cultureHandBlock(state, player)
+  if (full !== undefined) return { blocked: blocked('unavailable', full) }
   const sheetName = levelSheet(level)
   if (![...state.items, ...state.discardedItems].some((item) => item.sheetName === sheetName)) {
     return { blocked: blocked('unavailable', `There are no ${SHEET_LABEL[sheetName]} cards left to draw.`) }
@@ -456,9 +460,11 @@ const patronage: AssistedActionDefinition = {
     const planned = planPatronage(state, player, false)
     if ('blocked' in planned) return planned.blocked
     const { level, count } = planned.plan
+    const warning = cultureHandWarning(state, player, 1)
     return {
       status: 'ready',
       reason: `Spend 1 culture to draw ${plural(count, `culture ${ROMAN[level]} card`)}, of the level your marker is in, and keep one.`,
+      ...(warning === undefined ? {} : { warning }),
     }
   },
 
@@ -559,7 +565,7 @@ const patronage: AssistedActionDefinition = {
 /** What a city can harvest: the four market resources. Uranium only comes from villages. */
 export const HARVESTABLE_RESOURCES: readonly string[] = ['Incense', 'Iron', 'Silk', 'Wheat']
 
-const harvestPayloadOf = (payload: AssistedPayload | undefined): HarvestPayload | undefined =>
+const harvestPayloadOf = (payload: AssistedPayload | undefined): FeudalismHarvestPayload | undefined =>
   payload !== undefined && 'cityPieceId' in payload && 'resource' in payload && !('targets' in payload) && !('item' in payload)
     ? { cityPieceId: payload.cityPieceId, resource: String(payload.resource) }
     : undefined
@@ -653,7 +659,7 @@ const feudalismHarvest: AssistedActionDefinition = {
     return ok({
       state: counted,
       effect: {
-        kind: 'harvest',
+        kind: 'feudalismHarvest',
         resource: payload.resource,
         pieceId: piece.id,
         position: { x: piece.x, y: piece.y },
@@ -665,7 +671,7 @@ const feudalismHarvest: AssistedActionDefinition = {
 
   reverse(state, player, record, at) {
     const effect = record.effect
-    if (effect.kind !== 'harvest') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
+    if (effect.kind !== 'feudalismHarvest') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const piece = state.board.pieces.find((candidate) => candidate.id === effect.pieceId)
     const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === player.playerId)
     if (piece === undefined || area === undefined) {
