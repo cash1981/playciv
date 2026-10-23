@@ -51,6 +51,8 @@
   --bad: #e07a7d;
   --error-bg: #3a2020;
   --error-text: #ffd8d8;
+  --ok-bg: #1d3626;
+  --ok-text: #d6f5e0;
   --board-bg: #0f1115;
   --wonder-accent: #c9a227;
   --card-art-bg: #0d1015;
@@ -101,6 +103,8 @@
   --bad: #a8383f;
   --error-bg: #fbe9e6;
   --error-text: #8c2028;
+  --ok-bg: #e4f4e8;
+  --ok-text: #1e5a37;
   --board-bg: #ffffff;
   --wonder-accent: #9a7d12;
   --card-art-bg: #e6dcc4;

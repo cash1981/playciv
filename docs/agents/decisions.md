@@ -436,6 +436,26 @@ Source: `web/src/views/AssistedActions.tsx`, `PlayableCards.tsx`, `SotPanel.tsx`
 `HelpHint.tsx`, `PhaseSummary.tsx`, `GameView.tsx`, `ItemCard.tsx` and their tests;
 `engine/src/state.ts` (`AvailableAction.techName`) and `assisted.ts`.
 
+## Toasts (2026-10-23)
+
+Every action a player takes on the game page ends in a toast at the top of the
+screen: green when it went through, red when it failed. A success closes after about
+4 seconds and a failure after about 8 or with the close button; hovering holds it.
+The red box that sat in the page is gone (it stays only while the game has not
+loaded), so an error is seen wherever the player has scrolled to.
+
+The green text is the player's own words for what they did, from
+`GET /api/games/:gameId/confirmation?after=<revision>`: their private log text for the
+revisions after the one the page held, else the public line of a revision they made,
+else "Done". The route reads by the caller's id and needs a sign-in, so another
+player's private text cannot be in the answer; `api.test.ts` pins it. It is a
+separate route on purpose: the history list names things as the public log does,
+even to its owner, and that stays so. Fetching the text can fail without failing the
+action: the toast then says "Done".
+
+Source: `packages/web/src/lib/toasts.ts`, `confirmation.ts`, `views/ToastRegion.tsx`,
+`GameView.tsx` (`run`), `packages/server/src/routes/games.ts`.
+
 ## Trade offers (#265)
 
 Trade negotiation happens in the Trade tab of Your actions (the offer form and

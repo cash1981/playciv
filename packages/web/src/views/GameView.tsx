@@ -12,6 +12,8 @@ import { isTradable, isUnit, itemName, itemType } from '@civ/engine'
 import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
+import { confirmationText } from '../lib/confirmation.js'
+import { showToast } from '../lib/toasts.js'
 import { useActivity } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
@@ -284,6 +286,11 @@ export function GameView({
   const [historical, setHistorical] = useState<GameRevisionView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // An error is a red toast over the page, wherever the player has scrolled to. The
+  // box in the loading state below stays, because a page that has not loaded has no toast host in view.
+  useEffect(() => {
+    if (error !== null) showToast('error', error)
+  }, [error])
   // Covers a write plus the reload after it, which `request()` alone would not.
   useActivity(busy)
   const [reloadCount, setReloadCount] = useState(0)
@@ -403,11 +410,14 @@ export function GameView({
     async (action: () => Promise<PlayerView | unknown>) => {
       setBusy(true)
       setError(null)
+      const revisionBefore = latestStoredRevisionRef.current
       try {
         await action()
         if (activeGameIdRef.current !== gameId) return
-        await reload()
+        const reloaded = await reload()
         if (activeGameIdRef.current !== gameId) return
+        // A failed reload has set its own error; do not also say "Done".
+        if (reloaded) showToast('ok', await confirmationFor(gameId, revisionBefore, player !== null))
       } catch (caught) {
         if (activeGameIdRef.current !== gameId) return
         if (isUnauthorized(caught) && player !== null) return onUnauthorized()
@@ -582,8 +592,6 @@ export function GameView({
         }}
       />
 
-      {error !== null && <div className="error">{error}</div>}
-
       {/* The page runs: header and summary, the board, Your actions (End turn, the card
           buttons, a waiting choice and the viewer's own cities), Your cards, then the
           rest. The board has the whole content width at every size. */}
@@ -746,6 +754,19 @@ export function GlobalReplayBar({
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * The green toast's text: the player's own log line for what they just did. Asking can
+ * fail (the connection, a spectator); the action itself went through, so then it is "Done".
+ */
+async function confirmationFor(gameId: string, revisionBefore: number, signedIn: boolean): Promise<string> {
+  if (!signedIn || revisionBefore < 0) return confirmationText([])
+  try {
+    return confirmationText((await api.confirmation(gameId, revisionBefore)).lines)
+  } catch {
+    return confirmationText([])
+  }
+}
 
 export type Run = (action: () => Promise<PlayerView | unknown>) => Promise<void>
 

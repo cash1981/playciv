@@ -8,6 +8,8 @@ import type { Item } from '@civ/engine'
 import { useIsBusy } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, PlayerDto, PlayerView } from '../lib/api.js'
+import { clearToasts } from '../lib/toasts.js'
+import { ToastRegion } from './ToastRegion.js'
 import type { GameMenuActions } from './Navigation.js'
 import { BOARD_PANEL_ID } from './PhaseSummary.js'
 import {
@@ -50,6 +52,7 @@ vi.mock('./WondersPanel.js', () => ({ WondersPanel: () => <section><h2>Wonders</
 
 afterEach(() => {
   cleanup()
+  clearToasts()
   vi.restoreAllMocks()
 })
 
@@ -234,14 +237,17 @@ const renderOrder = async (view: PlayerView, player: PlayerDto | null = { userna
   vi.spyOn(api, 'game').mockResolvedValue(view)
   vi.spyOn(api, 'revisions').mockResolvedValue([])
   const rendered = render(
-    <GameView
-      gameId="game-1"
-      player={player}
-      onUnauthorized={vi.fn()}
-      onDeleted={vi.fn()}
-      onWithdrawn={vi.fn()}
-      onEnded={vi.fn()}
-    />,
+    <>
+      <GameView
+        gameId="game-1"
+        player={player}
+        onUnauthorized={vi.fn()}
+        onDeleted={vi.fn()}
+        onWithdrawn={vi.fn()}
+        onEnded={vi.fn()}
+      />
+      <ToastRegion />
+    </>,
   )
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Draw' })).toBeTruthy())
   return rendered
@@ -661,15 +667,18 @@ describe('End game wiring', () => {
     vi.spyOn(api, 'revisions').mockResolvedValue([])
     const latest: { current: GameMenuActions | null } = { current: null }
     render(
-      <GameView
-        gameId="game-1"
-        player={{ username: 'viewer', role } as unknown as PlayerDto}
-        onUnauthorized={vi.fn()}
-        onDeleted={vi.fn()}
-        onWithdrawn={vi.fn()}
-        onEnded={onEnded}
-        onGameActions={(actions) => { latest.current = actions }}
-      />,
+      <>
+        <GameView
+          gameId="game-1"
+          player={{ username: 'viewer', role } as unknown as PlayerDto}
+          onUnauthorized={vi.fn()}
+          onDeleted={vi.fn()}
+          onWithdrawn={vi.fn()}
+          onEnded={onEnded}
+          onGameActions={(actions) => { latest.current = actions }}
+        />
+        <ToastRegion />
+      </>,
     )
     await waitFor(() => expect(latest.current).not.toBeNull())
     return () => latest.current
@@ -1063,19 +1072,23 @@ describe('the game page (issue #215)', () => {
     view: PlayerView,
     role: 'user' | 'admin' = 'user',
     signedIn = true,
+    revisions: readonly GameRevisionSummary[] = [],
   ): Promise<void> => {
     localStorage.setItem('civ.autoRefresh', 'false')
     vi.spyOn(api, 'game').mockResolvedValue(view)
-    vi.spyOn(api, 'revisions').mockResolvedValue([])
+    vi.spyOn(api, 'revisions').mockResolvedValue([...revisions])
     render(
-      <GameView
-        gameId="game-1"
-        player={signedIn ? ({ username: 'Alice', role } as unknown as PlayerDto) : null}
-        onUnauthorized={vi.fn()}
-        onDeleted={vi.fn()}
-        onWithdrawn={vi.fn()}
-        onEnded={vi.fn()}
-      />,
+      <>
+        <GameView
+          gameId="game-1"
+          player={signedIn ? ({ username: 'Alice', role } as unknown as PlayerDto) : null}
+          onUnauthorized={vi.fn()}
+          onDeleted={vi.fn()}
+          onWithdrawn={vi.fn()}
+          onEnded={vi.fn()}
+        />
+        <ToastRegion />
+      </>,
     )
     await screen.findByRole('heading', { level: 1 })
   }
@@ -1306,6 +1319,34 @@ describe('the game page (issue #215)', () => {
       fireEvent.click(drawButton('Civ'))
 
       expect(await screen.findByText('Player is not on turn')).toBeTruthy()
+    })
+
+    it('confirms a draw with a green toast carrying the player\'s own log text', async () => {
+      const baseline = { revision: 1, actor: { username: 'Alice' }, publicDescription: 'Alice drew a Civ card' }
+      const view = chatView('Alice')
+      vi.spyOn(api, 'draw').mockResolvedValue(view)
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      await renderGame(view, 'user', true, [baseline as unknown as GameRevisionSummary])
+      const confirmation = vi.spyOn(api, 'confirmation').mockResolvedValue({ lines: ['You drew Americans'] })
+
+      fireEvent.click(drawButton('Civ'))
+
+      const toast = await screen.findByRole('status')
+      expect(toast.textContent).toContain('You drew Americans')
+      expect(confirmation).toHaveBeenCalledWith('game-1', 1)
+    })
+
+    it('still says Done when the confirmation cannot be fetched', async () => {
+      const baseline = { revision: 1, actor: { username: 'Alice' }, publicDescription: '' }
+      const view = chatView('Alice')
+      vi.spyOn(api, 'draw').mockResolvedValue(view)
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      await renderGame(view, 'user', true, [baseline as unknown as GameRevisionSummary])
+      vi.spyOn(api, 'confirmation').mockRejectedValue(new Error('offline'))
+
+      fireEvent.click(drawButton('Civ'))
+
+      expect((await screen.findByRole('status')).textContent).toContain('Done')
     })
 
     it('leaves Draw disabled for a spectator and does not promise a question', async () => {

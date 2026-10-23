@@ -394,6 +394,34 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     return c.json(revisions.map((revision) => revisionSummary(revision)))
   })
 
+  /**
+   * What the viewer's own actions after revision `after` did, in their own words, for the
+   * green confirmation on the page. It is the viewer's private log text where there is
+   * any, else the public line of a revision they made. It is read by the viewer's id and
+   * never takes another player's private text, so it is kept out of the history list,
+   * which names things the way the public log does, even to the player themself.
+   */
+  app.get('/api/games/:gameId/confirmation', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    if (await context.repo.findGameRevisionCounter(gameId) === undefined) {
+      return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    }
+    const after = Number.parseInt(c.req.query('after') ?? '', 10)
+    if (!Number.isInteger(after) || after < 0) {
+      return sendError(c, 400, 'BAD_REQUEST', 'after must be a whole number of 0 or more')
+    }
+    const viewerId = currentPlayer(c).id
+    const lines = (await context.repo.listGameRevisionSummaries(gameId))
+      .filter((revision) => revision.revision > after)
+      .map((revision) => {
+        const own = revision.privateDescriptions[viewerId]
+        if (own !== undefined && own !== '') return own
+        return revision.actor.playerId === viewerId ? revision.publicDescription : ''
+      })
+      .filter((line) => line !== '')
+    return c.json({ lines })
+  })
+
   app.get('/api/games/:gameId/revisions/:revision', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     const game = await context.repo.findGame(gameId)
