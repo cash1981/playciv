@@ -1334,8 +1334,7 @@ describe('the game page (issue #215)', () => {
 
       fireEvent.click(drawButton('Civ'))
 
-      const toast = await screen.findByRole('status')
-      expect(toast.textContent).toContain('You drew Americans')
+      expect((await screen.findByText('You drew Americans')).closest('[role="status"]')).not.toBeNull()
       expect(confirmation).toHaveBeenCalledWith('game-1', 1)
     })
 
@@ -1349,7 +1348,7 @@ describe('the game page (issue #215)', () => {
 
       fireEvent.click(drawButton('Civ'))
 
-      expect((await screen.findByRole('status')).textContent).toContain('Done')
+      expect((await screen.findByText('Done')).closest('[role="status"]')).not.toBeNull()
     })
 
     it('leaves Draw disabled for a spectator and does not promise a question', async () => {

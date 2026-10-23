@@ -50,7 +50,7 @@ function ToastItem({ toast }: { readonly toast: Toast }): React.JSX.Element {
 export function ToastRegion(): React.JSX.Element {
   const toasts = useToasts()
   return (
-    <div className="toast-region" aria-label="Notifications">
+    <div className="toast-region" role="region" aria-label="Notifications">
       <div className="toast-live" role="status">
         {toasts
           .filter((toast) => toast.kind === 'ok')

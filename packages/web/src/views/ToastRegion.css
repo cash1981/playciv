@@ -16,9 +16,15 @@
   pointer-events: none;
 }
 
-/* The live regions are only for the screen reader; they take no space of their own */
+/* The live regions are plain blocks (display: contents drops their role in older
+   browsers) that stack their toasts the same way the region does. */
 .toast-live {
-  display: contents;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.toast-live:empty {
+  display: none;
 }
 
 .toast {
