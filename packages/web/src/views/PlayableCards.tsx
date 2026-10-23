@@ -206,9 +206,9 @@ interface ListProps {
 }
 
 /**
- * The cards of the hand that belong to a phase tab: the ones played in that phase and
- * the ones that can be played at any time, which are listed in every tab. Ready cards
- * first. Nothing for a spectator.
+ * The ready cards of the hand that belong to a phase tab: the ones played in that phase
+ * and the ones that can be played at any time, which are listed in every tab. Nothing
+ * when no such card is ready, and nothing for a spectator.
  */
 export function PlayableCardList({
   gameId,

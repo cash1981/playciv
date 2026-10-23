@@ -52,7 +52,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
 - **Branch:** `feat/action-panel-focus` (from `feat/assisted-play-contract`)
 - **Brief:** `docs/agents/tasks/action-panel-focus.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
   - `packages/engine/src/state.ts` (`AvailableAction.techName` only), `assisted.ts` (`availableActionsFor` only), `packages/engine/test/assisted.test.ts`
   - `packages/web/src/views/AssistedActions.tsx`, `AssistedActions.css`, `PlayableCards.tsx`, `PlayableCards.css`, `SotPanel.tsx`, `SotPanel.css`, `PhaseSummary.tsx`, `GameView.tsx` (`HandItem` anchor only), `ItemCard.tsx` (optional DOM id only), `HelpHint.tsx` and their tests

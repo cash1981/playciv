@@ -3,7 +3,7 @@
 - **Slug:** `action-panel-focus`
 - **Branch:** `feat/action-panel-focus` (from `feat/assisted-play-contract`)
 - **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
-- **Status:** in progress
+- **Status:** in review
 
 ## Goal
 
@@ -35,16 +35,18 @@ scouting rules, card effects.
 
 ## Acceptance criteria
 
-- [ ] Ready, used, and warning state still come from the engine; no rule is re-derived
+- [x] Ready, used, and warning state still come from the engine; no rule is re-derived
       in the browser.
-- [ ] Disabled or used buttons have the reason in `title` and in a `?` dialog, not as
-      inline text. Used cards keep the existing confirm-before-repeat behavior.
-- [ ] Inactive actions are not listed; used actions stay visible with the Used tag and keep
+- [x] Disabled or used buttons in the action panel and the status table have the reason
+      in `title` and in a `?` dialog, not as inline text. The tech detail dialog keeps it
+      inline, because that dialog already is the card reference. Used cards keep the
+      existing confirm-before-repeat behavior.
+- [x] Inactive actions are not listed; used actions stay visible with the Used tag and keep
       the existing confirm-before-repeat behavior.
-- [ ] Playable card names link to the matching card in the hand; descriptions are gone.
-- [ ] Tech-backed action names link to the tech panel.
-- [ ] Found a city goes to the map after a successful press.
-- [ ] Invest is hidden without a coin, compact when used, and its card reference is a
+- [x] Playable card names link to the matching card in the hand; descriptions are gone.
+- [x] Tech-backed action names link to the tech panel.
+- [x] Found a city goes to the map after a successful press.
+- [x] Invest is hidden without a coin, compact when used, and its card reference is a
       `?` dialog opened next to the card picker.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build`
-- [ ] Hidden-information tests still pass (no hand data added to another player's view).
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build`
+- [x] Hidden-information tests still pass (no hand data added to another player's view).

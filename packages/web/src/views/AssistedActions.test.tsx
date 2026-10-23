@@ -13,6 +13,7 @@ import { AssistedActionsPanel } from './panelForTests.js'
 import { useBuildFlow } from './buildFlow.js'
 import type { Run } from './GameView.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { PhaseActionsPanel } from './PhaseTabs.js'
 import { TechPanel } from './TechPanel.js'
 
 beforeEach(() => {
@@ -383,7 +384,7 @@ describe('AssistedActionButton requests', () => {
     expect(perform.mock.calls[1]![2]).toBe(perform.mock.calls[0]![2])
   })
 
-  it('renders its children as the button text, with the reason only while blocked', () => {
+  it('renders its children as the button text and keeps the reason out of the page', () => {
     render(
       <AssistedActionButton
         action="democracy"
@@ -1235,6 +1236,47 @@ describe('The actions of the open phase', () => {
     } finally {
       Element.prototype.scrollIntoView = original
       localStorage.removeItem('civ.panel.techs')
+    }
+  })
+
+  it('links a social-policy action name to the social policy panel, opening it', async () => {
+    localStorage.setItem('civ.panel.social-policy', 'false')
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function () {}
+    const expansionism: Action = {
+      action: 'expansionism',
+      label: 'Expansionism',
+      phase: 'SOT',
+      group: 'Social policies',
+      status: 'ready',
+      reason: 'Gain 2 trade.',
+    }
+    try {
+      render(
+        <>
+          <PhaseActionsPanel
+            gameId="game-1"
+            view={{
+              ...viewWith([expansionism]),
+              activeTurn: { turnNumber: 3, waitingFor: [{ username: 'Alice', phase: 'SOT' }] },
+            } as unknown as PlayerView}
+            busy={false}
+            readOnly={false}
+            run={run}
+            initialPhase="SOT"
+          />
+          <CollapsiblePanel id="social-policy" title="Social policy">
+            <p>The policy cards</p>
+          </CollapsiblePanel>
+        </>,
+      )
+      expect(document.getElementById('social-policy-content')?.hidden).toBe(true)
+      fireEvent.click(screen.getByRole('button', { name: 'Show Expansionism in the social policy panel' }))
+      await waitFor(() => expect(document.getElementById('social-policy-content')?.hidden).toBe(false))
+      expect(localStorage.getItem('civ.panel.social-policy')).toBe('true')
+    } finally {
+      Element.prototype.scrollIntoView = original
+      localStorage.removeItem('civ.panel.social-policy')
     }
   })
 
