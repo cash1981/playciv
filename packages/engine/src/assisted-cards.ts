@@ -13,6 +13,7 @@
  * `card-timing.ts`). The list is own view only, because it names cards in the hand.
  */
 
+import { placeStartMarker } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
 import { drawCandidates, shuffleSheetTwice } from './assisted-culture.js'
 import { unitSheetOf } from './build-options.js'
@@ -34,7 +35,7 @@ import { itemName } from './item.js'
 import type { Item } from './item.js'
 import { appendLog } from './log.js'
 import type { AssistedEffect, GameState, Playerhand } from './state.js'
-import { turnStatus } from './turn.js'
+import { startPlayerOf, turnStatus } from './turn.js'
 import type { TurnPhase } from './turn.js'
 
 const KIND_OF: Readonly<Partial<Record<Item['kind'], PlayableCard['kind']>>> = {
@@ -131,7 +132,7 @@ type PlayCardEffect = Extract<AssistedEffect, { readonly kind: 'playCard' }>
 
 interface Automated {
   readonly state: GameState
-  readonly extra: Pick<PlayCardEffect, 'gain' | 'drew'>
+  readonly extra: Pick<PlayCardEffect, 'gain' | 'drew' | 'starter'>
   /** The end of the public line: what the game did for the card. */
   readonly said: string
 }
@@ -142,7 +143,7 @@ interface Automated {
  * is only logged and discarded, and the player does the rest by hand. `Err` is a
  * sentence for the player, and then the card stays in the hand.
  */
-function automate(state: GameState, player: Playerhand, name: string): Result<Automated | null, string> {
+function automate(state: GameState, player: Playerhand, name: string, at: string | undefined): Result<Automated | null, string> {
   const gained = (trade: number, culture: number, said: string): Result<Automated, string> =>
     ok({
       state: withPlayerHand(state, {
@@ -172,6 +173,20 @@ function automate(state: GameState, player: Playerhand, name: string): Result<Au
         state: withPlayerHand(drawn.value.state, { ...holder, items: [...holder.items, card] }),
         extra: { drew: { itemId: card.id, sheetName } },
         said: ', building an aircraft unit for free',
+      })
+    }
+    case 'Khalid ibn al-Walid': {
+      const current = startPlayerOf(state)
+      if (current === undefined || current.playerId === player.playerId) {
+        return ok({ state, extra: {}, said: `, but ${player.username} was already the start player` })
+      }
+      const moved = placeStartMarker(state, player, player.playerId, at)
+      const entry = moved.board.history.at(-1)
+      if (moved === state || entry === undefined) return err('The start player marker could not be moved to your area.')
+      return ok({
+        state: { ...moved, startPlayerId: player.playerId },
+        extra: { starter: { from: current.playerId, historyId: entry.id } },
+        said: `, becoming the start player (next turn passes clockwise from ${player.username})`,
       })
     }
     default:
@@ -259,7 +274,7 @@ export const playCard: AssistedActionDefinition = {
 
     const automated =
       card.kind === 'greatPerson'
-        ? automate(moved, playerOf(moved, player.playerId) ?? player, card.name)
+        ? automate(moved, playerOf(moved, player.playerId) ?? player, card.name, context.at)
         : ok<Automated | null>(null)
     if (!automated.ok) return err(rejected('playCard', blocked('unavailable', automated.error)))
     const after = automated.value?.state ?? moved
@@ -299,7 +314,7 @@ export const playCard: AssistedActionDefinition = {
     })
   },
 
-  reverse(state, player, record) {
+  reverse(state, player, record, at) {
     const effect = record.effect
     if (effect.kind !== 'playCard') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const blockedBy = (reason: string) => err({ kind: 'ASSISTED_UNDO_BLOCKED' as const, logId: record.logId, reason })
@@ -316,8 +331,17 @@ export const playCard: AssistedActionDefinition = {
       return blockedBy(`${effect.name} has left ${player.username}'s hand.`)
     }
 
+    if (effect.starter !== undefined && startPlayerOf(state)?.playerId !== player.playerId) {
+      return blockedBy(`${player.username} is no longer the start player, so ${effect.name} cannot be undone.`)
+    }
+
     let current: GameState = state
     let hand: Playerhand = player
+    if (effect.starter !== undefined) {
+      const previous = state.players.find((candidate) => candidate.playerId === effect.starter?.from)
+      if (previous === undefined) return blockedBy('The previous start player has left the game.')
+      current = { ...placeStartMarker(current, previous, player.playerId, at ?? undefined), startPlayerId: previous.playerId }
+    }
     if (effect.gain !== undefined) {
       hand = {
         ...hand,

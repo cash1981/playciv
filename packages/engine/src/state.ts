@@ -588,6 +588,8 @@ export type AssistedEffect =
       readonly gain?: { readonly trade: number; readonly culture: number }
       /** A unit card the game drew into the hand for the card, so an undo can put it back. */
       readonly drew?: { readonly itemId: string; readonly sheetName: SheetName }
+      /** The start player marker the game moved for the card: who held it, and the board entry of the move. */
+      readonly starter?: { readonly from: string; readonly historyId: string }
     }
   | {
       readonly kind: 'coinPurchase'

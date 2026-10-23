@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { undoLastBoardChange } from '../src/actions/board.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
@@ -13,6 +14,7 @@ import { playableCardsOf } from '../src/assisted-cards.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
+import { startPlayerOf } from '../src/turn.js'
 
 import { player, startOfTurn, tradeTurn, withCardInHand } from './assisted-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1 } from './fixture.js'
@@ -396,5 +398,26 @@ describe('Great Persons the game carries out', () => {
     const undone = undoneBy(played)
     expect(player(undone).items).toHaveLength(before)
     expect(player(undone).items.some((item) => item.id === itemId)).toBe(true)
+  })
+
+  it('moves the start player marker to Khalid, and back on undo', () => {
+    const { state, itemId } = withCardInHand(startOfTurn(), 'Khalid ibn al-Walid', CHUL)
+    const before = startPlayerOf(state)?.playerId
+    expect(before).not.toBe(CHUL)
+    const played = unwrap(play(state, 'req-1', itemId, { playerId: CHUL }))
+    expect(startPlayerOf(played)?.playerId).toBe(CHUL)
+    expect(played.log.at(-1)?.publicLog).toBe(
+      'Chul played Khalid ibn al-Walid (any time) and discarded it, becoming the start player (next turn passes clockwise from Chul)',
+    )
+    // The marker cannot be stepped back on the board alone
+    expect(unwrapErr(undoLastBoardChange(played, CHUL)).kind).toBe('BOARD_UNDO_ASSISTED')
+
+    const logId = played.log.at(-1)?.id ?? ''
+    const asked = unwrap(initiateUndo(played, { logId, playerId: CHUL }))
+    const undone = [CASH1981, KARANDRAS1, ITCHI].reduce(
+      (next, playerId) => unwrap(vote(next, { logId, playerId, vote: true, at: AT })),
+      asked,
+    )
+    expect(startPlayerOf(undone)?.playerId).toBe(before)
   })
 })

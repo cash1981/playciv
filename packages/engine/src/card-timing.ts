@@ -199,6 +199,7 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Marco Polo', 'gains 27 trade, up to the ceiling of 27'],
   ['St. Francis of Assisi', 'gains 3 culture for every army you have not built'],
   ['Orville Wright', 'draws an aircraft unit card into your hand'],
+  ['Khalid ibn al-Walid', 'moves the start player marker to your area, so the next turn passes clockwise from you'],
 ])
 
 const DEFAULT_RULE: CardPlayRule = optional('Who is targeted? (optional)')
