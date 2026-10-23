@@ -121,3 +121,17 @@ describe('discardsWhenUsed', () => {
     expect(discardsWhenUsed(null)).toBe(false)
   })
 })
+
+describe('Great Person targets', () => {
+  it('asks for no target where the card names no other player', () => {
+    for (const name of ['Orville Wright', 'Michelangelo', 'Hannibal', 'Albert Einstein', 'Jacques Cousteau']) {
+      expect(cardPlayRuleOf(name).targets).toEqual({ kind: 'none' })
+    }
+  })
+
+  it('still asks for a player where the card names one', () => {
+    for (const name of ['Thomas Edison', 'Mother Teresa']) {
+      expect(cardPlayRuleOf(name).targets).toMatchObject({ kind: 'players', min: 1, max: 1 })
+    }
+  })
+})
