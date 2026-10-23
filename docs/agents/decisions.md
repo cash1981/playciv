@@ -376,8 +376,8 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
   player judges it, as for the Pyramids); the white army of the Russians counts as one of
   the armies in the supply for Turing; the Seven Cities of Gold give the Arabs no free
   advance and ask which investment card gets the 2 markers; Expansionism counts a city-state
-  by the figure standing on it; a relic is taken in Movement and its ability is claimed in
-  any later Start of Turn; only Atlantis (log, then the tech tree) and the investment relic
+  by the figure standing on it; a relic is taken in Movement (by the player's own hand) and its ability is claimed in
+  any later Start of Turn; of the relics only Atlantis (log, then the tech tree) and the investment relic
   have a Start of Turn button; Mysticism's extra card applies to every culture card draw
   (advance, Patronage, Cristo Redentor); Patronage needs one advance first; Feudalism's
   resources come from the tile data; the coins on a wonder are not coin tokens to invest; a
@@ -390,7 +390,10 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
   a scout placed this turn gathers from next turn is told, not enforced; the English armies
   that gather as scouts are offered to Devote and Harvest by hand only; the same resource
   icon harvested twice in a turn (Feudalism and a city's Harvest, or two cities) is warned
-  about, not tracked.
+  about, not tracked; an Arab cannot invest while the free advance is impossible because no card of that level is left;
+  a square a scout sends (by default or by hand) no longer offers its icon to Feudalism, which reads the
+  outskirts only, so Feudalism cannot harvest a resource under a scout; a scout on a city's centre square or a
+  second scout on a square sends nothing.
 
 Source: `engine/src/assisted.ts`, `assisted-core.ts`, `assisted-sot.ts`,
 `assisted-abilities.ts`, `assisted-city.ts`, `assisted-cards.ts`, `card-timing.ts`,
@@ -437,8 +440,8 @@ typed by hand (`BoardPiece.productionOverride`, any player in the game may set i
   not fully blockaded), Military Science +1 per 3 coins (revealed). A Building
   Program marker on a city centre shows a second figure that doubles only the
   outskirts (Wisdom and Warfare p. 7). Communism, Urban Development, the Great
-  Lighthouse, scouts sending a square elsewhere and one-turn cards are named in the
-  notes, not computed. A square in two of the player's own cities counts for each
+  Lighthouse and one-turn cards are named in the notes, not computed (a scout's square
+  is computed since part 13: see "Cities and scouts" there). A square in two of the player's own cities counts for each
   and says so (cities may not overlap when built, so this is old data).
 - A city piece off the map is not listed, so the status board's city count can
   be higher than the list of cities (Your cities).
@@ -505,7 +508,7 @@ private card, nothing placed).
 - **"Possible actions" box in Your actions** (the human): the assisted actions (Advance
   culture and the card buttons) sit in a box under their own heading, above Your cities,
   styled like a city card. With the phase tabs (part 13) each tab has the box for its own
-  phase, its groups as sub-headings, and "Your cities" follows it in City Management. After a successful Advance culture the page scrolls to Your hand
+  phase that has an action the player holds (Trade, Movement and Research often have none), its groups as sub-headings, and "Your cities" follows it in City Management; in Start of Turn the government, invest, scout and card sections sit outside the box. After a successful Advance culture the page scrolls to Your hand
   (it waits for a card choice that is open, which is above the hand, and goes when it has
   been kept). The city name is the larger text on a city card and the production figure the
   smaller; Build and Start Building Program share a row when there is room.
@@ -722,9 +725,8 @@ adds the status (phase, market supply) and the projection carries it in `you.cit
   resource icon when devoted.
 - **Scouts** (p. 26): a scout of the player's outside the city's own outskirts is offered with its
   square's culture or resource, and what it stands on: a building (also one in another city's
-  outskirts), a wonder, a Great Person or a culture icon. Which city a scout is sent to, and whether it was placed the turn
-  before, are not tracked, so every city offers every scout and the player chooses; the panel
-  says so. A scout's square is read with no blockade.
+  outskirts), a wonder, a Great Person or a culture icon. Whether it was placed the turn before is not tracked (the panel says so). Which
+  city it is sent to is, since part 13: the city chosen in Start of Turn, else the capital. A scout's square is read with no blockade.
 - **One action per city per turn** (base rules p. 15; the human's ruling after the first version
   tracked nothing). Build, Start Building Program, Devote to the Arts and Harvest are the city's
   action; Upgrade buildings is not. `cityActionsTakenThisTurn` (`assisted.ts`) lists the applied,

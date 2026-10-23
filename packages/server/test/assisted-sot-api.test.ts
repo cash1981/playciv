@@ -324,9 +324,9 @@ describe('cities and scouts through the actions route', () => {
       cities: [],
       scoutsNow: { status: 'ready' },
     })
-    // The other player is not in their Start of Turn: their own view says so, and holds nothing of the starter's
+    // The other player has a view of their own (their own Start of Turn), with nothing of the starter's
     const theirs = await view(t.gameId, t.other)
     expect(theirs.you?.playerId).not.toBe(t.starterId)
-    expect(theirs.you?.startOfTurn).toMatchObject({ cityLimit: { have: 0, max: 2 }, scouts: [], cities: [] })
+    expect(theirs.you?.startOfTurn).toMatchObject({ cityLimit: { have: 0, max: 2 }, scouts: [], cities: [], scoutsNow: { status: 'ready' } })
   })
 })

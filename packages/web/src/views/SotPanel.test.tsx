@@ -389,6 +389,12 @@ describe('scouts and cities', () => {
     expect(screen.queryByText(/because you did not send it anywhere/)).toBeNull()
   })
 
+  it('offers a way back to the default for a square that was sent, whether or not there is a capital', () => {
+    renderChoices(viewOf(sotWith({ scouts: [scout({ assignedTo: 'c2', assignedByDefault: false })] as never })))
+    const select = screen.getByRole('combobox', { name: /Send the square of E5 to/ })
+    expect(within(select).getByRole('option', { name: 'Back to the default' })).toBeTruthy()
+  })
+
   it('does not bring a choice back after the answer returns to what it was', async () => {
     vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     const first = viewOf(sotWith({ scouts: [scout({ assignedTo: 'c1', assignedByDefault: true })] as never }))

@@ -309,6 +309,15 @@ describe('the phase tabs', () => {
     expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Your actions' }))
   })
 
+  it('does not take focus after a click elsewhere on the page ended it in the panel', () => {
+    const { rerender } = renderPanel(viewIn('CM'))
+    screen.getByRole('button', { name: 'Use Chivalry' }).focus()
+    fireEvent.pointerDown(document.body)
+    ;(document.activeElement as HTMLElement).blur()
+    rerender(<PhaseActionsPanel gameId="g1" view={viewIn('CM', [advance], { rev: 6 })} busy={false} readOnly={false} run={run} />)
+    expect(document.activeElement).toBe(document.body)
+  })
+
   it('leaves focus alone when it was not in the panel', () => {
     const { rerender } = renderPanel(viewIn('CM'))
     const outside = document.createElement('button')

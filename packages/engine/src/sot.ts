@@ -11,6 +11,7 @@
 import {
   blockadedGreatPersonTypes,
   blockadedPieceIds,
+  cityFootprintsOf,
   cityStateHolderColour,
   mapCellOf,
   pieceColorOf,
@@ -328,29 +329,37 @@ export function scoutAssignmentsOf(state: GameState, player: Playerhand): readon
   })
 }
 
-/** The player's capital: the city marker that says so. A capital grown into a metropolis has none. */
+/** The player's capital: the city marker that says so, on the map. A capital grown into a metropolis has none. */
 export function capitalOf(state: GameState, player: Playerhand): BoardPiece | undefined {
   const colour = player.color?.toLowerCase()
   if (colour === undefined) return undefined
-  return state.board.pieces.find(
-    (piece) => piece.category === 'city' && piece.assetId.includes('capital') && pieceColorOf(piece) === colour,
-  )
+  return cityFootprintsOf(state, colour).find((footprint) => footprint.piece.assetId.includes('capital'))?.piece
 }
 
 /**
  * Where each of the player's scouts on the map sends its square this turn: the city they chose,
  * and for a scout they did not send anywhere, the capital. An English army sent to a city is
  * kept too, but never goes to the capital on its own. Without a capital marker (a capital that
- * grew into a metropolis has none) a scout that was not sent has no destination.
+ * grew into a metropolis has none) a scout that was not sent has no destination. A scout on a
+ * city's own centre square sends nothing by default (the centre is not a square to gather), and
+ * a square is sent once: a second scout on it, or one already sent from it, adds nothing.
  */
 export function scoutDestinationsOf(state: GameState, player: Playerhand): readonly ScoutAssignment[] {
   const chosen = scoutAssignmentsOf(state, player)
   const capital = capitalOf(state, player)
-  if (capital === undefined) return chosen
+  const colour = player.color?.toLowerCase()
+  if (capital === undefined || colour === undefined) return chosen
   const sent = new Set(chosen.map((assignment) => assignment.scoutPieceId))
+  const taken = new Set(chosen.map((assignment) => `${assignment.column}:${assignment.row}`))
+  for (const footprint of cityFootprintsOf(state, colour)) {
+    for (const centre of footprint.centers) taken.add(`${centre.column}:${centre.row}`)
+  }
   const defaults = figuresOnMap(state, player, 'scout').flatMap((scout): readonly ScoutAssignment[] => {
     const at = mapCellOf(state.board, scout)
     if (sent.has(scout.id) || at === null) return []
+    const key = `${at.column}:${at.row}`
+    if (taken.has(key)) return []
+    taken.add(key)
     return [{ scoutPieceId: scout.id, cityPieceId: capital.id, column: at.column, row: at.row, chosen: false }]
   })
   return [...chosen, ...defaults]

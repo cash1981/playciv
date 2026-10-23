@@ -329,7 +329,7 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
 
     // The squares scouts send to this city from outside its outskirts
     for (const assignment of assignments) {
-      if (assignment.cityPieceId !== piece.id || outskirts.some((cell) => sameCell(cell, assignment))) continue
+      if (assignment.cityPieceId !== piece.id || [...centers, ...outskirts].some((cell) => sameCell(cell, assignment))) continue
       const gathered = scoutSquareProduction(board, assignment)
       detail.push({
         square: squareLabel(assignment),

@@ -319,7 +319,7 @@ export const assignScout: AssistedActionDefinition = {
       playerId: player.playerId,
       publicLog:
         cityLabel === null
-          ? capitalOf(state, player) === undefined
+          ? capitalOf(state, player) === undefined || !scout.assetId.endsWith('scout')
             ? `${player.username} stopped sending the square of the scout on ${square} to a city`
             : `${player.username} sent the square of the scout on ${square} back to the capital`
           : `${player.username} sent the square of the scout on ${square} to ${cityLabel}`,

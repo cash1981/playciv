@@ -372,7 +372,7 @@ describe('Cristo Redentor', () => {
     expect(undone.items.length).toBe(state.items.length)
   })
 
-  it('waits for a card choice and for a hand over its size, and warns when the two cards bring it over', () => {
+  it('waits for the card choice of the last draw before it draws again', () => {
     const waiting = withWonder(sotTurn({ techs: ['Mysticism'] }), 'wonders/cristoredentor')
     const drawn = unwrap(act(waiting, 'sot:cristoRedentor:1'))
     const reopened: GameState = {
@@ -420,6 +420,16 @@ describe('Cristo Redentor', () => {
     const both = keep(keep(used, 'req-1', first?.candidateIds[0] ?? '', 'req-2'), 'req-1:2', second?.candidateIds[1] ?? '', 'req-3')
     const effect = both.assistedActions[0]?.effect
     expect(effect?.kind === 'sotDraw' && effect.kept).toEqual([first?.candidateIds[0], second?.candidateIds[1]])
+    // The player then plays the card they kept from the first pair: the vote can no longer take it back
+    const played = first?.candidateIds[0] ?? ''
+    const gone: GameState = {
+      ...both,
+      players: both.players.map((candidate) =>
+        candidate.playerId === CASH1981 ? { ...candidate, items: candidate.items.filter((item) => item.id !== played) } : candidate,
+      ),
+      discardedItems: [...both.discardedItems, ...me(both).items.filter((item) => item.id === played)],
+    }
+    expect(undoRefusal(gone, 'req-1')).toMatchObject({ kind: 'ASSISTED_UNDO_BLOCKED' })
   })
 
   it('has its own button text', () => {

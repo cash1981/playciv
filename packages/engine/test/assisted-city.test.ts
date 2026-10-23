@@ -368,6 +368,21 @@ describe('founding a city', () => {
     expect(refusal(devoted)).toBe('The city on B2 was used after it was founded (devoteToTheArts). Undo that first.')
   })
 
+  it('refuses a second Roman city while the card choice of the first free advance is waiting, and says so in the view', () => {
+    const roman = withScout({ civ: 'Romans', step: 9, techs: ['Mysticism'] })
+    const first = unwrap(found(roman, scoutOf(roman).id))
+    expect(me(first).pendingRewards).toHaveLength(1)
+    // A scout on the same square again (the city taken off by hand), with the first advance's choice still waiting
+    const city = cityAt(first, 1, 1)
+    const cleared: GameState = { ...first, board: { ...first.board, pieces: first.board.pieces.filter((piece) => piece.id !== city?.id) } }
+    const second = put(cleared, CASH1981, 'figures/redscout', 1, 1)
+    const scout = scoutOf(second)
+    expect(reasonOf(found(second, scout.id, 'req-2'))).toMatch(/advance one space for free with every city, and that is stopped now/)
+    const view = scoutViewsOf(second, me(second)).find((entry) => entry.pieceId === scout.id)
+    expect(view?.found.ok).toBe(false)
+    expect(view?.found.reasons.join(' ')).toMatch(/advance one space for free with every city, and that is stopped now/)
+  })
+
   it('refuses the undo when the city has been moved', () => {
     const state = withScout()
     const result = unwrap(found(state, scoutOf(state).id))
@@ -570,6 +585,43 @@ describe('sending a scout’s square to a city', () => {
       const sent = unwrap(assign(state, scoutOf(state).id, cities(state).find((city) => city.label.endsWith('E5'))?.pieceId ?? ''))
       expect(wheat(sent, 'E5')).toEqual([false])
       expect(wheat(sent, 'B2')).toEqual([])
+    })
+
+    it('gives nothing for a scout on a city centre, and counts a square once for two scouts', () => {
+      const base = twoCities(FOREST_D3)
+      const capital = near(base)?.outskirts ?? 0
+      // A second scout on the same forest adds nothing
+      const twin = put(base, CASH1981, 'figures/redscout', FOREST_D3.column, FOREST_D3.row)
+      expect(near(twin)?.outskirts).toBe(capital)
+      // A scout on the capital's own centre square sends nothing
+      const centre = put(withAmerica(sotTurn({ techs: ['Irrigation'] })), CASH1981, 'cities/redcapital2', 1, 1)
+      const onCentre = put(centre, CASH1981, 'figures/redscout', 1, 1)
+      expect(near(onCentre)?.outskirts).toBe(near(centre)?.outskirts)
+      expect(scoutViewsOf(onCentre, me(onCentre))[0]).toMatchObject({ assignedTo: null })
+    })
+
+    it('has no capital when its marker is not on the map', () => {
+      let state = withAmerica(sotTurn({ techs: ['Irrigation'] }))
+      state = put(state, CASH1981, 'cities/redcity2', 4, 4)
+      state = put(state, CASH1981, 'figures/redscout', 6, 6)
+      const withMarker = put(state, CASH1981, 'cities/redcapital2', 1, 1)
+      const capital = withMarker.board.pieces.find((piece) => piece.assetId === 'cities/redcapital2')
+      if (capital === undefined) throw new Error('no capital')
+      expect(scoutViewsOf(withMarker, me(withMarker))[0]?.assignedTo).toBe(capital.id)
+      // The capital marker moves to the player's area: no capital on the map
+      const off: GameState = { ...withMarker, board: { ...withMarker.board, pieces: withMarker.board.pieces.map((piece) => (piece.id === capital.id ? { ...piece, x: -500, y: -500 } : piece)) } }
+      expect(scoutViewsOf(off, me(off))[0]).toMatchObject({ assignedTo: null, assignedByDefault: false })
+    })
+
+    it('logs clearing an English army’s send as stopping, not as going back to the capital', () => {
+      let english = withAmerica(sotTurn({ civ: 'England' }))
+      english = put(english, CASH1981, 'cities/redcapital2', 1, 1)
+      english = put(english, CASH1981, 'figures/redarmy', 3, 2)
+      const army = english.board.pieces.find((piece) => piece.assetId === 'figures/redarmy')
+      const cityId = near(english)?.pieceId ?? ''
+      const sent = unwrap(assign(english, army?.id ?? '', cityId))
+      const stopped = unwrap(assign(sent, army?.id ?? '', null, 'req-2'))
+      expect(stopped.log.at(-1)?.publicLog).toBe('cash1981 stopped sending the square of the scout on D3 to a city')
     })
 
     it('does not send an English army to the capital on its own', () => {

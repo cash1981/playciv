@@ -469,7 +469,7 @@ function SendSquare({
       <label>
         Send the square of {square} to{' '}
         <select value={value} disabled={busy || cities.length === 0} onChange={(event) => setChosen({ for: assignedTo, city: event.target.value })}>
-          {assignedTo === null && <option value="">No city</option>}
+          {!byDefault && <option value="">{assignedTo === null ? 'No city' : 'Back to the default'}</option>}
           {cities.map((city) => (
             <option key={city.pieceId} value={city.pieceId}>
               {city.label}

@@ -97,14 +97,17 @@ export function PhaseActionsPanel({
   const bodyRef = useRef<HTMLDivElement>(null)
   // The same when a press removes the control that was pressed (a city founded, a card played, a government
   // taken): the panel gets the focus when the page's own element is gone and focus was in the panel before.
+  // Focus is followed as it moves, and a click elsewhere on the page ends it, so a later refresh takes nothing.
   const focusInPanel = useRef(false)
   useEffect(() => {
-    const body = bodyRef.current
-    if (body === null) return
-    if (focusInPanel.current && document.activeElement === document.body) {
-      body.focus({ preventScroll: true })
+    const leave = (event: Event): void => {
+      if (!(event.target instanceof Node) || !bodyRef.current?.contains(event.target)) focusInPanel.current = false
     }
-    focusInPanel.current = body.contains(document.activeElement)
+    document.addEventListener('pointerdown', leave, true)
+    return () => document.removeEventListener('pointerdown', leave, true)
+  }, [])
+  useEffect(() => {
+    if (focusInPanel.current && document.activeElement === document.body) bodyRef.current?.focus({ preventScroll: true })
   })
   // A culture advance puts its cards in the hand: after it, and after a waiting card choice has been
   // kept, the page goes to Your hand. Left alone while a choice is waiting, which is above the hand.
@@ -163,6 +166,13 @@ export function PhaseActionsPanel({
         tabIndex={-1}
         role="group"
         aria-label="Your actions"
+        onFocus={() => {
+          focusInPanel.current = true
+        }}
+        onBlur={(event) => {
+          // Focus that moves to another element (outside the panel too) is not lost; removal gives no target
+          if (event.relatedTarget !== null) focusInPanel.current = false
+        }}
       >
         <EndTurn gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
 
