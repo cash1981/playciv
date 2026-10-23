@@ -19,6 +19,7 @@ import type { Cell } from './blockade.js'
 import { columnLabel, isMapCell, mapTop, squareOf } from './board.js'
 import type { Board, BoardPiece } from './board.js'
 import { coinSourcesOf, totalCoins } from './coins.js'
+import { scoutAssignmentsOf } from './sot.js'
 import type { GameState, Playerhand } from './state.js'
 import { terrainAt } from './terrain.js'
 import type { Terrain } from './terrain.js'
@@ -32,6 +33,10 @@ export interface OutskirtsSquare {
   /** Production counted for the square. 0 when it is blockaded or its icons are not in the data. */
   readonly amount: number
   readonly blockaded: boolean
+  /** Set when one of the player's scouts sends this square to another of their cities this turn: the label of that city. */
+  readonly sentTo?: string
+  /** Set on a square outside the outskirts that one of the player's scouts sends to this city this turn. */
+  readonly scout?: true
 }
 
 /** One thing added to every city. `amount` is what is counted, so it is 0 when `applied` is false. */
@@ -88,6 +93,30 @@ const SUSAN_B_ANTHONY_BONUS = 2
 const COINS_PER_MILITARY_SCIENCE_POINT = 3
 
 const sameCell = (a: Cell, b: Cell): boolean => a.column === b.column && a.row === b.row
+
+/**
+ * What a square gives a city that a scout sends it: the production of the building that
+ * stands there (a building replaces every icon of its square), nothing for a wonder or a
+ * great person (their icons are not in the data), otherwise the terrain's. The same rules
+ * as an outskirts square, without the blockade: a scout may gather a blockaded square.
+ */
+function scoutSquareProduction(board: Board, cell: Cell): { readonly source: string; readonly amount: number } {
+  const here = board.pieces.filter((other) => {
+    if (other.category !== 'building' && other.category !== 'wonder' && other.category !== 'greatperson') return false
+    const at = mapCellOf(board, other)
+    return at !== null && sameCell(at, cell)
+  })
+  const buildings = here.filter((other) => other.category === 'building')
+  if (buildings.length > 0) {
+    const best = buildings.reduce((top, candidate) =>
+      (buildingDataOf(candidate.assetId)?.production ?? 0) > (buildingDataOf(top.assetId)?.production ?? 0) ? candidate : top,
+    )
+    return { source: best.label, amount: buildingDataOf(best.assetId)?.production ?? 0 }
+  }
+  if (here.length > 0) return { source: here.some((other) => other.category === 'wonder') ? 'wonder' : 'great person', amount: 0 }
+  const terrain = terrainOfCell(board, cell)
+  return terrain === null ? { source: 'unknown terrain', amount: 0 } : { source: terrain, amount: TERRAIN_PRODUCTION[terrain] }
+}
 
 const squareLabel = (cell: Cell): string => `${columnLabel(cell.column)}${cell.row + 1}`
 
@@ -205,8 +234,14 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
     playerNotes.push('The Great Lighthouse is owned. Any effect on production is not counted.')
   }
   const ownScoutId = `figures/${colour}scout`
-  if (board.pieces.some((piece) => piece.assetId === ownScoutId && mapCellOf(board, piece) !== null)) {
-    playerNotes.push('A scout can send a square to another city. That is not tracked.')
+  const assignments = scoutAssignmentsOf(state, player)
+  const cityLabels = new Map(
+    footprints.map((footprint) => [footprint.piece.id, `${kindOf(footprint.piece)} ${squareOf(board, footprint.piece) ?? ''}`.trim()] as const),
+  )
+  if (assignments.length > 0) {
+    playerNotes.push('A square a scout sends is counted for production only. Its trade, culture, coin and resource icons are not counted.')
+  } else if (board.pieces.some((piece) => piece.assetId === ownScoutId && mapCellOf(board, piece) !== null)) {
+    playerNotes.push('A scout can send its square to a city in the Start of Turn. None does now.')
   }
 
   return footprints.map((footprint): CityProduction => {
@@ -224,6 +259,18 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
       // A city at the edge has outskirts off the map, which are not squares at all.
       if (!isMapCell(board, cell.column, cell.row)) continue
       const square = squareLabel(cell)
+      // One of the player's own scouts sends this square to another of their cities: it leaves this one
+      const sentAway = assignments.find((assignment) => sameCell(assignment, cell) && assignment.cityPieceId !== piece.id)
+      if (sentAway !== undefined) {
+        detail.push({
+          square,
+          source: 'sent by your scout',
+          amount: 0,
+          blockaded: false,
+          sentTo: cityLabels.get(sentAway.cityPieceId) ?? 'another city',
+        })
+        continue
+      }
       const blockaded = footprint.hasEnemyFigureAt(cell)
       // Counted for each city, as old data may overlap; the note says so. Another city's
       // centre is not a shared square: the centre is not outskirts, so only this city counts it.
@@ -276,6 +323,19 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
       if (icons > 0) detail.push({ square, source: terrain, amount: blockaded ? 0 : icons, blockaded })
     }
 
+    // The squares scouts send to this city from outside its outskirts
+    for (const assignment of assignments) {
+      if (assignment.cityPieceId !== piece.id || outskirts.some((cell) => sameCell(cell, assignment))) continue
+      const gathered = scoutSquareProduction(board, assignment)
+      detail.push({
+        square: squareLabel(assignment),
+        source: `${gathered.source}, sent by your scout`,
+        amount: gathered.amount,
+        blockaded: false,
+        scout: true,
+      })
+    }
+
     const outskirtsTotal = detail.reduce((total, entry) => total + entry.amount, 0)
     const estimate = outskirtsTotal + modifierTotal
     const buildingProgram = buildingProgramCells.some((marker) => centers.some((centre) => sameCell(centre, marker)))
@@ -310,7 +370,7 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
 
     return {
       pieceId: piece.id,
-      label: `${kindOf(piece)} ${squareOf(board, piece) ?? ''}`.trim(),
+      label: cityLabels.get(piece.id) ?? `${kindOf(piece)} ${squareOf(board, piece) ?? ''}`.trim(),
       outskirts: outskirtsTotal,
       outskirtsDetail: detail,
       modifiers,

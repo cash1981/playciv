@@ -10,7 +10,9 @@
 
 import { isGovernment } from '@civ/engine'
 import type {
+  AssignScoutPayload,
   AssistedPayload,
+  FoundCityPayload,
   GovernmentPayload,
   HarvestPayload,
   InvestPayload,
@@ -81,12 +83,30 @@ function parseHarvest(args: Record<string, unknown>): HarvestPayload | string {
   return { cityPieceId, resource }
 }
 
+function parseFoundCity(args: Record<string, unknown>): FoundCityPayload | string {
+  const extra = extraKeys(args, ['figurePieceId'])
+  if (extra.length > 0) return `foundCity takes only figurePieceId, not ${extra.join(', ')}`
+  if (!isId(args['figurePieceId'])) return 'figurePieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+  return { figurePieceId: args['figurePieceId'] }
+}
+
+function parseAssignScout(args: Record<string, unknown>): AssignScoutPayload | string {
+  const extra = extraKeys(args, ['scoutPieceId', 'cityPieceId'])
+  if (extra.length > 0) return `assignScout takes only scoutPieceId and cityPieceId, not ${extra.join(', ')}`
+  if (!isId(args['scoutPieceId'])) return 'scoutPieceId is required: 1 to 64 characters, letters, digits and . _ : -'
+  const city = args['cityPieceId']
+  if (city !== null && !isId(city)) return 'cityPieceId must be a piece id, or null to stop sending the square'
+  return { scoutPieceId: args['scoutPieceId'], cityPieceId: city }
+}
+
 /** The actions whose payload is `args`, with the parser of each. */
 const PARSERS: Readonly<Record<string, (args: Record<string, unknown>) => AssistedPayload | string>> = {
   playCard: parsePlayCard,
   switchGovernment: parseSwitchGovernment,
   invest: parseInvest,
   feudalismHarvest: parseHarvest,
+  foundCity: parseFoundCity,
+  assignScout: parseAssignScout,
 }
 
 /** Whether `action` takes `args`. */

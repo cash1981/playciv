@@ -214,3 +214,39 @@ describe('Feudalism through the actions route', () => {
     expect(bad.status).toBe(400)
   })
 })
+
+describe('cities and scouts through the actions route', () => {
+  it('refuses a malformed foundCity and assignScout before the engine sees it', async () => {
+    const t = await table('city')
+    const rev = (await view(t.gameId, t.starter)).rev
+    const send = (action: string, args: unknown) =>
+      post(t.starter, actions(t.gameId), { action, requestId: `req-${Math.random()}`, rev, args })
+    for (const args of [{}, { figurePieceId: 'bad id!' }, { figurePieceId: 'a', extra: 1 }, 'x']) {
+      expect((await send('foundCity', args)).status).toBe(400)
+    }
+    for (const args of [{}, { scoutPieceId: 's1' }, { scoutPieceId: 's1', cityPieceId: 3 }, { scoutPieceId: 's1', cityPieceId: 'c1', extra: 1 }]) {
+      expect((await send('assignScout', args)).status).toBe(400)
+    }
+    expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
+  })
+
+  it('answers a well formed request for a figure that does not exist with the engine reason', async () => {
+    const t = await table('city2')
+    const rev = (await view(t.gameId, t.starter)).rev
+    const response = await post(t.starter, actions(t.gameId), {
+      action: 'foundCity', requestId: 'req-1', rev, args: { figurePieceId: 'nothing' },
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    const none = await post(t.starter, actions(t.gameId), {
+      action: 'assignScout', requestId: 'req-2', rev, args: { scoutPieceId: 's1', cityPieceId: null },
+    })
+    expect(none.status).toBe(400)
+  })
+
+  it('gives the starter the scouts section and the city limit, and the other player a view of their own', async () => {
+    const t = await table('city3')
+    const mine = await view(t.gameId, t.starter)
+    expect(mine.you?.startOfTurn).toMatchObject({ cityLimit: { have: 0, max: 2 }, scouts: [], cities: [] })
+  })
+})

@@ -263,3 +263,46 @@ export function statsAfterGovernmentChange(player: Playerhand, government: Gover
   }
   return { ...player.stats, coinSources }
 }
+
+// ---------------------------------------------------------------------------
+// Scouts sending their square to a city (base rulebook p. 26)
+// ---------------------------------------------------------------------------
+
+/** A scout's square, sent to one of the player's cities for this turn. */
+export interface ScoutAssignment {
+  readonly scoutPieceId: string
+  readonly cityPieceId: string
+  readonly column: number
+  readonly row: number
+}
+
+/**
+ * The assignments in force this turn. They are not stored on their own: each is a record
+ * of the `assignScout` action, so the log, the undo vote and a retry already cover them.
+ * The latest applied record of a scout wins, and a record that was undone does not count,
+ * so undoing a change brings back the one before it. An assignment holds only while the
+ * scout still stands on the square it was declared for and the city is still on the map.
+ */
+export function scoutAssignmentsOf(state: GameState, player: Playerhand): readonly ScoutAssignment[] {
+  const turn = turnStatus(state).currentTurn
+  const latest = new Map<string, ScoutAssignment | null>()
+  for (const record of state.assistedActions) {
+    if (record.kind !== 'assignScout' || record.status !== 'applied') continue
+    if (record.playerId !== player.playerId || record.turnNumber !== turn) continue
+    const effect = record.effect
+    if (effect.kind !== 'assignScout') continue
+    latest.set(
+      effect.scoutPieceId,
+      effect.cityPieceId === null
+        ? null
+        : { scoutPieceId: effect.scoutPieceId, cityPieceId: effect.cityPieceId, column: effect.column, row: effect.row },
+    )
+  }
+  return [...latest.values()].filter((assignment): assignment is ScoutAssignment => {
+    if (assignment === null) return false
+    const scout = state.board.pieces.find((piece) => piece.id === assignment.scoutPieceId)
+    const at = scout === undefined ? null : mapCellOf(state.board, scout)
+    const city = state.board.pieces.find((piece) => piece.id === assignment.cityPieceId && piece.category === 'city')
+    return at !== null && at.column === assignment.column && at.row === assignment.row && city !== undefined
+  })
+}

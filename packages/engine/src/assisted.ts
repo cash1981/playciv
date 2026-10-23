@@ -34,6 +34,7 @@ import {
   freeTurnAction,
   lastLogId,
   openCityManagementTurn,
+  placeBack,
   playerOf,
   rejected,
   techBlock,
@@ -42,6 +43,7 @@ import {
   withPlayerHand,
 } from './assisted-core.js'
 import { playCard } from './assisted-cards.js'
+import { CITY_ACTIONS } from './assisted-city.js'
 import { SOT_ACTIONS } from './assisted-sot.js'
 import {
   chooseReward,
@@ -60,9 +62,7 @@ import type {
 import { blockadedPieceIds, cityFootprintsOf, mapCellOf } from './blockade.js'
 import {
   areaAt,
-  boardAreas,
   findBoardAsset,
-  locationOf,
   playerAreas,
 } from './board.js'
 import type { BoardPiece } from './board.js'
@@ -92,7 +92,6 @@ import type { EngineError } from './errors.js'
 import { itemName } from './item.js'
 import type { Item } from './item.js'
 import { appendLog } from './log.js'
-import { nextId } from './random.js'
 import type { Result } from './result.js'
 import { err, ok } from './result.js'
 import { SHEET_LABEL } from './sheet-name.js'
@@ -213,45 +212,6 @@ function returnResource(
     })
   }
   return ok(placeBack(state, player, spent.piece, at))
-}
-
-/**
- * Puts the exact piece back, same id and same place, as a board history entry
- * so the history bar and board replay see it. It lands on top of the stack, which
- * is what replaying a `place` change does. Not through `placePiece`: that would
- * make a new piece, snap it into the next free slot and refuse it when the
- * supply count is full, and an undo must not be refused halfway.
- */
-function placeBack(
-  state: GameState,
-  player: Playerhand,
-  piece: BoardPiece,
-  at: string | null,
-): GameState {
-  if (state.board.pieces.some((candidate) => candidate.id === piece.id)) return state
-  const [id, rng] = nextId(state.rng)
-  const areas = boardAreas(state.board, state.players)
-  return {
-    ...state,
-    rng,
-    board: {
-      ...state.board,
-      pieces: [...state.board.pieces, piece],
-      history: [
-        ...state.board.history,
-        {
-          id,
-          at,
-          playerId: player.playerId,
-          username: player.username,
-          description: `${player.username} put back ${piece.label} at ${locationOf(state.board, areas, piece)}`,
-          change: { kind: 'place', piece, onTop: true },
-          logLength: state.log.length,
-        },
-      ],
-      redo: [],
-    },
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -894,7 +854,14 @@ const build: AssistedActionDefinition = {
 
 /** The `startBuildingProgram` payload, or `undefined` when the payload is another action's or missing. */
 const startPayloadOf = (payload: AssistedPayload | undefined): StartBuildingProgramPayload | undefined =>
-  payload !== undefined && 'cityPieceId' in payload && !('item' in payload) ? payload : undefined
+  payload !== undefined &&
+  'cityPieceId' in payload &&
+  typeof payload.cityPieceId === 'string' &&
+  !('item' in payload) &&
+  !('resource' in payload) &&
+  !('scoutPieceId' in payload)
+    ? { cityPieceId: payload.cityPieceId }
+    : undefined
 
 /**
  * Puts the Building Program marker on a city's centre (Wisdom and Warfare p. 7), so
@@ -1169,6 +1136,7 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   upgradeBuildings,
   playCard,
   ...SOT_ACTIONS,
+  ...CITY_ACTIONS,
 ]
 
 /** The actions that are buttons, in the order of `availableActions`. `chooseReward` answers a choice and is not one. */

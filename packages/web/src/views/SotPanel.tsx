@@ -35,8 +35,8 @@ const techWords = (level: number | null): string => (level === null ? 'a tech of
 
 /**
  * The choices of the Start of Turn, in the order the rules list them: free techs
- * waiting, the government, the harvest of Feudalism and the investment. Nothing for a
- * spectator or for a replayed revision.
+ * waiting, the government, the harvest of Feudalism, the investment, and the scouts
+ * and cities. Nothing for a spectator or for a replayed revision.
  */
 export function StartOfTurnChoices({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element | null {
   const sot = view.you?.startOfTurn
@@ -48,6 +48,8 @@ export function StartOfTurnChoices({ gameId, view, busy, readOnly, run }: Props)
       <GovernmentChange {...common} />
       {sot.feudalism !== null && <FeudalismHarvest {...common} feudalism={sot.feudalism} />}
       <Invest {...common} />
+      <ScoutsAndCities {...common} />
+      <MetropolisHint view={view} />
     </>
   )
 }
@@ -324,6 +326,196 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
           Invest
         </button>
       </form>
+    </section>
+  )
+}
+
+const terrainWords = (terrain: string | null): string => (terrain === null ? 'unknown terrain' : terrain)
+
+/**
+ * The scouts: each can send its square to one of the player's cities for the whole turn,
+ * and found a city where it stands. The reasons a city cannot be founded are listed, all
+ * of them, so the player sees what to fix.
+ */
+function ScoutsAndCities({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Element | null {
+  const playerId = view.you?.playerId ?? ''
+  const { scouts, cities, cityLimit } = sot
+  if (scouts.length === 0 && cityLimit.have >= cityLimit.max) return null
+
+  const found = (pieceId: string): void => {
+    const key = `${gameId}:${playerId}:foundCity:${pieceId}`
+    void pressOnce(
+      key,
+      run,
+      (requestId) => api.actionWithArgs(gameId, 'foundCity', requestId, view.rev, { figurePieceId: pieceId }),
+      view,
+    )
+  }
+  const send = (pieceId: string, cityPieceId: string | null): void => {
+    const key = `${gameId}:${playerId}:assignScout:${pieceId}:${cityPieceId ?? 'none'}`
+    void pressOnce(
+      key,
+      run,
+      (requestId) => api.actionWithArgs(gameId, 'assignScout', requestId, view.rev, { scoutPieceId: pieceId, cityPieceId }),
+      view,
+    )
+  }
+
+  return (
+    <section className="phase-group sot-scouts" aria-label="Scouts and cities">
+      <h3 className="phase-group-title">Scouts and cities</h3>
+      <p>
+        You have {cityLimit.have} of the {cityLimit.max} cities you may have (a third city needs Irrigation). A new city
+        replaces the scout that stands where it goes. A scout sends its square to one city for the whole turn, and the
+        city gets that square&apos;s production. A scout placed this turn gathers from next turn.
+      </p>
+      <p className="muted">
+        Only production is moved. The trade, culture, coin and resource icons on the square are still counted by hand.
+      </p>
+      {scouts.length === 0 && <p className="muted">You have no scout on the map.</p>}
+      <ul className="sot-scout-list">
+        {scouts.map((scout) => (
+          <li key={scout.pieceId} className="sot-scout">
+            <strong>
+              {scout.figure === 'army' ? 'Army' : 'Scout'} on {scout.square}
+            </strong>{' '}
+            <span className="muted">({terrainWords(scout.terrain)})</span>
+            {scout.canSend && (
+              <SendSquare
+                scoutId={scout.pieceId}
+                square={scout.square}
+                assignedTo={scout.assignedTo}
+                cities={cities}
+                busy={busy}
+                send={send}
+              />
+            )}
+            <FoundHere
+              pieceId={scout.pieceId}
+              square={scout.square}
+              ok={scout.found.ok}
+              reasons={scout.found.reasons}
+              zuluHuts={scout.found.zuluHuts}
+              busy={busy}
+              found={found}
+            />
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function SendSquare({
+  scoutId,
+  square,
+  assignedTo,
+  cities,
+  busy,
+  send,
+}: {
+  readonly scoutId: string
+  readonly square: string
+  readonly assignedTo: string | null
+  readonly cities: StartOfTurn['cities']
+  readonly busy: boolean
+  readonly send: (pieceId: string, cityPieceId: string | null) => void
+}): React.JSX.Element {
+  const [chosen, setChosen] = useState<string | null>(null)
+  const value = chosen ?? assignedTo ?? ''
+  const changed = value !== (assignedTo ?? '')
+  return (
+    <form
+      className="sot-form sot-send"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (changed) send(scoutId, value === '' ? null : value)
+      }}
+    >
+      <label>
+        Send the square of {square} to{' '}
+        <select value={value} disabled={busy || cities.length === 0} onChange={(event) => setChosen(event.target.value)}>
+          <option value="">No city</option>
+          {cities.map((city) => (
+            <option key={city.pieceId} value={city.pieceId}>
+              {city.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" className="small" disabled={busy || !changed}>
+        Send
+      </button>
+      {cities.length === 0 && <span className="muted">You have no city on the map.</span>}
+    </form>
+  )
+}
+
+function FoundHere({
+  pieceId,
+  square,
+  ok,
+  reasons,
+  zuluHuts,
+  busy,
+  found,
+}: {
+  readonly pieceId: string
+  readonly square: string
+  readonly ok: boolean
+  readonly reasons: readonly string[]
+  readonly zuluHuts: readonly string[]
+  readonly busy: boolean
+  readonly found: (pieceId: string) => void
+}): React.JSX.Element {
+  const reasonId = useId()
+  return (
+    <div className="sot-found">
+      <button
+        type="button"
+        className="small"
+        aria-label={`Found a city on ${square}`}
+        aria-describedby={ok ? undefined : reasonId}
+        disabled={busy || !ok}
+        onClick={() => found(pieceId)}
+      >
+        Found a city here
+      </button>
+      {!ok && (
+        <ul id={reasonId} className="muted sot-reasons" aria-label={`Why no city on ${square}`}>
+          {reasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      )}
+      {ok && zuluHuts.length > 0 && (
+        <p className="muted">The Zulu may explore the hut next to the city ({zuluHuts.join(', ')}). Do that by hand.</p>
+      )}
+      {ok && <p className="muted">Move any other figures of yours on {square} to a square next to it.</p>}
+    </div>
+  )
+}
+
+/**
+ * Agriculture grows the capital into a metropolis on the map, which the game does not do
+ * for the player (the human, 2026-10-23): a pointer to the board is all it gives.
+ */
+function MetropolisHint({ view }: { readonly view: PlayerView }): React.JSX.Element | null {
+  const you = view.you
+  if (you === null) return null
+  const agriculture = (you.techsChosen ?? []).some((tech) => tech.name === 'Agriculture' && !tech.hidden)
+  const capital = (you.cities ?? []).some((city) => city.label.startsWith('Capital'))
+  if (!agriculture || !capital) return null
+  return (
+    <section className="phase-group sot-metropolis" aria-label="Metropolis">
+      <h3 className="phase-group-title">Grow your capital into a metropolis</h3>
+      <p>
+        You have Agriculture, so your capital grows into a metropolis when it can: on the capital&apos;s square and one
+        square next to it, with no enemy figure there and its outskirts on the map. Do it on the map.
+      </p>
+      <button type="button" className="small" onClick={() => goToPanel('board')}>
+        Go to the map
+      </button>
     </section>
   )
 }

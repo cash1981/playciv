@@ -9,9 +9,12 @@
  * `assisted.ts` documents. Keep it that way.
  */
 
+import { boardAreas, locationOf } from './board.js'
+import type { BoardPiece } from './board.js'
 import type { BuildPayload } from './build-options.js'
 import type { EngineError } from './errors.js'
 import type { Government } from './government.js'
+import { nextId } from './random.js'
 import type { Result } from './result.js'
 import type {
   AssistedActionKind,
@@ -204,6 +207,17 @@ export interface HarvestPayload {
   readonly resource: string
 }
 
+/** What `foundCity` carries: the figure that stands where the city goes. */
+export interface FoundCityPayload {
+  readonly figurePieceId: string
+}
+
+/** What `assignScout` carries: the scout, and the city to send its square to (`null` stops it). */
+export interface AssignScoutPayload {
+  readonly scoutPieceId: string
+  readonly cityPieceId: string | null
+}
+
 export type AssistedPayload =
   | ChooseRewardPayload
   | BuildPayload
@@ -213,6 +227,8 @@ export type AssistedPayload =
   | GovernmentPayload
   | InvestPayload
   | HarvestPayload
+  | FoundCityPayload
+  | AssignScoutPayload
 
 export interface ApplyContext {
   readonly requestId: string
@@ -296,3 +312,42 @@ export const usedReason = (label: string): string =>
 export const PHASE_REASON = 'Only available during your open City Management phase.'
 
 export const lastLogId = (state: GameState): string => state.log.at(-1)?.id ?? ''
+
+/**
+ * Puts the exact piece back, same id and same place, as a board history entry
+ * so the history bar and board replay see it. It lands on top of the stack, which
+ * is what replaying a `place` change does. Not through `placePiece`: that would
+ * make a new piece, snap it into the next free slot and refuse it when the
+ * supply count is full, and an undo must not be refused halfway.
+ */
+export function placeBack(
+  state: GameState,
+  player: Playerhand,
+  piece: BoardPiece,
+  at: string | null,
+): GameState {
+  if (state.board.pieces.some((candidate) => candidate.id === piece.id)) return state
+  const [id, rng] = nextId(state.rng)
+  const areas = boardAreas(state.board, state.players)
+  return {
+    ...state,
+    rng,
+    board: {
+      ...state.board,
+      pieces: [...state.board.pieces, piece],
+      history: [
+        ...state.board.history,
+        {
+          id,
+          at,
+          playerId: player.playerId,
+          username: player.username,
+          description: `${player.username} put back ${piece.label} at ${locationOf(state.board, areas, piece)}`,
+          change: { kind: 'place', piece, onTop: true },
+          logLength: state.log.length,
+        },
+      ],
+      redo: [],
+    },
+  }
+}

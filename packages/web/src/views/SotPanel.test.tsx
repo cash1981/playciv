@@ -42,6 +42,12 @@ function sotWith(overrides: Partial<StartOfTurn> = {}): StartOfTurn {
       ],
       totalCoins: 2,
     },
+    cityLimit: { have: 2, max: 2 },
+    cities: [
+      { pieceId: 'c1', label: 'Capital B3' },
+      { pieceId: 'c2', label: 'City F6' },
+    ],
+    scouts: [],
     techGrants: [],
     ...overrides,
   } as StartOfTurn
@@ -280,5 +286,131 @@ describe('investing', () => {
   it('explains that printed coins cannot be invested', () => {
     renderChoices(viewOf(sotWith()))
     expect(screen.getByText(/not coins printed on the map, a building, a government or a card/)).toBeTruthy()
+  })
+})
+
+describe('scouts and cities', () => {
+  const scout = (overrides: Record<string, unknown> = {}) => ({
+    pieceId: 's1',
+    square: 'E5',
+    terrain: 'forest',
+    figure: 'scout',
+    assignedTo: null,
+    canSend: true,
+    found: { ok: true, reasons: [], zuluHuts: [] },
+    ...overrides,
+  })
+
+  it('is left out when there is no scout and no city left to found', () => {
+    renderChoices(viewOf(sotWith()))
+    expect(screen.queryByRole('region', { name: 'Scouts and cities' })).toBeNull()
+  })
+
+  it('says how many cities you may have and that only production moves, and that there is no scout', () => {
+    renderChoices(viewOf(sotWith({ cityLimit: { have: 1, max: 2 } as never })))
+    const section = screen.getByRole('region', { name: 'Scouts and cities' })
+    expect(within(section).getByText(/You have 1 of the 2 cities you may have/)).toBeTruthy()
+    expect(within(section).getByText(/Only production is moved/)).toBeTruthy()
+    expect(within(section).getByText('You have no scout on the map.')).toBeTruthy()
+  })
+
+  it('lists each scout with its square and terrain', () => {
+    renderChoices(viewOf(sotWith({ scouts: [scout()] as never })))
+    expect(screen.getByText('Scout on E5')).toBeTruthy()
+    expect(screen.getByText('(forest)')).toBeTruthy()
+  })
+
+  it('sends the square to the chosen city, and “No city” stops it', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    renderChoices(viewOf(sotWith({ scouts: [scout()] as never })))
+    const button = screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    fireEvent.change(screen.getByRole('combobox', { name: /Send the square of E5 to/ }), { target: { value: 'c2' } })
+    expect(button.disabled).toBe(false)
+    fireEvent.click(button)
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', 'assignScout', expect.any(String), 6, { scoutPieceId: 's1', cityPieceId: 'c2' })
+  })
+
+  it('shows the city a scout already sends to, and sends null for No city', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    renderChoices(viewOf(sotWith({ scouts: [scout({ assignedTo: 'c1' })] as never })))
+    const select = screen.getByRole('combobox', { name: /Send the square of E5 to/ }) as HTMLSelectElement
+    expect(select.value).toBe('c1')
+    fireEvent.change(select, { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send.mock.calls[0]?.[4]).toEqual({ scoutPieceId: 's1', cityPieceId: null })
+  })
+
+  it('offers no sending for a figure that cannot gather', () => {
+    renderChoices(viewOf(sotWith({ scouts: [scout({ figure: 'army', canSend: false })] as never })))
+    expect(screen.getByText('Army on E5')).toBeTruthy()
+    expect(screen.queryByRole('combobox', { name: /Send the square/ })).toBeNull()
+  })
+
+  it('founds a city where the scout stands, once, when nothing is in the way', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    renderChoices(viewOf(sotWith({ scouts: [scout()] as never, cityLimit: { have: 1, max: 2 } as never })))
+    const button = screen.getByRole('button', { name: 'Found a city on E5' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    expect(screen.getByText(/Move any other figures of yours on E5/)).toBeTruthy()
+    fireEvent.click(button)
+    fireEvent.click(button)
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', 'foundCity', expect.any(String), 6, { figurePieceId: 's1' })
+  })
+
+  it('lists every reason a city cannot be founded, and disables the button', () => {
+    const reasons = ['E5 is a water square.', 'A hut is next to E5 (F5). Take it first.']
+    renderChoices(viewOf(sotWith({ scouts: [scout({ found: { ok: false, reasons, zuluHuts: [] } })] as never })))
+    const button = screen.getByRole('button', { name: 'Found a city on E5' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    const list = screen.getByRole('list', { name: 'Why no city on E5' })
+    expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual(reasons)
+    expect(button.getAttribute('aria-describedby')).toBe(list.id)
+  })
+
+  it('tells a Zulu player about the hut next to the new city', () => {
+    renderChoices(viewOf(sotWith({ scouts: [scout({ found: { ok: true, reasons: [], zuluHuts: ['F5'] } })] as never })))
+    expect(screen.getByText(/The Zulu may explore the hut next to the city \(F5\)/)).toBeTruthy()
+  })
+
+  it('is disabled while the page is busy or read only', () => {
+    const sot = sotWith({ scouts: [scout()] as never })
+    renderChoices(viewOf(sot), { busy: true })
+    expect((screen.getByRole('button', { name: 'Found a city on E5' }) as HTMLButtonElement).disabled).toBe(true)
+    cleanup()
+    renderChoices(viewOf(sot), { readOnly: true })
+    expect((screen.getByRole('button', { name: 'Found a city on E5' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('growing a capital into a metropolis', () => {
+  const withAgriculture = (cities: readonly { label: string }[], revealed = true): PlayerView =>
+    ({
+      rev: 6,
+      you: {
+        playerId: 'me',
+        username: 'Alice',
+        startOfTurn: sotWith(),
+        techsChosen: [{ name: 'Agriculture', hidden: !revealed }],
+        cities,
+      },
+      opponents: [],
+    }) as unknown as PlayerView
+
+  it('points at the map for a player with Agriculture and a capital that is not a metropolis', () => {
+    renderChoices(withAgriculture([{ label: 'Capital B3' }]))
+    const section = screen.getByRole('region', { name: 'Metropolis' })
+    expect(within(section).getByRole('button', { name: 'Go to the map' })).toBeTruthy()
+  })
+
+  it('says nothing without Agriculture revealed, or once the capital is a metropolis', () => {
+    renderChoices(withAgriculture([{ label: 'Capital B3' }], false))
+    expect(screen.queryByRole('region', { name: 'Metropolis' })).toBeNull()
+    cleanup()
+    renderChoices(withAgriculture([{ label: 'Metropolis B3' }]))
+    expect(screen.queryByRole('region', { name: 'Metropolis' })).toBeNull()
   })
 })

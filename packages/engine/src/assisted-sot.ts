@@ -38,6 +38,7 @@ import {
   reverseAdvanceEffect,
 } from './assisted-culture.js'
 import { AREA_LABEL_HEIGHT, findBoardAsset, playerAreas, remainingBoardAssetCount } from './board.js'
+import { cityLimitView, scoutViewsOf } from './assisted-city.js'
 import { cityFootprintsOf, pieceColorOf } from './blockade.js'
 import { cityProductionsOf } from './city-production.js'
 import { coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
@@ -609,7 +610,7 @@ const feudalismHarvest: AssistedActionDefinition = {
     const assetId = resourceAssetId(payload.resource)
     const asset = findBoardAsset(assetId)
     if (asset === undefined) return fail(`There is no ${payload.resource} token to place.`)
-    if ((remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers) ?? 0) <= 0) {
+    if ((remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers) ?? Infinity) <= 0) {
       return fail(`The market has no ${payload.resource} left.`)
     }
     const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === player.playerId)
@@ -1022,6 +1023,9 @@ export function startOfTurnViewOf(state: GameState, player: Playerhand): StartOf
       // Only the sources the player may pick from; the total shows what sits on printed coins as well
       totalCoins: Object.values(sources).reduce((total, value) => total + value, 0),
     },
+    cityLimit: cityLimitView(state, player),
+    cities,
+    scouts: scoutViewsOf(state, player),
     techGrants: player.techGrants
       .filter((grant) => grant.turnNumber === turn)
       .map((grant) => ({ id: grant.id, source: grant.source, level: grant.level })),

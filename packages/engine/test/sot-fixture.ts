@@ -5,7 +5,7 @@
 
 import { placePiece } from '../src/actions/board.js'
 import { chooseSocialPolicy, chooseTech, revealSocialPolicy, revealTech, setPlayerGovernment } from '../src/actions/player.js'
-import { SQUARE_SIZE, findBoardAsset, mapTop } from '../src/board.js'
+import { SQUARE_SIZE, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
 import type { Government } from '../src/government.js'
 import { unwrap } from '../src/result.js'
 import type { GameState, PlayerStats } from '../src/state.js'
@@ -77,4 +77,12 @@ export const me = (state: GameState, playerId = CASH1981) => {
   const player = findPlayer(state, playerId)
   if (player === undefined) throw new Error('fixture player missing')
   return player
+}
+
+/** The America tile in the first map slot: columns 0 to 3, rows 0 to 3 (B2 is a mountain, C2 grassland, B3 desert, C3 mountain). */
+export function withAmerica(state: GameState): GameState {
+  const slot = state.board.slots[0]
+  if (slot === undefined) throw new Error('board has no slots')
+  const [x, y] = slotOrigin(state.board, slot)
+  return unwrap(placePiece(state, { playerId: CASH1981, assetId: 'tiles/america', x, y }))
 }

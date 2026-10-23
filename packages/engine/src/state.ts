@@ -363,6 +363,8 @@ export type AssistedActionKind =
   | 'feudalismHarvest'
   | 'switchGovernment'
   | 'invest'
+  | 'foundCity'
+  | 'assignScout'
 
 /** The four investment cards, by the status-board counter that holds their markers. */
 export type InvestmentCard = 'infra' | 'efta' | 'mic' | 'pe'
@@ -477,6 +479,34 @@ export type AssistedEffect =
       readonly grantId: string | null
       /** The free advance an Arab investment gave, or `null`. */
       readonly advance: CultureAdvanceEffect | null
+    }
+  | {
+      /** A city founded in place of a scout (or an army under the Republic). */
+      readonly kind: 'foundCity'
+      /** The figure as it stood, so an undo puts the same piece back, and the board history entry that removed it. */
+      readonly figure: BoardPiece
+      readonly figureHistoryId: string
+      /** The city piece that was placed, where, and the history entry that placed it. */
+      readonly cityPieceId: string
+      readonly position: { readonly x: number; readonly y: number }
+      readonly historyId: string
+      readonly square: { readonly column: number; readonly row: number; readonly label: string }
+      /** A city-state that stood on the square and was destroyed (+3 culture), as it stood. */
+      readonly cityState: { readonly piece: BoardPiece; readonly historyId: string } | null
+      /** The culture the destroyed city-state gave. */
+      readonly culture: number
+      /** The free advance the Romans get for a new city, or `null`. */
+      readonly advance: CultureAdvanceEffect | null
+    }
+  | {
+      /** A scout's square sent to a city for the turn, or `cityPieceId: null` to stop sending it. */
+      readonly kind: 'assignScout'
+      readonly scoutPieceId: string
+      readonly cityPieceId: string | null
+      readonly column: number
+      readonly row: number
+      readonly square: string
+      readonly cityLabel: string | null
     }
   | {
       /** A resource taken from the market by the Feudalism government. */
@@ -1076,6 +1106,28 @@ export interface NowAnswer {
  * The choices behind the Start of Turn actions that need one, with the engine's own
  * answer on each. Own view only, blanked for a replayed revision.
  */
+/** One figure of the viewer that can found a city or send its square to one. */
+export interface ScoutView {
+  readonly pieceId: string
+  /** The square it stands on, for example "E5". */
+  readonly square: string
+  /** What the square is, or `null` when the map data has no terrain for it. */
+  readonly terrain: string | null
+  /** A scout, or an army (the Republic's armies found cities, and the English gather as scouts). */
+  readonly figure: 'scout' | 'army'
+  /** The city it sends its square to this turn, or `null`. */
+  readonly assignedTo: string | null
+  /** Whether it can send its square at all: a scout always, an army only for the English. */
+  readonly canSend: boolean
+  /** Whether it can found a city where it stands, and every reason it cannot. */
+  readonly found: {
+    readonly ok: boolean
+    readonly reasons: readonly string[]
+    /** Huts a Zulu city explores at once. */
+    readonly zuluHuts: readonly string[]
+  }
+}
+
 export interface StartOfTurnView {
   readonly government: NowAnswer & {
     readonly current: Government
@@ -1104,6 +1156,12 @@ export interface StartOfTurnView {
     /** Every coin the player has, printed ones included. */
     readonly totalCoins: number
   }
+  /** The cities the player has and may have: building one needs fewer than the limit. */
+  readonly cityLimit: { readonly have: number; readonly max: number }
+  /** The player's own cities on the map, for choosing where a scout sends its square. */
+  readonly cities: readonly { readonly pieceId: string; readonly label: string }[]
+  /** The figures that can found a city or send their square to one, with what stops them. */
+  readonly scouts: readonly ScoutView[]
   /** Free techs the player may learn in this Start of Turn. */
   readonly techGrants: readonly {
     readonly id: string

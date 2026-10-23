@@ -256,6 +256,9 @@ describe('the phase tabs', () => {
       government: { status: 'ready', reason: 'You may change government once in your Start of Turn.', current: 'Despotism', options: [], canEnterAnarchy: true },
       feudalism: null,
       invest: { status: 'needs-resource', reason: 'You have no coin token to invest.', coins: [], cards: [], totalCoins: 0 },
+      cityLimit: { have: 2, max: 2 },
+      cities: [],
+      scouts: [],
       techGrants: [],
     }
     renderPanel(viewIn('SOT', [expansionism, chivalry], { startOfTurn }))
