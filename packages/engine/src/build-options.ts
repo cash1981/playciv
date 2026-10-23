@@ -19,7 +19,7 @@
  * only call each other inside functions, never while the modules load.
  */
 
-import { PHASE_REASON, openCityManagementTurn } from './assisted.js'
+import { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
 import { UNIT_TYPES } from './build-item.js'
 import type { BuildItem, PlacedBuildItem, UnitBuildItem, UnitType } from './build-item.js'
 import { cityFootprintsOf, mapCellOf, pieceColorOf } from './blockade.js'

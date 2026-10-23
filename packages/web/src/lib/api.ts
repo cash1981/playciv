@@ -781,6 +781,19 @@ export const api = {
         : { action, requestId, rev },
     ),
   /**
+   * An assisted action that carries its payload in `args` (a card played, and the
+   * Start of Turn actions): the same route and request id rules as `performAction`.
+   * The server checks the shape of `args` for each action and the engine checks the
+   * rest against the fresh state.
+   */
+  actionWithArgs: (
+    gameId: string,
+    action: AssistedActionKind,
+    requestId: string,
+    rev: number,
+    args: Record<string, unknown>,
+  ) => post<PlayerView>(`/api/games/${gameId}/actions`, { action, requestId, rev, args }),
+  /**
    * The card choice after a culture advance: the same route as `performAction`,
    * with the reward and the card to keep. The request id is kept like any other.
    */

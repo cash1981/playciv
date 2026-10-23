@@ -3,7 +3,7 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Item } from '@civ/engine'
+import type { Item, PlayableCard } from '@civ/engine'
 
 import { useIsBusy } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
@@ -1217,5 +1217,63 @@ describe('the city actions in the game page', () => {
     await renderOrder(orderView(), null)
     expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
     expect(screen.queryByRole('heading', { name: 'Upgrades' })).toBeNull()
+  })
+})
+
+describe('HandItem: play a culture or Great Person card (assisted play, part 9)', () => {
+  const counterfeiters: Item = {
+    ...base,
+    id: 'cc-1',
+    sheetName: 'CULTURE_1',
+    kind: 'cultureI',
+    name: 'Counterfeiters',
+    type: null,
+  }
+  const ready: PlayableCard = {
+    itemId: 'cc-1',
+    name: 'Counterfeiters',
+    kind: 'culture',
+    description: 'Start of Turn: Choose another player.',
+    timings: ['SOT'],
+    targets: { kind: 'players', min: 1, max: 1 },
+    prompt: 'Which player discards a coin token?',
+    resources: [],
+    discards: true,
+    status: 'ready',
+    reason: 'Can be played in start of turn, which you are in.',
+  }
+  const view = {
+    rev: 3,
+    you: { playerId: 'me', username: 'Alice', playableCards: [ready] },
+    opponents: [{ playerId: 'bob', username: 'Bob' }],
+  } as unknown as PlayerView
+
+  it('has a Play button on a card that can be played at some time, enabled when it can be played now', () => {
+    render(<HandItem item={counterfeiters} gameId="g" busy={false} run={run} opponents={[]} view={view} playable={ready} />)
+    expect((screen.getByRole('button', { name: 'Play Counterfeiters' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('disables the button with the reason when the card cannot be played now', () => {
+    const waiting: PlayableCard = { ...ready, status: 'wrong-phase', reason: 'Played in start of turn. You are in trade.' }
+    render(<HandItem item={counterfeiters} gameId="g" busy={false} run={run} opponents={[]} view={view} playable={waiting} />)
+    expect((screen.getByRole('button', { name: 'Play Counterfeiters' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Played in start of turn. You are in trade.')).toBeTruthy()
+  })
+
+  it('has no Play button on a card the engine does not list, or without the viewer’s view', () => {
+    render(<HandItem item={counterfeiters} gameId="g" busy={false} run={run} opponents={[]} view={view} />)
+    expect(screen.queryByRole('button', { name: /^Play / })).toBeNull()
+    cleanup()
+    render(<HandItem item={counterfeiters} gameId="g" busy={false} run={run} opponents={[]} playable={ready} />)
+    expect(screen.queryByRole('button', { name: /^Play / })).toBeNull()
+  })
+
+  it('plays the card from the hand with the player the form names', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    render(<HandItem item={counterfeiters} gameId="g" busy={false} run={run} opponents={[]} view={view} playable={ready} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Play Counterfeiters' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm play' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g', 'playCard', expect.any(String), 3, { itemId: 'cc-1', targets: ['bob'] })
   })
 })

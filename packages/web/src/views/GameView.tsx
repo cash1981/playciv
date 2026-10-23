@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { isTradable, isUnit, itemName, itemType } from '@civ/engine'
-import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from '@civ/engine'
+import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
 import { useActivity } from '../lib/activity.js'
@@ -29,6 +29,7 @@ import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
 import { PageShortcuts, PhaseSummary } from './PhaseSummary.js'
 import { PhaseActionsPanel } from './PhaseTabs.js'
+import { PlayCardControl } from './PlayableCards.js'
 import { RevealedPanel } from './RevealedPanel.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
@@ -839,6 +840,8 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
                 item.type !== null &&
                 blockadedTypes.includes(item.type)
               }
+              view={view}
+              playable={view.you?.playableCards?.find((card) => card.itemId === item.id)}
             />
           )),
         )}
@@ -957,12 +960,18 @@ export function HandItem({
   run,
   opponents,
   blockaded = false,
+  view,
+  playable,
 }: {
   readonly item: Item
   readonly gameId: string
   readonly busy: boolean
   readonly run: Run
   readonly opponents: PlayerView['opponents']
+  /** The viewer's view, for the revision of a card play. Without it the card has no Play button. */
+  readonly view?: PlayerView | undefined
+  /** The engine's answer for this card when it can be played at some time. */
+  readonly playable?: PlayableCard | undefined
   /**
    * Every token of this Great Person type that you have on the map is
    * blockaded (issue #241). A marker only: the card stays usable here, since
@@ -1017,6 +1026,9 @@ export function HandItem({
       />
       {item.kind === 'greatperson' && item.name === 'Sir Isaac Newton' && (
         <PlaceGreatPersonControl item={item} gameId={gameId} busy={busy} run={run} />
+      )}
+      {playable !== undefined && view !== undefined && (
+        <PlayCardControl card={playable} gameId={gameId} view={view} busy={busy} run={run} />
       )}
     </ItemCard>
   )

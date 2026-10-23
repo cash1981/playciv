@@ -67,3 +67,38 @@ export function withHutInHand(
   }
 }
 
+
+/**
+ * A card of the given printed name (culture event or Great Person), taken from the
+ * deck into a player's hand and still hidden, as a drawn card is.
+ */
+export function withCardInHand(
+  state: GameState,
+  name: string,
+  ownerId = CASH1981,
+): { readonly state: GameState; readonly itemId: string } {
+  const card = state.items.find(
+    (item) => (item.kind === 'greatperson' || item.kind.startsWith('culture')) && 'name' in item && item.name === name,
+  )
+  if (card === undefined) throw new Error(`no ${name} card in the fixture deck`)
+  const inHand = { ...card, hidden: true, ownerId }
+  return {
+    itemId: card.id,
+    state: {
+      ...state,
+      items: state.items.filter((item) => item.id !== card.id),
+      players: state.players.map((candidate) =>
+        candidate.playerId === ownerId
+          ? { ...candidate, items: [...candidate.items, inHand] }
+          : candidate,
+      ),
+    },
+  }
+}
+
+/** The start of turn: nothing marked done, so Start of Turn is the open phase. */
+export const startOfTurn = (): GameState => firstCivGame()
+
+/** Start of Turn done, Trade open. */
+export const tradeTurn = (): GameState =>
+  unwrap(markPhasesDone(firstCivGame(), { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))

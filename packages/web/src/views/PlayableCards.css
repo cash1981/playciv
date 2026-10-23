@@ -1,0 +1,74 @@
+/* Playing a card (assisted play, part 9). Everything wraps at 320 px. */
+.playable-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.playable-card {
+  min-width: 0;
+}
+
+.playable-card-name {
+  font-weight: 600;
+}
+
+.playable-card-text {
+  margin: 0.25rem 0 0.4rem;
+  overflow-wrap: anywhere;
+}
+
+.play-card {
+  min-width: 0;
+}
+
+.play-card-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.play-card-reason {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.play-card-form {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.play-card-targets {
+  margin: 0;
+  padding: 0.5rem;
+  min-width: 0;
+}
+
+.play-card-target {
+  display: block;
+  padding: 0.2rem 0;
+}
+
+.play-card-targets p,
+.play-card-note {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.play-card-resource select {
+  max-width: 100%;
+}
+
+.play-card-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}

@@ -212,6 +212,37 @@ describe('the phase tabs', () => {
     expect(screen.getByRole('heading', { name: /Your actions \(1 choice waiting\)/ })).toBeTruthy()
   })
 
+  it('lists the cards that can be played in the open phase, and the any-time ones in every tab', () => {
+    const counterfeiters = {
+      itemId: 'c1',
+      name: 'Counterfeiters',
+      kind: 'culture',
+      description: 'Start of Turn: Choose another player.',
+      timings: ['SOT'],
+      targets: { kind: 'players', min: 1, max: 1 },
+      prompt: 'Which player discards a coin token?',
+      resources: [],
+      discards: true,
+      status: 'ready',
+      reason: 'Can be played in start of turn, which you are in.',
+    }
+    const bread = {
+      ...counterfeiters,
+      itemId: 'c2',
+      name: 'Bread and Circuses',
+      description: 'Any Time: Cancel a culture event targeting you.',
+      timings: ['ANY'],
+    }
+    renderPanel(viewIn('SOT', [], { playableCards: [counterfeiters, bread] }))
+    expect(screen.getByRole('button', { name: 'Play Counterfeiters' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Play Bread and Circuses' })).toBeTruthy()
+    for (const name of [/^Trade/, /^City management/, /^Movement/, /^Research/]) {
+      fireEvent.click(tab(name))
+      expect(screen.queryByRole('button', { name: 'Play Counterfeiters' })).toBeNull()
+      expect(screen.getByRole('button', { name: 'Play Bread and Circuses' })).toBeTruthy()
+    }
+  })
+
   it('renders nothing for a spectator', () => {
     const { container } = renderPanel({ rev: 1, you: null, activeTurn: null, opponents: [] } as unknown as PlayerView)
     expect(container.textContent).toBe('')

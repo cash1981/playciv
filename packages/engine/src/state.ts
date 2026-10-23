@@ -36,6 +36,8 @@ import type { Undo } from './undo.js'
 import type { Battle, BattleSideSummary } from './battle.js'
 import type { Government } from './government.js'
 import { availableActionsFor, livePendingRewards, publicAssistedActions } from './assisted.js'
+import { playableCardsOf } from './assisted-cards.js'
+import type { PlayableCard } from './card-timing.js'
 import { cultureMarkerOf } from './culture-track.js'
 import type { CultureLevel, CultureSpaceKind } from './culture-track.js'
 import type { SheetName } from './sheet-name.js'
@@ -323,6 +325,7 @@ export type AssistedActionKind =
   | 'build'
   | 'startBuildingProgram'
   | 'upgradeBuildings'
+  | 'playCard'
 
 /** The cards that spend a resource token for culture: "Incense, City Management: gain N culture". */
 export type CultureCardKind = 'chivalry' | 'currency' | 'metalCasting'
@@ -360,6 +363,18 @@ export interface GreatPersonMarker {
 /** What an action changed, enough to reverse it. Server side only, never in a view. */
 export type AssistedEffect =
   | { readonly kind: CultureCardKind; readonly culture: number; readonly spent: SpentResource }
+  | {
+      readonly kind: 'playCard'
+      /** The card as it stood in the hand, so an undo puts the same one back. */
+      readonly item: Item
+      /** True when the card went to the discard pile; false for a Great Person that stayed faceup. */
+      readonly discarded: boolean
+      /** The players the card named, in the order they were chosen. */
+      readonly targets: readonly string[]
+      readonly resource: string | null
+      /** The card's name as the line printed it. */
+      readonly name: string
+    }
   | {
       readonly kind: 'coinPurchase'
       readonly source: 'democracy' | 'printingPress'
@@ -980,6 +995,13 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
    */
   readonly availableActions: readonly AvailableAction[]
   /**
+   * The culture event and Great Person cards in the viewer's hand that can be played
+   * at some time, each with whether it can be played now. Names cards from the hand,
+   * so it is the own view only: never for another player or a spectator, and blanked
+   * for a replayed revision.
+   */
+  readonly playableCards: readonly PlayableCard[]
+  /**
    * What each of the viewer's cities can build now (assisted Build). Derived
    * from the viewer's revealed techs and trade, so it exists on the own view only:
    * never on `OpaquePlayerhand`, never for a spectator, and blanked for a replayed
@@ -1113,6 +1135,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           cities: cityProductionsOf(state, player),
           blockadedGreatPersonTypes: blockadedGreatPersonTypes(state, player),
           availableActions: availableActionsFor(state, viewerId),
+          playableCards: playableCardsOf(state, player),
           buildOptions: buildOptionsOf(state, player),
           cityActions: cityActionsOf(state, player),
           upgradeOptions: upgradeOptionsOf(state, player),

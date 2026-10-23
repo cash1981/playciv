@@ -223,7 +223,7 @@ function projectedRevision(revision: GameRevision, viewerId: string) {
   const projected = toPlayerView(state, viewerId)
   const view = projected.you === null
     ? projected
-    : { ...projected, you: { ...projected.you, gamenote: '', availableActions: [], buildOptions: [], cityActions: [], upgradeOptions: [], pendingRewards: [] } }
+    : { ...projected, you: { ...projected.you, gamenote: '', availableActions: [], buildOptions: [], cityActions: [], upgradeOptions: [], pendingRewards: [], playableCards: [] } }
   return {
     ...revisionSummary(revision),
     view,

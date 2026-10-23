@@ -32,6 +32,18 @@ export * from './culture-hand.js'
 export * from './culture-track.js'
 export * from './log.js'
 export * from './assisted.js'
+export { playableCardsOf } from './assisted-cards.js'
+export * from './card-timing.js'
+export { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
+export type {
+  AssistedAvailability,
+  AssistedPayload,
+  BlockedAvailability,
+  ChooseRewardPayload,
+  PlayCardPayload,
+  StartBuildingProgramPayload,
+  UpgradeBuildingsPayload,
+} from './assisted-core.js'
 export * from './trade-offers.js'
 export * from './gamedata.js'
 export * from './create-game.js'

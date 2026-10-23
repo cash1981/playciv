@@ -80,6 +80,7 @@ import {
   requireString,
 } from '../context.js'
 import { sendError } from '../errors.js'
+import { parseActionArgs, takesArgs } from './assisted-args.js'
 
 /** What a client may use as a `requestId`: 1 to 64 characters of a small safe set. */
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/
@@ -90,7 +91,7 @@ const BUILD_FIELDS = ['cityPieceId', 'item', 'target', 'rush'] as const
 const MAX_BUILD_COORDINATE = 63
 
 /** What every `/actions` body carries besides the payload of the action. */
-const ACTION_ENVELOPE_FIELDS: readonly string[] = ['action', 'requestId', 'rev', 'confirmedRepeat']
+const ACTION_ENVELOPE_FIELDS: readonly string[] = ['action', 'requestId', 'rev', 'confirmedRepeat', 'args']
 
 /** The fields of the body that are neither the envelope nor `allowed`, for an action whose payload is checked strictly. */
 const extraFields = (body: Record<string, unknown>, allowed: readonly string[]): readonly string[] =>
@@ -896,7 +897,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       return sendError(c, 400, 'BAD_REQUEST', 'confirmedRepeat must be a boolean')
     }
     const confirmedRepeat = body['confirmedRepeat'] === true
-    // Only `chooseReward`, `build`, `startBuildingProgram` and `upgradeBuildings` carry a payload, each its own; the other actions take none
+    // `chooseReward`, `build`, `startBuildingProgram` and `upgradeBuildings` carry a payload in top-level fields, the newer actions in `args`; the others take none
     let payload: AssistedPayload | undefined
     if (action === 'chooseReward') {
       const rewardId = requireString(body, 'rewardId')
@@ -934,6 +935,16 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
       )
     } else if (body['family'] !== undefined) {
       return sendError(c, 400, 'BAD_REQUEST', 'family only belongs to upgradeBuildings')
+    }
+    // The newer actions carry one `args` object, checked by their own parser
+    if (takesArgs(action)) {
+      const parsed = parseActionArgs(action, body['args'] ?? {})
+      if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
+      const stray = extraFields(body, [])
+      if (stray.length > 0) return sendError(c, 400, 'BAD_REQUEST', `${action} takes only args, not ${stray.join(', ')}`)
+      payload = parsed
+    } else if (body['args'] !== undefined) {
+      return sendError(c, 400, 'BAD_REQUEST', 'args does not belong to this action')
     }
     const actor = currentPlayer(c)
     return applyToGame(

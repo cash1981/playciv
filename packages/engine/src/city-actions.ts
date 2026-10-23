@@ -14,7 +14,7 @@
  * call each other inside functions, never while the modules load.
  */
 
-import { PHASE_REASON, openCityManagementTurn } from './assisted.js'
+import { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
 import { cityFootprintsOf, mapCellOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
 import type { BoardPiece } from './board.js'

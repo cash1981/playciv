@@ -26,6 +26,30 @@
  */
 
 import { movePieceUnchecked, placeUnchecked, removePiece } from './actions/board.js'
+import {
+  PHASE_REASON,
+  READY,
+  REPEAT_NOTE,
+  blocked,
+  freeTurnAction,
+  lastLogId,
+  openCityManagementTurn,
+  playerOf,
+  rejected,
+  techBlock,
+  useTurnAction,
+  usedReason,
+  withPlayerHand,
+} from './assisted-core.js'
+import { playCard } from './assisted-cards.js'
+import type {
+  AssistedActionDefinition,
+  AssistedAvailability,
+  AssistedPayload,
+  BlockedAvailability,
+  StartBuildingProgramPayload,
+  UpgradeBuildingsPayload,
+} from './assisted-core.js'
 import { reshuffleItems } from './actions/draw.js'
 import { GREAT_PERSON_CARD_TYPES, blockadedPieceIds, cityFootprintsOf, mapCellOf } from './blockade.js'
 import {
@@ -83,7 +107,6 @@ import type {
   AssistedActionKind,
   AssistedActionRecord,
   AssistedEffect,
-  AssistedStatus,
   AvailableAction,
   CultureCardKind,
   GameLogEntry,
@@ -95,120 +118,8 @@ import type {
   PublicAssistedAction,
   SpentResource,
 } from './state.js'
-import { publicTurn, publicTurnKey, sameTurn, turnStatus } from './turn.js'
+import { turnStatus } from './turn.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
-
-// These two read the player list directly, so this module does not need the
-// value exports of `state.ts`, which in turn builds the projection from here.
-const playerOf = (state: GameState, playerId: string): Playerhand | undefined =>
-  state.players.find((player) => player.playerId === playerId)
-
-const withPlayerHand = (state: GameState, player: Playerhand): GameState => ({
-  ...state,
-  players: state.players.map((existing) =>
-    existing.playerId === player.playerId ? player : existing,
-  ),
-})
-
-/** Why an action cannot be pressed: every status except `ready`. */
-export interface BlockedAvailability {
-  readonly status: Exclude<AssistedStatus, 'ready'>
-  readonly reason: string
-}
-
-/** Whether an action can be pressed now. A union, so `status !== 'ready'` narrows to the reason it is blocked. */
-export type AssistedAvailability =
-  | { readonly status: 'ready'; readonly reason: string }
-  | BlockedAvailability
-
-const READY: AssistedAvailability = { status: 'ready', reason: 'Ready to use.' }
-
-const blocked = (
-  status: BlockedAvailability['status'],
-  reason: string,
-): BlockedAvailability => ({
-  status,
-  reason,
-})
-
-// ---------------------------------------------------------------------------
-// City Management, the shared predicate
-// ---------------------------------------------------------------------------
-
-/**
- * The player's turn record while their City Management phase is open: Start of
- * Turn and Trade are done, City Management, Movement and Research are not.
- * `undefined` otherwise. `purchaseCoin` and every action that works "during City
- * Management" use this, so they cannot disagree about when that is.
- */
-export function openCityManagementTurn(
-  state: GameState,
-  player: Playerhand,
-): PlayerTurn | undefined {
-  const turnNumber = turnStatus(state).currentTurn
-  const turn = player.playerTurns.find((candidate) => candidate.turnNumber === turnNumber)
-  if (
-    turn === undefined ||
-    !turn.done.SOT ||
-    !turn.done.TRADE ||
-    turn.done.CM ||
-    turn.done.MOVEMENT ||
-    turn.done.RESEARCH
-  ) {
-    return undefined
-  }
-  return turn
-}
-
-/**
- * Writes a usage key on the turn, on the player's own record and on the public
- * copy, together with the new stats. One place, so retries and phase re-marking
- * see the same thing.
- */
-function useTurnAction(
-  state: GameState,
-  player: Playerhand,
-  turn: PlayerTurn,
-  usageKey: string,
-  stats: PlayerStats,
-): GameState {
-  // A confirmed repeat finds the key already there: it is never written twice, so
-  // one undo of the key's last holder frees it (see `reverseAssistedAction`).
-  const updatedTurn = turn.usedActions.includes(usageKey)
-    ? turn
-    : { ...turn, usedActions: [...turn.usedActions, usageKey] }
-  const playerTurns = player.playerTurns.map((candidate) =>
-    sameTurn(candidate, updatedTurn) ? updatedTurn : candidate,
-  )
-  return {
-    ...withPlayerHand(state, { ...player, playerTurns, stats }),
-    publicTurns: { ...state.publicTurns, [publicTurnKey(updatedTurn)]: publicTurn(updatedTurn) },
-  }
-}
-
-/** The inverse of {@link useTurnAction}'s usage key: frees the use on that turn. */
-function freeTurnAction(
-  state: GameState,
-  player: Playerhand,
-  turnNumber: number,
-  usageKey: string,
-): GameState {
-  const turn = player.playerTurns.find((candidate) => candidate.turnNumber === turnNumber)
-  if (turn === undefined) return state
-  const at = turn.usedActions.indexOf(usageKey)
-  if (at === -1) return state
-  const updatedTurn = {
-    ...turn,
-    usedActions: turn.usedActions.filter((_, index) => index !== at),
-  }
-  const playerTurns = player.playerTurns.map((candidate) =>
-    sameTurn(candidate, updatedTurn) ? updatedTurn : candidate,
-  )
-  return {
-    ...withPlayerHand(state, { ...player, playerTurns }),
-    publicTurns: { ...state.publicTurns, [publicTurnKey(updatedTurn)]: publicTurn(updatedTurn) },
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Spending a resource
@@ -355,118 +266,6 @@ function placeBack(
 // The registry
 // ---------------------------------------------------------------------------
 
-interface Applied {
-  readonly state: GameState
-  readonly effect: AssistedEffect
-  /** The public line the action wrote, the last one in the log. */
-  readonly logId: string
-}
-
-interface Reversed {
-  readonly state: GameState
-  /** The public sentence for the new log line. */
-  readonly text: string
-}
-
-/** What `chooseReward` carries: which pending reward and which of its cards to keep. */
-export interface ChooseRewardPayload {
-  readonly rewardId: string
-  readonly itemId: string
-}
-
-/** What `startBuildingProgram` carries: the city whose centre gets the marker. */
-export interface StartBuildingProgramPayload {
-  readonly cityPieceId: string
-}
-
-/**
- * What `upgradeBuildings` carries: the asset id of one basic building to flip
- * (`buildings/granary`), or nothing to flip every family that can be flipped.
- */
-export interface UpgradeBuildingsPayload {
-  readonly family?: string
-}
-
-/**
- * What an action may carry: `chooseReward` takes the reward and card, `build` takes
- * the city, item and square, `startBuildingProgram` the city and `upgradeBuildings`
- * an optional family.
- */
-export type AssistedPayload =
-  | ChooseRewardPayload
-  | BuildPayload
-  | StartBuildingProgramPayload
-  | UpgradeBuildingsPayload
-
-interface ApplyContext {
-  readonly requestId: string
-  readonly at: string | undefined
-  /** Only `chooseReward`, `build`, `startBuildingProgram` and `upgradeBuildings` read it, each its own shape; every other action ignores it. */
-  readonly payload: AssistedPayload | undefined
-  /**
-   * True when the action was `used` this turn and the player confirmed using it
-   * again. It pays and applies as a first use; only the log line says so.
-   */
-  readonly confirmedRepeat: boolean
-}
-
-type AssistedActionDefinition = {
-  readonly kind: AssistedActionKind
-  /** The tech card this action belongs to, as the tech dialog names it. `null` for an action that is not a card. */
-  readonly techName: string | null
-  readonly label: string
-  /**
-   * Whether it is an entry of `availableActions`, a button. `chooseReward` is
-   * not: it answers a choice the viewer already has and carries a payload.
-   */
-  readonly button: boolean
-  /**
-   * How often it can be done. A key (the default for a card) is written on the
-   * turn and allows it once per turn; `null`, as for the culture advance, means
-   * repeatable: it is never `used`, and each press needs its own `requestId`.
-   */
-  readonly usageKey: string | null
-  /**
-   * The phase tab the action belongs to, and that must be open to press it. `'ANY'`
-   * is for an action that is not bound to one phase (it works whenever the tech or
-   * card allows); its record then keeps the phase the player is working on.
-   */
-  readonly phase: TurnPhase | 'ANY'
-  /** The heading the action is listed under in its tab. */
-  readonly group: string
-  availability(state: GameState, playerId: string): AssistedAvailability
-  apply(state: GameState, player: Playerhand, context: ApplyContext): Result<Applied, EngineError>
-  reverse(
-    state: GameState,
-    player: Playerhand,
-    record: AssistedActionRecord,
-    at: string | null,
-  ): Result<Reversed, EngineError>
-}
-
-const rejected = (action: string, availability: BlockedAvailability): EngineError => ({
-  kind: 'ASSISTED_ACTION_REJECTED',
-  action,
-  status: availability.status,
-  reason: availability.reason,
-})
-
-/** The tech must be chosen, and revealed because a hidden one is private. */
-function techBlock(player: Playerhand, techName: string): BlockedAvailability | undefined {
-  const tech = player.techsChosen.find((candidate) => candidate.name === techName)
-  if (tech === undefined) return blocked('not-owned', `You do not have ${techName}.`)
-  if (tech.hidden) return blocked('unavailable', `Reveal ${techName} before using it.`)
-  return undefined
-}
-
-/** Added to the public line of a use the player confirmed after the card was used. */
-const REPEAT_NOTE = ' (used again, confirmed by the player)'
-
-/** The reason for `used`: it still blocks a plain press, but the player can override it. */
-const usedReason = (label: string): string =>
-  `${label} has already been used this turn. The rules allow it once per turn; you will be asked to confirm before using it again.`
-
-export const PHASE_REASON = 'Only available during your open City Management phase.'
 
 // -- Incense cards: Chivalry, Currency, Metal Casting -----------------------
 
@@ -2264,6 +2063,7 @@ export const ASSISTED_ACTIONS: readonly AssistedActionDefinition[] = [
   build,
   startBuildingProgram,
   upgradeBuildings,
+  playCard,
 ]
 
 /** The actions that are buttons, in the order of `availableActions`. `chooseReward` answers a choice and is not one. */
@@ -2279,7 +2079,12 @@ export function isAssistedActionKind(value: unknown): value is AssistedActionKin
 const definitionOf = (kind: AssistedActionKind): AssistedActionDefinition | undefined =>
   ASSISTED_ACTIONS.find((definition) => definition.kind === kind)
 
-const lastLogId = (state: GameState): string => state.log.at(-1)?.id ?? ''
+/** How a record is named in the public list and in an undo request. */
+const labelOfRecord = (record: AssistedActionRecord): string => {
+  const definition = definitionOf(record.kind)
+  return definition?.labelOf?.(record) ?? definition?.label ?? record.kind
+}
+
 
 /** The track's last position, the Culture Victory panel. */
 const CULTURE_VICTORY = CULTURE_VICTORY_STEP
@@ -2325,7 +2130,7 @@ export function publicAssistedActions(state: GameState): readonly PublicAssisted
   return state.assistedActions.filter((record) => record.kind !== 'chooseReward').map((record) => ({
     id: record.id,
     kind: record.kind,
-    label: definitionOf(record.kind)?.label ?? record.kind,
+    label: labelOfRecord(record),
     playerId: record.playerId,
     username: playerOf(state, record.playerId)?.username ?? '',
     turnNumber: record.turnNumber,
@@ -2435,7 +2240,7 @@ export function assistedRecordOf(
 
 /** How an undo request or vote names the action: public, the same as its own line. */
 export function assistedSubject(state: GameState, record: AssistedActionRecord): string {
-  const label = definitionOf(record.kind)?.label ?? record.kind
+  const label = labelOfRecord(record)
   return `${label} used by ${playerOf(state, record.playerId)?.username ?? 'a player'}`
 }
 
