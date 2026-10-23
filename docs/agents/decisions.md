@@ -216,10 +216,86 @@ buttons and the culture marker. Assisted actions are added beside them.
   Your cards, then the rest. The piece palette sits below the board at every
   width; this is unconfirmed by the human and reversible in `styles.css`.
 
-Source: `engine/src/assisted.ts`, `culture-track.ts`, `server/src/routes/play.ts`,
-`web/src/views/AssistedActions.tsx`, `PhaseSummary.tsx`, and the `assisted*`
-tests. Not built: Great Person abilities that need a map marker, killing
-markers, map tile 16a, free advances, hand limit, figures and military units (#264), offers (#265).
+### Phase tabs and Start of Turn (part 9, 2026-10-23)
+
+The "Your actions" panel has one tab per phase (Start of Turn, Trade, City
+Management, Movement, Research); the viewer's open phase is selected first and
+any tab can be opened. Every action built before part 9 is under City Management.
+Each action declares its `phase` and `group` in the registry, and a button shows
+its `status` and `reason`; `not-owned` ones are hidden. Rules read from the base
+rulebook p. 12 to 14 and 26 to 27, W&W p. 9 to 10, F&F p. 8 to 13, FAQ 2.0 and
+the card sheets; the full list is in `tasks/assisted-sot.md`.
+
+- **Playing a card is a log line.** A culture event or Great Person card that
+  names a timing in its own text ("Start of Turn:", "Any Time:", "A / B") is
+  listed in that phase, and "Any Time" cards in every tab. Play takes the card
+  out of the hand (discard pile, or faceup in place for a Great Person without
+  "discard this card"), and writes who played what and who it names. The effect
+  is never applied: other players can cancel it and most effects need a choice on
+  the map (the human). A Great Person whose figures are all blockaded cannot be
+  played. The same cards can be played in their own phase (City Management,
+  Movement, Research) by the same flow; that was not asked for and costs nothing.
+- **Start of Turn gate.** Everything here needs Start of Turn to be the player's
+  open phase, and a usage key once per turn (a confirmed repeat is allowed where a
+  card can grant another use). Changing government and investing a coin are
+  `strictOnce`: nothing grants a second one.
+- **Social policies** (Anarchy switches them off): Expansionism 1 trade per city
+  plus 1 per city-state with a figure of the player on it; Pacifism 1 culture, 2
+  with a scout on the map; Patronage spends 1 culture and draws a culture event of
+  the level the marker stands in (the start space counts as level I) and keeps one;
+  Rationalism spends 6 or 11 trade for a level I or II tech and records a
+  `TechGrant` that the tech panel spends when the tech is revealed in Start of Turn.
+  Learning is not researching: no coins keep trade.
+- **Government.** One change per Start of Turn. A government whose tech was revealed
+  last turn or this Start of Turn (`techRevealTurns`) can be taken directly; any other
+  change goes through Anarchy, and from Anarchy any known government is direct. The
+  Pyramids and Dr. Martin Luther King avoid Anarchy. Democracy +2 trade, Fundamentalism
+  1 culture per army on the map, Feudalism puts a harvested resource in the player's
+  area (which resource a square has is not in the map data, so the player names it).
+- **Invest** (F&F p. 13): one coin per turn, only coin tokens (the sheet and the tech
+  cards that hold tokens), never printed coins and never the coins on a wonder. The
+  Arabs advance one space for free with it, a Public Education threshold gives a free
+  tech grant.
+- **Cities and scouts.** A scout (an army under the Republic) founds a city: at most 2
+  cities, 3 with Irrigation; not on water; all eight neighbours revealed; no hut or
+  village next to it (the Zulu may, and then explore the hut); no enemy figure next to
+  it; no city closer than three squares, diagonals included (outskirts must not overlap, anyone's); no relic next to
+  it; a city-state on the square is destroyed for 3 culture, a city-state next to it
+  forbids it. The Romans advance one space for free. A scout sends its square to one
+  city for the turn and only production moves; the trade, culture, coin and resource
+  icons stay manual. Growing a capital into a metropolis only scrolls to the map.
+- **Wonders, Great Persons, techs, huts and relics** (`assisted-abilities.ts`, kinds
+  `sot:<ability>`): Stonehenge, The Colossus, The Louvre, Lorenzo de' Medici (1 culture
+  per 3 coins) and Alan Turing (1 trade and 1 culture per 2 armies still in the supply)
+  add their numbers; Sydney Opera House advances for free; Panama Canal adds a coin to
+  the wonder; Cristo Redentor draws two events of a chosen level and keeps both; Statue
+  of Liberty, the Teacher hut and Atlantis grant a free tech; the Seven Cities of Gold put
+  two investment markers on a chosen card without a coin. A relic is claimed by the
+  player whose board history removed its marker, once per game. The rest (Great Wall,
+  Hanging Gardens, Taj Mahal, Big Ben, Machu Picchu after an invested coin, Plastics, and
+  Ecology, which spends a Wheat) only log, once per turn: the choice is on the map. The
+  other Great Person cards with a Start of Turn text (Henson, Mother Teresa, Giannini,
+  Edison, Wright, Cousteau) go through the generic card play.
+- **Undo.** Every action has a vote undo that writes a "System:" line and refuses, vote
+  left open, when a token has moved or a card has left the hand. The board's own Undo
+  leaves to that vote every board change an action made: the city a scout founded and
+  the scout and city-state it took, a harvested token, a wonder's coin and the leader
+  marker of a free advance (found missing in review of part 9 and fixed with tests).
+- **Assumptions the human should confirm:** whether a wonder is obsolete is not tracked
+  (the player judges it, as for the Pyramids); the white army of the Russians counts as
+  one of the armies in the supply for Turing; relic claims accept any Start of Turn
+  after the marker was removed, not only the next one; a free investment of the Seven
+  Cities of Gold gives the Arabs no advance; Expansionism counts a city-state by the
+  figure standing on it; Mysticism's extra card is not added to Cristo Redentor's two.
+
+Source: `engine/src/assisted.ts`, `assisted-core.ts`, `assisted-sot.ts`,
+`assisted-abilities.ts`, `assisted-city.ts`, `assisted-cards.ts`, `card-timing.ts`,
+`sot.ts`, `city-founding.ts`, `culture-track.ts`, `server/src/routes/play.ts`,
+`assisted-args.ts`, `web/src/views/AssistedActions.tsx`, `PhaseTabs.tsx`, `SotPanel.tsx`,
+`PlayableCards.tsx`, `PhaseSummary.tsx`, and the `assisted*` and `sot*` tests. Not built:
+Great Person abilities that need a map marker, killing markers, map tile 16a, hand limit,
+the effect of a played card on other players, growing a metropolis, Movement, Trade and
+Research actions beyond their tabs (#264 harvest and devote), offers (#265).
 
 ## Trade offers (#265)
 

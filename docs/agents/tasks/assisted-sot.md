@@ -3,7 +3,7 @@
 - **Slug:** `assisted-sot` (part 9 of `assisted-play-contract`, same branch and PR #271 by the human's choice)
 - **Branch:** `feat/assisted-play-contract`
 - **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
-- **Status:** in progress
+- **Status:** in review
 
 ## Goal
 
@@ -43,6 +43,14 @@ show on every tab.
 - **Scouts** (base p. 26): from the turn after it was placed a scout sends its square to
   one city, declared in Start of Turn; the icons count as that city's outskirts for the
   turn and the square's own city loses them (p. 27).
+- **Wonders and Great Persons** (card sheets `Wonders` and `Great Person`): the texts that
+  start "Start of Turn:". Techs: Ecology (Wheat, change a square) and Plastics (build for
+  free), from the printed tech sheet in `techText.ts`; the sheet has no description for them.
+  **Teacher hut** (F&F p. 8): keep it, reveal and discard it in Start of Turn to learn a
+  level I tech for free. **Relics** (F&F p. 9): the player who removes the Atlantis marker
+  learns a free tech of their choice at the start of the next turn; the player who removes
+  the Seven Cities of Gold marker invests two coins for free at the start of the next turn
+  (two markers, no coins lost). The School of Confucius acts at once, not in Start of Turn.
 - **Culture cards** (card sheets): timing is the first words of the effect. Start of Turn
   and Any Time cards can be played in Start of Turn. A card with two timings is played
   for one of them.
@@ -82,11 +90,15 @@ Research and Trade actions beyond the tabs.
 
 ## Acceptance criteria
 
-- [ ] Five tabs; the viewer's current phase is selected first; any tab can be opened.
-- [ ] City Management holds every action that exists today; none is visible elsewhere.
-- [ ] Start of Turn lists each action with a button, a status and a reason.
-- [ ] A culture or Great Person card playable now has an enabled Play button in the tab
+- [x] Five tabs; the viewer's current phase is selected first; any tab can be opened.
+- [x] City Management holds every action that exists today; none is visible elsewhere.
+- [x] Start of Turn lists each action with a button, a status and a reason.
+- [x] A culture or Great Person card playable now has an enabled Play button in the tab
       and in the hand; play discards the card and logs the targets; undo by vote.
-- [ ] Hidden information: another player's view carries nothing of the hand.
-- [ ] Each new action: a test for ready, wrong phase, used and undo.
-- [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build`
+- [x] Hidden information: another player's view carries nothing of the hand.
+- [x] Each new action: a test for ready, wrong phase, used and undo.
+- [x] The board's own Undo leaves every board change of an action to the undo vote.
+- [x] `pnpm -r typecheck && pnpm -r test && pnpm -r build`
+- [x] Browser check of the tabs, the Start of Turn buttons, a wonder press, founding a city
+      from a scout, and the 390 px width. Not checked in a browser: the card list with a
+      card in the hand and the player picker (covered by web tests).

@@ -33,6 +33,12 @@ old test counts and past deployment reports do not establish present health.
   markers, phase summary, confirm before reuse. See the "Assisted play" section
   of decisions and `tasks/assisted-*.md`. Offers (#265) are not built.
 
+- Phase tabs and Start of Turn (part 9) are on PR #271: the Your actions panel has a tab per
+  phase, cards play from the tabs and the hand as log lines, and Start of Turn has buttons for
+  policies, governments, investing, founding cities from scouts, scout squares, and wonder,
+  Great Person, tech, hut and relic abilities. Brief `tasks/assisted-sot.md`; see "Phase tabs
+  and Start of Turn" in decisions for the assumptions waiting for the human.
+
 - City production (#250 slice A, first part of #264) is on PR #271: a per-city
   estimate with a hand-set override and a Cities panel.
   Brief `tasks/city-production.md`; see "City production" in decisions.

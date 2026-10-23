@@ -41,7 +41,7 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `packages/server/src/routes/play.ts`, `packages/server/test/assisted*.test.ts`
   - `packages/web/src/views/AssistedActions.tsx`, `TechPanel.tsx`, `GameView.tsx`, `PhaseSummary.tsx`, `BoardView.tsx`, `styles.css`, `FaqView.tsx` and tests
   - `docs/agents/decisions.md`, `state.md`, `README.md`
-  - Part 9 (`docs/agents/tasks/assisted-sot.md`): `packages/engine/src/assisted-core.ts`, `assisted-sot.ts`, `sot-*.ts`, `migrate.ts`, `actions/player.ts`; `packages/web/src/lib/api.ts`, `views/PhaseTabs.tsx`, `SotPanel.tsx`, `CitiesPanel.tsx`, `CityActions.tsx`
+  - Part 9 (`docs/agents/tasks/assisted-sot.md`): `packages/engine/src/assisted-core.ts`, `assisted-sot.ts`, `assisted-abilities.ts`, `assisted-resources.ts`, `assisted-cards.ts`, `assisted-culture.ts`, `assisted-city.ts`, `card-timing.ts`, `city-founding.ts`, `sot.ts`, `city-production.ts`, `migrate.ts`, `actions/player.ts`, `actions/board.ts` (the assisted check of the board Undo only); `packages/server/src/routes/assisted-args.ts`; `packages/web/src/lib/api.ts`, `views/PhaseTabs.tsx`, `SotPanel.tsx`, `PlayableCards.tsx`, `CitiesPanel.tsx`, `CityActions.tsx`
 - **Notes:** parts 1 to 8 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout, city production, Build for buildings, figures and units, Start Building Program and Upgrade buildings); part 9 is the phase tabs and Start of Turn. The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
 
 ### aircraft-unlocked
