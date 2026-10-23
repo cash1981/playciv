@@ -47,6 +47,18 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - Part 13 (`docs/agents/tasks/assisted-sot.md`): `packages/engine/src/assisted-core.ts`, `assisted-sot.ts`, `assisted-abilities.ts`, `assisted-resources.ts`, `assisted-cards.ts`, `assisted-culture.ts`, `assisted-city.ts`, `card-timing.ts`, `city-founding.ts`, `sot.ts`, `city-production.ts`, `city-gather.ts` (scouts sent in Start of Turn only), `migrate.ts`, `actions/player.ts`, `actions/board.ts` (the assisted check of the board Undo only); `packages/server/src/routes/assisted-args.ts`, `routes/games.ts` (the replay blanking of the new view fields only); `packages/web/src/lib/api.ts`, `views/PhaseTabs.tsx`, `PhaseTabs.css`, `SotPanel.tsx`, `SotPanel.css`, `PlayableCards.tsx`, `PlayableCards.css`, `panelForTests.tsx`, `CityActions.tsx` (the phase tabs replace the panel body of `AssistedActions.tsx`; `YourCities.tsx` moves into the City Management tab)
 - **Notes:** parts 1 to 13 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout, city production, Build for buildings, figures and units, Start Building Program and Upgrade buildings, End turn in Your actions, build polish and wonders, Devote to the Arts and Harvest, replacing, Great People and City Walls, and the phase tabs with Start of Turn). The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
 
+### action-panel-focus
+
+- **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
+- **Branch:** `feat/action-panel-focus` (from `feat/assisted-play-contract`)
+- **Brief:** `docs/agents/tasks/action-panel-focus.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/state.ts` (`AvailableAction.techName` only), `assisted.ts` (`availableActionsFor` only), `packages/engine/test/assisted.test.ts`
+  - `packages/web/src/views/AssistedActions.tsx`, `AssistedActions.css`, `PlayableCards.tsx`, `PlayableCards.css`, `SotPanel.tsx`, `SotPanel.css`, `PhaseSummary.tsx`, `GameView.tsx` (`HandItem` anchor only), `ItemCard.tsx` (optional DOM id only), `HelpHint.tsx` and their tests
+  - `docs/agents/tasks/action-panel-focus.md`, `docs/agents/decisions.md`
+- **Notes:** Child slice based on `feat/assisted-play-contract`; the parent branch claim is a base dependency, not a concurrent edit.
+
 ### aircraft-unlocked
 
 - **Owner:** Claude
