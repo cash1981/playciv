@@ -761,10 +761,11 @@ export const api = {
       phase,
       ...(turnNumber === undefined ? {} : { turnNumber }),
     }),
-  unmarkDone: (gameId: string, phase: TurnPhase, turnNumber?: number) =>
+  unmarkDone: (gameId: string, phase: TurnPhase, turnNumber?: number, rev?: number) =>
     post<PlayerView>(`/api/games/${gameId}/turns/undone`, {
       phase,
       ...(turnNumber === undefined ? {} : { turnNumber }),
+      ...(rev === undefined ? {} : { rev }),
     }),
   saveNote: (gameId: string, note: string) => post<PlayerView>(`/api/games/${gameId}/note`, { note }),
   // Shared bookkeeping: any member may set any player's stat (issue #43).

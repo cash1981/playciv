@@ -453,7 +453,11 @@ Source: `web/src/views/AssistedActions.tsx`, `PlayableCards.tsx`, `SotPanel.tsx`
   says so ("Reopened: ... stays ended"), and the log and chat show the "marked ...
   not done" line.
 - Only the active turn is offered. Reopening Research of a turn every player has
-  finished would pull the whole game back to it.
+  finished would pull the whole game back to it. The request carries the revision
+  the panel saw (`rev` on `/turns/undone`), so a press on a stale panel after the
+  turn has moved on answers 409 instead of pulling the table back.
+- The button offers the last phase ended before the one that is open, and the
+  note names every later phase that stays ended.
 
 ## Toasts (2026-10-23)
 

@@ -813,7 +813,11 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     )
   })
 
-  /** Takes one phase back to not done. Later phases keep their marker. */
+  /**
+   * Takes one phase back to not done. Later phases keep their marker. An optional
+   * `rev` makes a stale request answer 409 instead of applying: Reopen sends the
+   * revision it saw, so it cannot pull a turn back that has moved on since.
+   */
   app.post('/api/games/:gameId/turns/undone', auth, async (c) => {
     const gameId = c.req.param('gameId')
     const body = asRecord(await c.req.json().catch(() => ({})))
@@ -821,6 +825,10 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     if (phase instanceof Response) return phase
     const requestedTurn = parseTurnNumber(c, body)
     if (requestedTurn instanceof Response) return requestedTurn
+    const clientRev = optionalNumber(body, 'rev')
+    if (body['rev'] !== undefined && (clientRev === undefined || !Number.isInteger(clientRev) || clientRev < 0)) {
+      return sendError(c, 400, 'BAD_REQUEST', 'rev must be a non-negative integer')
+    }
 
     const actor = currentPlayer(c)
     let turnNumber = 1
@@ -832,7 +840,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
         turnNumber = requestedTurn ?? turnStatus(state).currentTurn
         return unmarkPhaseDone(state, { playerId: actor.id, turnNumber, phase })
       },
-      undefined,
+      clientRev,
       {
         after: ({ before, after }) =>
           appendSystemRow(gameId, actor.username, turnNumber, phase, before, after),

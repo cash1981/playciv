@@ -9,7 +9,9 @@
  * turn: the next turn starts when every player has done it.
  *
  * "Reopen" takes the viewer's latest ended phase of the active turn back to not
- * done (`api.unmarkDone`), for a player who forgot something. Nothing else moves:
+ * done (`api.unmarkDone`), for a player who forgot something. It sends the
+ * revision it saw, so a press on a stale panel is refused instead of pulling back
+ * a turn that has moved on. Nothing else moves:
  * the turn is derived from the done marks, so the others keep waiting for whoever
  * they waited for, and phases the viewer ended later stay ended. Nothing here adds
  * a rule.
@@ -58,12 +60,12 @@ export function reopenPhase(view: PlayerView, state: EndTurnState): TurnPhase | 
   return [...before].reverse().find((phase) => done?.[phase] === true) ?? null
 }
 
-/** The viewer's open phase when they ended a later one in the same turn, else `null`. */
-function reopenedLater(view: PlayerView, state: EndTurnState): TurnPhase | null {
-  if (state.kind !== 'open') return null
+/** The phases the viewer ended after the one they have open, in the same turn. */
+function endedLater(view: PlayerView, state: EndTurnState): readonly TurnPhase[] {
+  if (state.kind !== 'open') return []
   const done = view.you?.playerTurns?.find((turn) => turn.turnNumber === state.turnNumber)?.done
   const after = TURN_PHASES.slice(TURN_PHASES.indexOf(state.phase) + 1)
-  return after.find((phase) => done?.[phase] === true) ?? null
+  return after.filter((phase) => done?.[phase] === true)
 }
 
 const capitalized = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
@@ -82,6 +84,8 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
   const kind = state?.kind
   const doneRef = useRef<HTMLParagraphElement>(null)
   const wasOpen = useRef(false)
+  const endRef = useRef<HTMLButtonElement>(null)
+  const reopened = useRef(false)
 
   // The last press replaces the button with a line of text, and focus would fall to
   // the page, with nothing announced. Focus the line, but only when focus was lost:
@@ -96,6 +100,18 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
     }
   }, [kind])
 
+  // Pressing Reopen removes or moves the Reopen button, and focus would fall to the
+  // page. Put it on End turn, which is then the way to lock the phase again.
+  const phaseKey = state === null ? '' : `${state.kind}:${state.kind === 'open' ? state.phase : ''}`
+  useEffect(() => {
+    if (!reopened.current) return
+    const active = document.activeElement
+    if (active === null || active === document.body) {
+      endRef.current?.focus()
+      reopened.current = false
+    }
+  }, [phaseKey])
+
   if (state === null) return null
 
   const reopen = reopenPhase(view, state)
@@ -105,8 +121,12 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
         type="button"
         className="small"
         disabled={busy || readOnly}
-        aria-label={`Reopen: mark ${capitalized(TURN_PHASE_LABEL[reopen])} as not done`}
-        onClick={() => void run(() => api.unmarkDone(gameId, reopen, state.turnNumber))}
+        // Starts with the visible text (WCAG 2.5.3, Label in Name)
+        aria-label={`Reopen ${TURN_PHASE_LABEL[reopen]}: mark as not done`}
+        onClick={() => {
+          reopened.current = true
+          void run(() => api.unmarkDone(gameId, reopen, state.turnNumber, view.rev))
+        }}
       >
         Reopen {TURN_PHASE_LABEL[reopen]}
       </button>
@@ -128,10 +148,11 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
 
   const label = TURN_PHASE_LABEL[state.phase]
   const last = state.phase === TURN_PHASES[TURN_PHASES.length - 1]
-  const stillEnded = reopenedLater(view, state)
+  const stillEnded = endedLater(view, state)
   return (
     <div className="assisted-endturn">
       <button
+        ref={endRef}
         type="button"
         className="primary"
         disabled={busy || readOnly}
@@ -145,9 +166,10 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
         Turn {state.turnNumber}: marks your {label} phase done.
         {last && ' The next turn starts when every player has ended their research phase.'}
       </p>
-      {stillEnded !== null && (
+      {stillEnded.length > 0 && (
         <p className="assisted-endturn-text assisted-endturn-reopened">
-          Reopened: your {label} phase is open again. Your {TURN_PHASE_LABEL[stillEnded]} phase stays ended.
+          Reopened: your {label} phase is open again. Your {stillEnded.map((phase) => TURN_PHASE_LABEL[phase]).join(' and ')}{' '}
+          {stillEnded.length === 1 ? 'phase stays' : 'phases stay'} ended.
         </p>
       )}
       {reopenButton}

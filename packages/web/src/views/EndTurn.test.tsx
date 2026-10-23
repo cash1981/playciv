@@ -302,18 +302,20 @@ describe('Reopen in Your actions', () => {
       }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reopen: mark Research as not done' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen research: mark as not done' }))
 
-    await waitFor(() => expect(unmarkDone).toHaveBeenCalledExactlyOnceWith('game-1', 'RESEARCH', 4))
+    await waitFor(() => expect(unmarkDone).toHaveBeenCalledExactlyOnceWith('game-1', 'RESEARCH', 4, 5))
     expect(markDone).not.toHaveBeenCalled()
   })
 
   it('offers the phase before the open one, and says a later ended phase stays ended', () => {
-    renderPanel(withDone(activeTurn(4, [alice('CM'), bob('TRADE')]), 4, { SOT: true, MOVEMENT: true }))
+    renderPanel(withDone(activeTurn(4, [alice('CM'), bob('TRADE')]), 4, { SOT: true, MOVEMENT: true, RESEARCH: true }))
 
-    expect(screen.getByRole('button', { name: 'Reopen: mark Start of turn as not done' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reopen start of turn: mark as not done' })).toBeTruthy()
     expect(
-      screen.getByText('Reopened: your city management phase is open again. Your movement phase stays ended.'),
+      screen.getByText(
+        'Reopened: your city management phase is open again. Your movement and research phases stay ended.',
+      ),
     ).toBeTruthy()
     // End turn still ends the phase that is open, not the later one
     expect(screen.getByRole('button', { name: 'End turn: mark City management as done' })).toBeTruthy()
@@ -332,6 +334,36 @@ describe('Reopen in Your actions', () => {
   it('cannot be pressed while the page is busy', () => {
     const unmarkDone = vi.spyOn(api, 'unmarkDone').mockResolvedValue({} as PlayerView)
     renderPanel(withDone(activeTurn(4, [alice('CM')]), 4, { SOT: true }), { busy: true })
+
+    const button = screen.getByRole('button', { name: /^Reopen/ }) as HTMLButtonElement
+    fireEvent.click(button)
+    expect(button.disabled).toBe(true)
+    expect(unmarkDone).not.toHaveBeenCalled()
+  })
+
+  it('offers nothing from an earlier turn when the active turn has nothing ended', () => {
+    const view = viewIn(activeTurn(5, [alice('SOT')]), {
+      you: {
+        playerId: 'me', username: 'Alice', color: 'Red', civilization: { name: 'Rome' },
+        techsChosen: [], pyramidPlacements: [], availableActions: [],
+        playerTurns: [{ turnNumber: 4, done: { SOT: true, CM: true, TRADE: true, MOVEMENT: true, RESEARCH: true } }],
+      },
+    })
+    renderPanel(view)
+
+    expect(screen.queryByRole('button', { name: /^Reopen/ })).toBeNull()
+  })
+
+  it('has an accessible name that starts with the visible text', () => {
+    renderPanel(withDone(activeTurn(4, [alice('CM')]), 4, { SOT: true }))
+
+    const button = screen.getByRole('button', { name: /^Reopen/ })
+    expect(button.getAttribute('aria-label')?.startsWith(button.textContent ?? '')).toBe(true)
+  })
+
+  it('cannot be pressed in a replay', () => {
+    const unmarkDone = vi.spyOn(api, 'unmarkDone').mockResolvedValue({} as PlayerView)
+    renderPanel(withDone(activeTurn(4, [alice('CM')]), 4, { SOT: true }), { readOnly: true })
 
     const button = screen.getByRole('button', { name: /^Reopen/ }) as HTMLButtonElement
     fireEvent.click(button)
