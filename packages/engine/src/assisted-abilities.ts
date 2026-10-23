@@ -251,7 +251,7 @@ function availabilityOf(
 // ---------------------------------------------------------------------------
 
 /** Armies of the player's colour (and the white army of the Russians) still in the supply. */
-function unbuiltArmies(state: GameState, player: Playerhand): number {
+export function unbuiltArmies(state: GameState, player: Playerhand): number {
   const colour = player.color?.toLowerCase()
   const ids = [
     ...(colour === undefined ? [] : [`figures/${colour}army`]),

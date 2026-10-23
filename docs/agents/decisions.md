@@ -307,7 +307,11 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
   out of the hand (discard pile, or faceup in place for a Great Person without
   "discard this card"), and writes who played what and who it names. The effect
   is never applied: other players can cancel it and most effects need a choice on
-  the map (the human). A Great Person whose figures are all blockaded cannot be
+  the map (the human), with three Great Persons that need no choice as the
+  exception (2026-10-23, the human): Marco Polo gains 27 trade up to the ceiling
+  of 27, St. Francis of Assisi gains 3 culture per unbuilt army, and Orville Wright
+  draws an aircraft unit card; each is undone with the same vote. A Great Person
+  whose figures are all blockaded cannot be
   played. The same cards can be played in their own phase (City Management,
   Movement, Research) by the same flow; that was not asked for and costs nothing.
 - **Start of Turn gate.** Everything here needs Start of Turn to be the player's

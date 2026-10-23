@@ -30,6 +30,7 @@ const card = (overrides: Partial<PlayableCard> = {}): PlayableCard => ({
   targets: { kind: 'players', min: 1, max: 1 },
   prompt: 'Which player discards a coin token?',
   resources: [],
+  automatic: null,
   discards: true,
   status: 'ready',
   reason: 'Can be played in start of turn, which you are in.',

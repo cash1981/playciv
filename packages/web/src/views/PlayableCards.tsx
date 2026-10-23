@@ -9,8 +9,9 @@
  *
  * Playing asks first, because it takes the card out of the hand: who the card names
  * (the log says it), the resource a gift is played as, then Confirm. The game only
- * logs the play and discards the card. It does not apply the effect, because another
- * player may cancel the card, so the control says so.
+ * logs the play and discards the card. Except for the few cards the engine carries out
+ * (`automatic`), it does not apply the effect, because another player may cancel the
+ * card, so the control says so.
  */
 
 import { useId, useState } from 'react'
@@ -179,8 +180,10 @@ export function PlayCardControl({
             </label>
           )}
           <p className="muted play-card-note">
-            The game logs this and {card.discards ? 'discards the card' : 'turns the card faceup'}. It does not
-            apply the effect: do that yourself unless another player cancels the card.
+            The game logs this and {card.discards ? 'discards the card' : 'turns the card faceup'}.{' '}
+            {card.automatic === null
+              ? 'It does not apply the effect: do that yourself unless another player cancels the card.'
+              : `It also ${card.automatic}. Undo it with a vote if another player cancels the card.`}
           </p>
           <div className="play-card-buttons">
             <button type="submit" className="small" disabled={disabled || !valid}>

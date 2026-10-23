@@ -13,10 +13,14 @@
  * `card-timing.ts`). The list is own view only, because it names cards in the hand.
  */
 
+import { unbuiltArmies } from './assisted-abilities.js'
+import { drawCandidates, shuffleSheetTwice } from './assisted-culture.js'
+import { unitSheetOf } from './build-options.js'
 import { blockadedGreatPersonTypes } from './blockade.js'
 import { READY, blocked, lastLogId, playerOf, rejected, withPlayerHand } from './assisted-core.js'
 import type { AssistedActionDefinition } from './assisted-core.js'
 import {
+  AUTOMATIC_EFFECTS,
   CARDS_WITH_OWN_BUTTON,
   CARD_TIMING_TEXT,
   cardPlayRuleOf,
@@ -25,10 +29,11 @@ import {
 } from './card-timing.js'
 import type { CardTiming, PlayableCard } from './card-timing.js'
 import { err, ok } from './result.js'
+import type { Result } from './result.js'
 import { itemName } from './item.js'
 import type { Item } from './item.js'
 import { appendLog } from './log.js'
-import type { GameState, Playerhand } from './state.js'
+import type { AssistedEffect, GameState, Playerhand } from './state.js'
 import { turnStatus } from './turn.js'
 import type { TurnPhase } from './turn.js'
 
@@ -91,6 +96,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
       targets: rule.targets,
       prompt: rule.prompt,
       resources: rule.resources,
+      automatic: kind === 'greatPerson' ? (AUTOMATIC_EFFECTS.get(name) ?? null) : null,
       discards: kind === 'culture' || discardsWhenUsed(item.description),
     }
     if (waiting.has(item.id)) {
@@ -117,6 +123,61 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
 
 const joinNames = (names: readonly string[]): string =>
   names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`
+
+/** The trade track ends at 27. */
+const TRADE_CEILING = 27
+
+type PlayCardEffect = Extract<AssistedEffect, { readonly kind: 'playCard' }>
+
+interface Automated {
+  readonly state: GameState
+  readonly extra: Pick<PlayCardEffect, 'gain' | 'drew'>
+  /** The end of the public line: what the game did for the card. */
+  readonly said: string
+}
+
+/**
+ * The effects of a Great Person card the game can carry out itself, because they need
+ * no choice on the map: trade or culture gained, or a unit card drawn. Every other card
+ * is only logged and discarded, and the player does the rest by hand. `Err` is a
+ * sentence for the player, and then the card stays in the hand.
+ */
+function automate(state: GameState, player: Playerhand, name: string): Result<Automated | null, string> {
+  const gained = (trade: number, culture: number, said: string): Result<Automated, string> =>
+    ok({
+      state: withPlayerHand(state, {
+        ...player,
+        stats: { ...player.stats, trade: player.stats.trade + trade, culture: player.stats.culture + culture },
+      }),
+      extra: { gain: { trade, culture } },
+      said,
+    })
+  switch (name) {
+    case 'Marco Polo': {
+      const trade = Math.max(0, Math.min(TRADE_CEILING, player.stats.trade + 27) - player.stats.trade)
+      return gained(trade, 0, `, gaining ${trade} trade`)
+    }
+    case 'St. Francis of Assisi': {
+      const armies = unbuiltArmies(state, player)
+      return gained(0, armies * 3, `, gaining ${armies * 3} culture for ${armies} unbuilt ${armies === 1 ? 'army' : 'armies'}`)
+    }
+    case 'Orville Wright': {
+      const sheetName = unitSheetOf('aircraft')
+      const drawn = drawCandidates(state, sheetName, 1)
+      const first = drawn.ok ? drawn.value.items[0] : undefined
+      if (!drawn.ok || first === undefined) return err('No aircraft unit cards are left in the deck or the discard pile.')
+      const card = { ...first, ownerId: player.playerId, hidden: true }
+      const holder = playerOf(drawn.value.state, player.playerId) ?? player
+      return ok({
+        state: withPlayerHand(drawn.value.state, { ...holder, items: [...holder.items, card] }),
+        extra: { drew: { itemId: card.id, sheetName } },
+        said: ', building an aircraft unit for free',
+      })
+    }
+    default:
+      return ok(null)
+  }
+}
 
 export const playCard: AssistedActionDefinition = {
   kind: 'playCard',
@@ -196,6 +257,13 @@ export const playCard: AssistedActionDefinition = {
           items: player.items.map((candidate) => (candidate.id === item.id ? { ...candidate, hidden: false } : candidate)),
         })
 
+    const automated =
+      card.kind === 'greatPerson'
+        ? automate(moved, playerOf(moved, player.playerId) ?? player, card.name)
+        : ok<Automated | null>(null)
+    if (!automated.ok) return err(rejected('playCard', blocked('unavailable', automated.error)))
+    const after = automated.value?.state ?? moved
+
     const verb = card.kind === 'culture' ? 'played' : card.discards ? 'played' : 'used'
     const aimed =
       card.targets.kind === 'allOthers'
@@ -203,14 +271,15 @@ export const playCard: AssistedActionDefinition = {
         : targets.length > 0
           ? `, targeting ${joinNames(targets.map((target) => target.username))}`
           : ''
-    const logged = appendLog(moved, {
+    const logged = appendLog(after, {
       username: player.username,
       playerId: player.playerId,
       publicLog:
         `${player.username} ${verb} ${card.name} (${when})` +
         (resource === null ? '' : ` as ${resource}`) +
         aimed +
-        (card.discards && card.kind === 'greatPerson' ? ' and discarded it' : ''),
+        (card.discards && card.kind === 'greatPerson' ? ' and discarded it' : '') +
+        (automated.value === null ? '' : automated.value.said),
       privateLog: '',
       createdAt: context.at ?? null,
       assistedActionId: context.requestId,
@@ -224,6 +293,7 @@ export const playCard: AssistedActionDefinition = {
         targets: targets.map((target) => target.playerId),
         resource,
         name: card.name,
+        ...automated.value?.extra,
       },
       logId: lastLogId(logged),
     })
@@ -233,20 +303,50 @@ export const playCard: AssistedActionDefinition = {
     const effect = record.effect
     if (effect.kind !== 'playCard') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const blockedBy = (reason: string) => err({ kind: 'ASSISTED_UNDO_BLOCKED' as const, logId: record.logId, reason })
+
+    // What the game did besides logging goes first, checked before anything changes
+    const drewCard = effect.drew === undefined ? undefined : player.items.find((candidate) => candidate.id === effect.drew?.itemId)
+    if (effect.drew !== undefined && drewCard === undefined) {
+      return blockedBy(`The unit card ${effect.name} gave is no longer in ${player.username}'s hand.`)
+    }
+    if (effect.discarded && !state.discardedItems.some((candidate) => candidate.id === effect.item.id)) {
+      return blockedBy(`${effect.name} is no longer in the discard pile.`)
+    }
+    if (!effect.discarded && !player.items.some((candidate) => candidate.id === effect.item.id)) {
+      return blockedBy(`${effect.name} has left ${player.username}'s hand.`)
+    }
+
+    let current: GameState = state
+    let hand: Playerhand = player
+    if (effect.gain !== undefined) {
+      hand = {
+        ...hand,
+        stats: {
+          ...hand.stats,
+          trade: Math.max(0, hand.stats.trade - effect.gain.trade),
+          culture: Math.max(0, hand.stats.culture - effect.gain.culture),
+        },
+      }
+    }
+    if (effect.drew !== undefined && drewCard !== undefined) {
+      current = {
+        ...withPlayerHand(current, { ...hand, items: hand.items.filter((candidate) => candidate.id !== drewCard.id) }),
+        items: [...current.items, { ...drewCard, hidden: true, ownerId: null }],
+      }
+      current = shuffleSheetTwice(current, effect.drew.sheetName)
+      hand = playerOf(current, player.playerId) ?? hand
+    }
+
     if (effect.discarded) {
-      const inPile = state.discardedItems.find((candidate) => candidate.id === effect.item.id)
-      if (inPile === undefined) return blockedBy(`${effect.name} is no longer in the discard pile.`)
       const back: GameState = {
-        ...withPlayerHand(state, { ...player, items: [...player.items, effect.item] }),
-        discardedItems: state.discardedItems.filter((candidate) => candidate.id !== effect.item.id),
+        ...withPlayerHand(current, { ...hand, items: [...hand.items, effect.item] }),
+        discardedItems: current.discardedItems.filter((candidate) => candidate.id !== effect.item.id),
       }
       return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand` })
     }
-    const inHand = player.items.find((candidate) => candidate.id === effect.item.id)
-    if (inHand === undefined) return blockedBy(`${effect.name} has left ${player.username}'s hand.`)
-    const back = withPlayerHand(state, {
-      ...player,
-      items: player.items.map((candidate) =>
+    const back = withPlayerHand(current, {
+      ...hand,
+      items: hand.items.map((candidate) =>
         candidate.id === effect.item.id ? { ...candidate, hidden: effect.item.hidden } : candidate,
       ),
     })

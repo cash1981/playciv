@@ -191,6 +191,16 @@ const PLAY_RULES: ReadonlyMap<string, CardPlayRule> = new Map<string, CardPlayRu
   ['Mother Teresa', one('Who receives the coin token?')],
 ])
 
+/**
+ * What the game does itself when these Great Persons are played (`assisted-cards.ts`),
+ * said to the player before they confirm. Every other card is only logged.
+ */
+export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
+  ['Marco Polo', 'gains 27 trade, up to the ceiling of 27'],
+  ['St. Francis of Assisi', 'gains 3 culture for every army you have not built'],
+  ['Orville Wright', 'draws an aircraft unit card into your hand'],
+])
+
 const DEFAULT_RULE: CardPlayRule = optional('Who is targeted? (optional)')
 
 export const cardPlayRuleOf = (name: string): CardPlayRule => PLAY_RULES.get(name) ?? DEFAULT_RULE
@@ -223,6 +233,8 @@ export interface PlayableCard {
   readonly targets: CardTargets
   readonly prompt: string
   readonly resources: readonly string[]
+  /** What the game does for the card when it is played, or null when it only logs it. */
+  readonly automatic: string | null
   /** Playing it discards the card; otherwise a Great Person turns faceup and stays. */
   readonly discards: boolean
   readonly status: PlayableCardStatus

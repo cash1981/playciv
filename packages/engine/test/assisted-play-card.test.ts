@@ -168,7 +168,7 @@ describe('playing a card', () => {
     const marco = withCardInHand(startOfTurn(), 'Marco Polo')
     const discarded = unwrap(play(marco.state, 'req-1', marco.itemId))
     expect(discarded.discardedItems.some((item) => item.id === marco.itemId)).toBe(true)
-    expect(discarded.log.at(-1)?.publicLog).toBe('cash1981 played Marco Polo (any time) and discarded it')
+    expect(discarded.log.at(-1)?.publicLog).toBe('cash1981 played Marco Polo (any time) and discarded it, gaining 27 trade')
 
     const shakespeare = withCardInHand(startOfTurn(), 'William Shakespeare')
     const kept = unwrap(play(shakespeare.state, 'req-2', shakespeare.itemId))
@@ -358,5 +358,43 @@ describe('what other players can see', () => {
     const listed = toPlayerView(played, KARANDRAS1).assistedActions?.find((record) => record.id === 'req-1')
     expect(listed?.label).toBe('Counterfeiters')
     expect(listed?.text).toBe('cash1981 played Counterfeiters (start of turn), targeting Karandras1')
+  })
+})
+
+describe('Great Persons the game carries out', () => {
+  const OTHERS = [KARANDRAS1, ITCHI, CHUL]
+  const undoneBy = (state: GameState): GameState => {
+    const logId = state.log.at(-1)?.id ?? ''
+    const asked = unwrap(initiateUndo(state, { logId, playerId: CASH1981 }))
+    return OTHERS.reduce((next, playerId) => unwrap(vote(next, { logId, playerId, vote: true, at: AT })), asked)
+  }
+  const withTrade = (state: GameState, trade: number): GameState => ({
+    ...state,
+    players: state.players.map((candidate) =>
+      candidate.playerId === CASH1981 ? { ...candidate, stats: { ...candidate.stats, trade } } : candidate,
+    ),
+  })
+
+  it('gives Marco Polo 27 trade, never past the ceiling, and takes exactly that back on undo', () => {
+    const { state, itemId } = withCardInHand(withTrade(startOfTurn(), 10), 'Marco Polo')
+    const played = unwrap(play(state, 'req-1', itemId))
+    expect(player(played).stats.trade).toBe(27)
+    expect(played.log.at(-1)?.publicLog).toBe('cash1981 played Marco Polo (any time) and discarded it, gaining 17 trade')
+    expect(player(undoneBy(played)).stats.trade).toBe(10)
+  })
+
+  it('draws a free aircraft card for Orville Wright, privately, and puts it back on undo', () => {
+    const { state, itemId } = withCardInHand(startOfTurn(), 'Orville Wright')
+    const before = player(state).items.length
+    const played = unwrap(play(state, 'req-1', itemId))
+    const hand = player(played).items
+    expect(hand).toHaveLength(before) // Orville left, one aircraft card came in
+    expect(hand.some((item) => item.id === itemId)).toBe(false)
+    expect(played.log.at(-1)?.publicLog).toBe(
+      'cash1981 played Orville Wright (start of turn) and discarded it, building an aircraft unit for free',
+    )
+    const undone = undoneBy(played)
+    expect(player(undone).items).toHaveLength(before)
+    expect(player(undone).items.some((item) => item.id === itemId)).toBe(true)
   })
 })
