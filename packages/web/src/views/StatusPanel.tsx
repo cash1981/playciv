@@ -158,10 +158,23 @@ const COLUMN_COUNT = 3 + ACCOUNTING_COLUMNS.length + UNIT_COLUMNS.length + MODIF
 /** Keys of the first column in each group — used to draw vertical section dividers. */
 const GROUP_START_KEYS = new Set(STATUS_GROUPS.map((g) => g.columns[0]!.key))
 
+/** The window event that opens the government card reference from outside this panel. */
+const OPEN_GOVERNMENT_REFERENCE = 'civ:open-government-reference'
+
+/** Opens the same government card reference the `?` next to the status dropdown opens. */
+export function openGovernmentReference(): void {
+  window.dispatchEvent(new Event(OPEN_GOVERNMENT_REFERENCE))
+}
+
 export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element {
   const [showGovernmentReference, setShowGovernmentReference] = useState(false)
   const [section, setSection] = useState<Section>('status')
   const governmentHelpRef = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    const open = (): void => setShowGovernmentReference(true)
+    window.addEventListener(OPEN_GOVERNMENT_REFERENCE, open)
+    return () => window.removeEventListener(OPEN_GOVERNMENT_REFERENCE, open)
+  }, [])
   const rows: Row[] = []
   // There is no baton: the tag follows the player in focus, the same one the
   // game title names (`focusPlayer`), by username.

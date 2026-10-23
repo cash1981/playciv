@@ -425,6 +425,13 @@ only place that decides status; no rule moved to the browser.
   compact disabled row. Its rules text and the four investment cards (markers, ability,
   active thresholds) are behind the `?` next to the investment-card picker.
 
+- Start of Turn choices follow the same rule (2026-10-23): a section shows only while it
+  can be done, or as a disabled `Used` row once done, and returns next turn. Government
+  and Feudalism are hidden otherwise; Scouts and cities is hidden without a scout, and a
+  square where no city can go has no found button (the reasons are in the section's `?`).
+  Explanations are behind `?`. The government `?` opens the Player status government card
+  reference (`openGovernmentReference` in `StatusPanel.tsx`) instead of repeating it.
+
 Source: `web/src/views/AssistedActions.tsx`, `PlayableCards.tsx`, `SotPanel.tsx`,
 `HelpHint.tsx`, `PhaseSummary.tsx`, `GameView.tsx`, `ItemCard.tsx` and their tests;
 `engine/src/state.ts` (`AvailableAction.techName`) and `assisted.ts`.

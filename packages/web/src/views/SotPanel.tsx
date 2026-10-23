@@ -7,7 +7,7 @@
  * rule: it shows the status and reason the engine gives and sends one request per press.
  */
 
-import { useId, useState } from 'react'
+import { useState } from 'react'
 
 import type { Government } from '@civ/engine'
 
@@ -17,6 +17,7 @@ import { pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
 import { HelpHint } from './HelpHint.js'
 import { goToPanel } from './PhaseSummary.js'
+import { openGovernmentReference } from './StatusPanel.js'
 import './SotPanel.css'
 
 type StartOfTurn = NonNullable<NonNullable<PlayerView['you']>['startOfTurn']>
@@ -75,33 +76,26 @@ function TechGrants({ grants }: { readonly grants: StartOfTurn['techGrants'] }):
           </li>
         ))}
       </ul>
-      <p className="muted">
-        Choose the tech and reveal it in the tech tree. Revealing a tech that fits uses up the free tech.
-      </p>
-      <button type="button" className="small" onClick={() => goToPanel('techs')}>
-        Go to the tech tree
-      </button>
+      <div className="assisted-action">
+        <button type="button" className="small" onClick={() => goToPanel('techs')}>
+          Go to the tech tree
+        </button>
+        <HelpHint label="Free techs">
+          Choose the tech and reveal it in the tech tree. Revealing a tech that fits uses up the free tech.
+        </HelpHint>
+      </div>
     </section>
   )
 }
 
-/** The reason a control is blocked, as text the button points at; nothing while it is ready. */
-function Reason({ id, status, reason }: { readonly id: string; readonly status: string; readonly reason: string }): React.JSX.Element | null {
-  if (status === 'ready') return null
-  return (
-    <p id={id} className="muted sot-reason">
-      {reason}
-    </p>
-  )
-}
-
-function GovernmentChange({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Element {
-  const reasonId = useId()
+function GovernmentChange({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Element | null {
   const { government } = sot
   const ready = government.status === 'ready'
   const direct = government.options.filter((option) => option.route === 'direct')
-  const viaAnarchy = government.options.filter((option) => option.route === 'anarchy')
   const playerId = view.you?.playerId ?? ''
+  // Nothing to press when the change cannot be made: shown while ready, and as used once it is done
+  if (!ready && government.status !== 'used') return null
+  if (direct.length === 0 && !government.canEnterAnarchy) return null
 
   const change = (target: Government): void => {
     const key = `${gameId}:${playerId}:switchGovernment:${target}`
@@ -116,54 +110,43 @@ function GovernmentChange({ gameId, view, busy, run, sot }: ChoiceProps): React.
   return (
     <section className="phase-group sot-government" aria-label="Change government">
       <h3 className="phase-group-title">Change government</h3>
-      <p>
-        You are governed by <strong>{government.current}</strong>. You can change once in your Start of Turn.
-      </p>
-      <Reason id={reasonId} status={government.status} reason={government.reason} />
-      {ready && direct.length === 0 && viaAnarchy.length === 0 && !government.canEnterAnarchy && (
-        <p className="muted">You know no other government.</p>
-      )}
-      <ul className="sot-options">
+      <div className="assisted-action">
         {direct.map((option) => (
-          <li key={option.government}>
-            <button
-              type="button"
-              className="small"
-              aria-label={`Change to ${option.government}`}
-              aria-describedby={ready ? undefined : reasonId}
-              disabled={busy || !ready}
-              onClick={() => change(option.government)}
-            >
-              Change to {option.government}
-            </button>{' '}
-            <span className="muted sot-option-reason">{option.reason}</span>
-          </li>
-        ))}
-        {viaAnarchy.map((option) => (
-          <li key={option.government} className="sot-option-anarchy">
-            <span className="sot-option-name">{option.government}</span>{' '}
-            <span className="muted sot-option-reason">Only through Anarchy. {option.reason}</span>
-          </li>
+          <button
+            key={option.government}
+            type="button"
+            className="small"
+            aria-label={`Change to ${option.government}`}
+            title={option.reason}
+            disabled={busy || !ready}
+            onClick={() => change(option.government)}
+          >
+            Change to {option.government}
+          </button>
         ))}
         {government.canEnterAnarchy && (
-          <li>
-            <button
-              type="button"
-              className="small"
-              aria-label="Change to Anarchy"
-              aria-describedby={ready ? undefined : reasonId}
-              disabled={busy || !ready}
-              onClick={() => change('Anarchy')}
-            >
-              Change to Anarchy
-            </button>{' '}
-            <span className="muted sot-option-reason">
-              Your capital takes no action this turn and your social policies have no effect. Next Start of Turn you can
-              take any government you know.
-            </span>
-          </li>
+          <button
+            type="button"
+            className="small"
+            aria-label="Change to Anarchy"
+            title="Your capital takes no action this turn and your social policies have no effect. Next Start of Turn you can take any government you know."
+            disabled={busy || !ready}
+            onClick={() => change('Anarchy')}
+          >
+            Change to Anarchy
+          </button>
         )}
-      </ul>
+        {!ready && <span className="tag">Used</span>}
+        <button
+          type="button"
+          className="help-button"
+          aria-label="Show government card reference"
+          title={`You are governed by ${government.current}. Show the government cards.`}
+          onClick={openGovernmentReference}
+        >
+          ?
+        </button>
+      </div>
     </section>
   )
 }
@@ -174,8 +157,7 @@ function FeudalismHarvest({
   busy,
   run,
   feudalism,
-}: ChoiceProps & { readonly feudalism: NonNullable<StartOfTurn['feudalism']> }): React.JSX.Element {
-  const reasonId = useId()
+}: ChoiceProps & { readonly feudalism: NonNullable<StartOfTurn['feudalism']> }): React.JSX.Element | null {
   const [cityPieceId, setCity] = useState('')
   const [resource, setResource] = useState('')
   const ready = feudalism.status === 'ready'
@@ -203,18 +185,12 @@ function FeudalismHarvest({
     })
   }
 
+  // Only when it can be done (or was done this turn and returns next turn)
+  if (!ready && feudalism.status !== 'used') return null
+
   return (
     <section className="phase-group sot-feudalism" aria-label="Feudalism harvest">
       <h3 className="phase-group-title">Feudalism: harvest a resource</h3>
-      <p>
-        Take one resource token from the market, from a square with its icon in the outskirts of one of your cities, or under a scout that gathers for it. The
-        list is what the map shows around each city.
-      </p>
-      <p className="muted">
-        The same resource icon cannot be harvested twice in a turn, also not by the Harvest of a city. The game does not
-        track that.
-      </p>
-      <Reason id={reasonId} status={feudalism.status} reason={feudalism.reason} />
       <form
         className="sot-form"
         onSubmit={(event) => {
@@ -252,18 +228,27 @@ function FeudalismHarvest({
             ))}
           </select>
         </label>
-        <button
-          type="submit"
-          className="small"
-          aria-describedby={ready ? undefined : reasonId}
-          disabled={busy || !ready || !valid}
-        >
-          Harvest
-        </button>
+        <span className="card-control sot-invest-card">
+          <button type="submit" className="small" title={ready ? undefined : feudalism.reason} disabled={busy || !ready || !valid}>
+            Harvest
+          </button>
+          {!ready && <span className="tag">Used</span>}
+          <HelpHint label="Feudalism: harvest a resource">
+            <p>
+              Take one resource token from the market, from a square with its icon in the outskirts of one of your
+              cities, or under a scout that gathers for it. The list is what the map shows around each city.
+            </p>
+            <p>
+              The same resource icon cannot be harvested twice in a turn, also not by the Harvest of a city. The game
+              does not track that.
+            </p>
+            <p>{feudalism.reason}</p>
+            {city !== undefined && city.choices.length === 0 && (
+              <p>The map shows no resource in the outskirts of {city.label}.</p>
+            )}
+          </HelpHint>
+        </span>
       </form>
-      {city !== undefined && city.choices.length === 0 && (
-        <p className="muted">The map shows no resource in the outskirts of {city.label}.</p>
-      )}
     </section>
   )
 }
@@ -385,8 +370,8 @@ const terrainWords = (terrain: string | null): string => (terrain === null ? 'un
 function ScoutsAndCities({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Element | null {
   const playerId = view.you?.playerId ?? ''
   const { scouts, cities, cityLimit, scoutsNow } = sot
-  if (scouts.length === 0 && cityLimit.have >= cityLimit.max) return null
-  const now = scoutsNow.status === 'ready'
+  // No scout on the map, or nothing to do with one right now: nothing to show
+  if (scouts.length === 0 || scoutsNow.status !== 'ready') return null
 
   const found = (pieceId: string): void => {
     const key = `${gameId}:${playerId}:foundCity:${pieceId}`
@@ -411,20 +396,29 @@ function ScoutsAndCities({ gameId, view, busy, run, sot }: ChoiceProps): React.J
 
   return (
     <section className="phase-group sot-scouts" aria-label="Scouts and cities">
-      <h3 className="phase-group-title">Scouts and cities</h3>
-      <p>
-        You have {cityLimit.have} of the {cityLimit.max} cities you may have (a third city needs Irrigation). A new city
-        replaces the scout that stands where it goes. A scout sends its square to one city for the whole turn, and the
-        city gets that square&apos;s production. A scout you do not send goes to your capital. A scout placed this turn
-        gathers from next turn.
-      </p>
-      <p className="muted">
-        A scout gathers for its city alone. Its square counts for the city's production, and its culture and
-        resource icons are offered to that city's Devote to the Arts and Harvest. The trade and coin icons are still counted
-        by hand.
-      </p>
-      {!now && <p className="muted sot-reason">{scoutsNow.reason}</p>}
-      {scouts.length === 0 && <p className="muted">You have no scout on the map.</p>}
+      <h3 className="phase-group-title">
+        Scouts and cities
+        <HelpHint label="Scouts and cities">
+          <p>
+            You have {cityLimit.have} of the {cityLimit.max} cities you may have (a third city needs Irrigation). A new
+            city replaces the scout that stands where it goes. A scout sends its square to one city for the whole turn,
+            and the city gets that square&apos;s production. A scout you do not send goes to your capital. A scout
+            placed this turn gathers from next turn.
+          </p>
+          <p>
+            A scout gathers for its city alone. Its square counts for the city&apos;s production, and its culture and
+            resource icons are offered to that city&apos;s Devote to the Arts and Harvest. The trade and coin icons are
+            still counted by hand.
+          </p>
+          <p>Move any other figures of yours on the square of a new city to a square next to it.</p>
+          {scouts.map((scout) => (
+            <p key={scout.pieceId}>
+              <strong>{scout.square}:</strong>{' '}
+              {scout.found.ok ? 'a city can be founded here.' : scout.found.reasons.join(' ')}
+            </p>
+          ))}
+        </HelpHint>
+      </h3>
       <ul className="sot-scout-list">
         {scouts.map((scout) => (
           <li key={scout.pieceId} className="sot-scout">
@@ -439,15 +433,14 @@ function ScoutsAndCities({ gameId, view, busy, run, sot }: ChoiceProps): React.J
                 assignedTo={scout.assignedTo}
                 byDefault={scout.assignedByDefault}
                 cities={cities}
-                busy={busy || !now}
+                busy={busy}
                 send={send}
               />
             )}
             <FoundHere
               pieceId={scout.pieceId}
               square={scout.square}
-              ok={now && scout.found.ok}
-              reasons={now ? scout.found.reasons : [scoutsNow.reason]}
+              ok={scout.found.ok}
               zuluHuts={scout.found.zuluHuts}
               busy={busy}
               found={found}
@@ -505,8 +498,7 @@ function SendSquare({
       <button type="submit" className="small" disabled={busy || !changed}>
         Send
       </button>
-      {cities.length === 0 && <span className="muted">You have no city on the map.</span>}
-      {byDefault && <span className="muted">Your capital, because you did not send it anywhere.</span>}
+      {byDefault && <span className="muted">Capital</span>}
     </form>
   )
 }
@@ -515,7 +507,6 @@ function FoundHere({
   pieceId,
   square,
   ok,
-  reasons,
   zuluHuts,
   busy,
   found,
@@ -523,36 +514,26 @@ function FoundHere({
   readonly pieceId: string
   readonly square: string
   readonly ok: boolean
-  readonly reasons: readonly string[]
   readonly zuluHuts: readonly string[]
   readonly busy: boolean
   readonly found: (pieceId: string) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+  // A city that cannot be founded here has no button; the section's `?` says why
+  if (!ok) return null
   return (
     <div className="sot-found">
       <button
         type="button"
         className="small"
         aria-label={`Found a city here on ${square}`}
-        title={ok ? undefined : reasons.join(' ')}
-        disabled={busy || !ok}
+        disabled={busy}
         onClick={() => found(pieceId)}
       >
         Found a city here
       </button>
-      {!ok && (
-        <HelpHint label={`Why no city on ${square}`}>
-          <ul className="sot-reasons">
-            {reasons.map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
-        </HelpHint>
-      )}
-      {ok && zuluHuts.length > 0 && (
+      {zuluHuts.length > 0 && (
         <p className="muted">The Zulu may explore the hut next to the city ({zuluHuts.join(', ')}). Do that by hand.</p>
       )}
-      {ok && <p className="muted">Move any other figures of yours on {square} to a square next to it.</p>}
     </div>
   )
 }
@@ -570,13 +551,15 @@ function MetropolisHint({ view }: { readonly view: PlayerView }): React.JSX.Elem
   return (
     <section className="phase-group sot-metropolis" aria-label="Metropolis">
       <h3 className="phase-group-title">Grow your capital into a metropolis</h3>
-      <p>
-        You have Agriculture, so your capital grows into a metropolis when it can: on the capital&apos;s square and one
-        square next to it, with no enemy figure there and its outskirts on the map. Do it on the map.
-      </p>
-      <button type="button" className="small" onClick={() => goToPanel('board')}>
-        Go to the map
-      </button>
+      <div className="assisted-action">
+        <button type="button" className="small" onClick={() => goToPanel('board')}>
+          Go to the map
+        </button>
+        <HelpHint label="Metropolis">
+          You have Agriculture, so your capital grows into a metropolis when it can: on the capital&apos;s square and one
+          square next to it, with no enemy figure there and its outskirts on the map. Do it on the map.
+        </HelpHint>
+      </div>
     </section>
   )
 }

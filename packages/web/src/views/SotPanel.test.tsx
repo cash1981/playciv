@@ -115,18 +115,18 @@ describe('changing government', () => {
   it('names the government and offers a button for each one that can be taken at once', () => {
     const sot = sotWith({ government: { ...READY, current: 'Despotism', options: [direct, anarchy], canEnterAnarchy: true } as never })
     renderChoices(viewOf(sot))
-    expect(screen.getByText('Despotism', { selector: 'strong' })).toBeTruthy()
-    expect((screen.getByRole('button', { name: 'Change to Democracy' }) as HTMLButtonElement).disabled).toBe(false)
-    expect(screen.getByText('You learned Democracy recently, so you can change at once.')).toBeTruthy()
+    const button = screen.getByRole('button', { name: 'Change to Democracy' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    expect(button.getAttribute('title')).toBe('You learned Democracy recently, so you can change at once.')
+    expect(screen.queryByText(/You can change once in your Start of Turn/)).toBeNull()
   })
 
-  it('lists a government that needs Anarchy as text, not as a button, and offers Anarchy itself', () => {
+  it('shows no text or button for a government that needs Anarchy, and offers Anarchy itself', () => {
     const sot = sotWith({ government: { ...READY, current: 'Despotism', options: [direct, anarchy], canEnterAnarchy: true } as never })
     renderChoices(viewOf(sot))
     expect(screen.queryByRole('button', { name: 'Change to Feudalism' })).toBeNull()
-    expect(screen.getByText(/Only through Anarchy\. Changing to Feudalism now goes through Anarchy\./)).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Change to Anarchy' })).toBeTruthy()
-    expect(screen.getByText(/Your capital takes no action this turn/)).toBeTruthy()
+    expect(screen.queryByText(/Only through Anarchy/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Change to Anarchy' }).getAttribute('title')).toMatch(/Your capital takes no action this turn/)
   })
 
   it('offers no Anarchy to a player who is in it or immune to it', () => {
@@ -156,7 +156,7 @@ describe('changing government', () => {
     expect(send).toHaveBeenCalledWith('g1', 'switchGovernment', expect.any(String), 6, { government: 'Anarchy' })
   })
 
-  it('disables every button with the reason as text when the engine says it is used or the phase is wrong', () => {
+  it('disables every button and tags it Used when the change was made this turn', () => {
     const used = {
       status: 'used',
       reason: 'Changing government has already been done this turn.',
@@ -167,9 +167,28 @@ describe('changing government', () => {
     renderChoices(viewOf(sotWith({ government: used as never })))
     const button = screen.getByRole('button', { name: 'Change to Democracy' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
-    const reason = screen.getByText('Changing government has already been done this turn.')
-    expect(button.getAttribute('aria-describedby')).toBe(reason.id)
+    expect(screen.getByText('Used')).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Change to Anarchy' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('is hidden when the change cannot be made, or there is nothing to change to', () => {
+    const blockedNow = { status: 'wrong-phase', reason: 'Not now.', current: 'Democracy', options: [direct], canEnterAnarchy: true }
+    renderChoices(viewOf(sotWith({ government: blockedNow as never })))
+    expect(screen.queryByRole('region', { name: 'Change government' })).toBeNull()
+    cleanup()
+    const none = { ...READY, current: 'Despotism', options: [anarchy], canEnterAnarchy: false }
+    renderChoices(viewOf(sotWith({ government: none as never })))
+    expect(screen.queryByRole('region', { name: 'Change government' })).toBeNull()
+  })
+
+  it('opens the government card reference from the ? next to the buttons', () => {
+    const opened = vi.fn()
+    window.addEventListener('civ:open-government-reference', opened)
+    const sot = sotWith({ government: { ...READY, current: 'Despotism', options: [direct], canEnterAnarchy: true } as never })
+    renderChoices(viewOf(sot))
+    fireEvent.click(screen.getByRole('button', { name: 'Show government card reference' }))
+    window.removeEventListener('civ:open-government-reference', opened)
+    expect(opened).toHaveBeenCalledTimes(1)
   })
 
   it('is disabled while the page is busy or read only', () => {
@@ -242,17 +261,27 @@ describe('the Feudalism harvest', () => {
     expect((screen.getByRole('button', { name: 'Harvest' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('says so when the map shows no resource around the city', () => {
+  it('says so behind help when the map shows no resource around the city', () => {
     const none = { ...feudalism, cities: [{ pieceId: 'c1', label: 'Capital B3', choices: [] }] }
     renderChoices(viewOf(sotWith({ feudalism: none as never })))
-    expect(screen.getByText('The map shows no resource in the outskirts of Capital B3.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Feudalism: harvest a resource' }))
+    expect(within(screen.getByRole('dialog')).getByText('The map shows no resource in the outskirts of Capital B3.')).toBeTruthy()
   })
 
-  it('is disabled with the reason when it is used or not allowed', () => {
+  it('is disabled and tagged Used when it was used, with the reason behind help', () => {
     const used = { ...feudalism, status: 'used', reason: 'Feudalism government has already been used this turn.' }
     renderChoices(viewOf(sotWith({ feudalism: used as never })))
     expect((screen.getByRole('button', { name: 'Harvest' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText('Feudalism government has already been used this turn.')).toBeTruthy()
+    expect(screen.getByText('Used')).toBeTruthy()
+    expect(screen.queryByText(/Take one resource token from the market/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Feudalism: harvest a resource' }))
+    expect(within(screen.getByRole('dialog')).getByText('Feudalism government has already been used this turn.')).toBeTruthy()
+  })
+
+  it('is hidden when it cannot be done now', () => {
+    const blockedNow = { ...feudalism, status: 'wrong-phase', reason: 'Not now.' }
+    renderChoices(viewOf(sotWith({ feudalism: blockedNow as never })))
+    expect(screen.queryByRole('region', { name: 'Feudalism harvest' })).toBeNull()
   })
 })
 
@@ -361,18 +390,21 @@ describe('scouts and cities', () => {
     ...overrides,
   })
 
-  it('is left out when there is no scout and no city left to found', () => {
+  it('is left out when there is no scout, whatever the city limit', () => {
     renderChoices(viewOf(sotWith()))
     expect(screen.queryByRole('region', { name: 'Scouts and cities' })).toBeNull()
   })
 
-  it('says how many cities you may have and that only production moves, and that there is no scout', () => {
-    renderChoices(viewOf(sotWith({ cityLimit: { have: 1, max: 2 } as never })))
+  it('keeps the city limit and the gathering rules behind help', () => {
+    renderChoices(viewOf(sotWith({ scouts: [scout()] as never, cityLimit: { have: 1, max: 2 } as never })))
     const section = screen.getByRole('region', { name: 'Scouts and cities' })
-    expect(within(section).getByText(/You have 1 of the 2 cities you may have/)).toBeTruthy()
-    expect(within(section).getByText(/A scout gathers for its city alone/)).toBeTruthy()
-    expect(within(section).getByText(/A scout you do not send goes to your capital/)).toBeTruthy()
-    expect(within(section).getByText('You have no scout on the map.')).toBeTruthy()
+    expect(within(section).queryByText(/You have 1 of the 2 cities you may have/)).toBeNull()
+    fireEvent.click(within(section).getByRole('button', { name: 'Help: Scouts and cities' }))
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByText(/You have 1 of the 2 cities you may have/)).toBeTruthy()
+    expect(dialog.getByText(/A scout gathers for its city alone/)).toBeTruthy()
+    expect(dialog.getByText(/A scout you do not send goes to your capital/)).toBeTruthy()
+    expect(dialog.getByText(/Move any other figures of yours/)).toBeTruthy()
   })
 
   it('lists each scout with its square and terrain', () => {
@@ -398,7 +430,7 @@ describe('scouts and cities', () => {
     renderChoices(viewOf(sotWith({ scouts: [scout({ assignedTo: 'c1', assignedByDefault: true })] as never })))
     const select = screen.getByRole('combobox', { name: /Send the square of E5 to/ }) as HTMLSelectElement
     expect(select.value).toBe('c1')
-    expect(screen.getByText('Your capital, because you did not send it anywhere.')).toBeTruthy()
+    expect(screen.getByText('Capital')).toBeTruthy()
     expect(within(select).queryByRole('option', { name: 'No city' })).toBeNull()
     expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(select, { target: { value: 'c2' } })
@@ -461,7 +493,6 @@ describe('scouts and cities', () => {
     try {
       const button = screen.getByRole('button', { name: 'Found a city here on E5' }) as HTMLButtonElement
       expect(button.disabled).toBe(false)
-      expect(screen.getByText(/Move any other figures of yours on E5/)).toBeTruthy()
       fireEvent.click(button)
       fireEvent.click(button)
       await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
@@ -472,15 +503,13 @@ describe('scouts and cities', () => {
     }
   })
 
-  it('puts every reason a city cannot be founded behind help, and disables the button', () => {
+  it('has no found button for a square where no city can go, and gives every reason behind help', () => {
     const reasons = ['E5 is a water square.', 'A hut is next to E5 (F5). Take it first.']
     renderChoices(viewOf(sotWith({ scouts: [scout({ found: { ok: false, reasons, zuluHuts: [] } })] as never })))
-    const button = screen.getByRole('button', { name: 'Found a city here on E5' }) as HTMLButtonElement
-    expect(button.disabled).toBe(true)
-    expect(button.getAttribute('title')).toBe(reasons.join(' '))
-    fireEvent.click(screen.getByRole('button', { name: 'Help: Why no city on E5' }))
-    const list = within(screen.getByRole('dialog')).getByRole('list')
-    expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual(reasons)
+    expect(screen.queryByRole('button', { name: 'Found a city here on E5' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Scouts and cities' }))
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByText(/E5 is a water square\. A hut is next to E5/)).toBeTruthy()
   })
 
   it('tells a Zulu player about the hut next to the new city', () => {
@@ -488,15 +517,10 @@ describe('scouts and cities', () => {
     expect(screen.getByText(/The Zulu may explore the hut next to the city \(F5\)/)).toBeTruthy()
   })
 
-  it('is disabled outside the Start of Turn, with the reason shown', () => {
+  it('is hidden outside the Start of Turn', () => {
     const reason = 'Only available during your open Start of Turn phase.'
     renderChoices(viewOf(sotWith({ scouts: [scout()] as never, scoutsNow: { status: 'wrong-phase', reason } as never })))
-    const found = screen.getByRole('button', { name: 'Found a city here on E5' }) as HTMLButtonElement
-    expect(found.disabled).toBe(true)
-    expect(found.getAttribute('title')).toBe(reason)
-    expect((screen.getByRole('combobox', { name: /Send the square of E5 to/ }) as HTMLSelectElement).disabled).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: 'Help: Why no city on E5' }))
-    expect(within(screen.getByRole('dialog')).getByText(reason)).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Scouts and cities' })).toBeNull()
   })
 
   it('is disabled while the page is busy or read only', () => {
