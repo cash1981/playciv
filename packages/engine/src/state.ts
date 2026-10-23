@@ -747,6 +747,8 @@ export interface AvailableAction {
   readonly phase: TurnPhase | 'ANY'
   /** The heading it is listed under in its tab. */
   readonly group: string
+  /** What the button says when "Use <label>" is not it. */
+  readonly buttonText?: string
   readonly status: AssistedStatus
   /** A readable sentence, also when `status` is `ready`. */
   readonly reason: string
@@ -1251,8 +1253,18 @@ export interface StartOfTurnView {
   /** The Feudalism harvest, only while the government is Feudalism. */
   readonly feudalism:
     | (NowAnswer & {
-        readonly cities: readonly { readonly pieceId: string; readonly label: string }[]
-        readonly resources: readonly string[]
+        /** Each city of the player with what its outskirts hold, read from the tile data. */
+        readonly cities: readonly {
+          readonly pieceId: string
+          readonly label: string
+          readonly choices: readonly {
+            readonly resource: string
+            /** "Wheat at C4 and D5". */
+            readonly label: string
+            readonly available: boolean
+            readonly unavailableReason: string | null
+          }[]
+        }[]
       })
     | null
   readonly invest: NowAnswer & {

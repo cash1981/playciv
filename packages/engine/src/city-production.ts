@@ -239,7 +239,7 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
     footprints.map((footprint) => [footprint.piece.id, `${kindOf(footprint.piece)} ${squareOf(board, footprint.piece) ?? ''}`.trim()] as const),
   )
   if (assignments.length > 0) {
-    playerNotes.push('A square a scout sends is counted for production only. Its trade, culture, coin and resource icons are not counted.')
+    playerNotes.push('A square a scout sends is counted for production here. Its culture and resource icons are offered to Devote to the Arts and Harvest of that city; its trade and coin icons are not counted.')
   } else if (board.pieces.some((piece) => piece.assetId === ownScoutId && mapCellOf(board, piece) !== null)) {
     playerNotes.push('A scout can send its square to a city in the Start of Turn. None does now.')
   }

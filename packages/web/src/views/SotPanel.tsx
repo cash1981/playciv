@@ -178,17 +178,24 @@ function FeudalismHarvest({
   const [cityPieceId, setCity] = useState('')
   const [resource, setResource] = useState('')
   const ready = feudalism.status === 'ready'
-  const city = cityPieceId === '' ? (feudalism.cities.length === 1 ? (feudalism.cities[0]?.pieceId ?? '') : '') : cityPieceId
-  const valid = city !== '' && resource !== ''
+  // A single city is chosen for the player; a city picked earlier is dropped when it is gone
+  const known = feudalism.cities.find((candidate) => candidate.pieceId === cityPieceId)
+  const city = known ?? (feudalism.cities.length === 1 ? feudalism.cities[0] : undefined)
+  const choice = city?.choices.find((candidate) => candidate.resource === resource && candidate.available)
+  const valid = city !== undefined && choice !== undefined
   const playerId = view.you?.playerId ?? ''
 
   const harvest = (): void => {
-    if (!valid) return
-    const key = `${gameId}:${playerId}:feudalismHarvest:${city}:${resource}`
+    if (city === undefined || choice === undefined) return
+    const key = `${gameId}:${playerId}:feudalismHarvest:${city.pieceId}:${choice.resource}`
     void pressOnce(
       key,
       run,
-      (requestId) => api.actionWithArgs(gameId, 'feudalismHarvest', requestId, view.rev, { cityPieceId: city, resource }),
+      (requestId) =>
+        api.actionWithArgs(gameId, 'feudalismHarvest', requestId, view.rev, {
+          cityPieceId: city.pieceId,
+          resource: choice.resource,
+        }),
       view,
     ).then((done) => {
       if (done) setResource('')
@@ -200,7 +207,7 @@ function FeudalismHarvest({
       <h3 className="phase-group-title">Feudalism: harvest a resource</h3>
       <p>
         Take one resource token from the market, from a square with its icon in the outskirts of one of your cities. The
-        game cannot see the map icons, so you say which city and which resource.
+        list is what the map shows around each city.
       </p>
       <Reason id={reasonId} status={feudalism.status} reason={feudalism.reason} />
       <form
@@ -212,7 +219,14 @@ function FeudalismHarvest({
       >
         <label>
           City{' '}
-          <select value={city} disabled={busy || !ready} onChange={(event) => setCity(event.target.value)}>
+          <select
+            value={city?.pieceId ?? ''}
+            disabled={busy || !ready}
+            onChange={(event) => {
+              setCity(event.target.value)
+              setResource('')
+            }}
+          >
             <option value="">Choose a city</option>
             {feudalism.cities.map((candidate) => (
               <option key={candidate.pieceId} value={candidate.pieceId}>
@@ -223,11 +237,12 @@ function FeudalismHarvest({
         </label>
         <label>
           Resource{' '}
-          <select value={resource} disabled={busy || !ready} onChange={(event) => setResource(event.target.value)}>
-            <option value="">Choose a resource</option>
-            {feudalism.resources.map((name) => (
-              <option key={name} value={name}>
-                {name}
+          <select value={resource} disabled={busy || !ready || city === undefined} onChange={(event) => setResource(event.target.value)}>
+            <option value="">{city === undefined ? 'Choose a city first' : 'Choose a resource'}</option>
+            {(city?.choices ?? []).map((candidate) => (
+              <option key={candidate.resource} value={candidate.resource} disabled={!candidate.available}>
+                {candidate.label}
+                {candidate.available ? '' : ` (${candidate.unavailableReason ?? 'none left'})`}
               </option>
             ))}
           </select>
@@ -241,6 +256,9 @@ function FeudalismHarvest({
           Harvest
         </button>
       </form>
+      {city !== undefined && city.choices.length === 0 && (
+        <p className="muted">The map shows no resource in the outskirts of {city.label}.</p>
+      )}
     </section>
   )
 }
@@ -370,7 +388,9 @@ function ScoutsAndCities({ gameId, view, busy, run, sot }: ChoiceProps): React.J
         city gets that square&apos;s production. A scout placed this turn gathers from next turn.
       </p>
       <p className="muted">
-        Only production is moved. The trade, culture, coin and resource icons on the square are still counted by hand.
+        A scout you send gathers for that city alone. Its square counts for the city's production, and its culture and
+        resource icons are offered to that city's Devote to the Arts and Harvest. The trade and coin icons are still counted
+        by hand.
       </p>
       {scouts.length === 0 && <p className="muted">You have no scout on the map.</p>}
       <ul className="sot-scout-list">

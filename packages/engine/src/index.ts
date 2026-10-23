@@ -47,7 +47,6 @@ export {
   unlockedGovernments,
 } from './sot.js'
 export type { GovernmentOption, InvestmentCardInfo } from './sot.js'
-export { HARVESTABLE_RESOURCES } from './assisted-sot.js'
 export { MAX_CITIES, MAX_CITIES_WITH_IRRIGATION, cityLimitOf, foundCityCheck } from './city-founding.js'
 export { livePendingRewards } from './assisted-culture.js'
 export * from './card-timing.js'

@@ -290,6 +290,8 @@ export type AssistedActionDefinition = {
   readonly phase: TurnPhase | 'ANY'
   /** The heading the action is listed under in its tab. */
   readonly group: string
+  /** What the button says when "Use <label>" is not it ("Draw two level II events"). */
+  readonly buttonText?: string
   /**
    * What an applied record is called in the public list and in an undo request, when
    * that is more than the action's label (a card played is called by its name).

@@ -39,7 +39,10 @@ import {
 } from './assisted-culture.js'
 import { AREA_LABEL_HEIGHT, findBoardAsset, playerAreas, remainingBoardAssetCount } from './board.js'
 import { cityLimitView, scoutViewsOf } from './assisted-city.js'
-import { cityFootprintsOf, pieceColorOf } from './blockade.js'
+import { cityActionsOf } from './city-actions.js'
+import { RESOURCE_KINDS, resourceName } from './tile-icons.js'
+import type { ResourceKind } from './tile-icons.js'
+import { pieceColorOf } from './blockade.js'
 import { cityProductionsOf } from './city-production.js'
 import { coinSourcesOf, findCoinSource, withCoinSource } from './coins.js'
 import type { CoinSourceKey } from './coins.js'
@@ -404,7 +407,7 @@ function rationalism(row: RationalismRow): AssistedActionDefinition {
 // Patronage: culture for a culture event card
 // ---------------------------------------------------------------------------
 
-/** The level of the culture track section a marker stands in. Start counts as the first section. */
+/** The level of the culture track section a marker stands in. The start space has none: a marker must have advanced once. */
 export const levelOfMarker = (step: number): CultureLevel => (step <= 7 ? 1 : step <= 14 ? 2 : 3)
 
 export const levelSheet = (level: CultureLevel): SheetName =>
@@ -428,6 +431,15 @@ function planPatronage(
   if ('blocked' in open) return open
   const marker = cultureMarkerOf(state, player)
   if (marker === undefined) return { blocked: blocked('unavailable', 'Your leader marker is not on the culture track.') }
+  // The start space belongs to no level: the card is of the level the marker has advanced into (the human, 2026-10-23)
+  if (marker.step < 1) {
+    return {
+      blocked: blocked(
+        'unavailable',
+        'Advance on the culture track at least once first: Patronage draws a card of the level your marker stands in, and the start space has no level.',
+      ),
+    }
+  }
   const level = levelOfMarker(marker.step)
   if (livePendingRewards(player).length > 0) {
     return { blocked: blocked('unavailable', 'Choose the card to keep from your last advance first.') }
@@ -562,15 +574,24 @@ const patronage: AssistedActionDefinition = {
 // Feudalism: harvest a resource
 // ---------------------------------------------------------------------------
 
-/** What a city can harvest: the four market resources. Uranium only comes from villages. */
-export const HARVESTABLE_RESOURCES: readonly string[] = ['Incense', 'Iron', 'Silk', 'Wheat']
+/**
+ * The resources a city's outskirts offer to a harvest: what the tile data holds for the
+ * eight squares around it, the same list the city's own Harvest button works from. A
+ * scout's square is no part of this: the government says "in the outskirts".
+ */
+function outskirtsChoices(state: GameState, player: Playerhand, cityPieceId: string) {
+  const options = cityActionsOf(state, player).find((candidate) => candidate.cityPieceId === cityPieceId)
+  return options === undefined
+    ? undefined
+    : { label: options.label, choices: options.harvest.choices.filter((choice) => choice.scoutPieceId === null) }
+}
+
+const resourceAssetId = (resource: ResourceKind): string => `resources/${resource}`
 
 const harvestPayloadOf = (payload: AssistedPayload | undefined): FeudalismHarvestPayload | undefined =>
   payload !== undefined && 'cityPieceId' in payload && 'resource' in payload && !('targets' in payload) && !('item' in payload)
     ? { cityPieceId: payload.cityPieceId, resource: String(payload.resource) }
     : undefined
-
-const resourceAssetId = (resource: string): string => `resources/${resource.toLowerCase()}`
 
 const feudalismHarvest: AssistedActionDefinition = {
   kind: 'feudalismHarvest',
@@ -589,6 +610,15 @@ const feudalismHarvest: AssistedActionDefinition = {
     const open = startOfTurnGate(state, player, { usageKey: 'government:Feudalism', label: 'Feudalism government' })
     if ('blocked' in open) return open.blocked
     if (cityPiecesOf(state, player).length === 0) return blocked('unavailable', 'You have no city on the map.')
+    const offered = cityActionsOf(state, player).some((city) =>
+      city.harvest.choices.some((choice) => choice.scoutPieceId === null && choice.available),
+    )
+    if (!offered) {
+      return blocked(
+        'unavailable',
+        'No city of yours has a resource icon in its outskirts that the market still has a token of.',
+      )
+    }
     return {
       status: 'ready',
       reason: 'Harvest a resource from the outskirts of one of your cities, as the Start of Turn ability of Feudalism.',
@@ -607,17 +637,21 @@ const feudalismHarvest: AssistedActionDefinition = {
       allowRepeat: context.confirmedRepeat,
     })
     if ('blocked' in open) return err(rejected('feudalismHarvest', open.blocked))
-    if (!HARVESTABLE_RESOURCES.includes(payload.resource)) {
-      return fail(`Choose a resource: ${HARVESTABLE_RESOURCES.join(', ')}.`)
+    const resource = payload.resource.toLowerCase()
+    if (!(RESOURCE_KINDS as readonly string[]).includes(resource)) {
+      return fail(`Choose a resource: ${RESOURCE_KINDS.map(resourceName).join(', ')}.`)
     }
-    const colour = player.color?.toLowerCase()
-    const city = colour === undefined ? undefined : cityFootprintsOf(state, colour).find((view) => view.piece.id === payload.cityPieceId)
+    const kind = resource as ResourceKind
+    const city = outskirtsChoices(state, player, payload.cityPieceId)
     if (city === undefined) return fail('That is not one of your cities on the map.')
-    const assetId = resourceAssetId(payload.resource)
+    const choice = city.choices.find((candidate) => candidate.resource === kind)
+    if (choice === undefined) return fail(`${city.label} has no ${resourceName(kind)} icon in its outskirts.`)
+    if (!choice.available) return fail(choice.unavailableReason ?? `The market has no ${resourceName(kind)} left.`)
+    const assetId = resourceAssetId(kind)
     const asset = findBoardAsset(assetId)
-    if (asset === undefined) return fail(`There is no ${payload.resource} token to place.`)
+    if (asset === undefined) return fail(`There is no ${resourceName(kind)} token to place.`)
     if ((remainingBoardAssetCount(asset, state.board.pieces, state.numOfPlayers) ?? Infinity) <= 0) {
-      return fail(`The market has no ${payload.resource} left.`)
+      return fail(`The market has no ${resourceName(kind)} left.`)
     }
     const area = playerAreas(state.board, state.players).find((candidate) => candidate.playerId === player.playerId)
     if (area === undefined) return fail('You have no player area on the board to put the token in.')
@@ -634,14 +668,13 @@ const feudalismHarvest: AssistedActionDefinition = {
       return fail('The token could not be placed.')
     }
     const piece = entry.change.piece
-    const cityLabel = cityProductionsOf(state, player).find((candidate) => candidate.pieceId === payload.cityPieceId)?.label ?? 'a city'
     const holder = playerOf(placed, player.playerId) ?? player
     const used = useTurnAction(placed, holder, open.turn, 'government:Feudalism', holder.stats)
     const logged = appendLog(used, {
       username: player.username,
       playerId: player.playerId,
       publicLog:
-        `${player.username} used the Feudalism government: harvested ${payload.resource} in the outskirts of ${cityLabel}` +
+        `${player.username} used the Feudalism government: harvested ${resourceName(kind)} in the outskirts of ${city.label}` +
         (context.confirmedRepeat ? REPEAT_NOTE : ''),
       privateLog: '',
       createdAt: context.at ?? null,
@@ -660,7 +693,7 @@ const feudalismHarvest: AssistedActionDefinition = {
       state: counted,
       effect: {
         kind: 'feudalismHarvest',
-        resource: payload.resource,
+        resource: resourceName(kind),
         pieceId: piece.id,
         position: { x: piece.x, y: piece.y },
         historyId: entry.id,
@@ -1010,7 +1043,22 @@ export function startOfTurnViewOf(state: GameState, player: Playerhand): StartOf
     },
     feudalism:
       player.government === 'Feudalism'
-        ? { ...now(feudalismHarvest.availability(state, player.playerId)), cities, resources: HARVESTABLE_RESOURCES }
+        ? {
+            ...now(feudalismHarvest.availability(state, player.playerId)),
+            // What each city's outskirts hold, from the tile data: the player picks one of these
+            cities: cityActionsOf(state, player).map((city) => ({
+              pieceId: city.cityPieceId,
+              label: city.label,
+              choices: city.harvest.choices
+                .filter((choice) => choice.scoutPieceId === null)
+                .map((choice) => ({
+                  resource: choice.resource,
+                  label: choice.label,
+                  available: choice.available,
+                  unavailableReason: choice.unavailableReason,
+                })),
+            })),
+          }
         : null,
     invest: {
       ...now(invest.availability(state, player.playerId)),

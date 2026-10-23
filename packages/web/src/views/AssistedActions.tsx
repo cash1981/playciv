@@ -229,7 +229,7 @@ export function AssistedActionButton({
         aria-describedby={showReason ? reasonId : undefined}
         onClick={press}
       >
-        {children ?? BUTTON_TEXT[action] ?? `Use ${state.label}`}
+        {children ?? state.buttonText ?? BUTTON_TEXT[action] ?? `Use ${state.label}`}
       </button>
       {detail === 'full' && <span className="tag">{STATUS_TEXT[state.status]}</span>}
       {showReason && (
@@ -306,7 +306,7 @@ export function AssistedActionGroups({
               .map((candidate) => (
                 <li key={candidate.action}>
                   {/* A button with its own text (Advance culture) names the row itself. */}
-                  {BUTTON_TEXT[candidate.action] === undefined && (
+                  {BUTTON_TEXT[candidate.action] === undefined && candidate.buttonText === undefined && (
                     <span className="assisted-name">{candidate.label}</span>
                   )}
                   <AssistedActionButton

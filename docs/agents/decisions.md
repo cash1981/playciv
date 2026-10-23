@@ -317,7 +317,9 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
 - **Social policies** (Anarchy switches them off): Expansionism 1 trade per city
   plus 1 per city-state with a figure of the player on it; Pacifism 1 culture, 2
   with a scout on the map; Patronage spends 1 culture and draws a culture event of
-  the level the marker stands in (the start space counts as level I) and keeps one;
+  the level the marker stands in and keeps one (with Mysticism it draws two and keeps
+  one). It does not work until the marker has advanced once: the start space has no
+  level (the human, 2026-10-23);
   Rationalism spends 6 or 11 trade for a level I or II tech and records a
   `TechGrant` that the tech panel spends when the tech is revealed in Start of Turn.
   Learning is not researching: no coins keep trade.
@@ -326,7 +328,9 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
   change goes through Anarchy, and from Anarchy any known government is direct. The
   Pyramids and Dr. Martin Luther King avoid Anarchy. Democracy +2 trade, Fundamentalism
   1 culture per army on the map, Feudalism puts a harvested resource in the player's
-  area (which resource a square has is not in the map data, so the player names it).
+  area. Which resources a city's outskirts hold is read from the tile data
+  (`tile-icons.json`, the same list the city's Harvest button uses), so the player picks
+  from what the map shows; a scout's square is not part of the outskirts.
 - **Invest** (F&F p. 13): one coin per turn, only coin tokens (the sheet and the tech
   cards that hold tokens), never printed coins and never the coins on a wonder. The
   Arabs advance one space for free with it, a Public Education threshold gives a free
@@ -337,16 +341,23 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
   it; no city closer than three squares, diagonals included (outskirts must not overlap, anyone's); no relic next to
   it; a city-state on the square is destroyed for 3 culture, a city-state next to it
   forbids it. The Romans advance one space for free. A scout sends its square to one
-  city for the turn and only production moves; the trade, culture, coin and resource
-  icons stay manual. Growing a capital into a metropolis only scrolls to the map.
+  city for the turn: the square counts for that city's production, and its culture and
+  resource icons are offered to that city's Devote to the Arts and Harvest only (a
+  scout sent nowhere is offered to every city, as before); the trade and coin icons stay
+  manual. Growing a capital into a metropolis only scrolls to the map.
 - **Wonders, Great Persons, techs, huts and relics** (`assisted-abilities.ts`, kinds
   `sot:<ability>`): Stonehenge, The Colossus, The Louvre, Lorenzo de' Medici (1 culture
   per 3 coins) and Alan Turing (1 trade and 1 culture per 2 armies still in the supply)
   add their numbers; Sydney Opera House advances for free; Panama Canal adds a coin to
-  the wonder; Cristo Redentor draws two events of a chosen level and keeps both; Statue
-  of Liberty, the Teacher hut and Atlantis grant a free tech; the Seven Cities of Gold put
-  two investment markers on a chosen card without a coin. A relic is claimed by the
-  player whose board history removed its marker, once per game. The rest (Great Wall,
+  the wonder; Cristo Redentor draws two events of a chosen level (every culture event
+  draw has Mysticism's extra card, so with it each of the two draws is a pick of one from
+  two, and both picks wait as card choices); Statue of Liberty, the Teacher hut and
+  Atlantis grant a free tech and the page goes to the tech tree for the player to choose
+  and reveal it; the Seven Cities of Gold ask which investment card gets 2 markers and
+  put them there without a coin (no free advance for the Arabs). A relic marker is taken
+  in Movement; its ability is claimed in a Start of Turn by the player whose board
+  history removed the marker, once per game, and a claimed relic is `unavailable`, not
+  `used`, so no button offers a second use. The rest (Great Wall,
   Hanging Gardens, Taj Mahal, Big Ben, Machu Picchu after an invested coin, Plastics, and
   Ecology, which spends a Wheat) only log, once per turn: the choice is on the map. The
   other Great Person cards with a Start of Turn text (Henson, Mother Teresa, Giannini,
@@ -356,12 +367,11 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
   leaves to that vote every board change an action made: the city a scout founded and
   the scout and city-state it took, a harvested token, a wonder's coin and the leader
   marker of a free advance (found missing in review of part 13 and fixed with tests).
-- **Assumptions the human should confirm:** whether a wonder is obsolete is not tracked
-  (the player judges it, as for the Pyramids); the white army of the Russians counts as
-  one of the armies in the supply for Turing; relic claims accept any Start of Turn
-  after the marker was removed, not only the next one; a free investment of the Seven
-  Cities of Gold gives the Arabs no advance; Expansionism counts a city-state by the
-  figure standing on it; Mysticism's extra card is not added to Cristo Redentor's two.
+- **Settled with the human, 2026-10-23:** whether a wonder is obsolete is not tracked (the
+  player judges it, as for the Pyramids); the white army of the Russians counts as one of
+  the armies in the supply for Turing; the Seven Cities of Gold give the Arabs no free
+  advance; Expansionism counts a city-state by the figure standing on it; relics are
+  claimed in a Start of Turn after they were taken in Movement.
 
 Source: `engine/src/assisted.ts`, `assisted-core.ts`, `assisted-sot.ts`,
 `assisted-abilities.ts`, `assisted-city.ts`, `assisted-cards.ts`, `card-timing.ts`,

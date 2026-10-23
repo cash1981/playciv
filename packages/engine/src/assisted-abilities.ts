@@ -50,7 +50,8 @@ import type { StatGainSpec } from './assisted-sot.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds } from './blockade.js'
 import { findBoardAsset, remainingBoardAssetCount, whiteFigureFor } from './board.js'
 import { activeWonderOwnerIds, coinSourcesOf, totalCoins } from './coins.js'
-import { cultureHandBlock } from './culture-hand.js'
+import { cultureHandBlock, cultureHandWarning } from './culture-hand.js'
+import { cultureMarkerOf, rewardDrawCount } from './culture-track.js'
 import type { CultureLevel } from './culture-track.js'
 import { itemName } from './item.js'
 import type { GreatPersonItem, HutItem, Item } from './item.js'
@@ -58,7 +59,15 @@ import { appendLog } from './log.js'
 import { err, ok } from './result.js'
 import { SHEET_LABEL } from './sheet-name.js'
 import { INVESTMENT_CARDS } from './sot.js'
-import type { AssistedActionKind, GameState, InvestmentCard, Playerhand, SpentResource, TechGrant } from './state.js'
+import type {
+  AssistedActionKind,
+  GameState,
+  InvestmentCard,
+  PendingReward,
+  Playerhand,
+  SpentResource,
+  TechGrant,
+} from './state.js'
 import { turnStatus } from './turn.js'
 import type { PlayerTurn } from './turn.js'
 
@@ -82,6 +91,8 @@ interface AbilityBase {
   readonly check?: (state: GameState, player: Playerhand) => BlockedAvailability | undefined
   /** The rule allows it once and nothing grants another use. */
   readonly strictOnce?: boolean
+  /** What the button says when "Use <label>" is not it. */
+  readonly buttonText?: string
 }
 
 const kindOf = (id: string): AssistedActionKind => `sot:${id}`
@@ -152,7 +163,8 @@ const relicBlock =
     const claimed = state.assistedActions.some(
       (record) => record.status === 'applied' && kinds.includes(record.kind),
     )
-    return claimed ? blocked('used', `You have claimed the ${label} relic already. It gives its ability once.`) : undefined
+    // Not `used`: the button would ask "use it again?", and the relic gives its ability once
+    return claimed ? blocked('unavailable', `You have claimed the ${label} relic already. It gives its ability once.`) : undefined
   }
 
 // ---------------------------------------------------------------------------
@@ -205,17 +217,27 @@ const shared = (spec: AbilityBase) =>
     usageKey: spec.usageKey,
     phase: 'SOT' as const,
     group: spec.group,
+    ...(spec.buttonText === undefined ? {} : { buttonText: spec.buttonText }),
     ...(spec.strictOnce === true ? { strictOnce: true } : {}),
   }) satisfies Partial<AssistedActionDefinition>
 
-/** The availability every ability shares; `reason` is what it says when ready. */
-function availabilityOf(spec: AbilityBase, reason: (state: GameState, player: Playerhand) => string) {
+/** The availability every ability shares; `reason` is what it says when ready, `warning` what to think twice about. */
+function availabilityOf(
+  spec: AbilityBase,
+  reason: (state: GameState, player: Playerhand) => string,
+  warning?: (state: GameState, player: Playerhand) => string | undefined,
+) {
   return (state: GameState, playerId: string) => {
     const player = playerOf(state, playerId)
     if (player === undefined) return blocked('unavailable', 'You are not a player in this game.')
     const opened = openGate(state, player, spec, false)
     if ('blocked' in opened) return opened.blocked
-    return { status: 'ready' as const, reason: reason(state, player) }
+    const caution = warning?.(state, player)
+    return {
+      status: 'ready' as const,
+      reason: reason(state, player),
+      ...(caution === undefined ? {} : { warning: caution }),
+    }
   }
 }
 
@@ -669,47 +691,99 @@ const panamaCanal: AssistedActionDefinition = {
 // Cristo Redentor: two culture events from a deck of the player's choice
 // ---------------------------------------------------------------------------
 
-const CRISTO_COUNT = 2
+/** Cristo Redentor draws culture events twice; Mysticism makes each draw take an extra card to choose from. */
+const CRISTO_DRAWS = 2
 
 function cristoRedentor(level: CultureLevel): AssistedActionDefinition {
   const sheetName = levelSheet(level)
   const spec: AbilityBase = {
     id: `cristoRedentor:${level}`,
     label: `Cristo Redentor, level ${ROMAN[level]} events`,
+    buttonText: `Cristo Redentor: draw two level ${ROMAN[level]} events`,
     group: WONDERS,
     usageKey: 'wonder:cristoredentor',
     block: wonderBlock('wonders/cristoredentor', 'Cristo Redentor'),
-    check: (state, player) =>
-      [...state.items, ...state.discardedItems].some((item) => item.sheetName === sheetName)
-        ? // Culture cards come in: the hand must be down to its size first
-          ((full) => (full === undefined ? undefined : blocked('unavailable', full)))(cultureHandBlock(state, player))
-        : blocked('unavailable', `There are no ${SHEET_LABEL[sheetName]} cards left to draw.`),
+    check(state, player) {
+      if (livePendingRewards(player).length > 0) {
+        return blocked('unavailable', 'Choose the card to keep from your last advance first.')
+      }
+      if (![...state.items, ...state.discardedItems].some((item) => item.sheetName === sheetName)) {
+        return blocked('unavailable', `There are no ${SHEET_LABEL[sheetName]} cards left to draw.`)
+      }
+      // Culture cards come in: the hand must be down to its size first
+      const full = cultureHandBlock(state, player)
+      return full === undefined ? undefined : blocked('unavailable', full)
+    },
   }
   return {
     ...shared(spec),
 
-    availability: availabilityOf(spec, () => `Draw two ${SHEET_LABEL[sheetName]} cards. You keep both.`),
+    availability: availabilityOf(
+      spec,
+      (state, player) => {
+        const count = rewardDrawCount(state, player, 'event')
+        return count > 1
+          ? `Draw two ${SHEET_LABEL[sheetName]} cards. With Mysticism each draw takes ${count} cards and you keep one of them.`
+          : `Draw two ${SHEET_LABEL[sheetName]} cards. You keep both.`
+      },
+      (state, player) => cultureHandWarning(state, player, CRISTO_DRAWS),
+    ),
 
     apply(state, player, context) {
       const opened = openGate(state, player, spec, context.confirmedRepeat)
       if ('blocked' in opened) return dismissed(spec, opened)
-      const drawn = drawCandidates(state, sheetName, CRISTO_COUNT)
-      if (!drawn.ok) return drawn
-      const cards = drawn.value.items.map((item): Item => ({ ...item, ownerId: player.playerId, hidden: true }))
-      const holder = holderIn(drawn.value.state, player)
-      const holding: Playerhand = { ...holder, items: [...holder.items, ...cards] }
-      const used = markUsed(withPlayerHand(drawn.value.state, holding), holding, opened.turn, spec)
+      // Every culture event draw has Mysticism's extra card, so each of the two draws is a choice of its own
+      const count = rewardDrawCount(state, player, 'event')
+      let working = state
+      const groups: Item[][] = []
+      for (let draw = 0; draw < CRISTO_DRAWS; draw += 1) {
+        const drawn = drawCandidates(working, sheetName, count)
+        if (!drawn.ok) {
+          if (groups.length === 0) return drawn
+          break
+        }
+        working = drawn.value.state
+        const items = drawn.value.items.map((item): Item => ({ ...item, ownerId: player.playerId, hidden: true }))
+        if (items.length > 0) groups.push(items)
+      }
+      const cards = groups.flat()
+      const step = cultureMarkerOf(state, player)?.step ?? 0
+      // The second choice is `<request id>:2`, so the record of the action still finds both
+      const rewards = groups.flatMap((items, draw): readonly PendingReward[] =>
+        items.length < 2
+          ? []
+          : [
+              {
+                id: draw === 0 ? context.requestId : `${context.requestId}:${draw + 1}`,
+                kind: 'event',
+                level,
+                step,
+                candidateIds: items.map((item) => item.id),
+                keep: 1,
+              },
+            ],
+      )
+      const holder = holderIn(working, player)
+      const holding: Playerhand = {
+        ...holder,
+        items: [...holder.items, ...cards],
+        pendingRewards: [...livePendingRewards(holder), ...rewards],
+      }
+      const used = markUsed(withPlayerHand(working, holding), holding, opened.turn, spec)
       const publicLine = announce(
         used,
         player,
         context,
-        `${player.username} used Cristo Redentor: drew ${plural(cards.length, `level ${ROMAN[level]} culture event card`)}`,
+        `${player.username} used Cristo Redentor: drew ${plural(cards.length, `level ${ROMAN[level]} culture event card`)}` +
+          (rewards.length === 0 ? '' : ', keeping one of each pair'),
       )
       const logId = lastLogId(publicLine)
       const logged = appendLog(publicLine, {
         username: player.username,
         playerId: player.playerId,
-        privateLog: `${player.username} drew ${cards.map(itemName).join(', ')} (${SHEET_LABEL[sheetName]}) with Cristo Redentor`,
+        privateLog:
+          `${player.username} drew ${cards.map(itemName).join(', ')} (${SHEET_LABEL[sheetName]}) with Cristo Redentor` +
+          (rewards.length === 0 ? '' : ', keeps one of each pair'),
         createdAt: context.at ?? null,
       })
       return ok({
@@ -730,8 +804,14 @@ function cristoRedentor(level: CultureLevel): AssistedActionDefinition {
           reason: 'A card this drew has left the hand, so Cristo Redentor cannot be undone.',
         })
       }
+      // `restoreDrawnCards` drops the choice named by the record; the second one is `<id>:2`
+      const holder = holderIn(restored.value, player)
+      const cleared = withPlayerHand(restored.value, {
+        ...holder,
+        pendingRewards: holder.pendingRewards.filter((reward) => !reward.id.startsWith(`${record.id}:`)),
+      })
       return ok({
-        state: restored.value,
+        state: cleared,
         text: `${player.username}'s ${effect.subject} was undone: the drawn cards were put back in the deck`,
       })
     },
@@ -751,7 +831,8 @@ function sevenCities(card: InvestmentCard): AssistedActionDefinition {
   const spec: AbilityBase = {
     id: `sevenCities:${card}`,
     label,
-    group: HUTS_AND_RELICS,
+    buttonText: `Put 2 markers on ${info?.label ?? card}`,
+    group: 'Seven Cities of Gold: choose the investment that gets 2 markers',
     usageKey: null,
     strictOnce: true,
     block: relicBlock('relics/seven_cities_of_gold', 'Seven Cities of Gold', kinds),

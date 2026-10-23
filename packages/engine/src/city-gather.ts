@@ -17,6 +17,7 @@
 import { mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
 import { WHITE_SCOUT_ID, isMapCell, whiteFigureFor } from './board.js'
+import { scoutAssignmentsOf } from './sot.js'
 import type { BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
 import { buildingDataOf, buildingNameOf } from './building-data.js'
@@ -246,10 +247,18 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
 
   const scouts: ScoutSquare[] = []
   const scoutChoices: HarvestChoiceView[] = []
+  // A scout the player sent to a city in the Start of Turn gathers for that city only (base rules p. 26)
+  const sentTo = new Map(scoutAssignmentsOf(state, player).map((assignment) => [assignment.scoutPieceId, assignment.cityPieceId]))
+  let sentHere = false
+  let unsent = false
   for (const piece of board.pieces) {
     if (!isOwnScout(piece, player)) continue
+    const city = sentTo.get(piece.id)
+    if (city !== undefined && city !== footprint.piece.id) continue
     const cell = mapCellOf(board, piece)
     if (cell === null || own.some((mine) => sameCell(mine, cell))) continue
+    if (city === undefined) unsent = true
+    else sentHere = true
     const reading = readSquare(state, cell)
     if (reading.culture > 0) scouts.push({
         pieceId: piece.id,
@@ -268,8 +277,9 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
       })
     }
   }
-  if (scouts.length > 0) {
-    notes.push('A scout gathers from the turn after it was placed and is sent to one city. The game does not track that; send it only where you mean to.')
+  if (sentHere) notes.push('A scout you sent to this city in the Start of Turn gathers here and for no other city.')
+  if (unsent && scouts.length > 0) {
+    notes.push('A scout gathers from the turn after it was placed and is sent to one city. Send a scout to a city in the Start of Turn so the game tracks it; one you did not send is offered to every city.')
   }
 
   const choices: HarvestChoiceView[] = [
@@ -290,7 +300,10 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
   ]
 
   const harvestNotes: string[] = []
-  if (scoutChoices.length > 0) harvestNotes.push('A scout gathers from the turn after it was placed and is sent to one city. The game does not track that; take from a scout only where you mean to.')
+  if (sentHere && scoutChoices.length > 0) harvestNotes.push('A scout you sent to this city in the Start of Turn gathers here and for no other city.')
+  if (unsent && scoutChoices.length > 0) {
+    harvestNotes.push('A scout gathers from the turn after it was placed and is sent to one city. Send a scout to a city in the Start of Turn so the game tracks it; one you did not send is offered to every city.')
+  }
   if (blockadeNote !== null) harvestNotes.push(blockadeNote)
   if (unknown.length > 0) harvestNotes.push(`The icons of ${listSquares(unknown)} are not in the map data, so a resource there is not listed.`)
   if (coveredResources.length > 0) {

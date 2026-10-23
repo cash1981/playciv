@@ -22,6 +22,7 @@ import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { mapCellOf } from '../src/blockade.js'
 import { SQUARE_SIZE } from '../src/board.js'
 import { foundCityCheck } from '../src/city-founding.js'
+import { cityActionsOf } from '../src/city-actions.js'
 import { cityProductionsOf } from '../src/city-production.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { scoutAssignmentsOf } from '../src/sot.js'
@@ -396,7 +397,45 @@ describe('sending a scout’s square to a city', () => {
     state = put(state, CASH1981, 'buildings/workshop', 3, 2)
     const sent = unwrap(assign(state, scoutOf(state).id, near(state)?.pieceId ?? ''))
     expect(near(sent)?.outskirtsDetail.find((entry) => entry.square === 'D3')?.amount).toBe(3)
-    expect(near(sent)?.notes.join(' ')).toContain('Its trade, culture, coin and resource icons are not counted.')
+    expect(near(sent)?.notes.join(' ')).toContain('its trade and coin icons are not counted')
+  })
+
+  describe('and what it gathers in Devote to the Arts and Harvest', () => {
+    // The America tile prints wheat on D4, which is outside the outskirts of B2 and of the far city
+    const WHEAT_D4 = { column: 3, row: 3 }
+    const scoutChoices = (state: GameState, label: string) =>
+      cityActionsOf(state, me(state))
+        .find((options) => options.label.endsWith(label))
+        ?.harvest.choices.filter((choice) => choice.scoutPieceId !== null)
+        .map((choice) => choice.resource)
+
+    it('offers a scout that has been sent nowhere to every city, as before', () => {
+      const state = twoCities(WHEAT_D4)
+      expect(scoutChoices(state, 'B2')).toEqual(['wheat'])
+      expect(scoutChoices(state, 'I9')).toEqual(['wheat'])
+      expect(cityActionsOf(state, me(state))[0]?.harvest.notes.join(' ')).toContain('one you did not send is offered to every city')
+    })
+
+    it('offers a scout that was sent to a city to that city only', () => {
+      const state = twoCities(WHEAT_D4)
+      const sent = unwrap(assign(state, scoutOf(state).id, near(state)?.pieceId ?? ''))
+      expect(scoutChoices(sent, 'B2')).toEqual(['wheat'])
+      expect(scoutChoices(sent, 'I9')).toEqual([])
+      expect(cityActionsOf(sent, me(sent)).find((options) => options.label.endsWith('B2'))?.harvest.notes.join(' ')).toContain(
+        'sent to this city in the Start of Turn gathers here and for no other city',
+      )
+    })
+
+    it('follows the latest choice, and gives the scout back to every city when the sending stops', () => {
+      const state = twoCities(WHEAT_D4)
+      const first = unwrap(assign(state, scoutOf(state).id, near(state)?.pieceId ?? ''))
+      const second = unwrap(assign(first, scoutOf(first).id, far(first)?.pieceId ?? '', 'req-2'))
+      expect(scoutChoices(second, 'B2')).toEqual([])
+      expect(scoutChoices(second, 'I9')).toEqual(['wheat'])
+      const stopped = unwrap(assign(second, scoutOf(second).id, null, 'req-3'))
+      expect(scoutChoices(stopped, 'B2')).toEqual(['wheat'])
+      expect(scoutChoices(stopped, 'I9')).toEqual(['wheat'])
+    })
   })
 
   it('lets the latest choice win, lets a scout stop sending, and gives back the earlier choice when one is undone', () => {

@@ -15,7 +15,7 @@ import type { AssistedActionKind, GameState } from '../src/state.js'
 import { toPlayerView } from '../src/state.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 
-import { AT, me, put, sotTurn } from './sot-fixture.js'
+import { AT, me, put, sotTurn, withAmerica } from './sot-fixture.js'
 import { CASH1981, CHUL, ITCHI, KARANDRAS1 } from './fixture.js'
 
 const OTHERS = [KARANDRAS1, ITCHI, CHUL]
@@ -281,6 +281,16 @@ describe('Patronage', () => {
     expect(status(undone, 'patronage').status).toBe('ready')
   })
 
+  it('does not work until the marker has advanced once: the start space has no level', () => {
+    const atStart = sotTurn({ policies: ['Patronage'], step: 0, culture: 4 })
+    expect(status(atStart, 'patronage')).toMatchObject({
+      status: 'unavailable',
+      reason: expect.stringContaining('Advance on the culture track at least once first'),
+    })
+    expect(status(sotTurn({ policies: ['Patronage'], step: 1, culture: 4 }), 'patronage').status).toBe('ready')
+    expect(status(sotTurn({ policies: ['Patronage'], step: 7, culture: 4 }), 'patronage').reason).toContain('culture I card')
+  })
+
   it('needs culture, a marker on the track and no choice waiting', () => {
     expect(status(sotTurn({ policies: ['Patronage'], step: 9, culture: 0 }), 'patronage').status).toBe('needs-resource')
     const noMarker = { ...sotTurn({ policies: ['Patronage'], culture: 4 }) }
@@ -423,9 +433,13 @@ describe('Feudalism: harvest a resource', () => {
   const harvest = (state: GameState, cityPieceId: string, resource: string, requestId = 'req-1') =>
     act(state, 'feudalismHarvest', requestId, { cityPieceId, resource })
 
+  /**
+   * A capital on B2 of the America tile. The tile prints iron on A1, silk on B2 (the city's own
+   * square), incense on C3 and wheat on D4, so the outskirts of B2 hold iron and incense only.
+   */
   function feudal(): { state: GameState; cityId: string } {
-    let state = sotTurn({ government: 'Feudalism' })
-    state = put(state, CASH1981, 'cities/redcapital2', 3, 3)
+    let state = withAmerica(sotTurn({ government: 'Feudalism' }))
+    state = put(state, CASH1981, 'cities/redcapital2', 1, 1)
     const city = state.board.pieces.find((piece) => piece.category === 'city')
     if (city === undefined) throw new Error('no city')
     return { state, cityId: city.id }
@@ -433,40 +447,72 @@ describe('Feudalism: harvest a resource', () => {
 
   it('places the resource token in the player’s own area and says where it was harvested', () => {
     const { state, cityId } = feudal()
-    const used = unwrap(harvest(state, cityId, 'Silk'))
-    const piece = used.board.pieces.find((candidate) => candidate.assetId === 'resources/silk')
+    const used = unwrap(harvest(state, cityId, 'iron'))
+    const piece = used.board.pieces.find((candidate) => candidate.assetId === 'resources/iron')
     expect(piece).toBeDefined()
-    expect(used.log.at(-1)?.publicLog).toMatch(/^cash1981 used the Feudalism government: harvested Silk in the outskirts of Capital [A-Z]\d+$/)
+    expect(used.log.at(-1)?.publicLog).toMatch(/^cash1981 used the Feudalism government: harvested Iron in the outskirts of Capital [A-Z]\d+$/)
     expect(status(used, 'feudalismHarvest').status).toBe('used')
+  })
+
+  it('takes the resource from the map: only what the outskirts hold, in any case of letters', () => {
+    const { state, cityId } = feudal()
+    expect(unwrap(harvest(state, cityId, 'Incense')).board.pieces.some((piece) => piece.assetId === 'resources/incense')).toBe(true)
+    // Silk is on the city's own square and wheat is two squares away: neither is in the outskirts
+    expect(reasonOf(harvest(state, cityId, 'silk'))).toMatch(/has no Silk icon in its outskirts\.$/)
+    expect(reasonOf(harvest(state, cityId, 'Wheat'))).toMatch(/has no Wheat icon in its outskirts\.$/)
   })
 
   it('refuses a resource that is not harvestable, a city that is not yours and a second use', () => {
     const { state, cityId } = feudal()
-    expect(reasonOf(harvest(state, cityId, 'Uranium'))).toBe('Choose a resource: Incense, Iron, Silk, Wheat.')
-    expect(reasonOf(harvest(state, 'no-such-city', 'Silk'))).toBe('That is not one of your cities on the map.')
-    const used = unwrap(harvest(state, cityId, 'Silk'))
-    expect(reasonOf(harvest(used, cityId, 'Iron', 'req-2'))).toContain('has already been used this turn')
+    expect(reasonOf(harvest(state, cityId, 'Uranium'))).toBe('Choose a resource: Wheat, Silk, Incense, Iron.')
+    expect(reasonOf(harvest(state, 'no-such-city', 'iron'))).toBe('That is not one of your cities on the map.')
+    const used = unwrap(harvest(state, cityId, 'iron'))
+    expect(reasonOf(harvest(used, cityId, 'incense', 'req-2'))).toContain('has already been used this turn')
   })
 
-  it('needs the Feudalism government and a city', () => {
+  it('refuses a resource the market has no token of left', () => {
+    const { state, cityId } = feudal()
+    // Four players: the market holds four of each kind. Put them all on the board
+    let drained = state
+    for (let count = 0; count < 4; count += 1) drained = put(drained, KARANDRAS1, 'resources/iron', 5, 5)
+    expect(reasonOf(harvest(drained, cityId, 'iron'))).toBe('The market has no iron token left.')
+    expect(status(drained, 'feudalismHarvest').status).toBe('ready')
+  })
+
+  it('needs the Feudalism government, a city and a resource in the outskirts', () => {
     expect(status(sotTurn({ government: 'Monarchy' }), 'feudalismHarvest').status).toBe('not-owned')
     expect(status(sotTurn({ government: 'Feudalism' }), 'feudalismHarvest')).toMatchObject({
       status: 'unavailable',
       reason: 'You have no city on the map.',
     })
+    // A city with no icon around it, and a city that has some
+    const bare = put(sotTurn({ government: 'Feudalism' }), CASH1981, 'cities/redcapital2', 8, 8)
+    expect(status(bare, 'feudalismHarvest')).toMatchObject({
+      status: 'unavailable',
+      reason: expect.stringContaining('resource icon in its outskirts'),
+    })
+    expect(status(feudal().state, 'feudalismHarvest').status).toBe('ready')
+  })
+
+  it('shows the player the resources of each city’s outskirts, from the map', () => {
+    const { state, cityId } = feudal()
+    const view = toPlayerView(state, CASH1981).you?.startOfTurn?.feudalism
+    expect(view?.cities).toHaveLength(1)
+    expect(view?.cities[0]).toMatchObject({ pieceId: cityId })
+    expect(view?.cities[0]?.choices.map((choice) => choice.resource).sort()).toEqual(['incense', 'iron'])
   })
 
   it('leaves the token to the undo vote: the board’s own Undo refuses', () => {
     const { state, cityId } = feudal()
-    const used = unwrap(harvest(state, cityId, 'Silk'))
+    const used = unwrap(harvest(state, cityId, 'iron'))
     expect(unwrapErr(undoLastBoardChange(used, CASH1981)).kind).toBe('BOARD_UNDO_ASSISTED')
   })
 
   it('takes the token back to the market on undo', () => {
     const { state, cityId } = feudal()
-    const used = unwrap(harvest(state, cityId, 'Wheat'))
+    const used = unwrap(harvest(state, cityId, 'incense'))
     const undone = undoByVote(used, 'req-1')
-    expect(undone.board.pieces.some((candidate) => candidate.assetId === 'resources/wheat')).toBe(false)
+    expect(undone.board.pieces.some((candidate) => candidate.assetId === 'resources/incense')).toBe(false)
     expect(status(undone, 'feudalismHarvest').status).toBe('ready')
   })
 })

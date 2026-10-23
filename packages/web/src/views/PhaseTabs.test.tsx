@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PlayerView } from '../lib/api.js'
 import { resetPendingRequestIds } from './AssistedActions.js'
 import type { Run } from './GameView.js'
+import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { PHASE_GUIDE, PhaseActionsPanel, currentPhaseOf, phaseStatusText } from './PhaseTabs.js'
 
 beforeEach(() => {
@@ -285,6 +286,60 @@ describe('the phase tabs', () => {
     expect(screen.getByRole('heading', { name: 'Your cities' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Build/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
+  })
+})
+
+describe('a free tech arriving', () => {
+  // Trade is the open tab, so the Start of Turn choices (which read the whole view) are not rendered
+  const withGrants = (count: number): PlayerView =>
+    viewIn('TRADE', [], {
+      startOfTurn: {
+        techGrants: Array.from({ length: count }, (_, index) => ({ id: `g${index}`, source: 'Atlantis', level: null })),
+      },
+    })
+
+  function renderWithTechs(view: PlayerView) {
+    const panel = (next: PlayerView) => (
+      <>
+        <PhaseActionsPanel gameId="g1" view={next} busy={false} readOnly={false} run={run} />
+        <CollapsiblePanel id="techs" title="Techs" defaultOpen>
+          <p>The tech tree</p>
+        </CollapsiblePanel>
+      </>
+    )
+    const rendered = render(panel(view))
+    return { ...rendered, again: (next: PlayerView) => rendered.rerender(panel(next)) }
+  }
+
+  it('takes the page to the tech tree when a grant arrives, and not for one that was already there', () => {
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    const { again } = renderWithTechs(withGrants(1))
+    expect(scroll).not.toHaveBeenCalled()
+
+    again(withGrants(2))
+    expect(scroll).toHaveBeenCalledTimes(1)
+    // The same grants on a refresh do not scroll again, and using one up does not either
+    again(withGrants(2))
+    again(withGrants(1))
+    expect(scroll).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('buttons with their own text', () => {
+  it('says what the button does when the action names it, without a second name beside it', () => {
+    const cristo: Action = {
+      action: 'sot:cristoRedentor:2',
+      label: 'Cristo Redentor, level II events',
+      buttonText: 'Cristo Redentor: draw two level II events',
+      phase: 'SOT',
+      group: 'Wonders',
+      status: 'ready',
+      reason: 'Draw two culture II cards. You keep both.',
+    }
+    renderPanel(viewIn('SOT', [cristo]))
+    expect(screen.getByRole('button', { name: 'Cristo Redentor: draw two level II events' })).toBeTruthy()
+    expect(screen.queryByText('Cristo Redentor, level II events')).toBeNull()
   })
 })
 

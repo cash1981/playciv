@@ -326,6 +326,75 @@ describe('Cristo Redentor', () => {
     expect(status(used, 'sot:cristoRedentor:3').status).toBe('used')
   })
 
+  it('with Mysticism each of the two draws takes two cards and keeps one, as a choice of its own', () => {
+    const state = withWonder(sotTurn({ techs: ['Mysticism'] }), 'wonders/cristoredentor')
+    const used = unwrap(act(state, 'sot:cristoRedentor:2'))
+    const rewards = me(used).pendingRewards
+    expect(rewards.map((reward) => reward.id)).toEqual(['req-1', 'req-1:2'])
+    expect(rewards.every((reward) => reward.candidateIds.length === 2 && reward.keep === 1)).toBe(true)
+    expect(me(used).items.length).toBe(me(state).items.length + 4)
+    expect(used.log.at(-2)?.publicLog).toBe(
+      'cash1981 used Cristo Redentor: drew 4 level II culture event cards, keeping one of each pair',
+    )
+
+    // Both choices are made through the record of the action
+    const choose = (from: GameState, rewardId: string, requestId: string) =>
+      unwrap(
+        performAssistedAction(from, {
+          playerId: CASH1981,
+          action: 'chooseReward',
+          requestId,
+          at: AT,
+          payload: { rewardId, itemId: me(from).pendingRewards.find((reward) => reward.id === rewardId)?.candidateIds[0] ?? '' },
+        }),
+      )
+    const first = choose(used, 'req-1', 'req-2')
+    expect(me(first).pendingRewards.map((reward) => reward.id)).toEqual(['req-1:2'])
+    const second = choose(first, 'req-1:2', 'req-3')
+    expect(me(second).pendingRewards).toEqual([])
+    expect(me(second).items.length).toBe(me(state).items.length + 2)
+    expect(second.discardedItems.length).toBe(state.discardedItems.length + 2)
+
+    // A vote undoes both pairs, kept and discarded cards alike
+    const undone = undoByVote(second, 'req-1')
+    expect(me(undone).items.length).toBe(me(state).items.length)
+    expect(undone.discardedItems.length).toBe(state.discardedItems.length)
+    expect(undone.items.length).toBe(state.items.length)
+  })
+
+  it('takes both waiting choices away on undo before either is made', () => {
+    const state = withWonder(sotTurn({ techs: ['Mysticism'] }), 'wonders/cristoredentor')
+    const used = unwrap(act(state, 'sot:cristoRedentor:1'))
+    expect(me(used).pendingRewards).toHaveLength(2)
+    const undone = undoByVote(used, 'req-1')
+    expect(me(undone).pendingRewards).toEqual([])
+    expect(me(undone).items.length).toBe(me(state).items.length)
+    expect(undone.items.length).toBe(state.items.length)
+  })
+
+  it('waits for a card choice and for a hand over its size, and warns when the two cards bring it over', () => {
+    const waiting = withWonder(sotTurn({ techs: ['Mysticism'] }), 'wonders/cristoredentor')
+    const drawn = unwrap(act(waiting, 'sot:cristoRedentor:1'))
+    const reopened: GameState = {
+      ...drawn,
+      players: drawn.players.map((candidate) =>
+        candidate.playerId === CASH1981
+          ? { ...candidate, playerTurns: candidate.playerTurns.map((turn) => ({ ...turn, usedActions: [] })) }
+          : candidate,
+      ),
+    }
+    expect(status(reopened, 'sot:cristoRedentor:1')).toMatchObject({
+      status: 'unavailable',
+      reason: 'Choose the card to keep from your last advance first.',
+    })
+  })
+
+  it('has its own button text', () => {
+    const state = withWonder(sotTurn(), 'wonders/cristoredentor')
+    const entry = toPlayerView(state, CASH1981).you?.availableActions.find((action) => action.action === 'sot:cristoRedentor:3')
+    expect(entry?.buttonText).toBe('Cristo Redentor: draw two level III events')
+  })
+
   it('puts the cards back in the deck on undo, and refuses once one has left the hand', () => {
     const state = owned()
     const used = unwrap(act(state, 'sot:cristoRedentor:3'))
@@ -482,7 +551,8 @@ describe('free techs', () => {
 
     const used = unwrap(act(mine, 'sot:atlantis'))
     expect(me(used).techGrants).toEqual([{ id: 'req-1', source: 'Atlantis', level: null, turnNumber: 1 }])
-    expect(status(used, 'sot:atlantis')).toMatchObject({ status: 'used' })
+    // Not `used`: that would offer "use it again?", and the relic gives its ability once
+    expect(status(used, 'sot:atlantis')).toMatchObject({ status: 'unavailable' })
     // Not even a confirmed repeat gives it twice
     expect(reasonOf(act(used, 'sot:atlantis', 'req-2', true))).toContain('claimed the Atlantis relic already')
 
@@ -502,7 +572,7 @@ describe('the Seven Cities of Gold', () => {
       'cash1981 used the Seven Cities of Gold: invested 2 markers in Infrastructure for free (2 markers on it)',
     )
     for (const card of ['infra', 'efta', 'mic', 'pe'] as const) {
-      expect(status(used, `sot:sevenCities:${card}`).status).toBe('used')
+      expect(status(used, `sot:sevenCities:${card}`).status).toBe('unavailable')
     }
     expect(me(undoByVote(used, 'req-1')).stats.infra).toBe(0)
   })

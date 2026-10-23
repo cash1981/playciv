@@ -14,7 +14,7 @@ import type {
   AssistedPayload,
   FoundCityPayload,
   GovernmentPayload,
-  HarvestPayload,
+  FeudalismHarvestPayload,
   InvestPayload,
   InvestmentCard,
   PlayCardPayload,
@@ -74,7 +74,7 @@ function parseInvest(args: Record<string, unknown>): InvestPayload | string {
   return { source, card: card as InvestmentCard }
 }
 
-function parseHarvest(args: Record<string, unknown>): HarvestPayload | string {
+function parseHarvest(args: Record<string, unknown>): FeudalismHarvestPayload | string {
   const extra = extraKeys(args, ['cityPieceId', 'resource'])
   if (extra.length > 0) return `feudalismHarvest takes only cityPieceId and resource, not ${extra.join(', ')}`
   const { cityPieceId, resource } = args

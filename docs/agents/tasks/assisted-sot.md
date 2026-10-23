@@ -60,8 +60,9 @@ show on every tab.
 - Cards played: only a log line (who played what, who is targeted) and the discard. No
   effect on the target, because other players can cancel the card. A player picker
   chooses targets, so the log names them.
-- Scouts: assigning only affects the production estimate (terrain) and the log. Trade,
-  culture, coin and resource icons are not in the map data; those stay manual.
+- Scouts: a scout sent to a city counts for that city's production; its culture and
+  resource icons are offered to that city's Devote to the Arts and Harvest only (the map
+  data now has them, `tile-icons.json`). Trade and coin icons stay manual.
 - Growing a capital into a metropolis (Agriculture) only scrolls to the map; the player
   does it by hand.
 - Wonder, Great Person, hut, relic and tech Start of Turn abilities are in this slice.

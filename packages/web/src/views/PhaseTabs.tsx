@@ -105,6 +105,14 @@ export function PhaseActionsPanel({
       goToPanel('hand')
     }
   }, [toHand, waiting])
+  // A free tech the viewer has just been given (Rationalism, the Teacher, Atlantis, the Statue of Liberty,
+  // Public Education) is chosen and revealed in the tech tree, so the page goes there when one arrives.
+  const grants = view.you?.startOfTurn?.techGrants?.length ?? 0
+  const seenGrants = useRef(grants)
+  useEffect(() => {
+    if (grants > seenGrants.current) goToPanel('techs')
+    seenGrants.current = grants
+  }, [grants])
 
   if (view.you === null || !hasActionsPanel(view)) return null
   // A collapsed panel must not hide the choice, so the title says it is waiting.

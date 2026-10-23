@@ -1735,6 +1735,7 @@ export function availableActionsFor(state: GameState, playerId: string): readonl
     label: definition.label,
     phase: definition.phase,
     group: definition.group,
+    ...(definition.buttonText === undefined ? {} : { buttonText: definition.buttonText }),
     ...definition.availability(state, playerId),
   }))
 }
