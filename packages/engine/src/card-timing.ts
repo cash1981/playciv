@@ -160,6 +160,13 @@ const DEFAULT_RULE: CardPlayRule = optional('Who is targeted? (optional)')
 
 export const cardPlayRuleOf = (name: string): CardPlayRule => PLAY_RULES.get(name) ?? DEFAULT_RULE
 
+/**
+ * Great Person cards that have a Start of Turn button of their own (`assisted-abilities.ts`),
+ * so the list of cards to play leaves them out: playing one there would log it without
+ * the gain the button gives.
+ */
+export const CARDS_WITH_OWN_BUTTON: ReadonlySet<string> = new Set(["Lorenzo de' Medici", 'Alan Turing'])
+
 /** Whether using a Great Person card discards it: its text says "discard this card". */
 export const discardsWhenUsed = (description: string | null | undefined): boolean =>
   description !== null && description !== undefined && /discard this card/i.test(description)

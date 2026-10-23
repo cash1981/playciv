@@ -77,8 +77,8 @@ import type { PlayerTurn } from './turn.js'
 import { isGovernment } from './government.js'
 import type { Government } from './government.js'
 
-const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`
-const ROMAN = ['', 'I', 'II', 'III'] as const
+export const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`
+export const ROMAN = ['', 'I', 'II', 'III'] as const
 
 /** "3 trade", "2 culture", "1 trade and 2 culture". */
 function describeGain(gain: { readonly trade: number; readonly culture: number }): string {
@@ -93,13 +93,13 @@ function describeGain(gain: { readonly trade: number; readonly culture: number }
 // The gate every Start of Turn action passes
 // ---------------------------------------------------------------------------
 
-type Gate = { readonly blocked: BlockedAvailability } | { readonly turn: PlayerTurn }
+export type Gate = { readonly blocked: BlockedAvailability } | { readonly turn: PlayerTurn }
 
 /**
  * Start of Turn must be the player's open phase, and the usage key must be free (or the
  * player has confirmed a repeat). `strict` actions say plainly that the rule allows one use.
  */
-function startOfTurnGate(
+export function startOfTurnGate(
   state: GameState,
   player: Playerhand,
   options: { readonly usageKey: string | null; readonly label: string; readonly strict?: boolean; readonly allowRepeat?: boolean },
@@ -147,14 +147,14 @@ const cityPiecesOf = (state: GameState, player: Playerhand) => {
 // Abilities that add trade or culture
 // ---------------------------------------------------------------------------
 
-interface StatGain {
+export interface StatGain {
   readonly trade: number
   readonly culture: number
   /** Where the number comes from, as the button explains it. */
   readonly text: string
 }
 
-interface StatGainSpec {
+export interface StatGainSpec {
   readonly kind: AssistedActionKind
   /** What the action is called in lists, lines and undo requests. */
   readonly label: string
@@ -406,7 +406,7 @@ function rationalism(row: RationalismRow): AssistedActionDefinition {
 /** The level of the culture track section a marker stands in. Start counts as the first section. */
 export const levelOfMarker = (step: number): CultureLevel => (step <= 7 ? 1 : step <= 14 ? 2 : 3)
 
-const levelSheet = (level: CultureLevel): SheetName =>
+export const levelSheet = (level: CultureLevel): SheetName =>
   level === 1 ? 'CULTURE_1' : level === 2 ? 'CULTURE_2' : 'CULTURE_3'
 
 interface PatronagePlan {

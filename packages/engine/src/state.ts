@@ -365,6 +365,8 @@ export type AssistedActionKind =
   | 'invest'
   | 'foundCity'
   | 'assignScout'
+  // A Start of Turn ability of a wonder, a Great Person, a tech, a hut or a relic: `sot:<ability>` (assisted-abilities.ts)
+  | `sot:${string}`
 
 /** The four investment cards, by the status-board counter that holds their markers. */
 export type InvestmentCard = 'infra' | 'efta' | 'mic' | 'pe'
@@ -507,6 +509,51 @@ export type AssistedEffect =
       readonly row: number
       readonly square: string
       readonly cityLabel: string | null
+    }
+  | {
+      /** A Start of Turn ability the game only logs; the player does the rest on the map. */
+      readonly kind: 'sotNote'
+      readonly subject: string
+      /** The resource it cost (Ecology), exactly, so an undo puts the same token back. */
+      readonly spent: SpentResource | null
+    }
+  | {
+      /** A free tech to learn, from a wonder, a relic or a Teacher hut. */
+      readonly kind: 'sotGrant'
+      readonly subject: string
+      readonly grantId: string
+      /** The hut that was discarded for it, as it stood in the hand, or `null`. */
+      readonly hut: Item | null
+    }
+  | {
+      /** A free advance on the culture track from a wonder (Sydney Opera House). */
+      readonly kind: 'sotAdvance'
+      readonly subject: string
+      readonly advance: CultureAdvanceEffect
+    }
+  | {
+      /** A coin token added to a wonder (Panama Canal). */
+      readonly kind: 'sotCoin'
+      readonly subject: string
+      readonly pieceId: string
+      /** The board history entry that set the coins, so the board's own Undo leaves it to the vote. */
+      readonly historyId: string
+    }
+  | {
+      /** Culture events drawn from the deck of the player's choice (Cristo Redentor). */
+      readonly kind: 'sotDraw'
+      readonly subject: string
+      readonly sheetName: SheetName
+      readonly drawn: readonly string[]
+    }
+  | {
+      /** Investment markers added without paying a coin (the Seven Cities of Gold). */
+      readonly kind: 'sotInvest'
+      readonly subject: string
+      readonly card: InvestmentCard
+      readonly markers: number
+      /** The free tech an activated Public Education gave, or `null`. */
+      readonly grantId: string | null
     }
   | {
       /** A resource taken from the market by the Feudalism government. */

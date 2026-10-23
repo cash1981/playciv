@@ -654,7 +654,9 @@ export function removePieceAsSystem(state: GameState, pieceId: string): GameStat
  * marker a culture advance made, the Great Person marker a culture advance put in the
  * player's area, or the building a build placed and the Building Program marker it
  * used up, the marker a Building Program start placed and each building an upgrade
- * removed and placed again. That change belongs to the action, so only the undo vote on the
+ * removed and placed again, the city a scout founded (and the scout and city-state it
+ * took off the map), a harvested token, a coin a wonder was given, and the free
+ * advance another action holds. That change belongs to the action, so only the undo vote on the
  * action's log line may take it back; the board's own Undo would return it and keep
  * what the action gave (or take the marker and keep the card). Once the action is
  * undone the old history entry is an ordinary one again.
@@ -677,15 +679,24 @@ function isAssistedBoardChange(state: GameState, entry: BoardHistoryEntry): bool
     if (effect.kind === 'upgradeBuildings') {
       return effect.flipped.some((flip) => flip.removedHistoryId === entry.id || flip.placedHistoryId === entry.id)
     }
-    if (change.kind === 'place' && effect.kind === 'cultureAdvance') {
-      return effect.marker?.pieceId === change.piece.id
+    // A city took the scout off the map, put the city (and the destroyed city-state) on it: all one action
+    if (effect.kind === 'foundCity') {
+      if ([effect.figureHistoryId, effect.historyId, effect.cityState?.historyId].includes(entry.id)) return true
     }
-    if (effect.kind === 'cultureAdvance') {
-      return change.kind === 'move' && effect.historyId === entry.id
+    // The token a Feudalism harvest put in the player's area, and the coin a wonder was given
+    if (effect.kind === 'harvest' || effect.kind === 'sotCoin') {
+      if (effect.historyId === entry.id) return true
+    }
+    // A culture advance, or the free one another action holds (Romans, Arabs, Sydney Opera House)
+    const advance = effect.kind === 'cultureAdvance' ? effect : 'advance' in effect ? effect.advance : null
+    if (advance !== null && advance !== undefined) {
+      if (change.kind === 'place' && advance.marker?.pieceId === change.piece.id) return true
+      if (change.kind === 'move' && advance.historyId === entry.id) return true
     }
     return (
       change.kind === 'remove' &&
       'spent' in effect &&
+      effect.spent !== null &&
       effect.spent.kind === 'piece' &&
       effect.spent.piece.id === change.piece.id
     )

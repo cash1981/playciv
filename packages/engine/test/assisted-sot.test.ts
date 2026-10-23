@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { undoLastBoardChange } from '../src/actions/board.js'
 import { chooseTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
@@ -453,6 +454,12 @@ describe('Feudalism: harvest a resource', () => {
       status: 'unavailable',
       reason: 'You have no city on the map.',
     })
+  })
+
+  it('leaves the token to the undo vote: the board’s own Undo refuses', () => {
+    const { state, cityId } = feudal()
+    const used = unwrap(harvest(state, cityId, 'Silk'))
+    expect(unwrapErr(undoLastBoardChange(used, CASH1981)).kind).toBe('BOARD_UNDO_ASSISTED')
   })
 
   it('takes the token back to the market on undo', () => {

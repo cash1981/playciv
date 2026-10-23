@@ -16,7 +16,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { movePiece } from '../src/actions/board.js'
+import { movePiece, undoLastBoardChange } from '../src/actions/board.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { mapCellOf } from '../src/blockade.js'
@@ -302,6 +302,18 @@ describe('founding a city', () => {
     expect(marker?.x).toBe(before?.x)
     // And it can be founded again
     expect(unwrap(found(undone, scout.id, 'req-2')).assistedActions.at(-1)?.status).toBe('applied')
+  })
+
+  it('leaves the city, the scout and a Roman advance to the undo vote: the board’s own Undo refuses', () => {
+    const state = withScout({ civ: 'Romans', step: 9 })
+    const result = unwrap(found(state, scoutOf(state).id))
+    // The marker's move, the city and the scout's removal were each recorded in the board history
+    let walked = result
+    for (let count = 0; count < 3; count += 1) {
+      expect(unwrapErr(undoLastBoardChange(walked, CASH1981)).kind).toBe('BOARD_UNDO_ASSISTED')
+      // Nothing can be taken back one by one: peel an entry off to look at the one before it
+      walked = { ...walked, board: { ...walked.board, history: walked.board.history.slice(0, -1) } }
+    }
   })
 
   it('refuses the undo when the city has been moved', () => {

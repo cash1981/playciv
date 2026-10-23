@@ -17,6 +17,7 @@ import { blockadedGreatPersonTypes } from './blockade.js'
 import { READY, blocked, lastLogId, playerOf, rejected, withPlayerHand } from './assisted-core.js'
 import type { AssistedActionDefinition } from './assisted-core.js'
 import {
+  CARDS_WITH_OWN_BUTTON,
   CARD_TIMING_TEXT,
   cardPlayRuleOf,
   discardsWhenUsed,
@@ -77,6 +78,7 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
     const timings = timingsOf(item.description)
     if (timings.length === 0) return []
     const name = itemName(item)
+    if (item.kind === 'greatperson' && CARDS_WITH_OWN_BUTTON.has(name)) return []
     const rule = cardPlayRuleOf(name)
     const base = {
       itemId: item.id,

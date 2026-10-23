@@ -19,6 +19,7 @@ import {
   isAssistedActionKind,
   performAssistedAction,
 } from '../src/assisted.js'
+import { ABILITY_KINDS } from '../src/assisted-abilities.js'
 import { ASSISTED_TECH_ACTIONS } from '../src/assisted-techs.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { AssistedActionKind, GameState } from '../src/state.js'
@@ -89,7 +90,9 @@ describe('the registry and the tech map', () => {
       'printingPress',
       'rationalismI',
       'rationalismII',
-    ])
+      // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
+      ...ABILITY_KINDS,
+    ].sort())
     for (const [kind] of CARDS) expect(isAssistedActionKind(kind)).toBe(true)
   })
 

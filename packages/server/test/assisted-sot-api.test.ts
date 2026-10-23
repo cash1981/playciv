@@ -215,6 +215,55 @@ describe('Feudalism through the actions route', () => {
   })
 })
 
+describe('wonder, Great Person, tech, hut and relic abilities through the actions route', () => {
+  /** The starter owns a Panama Canal on the map, placed and assigned through the board routes. */
+  async function withPanama(t: Awaited<ReturnType<typeof table>>): Promise<string> {
+    const placed = await post(t.starter, `/api/games/${t.gameId}/board/pieces`, { assetId: 'wonders/panamacanal', x: 600, y: 600 })
+    expect(placed.status).toBe(200)
+    const piece = (await repo.findGame(t.gameId))?.board.pieces.find((candidate) => candidate.assetId === 'wonders/panamacanal')
+    if (piece === undefined) throw new Error('the wonder was not placed')
+    const owned = await post(t.starter, `/api/games/${t.gameId}/board/pieces/${piece.id}/owner`, { ownerId: t.starterId })
+    expect(owned.status).toBe(200)
+    return piece.id
+  }
+
+  it('lists the ability as ready for the owner only, performs it, and refuses a second press', async () => {
+    const t = await table('wonder')
+    const pieceId = await withPanama(t)
+    const before = await view(t.gameId, t.starter)
+    expect(before.you?.availableActions.find((candidate) => candidate.action === 'sot:panamaCanal')).toMatchObject({
+      phase: 'SOT', group: 'Wonders', status: 'ready',
+    })
+    const theirs = await view(t.gameId, t.other)
+    expect(theirs.you?.availableActions.find((candidate) => candidate.action === 'sot:panamaCanal')?.status).toBe('not-owned')
+
+    const response = await post(t.starter, actions(t.gameId), { action: 'sot:panamaCanal', requestId: 'req-1', rev: before.rev })
+    expect(response.status).toBe(200)
+    const after = await response.json<View>()
+    expect(after.assistedActions[0]).toMatchObject({ id: 'req-1', kind: 'sot:panamaCanal', status: 'applied' })
+    expect((await repo.findGame(t.gameId))?.board.pieces.find((piece) => piece.id === pieceId)?.coinTokens).toBe(1)
+
+    const second = await post(t.starter, actions(t.gameId), { action: 'sot:panamaCanal', requestId: 'req-2', rev: after.rev })
+    expect(second.status).toBe(409)
+    // The coin is the action's own: the board's Undo leaves it to the vote
+    const refused = await post(t.starter, `/api/games/${t.gameId}/board/undo`, {})
+    expect(await refused.json()).toMatchObject({ error: 'BOARD_UNDO_ASSISTED' })
+  })
+
+  it('refuses an ability the player does not hold, an unknown ability, and an args body', async () => {
+    const t = await table('wonder2')
+    const rev = (await view(t.gameId, t.starter)).rev
+    const none = await post(t.starter, actions(t.gameId), { action: 'sot:stonehenge', requestId: 'req-1', rev })
+    expect(none.status).toBe(400)
+    expect(await none.json()).toMatchObject({ error: 'ASSISTED_ACTION_REJECTED' })
+    const unknown = await post(t.starter, actions(t.gameId), { action: 'sot:nothing', requestId: 'req-2', rev })
+    expect(unknown.status).toBe(400)
+    const withArgs = await post(t.starter, actions(t.gameId), { action: 'sot:stonehenge', requestId: 'req-3', rev, args: { x: 1 } })
+    expect(withArgs.status).toBe(400)
+    expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
+  })
+})
+
 describe('cities and scouts through the actions route', () => {
   it('refuses a malformed foundCity and assignScout before the engine sees it', async () => {
     const t = await table('city')

@@ -18,6 +18,7 @@ import {
   performAssistedAction,
   spendResource,
 } from '../src/assisted.js'
+import { ABILITY_KINDS } from '../src/assisted-abilities.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
@@ -54,7 +55,9 @@ describe('the registry', () => {
       'printingPress',
       'rationalismI',
       'rationalismII',
-    ])
+      // The wonders, Great Persons, techs, huts and relics: the table in assisted-abilities.test.ts
+      ...ABILITY_KINDS,
+    ].sort())
     expect(isAssistedActionKind('chivalry')).toBe(true)
     // Registered since the Currency and Metal Casting slice; Wheat and Silk are not
     expect(isAssistedActionKind('currency')).toBe(true)
@@ -68,7 +71,7 @@ describe('the registry', () => {
     for (const action of actions) {
       expect(action.group.length).toBeGreaterThan(0)
       const startOfTurn = ['expansionism', 'pacifism', 'patronage', 'rationalismI', 'rationalismII', 'democracyTrade', 'fundamentalismCulture']
-      expect(action.phase).toBe(startOfTurn.includes(action.action) ? 'SOT' : 'CM')
+      expect(action.phase).toBe(startOfTurn.includes(action.action) || action.action.startsWith('sot:') ? 'SOT' : 'CM')
     }
     expect(actions.find((action) => action.action === 'chivalry')?.group).toBe('Resource abilities')
     expect(actions.find((action) => action.action === 'democracy')?.group).toBe('Coins')
