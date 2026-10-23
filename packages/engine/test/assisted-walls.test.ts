@@ -150,6 +150,10 @@ describe('the walled side of a city marker', () => {
     expect(walledAssetIdOf('cities/bluecapital2')).toBe('cities/bluecapitalwalled2')
     expect(walledAssetIdOf('cities/greenmetropolis2')).toBe('cities/greenmetropoliswalled2')
     expect(walledAssetIdOf('cities/redcitywalled2')).toBeUndefined()
+    // No trailing digits: nothing to put the word before, as before
+    expect(walledAssetIdOf('cities/redcity')).toBe('cities/redcity')
+    // A very long run of digits is cut in one pass
+    expect(walledAssetIdOf(`cities/redcity${'0'.repeat(100000)}`)).toBe(`cities/redcitywalled${'0'.repeat(100000)}`)
   })
 
   it('has artwork for every colour of capital, city and metropolis', () => {

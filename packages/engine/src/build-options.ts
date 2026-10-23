@@ -679,7 +679,11 @@ const WALLS_COST = 7
  * `undefined` when the marker is already walled.
  */
 export function walledAssetIdOf(cityAssetId: string): string | undefined {
-  return cityAssetId.includes('walled') ? undefined : cityAssetId.replace(/(\d+)$/, 'walled$1')
+  if (cityAssetId.includes('walled')) return undefined
+  // The trailing digits are found by walking back from the end, not by a regular expression, so a long id costs no more than its length
+  let digits = cityAssetId.length
+  while (digits > 0 && cityAssetId.charCodeAt(digits - 1) >= 48 && cityAssetId.charCodeAt(digits - 1) <= 57) digits -= 1
+  return digits === cityAssetId.length ? cityAssetId : `${cityAssetId.slice(0, digits)}walled${cityAssetId.slice(digits)}`
 }
 
 /** Base rules p. 15 to 17: an army figure costs 4 production, a scout figure 6. */
