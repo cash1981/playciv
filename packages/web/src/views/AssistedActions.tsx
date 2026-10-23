@@ -156,10 +156,10 @@ function cardLinkOf(
   view: PlayerView,
 ): { readonly where: string; readonly go: () => void } | undefined {
   if (candidate.techName !== undefined) {
-    return { where: 'the tech panel', go: () => goToPanel('techs') }
+    return { where: 'the tech panel', go: () => goToPanel('techs', true) }
   }
   if (candidate.group === 'Social policies') {
-    return { where: 'the social policy panel', go: () => goToPanel('social-policy') }
+    return { where: 'the social policy panel', go: () => goToPanel('social-policy', true) }
   }
   if (candidate.group === 'Wonders') {
     return { where: 'the map', go: () => goToPanel('board') }
@@ -180,6 +180,11 @@ interface ButtonProps {
   readonly run: Run
   /** `full` shows the status tag; a tight table cell uses `blocked`. */
   readonly detail?: 'full' | 'blocked'
+  /**
+   * `help` keeps the reason behind the `?`; `inline` shows it as text, for a
+   * dialog that already is the card reference (no second modal on top).
+   */
+  readonly reasonPlacement?: 'help' | 'inline'
   readonly className?: string
   /** Replaces the default "Use <label>" text. */
   readonly children?: ReactNode
@@ -210,6 +215,7 @@ export function AssistedActionButton({
   readOnly,
   run,
   detail = 'full',
+  reasonPlacement = 'help',
   className = 'small',
   children,
   onDone,
@@ -255,7 +261,11 @@ export function AssistedActionButton({
         {children ?? state.buttonText ?? BUTTON_TEXT[action] ?? `Use ${state.label}`}
       </button>
       {detail === 'full' && <span className="tag">{STATUS_TEXT[state.status]}</span>}
-      <HelpHint label={state.label}>{state.reason}</HelpHint>
+      {reasonPlacement === 'inline' ? (
+        <span className="muted assisted-reason">{state.reason}</span>
+      ) : (
+        <HelpHint label={state.label}>{state.reason}</HelpHint>
+      )}
       {ready && state.warning !== undefined && (
         <span role="status" className="assisted-warning">
           {state.warning}

@@ -104,7 +104,8 @@ function findPanel(key: string): { readonly section: HTMLElement; readonly focus
  *
  * Your actions (`actions`) is opened when it is collapsed: the city controls and
  * a waiting card choice are in it, and a saved collapsed state would hide them
- * behind a button that says it goes there. The click on its toggle is a manual
+ * behind a button that says it goes there. `open` asks for the same for a card
+ * link, so the referenced card is visible. The click on the toggle is a manual
  * one, so the open state is remembered. Every other panel is left as it is.
  */
 function prefersReducedMotion(): boolean {
@@ -114,10 +115,12 @@ function prefersReducedMotion(): boolean {
   )
 }
 
-export function goToPanel(key: string): void {
+export function goToPanel(key: string, open = false): void {
   const panel = findPanel(key)
   if (panel === null) return
-  if (key === 'actions' && panel.focus.getAttribute('aria-expanded') === 'false') panel.focus.click()
+  if ((open || key === 'actions') && panel.focus.getAttribute('aria-expanded') === 'false') {
+    panel.focus.click()
+  }
   panel.section.scrollIntoView({
     behavior: prefersReducedMotion() ? 'auto' : 'smooth',
     block: 'start',

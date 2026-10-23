@@ -28,6 +28,12 @@
   min-width: 0;
 }
 
+.assisted-reason {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* In a table cell the controls sit under each other instead of beside each other. */
 td .assisted-action {
   flex-direction: column;

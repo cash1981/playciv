@@ -337,9 +337,9 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
               ))}
             </select>
           </label>
-          <label>
-            Marker on{' '}
-            <span className="card-control">
+          <span className="card-control sot-invest-card">
+            <label>
+              Marker on{' '}
               <select
                 aria-label="Marker on"
                 value={card}
@@ -353,11 +353,11 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
                   </option>
                 ))}
               </select>
-              <HelpHint label="Investment cards">
-                <InvestmentHelp cards={invest.cards} />
-              </HelpHint>
-            </span>
-          </label>
+            </label>
+            <HelpHint label="Investment cards">
+              <InvestmentHelp cards={invest.cards} />
+            </HelpHint>
+          </span>
           <button type="submit" className="small" disabled={busy || !valid}>
             Invest
           </button>

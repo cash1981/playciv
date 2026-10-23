@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { TechItem } from '@civ/engine'
@@ -99,9 +99,7 @@ describe('the assisted action button in the tech dialog', () => {
     const button = screen.getByRole('button', { name: 'Use Metal Casting' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
     expect(button.getAttribute('title')).toBe('You need an Incense token.')
-    fireEvent.click(screen.getByRole('button', { name: 'Help: Metal Casting' }))
-    const dialogs = screen.getAllByRole('dialog')
-    expect(within(dialogs[dialogs.length - 1]!).getByText('You need an Incense token.')).toBeTruthy()
+    expect(screen.getByRole('dialog').textContent).toContain('You need an Incense token.')
   })
 
   it('keeps a used card\'s button pressable in the dialog, and asks before sending confirmedRepeat', async () => {
@@ -127,7 +125,7 @@ describe('the assisted action button in the tech dialog', () => {
     expect(button.disabled).toBe(false)
     expect(dialog.textContent).toContain('Used')
     expect(button.getAttribute('title')).toBe('Currency has already been used this turn. You will be asked to confirm.')
-    expect(dialog.textContent).not.toContain('Currency has already been used this turn.')
+    expect(dialog.textContent).toContain('Currency has already been used this turn.')
 
     fireEvent.click(button)
     expect(confirm).toHaveBeenCalledWith(

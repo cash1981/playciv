@@ -45,6 +45,11 @@
   max-width: 100%;
 }
 
+/* The investment-card picker and its `?` reference sit on one row. */
+.sot-invest-card {
+  align-items: flex-end;
+}
+
 .sot-scout-list {
   list-style: none;
   margin: 0.5rem 0 0;

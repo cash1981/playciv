@@ -585,10 +585,9 @@ describe('the same action from two entry points', () => {
     expect(inDialog.disabled).toBe(true)
     expect(inDialog.getAttribute('title')).toBe(reason)
     expect(within(dialog).getByText('Needs resource')).toBeTruthy()
-    expect(screen.queryByText(reason)).toBeNull()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Help: Chivalry' }))
-    const helps = screen.getAllByRole('dialog')
-    expect(within(helps[helps.length - 1]!).getByText(reason)).toBeTruthy()
+    // The tech dialog already is the card reference, so the reason stays inline there
+    expect(within(dialog).getByText(reason)).toBeTruthy()
+    expect(within(dialog).queryByRole('button', { name: 'Help: Chivalry' })).toBeNull()
     // The panel behind the dialog hides the action until it can be pressed.
     expect(screen.getAllByRole('button', { name: 'Use Chivalry', hidden: true })).toHaveLength(1)
   })
@@ -1206,8 +1205,8 @@ describe('The actions of the open phase', () => {
     expect(possible.compareDocumentPosition(cities) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('links a tech-backed action name to the tech panel', () => {
-    localStorage.setItem('civ.panel.techs', 'true')
+  it('links a tech-backed action name to the tech panel, opening it when it is collapsed', async () => {
+    localStorage.setItem('civ.panel.techs', 'false')
     const scrolled: Element[] = []
     const original = Element.prototype.scrollIntoView
     Element.prototype.scrollIntoView = function (this: Element) {
@@ -1223,13 +1222,16 @@ describe('The actions of the open phase', () => {
             readOnly={false}
             run={run}
           />
-          <CollapsiblePanel id="techs" title="Tech tree" defaultOpen>
+          <CollapsiblePanel id="techs" title="Tech tree">
             <p>The pyramid</p>
           </CollapsiblePanel>
         </>,
       )
+      expect(document.getElementById('techs-content')?.hidden).toBe(true)
       fireEvent.click(screen.getByRole('button', { name: 'Show Chivalry in the tech panel' }))
       expect(scrolled).toHaveLength(1)
+      await waitFor(() => expect(document.getElementById('techs-content')?.hidden).toBe(false))
+      expect(localStorage.getItem('civ.panel.techs')).toBe('true')
     } finally {
       Element.prototype.scrollIntoView = original
       localStorage.removeItem('civ.panel.techs')
