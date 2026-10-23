@@ -98,6 +98,7 @@ describe('the assisted action button in the tech dialog', () => {
 
     const button = screen.getByRole('button', { name: 'Use Metal Casting' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
+    expect(button.getAttribute('title')).toBe('You need an Incense token.')
     expect(screen.getByRole('dialog').textContent).toContain('You need an Incense token.')
   })
 
@@ -123,6 +124,7 @@ describe('the assisted action button in the tech dialog', () => {
     expect(dialog.contains(button)).toBe(true)
     expect(button.disabled).toBe(false)
     expect(dialog.textContent).toContain('Used')
+    expect(button.getAttribute('title')).toBe('Currency has already been used this turn. You will be asked to confirm.')
     expect(dialog.textContent).toContain('Currency has already been used this turn.')
 
     fireEvent.click(button)

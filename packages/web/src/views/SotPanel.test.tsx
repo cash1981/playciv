@@ -257,9 +257,11 @@ describe('the Feudalism harvest', () => {
 })
 
 describe('investing', () => {
-  it('shows each investment card with its markers and when its ability is active', () => {
+  it('puts each investment card, its markers and its active steps behind help', () => {
     renderChoices(viewOf(sotWith()))
-    const cards = screen.getByRole('list', { name: 'Your investment cards' })
+    expect(screen.queryByRole('list', { name: 'Investment cards' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Investment cards' }))
+    const cards = within(screen.getByRole('dialog')).getByRole('list', { name: 'Investment cards' })
     const items = within(cards).getAllByRole('listitem')
     expect(items).toHaveLength(4)
     expect(items[0]?.textContent).toContain('Infrastructure: 1 marker.')
@@ -301,7 +303,7 @@ describe('investing', () => {
     expect((within(section).getByRole('button', { name: 'Invest' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('is disabled with the reason as text when there is no coin or the investment is used', () => {
+  it('is hidden when there is no coin to invest', () => {
     const sot = sotWith()
     const none = {
       ...sot,
@@ -313,12 +315,35 @@ describe('investing', () => {
       },
     } as StartOfTurn
     renderChoices(viewOf(none))
-    expect((screen.getByRole('button', { name: 'Invest' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText(/^You have no coin token to invest\./)).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Invest a coin' })).toBeNull()
+    expect(screen.queryByText(/^You have no coin token to invest\./)).toBeNull()
   })
 
-  it('explains that printed coins cannot be invested', () => {
+  it('stays as a compact disabled row after the coin was invested', () => {
+    const sot = sotWith()
+    const used = {
+      ...sot,
+      invest: {
+        ...sot.invest,
+        status: 'used',
+        reason: 'Investing has already been done this turn.',
+      },
+    } as StartOfTurn
+    renderChoices(viewOf(used))
+    const section = screen.getByRole('region', { name: 'Invest a coin' })
+    const button = within(section).getByRole('button', { name: 'Invest' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(button.getAttribute('title')).toBe('Investing has already been done this turn.')
+    expect(within(section).queryByRole('combobox')).toBeNull()
+    expect(within(section).queryByRole('list')).toBeNull()
+    expect(within(section).getByText('Used')).toBeTruthy()
+    fireEvent.click(within(section).getByRole('button', { name: 'Help: Invest a coin' }))
+    expect(within(screen.getByRole('dialog')).getByText('Investing has already been done this turn.')).toBeTruthy()
+  })
+
+  it('explains in the help that printed coins cannot be invested', () => {
     renderChoices(viewOf(sotWith()))
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Investment cards' }))
     expect(screen.getByText(/not coins printed on the map, a building, a government or a card/)).toBeTruthy()
   })
 })
@@ -414,26 +439,48 @@ describe('scouts and cities', () => {
     expect(screen.queryByRole('combobox', { name: /Send the square/ })).toBeNull()
   })
 
-  it('founds a city where the scout stands, once, when nothing is in the way', async () => {
+  it('founds a city where the scout stands, once, then goes to the map', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
-    renderChoices(viewOf(sotWith({ scouts: [scout()] as never, cityLimit: { have: 1, max: 2 } as never })))
-    const button = screen.getByRole('button', { name: 'Found a city here on E5' }) as HTMLButtonElement
-    expect(button.disabled).toBe(false)
-    expect(screen.getByText(/Move any other figures of yours on E5/)).toBeTruthy()
-    fireEvent.click(button)
-    fireEvent.click(button)
-    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
-    expect(send).toHaveBeenCalledWith('g1', 'foundCity', expect.any(String), 6, { figurePieceId: 's1' })
+    const scrolled: Element[] = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this)
+    }
+    render(
+      <>
+        <StartOfTurnChoices
+          gameId="g1"
+          view={viewOf(sotWith({ scouts: [scout()] as never, cityLimit: { have: 1, max: 2 } as never }))}
+          busy={false}
+          readOnly={false}
+          run={run}
+        />
+        <section id="game-board">the map</section>
+      </>,
+    )
+    try {
+      const button = screen.getByRole('button', { name: 'Found a city here on E5' }) as HTMLButtonElement
+      expect(button.disabled).toBe(false)
+      expect(screen.getByText(/Move any other figures of yours on E5/)).toBeTruthy()
+      fireEvent.click(button)
+      fireEvent.click(button)
+      await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+      expect(send).toHaveBeenCalledWith('g1', 'foundCity', expect.any(String), 6, { figurePieceId: 's1' })
+      await waitFor(() => expect(scrolled.map((element) => element.id)).toContain('game-board'))
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
   })
 
-  it('lists every reason a city cannot be founded, and disables the button', () => {
+  it('puts every reason a city cannot be founded behind help, and disables the button', () => {
     const reasons = ['E5 is a water square.', 'A hut is next to E5 (F5). Take it first.']
     renderChoices(viewOf(sotWith({ scouts: [scout({ found: { ok: false, reasons, zuluHuts: [] } })] as never })))
     const button = screen.getByRole('button', { name: 'Found a city here on E5' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
-    const list = screen.getByRole('list', { name: 'Why no city on E5' })
+    expect(button.getAttribute('title')).toBe(reasons.join(' '))
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Why no city on E5' }))
+    const list = within(screen.getByRole('dialog')).getByRole('list')
     expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual(reasons)
-    expect(button.getAttribute('aria-describedby')).toBe(list.id)
   })
 
   it('tells a Zulu player about the hut next to the new city', () => {
@@ -446,9 +493,10 @@ describe('scouts and cities', () => {
     renderChoices(viewOf(sotWith({ scouts: [scout()] as never, scoutsNow: { status: 'wrong-phase', reason } as never })))
     const found = screen.getByRole('button', { name: 'Found a city here on E5' }) as HTMLButtonElement
     expect(found.disabled).toBe(true)
-    expect(screen.getByRole('list', { name: 'Why no city on E5' }).textContent).toBe(reason)
+    expect(found.getAttribute('title')).toBe(reason)
     expect((screen.getByRole('combobox', { name: /Send the square of E5 to/ }) as HTMLSelectElement).disabled).toBe(true)
-    expect(within(screen.getByRole('region', { name: 'Scouts and cities' })).getAllByText(reason).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Why no city on E5' }))
+    expect(within(screen.getByRole('dialog')).getByText(reason)).toBeTruthy()
   })
 
   it('is disabled while the page is busy or read only', () => {

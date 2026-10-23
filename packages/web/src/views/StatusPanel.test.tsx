@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBoard, DEFAULT_PLAYER_STATS, EMPTY_COIN_SOURCES, GOVERNMENT_CARDS, GOVERNMENTS, wondersArea } from '@civ/engine'
@@ -497,7 +497,10 @@ describe('StatusPanel Coins section', () => {
     const button = screen.getByRole('button', { name: 'Spend 6 trade' })
 
     expect((button as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText('Only available during your open City Management phase.')).toBeTruthy()
+    expect(button.getAttribute('title')).toBe('Only available during your open City Management phase.')
+    expect(screen.queryByText('Only available during your open City Management phase.')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Democracy' }))
+    expect(within(screen.getByRole('dialog')).getByText('Only available during your open City Management phase.')).toBeTruthy()
     fireEvent.click(button)
     expect(perform).not.toHaveBeenCalled()
   })
@@ -514,7 +517,13 @@ describe('StatusPanel Coins section', () => {
     openCoins()
     const button = screen.getByRole('button', { name: 'Spend 6 trade' }) as HTMLButtonElement
     expect(button.disabled).toBe(false)
-    expect(screen.getByText('Democracy has already been used this turn. You will be asked to confirm.')).toBeTruthy()
+    expect(button.getAttribute('title')).toBe('Democracy has already been used this turn. You will be asked to confirm.')
+    expect(screen.queryByText('Democracy has already been used this turn. You will be asked to confirm.')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Democracy' }))
+    expect(
+      within(screen.getByRole('dialog')).getByText('Democracy has already been used this turn. You will be asked to confirm.'),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
     fireEvent.click(button)
     expect(confirm).toHaveBeenCalledWith(

@@ -15,6 +15,7 @@ import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
+import { HelpHint } from './HelpHint.js'
 import { goToPanel } from './PhaseSummary.js'
 import './SotPanel.css'
 
@@ -267,8 +268,26 @@ function FeudalismHarvest({
   )
 }
 
-function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Element {
-  const reasonId = useId()
+function InvestmentHelp({ cards }: { readonly cards: StartOfTurn['invest']['cards'] }): React.JSX.Element {
+  return (
+    <>
+      <p>
+        You may invest one coin each turn. Only coin tokens on your sheet and on tech cards can be invested, not coins
+        printed on the map, a building, a government or a card.
+      </p>
+      <ul className="sot-cards" aria-label="Investment cards">
+        {cards.map((entry) => (
+          <li key={entry.key}>
+            <strong>{entry.label}</strong>: {entry.markers} {entry.markers === 1 ? 'marker' : 'markers'}. {entry.ability}{' '}
+            <span className="muted">Active at {entry.thresholds.join(', ')}.</span>
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+}
+
+function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Element | null {
   const { invest } = sot
   const [source, setSource] = useState('')
   const [card, setCard] = useState('')
@@ -294,60 +313,64 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
     })
   }
 
+  if (invest.status !== 'ready' && invest.status !== 'used') return null
+
   return (
     <section className="phase-group sot-invest" aria-label="Invest a coin">
       <h3 className="phase-group-title">Invest a coin</h3>
-      <p>
-        You may invest one coin each turn. Only coin tokens on your sheet and on tech cards can be invested, not coins
-        printed on the map, a building, a government or a card.
-      </p>
-      <Reason id={reasonId} status={invest.status} reason={invest.reason} />
-      <ul className="sot-cards" aria-label="Your investment cards">
-        {invest.cards.map((entry) => (
-          <li key={entry.key}>
-            <strong>{entry.label}</strong>: {entry.markers} {entry.markers === 1 ? 'marker' : 'markers'}. {entry.ability}{' '}
-            <span className="muted">Active at {entry.thresholds.join(', ')}.</span>
-          </li>
-        ))}
-      </ul>
-      <form
-        className="sot-form"
-        onSubmit={(event) => {
-          event.preventDefault()
-          press()
-        }}
-      >
-        <label>
-          Coin from{' '}
-          <select value={chosenSource} disabled={busy || !ready} onChange={(event) => setSource(event.target.value)}>
-            <option value="">Choose where the coin comes from</option>
-            {invest.coins.map((entry) => (
-              <option key={entry.key} value={entry.key}>
-                {entry.label} ({entry.coins})
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Marker on{' '}
-          <select value={card} disabled={busy || !ready} onChange={(event) => setCard(event.target.value)}>
-            <option value="">Choose a card</option>
-            {invest.cards.map((entry) => (
-              <option key={entry.key} value={entry.key}>
-                {entry.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="submit"
-          className="small"
-          aria-describedby={ready ? undefined : reasonId}
-          disabled={busy || !ready || !valid}
+      {ready ? (
+        <form
+          className="sot-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            press()
+          }}
         >
-          Invest
-        </button>
-      </form>
+          <label>
+            Coin from{' '}
+            <select value={chosenSource} disabled={busy} onChange={(event) => setSource(event.target.value)}>
+              <option value="">Choose where the coin comes from</option>
+              {invest.coins.map((entry) => (
+                <option key={entry.key} value={entry.key}>
+                  {entry.label} ({entry.coins})
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="card-control sot-invest-card">
+            <label>
+              Marker on{' '}
+              <select
+                aria-label="Marker on"
+                value={card}
+                disabled={busy}
+                onChange={(event) => setCard(event.target.value)}
+              >
+                <option value="">Choose a card</option>
+                {invest.cards.map((entry) => (
+                  <option key={entry.key} value={entry.key}>
+                    {entry.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <HelpHint label="Investment cards">
+              <InvestmentHelp cards={invest.cards} />
+            </HelpHint>
+          </span>
+          <button type="submit" className="small" disabled={busy || !valid}>
+            Invest
+          </button>
+        </form>
+      ) : (
+        <div className="assisted-action">
+          <button type="button" className="small" disabled title={invest.reason}>
+            Invest
+          </button>
+          <span className="tag">Used</span>
+          <HelpHint label="Invest a coin">{invest.reason}</HelpHint>
+        </div>
+      )}
     </section>
   )
 }
@@ -372,7 +395,9 @@ function ScoutsAndCities({ gameId, view, busy, run, sot }: ChoiceProps): React.J
       run,
       (requestId) => api.actionWithArgs(gameId, 'foundCity', requestId, view.rev, { figurePieceId: pieceId }),
       view,
-    )
+    ).then((done) => {
+      if (done) goToPanel('board')
+    })
   }
   const send = (pieceId: string, cityPieceId: string | null): void => {
     const key = `${gameId}:${playerId}:assignScout:${pieceId}:${cityPieceId ?? 'none'}`
@@ -503,25 +528,26 @@ function FoundHere({
   readonly busy: boolean
   readonly found: (pieceId: string) => void
 }): React.JSX.Element {
-  const reasonId = useId()
   return (
     <div className="sot-found">
       <button
         type="button"
         className="small"
         aria-label={`Found a city here on ${square}`}
-        aria-describedby={ok ? undefined : reasonId}
+        title={ok ? undefined : reasons.join(' ')}
         disabled={busy || !ok}
         onClick={() => found(pieceId)}
       >
         Found a city here
       </button>
       {!ok && (
-        <ul id={reasonId} className="muted sot-reasons" aria-label={`Why no city on ${square}`}>
-          {reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
+        <HelpHint label={`Why no city on ${square}`}>
+          <ul className="sot-reasons">
+            {reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </HelpHint>
       )}
       {ok && zuluHuts.length > 0 && (
         <p className="muted">The Zulu may explore the hut next to the city ({zuluHuts.join(', ')}). Do that by hand.</p>

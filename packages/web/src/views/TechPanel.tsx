@@ -247,6 +247,7 @@ export function TechPanel({
                 busy={busy}
                 readOnly={historical !== null}
                 run={run}
+                reasonPlacement="inline"
               />
             </div>
           )}

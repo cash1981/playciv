@@ -41,6 +41,11 @@ old test counts and past deployment reports do not establish present health.
   Great Person, tech, hut and relic abilities. Brief `tasks/assisted-sot.md`; see "Phase tabs
   and Start of Turn" in decisions for what the human settled and what is still a judgement.
 
+- The action panel shows only ready or used actions for the open phase; button reasons
+  are behind `?`, playable card names link to the card in the hand and tech actions to
+  the tech panel, and Invest is hidden without a coin. See "Action panel focus" in
+  decisions.
+
 - City production (#250 slice A, first part of #264) is on PR #271: a per-city
   estimate with a hand-set override, shown on each city card.
   Brief `tasks/city-production.md`; see "City production" in decisions.

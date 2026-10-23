@@ -545,9 +545,12 @@ same thing in chat or editing the counters by hand still works. See
 `docs/agents/decisions.md`, 2026-10-09.
 
 **Your actions follows the turn.** The panel has a tab for each phase of the turn (Start of
-Turn, Trade, City Management, Movement, Research); the one you are in is open first, and
-each tab says what you may do there and why a button cannot be pressed. A culture card or a
-Great Person card that can be played in a phase has a Play button in that tab and in your
+Turn, Trade, City Management, Movement, Research); the one you are in is open first. The
+open tab lists ready and used actions; other actions and non-ready cards are left out.
+Reasons for blocked or used buttons are behind a `?` help dialog, not inline. Playable card
+and action names link to their relevant location in your hand, the tech or social policy
+panel, or the map. A culture card or a Great Person card that can be played in a phase has a
+Play button in that tab and in your
 hand: you choose which players it names, the card is discarded (a Great Person that is not
 discarded turns faceup) and the log says who played what. Nothing is done to the other
 players, because they can cancel the card. Start of Turn
@@ -558,7 +561,8 @@ capital when you do not), and the
 Start of Turn abilities of wonders, Great Persons, Plastics, Ecology, the Teacher hut and the
 Atlantis and Seven Cities of Gold relics. Where the effect is a choice on the map (a free
 building, a resource from the market) the game logs it and you place it by hand. Every one
-can be taken back with the vote undo. See [decisions](docs/agents/decisions.md#phase-tabs-and-start-of-turn-part-13-2026-10-23).
+can be taken back with the vote undo. See [phase tabs and Start of Turn decisions](docs/agents/decisions.md#phase-tabs-and-start-of-turn-part-13-2026-10-23)
+and the [action panel focus decision](docs/agents/decisions.md#action-panel-focus-2026-10-23).
 
 **Opponents' public hands show face-down cards.** Issue #142 adds one generic
 card back for each culture card, hut, village, great person and unit in another

@@ -35,6 +35,7 @@ export function ItemCard({
   role,
   tabIndex,
   className,
+  id,
   onDragStart,
   onDragEnd,
   /**
@@ -72,6 +73,8 @@ export function ItemCard({
   readonly role?: React.AriaRole
   readonly tabIndex?: number
   readonly className?: string
+  /** A DOM id, for a link that scrolls to this card (the hand does). */
+  readonly id?: string
   readonly onDragStart?: (e: React.DragEvent<HTMLLIElement>) => void
   readonly onDragEnd?: (e: React.DragEvent<HTMLLIElement>) => void
   readonly rotation?: number
@@ -88,6 +91,7 @@ export function ItemCard({
 
   return (
     <li
+      id={id}
       className={`card${className === undefined ? '' : ` ${className}`}`}
       draggable={draggable}
       onClick={onClick}

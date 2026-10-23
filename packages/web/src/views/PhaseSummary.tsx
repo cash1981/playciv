@@ -104,18 +104,54 @@ function findPanel(key: string): { readonly section: HTMLElement; readonly focus
  *
  * Your actions (`actions`) is opened when it is collapsed: the city controls and
  * a waiting card choice are in it, and a saved collapsed state would hide them
- * behind a button that says it goes there. The click on its toggle is a manual
+ * behind a button that says it goes there. `open` asks for the same for a card
+ * link, so the referenced card is visible. The click on the toggle is a manual
  * one, so the open state is remembered. Every other panel is left as it is.
  */
-export function goToPanel(key: string): void {
-  const panel = findPanel(key)
-  if (panel === null) return
-  if (key === 'actions' && panel.focus.getAttribute('aria-expanded') === 'false') panel.focus.click()
-  const reduced =
+function prefersReducedMotion(): boolean {
+  return (
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  panel.section.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' })
+  )
+}
+
+export function goToPanel(key: string, open = false): void {
+  const panel = findPanel(key)
+  if (panel === null) return
+  if ((open || key === 'actions') && panel.focus.getAttribute('aria-expanded') === 'false') {
+    panel.focus.click()
+  }
+  panel.section.scrollIntoView({
+    behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+    block: 'start',
+  })
   panel.focus.focus({ preventScroll: true })
+}
+
+/** The DOM id of one card in the viewer's hand. */
+export const handItemId = (itemId: string): string => `hand-item-${itemId}`
+
+/**
+ * Scrolls to a card in the viewer's hand and focuses it. The hand is opened first
+ * when it is collapsed, so the card is not hidden behind the panel toggle.
+ */
+export function goToHandItem(itemId: string): void {
+  const panel = findPanel('hand')
+  if (panel === null) return
+  const content = document.getElementById('hand-content')
+  const wasClosed = content?.hidden === true
+  if (wasClosed) panel.focus.click()
+  const reveal = (): void => {
+    const item = document.getElementById(handItemId(itemId))
+    if (item === null) return
+    item.scrollIntoView?.({
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      block: 'center',
+    })
+    item.focus({ preventScroll: true })
+  }
+  if (wasClosed) window.setTimeout(reveal, 0)
+  else reveal()
 }
 
 const SHORTCUTS: readonly { readonly key: string; readonly label: string; readonly onlyWithActions?: true }[] = [
