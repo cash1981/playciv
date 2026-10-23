@@ -204,6 +204,13 @@ describe('api timeline and admin calls (issue #215)', () => {
     const third = respondWith(200, '{}')
     await api.unmarkDone('g1', 'CM', 4)
     expect(lastCall(third).path).toBe('/api/games/g1/turns/undone')
+
+    const fourth = respondWith(200, '{}')
+    await api.unmarkDone('g1', 'CM', 4, 17)
+    expect(lastCall(fourth)).toEqual({
+      path: '/api/games/g1/turns/undone',
+      body: { phase: 'CM', turnNumber: 4, rev: 17 },
+    })
   })
 
   it('posts an assisted action with its request id and the revision the client saw', async () => {

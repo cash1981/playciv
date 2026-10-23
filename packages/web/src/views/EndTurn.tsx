@@ -105,11 +105,10 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
   const phaseKey = state === null ? '' : `${state.kind}:${state.kind === 'open' ? state.phase : ''}`
   useEffect(() => {
     if (!reopened.current) return
+    // One chance per press: a later change must not take focus the player has moved.
+    reopened.current = false
     const active = document.activeElement
-    if (active === null || active === document.body) {
-      endRef.current?.focus()
-      reopened.current = false
-    }
+    if (active === null || active === document.body) endRef.current?.focus()
   }, [phaseKey])
 
   if (state === null) return null

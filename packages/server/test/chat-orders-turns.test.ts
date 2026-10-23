@@ -234,6 +234,11 @@ describe('the row that starts a turn', () => {
     expect(await rowsOf(table.gameId)).toEqual(before)
     const bad = await post(last.token, `/api/games/${table.gameId}/turns/undone`, { phase: 'RESEARCH', turnNumber: 1, rev: -1 })
     expect(bad.status).toBe(400)
+
+    const rev = (await repo.findGame(table.gameId))?.rev
+    if (rev === undefined) throw new Error('no game')
+    const current = await post(last.token, `/api/games/${table.gameId}/turns/undone`, { phase: 'RESEARCH', turnNumber: 1, rev })
+    expect(current.status).toBe(200)
   })
 
   it('is not written for a done that leaves the turn open', async () => {

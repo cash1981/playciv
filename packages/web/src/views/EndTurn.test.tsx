@@ -309,9 +309,9 @@ describe('Reopen in Your actions', () => {
   })
 
   it('offers the phase before the open one, and says a later ended phase stays ended', () => {
-    renderPanel(withDone(activeTurn(4, [alice('CM'), bob('TRADE')]), 4, { SOT: true, MOVEMENT: true, RESEARCH: true }))
+    renderPanel(withDone(activeTurn(4, [alice('CM'), bob('TRADE')]), 4, { SOT: true, TRADE: true, MOVEMENT: true, RESEARCH: true }))
 
-    expect(screen.getByRole('button', { name: 'Reopen start of turn: mark as not done' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reopen trade: mark as not done' })).toBeTruthy()
     expect(
       screen.getByText(
         'Reopened: your city management phase is open again. Your movement and research phases stay ended.',
@@ -339,6 +339,26 @@ describe('Reopen in Your actions', () => {
     fireEvent.click(button)
     expect(button.disabled).toBe(true)
     expect(unmarkDone).not.toHaveBeenCalled()
+  })
+
+  it('moves focus to End turn after the press removes the Reopen button', async () => {
+    vi.spyOn(api, 'unmarkDone').mockResolvedValue({} as PlayerView)
+    const { rerender } = renderPanel(withDone(activeTurn(4, [alice('CM')]), 4, { SOT: true }))
+    const button = screen.getByRole('button', { name: /^Reopen/ })
+    button.focus()
+    fireEvent.click(button)
+
+    rerender(
+      <AssistedActionsPanel
+        gameId="game-1"
+        view={withDone(activeTurn(4, [alice('SOT')]), 4, {})}
+        busy={false}
+        readOnly={false}
+        run={run}
+      />,
+    )
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /^End turn/ }))
   })
 
   it('offers nothing from an earlier turn when the active turn has nothing ended', () => {
