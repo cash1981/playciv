@@ -548,15 +548,17 @@ same thing in chat or editing the counters by hand still works. See
 Turn, Trade, City Management, Movement, Research); the one you are in is open first, and
 each tab says what you may do there and why a button cannot be pressed. A culture card or a
 Great Person card that can be played in a phase has a Play button in that tab and in your
-hand: you choose which players it names, the card is discarded and the log says who played
-what. Nothing is done to the other players, because they can cancel the card. Start of Turn
+hand: you choose which players it names, the card is discarded (a Great Person that is not
+discarded turns faceup) and the log says who played what. Nothing is done to the other
+players, because they can cancel the card. Start of Turn
 has buttons for your social policies and government (Expansionism, Pacifism, Patronage,
 Rationalism, Democracy, Fundamentalism, Feudalism), changing government once a turn,
-investing one coin, founding a city from a scout, sending a scout's square to a city, and the
+investing one coin, founding a city from a scout, sending a scout's square to a city (to your
+capital when you do not), and the
 Start of Turn abilities of wonders, Great Persons, Plastics, Ecology, the Teacher hut and the
 Atlantis and Seven Cities of Gold relics. Where the effect is a choice on the map (a free
 building, a resource from the market) the game logs it and you place it by hand. Every one
-can be taken back with the vote undo. See [decisions](docs/agents/decisions.md#phase-tabs-and-start-of-turn-part-9-2026-10-23).
+can be taken back with the vote undo. See [decisions](docs/agents/decisions.md#phase-tabs-and-start-of-turn-part-13-2026-10-23).
 
 **Opponents' public hands show face-down cards.** Issue #142 adds one generic
 card back for each culture card, hut, village, great person and unit in another

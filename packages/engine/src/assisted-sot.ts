@@ -14,9 +14,13 @@
 import { placeUnchecked, removePiece } from './actions/board.js'
 import {
   REPEAT_NOTE,
+  ROMAN,
   blocked,
+  grantUndoBlock,
   lastLogId,
+  levelSheet,
   playerOf,
+  plural,
   rejected,
   useTurnAction,
   usedReason,
@@ -32,6 +36,7 @@ import type {
 } from './assisted-core.js'
 import {
   drawCandidates,
+  freeAdvanceStatus,
   livePendingRewards,
   performAdvance,
   restoreDrawnCards,
@@ -81,8 +86,6 @@ import type { PlayerTurn } from './turn.js'
 import { isGovernment } from './government.js'
 import type { Government } from './government.js'
 
-export const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`
-export const ROMAN = ['', 'I', 'II', 'III'] as const
 
 /** "3 trade", "2 culture", "1 trade and 2 culture". */
 function describeGain(gain: { readonly trade: number; readonly culture: number }): string {
@@ -383,13 +386,8 @@ function rationalism(row: RationalismRow): AssistedActionDefinition {
     reverse(state, player, record) {
       const effect = record.effect
       if (effect.kind !== 'techGrant') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
-      if (!player.techGrants.some((grant) => grant.id === effect.grantId)) {
-        return err({
-          kind: 'ASSISTED_UNDO_BLOCKED',
-          logId: record.logId,
-          reason: 'The tech this paid for has been learned already. Remove that tech first.',
-        })
-      }
+      const spent = grantUndoBlock(player, effect.grantId)
+      if (spent !== undefined) return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId: record.logId, reason: spent })
       const back: Playerhand = {
         ...player,
         stats: { ...player.stats, trade: player.stats.trade + effect.trade },
@@ -409,9 +407,6 @@ function rationalism(row: RationalismRow): AssistedActionDefinition {
 
 /** The level of the culture track section a marker stands in. The start space has none: a marker must have advanced once. */
 export const levelOfMarker = (step: number): CultureLevel => (step <= 7 ? 1 : step <= 14 ? 2 : 3)
-
-export const levelSheet = (level: CultureLevel): SheetName =>
-  level === 1 ? 'CULTURE_1' : level === 2 ? 'CULTURE_2' : 'CULTURE_3'
 
 interface PatronagePlan {
   readonly turn: PlayerTurn
@@ -863,6 +858,17 @@ const investPayloadOf = (payload: AssistedPayload | undefined): InvestPayload | 
 
 const investmentCardOf = (key: InvestmentCard) => INVESTMENT_CARDS.find((card) => card.key === key)
 
+/**
+ * Why the free advance the Arabs get with every coin they invest is stopped now (a card choice waiting, a
+ * hand over its size, an empty deck), or `undefined`. The coin waits for it, so nothing is half done; at the
+ * end of the track there is nothing to advance and nothing stops the investment.
+ */
+function arabsAdvanceStop(state: GameState, player: Playerhand): string | undefined {
+  if (player.civilization?.name !== 'Arabs') return undefined
+  const status = freeAdvanceStatus(state, player)
+  return status.kind === 'blocked' ? `The Arabs advance one space for free with every coin they invest, and that is stopped now: ${status.reason}` : undefined
+}
+
 const invest: AssistedActionDefinition = {
   kind: 'invest',
   techName: null,
@@ -884,6 +890,8 @@ const invest: AssistedActionDefinition = {
         'You have no coin token to invest. Only coins on your sheet and on tech cards can be invested, not printed coins.',
       )
     }
+    const stopped = arabsAdvanceStop(state, player)
+    if (stopped !== undefined) return blocked('unavailable', stopped)
     return { status: 'ready', reason: 'Invest one coin token this turn, and put the marker on one of your investment cards.' }
   },
 
@@ -895,6 +903,8 @@ const invest: AssistedActionDefinition = {
     if ('blocked' in open) return err(rejected('invest', open.blocked))
     const card = investmentCardOf(payload.card)
     if (card === undefined) return fail('Choose one of your four investment cards.')
+    const stopped = arabsAdvanceStop(state, player)
+    if (stopped !== undefined) return fail(stopped)
     const source = payload.source as CoinSourceKey
     if (!INVESTABLE_COIN_SOURCES.includes(source) || findCoinSource(source) === undefined) {
       return fail('That coin cannot be invested. Only coin tokens on your sheet and on tech cards can.')
@@ -905,16 +915,12 @@ const invest: AssistedActionDefinition = {
     let working = state
     let advance = null as ReturnType<typeof performAdvance> | null
     if (player.civilization?.name === 'Arabs') {
-      advance = performAdvance(state, player, { requestId: context.requestId, at: context.at }, { free: true, tagLog: false })
-      // At the end of the track, or without a marker, there is nothing to advance; anything else refuses
-      if (!advance.ok) {
-        const refusal = advance.error
-        const text = refusal.kind === 'ASSISTED_ACTION_REJECTED' ? refusal.reason : ''
-        const nothingToAdvance = /Culture Victory space|leader marker is not on/.test(text)
-        if (!nothingToAdvance) return advance
-        advance = null
-      } else {
-        working = advance.value.state
+      // `blocked` was refused above; `nothing` (the end of the track) loses nothing
+      if (freeAdvanceStatus(state, player).kind === 'ok') {
+        const taken = performAdvance(state, player, { requestId: context.requestId, at: context.at }, { free: true, tagLog: false })
+        if (!taken.ok) return taken
+        advance = taken
+        working = taken.value.state
       }
     }
 
@@ -964,9 +970,8 @@ const invest: AssistedActionDefinition = {
     const effect = record.effect
     if (effect.kind !== 'invest') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
     const blockedBy = (reason: string) => err({ kind: 'ASSISTED_UNDO_BLOCKED' as const, logId: record.logId, reason })
-    if (effect.grantId !== null && !player.techGrants.some((grant) => grant.id === effect.grantId)) {
-      return blockedBy('The tech this paid for has been learned already. Remove that tech first.')
-    }
+    const spent = effect.grantId === null ? undefined : grantUndoBlock(player, effect.grantId)
+    if (spent !== undefined) return blockedBy(spent)
     let working = state
     let current = player
     // The free advance goes first: it can refuse (the marker moved on)
@@ -1079,9 +1084,13 @@ export function startOfTurnViewOf(state: GameState, player: Playerhand): StartOf
     },
     cityLimit: cityLimitView(state, player),
     cities,
+    scoutsNow:
+      openStartOfTurn(state, player) === undefined
+        ? { status: 'wrong-phase', reason: SOT_PHASE_REASON }
+        : { status: 'ready', reason: 'Founding a city and sending a square can be done now.' },
     scouts: scoutViewsOf(state, player),
     techGrants: player.techGrants
-      .filter((grant) => grant.turnNumber === turn)
+      .filter((grant) => grant.turnNumber === turn && grant.usedFor === undefined)
       .map((grant) => ({ id: grant.id, source: grant.source, level: grant.level })),
   }
 }

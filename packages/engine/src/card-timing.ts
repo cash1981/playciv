@@ -19,7 +19,7 @@ import type { TurnPhase } from './turn.js'
 export type CardTiming = TurnPhase | 'BATTLE' | 'ANY'
 
 /** The words the card sheets use, and the timing each stands for. */
-const TIMING_LABELS: readonly (readonly [string, CardTiming])[] = [
+const TIMING_WORDS: readonly (readonly [string, CardTiming])[] = [
   ['Start of Any Phase', 'ANY'],
   ['Start of Turn', 'SOT'],
   ['Any Time', 'ANY'],
@@ -28,6 +28,11 @@ const TIMING_LABELS: readonly (readonly [string, CardTiming])[] = [
   ['Research', 'RESEARCH'],
   ['Battle', 'BATTLE'],
 ]
+
+/** Each word with the pattern for a segment that starts with it, made once. */
+const TIMING_LABELS: readonly (readonly [RegExp, CardTiming])[] = TIMING_WORDS.map(
+  ([word, timing]): readonly [RegExp, CardTiming] => [new RegExp(`^${word}\\s*:`, 'i'), timing],
+)
 
 /** How a timing reads in a log line and on a button. */
 export const CARD_TIMING_TEXT: Readonly<Record<CardTiming, string>> = {
@@ -42,17 +47,18 @@ export const CARD_TIMING_TEXT: Readonly<Record<CardTiming, string>> = {
 
 /**
  * The timings a card's text names, in the order it names them, without repeats.
- * A segment counts only at the start of the text or right after a slash, so a word
- * such as "Research:" inside a sentence is not read as a timing. A card with no
- * timing (a passive Great Person such as Valmiki) has none.
+ * A segment counts only at the start of the text or right after a slash or a line
+ * break (the sheets use both between two timings), so a word such as "Research:"
+ * inside a sentence is not read as a timing. A card with no timing (a passive Great
+ * Person such as Valmiki) has none.
  */
 export function timingsOf(description: string | null | undefined): readonly CardTiming[] {
   if (description === null || description === undefined) return []
   const found: CardTiming[] = []
-  for (const segment of description.split('/')) {
+  for (const segment of description.split(/[/\n]/)) {
     const text = segment.trim()
     for (const [label, timing] of TIMING_LABELS) {
-      if (new RegExp(`^${label}\\s*:`, 'i').test(text)) {
+      if (label.test(text)) {
         if (!found.includes(timing)) found.push(timing)
         break
       }

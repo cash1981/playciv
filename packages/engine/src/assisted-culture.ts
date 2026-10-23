@@ -540,18 +540,19 @@ export function restoreDrawnCards(
   player: Playerhand,
   recordId: string,
   ids: readonly string[],
-  kept: string | null,
+  kept: string | readonly string[] | null,
   sheetName: SheetName,
 ): Result<GameState, EngineError> {
+  const keptIds: readonly string[] = kept === null ? [] : typeof kept === 'string' ? [kept] : kept
   const inHand = (id: string): Item | undefined => player.items.find((item) => item.id === id)
   const inDiscard = (id: string): Item | undefined => state.discardedItems.find((item) => item.id === id)
   const inDeck = (id: string): boolean => state.items.some((item) => item.id === id)
   const toDeck: Item[] = []
   for (const id of ids) {
-    const found = id === kept ? inHand(id) : (inDiscard(id) ?? inHand(id))
+    const found = keptIds.includes(id) ? inHand(id) : (inDiscard(id) ?? inHand(id))
     if (found !== undefined) {
       toDeck.push(found)
-    } else if (!inDeck(id) || id === kept) {
+    } else if (!inDeck(id) || keptIds.includes(id)) {
       return err({ kind: 'ITEM_NOT_FOUND', sheetName })
     }
   }
@@ -587,6 +588,24 @@ function removeGreatPersonMarker(
 /** The sentence part for a removed marker, or an empty string. */
 const removedMarkerText = (marker: GreatPersonMarker | null | undefined): string =>
   marker === null || marker === undefined ? '' : ` and the ${markerLabelOf(marker.assetId)} great person marker was removed`
+
+/** Whether the free advance that goes with another action (the Romans' city, the Arabs' coin, Sydney) can be taken now. */
+export type FreeAdvanceStatus =
+  | { readonly kind: 'ok' }
+  /** There is no space to advance to: the marker is not on the track or on the last space. Nothing is lost. */
+  | { readonly kind: 'nothing'; readonly reason: string }
+  /** The advance is stopped for now (a card choice waiting, a hand over its size, an empty deck). */
+  | { readonly kind: 'blocked'; readonly reason: string }
+
+export function freeAdvanceStatus(state: GameState, player: Playerhand): FreeAdvanceStatus {
+  const marker = cultureMarkerOf(state, player)
+  if (marker === undefined) return { kind: 'nothing', reason: 'Your leader marker is not on the culture track.' }
+  if (cultureSpaceAt(marker.step + 1) === undefined) {
+    return { kind: 'nothing', reason: 'Your marker is already on the Culture Victory space.' }
+  }
+  const plan = planAdvance(state, player, { free: true })
+  return plan.ok ? { kind: 'ok' } : { kind: 'blocked', reason: plan.error.reason }
+}
 
 /** What a culture advance needs besides the player: the request that causes it, and when. */
 export interface AdvanceContext {
@@ -894,6 +913,13 @@ export function advanceEffectOf(record: AssistedActionRecord): CultureAdvanceEff
   return undefined
 }
 
+/**
+ * Whether the record is the action that made the reward: its id is the reward's, or the reward's
+ * with `:<n>` after it (an action that makes several choices, Cristo Redentor with Mysticism).
+ */
+const ownsReward = (record: AssistedActionRecord, rewardId: string): boolean =>
+  record.id === rewardId || rewardId.startsWith(`${record.id}:`)
+
 /** The record with the card that was kept written into the effect that holds the cards, wherever it is. */
 function withKeptCard(
   record: AssistedActionRecord,
@@ -904,6 +930,7 @@ function withKeptCard(
   const extra = marker === null ? {} : { marker }
   if (effect.kind === 'cultureAdvance') return { ...record, effect: { ...effect, kept, ...extra } }
   if (effect.kind === 'patronage') return { ...record, effect: { ...effect, kept } }
+  if (effect.kind === 'sotDraw') return { ...record, effect: { ...effect, kept: [...effect.kept, kept] } }
   if ('advance' in effect && effect.advance !== null && effect.advance !== undefined) {
     return { ...record, effect: { ...effect, advance: { ...effect.advance, kept, ...extra } } }
   }
@@ -967,7 +994,7 @@ export const chooseReward: AssistedActionDefinition = {
 
     // A Great Person is kept together with its marker. A reward from before the
     // markers existed (its record has no `rejected` list) keeps the old, by-hand step.
-    const origin = state.assistedActions.find((record) => record.id === reward.id)
+    const origin = state.assistedActions.find((record) => ownsReward(record, reward.id))
     const originAdvance = origin === undefined ? undefined : advanceEffectOf(origin)
     const takesMarker =
       reward.kind === 'greatPerson' && originAdvance !== undefined && originAdvance.rejected !== undefined
@@ -993,7 +1020,7 @@ export const chooseReward: AssistedActionDefinition = {
         ...board,
         discardedItems: [...board.discardedItems, ...others.map((item): Item => ({ ...item, hidden: true }))],
         assistedActions: board.assistedActions.map((record) =>
-          record.id === reward.id ? withKeptCard(record, kept.id, marker) : record,
+          ownsReward(record, reward.id) ? withKeptCard(record, kept.id, marker) : record,
         ),
       },
       {

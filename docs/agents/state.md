@@ -35,10 +35,11 @@ old test counts and past deployment reports do not establish present health.
   built too; see "Trade offers (#265)" in decisions.
 
 - Phase tabs and Start of Turn (part 13) are on PR #271: the Your actions panel has a tab per
-  phase, cards play from the tabs and the hand as log lines, and Start of Turn has buttons for
+  phase, each with a "Possible actions" box (Advance culture scrolls to Your hand afterwards),
+  cards play from the tabs and the hand as log lines, and Start of Turn has buttons for
   policies, governments, investing, founding cities from scouts, scout squares, and wonder,
   Great Person, tech, hut and relic abilities. Brief `tasks/assisted-sot.md`; see "Phase tabs
-  and Start of Turn" in decisions for the assumptions waiting for the human.
+  and Start of Turn" in decisions for what the human settled and what is still a judgement.
 
 - City production (#250 slice A, first part of #264) is on PR #271: a per-city
   estimate with a hand-set override, shown on each city card.
@@ -57,21 +58,15 @@ old test counts and past deployment reports do not establish present health.
   Your cards and Tech tree; a city's arithmetic opens in a popup. Brief
   `tasks/phase-cities-polish.md`; see "Assisted play" in decisions.
 
-- The viewer's own cities (cards, Build, Start Building Program, Upgrades, the
-  production figure) are in "Your actions", which sits under the board, before Your
-  hand. There is no panel for the opponents' cities. Briefs `tasks/cities-in-actions.md`
-  and `tasks/build-polish-wonders.md`; see "Assisted play" in decisions.
+- The viewer's own cities (cards, Build, Start Building Program, Upgrades, production) are in the
+  City Management tab of "Your actions", under the board. There is no panel for the opponents'
+  cities. See "Assisted play" in decisions.
 
-- Build: Build opens with a button per group (buildings, wonders, figures, units); wonders from the market are built like a building (cost shown, not enforced; the next wonder is drawn into the market); a building, wonder or figure is placed by the tap
-  on its square; removing a built piece before End turn takes the build back with a new log
-  line. Brief `tasks/build-polish-wonders.md`; see "Build polish and wonders" in decisions.
+- Build: a button per group (buildings, wonders, figures, units), placed by the tap on a square;
+  removing the piece before End turn takes the build back. See "Build polish and wonders" in decisions.
 
-- Your actions has a "Possible actions" box (Advance culture and the card buttons) above Your cities;
-  Advance culture scrolls to Your hand afterwards.
-
-- End turn (it ends the viewer's open phase) is a button in "Your actions", the first
-  Order tab control to move there; the Order tab keeps its own for now. Brief
-  `tasks/end-turn-actions.md`; see "Assisted play" in decisions.
+- End turn (it ends the viewer's open phase) is a button in "Your actions"; the Order tab keeps
+  its own for now. See "Assisted play" in decisions.
 
 Read [current decisions](decisions.md) for the relevant compatibility/rationale
 and [limitations](limitations.md) for known gaps. Archived Mongo games remaining

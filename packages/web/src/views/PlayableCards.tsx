@@ -110,7 +110,7 @@ export function PlayCardControl({
         <button
           type="button"
           className="small"
-          aria-label={`Play ${card.name}`}
+          aria-label={`${card.kind === 'greatPerson' && !card.discards ? 'Use' : 'Play'} ${card.name}`}
           aria-expanded={ready ? open : undefined}
           aria-controls={ready && open ? formId : undefined}
           aria-describedby={ready ? undefined : reasonId}

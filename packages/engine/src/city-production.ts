@@ -19,7 +19,7 @@ import type { Cell } from './blockade.js'
 import { columnLabel, isMapCell, mapTop, squareOf } from './board.js'
 import type { Board, BoardPiece } from './board.js'
 import { coinSourcesOf, totalCoins } from './coins.js'
-import { scoutAssignmentsOf } from './sot.js'
+import { figuresOnMap, scoutDestinationsOf } from './sot.js'
 import type { GameState, Playerhand } from './state.js'
 import { terrainAt } from './terrain.js'
 import type { Terrain } from './terrain.js'
@@ -233,15 +233,19 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
   if (state.board.pieces.some((piece) => piece.assetId === GREAT_LIGHTHOUSE_ASSET_ID && piece.ownerId === player.playerId)) {
     playerNotes.push('The Great Lighthouse is owned. Any effect on production is not counted.')
   }
-  const ownScoutId = `figures/${colour}scout`
-  const assignments = scoutAssignmentsOf(state, player)
+  const assignments = scoutDestinationsOf(state, player)
   const cityLabels = new Map(
     footprints.map((footprint) => [footprint.piece.id, `${kindOf(footprint.piece)} ${squareOf(board, footprint.piece) ?? ''}`.trim()] as const),
   )
   if (assignments.length > 0) {
-    playerNotes.push('A square a scout sends is counted for production here. Its culture and resource icons are offered to Devote to the Arts and Harvest of that city; its trade and coin icons are not counted.')
-  } else if (board.pieces.some((piece) => piece.assetId === ownScoutId && mapCellOf(board, piece) !== null)) {
-    playerNotes.push('A scout can send its square to a city in the Start of Turn. None does now.')
+    const toCapital = assignments.some((assignment) => !assignment.chosen)
+    playerNotes.push(
+      `A square a scout sends is counted for production here${toCapital ? '; a scout you did not send counts for your capital' : ''}. Its culture and resource icons are offered to Devote to the Arts and Harvest of that city; its trade and coin icons are not counted.`,
+    )
+  } else if (figuresOnMap(state, player, 'scout').length > 0) {
+    playerNotes.push(
+      'A scout sends its square to a city in the Start of Turn, and goes to the capital when it is not sent. None is counted now, because no capital is marked on the map.',
+    )
   }
 
   return footprints.map((footprint): CityProduction => {

@@ -29,7 +29,7 @@ import {
 } from '../coins.js'
 import { cultureCardsHeld, cultureHandSizeOf, isCultureHandOver } from '../culture-hand.js'
 import { applyCoinPurchase } from '../assisted.js'
-import { openPhaseOf, statsAfterGovernmentChange } from '../sot.js'
+import { grantsAfterTechRemoved, openPhaseOf, statsAfterGovernmentChange } from '../sot.js'
 import { turnStatus } from '../turn.js'
 import { blockadedPieceIds } from '../blockade.js'
 import type { EngineError } from '../errors.js'
@@ -135,6 +135,7 @@ export function removeTech(state: GameState, input: ChooseTechInput): ActionResu
   const source = techCoinSource(tech.name)
   const next = withPlayer(state, {
     ...player,
+    techGrants: grantsAfterTechRemoved(player.techGrants, tech.name),
     techsChosen: player.techsChosen.filter((candidate) => candidate.name !== tech.name),
     stats:
       source === undefined
@@ -173,7 +174,9 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
     tech.hidden && openPhaseOf(state, player.playerId) === 'SOT'
       ? player.techGrants.find(
           (candidate) =>
-            candidate.turnNumber === turnNumber && (candidate.level === null || candidate.level === tech.level),
+            candidate.usedFor === undefined &&
+            candidate.turnNumber === turnNumber &&
+            (candidate.level === null || candidate.level === tech.level),
         )
       : undefined
   const next = withPlayer(state, {
@@ -183,7 +186,7 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
       : {}),
     ...(grant === undefined
       ? {}
-      : { techGrants: player.techGrants.filter((candidate) => candidate !== grant) }),
+      : { techGrants: player.techGrants.map((candidate) => (candidate === grant ? { ...candidate, usedFor: tech.name } : candidate)) }),
     techsChosen: player.techsChosen.map((candidate) =>
       candidate.name === tech.name ? revealed : candidate,
     ),

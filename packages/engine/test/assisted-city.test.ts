@@ -22,6 +22,7 @@ import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
 import { mapCellOf } from '../src/blockade.js'
 import { SQUARE_SIZE } from '../src/board.js'
 import { foundCityCheck } from '../src/city-founding.js'
+import { scoutViewsOf } from '../src/assisted-city.js'
 import { cityActionsOf } from '../src/city-actions.js'
 import { cityProductionsOf } from '../src/city-production.js'
 import { markPhasesDone } from '../src/actions/turn.js'
@@ -152,8 +153,12 @@ describe('where a city can be founded', () => {
   })
 
   it('counts both squares of a metropolis', () => {
-    const state = put(withScout(), KARANDRAS1, 'cities/bluemetropolis2', 3, 1)
-    expect(check(state).ok).toBe(false)
+    // Anchored on E2 it also holds D2, which is 2 squares from B2: only the second square is too near
+    const near = put(withScout(), KARANDRAS1, 'cities/bluemetropolis2', 4, 1)
+    expect(check(near).ok).toBe(false)
+    // Anchored on F2 it holds E2 and F2, both 3 or more away
+    const far = put(withScout(), KARANDRAS1, 'cities/bluemetropolis2', 5, 1)
+    expect(check(far).ok).toBe(true)
   })
 
   it('refuses a third city before Irrigation, and allows it with Irrigation revealed', () => {
@@ -317,6 +322,52 @@ describe('founding a city', () => {
     }
   })
 
+  it('refuses the undo once the city was used, and when the culture of its city-state is spent', () => {
+    const base = withScout({ culture: 4 })
+    const state = put(base, CASH1981, 'city-states/cs2', 1, 1)
+    const result = unwrap(found(state, scoutOf(state).id))
+    const city = cityAt(result, 1, 1)
+    if (city === undefined) throw new Error('no city')
+    const refusal = (from: GameState): string => {
+      const entry = from.log.find((candidate) => candidate.assistedActionId === 'req-1')
+      if (entry === undefined) throw new Error('no line')
+      let next = unwrap(initiateUndo(from, { logId: entry.id, playerId: CASH1981 }))
+      next = unwrap(vote(next, { logId: entry.id, playerId: KARANDRAS1, vote: true, at: AT }))
+      next = unwrap(vote(next, { logId: entry.id, playerId: ITCHI, vote: true, at: AT }))
+      const error = unwrapErr(vote(next, { logId: entry.id, playerId: CHUL, vote: true, at: AT }))
+      if (error.kind !== 'ASSISTED_UNDO_BLOCKED') throw new Error(`unexpected error ${error.kind}`)
+      return error.reason
+    }
+    // The 3 culture of the city-state was spent
+    const spent: GameState = {
+      ...result,
+      players: result.players.map((player) =>
+        player.playerId === CASH1981 ? { ...player, stats: { ...player.stats, culture: 2 } } : player,
+      ),
+    }
+    expect(refusal(spent)).toMatch(/Only 2 culture is left, so the 3 culture from the city-state on B2 cannot be taken back/)
+    // A later action of the city
+    const devoted: GameState = {
+      ...result,
+      assistedActions: [
+        ...result.assistedActions,
+        {
+          id: 'later',
+          kind: 'devoteToTheArts',
+          playerId: CASH1981,
+          turnNumber: result.assistedActions[0]?.turnNumber ?? 1,
+          phase: 'CM',
+          usageKey: null,
+          at: null,
+          logId: 'none',
+          status: 'applied',
+          effect: { kind: 'devoteToTheArts', cityPieceId: city.id, cityLabel: 'City B2', culture: 1 },
+        },
+      ],
+    }
+    expect(refusal(devoted)).toBe('The city on B2 was used after it was founded (devoteToTheArts). Undo that first.')
+  })
+
   it('refuses the undo when the city has been moved', () => {
     const state = withScout()
     const result = unwrap(found(state, scoutOf(state).id))
@@ -338,6 +389,12 @@ describe('founding a city', () => {
     expect(own?.scouts[0]).toMatchObject({ square: 'B2', terrain: 'mountain', figure: 'scout', canSend: true })
     expect(own?.scouts[0]?.found.reasons).toEqual(['An enemy figure is next to B2 (C2).'])
     expect(own?.cityLimit).toEqual({ have: 0, max: 2 })
+    expect(own?.scoutsNow.status).toBe('ready')
+    const closed = unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
+    expect(toPlayerView(closed, CASH1981).you?.startOfTurn?.scoutsNow).toEqual({
+      status: 'wrong-phase',
+      reason: 'Only available during your open Start of Turn phase.',
+    })
     expect(toPlayerView(state, KARANDRAS1).you?.startOfTurn?.scouts).toEqual([])
     expect(JSON.stringify(toPlayerView(state, KARANDRAS1).opponents)).not.toContain('startOfTurn')
   })
@@ -359,17 +416,38 @@ describe('sending a scout’s square to a city', () => {
   const near = (state: GameState) => cities(state).find((city) => city.label.endsWith('B2'))
   const far = (state: GameState) => cities(state).find((city) => city.label.endsWith('I9'))
 
-  it('adds the production of a forest outside the outskirts to the city the scout sends it to', () => {
+  it('counts the square of a scout that was not sent for the capital', () => {
     const state = twoCities(FOREST_D3)
-    const before = near(state)?.outskirts ?? 0
-    const sent = unwrap(assign(state, scoutOf(state).id, near(state)?.pieceId ?? ''))
-    expect(near(sent)?.outskirts).toBe(before + 2)
-    expect(near(sent)?.outskirtsDetail.find((entry) => entry.square === 'D3')).toMatchObject({
+    const withoutScout: GameState = { ...state, board: { ...state.board, pieces: state.board.pieces.filter((piece) => piece.id !== scoutOf(state).id) } }
+    expect(near(state)?.outskirts).toBe((near(withoutScout)?.outskirts ?? 0) + 2)
+    expect(near(state)?.outskirtsDetail.find((entry) => entry.square === 'D3')).toMatchObject({
       source: 'forest, sent by your scout',
       amount: 2,
       scout: true,
     })
+    expect(far(state)?.outskirts).toBe(0)
+    expect(near(state)?.notes.join(' ')).toContain('a scout you did not send counts for your capital')
+  })
+
+  it('adds the production of a forest outside the outskirts to the city the scout sends it to', () => {
+    const state = twoCities(FOREST_D3)
+    const capitalBefore = near(state)?.outskirts ?? 0
+    const sent = unwrap(assign(state, scoutOf(state).id, far(state)?.pieceId ?? ''))
+    expect(far(sent)?.outskirts).toBe(2)
+    expect(far(sent)?.outskirtsDetail.find((entry) => entry.square === 'D3')).toMatchObject({
+      source: 'forest, sent by your scout',
+      amount: 2,
+      scout: true,
+    })
+    expect(near(sent)?.outskirts).toBe(capitalBefore - 2)
+    expect(sent.log.at(-1)?.publicLog).toBe('cash1981 sent the square of the scout on D3 to City I9')
+  })
+
+  it('names the capital in the log when a scout is sent to it', () => {
+    const state = twoCities(FOREST_D3)
+    const sent = unwrap(assign(state, scoutOf(state).id, near(state)?.pieceId ?? ''))
     expect(sent.log.at(-1)?.publicLog).toBe('cash1981 sent the square of the scout on D3 to Capital B2')
+    expect(near(sent)?.outskirts).toBe(near(state)?.outskirts)
   })
 
   it('takes the square away from the city it belongs to when the scout sends it to another city', () => {
@@ -409,32 +487,96 @@ describe('sending a scout’s square to a city', () => {
         ?.harvest.choices.filter((choice) => choice.scoutPieceId !== null)
         .map((choice) => choice.resource)
 
-    it('offers a scout that has been sent nowhere to every city, as before', () => {
+    it('offers a scout that was not sent to the capital only', () => {
       const state = twoCities(WHEAT_D4)
       expect(scoutChoices(state, 'B2')).toEqual(['wheat'])
-      expect(scoutChoices(state, 'I9')).toEqual(['wheat'])
-      expect(cityActionsOf(state, me(state))[0]?.harvest.notes.join(' ')).toContain('one you did not send is offered to every city')
+      expect(scoutChoices(state, 'I9')).toEqual([])
+      const notes = (label: string) =>
+        cityActionsOf(state, me(state)).find((options) => options.label.endsWith(label))?.harvest.notes.join(' ')
+      expect(notes('B2')).toContain('did not send anywhere gathers for your capital and for no other city')
+      expect(notes('I9')).not.toContain('did not send anywhere')
     })
 
-    it('offers a scout that was sent to a city to that city only', () => {
+    it('offers a scout that was sent to another city to that city only', () => {
       const state = twoCities(WHEAT_D4)
-      const sent = unwrap(assign(state, scoutOf(state).id, near(state)?.pieceId ?? ''))
-      expect(scoutChoices(sent, 'B2')).toEqual(['wheat'])
-      expect(scoutChoices(sent, 'I9')).toEqual([])
-      expect(cityActionsOf(sent, me(sent)).find((options) => options.label.endsWith('B2'))?.harvest.notes.join(' ')).toContain(
+      const sent = unwrap(assign(state, scoutOf(state).id, far(state)?.pieceId ?? ''))
+      expect(scoutChoices(sent, 'B2')).toEqual([])
+      expect(scoutChoices(sent, 'I9')).toEqual(['wheat'])
+      expect(cityActionsOf(sent, me(sent)).find((options) => options.label.endsWith('I9'))?.harvest.notes.join(' ')).toContain(
         'sent to this city in the Start of Turn gathers here and for no other city',
       )
     })
 
-    it('follows the latest choice, and gives the scout back to every city when the sending stops', () => {
+    it('follows the latest choice, and gives the scout back to the capital when the sending stops', () => {
       const state = twoCities(WHEAT_D4)
-      const first = unwrap(assign(state, scoutOf(state).id, near(state)?.pieceId ?? ''))
-      const second = unwrap(assign(first, scoutOf(first).id, far(first)?.pieceId ?? '', 'req-2'))
-      expect(scoutChoices(second, 'B2')).toEqual([])
-      expect(scoutChoices(second, 'I9')).toEqual(['wheat'])
-      const stopped = unwrap(assign(second, scoutOf(second).id, null, 'req-3'))
+      const first = unwrap(assign(state, scoutOf(state).id, far(state)?.pieceId ?? ''))
+      const second = unwrap(assign(first, scoutOf(first).id, near(first)?.pieceId ?? '', 'req-2'))
+      expect(scoutChoices(second, 'B2')).toEqual(['wheat'])
+      expect(scoutChoices(second, 'I9')).toEqual([])
+      const again = unwrap(assign(second, scoutOf(second).id, far(second)?.pieceId ?? '', 'req-3'))
+      expect(scoutChoices(again, 'I9')).toEqual(['wheat'])
+      const stopped = unwrap(assign(again, scoutOf(again).id, null, 'req-4'))
       expect(scoutChoices(stopped, 'B2')).toEqual(['wheat'])
-      expect(scoutChoices(stopped, 'I9')).toEqual(['wheat'])
+      expect(scoutChoices(stopped, 'I9')).toEqual([])
+    })
+
+    it('offers a scout to every city when no capital is marked on the map, and says why', () => {
+      let state = withAmerica(sotTurn({ techs: ['Irrigation'] }))
+      state = put(state, CASH1981, 'cities/redcity2', 1, 1)
+      state = put(state, CASH1981, 'cities/redcity2', 8, 8)
+      state = put(state, CASH1981, 'figures/redscout', WHEAT_D4.column, WHEAT_D4.row)
+      expect(scoutChoices(state, 'B2')).toEqual(['wheat'])
+      expect(scoutChoices(state, 'I9')).toEqual(['wheat'])
+      expect(cityActionsOf(state, me(state))[0]?.harvest.notes.join(' ')).toContain('Your capital is not marked on the map')
+      expect(scoutViewsOf(state, me(state))[0]).toMatchObject({ assignedTo: null, assignedByDefault: false })
+    })
+  })
+
+  describe('the capital as the default', () => {
+    it('shows each scout where it goes, and whether the player chose it', () => {
+      const state = twoCities(FOREST_D3)
+      const capital = near(state)?.pieceId
+      expect(scoutViewsOf(state, me(state))[0]).toMatchObject({ assignedTo: capital, assignedByDefault: true })
+      const sent = unwrap(assign(state, scoutOf(state).id, far(state)?.pieceId ?? ''))
+      expect(scoutViewsOf(sent, me(sent))[0]).toMatchObject({ assignedTo: far(sent)?.pieceId, assignedByDefault: false })
+      const chosen = unwrap(assign(state, scoutOf(state).id, capital ?? ''))
+      expect(scoutViewsOf(chosen, me(chosen))[0]).toMatchObject({ assignedTo: capital, assignedByDefault: false })
+    })
+
+    it('sends the scout back to the capital when the choice is undone', () => {
+      const state = twoCities(FOREST_D3)
+      const sent = unwrap(assign(state, scoutOf(state).id, far(state)?.pieceId ?? ''))
+      const undone = undoByVote(sent, 'req-1')
+      expect(scoutViewsOf(undone, me(undone))[0]).toMatchObject({ assignedTo: near(undone)?.pieceId, assignedByDefault: true })
+      expect(near(undone)?.outskirts).toBe(near(state)?.outskirts)
+    })
+
+    it('takes a square a scout stands on from the other city it lies next to, in the gathering as in the production', () => {
+      // D4 holds wheat. It lies in the outskirts of a second city on E5, and the scout there goes to the capital on B2
+      let state = withAmerica(sotTurn({ techs: ['Irrigation'] }))
+      state = put(state, CASH1981, 'cities/redcapital2', 1, 1)
+      state = put(state, CASH1981, 'cities/redcity2', 4, 4)
+      state = put(state, CASH1981, 'figures/redscout', 3, 3)
+      const harvest = (from: GameState, label: string) =>
+        cityActionsOf(from, me(from)).find((options) => options.label.endsWith(label))?.harvest
+      const wheat = (from: GameState, label: string) =>
+        harvest(from, label)?.choices.filter((choice) => choice.resource === 'wheat').map((choice) => choice.scoutPieceId !== null)
+      expect(wheat(state, 'B2')).toEqual([true])
+      expect(wheat(state, 'E5')).toEqual([])
+      expect(harvest(state, 'E5')?.notes.join(' ')).toContain('D4 is sent to another city by a scout and gives nothing here.')
+      const own = cities(state).find((city) => city.label.endsWith('E5'))
+      expect(own?.outskirtsDetail.find((entry) => entry.square === 'D4')).toMatchObject({ amount: 0, sentTo: 'Capital B2' })
+      // Sent to the city next to it, the square stays where it is
+      const sent = unwrap(assign(state, scoutOf(state).id, cities(state).find((city) => city.label.endsWith('E5'))?.pieceId ?? ''))
+      expect(wheat(sent, 'E5')).toEqual([false])
+      expect(wheat(sent, 'B2')).toEqual([])
+    })
+
+    it('does not send an English army to the capital on its own', () => {
+      let english = withAmerica(sotTurn({ civ: 'England' }))
+      english = put(english, CASH1981, 'cities/redcapital2', 1, 1)
+      english = put(english, CASH1981, 'figures/redarmy', 3, 2)
+      expect(scoutViewsOf(english, me(english)).find((view) => view.figure === 'army')).toMatchObject({ assignedTo: null, assignedByDefault: false })
     })
   })
 
@@ -447,7 +589,7 @@ describe('sending a scout’s square to a city', () => {
     expect(far(toNear)?.outskirts).toBe(0)
     const stopped = unwrap(assign(toFar, scout.id, null, 'req-3'))
     expect(scoutAssignmentsOf(stopped, me(stopped))).toEqual([])
-    expect(stopped.log.at(-1)?.publicLog).toBe('cash1981 stopped sending the square of the scout on A2 to a city')
+    expect(stopped.log.at(-1)?.publicLog).toBe('cash1981 sent the square of the scout on A2 back to the capital')
     expect(near(stopped)?.outskirts).toBe(near(state)?.outskirts)
 
     // Undoing the latest choice brings the one before back
@@ -458,14 +600,16 @@ describe('sending a scout’s square to a city', () => {
   it('stops counting once the scout has moved off the square, and once the turn has gone on', () => {
     const state = twoCities(FOREST_D3)
     const scout = scoutOf(state)
-    const sent = unwrap(assign(state, scout.id, near(state)?.pieceId ?? ''))
+    const sent = unwrap(assign(state, scout.id, far(state)?.pieceId ?? ''))
     expect(scoutAssignmentsOf(sent, me(sent))).toHaveLength(1)
+    expect(far(sent)?.outskirts).toBe(2)
     const moved = unwrap(movePiece(sent, { playerId: CASH1981, pieceId: scout.id, x: scout.x + SQUARE_SIZE, y: scout.y, snap: false }))
     expect(scoutAssignmentsOf(moved, me(moved))).toEqual([])
-    expect(near(moved)?.outskirts).toBe(near(state)?.outskirts)
+    expect(far(moved)?.outskirts).toBe(0)
     // A record from an earlier turn does not count
     const later: GameState = { ...sent, assistedActions: sent.assistedActions.map((record) => ({ ...record, turnNumber: 0 })) }
     expect(scoutAssignmentsOf(later, me(later))).toEqual([])
+    expect(far(later)?.outskirts).toBe(0)
   })
 
   it('ignores a scout whose city is gone', () => {
@@ -511,9 +655,10 @@ describe('sending a scout’s square to a city', () => {
 
   it('does not change what another player sees of the cities, except the production figure', () => {
     const state = twoCities(FOREST_D3)
-    const sent = unwrap(assign(state, scoutOf(state).id, near(state)?.pieceId ?? ''))
+    const sent = unwrap(assign(state, scoutOf(state).id, far(state)?.pieceId ?? ''))
     const theirs = toPlayerView(sent, KARANDRAS1).opponents.find((opponent) => opponent.playerId === CASH1981)
-    expect(theirs?.cities?.find((city) => city.label.endsWith('B2'))?.outskirts).toBe((near(state)?.outskirts ?? 0) + 2)
+    expect(theirs?.cities?.find((city) => city.label.endsWith('I9'))?.outskirts).toBe(2)
+    expect(theirs?.cities?.find((city) => city.label.endsWith('B2'))?.outskirts).toBe(near(sent)?.outskirts)
   })
 
 })

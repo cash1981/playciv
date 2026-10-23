@@ -7,9 +7,8 @@
  * images), from the building table, and from the culture on wonder and Great Person
  * markers (`wonder-data.ts`, `great-person-data.ts`). The player's social policy
  * Urban Development adds culture to a city with two different buildings or wonders in its
- * outskirts. One thing is never known: the scout that is sent to a city this turn (it is
- * assigned at the start of the turn), so a scout is offered to every city and the player
- * says which.
+ * outskirts. A scout gathers for the city it was sent to in the Start of Turn, else for the
+ * capital (`scoutDestinationsOf`); without a capital marker it is offered to every city.
  *
  * Pure: the phase and the supply of tokens are decided by the caller, not here.
  */
@@ -17,7 +16,7 @@
 import { mapCellOf, pieceColorOf } from './blockade.js'
 import type { Cell, CityFootprintView } from './blockade.js'
 import { WHITE_SCOUT_ID, isMapCell, whiteFigureFor } from './board.js'
-import { scoutAssignmentsOf } from './sot.js'
+import { scoutDestinationsOf } from './sot.js'
 import type { BoardPiece } from './board.js'
 import { squareLabel } from './build-options.js'
 import { buildingDataOf, buildingNameOf } from './building-data.js'
@@ -207,9 +206,17 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
   const unknown: string[] = []
   const coveredResources: string[] = []
   const found = new Map<ResourceKind, string[]>()
+  const sentTo = new Map(scoutDestinationsOf(state, player).map((assignment) => [assignment.scoutPieceId, assignment]))
+  const sentAway: string[] = []
 
   for (const cell of outskirts) {
     const reading = readSquare(state, cell)
+    // A scout on the square sends it to another city: it leaves this one (base rules p. 26)
+    const leaves = [...sentTo.values()].some((assignment) => sameCell(assignment, cell) && assignment.cityPieceId !== footprint.piece.id)
+    if (leaves) {
+      sentAway.push(reading.label)
+      continue
+    }
     const blockaded = footprint.hasEnemyFigureAt(cell)
     if (blockaded) {
       if (reading.culture > 0 || reading.resource !== null) blockadedWithIcons.push(reading.label)
@@ -228,6 +235,11 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
       ? null
       : `${listSquares(blockadedWithIcons)} ${blockadedWithIcons.length === 1 ? 'is blockaded and gives' : 'are blockaded and give'} nothing.`
   if (blockadeNote !== null) notes.push(blockadeNote)
+  const sentAwayNote =
+    sentAway.length === 0
+      ? null
+      : `${listSquares(sentAway)} ${sentAway.length === 1 ? 'is' : 'are'} sent to another city by a scout and give${sentAway.length === 1 ? 's' : ''} nothing here.`
+  if (sentAwayNote !== null) notes.push(sentAwayNote)
   if (unknown.length > 0) {
     notes.push(`The icons of ${listSquares(unknown)} are not in the map data and count as none.`)
   }
@@ -247,18 +259,20 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
 
   const scouts: ScoutSquare[] = []
   const scoutChoices: HarvestChoiceView[] = []
-  // A scout the player sent to a city in the Start of Turn gathers for that city only (base rules p. 26)
-  const sentTo = new Map(scoutAssignmentsOf(state, player).map((assignment) => [assignment.scoutPieceId, assignment.cityPieceId]))
+  // A scout gathers for the city it was sent to in the Start of Turn, and for the capital when it was
+  // not sent (base rules p. 26). Without a capital marker it is offered to every city.
   let sentHere = false
+  let defaultHere = false
   let unsent = false
   for (const piece of board.pieces) {
     if (!isOwnScout(piece, player)) continue
-    const city = sentTo.get(piece.id)
-    if (city !== undefined && city !== footprint.piece.id) continue
+    const destination = sentTo.get(piece.id)
+    if (destination !== undefined && destination.cityPieceId !== footprint.piece.id) continue
     const cell = mapCellOf(board, piece)
     if (cell === null || own.some((mine) => sameCell(mine, cell))) continue
-    if (city === undefined) unsent = true
-    else sentHere = true
+    if (destination === undefined) unsent = true
+    else if (destination.chosen) sentHere = true
+    else defaultHere = true
     const reading = readSquare(state, cell)
     if (reading.culture > 0) scouts.push({
         pieceId: piece.id,
@@ -277,10 +291,16 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
       })
     }
   }
-  if (sentHere) notes.push('A scout you sent to this city in the Start of Turn gathers here and for no other city.')
-  if (unsent && scouts.length > 0) {
-    notes.push('A scout gathers from the turn after it was placed and is sent to one city. Send a scout to a city in the Start of Turn so the game tracks it; one you did not send is offered to every city.')
+  const scoutNotes: string[] = []
+  if (sentHere || defaultHere || unsent) scoutNotes.push('A scout gathers from the turn after it was placed.')
+  if (sentHere) scoutNotes.push('A scout you sent to this city in the Start of Turn gathers here and for no other city.')
+  if (defaultHere) {
+    scoutNotes.push('A scout you did not send anywhere gathers for your capital and for no other city. Send it to another city in the Start of Turn to change that.')
   }
+  if (unsent) {
+    scoutNotes.push('Your capital is not marked on the map (a metropolis has no capital marker), so a scout you did not send is offered to every city. Send it to a city in the Start of Turn so the game tracks it.')
+  }
+  if (scouts.length > 0) notes.push(...scoutNotes)
 
   const choices: HarvestChoiceView[] = [
     ...RESOURCE_KINDS.flatMap((resource): HarvestChoiceView[] => {
@@ -300,11 +320,9 @@ export function cityGatheringOf(state: GameState, player: Playerhand, footprint:
   ]
 
   const harvestNotes: string[] = []
-  if (sentHere && scoutChoices.length > 0) harvestNotes.push('A scout you sent to this city in the Start of Turn gathers here and for no other city.')
-  if (unsent && scoutChoices.length > 0) {
-    harvestNotes.push('A scout gathers from the turn after it was placed and is sent to one city. Send a scout to a city in the Start of Turn so the game tracks it; one you did not send is offered to every city.')
-  }
+  if (scoutChoices.length > 0) harvestNotes.push(...scoutNotes)
   if (blockadeNote !== null) harvestNotes.push(blockadeNote)
+  if (sentAwayNote !== null) harvestNotes.push(sentAwayNote)
   if (unknown.length > 0) harvestNotes.push(`The icons of ${listSquares(unknown)} are not in the map data, so a resource there is not listed.`)
   if (coveredResources.length > 0) {
     harvestNotes.push(`${listSquares(coveredResources)} ${coveredResources.length === 1 ? 'is' : 'are'} covered by a building, wonder, Great Person or disaster token and cannot be harvested.`)

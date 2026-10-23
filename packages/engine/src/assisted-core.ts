@@ -12,10 +12,12 @@
 import { boardAreas, locationOf } from './board.js'
 import type { BoardPiece } from './board.js'
 import type { BuildPayload } from './build-options.js'
+import type { CultureLevel } from './culture-track.js'
 import type { EngineError } from './errors.js'
 import type { Government } from './government.js'
 import { nextId } from './random.js'
 import type { Result } from './result.js'
+import type { SheetName } from './sheet-name.js'
 import type {
   AssistedActionKind,
   AssistedActionRecord,
@@ -28,6 +30,12 @@ import type {
 } from './state.js'
 import { publicTurn, publicTurnKey, sameTurn, turnStatus } from './turn.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
+
+export const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`
+export const ROMAN = ['', 'I', 'II', 'III'] as const
+
+export const levelSheet = (level: CultureLevel): SheetName =>
+  level === 1 ? 'CULTURE_1' : level === 2 ? 'CULTURE_2' : 'CULTURE_3'
 
 // These two read the player list directly, so this module does not need the
 // value exports of `state.ts`, which in turn builds the projection from here.
@@ -344,6 +352,19 @@ export const usedReason = (label: string): string =>
 export const PHASE_REASON = 'Only available during your open City Management phase.'
 
 export const lastLogId = (state: GameState): string => state.log.at(-1)?.id ?? ''
+
+/**
+ * Why a free tech cannot be taken back, or `undefined` when it can. A grant that a tech was learned with
+ * stays on the player marked with that tech (`usedFor`): removing the tech frees it again, so the
+ * refusal says what to do and it works.
+ */
+export function grantUndoBlock(player: Playerhand, grantId: string): string | undefined {
+  const grant = player.techGrants.find((candidate) => candidate.id === grantId)
+  if (grant === undefined) return 'The free tech this gave is no longer on your list, so it cannot be taken back.'
+  return grant.usedFor === undefined
+    ? undefined
+    : `You learned ${grant.usedFor} with it. Remove ${grant.usedFor} first, then undo this.`
+}
 
 /**
  * Puts the exact piece back, same id and same place, as a board history entry

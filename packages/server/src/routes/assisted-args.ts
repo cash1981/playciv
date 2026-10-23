@@ -99,25 +99,27 @@ function parseAssignScout(args: Record<string, unknown>): AssignScoutPayload | s
   return { scoutPieceId: args['scoutPieceId'], cityPieceId: city }
 }
 
-/** The actions whose payload is `args`, with the parser of each. */
-const PARSERS: Readonly<Record<string, (args: Record<string, unknown>) => AssistedPayload | string>> = {
-  playCard: parsePlayCard,
-  switchGovernment: parseSwitchGovernment,
-  invest: parseInvest,
-  feudalismHarvest: parseHarvest,
-  foundCity: parseFoundCity,
-  assignScout: parseAssignScout,
-}
+type Parser = (args: Record<string, unknown>) => AssistedPayload | string
+
+/** The actions whose payload is `args`, with the parser of each. A map, so a request can only pick an entry that is here. */
+const PARSERS: ReadonlyMap<string, Parser> = new Map<string, Parser>([
+  ['playCard', parsePlayCard],
+  ['switchGovernment', parseSwitchGovernment],
+  ['invest', parseInvest],
+  ['feudalismHarvest', parseHarvest],
+  ['foundCity', parseFoundCity],
+  ['assignScout', parseAssignScout],
+])
 
 /** Whether `action` takes `args`. */
-export const takesArgs = (action: string): boolean => Object.hasOwn(PARSERS, action)
+export const takesArgs = (action: string): boolean => PARSERS.has(action)
 
 /**
  * The payload of `action` from the body's `args`, or a sentence saying what is
  * wrong with it. `args` must be an object for an action that takes it.
  */
 export function parseActionArgs(action: string, raw: unknown): AssistedPayload | string {
-  const parser = PARSERS[action]
+  const parser = PARSERS.get(action)
   if (parser === undefined) return `${action} takes no args`
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return 'args must be an object'
   return parser(asRecord(raw))

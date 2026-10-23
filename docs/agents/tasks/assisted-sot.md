@@ -62,11 +62,21 @@ show on every tab.
   chooses targets, so the log names them.
 - Scouts: a scout sent to a city counts for that city's production; its culture and
   resource icons are offered to that city's Devote to the Arts and Harvest only (the map
-  data now has them, `tile-icons.json`). Trade and coin icons stay manual.
+  data now has them, `tile-icons.json`). Trade and coin icons stay manual. A scout that is
+  not sent goes to the capital.
 - Growing a capital into a metropolis (Agriculture) only scrolls to the map; the player
   does it by hand.
-- Wonder, Great Person, hut, relic and tech Start of Turn abilities are in this slice.
+- Wonder, Great Person, hut, relic and tech Start of Turn abilities are in this slice. Only
+  Atlantis (log, then the tech tree for a free tech) and the investment relic (Seven Cities of
+  Gold: the player says which investment card gets 2 markers) have a Start of Turn button.
 - The base city and Anarchy defaults above are confirmed.
+- A wonder being obsolete is not tracked; Turing counts the Russians' white army; the Seven
+  Cities give the Arabs no free advance; Expansionism counts a city-state by the figure on it;
+  a relic is claimed in any later Start of Turn.
+- Mysticism's extra card applies to every culture card draw (advance, Patronage, Cristo
+  Redentor). Patronage needs one advance first (the start space has no level). Feudalism's
+  harvest is chosen from what the tile data shows around the city.
+- Only coin tokens on the sheet and on tech cards can be invested; the coins on a wonder cannot.
 
 ## Scope
 

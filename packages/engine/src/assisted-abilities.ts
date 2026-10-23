@@ -27,9 +27,13 @@
 import { setWonderCoinTokens } from './actions/board.js'
 import {
   REPEAT_NOTE,
+  ROMAN,
   blocked,
+  grantUndoBlock,
   lastLogId,
+  levelSheet,
   playerOf,
+  plural,
   rejected,
   techBlock,
   useTurnAction,
@@ -39,13 +43,14 @@ import type { ApplyContext, AssistedActionDefinition, BlockedAvailability } from
 import {
   countLinesIn,
   drawCandidates,
+  freeAdvanceStatus,
   livePendingRewards,
   performAdvance,
   restoreDrawnCards,
   reverseAdvanceEffect,
 } from './assisted-culture.js'
 import { findResourceToken, returnResource, spendResource } from './assisted-resources.js'
-import { ROMAN, levelSheet, plural, startOfTurnGate, statGainAction } from './assisted-sot.js'
+import { startOfTurnGate, statGainAction } from './assisted-sot.js'
 import type { StatGainSpec } from './assisted-sot.js'
 import { blockadedGreatPersonTypes, blockadedPieceIds } from './blockade.js'
 import { findBoardAsset, remainingBoardAssetCount, whiteFigureFor } from './board.js'
@@ -550,9 +555,8 @@ function grantAction(spec: GrantSpec): AssistedActionDefinition {
       const effect = record.effect
       if (effect.kind !== 'sotGrant') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
       const blockedBy = (reason: string) => err({ kind: 'ASSISTED_UNDO_BLOCKED' as const, logId: record.logId, reason })
-      if (!player.techGrants.some((grant) => grant.id === effect.grantId)) {
-        return blockedBy('The tech this gave has been learned already. Remove that tech first.')
-      }
+      const spent = grantUndoBlock(player, effect.grantId)
+      if (spent !== undefined) return blockedBy(spent)
       const hut = effect.hut
       if (hut !== null && !state.discardedItems.some((item) => item.id === hut.id)) {
         return blockedBy('The hut is no longer in the discard pile.')
@@ -585,10 +589,14 @@ const SYDNEY: AbilityBase = {
   group: WONDERS,
   usageKey: 'wonder:sydneyoperahouse',
   block: wonderBlock('wonders/sydneyoperahouse', 'Sydney Opera House'),
-  check: (_state, player) =>
-    livePendingRewards(player).length > 0
-      ? blocked('unavailable', 'Choose the card to keep from your last advance first.')
-      : undefined,
+  check(state, player) {
+    if (livePendingRewards(player).length > 0) {
+      return blocked('unavailable', 'Choose the card to keep from your last advance first.')
+    }
+    // The button is ready only when the advance can be made: the end of the track, a hand over its size and an empty deck stop it
+    const status = freeAdvanceStatus(state, player)
+    return status.kind === 'ok' ? undefined : blocked('unavailable', status.reason)
+  },
 }
 
 const sydneyOperaHouse: AssistedActionDefinition = {
@@ -639,7 +647,7 @@ const panamaPieceOf = (state: GameState, player: Playerhand) =>
 const panamaCanal: AssistedActionDefinition = {
   ...shared(PANAMA),
 
-  availability: availabilityOf(PANAMA, () => 'Add 1 coin token to the Panama Canal. It can be invested later, and it counts as a coin.'),
+  availability: availabilityOf(PANAMA, () => 'Add 1 coin token to the Panama Canal. It counts as a coin, but it is not a coin token of the sheet, so it cannot be invested.'),
 
   apply(state, player, context) {
     const opened = openGate(state, player, PANAMA, context.confirmedRepeat)
@@ -747,6 +755,8 @@ function cristoRedentor(level: CultureLevel): AssistedActionDefinition {
         if (items.length > 0) groups.push(items)
       }
       const cards = groups.flat()
+      // A draw with one card has no choice: that card is kept
+      const keptAtOnce = groups.flatMap((items) => (items.length === 1 ? items.map((item) => item.id) : []))
       const step = cultureMarkerOf(state, player)?.step ?? 0
       // The second choice is `<request id>:2`, so the record of the action still finds both
       const rewards = groups.flatMap((items, draw): readonly PendingReward[] =>
@@ -788,7 +798,7 @@ function cristoRedentor(level: CultureLevel): AssistedActionDefinition {
       })
       return ok({
         state: logged,
-        effect: { kind: 'sotDraw', subject: 'Cristo Redentor', sheetName, drawn: cards.map((card) => card.id) },
+        effect: { kind: 'sotDraw', subject: 'Cristo Redentor', sheetName, drawn: cards.map((card) => card.id), kept: keptAtOnce },
         logId,
       })
     },
@@ -796,7 +806,7 @@ function cristoRedentor(level: CultureLevel): AssistedActionDefinition {
     reverse(state, player, record) {
       const effect = record.effect
       if (effect.kind !== 'sotDraw') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
-      const restored = restoreDrawnCards(state, player, record.id, effect.drawn, null, effect.sheetName)
+      const restored = restoreDrawnCards(state, player, record.id, effect.drawn, effect.kept, effect.sheetName)
       if (!restored.ok) {
         return err({
           kind: 'ASSISTED_UNDO_BLOCKED',
@@ -879,13 +889,8 @@ function sevenCities(card: InvestmentCard): AssistedActionDefinition {
     reverse(state, player, record) {
       const effect = record.effect
       if (effect.kind !== 'sotInvest') return err({ kind: 'NOTHING_TO_UNDO', logId: record.logId })
-      if (effect.grantId !== null && !player.techGrants.some((grant) => grant.id === effect.grantId)) {
-        return err({
-          kind: 'ASSISTED_UNDO_BLOCKED',
-          logId: record.logId,
-          reason: 'The tech this paid for has been learned already. Remove that tech first.',
-        })
-      }
+      const spent = effect.grantId === null ? undefined : grantUndoBlock(player, effect.grantId)
+      if (spent !== undefined) return err({ kind: 'ASSISTED_UNDO_BLOCKED', logId: record.logId, reason: spent })
       const back: Playerhand = {
         ...player,
         stats: { ...player.stats, [effect.card]: Math.max(0, player.stats[effect.card] - effect.markers) },

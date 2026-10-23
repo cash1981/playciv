@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { undoLastBoardChange } from '../src/actions/board.js'
-import { chooseTech, revealTech } from '../src/actions/player.js'
+import { chooseTech, removeTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, performAssistedAction } from '../src/assisted.js'
@@ -199,7 +199,9 @@ describe('Rationalism', () => {
     const state = unwrap(act(sotTurn({ policies: ['Rationalism'], trade: 20 }), 'rationalismI', 'req-1'))
     const chosen = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Pottery' }))
     const learned = unwrap(revealTech(chosen, { playerId: CASH1981, techName: 'Pottery' }))
-    expect(me(learned).techGrants).toEqual([])
+    // Spent, but kept on the player so that removing Pottery gives it back
+    expect(me(learned).techGrants).toEqual([expect.objectContaining({ id: 'req-1', usedFor: 'Pottery' })])
+    expect(toPlayerView(learned, CASH1981).you?.startOfTurn?.techGrants).toEqual([])
     expect(learned.log.at(-1)?.publicLog).toBe('cash1981 learned Pottery with Rationalism')
     expect(me(learned).techRevealTurns['Pottery']).toBe(1)
   })
@@ -225,7 +227,32 @@ describe('Rationalism', () => {
     let next = unwrap(initiateUndo(learned, { logId: entry.id, playerId: CASH1981 }))
     next = unwrap(vote(next, { logId: entry.id, playerId: KARANDRAS1, vote: true, at: AT }))
     next = unwrap(vote(next, { logId: entry.id, playerId: ITCHI, vote: true, at: AT }))
-    expect(unwrapErr(vote(next, { logId: entry.id, playerId: CHUL, vote: true, at: AT })).kind).toBe('ASSISTED_UNDO_BLOCKED')
+    const refusal = unwrapErr(vote(next, { logId: entry.id, playerId: CHUL, vote: true, at: AT }))
+    expect(refusal).toMatchObject({
+      kind: 'ASSISTED_UNDO_BLOCKED',
+      reason: 'You learned Pottery with it. Remove Pottery first, then undo this.',
+    })
+
+    // What the refusal says works: removing the tech gives the free tech back, and the undo then goes through
+    const without = unwrap(removeTech(learned, { playerId: CASH1981, techName: 'Pottery' }))
+    expect(toPlayerView(without, CASH1981).you?.startOfTurn?.techGrants).toEqual([
+      { id: 'req-1', source: 'Rationalism', level: 1 },
+    ])
+    const undoneAfterRemoval = undoByVote(without, 'req-1')
+    expect(me(undoneAfterRemoval).stats.trade).toBe(20)
+    expect(me(undoneAfterRemoval).techGrants).toEqual([])
+  })
+
+  it('gives the free tech back when the vote takes the reveal back', () => {
+    const state = unwrap(act(sotTurn({ policies: ['Rationalism'], trade: 20 }), 'rationalismI', 'req-1'))
+    const chosen = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Pottery' }))
+    const learned = unwrap(revealTech(chosen, { playerId: CASH1981, techName: 'Pottery' }))
+    const reveal = learned.log.find((entry) => entry.item?.kind === 'tech' && entry.item.name === 'Pottery' && entry.logType === 'REVEAL')
+    if (reveal === undefined) throw new Error('no reveal line')
+    let next = unwrap(initiateUndo(learned, { logId: reveal.id, playerId: CASH1981 }))
+    for (const playerId of OTHERS) next = unwrap(vote(next, { logId: reveal.id, playerId, vote: true, at: AT }))
+    expect(me(next).techsChosen.some((tech) => tech.name === 'Pottery')).toBe(false)
+    expect(me(next).techGrants).toEqual([expect.not.objectContaining({ usedFor: expect.anything() })])
   })
 })
 
@@ -581,7 +608,7 @@ describe('investing a coin', () => {
     // Any level can be learned with it
     const chosen = unwrap(chooseTech(used, { playerId: CASH1981, techName: 'Chivalry' }))
     const learned = unwrap(revealTech(chosen, { playerId: CASH1981, techName: 'Chivalry' }))
-    expect(me(learned).techGrants).toEqual([])
+    expect(me(learned).techGrants).toEqual([expect.objectContaining({ id: 'req-1', usedFor: 'Chivalry' })])
     expect(learned.log.at(-1)?.publicLog).toBe('cash1981 learned Chivalry with Public Education')
   })
 

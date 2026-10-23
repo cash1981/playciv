@@ -47,6 +47,7 @@ function sotWith(overrides: Partial<StartOfTurn> = {}): StartOfTurn {
       { pieceId: 'c1', label: 'Capital B3' },
       { pieceId: 'c2', label: 'City F6' },
     ],
+    scoutsNow: { status: 'ready', reason: 'Founding a city and sending a square can be done now.' },
     scouts: [],
     techGrants: [],
     ...overrides,
@@ -329,6 +330,7 @@ describe('scouts and cities', () => {
     terrain: 'forest',
     figure: 'scout',
     assignedTo: null,
+    assignedByDefault: false,
     canSend: true,
     found: { ok: true, reasons: [], zuluHuts: [] },
     ...overrides,
@@ -343,7 +345,8 @@ describe('scouts and cities', () => {
     renderChoices(viewOf(sotWith({ cityLimit: { have: 1, max: 2 } as never })))
     const section = screen.getByRole('region', { name: 'Scouts and cities' })
     expect(within(section).getByText(/You have 1 of the 2 cities you may have/)).toBeTruthy()
-    expect(within(section).getByText(/A scout you send gathers for that city alone/)).toBeTruthy()
+    expect(within(section).getByText(/A scout gathers for its city alone/)).toBeTruthy()
+    expect(within(section).getByText(/A scout you do not send goes to your capital/)).toBeTruthy()
     expect(within(section).getByText('You have no scout on the map.')).toBeTruthy()
   })
 
@@ -365,15 +368,38 @@ describe('scouts and cities', () => {
     expect(send).toHaveBeenCalledWith('g1', 'assignScout', expect.any(String), 6, { scoutPieceId: 's1', cityPieceId: 'c2' })
   })
 
-  it('shows the city a scout already sends to, and sends null for No city', async () => {
+  it('shows the capital a scout goes to when it was not sent, and sends the other city chosen', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
-    renderChoices(viewOf(sotWith({ scouts: [scout({ assignedTo: 'c1' })] as never })))
+    renderChoices(viewOf(sotWith({ scouts: [scout({ assignedTo: 'c1', assignedByDefault: true })] as never })))
     const select = screen.getByRole('combobox', { name: /Send the square of E5 to/ }) as HTMLSelectElement
     expect(select.value).toBe('c1')
-    fireEvent.change(select, { target: { value: '' } })
+    expect(screen.getByText('Your capital, because you did not send it anywhere.')).toBeTruthy()
+    expect(within(select).queryByRole('option', { name: 'No city' })).toBeNull()
+    expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(select, { target: { value: 'c2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
-    expect(send.mock.calls[0]?.[4]).toEqual({ scoutPieceId: 's1', cityPieceId: null })
+    expect(send.mock.calls[0]?.[4]).toEqual({ scoutPieceId: 's1', cityPieceId: 'c2' })
+  })
+
+  it('offers No city only when there is no capital to go to', () => {
+    renderChoices(viewOf(sotWith({ scouts: [scout({ assignedTo: null })] as never })))
+    const select = screen.getByRole('combobox', { name: /Send the square of E5 to/ })
+    expect(within(select).getByRole('option', { name: 'No city' })).toBeTruthy()
+    expect(screen.queryByText(/because you did not send it anywhere/)).toBeNull()
+  })
+
+  it('does not bring a choice back after the answer returns to what it was', async () => {
+    vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const first = viewOf(sotWith({ scouts: [scout({ assignedTo: 'c1', assignedByDefault: true })] as never }))
+    const { rerender } = renderChoices(first)
+    const select = () => screen.getByRole('combobox', { name: /Send the square of E5 to/ }) as HTMLSelectElement
+    fireEvent.change(select(), { target: { value: 'c2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(api.actionWithArgs).toHaveBeenCalledTimes(1))
+    // An undo, or another device, puts the scout back with the capital
+    rerender(<StartOfTurnChoices gameId="g1" view={first} busy={false} readOnly={false} run={run} />)
+    expect(select().value).toBe('c1')
   })
 
   it('offers no sending for a figure that cannot gather', () => {
@@ -385,7 +411,7 @@ describe('scouts and cities', () => {
   it('founds a city where the scout stands, once, when nothing is in the way', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     renderChoices(viewOf(sotWith({ scouts: [scout()] as never, cityLimit: { have: 1, max: 2 } as never })))
-    const button = screen.getByRole('button', { name: 'Found a city on E5' }) as HTMLButtonElement
+    const button = screen.getByRole('button', { name: 'Found a city here on E5' }) as HTMLButtonElement
     expect(button.disabled).toBe(false)
     expect(screen.getByText(/Move any other figures of yours on E5/)).toBeTruthy()
     fireEvent.click(button)
@@ -397,7 +423,7 @@ describe('scouts and cities', () => {
   it('lists every reason a city cannot be founded, and disables the button', () => {
     const reasons = ['E5 is a water square.', 'A hut is next to E5 (F5). Take it first.']
     renderChoices(viewOf(sotWith({ scouts: [scout({ found: { ok: false, reasons, zuluHuts: [] } })] as never })))
-    const button = screen.getByRole('button', { name: 'Found a city on E5' }) as HTMLButtonElement
+    const button = screen.getByRole('button', { name: 'Found a city here on E5' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
     const list = screen.getByRole('list', { name: 'Why no city on E5' })
     expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual(reasons)
@@ -409,13 +435,23 @@ describe('scouts and cities', () => {
     expect(screen.getByText(/The Zulu may explore the hut next to the city \(F5\)/)).toBeTruthy()
   })
 
+  it('is disabled outside the Start of Turn, with the reason shown', () => {
+    const reason = 'Only available during your open Start of Turn phase.'
+    renderChoices(viewOf(sotWith({ scouts: [scout()] as never, scoutsNow: { status: 'wrong-phase', reason } as never })))
+    const found = screen.getByRole('button', { name: 'Found a city here on E5' }) as HTMLButtonElement
+    expect(found.disabled).toBe(true)
+    expect(screen.getByRole('list', { name: 'Why no city on E5' }).textContent).toBe(reason)
+    expect((screen.getByRole('combobox', { name: /Send the square of E5 to/ }) as HTMLSelectElement).disabled).toBe(true)
+    expect(within(screen.getByRole('region', { name: 'Scouts and cities' })).getAllByText(reason).length).toBeGreaterThan(0)
+  })
+
   it('is disabled while the page is busy or read only', () => {
     const sot = sotWith({ scouts: [scout()] as never })
     renderChoices(viewOf(sot), { busy: true })
-    expect((screen.getByRole('button', { name: 'Found a city on E5' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Found a city here on E5' }) as HTMLButtonElement).disabled).toBe(true)
     cleanup()
     renderChoices(viewOf(sot), { readOnly: true })
-    expect((screen.getByRole('button', { name: 'Found a city on E5' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Found a city here on E5' }) as HTMLButtonElement).disabled).toBe(true)
   })
 })
 

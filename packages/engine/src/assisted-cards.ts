@@ -72,6 +72,8 @@ function playableIn(
 export function playableCardsOf(state: GameState, player: Playerhand): readonly PlayableCard[] {
   const now = currentPhaseOf(state, player.playerId)
   const blockaded = blockadedGreatPersonTypes(state, player)
+  // The cards drawn for a choice are in the hand until one is kept: none of them is the player's yet
+  const waiting = new Set(player.pendingRewards.flatMap((reward) => reward.candidateIds))
   return player.items.flatMap((item): readonly PlayableCard[] => {
     const kind = KIND_OF[item.kind]
     if (kind === undefined || item.description === null || item.description === undefined) return []
@@ -90,6 +92,15 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
       prompt: rule.prompt,
       resources: rule.resources,
       discards: kind === 'culture' || discardsWhenUsed(item.description),
+    }
+    if (waiting.has(item.id)) {
+      return [
+        {
+          ...base,
+          status: 'unavailable',
+          reason: `${name} is one of the cards you are choosing between. Choose the card to keep first.`,
+        },
+      ]
     }
     if (item.kind === 'greatperson' && item.type !== null && blockaded.includes(item.type)) {
       return [
@@ -127,7 +138,7 @@ export const playCard: AssistedActionDefinition = {
 
   apply(state, player, context) {
     const payload = context.payload
-    if (payload === undefined || !('itemId' in payload) || !('targets' in payload)) {
+    if (payload === undefined || !('itemId' in payload) || !('targets' in payload) || !Array.isArray(payload.targets)) {
       return err(rejected('playCard', blocked('unavailable', 'Choose the card to play.')))
     }
     const card = playableCardsOf(state, player).find((candidate) => candidate.itemId === payload.itemId)

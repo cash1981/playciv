@@ -209,6 +209,10 @@ function FeudalismHarvest({
         Take one resource token from the market, from a square with its icon in the outskirts of one of your cities. The
         list is what the map shows around each city.
       </p>
+      <p className="muted">
+        The same resource icon cannot be harvested twice in a turn, also not by the Harvest of a city. The game does not
+        track that.
+      </p>
       <Reason id={reasonId} status={feudalism.status} reason={feudalism.reason} />
       <form
         className="sot-form"
@@ -357,8 +361,9 @@ const terrainWords = (terrain: string | null): string => (terrain === null ? 'un
  */
 function ScoutsAndCities({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Element | null {
   const playerId = view.you?.playerId ?? ''
-  const { scouts, cities, cityLimit } = sot
+  const { scouts, cities, cityLimit, scoutsNow } = sot
   if (scouts.length === 0 && cityLimit.have >= cityLimit.max) return null
+  const now = scoutsNow.status === 'ready'
 
   const found = (pieceId: string): void => {
     const key = `${gameId}:${playerId}:foundCity:${pieceId}`
@@ -385,13 +390,15 @@ function ScoutsAndCities({ gameId, view, busy, run, sot }: ChoiceProps): React.J
       <p>
         You have {cityLimit.have} of the {cityLimit.max} cities you may have (a third city needs Irrigation). A new city
         replaces the scout that stands where it goes. A scout sends its square to one city for the whole turn, and the
-        city gets that square&apos;s production. A scout placed this turn gathers from next turn.
+        city gets that square&apos;s production. A scout you do not send goes to your capital. A scout placed this turn
+        gathers from next turn.
       </p>
       <p className="muted">
-        A scout you send gathers for that city alone. Its square counts for the city's production, and its culture and
+        A scout gathers for its city alone. Its square counts for the city's production, and its culture and
         resource icons are offered to that city's Devote to the Arts and Harvest. The trade and coin icons are still counted
         by hand.
       </p>
+      {!now && <p className="muted sot-reason">{scoutsNow.reason}</p>}
       {scouts.length === 0 && <p className="muted">You have no scout on the map.</p>}
       <ul className="sot-scout-list">
         {scouts.map((scout) => (
@@ -405,16 +412,17 @@ function ScoutsAndCities({ gameId, view, busy, run, sot }: ChoiceProps): React.J
                 scoutId={scout.pieceId}
                 square={scout.square}
                 assignedTo={scout.assignedTo}
+                byDefault={scout.assignedByDefault}
                 cities={cities}
-                busy={busy}
+                busy={busy || !now}
                 send={send}
               />
             )}
             <FoundHere
               pieceId={scout.pieceId}
               square={scout.square}
-              ok={scout.found.ok}
-              reasons={scout.found.reasons}
+              ok={now && scout.found.ok}
+              reasons={now ? scout.found.reasons : [scoutsNow.reason]}
               zuluHuts={scout.found.zuluHuts}
               busy={busy}
               found={found}
@@ -430,6 +438,7 @@ function SendSquare({
   scoutId,
   square,
   assignedTo,
+  byDefault,
   cities,
   busy,
   send,
@@ -437,25 +446,30 @@ function SendSquare({
   readonly scoutId: string
   readonly square: string
   readonly assignedTo: string | null
+  readonly byDefault: boolean
   readonly cities: StartOfTurn['cities']
   readonly busy: boolean
   readonly send: (pieceId: string, cityPieceId: string | null) => void
 }): React.JSX.Element {
-  const [chosen, setChosen] = useState<string | null>(null)
-  const value = chosen ?? assignedTo ?? ''
+  // The choice made in the list lasts until the engine's answer changes (an undo, another device)
+  const [chosen, setChosen] = useState<{ readonly for: string | null; readonly city: string } | null>(null)
+  const value = chosen !== null && chosen.for === assignedTo ? chosen.city : (assignedTo ?? '')
   const changed = value !== (assignedTo ?? '')
   return (
     <form
       className="sot-form sot-send"
       onSubmit={(event) => {
         event.preventDefault()
-        if (changed) send(scoutId, value === '' ? null : value)
+        if (!changed) return
+        send(scoutId, value === '' ? null : value)
+        // The answer that comes back shows the city; a choice kept here would come back after an undo
+        setChosen(null)
       }}
     >
       <label>
         Send the square of {square} to{' '}
-        <select value={value} disabled={busy || cities.length === 0} onChange={(event) => setChosen(event.target.value)}>
-          <option value="">No city</option>
+        <select value={value} disabled={busy || cities.length === 0} onChange={(event) => setChosen({ for: assignedTo, city: event.target.value })}>
+          {assignedTo === null && <option value="">No city</option>}
           {cities.map((city) => (
             <option key={city.pieceId} value={city.pieceId}>
               {city.label}
@@ -467,6 +481,7 @@ function SendSquare({
         Send
       </button>
       {cities.length === 0 && <span className="muted">You have no city on the map.</span>}
+      {byDefault && <span className="muted">Your capital, because you did not send it anywhere.</span>}
     </form>
   )
 }
@@ -494,7 +509,7 @@ function FoundHere({
       <button
         type="button"
         className="small"
-        aria-label={`Found a city on ${square}`}
+        aria-label={`Found a city here on ${square}`}
         aria-describedby={ok ? undefined : reasonId}
         disabled={busy || !ok}
         onClick={() => found(pieceId)}

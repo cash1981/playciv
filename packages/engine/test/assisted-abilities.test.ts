@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { removePiece, setWonderOwner, undoLastBoardChange } from '../src/actions/board.js'
-import { revealTech } from '../src/actions/player.js'
+import { chooseTech, removeTech, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import { initiateUndo, vote } from '../src/actions/undo.js'
 import { assistedAvailability, availableActionsFor, performAssistedAction } from '../src/assisted.js'
@@ -187,10 +187,10 @@ describe("Lorenzo de' Medici and Alan Turing", () => {
       ),
     }
     const state = withPerson(withCoins, "Lorenzo de' Medici")
-    expect(Object.values(coinSourcesOf(state, me(state))).reduce((sum, value) => sum + value, 0)).toBeGreaterThanOrEqual(7)
+    // 7 coins in all: two sets of three, one left over
+    expect(Object.values(coinSourcesOf(state, me(state))).reduce((sum, value) => sum + value, 0)).toBe(7)
     const used = unwrap(act(state, 'sot:lorenzo'))
-    const coins = Object.values(coinSourcesOf(state, me(state))).reduce((sum, value) => sum + value, 0)
-    expect(me(used).stats.culture).toBe(Math.floor(coins / 3))
+    expect(me(used).stats.culture).toBe(2)
     expect(me(used).stats.trade).toBe(0)
     const undone = undoByVote(used, 'req-1')
     expect(me(undone).stats.culture).toBe(0)
@@ -389,6 +389,39 @@ describe('Cristo Redentor', () => {
     })
   })
 
+  it('refuses the undo once a kept card has gone to the discard pile, instead of taking it back from there', () => {
+    const state = withWonder(sotTurn(), 'wonders/cristoredentor')
+    const used = unwrap(act(state, 'sot:cristoRedentor:1'))
+    const effect = used.assistedActions[0]?.effect
+    if (effect === undefined || effect.kind !== 'sotDraw') throw new Error('no draw record')
+    expect(effect.kept).toEqual(effect.drawn)
+    const played = effect.drawn[0] ?? ''
+    // The player plays or discards one of the two cards they kept
+    const gone: GameState = {
+      ...used,
+      players: used.players.map((candidate) =>
+        candidate.playerId === CASH1981 ? { ...candidate, items: candidate.items.filter((item) => item.id !== played) } : candidate,
+      ),
+      discardedItems: [...used.discardedItems, ...me(used).items.filter((item) => item.id === played)],
+    }
+    expect(undoRefusal(gone, 'req-1')).toMatchObject({
+      kind: 'ASSISTED_UNDO_BLOCKED',
+      reason: 'A card this drew has left the hand, so Cristo Redentor cannot be undone.',
+    })
+  })
+
+  it('remembers which card of each pair was kept, so a card chosen and then played blocks the undo', () => {
+    const state = withWonder(sotTurn({ techs: ['Mysticism'] }), 'wonders/cristoredentor')
+    const used = unwrap(act(state, 'sot:cristoRedentor:1'))
+    const first = me(used).pendingRewards.find((reward) => reward.id === 'req-1')
+    const second = me(used).pendingRewards.find((reward) => reward.id === 'req-1:2')
+    const keep = (from: GameState, rewardId: string, itemId: string, requestId: string) =>
+      unwrap(performAssistedAction(from, { playerId: CASH1981, action: 'chooseReward', requestId, at: AT, payload: { rewardId, itemId } }))
+    const both = keep(keep(used, 'req-1', first?.candidateIds[0] ?? '', 'req-2'), 'req-1:2', second?.candidateIds[1] ?? '', 'req-3')
+    const effect = both.assistedActions[0]?.effect
+    expect(effect?.kind === 'sotDraw' && effect.kept).toEqual([first?.candidateIds[0], second?.candidateIds[1]])
+  })
+
   it('has its own button text', () => {
     const state = withWonder(sotTurn(), 'wonders/cristoredentor')
     const entry = toPlayerView(state, CASH1981).you?.availableActions.find((action) => action.action === 'sot:cristoRedentor:3')
@@ -507,21 +540,24 @@ describe('free techs', () => {
     }
     const name = me(chosen).techsChosen.at(-1)?.name ?? ''
     const learned = unwrap(revealTech(chosen, { playerId: CASH1981, techName: name }))
-    expect(me(learned).techGrants).toEqual([])
+    expect(me(learned).techGrants).toEqual([expect.objectContaining({ id: 'req-1', usedFor: name })])
   })
 
   it('takes the grant back on undo, and refuses once the tech has been learned', () => {
     const state = withWonder(sotTurn(), 'wonders/statueofliberty')
     const used = unwrap(act(state, 'sot:statueOfLiberty'))
     expect(me(undoByVote(used, 'req-1')).techGrants).toEqual([])
-    const spent: GameState = {
-      ...used,
-      players: used.players.map((candidate) => (candidate.playerId === CASH1981 ? { ...candidate, techGrants: [] } : candidate)),
-    }
-    expect(undoRefusal(spent, 'req-1')).toMatchObject({
+    // Learn a tech with it: the undo is refused until that tech is removed, then it goes through
+    const tech = used.techs.find((candidate) => candidate.level === 2)
+    if (tech === undefined) throw new Error('no level II tech in the fixture')
+    const chosen = unwrap(chooseTech(used, { playerId: CASH1981, techName: tech.name }))
+    const learned = unwrap(revealTech(chosen, { playerId: CASH1981, techName: tech.name }))
+    expect(undoRefusal(learned, 'req-1')).toMatchObject({
       kind: 'ASSISTED_UNDO_BLOCKED',
-      reason: 'The tech this gave has been learned already. Remove that tech first.',
+      reason: `You learned ${tech.name} with it. Remove ${tech.name} first, then undo this.`,
     })
+    const without = unwrap(removeTech(learned, { playerId: CASH1981, techName: tech.name }))
+    expect(me(undoByVote(without, 'req-1')).techGrants).toEqual([])
   })
 
   it('the Teacher hut is discarded for a level I tech, and comes back on undo', () => {

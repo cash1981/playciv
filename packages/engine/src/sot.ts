@@ -27,7 +27,7 @@ import {
 import type { CoinSourceKey } from './coins.js'
 import { GOVERNMENTS } from './government.js'
 import type { Government } from './government.js'
-import type { GameState, InvestmentCard, Playerhand, PlayerStats } from './state.js'
+import type { GameState, InvestmentCard, Playerhand, PlayerStats, TechGrant } from './state.js'
 import { createPlayerTurn, turnStatus } from './turn.js'
 import type { PlayerTurn, TurnPhase } from './turn.js'
 
@@ -52,6 +52,18 @@ export function openStartOfTurn(state: GameState, player: Playerhand): PlayerTur
     player.playerTurns.find((candidate) => candidate.turnNumber === turnNumber) ??
     createPlayerTurn(player.username, turnNumber)
   )
+}
+
+/** The grants with the one that `techName` was learned with free again: that tech is no longer the player's. */
+export function grantsAfterTechRemoved(
+  grants: readonly TechGrant[],
+  techName: string,
+): readonly TechGrant[] {
+  return grants.map((grant) => {
+    if (grant.usedFor !== techName) return grant
+    const { usedFor: _spent, ...free } = grant
+    return free
+  })
 }
 
 export const SOT_PHASE_REASON = 'Only available during your open Start of Turn phase.'
@@ -274,14 +286,17 @@ export interface ScoutAssignment {
   readonly cityPieceId: string
   readonly column: number
   readonly row: number
+  /** `false` when no `assignScout` record chose the city and the capital is the default. */
+  readonly chosen: boolean
 }
 
 /**
- * The assignments in force this turn. They are not stored on their own: each is a record
- * of the `assignScout` action, so the log, the undo vote and a retry already cover them.
- * The latest applied record of a scout wins, and a record that was undone does not count,
- * so undoing a change brings back the one before it. An assignment holds only while the
- * scout still stands on the square it was declared for and the city is still on the map.
+ * The cities the player chose for their scouts this turn. They are not stored on their own:
+ * each is a record of the `assignScout` action, so the log, the undo vote and a retry already
+ * cover them. The latest applied record of a scout wins, and a record that was undone does
+ * not count, so undoing a change brings back the one before it. A choice holds only while the
+ * scout still stands on the square it was declared for and the city marker is still on the board.
+ * A scout without a choice goes to the capital: see `scoutDestinationsOf`.
  */
 export function scoutAssignmentsOf(state: GameState, player: Playerhand): readonly ScoutAssignment[] {
   const turn = turnStatus(state).currentTurn
@@ -295,7 +310,13 @@ export function scoutAssignmentsOf(state: GameState, player: Playerhand): readon
       effect.scoutPieceId,
       effect.cityPieceId === null
         ? null
-        : { scoutPieceId: effect.scoutPieceId, cityPieceId: effect.cityPieceId, column: effect.column, row: effect.row },
+        : {
+            scoutPieceId: effect.scoutPieceId,
+            cityPieceId: effect.cityPieceId,
+            column: effect.column,
+            row: effect.row,
+            chosen: true,
+          },
     )
   }
   return [...latest.values()].filter((assignment): assignment is ScoutAssignment => {
@@ -305,4 +326,32 @@ export function scoutAssignmentsOf(state: GameState, player: Playerhand): readon
     const city = state.board.pieces.find((piece) => piece.id === assignment.cityPieceId && piece.category === 'city')
     return at !== null && at.column === assignment.column && at.row === assignment.row && city !== undefined
   })
+}
+
+/** The player's capital: the city marker that says so. A capital grown into a metropolis has none. */
+export function capitalOf(state: GameState, player: Playerhand): BoardPiece | undefined {
+  const colour = player.color?.toLowerCase()
+  if (colour === undefined) return undefined
+  return state.board.pieces.find(
+    (piece) => piece.category === 'city' && piece.assetId.includes('capital') && pieceColorOf(piece) === colour,
+  )
+}
+
+/**
+ * Where each of the player's scouts on the map sends its square this turn: the city they chose,
+ * and for a scout they did not send anywhere, the capital. An English army sent to a city is
+ * kept too, but never goes to the capital on its own. Without a capital marker (a capital that
+ * grew into a metropolis has none) a scout that was not sent has no destination.
+ */
+export function scoutDestinationsOf(state: GameState, player: Playerhand): readonly ScoutAssignment[] {
+  const chosen = scoutAssignmentsOf(state, player)
+  const capital = capitalOf(state, player)
+  if (capital === undefined) return chosen
+  const sent = new Set(chosen.map((assignment) => assignment.scoutPieceId))
+  const defaults = figuresOnMap(state, player, 'scout').flatMap((scout): readonly ScoutAssignment[] => {
+    const at = mapCellOf(state.board, scout)
+    if (sent.has(scout.id) || at === null) return []
+    return [{ scoutPieceId: scout.id, cityPieceId: capital.id, column: at.column, row: at.row, chosen: false }]
+  })
+  return [...chosen, ...defaults]
 }

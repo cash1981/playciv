@@ -119,8 +119,12 @@ interface PickerProps {
  */
 export function BuildPicker({ city, note, message, busy, onChoose, onClose }: PickerProps): React.JSX.Element {
   const ref = useRef<HTMLElement>(null)
-  // Opening the picker is a press on Build right above it: put keyboard focus in it.
-  useEffect(() => ref.current?.focus({ preventScroll: true }), [])
+  // Opening the picker is a press on Build right above it: put keyboard focus in it. Not when it comes back
+  // with its tab (the picker survives a switch of tab) while the viewer is moving along the tab list.
+  useEffect(() => {
+    if (document.activeElement?.closest('[role="tablist"]')) return
+    ref.current?.focus({ preventScroll: true })
+  }, [])
   const ready = city.status === 'ready'
   const [picked, setPicked] = useState<GroupId | null>(null)
   const groupRef = useRef<HTMLElement>(null)

@@ -1202,17 +1202,22 @@ describe('The actions of the open phase', () => {
     })
     render(<WithFlow view={view} />)
     const panel = screen.getByRole('group', { name: 'Your actions' })
-    const culture = within(panel).getByRole('region', { name: 'Culture track' })
-    expect(within(culture).getByRole('heading', { level: 3, name: 'Culture track' })).toBeTruthy()
+    // The groups sit in one box under "Possible actions", like a city card under "Your cities"
+    const possible = within(panel).getByRole('region', { name: 'Possible actions' })
+    expect(within(possible).getByRole('heading', { level: 3, name: 'Possible actions' })).toBeTruthy()
+    expect(possible.querySelector('.assisted-possible-box')).not.toBeNull()
+    const culture = within(possible).getByRole('region', { name: 'Culture track' })
+    expect(within(culture).getByRole('heading', { level: 4, name: 'Culture track' })).toBeTruthy()
     expect(within(culture).getByRole('button', { name: 'Advance culture' })).toBeTruthy()
     expect(within(culture).getByText('You are missing 3 culture.')).toBeTruthy()
-    expect(within(panel).getByRole('region', { name: 'Resource abilities' })).toBeTruthy()
+    expect(within(possible).getByRole('region', { name: 'Resource abilities' })).toBeTruthy()
     const cities = within(panel).getByRole('region', { name: 'Your cities' })
-    expect(culture.compareDocumentPosition(cities) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(possible.compareDocumentPosition(cities) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('has no group when no action is listed', () => {
+  it('has no group and no box when no action is listed', () => {
     render(<WithFlow view={withYou(viewWith([]), { cities: [cityOf()], buildOptions: [buildOptionsOf()] })} />)
+    expect(screen.queryByRole('region', { name: 'Possible actions' })).toBeNull()
     expect(screen.queryByRole('region', { name: 'Culture track' })).toBeNull()
     expect(screen.queryByRole('region', { name: 'Resource abilities' })).toBeNull()
   })

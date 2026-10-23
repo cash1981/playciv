@@ -1038,7 +1038,7 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     }
     // The newer actions carry one `args` object, checked by their own parser
     if (takesArgs(action)) {
-      const parsed = parseActionArgs(action, body['args'] ?? {})
+      const parsed = parseActionArgs(action, body['args'] === undefined ? {} : body['args'])
       if (typeof parsed === 'string') return sendError(c, 400, 'BAD_REQUEST', parsed)
       const stray = extraFields(body, [])
       if (stray.length > 0) return sendError(c, 400, 'BAD_REQUEST', `${action} takes only args, not ${stray.join(', ')}`)

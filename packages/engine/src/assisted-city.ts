@@ -3,9 +3,9 @@
  *
  * Both happen in the Start of Turn (base rulebook p. 13 and 26). A new city replaces the
  * scout that stood where it goes; a scout sends its square, and the icons on it, to one
- * city for the whole turn. The engine only knows terrain and buildings of a square, not
- * its trade, culture, coin and resource icons, so sending a square moves production
- * only (the human, 2026-10-23); the rest stays by hand.
+ * city for the whole turn, the capital when it is not sent. The square counts for that city's
+ * production, and its culture and resource icons are offered to that city's Devote to the Arts and
+ * Harvest. Its trade and coin icons are not in the map data and stay by hand.
  */
 
 import { placeUnchecked, removePiece } from './actions/board.js'
@@ -23,7 +23,7 @@ import type {
   AssistedPayload,
   FoundCityPayload,
 } from './assisted-core.js'
-import { countLinesIn, performAdvance, reverseAdvanceEffect } from './assisted-culture.js'
+import { countLinesIn, freeAdvanceStatus, performAdvance, reverseAdvanceEffect } from './assisted-culture.js'
 import { mapCellOf } from './blockade.js'
 import { findBoardAsset, mapTop, remainingBoardAssetCount } from './board.js'
 import type { BoardPiece } from './board.js'
@@ -32,7 +32,7 @@ import { cityLimitOf, foundCityCheck, foundingFiguresOf, isOwnFigure, ownCityPie
 import { cityProductionsOf } from './city-production.js'
 import { err, ok } from './result.js'
 import { appendLog } from './log.js'
-import { SOT_PHASE_REASON, openStartOfTurn, scoutAssignmentsOf } from './sot.js'
+import { SOT_PHASE_REASON, capitalOf, openStartOfTurn, scoutDestinationsOf } from './sot.js'
 import type { GameState, Playerhand, ScoutView } from './state.js'
 import { terrainAt } from './terrain.js'
 
@@ -64,6 +64,17 @@ export function gatheringFiguresOf(state: GameState, player: Playerhand): readon
 const ROMANS = 'Romans'
 const CITY_STATE_CULTURE = 3
 
+/**
+ * Why the free advance that comes with every Roman city is stopped now (a card choice waiting, a hand over
+ * its size, an empty deck), or `undefined`. The city waits for it, so the game never founds one without
+ * the advance it owes; at the end of the track there is nothing to advance and nothing stops the city.
+ */
+function romansAdvanceStop(state: GameState, player: Playerhand): string | undefined {
+  if (player.civilization?.name !== ROMANS) return undefined
+  const status = freeAdvanceStatus(state, player)
+  return status.kind === 'blocked' ? `The Romans advance one space for free with every city, and that is stopped now: ${status.reason}` : undefined
+}
+
 export const foundCity: AssistedActionDefinition = {
   kind: 'foundCity',
   techName: null,
@@ -94,6 +105,8 @@ export const foundCity: AssistedActionDefinition = {
     if (figure === undefined) return fail('That figure is not yours, or it is not on the map.')
     const check = foundCityCheck(state, player, figure)
     if (!check.ok || check.cell === null) return fail(check.reasons.join(' '))
+    const stopped = romansAdvanceStop(state, player)
+    if (stopped !== undefined) return fail(stopped)
     const { cell, square } = check
 
     const colour = player.color?.toLowerCase()
@@ -173,15 +186,15 @@ export const foundCity: AssistedActionDefinition = {
     // The Romans advance one space for free each time they build a city (civilization sheet)
     let advance = null as ReturnType<typeof performAdvance> | null
     if (player.civilization?.name === ROMANS) {
-      advance = performAdvance(result, playerOf(result, player.playerId) ?? player, { requestId: context.requestId, at: context.at }, { free: true, tagLog: false })
-      if (!advance.ok) {
-        const reason = advance.error.kind === 'ASSISTED_ACTION_REJECTED' ? advance.error.reason : ''
-        // At the end of the track, or without a marker, there is nothing to advance
-        if (!/Culture Victory space|leader marker is not on/.test(reason)) return advance
-        advance = null
-      } else {
-        result = advance.value.state
+      const holder = playerOf(result, player.playerId) ?? player
+      const status = freeAdvanceStatus(result, holder)
+      if (status.kind === 'ok') {
+        const taken = performAdvance(result, holder, { requestId: context.requestId, at: context.at }, { free: true, tagLog: false })
+        if (!taken.ok) return taken
+        advance = taken
+        result = taken.value.state
       }
+      // `blocked` was refused before the city was placed, and `nothing` (the end of the track) loses nothing
     }
 
     return ok({
@@ -213,6 +226,23 @@ export const foundCity: AssistedActionDefinition = {
     }
     if (state.board.pieces.some((piece) => piece.id === effect.figure.id)) {
       return blockedBy('The scout is on the board again, so the city cannot be undone.')
+    }
+    // Something was done with the city after it was founded (a build, a Devote, a harvest): that goes first
+    const later = state.assistedActions.find(
+      (other) =>
+        other.status === 'applied' &&
+        other.id !== record.id &&
+        other.kind !== 'assignScout' &&
+        'cityPieceId' in other.effect &&
+        other.effect.cityPieceId === effect.cityPieceId,
+    )
+    if (later !== undefined) {
+      return blockedBy(`The city on ${effect.square.label} was used after it was founded (${later.kind}). Undo that first.`)
+    }
+    if (player.stats.culture < effect.culture) {
+      return blockedBy(
+        `Only ${player.stats.culture} culture is left, so the ${effect.culture} culture from the city-state on ${effect.square.label} cannot be taken back. It has been spent, or the counter was changed by hand.`,
+      )
     }
 
     let working = state
@@ -263,7 +293,7 @@ export const assignScout: AssistedActionDefinition = {
     if (openStartOfTurn(state, player) === undefined) return blocked('wrong-phase', SOT_PHASE_REASON)
     if (gatheringFiguresOf(state, player).length === 0) return blocked('unavailable', 'You have no scout on the map.')
     if (ownCityPieces(state, player).length === 0) return blocked('unavailable', 'You have no city on the map to send a square to.')
-    return { status: 'ready', reason: 'Choose the city each scout sends its square to this turn.' }
+    return { status: 'ready', reason: 'Choose the city each scout sends its square to this turn. A scout you do not send goes to your capital.' }
   },
 
   apply(state, player, context) {
@@ -289,7 +319,9 @@ export const assignScout: AssistedActionDefinition = {
       playerId: player.playerId,
       publicLog:
         cityLabel === null
-          ? `${player.username} stopped sending the square of the scout on ${square} to a city`
+          ? capitalOf(state, player) === undefined
+            ? `${player.username} stopped sending the square of the scout on ${square} to a city`
+            : `${player.username} sent the square of the scout on ${square} back to the capital`
           : `${player.username} sent the square of the scout on ${square} to ${cityLabel}`,
       privateLog: '',
       createdAt: context.at ?? null,
@@ -330,9 +362,10 @@ export const assignScout: AssistedActionDefinition = {
 
 /** Every figure of the viewer that can found a city or send its square, with the answer for each. */
 export function scoutViewsOf(state: GameState, player: Playerhand): readonly ScoutView[] {
-  const assignments = new Map(scoutAssignmentsOf(state, player).map((assignment) => [assignment.scoutPieceId, assignment.cityPieceId]))
+  const destinations = new Map(scoutDestinationsOf(state, player).map((assignment) => [assignment.scoutPieceId, assignment]))
   const founding = new Set(foundingFiguresOf(state, player).map((piece) => piece.id))
   const gathering = new Set(gatheringFiguresOf(state, player).map((piece) => piece.id))
+  const stopped = romansAdvanceStop(state, player)
   const figures = state.board.pieces.filter((piece) => founding.has(piece.id) || gathering.has(piece.id))
   return figures.flatMap((piece): readonly ScoutView[] => {
     const cell = mapCellOf(state.board, piece)
@@ -348,11 +381,14 @@ export function scoutViewsOf(state: GameState, player: Playerhand): readonly Sco
           mapTop(state.board) + (cell.row + 0.5) * state.board.squareSize,
         ),
         figure: piece.assetId.endsWith('army') ? 'army' : 'scout',
-        assignedTo: assignments.get(piece.id) ?? null,
+        assignedTo: destinations.get(piece.id)?.cityPieceId ?? null,
+        assignedByDefault: destinations.get(piece.id)?.chosen === false,
         canSend: gathering.has(piece.id),
         found: {
-          ok: founding.has(piece.id) && check.ok,
-          reasons: founding.has(piece.id) ? check.reasons : ['Only a scout can found a city (an army can under the Republic).'],
+          ok: founding.has(piece.id) && check.ok && stopped === undefined,
+          reasons: founding.has(piece.id)
+            ? [...check.reasons, ...(stopped === undefined ? [] : [stopped])]
+            : ['Only a scout can found a city (an army can under the Republic).'],
           zuluHuts: check.zuluHuts,
         },
       },

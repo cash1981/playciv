@@ -154,10 +154,32 @@ describe('changing government through the actions route', () => {
     }
   })
 
-  it('does not show the starter’s options to the other player', async () => {
+  it('does not show the starter’s choices to the other player, who has a view of their own', async () => {
     const t = await table('govpriv')
+    // Only the starter has a coin on the sheet, so only the starter can invest one
+    expect((await post(t.starter, `/api/games/${t.gameId}/players/${t.starterId}/coin`, { source: 'sheet', value: 2 })).status).toBe(200)
+    const mine = await view(t.gameId, t.starter)
+    expect(mine.you?.startOfTurn?.invest.coins).toEqual([{ key: 'sheet', coins: 2, label: 'Sheet' }])
     const theirs = await view(t.gameId, t.other)
-    expect(JSON.stringify(theirs.you?.startOfTurn)).not.toContain(t.starterId)
+    expect(theirs.you?.playerId).not.toBe(t.starterId)
+    expect(theirs.you?.startOfTurn?.invest.coins).toEqual([])
+    const opponents = (theirs as unknown as { opponents: readonly object[] }).opponents
+    expect(JSON.stringify(opponents)).not.toContain('startOfTurn')
+    expect(JSON.stringify(opponents)).not.toContain('availableActions')
+  })
+})
+
+describe('a replayed revision', () => {
+  it('has no Start of Turn choices and no playable card: none can be made from the past', async () => {
+    const t = await table('replay')
+    const live = await view(t.gameId, t.starter)
+    expect(live.you?.startOfTurn).not.toBeNull()
+    const past = await inject(app, { url: `/api/games/${t.gameId}/revisions/${live.rev}`, headers: bearer(t.starter) })
+    expect(past.status).toBe(200)
+    const replay = await past.json<{ view: { you: { startOfTurn: unknown; playableCards: unknown; availableActions: unknown } | null } }>()
+    expect(replay.view.you?.startOfTurn).toBeNull()
+    expect(replay.view.you?.playableCards).toEqual([])
+    expect(replay.view.you?.availableActions).toEqual([])
   })
 })
 
@@ -296,6 +318,15 @@ describe('cities and scouts through the actions route', () => {
   it('gives the starter the scouts section and the city limit, and the other player a view of their own', async () => {
     const t = await table('city3')
     const mine = await view(t.gameId, t.starter)
-    expect(mine.you?.startOfTurn).toMatchObject({ cityLimit: { have: 0, max: 2 }, scouts: [], cities: [] })
+    expect(mine.you?.startOfTurn).toMatchObject({
+      cityLimit: { have: 0, max: 2 },
+      scouts: [],
+      cities: [],
+      scoutsNow: { status: 'ready' },
+    })
+    // The other player is not in their Start of Turn: their own view says so, and holds nothing of the starter's
+    const theirs = await view(t.gameId, t.other)
+    expect(theirs.you?.playerId).not.toBe(t.starterId)
+    expect(theirs.you?.startOfTurn).toMatchObject({ cityLimit: { have: 0, max: 2 }, scouts: [], cities: [] })
   })
 })

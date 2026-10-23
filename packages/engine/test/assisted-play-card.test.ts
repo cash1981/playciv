@@ -208,6 +208,29 @@ describe('what is refused', () => {
     )
   })
 
+  it('refuses a card that is one of the choices of a card choice still waiting, and changes nothing', () => {
+    const { state, itemId } = withCardInHand(startOfTurn(), 'Counterfeiters')
+    const waiting: GameState = {
+      ...state,
+      players: state.players.map((candidate) =>
+        candidate.playerId === CASH1981
+          ? {
+              ...candidate,
+              pendingRewards: [{ id: 'req-0', kind: 'event' as const, level: 1 as const, step: 1, candidateIds: [itemId, 'other'], keep: 1 as const }],
+            }
+          : candidate,
+      ),
+    }
+    expect(cardOf(waiting, 'Counterfeiters')).toMatchObject({
+      status: 'unavailable',
+      reason: 'Counterfeiters is one of the cards you are choosing between. Choose the card to keep first.',
+    })
+    expect(refusal(play(waiting, 'req-1', itemId, { targets: [KARANDRAS1] }))).toBe(
+      'Counterfeiters is one of the cards you are choosing between. Choose the card to keep first.',
+    )
+    expect(waiting.discardedItems).toHaveLength(0)
+  })
+
   it('refuses a card in the wrong phase, and changes nothing', () => {
     const { state, itemId } = withCardInHand(tradeTurn(), 'Counterfeiters')
     const result = play(state, 'req-1', itemId, { targets: [KARANDRAS1] })

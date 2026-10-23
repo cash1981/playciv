@@ -551,9 +551,12 @@ describe('notes', () => {
     expect(only(owned).notes.some((note) => note.includes('Great Lighthouse'))).toBe(true)
   })
 
-  it('name scouts that may send a square to another city', () => {
+  it('name scouts that may send a square to another city, and the capital as the default', () => {
     expect(only(scene()).notes.some((note) => note.includes('scout'))).toBe(false)
-    expect(only(put(scene(), CASH1981, 'figures/redscout', 9, 9)).notes.some((note) => note.includes('scout'))).toBe(true)
+    // No capital marker: a scout that was not sent goes nowhere
+    expect(only(put(scene(), CASH1981, 'figures/redscout', 9, 9)).notes.join(' ')).toContain('no capital is marked on the map')
+    const capital = put(put(game(), CASH1981, 'cities/redcapital2', 1, 1), CASH1981, 'figures/redscout', 9, 9)
+    expect(only(capital).notes.join(' ')).toContain('a scout you did not send counts for your capital')
   })
 
   it('say when a square belongs to two of the player’s cities', () => {

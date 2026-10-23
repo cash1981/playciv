@@ -921,6 +921,47 @@ describe('HandItem: place a Great Person in the tech pyramid (#168 follow-up)', 
   })
 })
 
+describe('HandItem: playing the card from the hand', () => {
+  const card: Item = { ...base, id: 'c-play', sheetName: 'CULTURE_1', kind: 'cultureI', name: 'Counterfeiters', type: null }
+  const playable = {
+    itemId: 'c-play',
+    name: 'Counterfeiters',
+    kind: 'culture',
+    description: 'Start of Turn: Choose another player.',
+    timings: ['SOT'],
+    targets: { kind: 'none' },
+    prompt: '',
+    resources: [],
+    discards: true,
+    status: 'ready',
+    reason: 'Can be played in start of turn, which you are in.',
+  } as unknown as NonNullable<NonNullable<PlayerView['you']>['playableCards']>[number]
+  const view = { rev: 3, you: { playerId: 'me', username: 'Alice', playableCards: [playable] }, opponents: [] } as unknown as PlayerView
+
+  it('shows a Play button when the engine lists the card as playable, and no other', () => {
+    const { unmount } = render(
+      <HandItem item={card} gameId="g" busy={false} run={run} opponents={[]} view={view} playable={playable} />,
+    )
+    expect(screen.getByRole('button', { name: 'Play Counterfeiters' })).toBeTruthy()
+    unmount()
+    render(<HandItem item={card} gameId="g" busy={false} run={run} opponents={[]} />)
+    expect(screen.queryByRole('button', { name: 'Play Counterfeiters' })).toBeNull()
+    // Without the view there is no revision to send, so no button either
+    cleanup()
+    render(<HandItem item={card} gameId="g" busy={false} run={run} opponents={[]} playable={playable} />)
+    expect(screen.queryByRole('button', { name: 'Play Counterfeiters' })).toBeNull()
+  })
+
+  it('plays the card with the revision of the view', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    render(<HandItem item={card} gameId="g" busy={false} run={run} opponents={[]} view={view} playable={playable} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Play Counterfeiters' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Confirm/ }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g', 'playCard', expect.any(String), 3, { itemId: 'c-play', targets: [] })
+  })
+})
+
 describe('a Great Person card whose tokens are blockaded (issue #241)', () => {
   const general: Item = {
     ...base,

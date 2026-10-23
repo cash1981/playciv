@@ -66,8 +66,8 @@ const renderControl = (
     />,
   )
 
-const playButton = (name = 'Counterfeiters'): HTMLButtonElement =>
-  screen.getByRole('button', { name: `Play ${name}` }) as HTMLButtonElement
+const playButton = (name = 'Counterfeiters', verb = 'Play'): HTMLButtonElement =>
+  screen.getByRole('button', { name: `${verb} ${name}` }) as HTMLButtonElement
 const confirmButton = (): HTMLButtonElement =>
   screen.getByRole('button', { name: /^Confirm/ }) as HTMLButtonElement
 
@@ -106,8 +106,9 @@ describe('the Play button', () => {
   it('says Use for a Great Person that stays faceup', () => {
     const stays = card({ name: 'William Shakespeare', kind: 'greatPerson', discards: false, targets: { kind: 'none' }, prompt: '' })
     renderControl(viewWith([stays]), stays)
-    expect(playButton('William Shakespeare').textContent).toBe('Use')
-    fireEvent.click(playButton('William Shakespeare'))
+    // The accessible name starts with the visible text, so "click Use" finds it
+    expect(playButton('William Shakespeare', 'Use').textContent).toBe('Use')
+    fireEvent.click(playButton('William Shakespeare', 'Use'))
     expect(screen.getByRole('button', { name: 'Confirm use' })).toBeTruthy()
     expect(screen.getByText(/turns the card faceup/)).toBeTruthy()
   })
@@ -245,7 +246,7 @@ describe('confirming', () => {
     expect(send.mock.calls[0]?.[4]).toEqual({ itemId: 'c1', targets: [] })
   })
 
-  it('sends one request for a double click, and the same request id for a retry of the same press', async () => {
+  it('sends one request for a double click', async () => {
     let release: (view: PlayerView) => void = () => undefined
     const send = vi.spyOn(api, 'actionWithArgs').mockImplementation(
       () => new Promise<PlayerView>((resolve) => (release = resolve)),
@@ -258,6 +259,30 @@ describe('confirming', () => {
     expect(send).toHaveBeenCalledTimes(1)
     release({} as PlayerView)
     await waitFor(() => expect(screen.queryByRole('form')).toBeNull())
+  })
+
+  it('sends the same request id again when the answer was lost, and a new one once the press settled', async () => {
+    const send = vi
+      .spyOn(api, 'actionWithArgs')
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValue({} as PlayerView)
+    const quiet: Run = async (action) => {
+      try {
+        await action()
+      } catch {
+        /* GameView shows it */
+      }
+    }
+    render(<PlayCardControl card={card()} gameId="g1" view={viewWith([card()])} busy={false} run={quiet} />)
+    fireEvent.click(playButton())
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Bob' }))
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    // The form is still open, so the same button can be pressed again
+    await waitFor(() => expect((confirmButton() as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(confirmButton())
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(2))
+    expect(send.mock.calls[1]?.[2]).toBe(send.mock.calls[0]?.[2])
   })
 
   it('keeps the form open when the server refuses, so the player can change the choice', async () => {

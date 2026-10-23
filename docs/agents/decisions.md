@@ -227,8 +227,8 @@ buttons and the culture marker. Assisted actions are added beside them.
   notice while over. Great Person spaces give a marker, not a culture card, so they are
   never blocked. Trade offers record an agreement only and are not checked.
 - Drawing a culture deck whose level differs from the level of the space the leader
-  marker stands on (Start counts as level I, spaces 1 to 7 are I, 8 to 14 II, 15 to 21
-  III) asks "Are you sure?" first. Client-side only, no server flag: the Draw button is a
+  marker stands on (Start counts as level I here, spaces 1 to 7 are I, 8 to 14 II, 15 to 21
+  III; Patronage is stricter, see part 13) asks "Are you sure?" first. Client-side only, no server flag: the Draw button is a
   manual path. Moving the leader marker by hand charges and awards nothing.
   The card count includes every culture card in the hand, revealed or not, and the size
   counts only revealed cards, so an unrevealed Pottery or Valmiki can block early.
@@ -283,9 +283,9 @@ buttons and the culture marker. Assisted actions are added beside them.
   has no open phase the button gives way to "You have ended turn N. Waiting for ...".
   A player in a running game now always has the panel, so it is shown even with no
   card action, choice or city; not for a spectator, before the game starts or after
-  it ends. A player with no city yet therefore sees End turn above "Your cities: No
-  cities of yours on the map yet." (the line the cities task allowed "when the panel
-  is shown for another reason"). After the last press the button gives way to a line
+  it ends. A player with no city yet therefore sees End turn above the tabs, and in the
+  City Management tab "Your cities: No cities of yours on the map yet." (the line the
+  cities task allowed "when the panel is shown for another reason"). After the last press the button gives way to a line
   that takes focus, but only if focus was lost, so a refresh from another device does
   not steal it. The Order tab keeps its End turn and "Not done" button for now; there is
   no undo in the panel yet, and it does not work ahead into the next turn the way the
@@ -341,15 +341,20 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
   it; no city closer than three squares, diagonals included (outskirts must not overlap, anyone's); no relic next to
   it; a city-state on the square is destroyed for 3 culture, a city-state next to it
   forbids it. The Romans advance one space for free. A scout sends its square to one
-  city for the turn: the square counts for that city's production, and its culture and
-  resource icons are offered to that city's Devote to the Arts and Harvest only (a
-  scout sent nowhere is offered to every city, as before); the trade and coin icons stay
-  manual. Growing a capital into a metropolis only scrolls to the map.
+  city for the turn, and **to the capital when it is not sent** (the human, 2026-10-23):
+  the square counts for that city's production, and its culture and resource icons are
+  offered to that city's Devote to the Arts and Harvest only; the trade and coin icons stay
+  manual. The square leaves the city it lies in when the scout goes to another one, in the
+  production and in the gathering alike, also by the default (a scout in a non-capital
+  city's outskirts goes to the capital unless it is sent to that city). A capital that grew
+  into a metropolis has no capital marker: a scout that was not sent then goes nowhere and is
+  offered to every city, with a note saying so. An English army is only ever sent by hand.
+  Growing a capital into a metropolis only scrolls to the map.
 - **Wonders, Great Persons, techs, huts and relics** (`assisted-abilities.ts`, kinds
   `sot:<ability>`): Stonehenge, The Colossus, The Louvre, Lorenzo de' Medici (1 culture
   per 3 coins) and Alan Turing (1 trade and 1 culture per 2 armies still in the supply)
   add their numbers; Sydney Opera House advances for free; Panama Canal adds a coin to
-  the wonder; Cristo Redentor draws two events of a chosen level (every culture event
+  the wonder (it counts as a coin and cannot be invested); Cristo Redentor draws two events of a chosen level (every culture event
   draw has Mysticism's extra card, so with it each of the two draws is a pick of one from
   two, and both picks wait as card choices); Statue of Liberty, the Teacher hut and
   Atlantis grant a free tech and the page goes to the tech tree for the player to choose
@@ -370,8 +375,22 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
 - **Settled with the human, 2026-10-23:** whether a wonder is obsolete is not tracked (the
   player judges it, as for the Pyramids); the white army of the Russians counts as one of
   the armies in the supply for Turing; the Seven Cities of Gold give the Arabs no free
-  advance; Expansionism counts a city-state by the figure standing on it; relics are
-  claimed in a Start of Turn after they were taken in Movement.
+  advance and ask which investment card gets the 2 markers; Expansionism counts a city-state
+  by the figure standing on it; a relic is taken in Movement and its ability is claimed in
+  any later Start of Turn; only Atlantis (log, then the tech tree) and the investment relic
+  have a Start of Turn button; Mysticism's extra card applies to every culture card draw
+  (advance, Patronage, Cristo Redentor); Patronage needs one advance first; Feudalism's
+  resources come from the tile data; the coins on a wonder are not coin tokens to invest; a
+  scout goes to the capital unless it is sent to a city.
+- **Judgements of this work, not settled with the human:** a card in the hand over the hand size can
+  still be played (base rules p. 18 say to discard first; the game does not enforce it);
+  a Great Person with a passive or triggered text and a timing word is listed as playable
+  and is only turned faceup by "use"; the free tech of a grant is spent by the first
+  hidden tech of a matching level revealed in a Start of Turn, whichever the player meant;
+  a scout placed this turn gathers from next turn is told, not enforced; the English armies
+  that gather as scouts are offered to Devote and Harvest by hand only; the same resource
+  icon harvested twice in a turn (Feudalism and a city's Harvest, or two cities) is warned
+  about, not tracked.
 
 Source: `engine/src/assisted.ts`, `assisted-core.ts`, `assisted-sot.ts`,
 `assisted-abilities.ts`, `assisted-city.ts`, `assisted-cards.ts`, `card-timing.ts`,
@@ -379,8 +398,9 @@ Source: `engine/src/assisted.ts`, `assisted-core.ts`, `assisted-sot.ts`,
 `assisted-args.ts`, `web/src/views/AssistedActions.tsx`, `PhaseTabs.tsx`, `SotPanel.tsx`,
 `PlayableCards.tsx`, `EndTurn.tsx`, `YourCities.tsx`, `CityCard.tsx`, `PhaseSummary.tsx`, and the `assisted*` and `sot*` tests. Not built:
 Great Person abilities that need a map marker, killing markers, map tile 16a, the effect of a
-played card on other players, growing a metropolis, and Movement, Trade and Research actions
-beyond their tabs.
+played card on other players, growing a metropolis, Movement, Trade and Research actions
+beyond their tabs, and a guard for the owner's board Undo against the board changes a vote
+undo made itself (it can bring back a token that the vote removed; the record stays undone).
 
 ## Trade offers (#265)
 
@@ -484,7 +504,8 @@ private card, nothing placed).
   piece gives it back. After a refusal Confirm shows, so the same square can be tried again.
 - **"Possible actions" box in Your actions** (the human): the assisted actions (Advance
   culture and the card buttons) sit in a box under their own heading, above Your cities,
-  styled like a city card. After a successful Advance culture the page scrolls to Your hand
+  styled like a city card. With the phase tabs (part 13) each tab has the box for its own
+  phase, its groups as sub-headings, and "Your cities" follows it in City Management. After a successful Advance culture the page scrolls to Your hand
   (it waits for a card choice that is open, which is above the hand, and goes when it has
   been kept). The city name is the larger text on a city card and the production figure the
   smaller; Build and Start Building Program share a row when there is room.

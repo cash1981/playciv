@@ -95,6 +95,17 @@ export function PhaseActionsPanel({
   }, [current])
   // After a successful Keep the choice unmounts and focus would fall to the page.
   const bodyRef = useRef<HTMLDivElement>(null)
+  // The same when a press removes the control that was pressed (a city founded, a card played, a government
+  // taken): the panel gets the focus when the page's own element is gone and focus was in the panel before.
+  const focusInPanel = useRef(false)
+  useEffect(() => {
+    const body = bodyRef.current
+    if (body === null) return
+    if (focusInPanel.current && document.activeElement === document.body) {
+      body.focus({ preventScroll: true })
+    }
+    focusInPanel.current = body.contains(document.activeElement)
+  })
   // A culture advance puts its cards in the hand: after it, and after a waiting card choice has been
   // kept, the page goes to Your hand. Left alone while a choice is waiting, which is above the hand.
   const [toHand, setToHand] = useState(false)
@@ -107,10 +118,12 @@ export function PhaseActionsPanel({
   }, [toHand, waiting])
   // A free tech the viewer has just been given (Rationalism, the Teacher, Atlantis, the Statue of Liberty,
   // Public Education) is chosen and revealed in the tech tree, so the page goes there when one arrives.
-  const grants = view.you?.startOfTurn?.techGrants?.length ?? 0
+  // A replayed revision has no Start of Turn view (null): that is no change in the number of grants.
+  const grants = view.you?.startOfTurn?.techGrants?.length ?? null
   const seenGrants = useRef(grants)
   useEffect(() => {
-    if (grants > seenGrants.current) goToPanel('techs')
+    if (grants === null) return
+    if (seenGrants.current !== null && grants > seenGrants.current) goToPanel('techs')
     seenGrants.current = grants
   }, [grants])
 

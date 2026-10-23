@@ -173,6 +173,14 @@ describe('playing a card through the actions route', () => {
     expect((await send({ itemId: t.itemId, targets: [], resource: '' })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: [], extra: 1 })).status).toBe(400)
     expect((await send({ itemId: t.itemId, targets: [] }, { family: 'x' })).status).toBe(400)
+    // A field of the body that no action reads is refused too, not ignored
+    const stray = await send({ itemId: t.itemId, targets: [] }, { foo: 1 })
+    expect(stray.status).toBe(400)
+    expect(await stray.json()).toMatchObject({ message: 'playCard takes only args, not foo' })
+    // An args that is null is not an object, and says so
+    const empty = await send(null)
+    expect(empty.status).toBe(400)
+    expect(await empty.json()).toMatchObject({ message: 'args must be an object' })
     expect((await repo.findGame(t.gameId))?.assistedActions).toHaveLength(0)
   })
 

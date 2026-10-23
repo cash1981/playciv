@@ -9,12 +9,15 @@ import type { Run } from './GameView.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { PHASE_GUIDE, PhaseActionsPanel, currentPhaseOf, phaseStatusText } from './PhaseTabs.js'
 
+const originalScrollIntoView = Element.prototype.scrollIntoView
+
 beforeEach(() => {
   localStorage.setItem('civ.panel.actions', 'true')
   resetPendingRequestIds()
 })
 afterEach(() => {
   cleanup()
+  Element.prototype.scrollIntoView = originalScrollIntoView
   localStorage.removeItem('civ.panel.actions')
   vi.restoreAllMocks()
 })
@@ -281,11 +284,39 @@ describe('the phase tabs', () => {
     expect(container.textContent).toBe('')
   })
 
-  it('keeps a replay or a locked game from ordering anything in the cities', () => {
+  it('keeps a replay or a locked game from ordering anything in the cities or pressing an action', () => {
     renderPanel(viewIn('CM'), { readOnly: true })
     expect(screen.getByRole('heading', { name: 'Your cities' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Build/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
+    expect((screen.getByRole('button', { name: 'Use Chivalry' }) as HTMLButtonElement).disabled).toBe(true)
+    cleanup()
+    renderPanel(viewIn('CM'))
+    expect((screen.getByRole('button', { name: 'Use Chivalry' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('puts focus on the panel when the control that had it goes away', () => {
+    const { rerender } = renderPanel(viewIn('CM'))
+    const again = (view: PlayerView) =>
+      rerender(<PhaseActionsPanel gameId="g1" view={view} busy={false} readOnly={false} run={run} />)
+    const button = screen.getByRole('button', { name: 'Use Chivalry' })
+    button.focus()
+    // A press changes the page before the answer comes (the button is disabled while busy): that is a render
+    again(viewIn('CM', [chivalry, advance], { rev: 5 }))
+    expect(document.activeElement).toBe(button)
+    again(viewIn('CM', [advance], { rev: 6 }))
+    expect(screen.queryByRole('button', { name: 'Use Chivalry' })).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Your actions' }))
+  })
+
+  it('leaves focus alone when it was not in the panel', () => {
+    const { rerender } = renderPanel(viewIn('CM'))
+    const outside = document.createElement('button')
+    document.body.append(outside)
+    outside.focus()
+    rerender(<PhaseActionsPanel gameId="g1" view={viewIn('CM', [advance], { rev: 6 })} busy={false} readOnly={false} run={run} />)
+    expect(document.activeElement).toBe(outside)
+    outside.remove()
   })
 })
 
@@ -323,6 +354,16 @@ describe('a free tech arriving', () => {
     again(withGrants(2))
     again(withGrants(1))
     expect(scroll).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not take the page there when the viewer returns from a replayed revision', () => {
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    const replay = viewIn('TRADE', [], { startOfTurn: null })
+    const { again } = renderWithTechs(withGrants(1))
+    again(replay)
+    again(withGrants(1))
+    expect(scroll).not.toHaveBeenCalled()
   })
 })
 

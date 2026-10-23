@@ -296,34 +296,37 @@ export function AssistedActionGroups({
   if (view.you === null || actions.length === 0) return null
   const groups = [...new Set(actions.map((candidate) => candidate.group))]
   return (
-    <>
-      {groups.map((group) => (
-        <section key={group} className="phase-group" aria-label={group}>
-          <h3 className="phase-group-title">{group}</h3>
-          <ul className="assisted-actions">
-            {actions
-              .filter((candidate) => candidate.group === group)
-              .map((candidate) => (
-                <li key={candidate.action}>
-                  {/* A button with its own text (Advance culture) names the row itself. */}
-                  {BUTTON_TEXT[candidate.action] === undefined && candidate.buttonText === undefined && (
-                    <span className="assisted-name">{candidate.label}</span>
-                  )}
-                  <AssistedActionButton
-                    action={candidate.action}
-                    gameId={gameId}
-                    view={view}
-                    busy={busy}
-                    readOnly={readOnly}
-                    run={run}
-                    onDone={onDone === undefined ? undefined : () => onDone(candidate.action)}
-                  />
-                </li>
-              ))}
-          </ul>
-        </section>
-      ))}
-    </>
+    <section className="assisted-possible" aria-label="Possible actions">
+      <h3 className="assisted-possible-title">Possible actions</h3>
+      <div className="assisted-possible-box">
+        {groups.map((group) => (
+          <section key={group} className="phase-group" aria-label={group}>
+            <h4 className="phase-group-title">{group}</h4>
+            <ul className="assisted-actions">
+              {actions
+                .filter((candidate) => candidate.group === group)
+                .map((candidate) => (
+                  <li key={candidate.action}>
+                    {/* A button with its own text (Advance culture) names the row itself. */}
+                    {BUTTON_TEXT[candidate.action] === undefined && candidate.buttonText === undefined && (
+                      <span className="assisted-name">{candidate.label}</span>
+                    )}
+                    <AssistedActionButton
+                      action={candidate.action}
+                      gameId={gameId}
+                      view={view}
+                      busy={busy}
+                      readOnly={readOnly}
+                      run={run}
+                      onDone={onDone === undefined ? undefined : () => onDone(candidate.action)}
+                    />
+                  </li>
+                ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </section>
   )
 }
 

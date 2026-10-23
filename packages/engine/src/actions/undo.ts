@@ -13,6 +13,7 @@
  */
 
 import { assistedRecordOf, assistedSubject, reverseAssistedAction } from '../assisted.js'
+import { grantsAfterTechRemoved } from '../sot.js'
 import { civTileAssetId, leaderAssetId } from '../board.js'
 import { techCoinSource, withCoinSource } from '../coins.js'
 import type { EngineError } from '../errors.js'
@@ -525,6 +526,7 @@ function putTechBack(
     const source = techCoinSource(tech.name)
     const next = withPlayer(state, {
       ...player,
+      techGrants: grantsAfterTechRemoved(player.techGrants, tech.name),
       techsChosen: player.techsChosen.filter((candidate) => candidate.name !== tech.name),
       stats:
         source === undefined

@@ -205,6 +205,12 @@ export interface TechGrant {
   readonly level: 1 | 2 | 3 | 4 | 5 | null
   /** The turn it was granted; it can only be used in that turn's Start of Turn. */
   readonly turnNumber: number
+  /**
+   * The tech that was learned with it, once one was. The grant stays on the player so that removing that
+   * tech (or taking its reveal back by vote) gives the free tech back, and so the action that granted
+   * it can still be undone after the tech has been taken off again.
+   */
+  readonly usedFor?: string
 }
 
 /**
@@ -547,6 +553,8 @@ export type AssistedEffect =
       readonly subject: string
       readonly sheetName: SheetName
       readonly drawn: readonly string[]
+      /** The cards kept, in the hand: the ones with no choice to make, then each card a choice kept. The others went to the discard pile. */
+      readonly kept: readonly string[]
     }
   | {
       /** Investment markers added without paying a coin (the Seven Cities of Gold). */
@@ -1230,8 +1238,10 @@ export interface ScoutView {
   readonly terrain: string | null
   /** A scout, or an army (the Republic's armies found cities, and the English gather as scouts). */
   readonly figure: 'scout' | 'army'
-  /** The city it sends its square to this turn, or `null`. */
+  /** The city it sends its square to this turn: the one chosen, else the capital, or `null` without a capital marker. */
   readonly assignedTo: string | null
+  /** Whether `assignedTo` is the capital because no city was chosen. */
+  readonly assignedByDefault: boolean
   /** Whether it can send its square at all: a scout always, an army only for the English. */
   readonly canSend: boolean
   /** Whether it can found a city where it stands, and every reason it cannot. */
@@ -1285,6 +1295,8 @@ export interface StartOfTurnView {
   readonly cityLimit: { readonly have: number; readonly max: number }
   /** The player's own cities on the map, for choosing where a scout sends its square. */
   readonly cities: readonly { readonly pieceId: string; readonly label: string }[]
+  /** Whether founding a city and sending a square can be done now: only in the player's open Start of Turn. */
+  readonly scoutsNow: NowAnswer
   /** The figures that can found a city or send their square to one, with what stops them. */
   readonly scouts: readonly ScoutView[]
   /** Free techs the player may learn in this Start of Turn. */

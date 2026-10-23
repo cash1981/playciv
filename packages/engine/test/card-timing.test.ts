@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { firstCivGame } from './fixture.js'
 import {
   CARD_TIMING_TEXT,
   cardPlayRuleOf,
@@ -35,6 +36,46 @@ describe('timingsOf', () => {
       'CM',
       'MOVEMENT',
     ])
+  })
+
+  it('reads a second timing after a line break, as the sheets also write it', () => {
+    expect(
+      timingsOf('City Management: Each time you build a wonder, place a wound marker on this card.\nStart of Turn: Gain culture and trade.'),
+    ).toEqual(['CM', 'SOT'])
+  })
+
+  it('reads every timing a card prints at the start of its text or after a slash or a line break', () => {
+    const TIMING_OF: Readonly<Record<string, string>> = {
+      'start of any phase': 'ANY',
+      'start of turn': 'SOT',
+      'any time': 'ANY',
+      'city management': 'CM',
+      movement: 'MOVEMENT',
+      research: 'RESEARCH',
+      battle: 'BATTLE',
+    }
+    const starts = /(?:^|\n|\/)\s*(Start of Any Phase|Start of Turn|Any Time|City Management|Movement|Research|Battle)\s*:/gi
+    const cards = firstCivGame().items.filter(
+      (item) => item.kind === 'greatperson' || item.kind === 'cultureI' || item.kind === 'cultureII' || item.kind === 'cultureIII',
+    )
+    expect(cards.length).toBeGreaterThan(100)
+    for (const card of cards) {
+      const description = card.description ?? ''
+      const found = timingsOf(description) as readonly string[]
+      for (const match of description.matchAll(starts)) {
+        const timing = TIMING_OF[(match[1] ?? '').toLowerCase()] ?? ''
+        expect({ card: 'name' in card ? card.name : '', timing, read: found.includes(timing) }).toEqual({
+          card: 'name' in card ? card.name : '',
+          timing,
+          read: true,
+        })
+      }
+    }
+  })
+
+  it('reads Jim Henson as played in both City Management and Start of Turn', () => {
+    const henson = firstCivGame().items.find((item) => item.kind === 'greatperson' && item.name === 'Jim Henson')
+    expect(timingsOf(henson?.description)).toEqual(['CM', 'SOT'])
   })
 
   it('has no timing for a passive card, and ignores a phase word inside a sentence', () => {
