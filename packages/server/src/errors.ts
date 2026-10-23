@@ -90,7 +90,7 @@ export function statusFor(error: EngineError): number {
     case 'GAME_CREATOR_MUST_END_GAME':
     case 'ONLY_GAME_CREATOR_CAN_END_GAME':
     case 'BOARD_UNDO_NOT_YOURS':
-    case 'BOARD_ASSET_RUSSIA_ONLY':
+    case 'BOARD_ASSET_CIV_ONLY':
       return 403
     case 'ITEM_NOT_LOOTABLE':
       return 406
@@ -111,6 +111,8 @@ export function statusFor(error: EngineError): number {
     case 'CIVILIZATION_ALREADY_CHOSEN':
     case 'UNDO_ALREADY_INITIATED':
     case 'NOTHING_TO_UNDO':
+    case 'UNDO_ALREADY_DONE':
+    case 'CIV_REVEAL_NOT_UNDOABLE':
     case 'GAME_IS_FULL':
     case 'ALREADY_JOINED':
     case 'NO_COLOR_AVAILABLE':

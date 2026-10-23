@@ -601,7 +601,7 @@ export function GameView({
         busy={interactionBusy}
         readOnly={replaying || locked}
         youId={you?.playerId ?? null}
-        viewerIsRussia={you?.civilization?.name === 'Russians'}
+        viewerCivilization={you?.civilization?.name ?? null}
         {...(pickSquares === undefined ? {} : { pickSquares })}
         run={run}
       />

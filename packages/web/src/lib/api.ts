@@ -747,8 +747,8 @@ export const api = {
     targetPlayerId: string,
     stat: PlayerStatKey,
     // Movement (issue #102) takes its expression as a string ("3+1") and Combat
-    // hand size is free text; every other stat is a number.
-    value: number | string,
+    // hand size is free text; Aircraft unlocked is true/false; every other stat is a number.
+    value: number | string | boolean,
   ) =>
     post<PlayerView>(`/api/games/${gameId}/players/${targetPlayerId}/stat`, { stat, value }),
   // The coin counters are shared bookkeeping too; the engine caps each source.

@@ -55,6 +55,10 @@ export type EngineError =
   | { readonly kind: 'UNDO_NOT_INITIATED'; readonly logId: string }
   /** The log entry carries no item, so there is nothing to undo */
   | { readonly kind: 'NOTHING_TO_UNDO'; readonly logId: string }
+  /** The vote has already run, so a late vote cannot run the undo again */
+  | { readonly kind: 'UNDO_ALREADY_DONE'; readonly logId: string }
+  /** A civilization reveal whose setup cannot be told apart from the log, so it cannot be taken back */
+  | { readonly kind: 'CIV_REVEAL_NOT_UNDOABLE'; readonly logId: string }
   /** Java: 400 "Cannot join the game. Its full!" */
   | { readonly kind: 'GAME_IS_FULL'; readonly numOfPlayers: number }
   /** Java: 400 "Cannot join the game. You have already joined!" */
@@ -73,8 +77,8 @@ export type EngineError =
   | { readonly kind: 'BOARD_ASSET_NOT_FOUND'; readonly assetId: string }
   /** The physical supply for this board asset has been exhausted. */
   | { readonly kind: 'BOARD_ASSET_LIMIT_REACHED'; readonly assetId: string; readonly limit: number }
-  /** Only the Russian player may place the white army (issue #204) */
-  | { readonly kind: 'BOARD_ASSET_RUSSIA_ONLY'; readonly assetId: string }
+  /** A white figure belongs to one civilization: Russia's army (issue #204), Spain's scout */
+  | { readonly kind: 'BOARD_ASSET_CIV_ONLY'; readonly assetId: string; readonly civilization: string }
   | { readonly kind: 'BOARD_PIECE_NOT_FOUND'; readonly pieceId: string }
   | { readonly kind: 'UNKNOWN_WONDER_OWNER'; readonly playerId: string }
   /** `setCityProductionOverride` was pointed at a piece that is not a city. */
@@ -103,7 +107,7 @@ export type EngineError =
    * non-integer or negative number, or — for Movement (issue #102) — a string
    * that is not a `base(+bonus)*` expression.
    */
-  | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number | string }
+  | { readonly kind: 'INVALID_STAT_VALUE'; readonly value: number | string | boolean }
   /** `setCoinSource` got a source key outside the reference sheet's rows */
   | { readonly kind: 'UNKNOWN_COIN_SOURCE'; readonly source: string }
   /** `setCoinSource` was asked to set a row derived from current game state. */
@@ -205,6 +209,10 @@ export function describeError(error: EngineError): string {
       return 'This item cannot be undone. Nothing to undo.'
     case 'NOTHING_TO_UNDO':
       return 'The log entry has no item to undo'
+    case 'UNDO_ALREADY_DONE':
+      return 'This undo has already been carried out'
+    case 'CIV_REVEAL_NOT_UNDOABLE':
+      return 'This civilization reveal cannot be undone'
     case 'GAME_IS_FULL':
       return 'Cannot join the game. Its full!'
     case 'ALREADY_JOINED':
@@ -227,8 +235,8 @@ export function describeError(error: EngineError): string {
       return `Unknown board piece: ${error.assetId}`
     case 'BOARD_ASSET_LIMIT_REACHED':
       return `No ${error.assetId} pieces remain available`
-    case 'BOARD_ASSET_RUSSIA_ONLY':
-      return 'Only the Russian player can place the white army'
+    case 'BOARD_ASSET_CIV_ONLY':
+      return `The white figure belongs to the ${error.civilization}; only their player can place it`
     case 'BOARD_PIECE_NOT_FOUND':
       return `No piece on the board with id ${error.pieceId}`
     case 'UNKNOWN_WONDER_OWNER':
@@ -252,7 +260,7 @@ export function describeError(error: EngineError): string {
     case 'STAT_NOT_EDITABLE':
       return `The ${error.stat} stat is calculated automatically and cannot be edited`
     case 'INVALID_STAT_VALUE':
-      return `Player stat must be a whole number of zero or more, got ${error.value}`
+      return `Player stat must be a whole number of zero or more (or true/false for Aircraft), got ${error.value}`
     case 'UNKNOWN_COIN_SOURCE':
       return `Unknown coin source: ${error.source}`
     case 'COIN_SOURCE_NOT_EDITABLE':

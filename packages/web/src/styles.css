@@ -1841,6 +1841,13 @@ ul.history > li {
   padding: 0.15rem 0.35rem;
 }
 
+/* The Aircraft-unlocked checkbox in the status board. */
+.stat-checkbox {
+  width: 1.1rem;
+  height: 1.1rem;
+  cursor: pointer;
+}
+
 /* The read-only Coins total in the status board (the sum of the Coins tab). */
 .stat-total {
   display: inline-block;

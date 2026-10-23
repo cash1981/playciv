@@ -43,6 +43,19 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
   - `docs/agents/decisions.md`, `state.md`, `README.md`
 - **Notes:** parts 1 to 8 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout, city production, Build for buildings, figures and units, Start Building Program and Upgrade buildings). The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here.
 
+### aircraft-unlocked
+
+- **Owner:** Claude
+- **Branch:** `feat/aircraft-unlocked`
+- **Brief:** `docs/agents/tasks/aircraft-unlocked.md`
+- **Status:** in review
+- **Claimed paths:**
+  - `packages/engine/src/state.ts` (`PlayerStats` only), `migrate.ts`, `errors.ts`, `actions/player.ts`
+  - `packages/server/src/routes/play.ts`, `packages/server/test/api.test.ts`
+  - `packages/web/src/lib/api.ts`, `packages/web/src/views/StatusPanel.tsx`, `styles.css`
+  - related tests, `docs/agents/decisions.md`
+- **Notes:** adds an Aircraft-unlocked checkbox to Player status
+
 ---
 
 ## Format

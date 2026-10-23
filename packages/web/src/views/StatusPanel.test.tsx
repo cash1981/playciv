@@ -157,6 +157,56 @@ describe('StatusPanel Movement (issue #102)', () => {
   })
 })
 
+describe('StatusPanel Aircraft unlocked', () => {
+  it('is an Aircraft checkbox under Units, reflecting each player\'s flag', () => {
+    const view = {
+      ...memberView,
+      opponents: [
+        { ...memberView.opponents[0]!, stats: { ...DEFAULT_PLAYER_STATS, aircraft: true } },
+      ],
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    expect((screen.getByRole('checkbox', { name: 'Alice Aircraft unlocked' }) as HTMLInputElement).checked).toBe(false)
+    expect((screen.getByRole('checkbox', { name: 'Bob Aircraft unlocked' }) as HTMLInputElement).checked).toBe(true)
+    const heads = screen.getAllByRole('columnheader').map((th) => th.textContent)
+    expect(heads.indexOf('Aircraft')).toBe(heads.indexOf('Mounted') + 1)
+  })
+
+  it('saves a tick as a boolean', async () => {
+    const setStat = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(memberView)
+    render(<StatusPanel gameId="game-1" view={memberView} busy={false} readOnly={false} run={run} />)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Alice Aircraft unlocked' }))
+
+    await waitFor(() =>
+      expect(setStat).toHaveBeenCalledWith('game-1', 'player-me', 'aircraft', true),
+    )
+  })
+
+  it('saves an untick as false', async () => {
+    const setStat = vi.spyOn(api, 'setPlayerStat').mockResolvedValue(memberView)
+    const view = {
+      ...memberView,
+      opponents: [
+        { ...memberView.opponents[0]!, stats: { ...DEFAULT_PLAYER_STATS, aircraft: true } },
+      ],
+    } as unknown as PlayerView
+    render(<StatusPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Bob Aircraft unlocked' }))
+
+    await waitFor(() =>
+      expect(setStat).toHaveBeenCalledWith('game-1', 'player-them', 'aircraft', false),
+    )
+  })
+
+  it('is disabled for spectators or replay', () => {
+    render(<StatusPanel gameId="game-1" view={memberView} busy={false} readOnly run={run} />)
+    expect((screen.getByRole('checkbox', { name: 'Alice Aircraft unlocked' }) as HTMLInputElement).disabled).toBe(true)
+  })
+})
+
 describe('StatusPanel hand sizes', () => {
   it('shows Culture hand size as a read-only number in the Trade, Coins & Culture cards group', () => {
     render(

@@ -151,8 +151,10 @@ The palette has thirteen categories, generated from the images on disk. Building
 and resources use finite physical supplies: the physical building counts are
 read from the reference sheet, wheat, iron, silk and incense are each limited by
 the player count, and each Great Person type has three board pieces. Each colour
-has six armies and two scouts; Russia also has one white army, which only the
-Russian player can place (issue #204). Huts and
+has six armies and two scouts; Russia also has one white army and Spain one
+white scout, which only that civ's player can place (issue #204). Revealing the
+civ puts it in the player's own area, and removing it makes it available again.
+Huts and
 Villages are **unlimited** — they are picked up during play rather than dealt
 from a setup supply, so the player-count cap does not apply to them (issue
 #116). Each of the five relics (Ark of the Covenant, Atlantis, Attila's Village,
@@ -162,7 +164,7 @@ separate Great Person card deck remains a hand/draw mechanic.
 
 | Category | Count | From |
 | --- | --- | --- |
-| Figures | 11 | army and scout in five colours, plus Russia's white army |
+| Figures | 12 | army and scout in five colours, plus Russia's white army and Spain's white scout |
 | Resources | 6 | hut, village, wheat, iron, silk, incense |
 | Markers | 7 | coin, culture, caravan, fortification, wound, first player, building program |
 | Cities | 30 | capital/city/metropolis, with and without walls, per colour |
@@ -570,7 +572,8 @@ movement/combat/stacking values, a Combat hand size note and EftA/Infra/MIC/PE
 modifiers. Every value except Combat and Culture hand size is editable by any
 member of the game, with every edit written to the public log. Combat is
 calculated automatically from buildings, generals, MIC investments, government,
-civilization and the Statue of Zeus. Culture hand size starts at 2 and is
+civilization, the Statue of Zeus and city-state 4 (+2 for the player whose army
+or scout stood on it first, until their figures are gone). Culture hand size starts at 2 and is
 calculated from Pottery, Civil Service and Theology (+1 each), Computers (+1 per
 5 coins), Valmiki (+2 while revealed and usable, suppressed when all tracked
 Artist or Thinker tokens are blockaded, gone again when discarded), the first

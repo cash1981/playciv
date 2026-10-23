@@ -31,10 +31,10 @@ import {
   CULTURE_TRACK_CELLS,
   ROTATIONS,
   TILE_SQUARES,
-  WHITE_ARMY_ID,
   WONDERS_AREA_ID,
   areaBandTop,
   boardHeight,
+  boardUndoBlocked,
   boardWidth,
   clampToBoard,
   columnLabel,
@@ -49,6 +49,7 @@ import {
   slotOrigin,
   terrainAt,
   terrainWarning,
+  whiteFigureCivilization,
 } from '@civ/engine'
 import type { Board, BoardArea, BoardAsset, BoardPiece } from '@civ/engine'
 
@@ -91,8 +92,8 @@ interface Props {
   readonly readOnly?: boolean
   /** Whose Undo button this is — only enabled when they made the last change. */
   readonly youId?: string | null
-  /** Only the Russian player is offered the white army (issue #204). */
-  readonly viewerIsRussia?: boolean
+  /** The viewer's civ: Russia is offered the white army (issue #204), Spain the white scout. */
+  readonly viewerCivilization?: string | null
   /** Buildings and Great Persons an enemy figure stands on (issue #241); drawn greyed and struck through. */
   readonly blockadedPieceIds?: readonly string[]
   /** Set while a Build waits for the player to pick a square. */
@@ -195,8 +196,8 @@ export interface BoardPaletteProps {
   readonly replaying: boolean
   readonly pieces: readonly BoardPiece[]
   readonly numOfPlayers: number
-  /** Hides the white army from everyone else; the engine enforces it too. */
-  readonly viewerIsRussia?: boolean
+  /** Hides a white figure from everyone but its civ; the engine enforces it too. */
+  readonly viewerCivilization?: string | null
   /** Why the pieces cannot be used right now (for example a Build is waiting for its square); they are disabled and this is shown. */
   readonly blockedReason?: string | undefined
   readonly onSelectAsset?: (asset: BoardAsset) => void
@@ -210,13 +211,15 @@ export function BoardPalette({
   replaying,
   pieces,
   numOfPlayers,
-  viewerIsRussia = false,
+  viewerCivilization = null,
   blockedReason,
   onSelectAsset,
 }: BoardPaletteProps): React.JSX.Element {
-  const available = assets.filter(
-    (asset) => asset.category === category && (asset.id !== WHITE_ARMY_ID || viewerIsRussia),
-  )
+  const available = assets.filter((asset) => {
+    if (asset.category !== category) return false
+    const owner = whiteFigureCivilization(asset.id)
+    return owner === undefined || owner === viewerCivilization
+  })
   const inCategory =
     category === 'wonder'
       ? [...available].sort((a, b) => compareWonderNames(a.label, b.label))
@@ -312,7 +315,7 @@ export function BoardView({
   busy,
   readOnly = false,
   youId = null,
-  viewerIsRussia = false,
+  viewerCivilization = null,
   blockadedPieceIds = [],
   pickSquares,
   run,
@@ -855,7 +858,7 @@ export function BoardView({
         </label>
         <button
           className="small"
-          disabled={busy || readOnly || board.history.at(-1)?.playerId !== youId}
+          disabled={busy || readOnly || board.history.at(-1)?.playerId !== youId || boardUndoBlocked(board)}
           title="Take back your last change to the board"
           onClick={() => void run(() => api.undoBoard(gameId))}
         >
@@ -1104,7 +1107,7 @@ export function BoardView({
             replaying={readOnly}
             pieces={pieces}
             numOfPlayers={numOfPlayers}
-            viewerIsRussia={viewerIsRussia}
+            viewerCivilization={viewerCivilization}
             blockedReason={picking ? 'Finish or cancel the build first.' : undefined}
             onSelectAsset={(asset) => {
               if (picking) return

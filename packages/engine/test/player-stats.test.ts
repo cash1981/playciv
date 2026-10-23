@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 
 import { placePiece } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
-import { chooseTech, revealItem, setCoinSource, setPlayerStat } from '../src/actions/player.js'
+import { chooseTech, revealItem, revealTech, setCoinSource, setPlayerStat } from '../src/actions/player.js'
 import { EMPTY_COIN_SOURCES } from '../src/coins.js'
 import { createGame } from '../src/create-game.js'
 import { migrateGameState } from '../src/migrate.js'
@@ -66,6 +66,7 @@ describe('setPlayerStat', () => {
       infantry: 1,
       artillery: 1,
       mounted: 1,
+      aircraft: false,
       stacking: 2,
       mvmt: '2',
       combat: 0,
@@ -409,5 +410,85 @@ describe('projections carry the status board', () => {
     // A member not shown here (CHUL) proves opponents beyond the pair above
     // are unaffected by the edit.
     expect(findPlayer(state, CHUL)?.stats).toEqual(DEFAULT_PLAYER_STATS)
+  })
+})
+
+describe('Aircraft unlocked', () => {
+  const setAircraft = (state: GameState, value: unknown) =>
+    setPlayerStat(state, {
+      editorPlayerId: CASH1981,
+      targetPlayerId: KARANDRAS1,
+      stat: 'aircraft',
+      value: value as boolean,
+    })
+
+  it('can be ticked and unticked by hand, with a public log line', () => {
+    const ticked = unwrap(setAircraft(firstCivGame(), true))
+    expect(findPlayer(ticked, KARANDRAS1)?.stats.aircraft).toBe(true)
+    expect(findPlayer(ticked, CASH1981)?.stats.aircraft).toBe(false)
+    expect(ticked.log.at(-1)?.publicLog).toBe("cash1981 set Karandras1's aircraft unlocked to yes")
+
+    const unticked = unwrap(setAircraft(ticked, false))
+    expect(findPlayer(unticked, KARANDRAS1)?.stats.aircraft).toBe(false)
+  })
+
+  it.each([1, 'true', null])('rejects %s, which is not a boolean', (value) => {
+    expect(unwrapErr(setAircraft(firstCivGame(), value)).kind).toBe('INVALID_STAT_VALUE')
+  })
+
+  it('rejects a boolean for a numeric stat', () => {
+    const error = unwrapErr(
+      setPlayerStat(firstCivGame(), {
+        editorPlayerId: CASH1981,
+        targetPlayerId: CASH1981,
+        stat: 'culture',
+        value: true as unknown as number,
+      }),
+    )
+    expect(error.kind).toBe('INVALID_STAT_VALUE')
+  })
+
+  it('is set when the player reveals Flight, but not by merely choosing it', () => {
+    const chosen = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Flight' }))
+    expect(findPlayer(chosen, CASH1981)?.stats.aircraft).toBe(false)
+    const revealed = unwrap(revealTech(chosen, { playerId: CASH1981, techName: 'Flight' }))
+    expect(findPlayer(revealed, CASH1981)?.stats.aircraft).toBe(true)
+    expect(findPlayer(revealed, KARANDRAS1)?.stats.aircraft).toBe(false)
+  })
+
+  it('is not set by revealing any other tech', () => {
+    const chosen = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Education' }))
+    const revealed = unwrap(revealTech(chosen, { playerId: CASH1981, techName: 'Education' }))
+    expect(findPlayer(revealed, CASH1981)?.stats.aircraft).toBe(false)
+  })
+
+  it('does not overrule a player who unticked it when Flight is revealed a second time', () => {
+    let state = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Flight' }))
+    state = unwrap(revealTech(state, { playerId: CASH1981, techName: 'Flight' }))
+    state = unwrap(setPlayerStat(state, {
+      editorPlayerId: CASH1981, targetPlayerId: CASH1981, stat: 'aircraft', value: false,
+    }))
+    state = unwrap(revealTech(state, { playerId: CASH1981, techName: 'Flight' }))
+    expect(findPlayer(state, CASH1981)?.stats.aircraft).toBe(false)
+  })
+
+  it('is public status: an opponent sees it only once Flight has been revealed or it was ticked', () => {
+    const chosen = unwrap(chooseTech(firstCivGame(), { playerId: CASH1981, techName: 'Flight' }))
+    const opponentSees = (state: GameState) =>
+      toPlayerView(state, KARANDRAS1).opponents.find((o) => o.playerId === CASH1981)?.stats.aircraft
+    expect(opponentSees(chosen)).toBe(false)
+    expect(opponentSees(unwrap(revealTech(chosen, { playerId: CASH1981, techName: 'Flight' })))).toBe(true)
+  })
+
+  it('is filled in as false on a game saved before it existed', () => {
+    const original = firstCivGame()
+    const older = {
+      ...original,
+      players: original.players.map((player) => {
+        const { aircraft: _aircraft, ...stats } = player.stats
+        return { ...player, stats }
+      }),
+    } as unknown as GameState
+    expect(findPlayer(migrateGameState(older), CASH1981)?.stats.aircraft).toBe(false)
   })
 })

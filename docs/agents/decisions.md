@@ -77,7 +77,26 @@ see [legacy layout limitations](limitations.md#game-behavior). The culture track
 markers. Board undo targets the caller's latest consecutive actions; a new
 board action clears redo. Undoing board edits does not undo game actions.
 
+Each colour has six armies and two scouts. Russia gets one extra white army and
+Spain one extra white scout (`whiteFigureFor` in `board.ts`), a supply of one
+each. Revealing the civ puts that figure in the player's own area, so the
+palette shows 0 left; removing it from the board makes it 1 again, and only a
+player of that civ is offered it and may place it (`BOARD_ASSET_CIV_ONLY`).
+Undoing the reveal takes it back. In the blockade and City-state 4 rules a white
+figure counts as its civ's colour. Players who revealed Russia before this
+change get no automatic army and place it from the palette. The white scout art
+is made from the red scout by `tools/board-assets.ps1`, which also adds its
+manifest entry. The Spanish card says
+only "start with 2 scouts"; one extra scout follows the owner's request and the
+issue #204 precedent for Russia, not a rulebook reading. Tests: `white-figures.test.ts`,
+`undo-civ-reveal.test.ts`.
+
 Terrain checks are advisory client warnings, not server placement restrictions.
+Player status has an Aircraft checkbox under Units (`stats.aircraft`, default
+false) meaning the player has unlocked Aircraft units. Revealing the Flight tech
+for the first time ticks it; anyone can still tick or untick it by hand, and it
+is neither cleared when Flight is removed nor enforced when drawing Aircraft.
+
 Government selection and tech-pyramid placement remain permissive bookkeeping
 unless a specific effect is explicitly automated. Generated data should be
 changed through its generator/source process, not patched to encode a rule.
@@ -105,8 +124,19 @@ compatibility with existing games. Public totals never include hidden bonuses.
 Scout-transfer corrections remain manual; see [limitations](limitations.md).
 The palette uses a single `coin1` marker named Coin.
 
-Source: `packages/engine/src/coins.ts`, `packages/engine/src/blockade.ts`
-and related tests.
+City-state 4 (`city-states/cs4`, "1 Culture & +2 Combat bonus") adds +2 to the
+derived combat bonus of the player whose army or scout stood in its square
+first, once however many figures stand there; the white army and white scout count
+for the Russian and Spanish player. Holding the card is not required. A figure of another colour
+that arrives later (a battle) does not get it. It passes on only when the
+holder has no figure left there (killed or moved away), to the colour that has
+stood there longest; it is not regained by coming back. "First" is found by
+replaying `board.history` (`cityStateHolderColour`), because the stacking order
+changes with bring to front; nothing is stored, and undo follows. The +1
+culture half is not derived. Test: `combat-bonus.test.ts`.
+
+Source: `packages/engine/src/coins.ts`, `packages/engine/src/blockade.ts`,
+`packages/engine/src/combat-bonus.ts` and related tests.
 
 ## Arena and card handling
 
@@ -123,8 +153,34 @@ or draws automatically. Only the player who ended the battle may undo End
 battle, until another battle begins. Undo restores battle state; the projection
 exposes only `battleUndo.endedBy`, never the stored private unit identities.
 
-Source: `packages/engine/src/actions/arena.ts`, `actions/player.ts`, `state.ts`
-and arena tests. The earlier auto-discard and automatic-only barbarian plans
+An undo vote on a civilization's REVEAL entry takes back everything the reveal
+handed out by itself, recorded on that entry as `GameLogEntry.civSetup`: the
+starting units and Egypt's own wonder go back into the deck (the deck is
+reshuffled), the other civ cards return to the hand, and the starting tile,
+leader marker, starting tech and government are removed. Anything the player
+drew or chose themselves stays in the hand. The start-of-game wonder deal only
+holds while every seat has a civilization, so it is taken back too, whichever
+reveal triggered it, and the next reveal that completes the table deals it
+again. The board pieces are removed as history entries by the System, so the
+owner's board Undo cannot bring back a piece whose card is already in the deck,
+and the starting tech's and Democracy's coin counters are cleared. A reveal made
+before `civSetup` existed is rebuilt from the log (the starting-unit draws and
+civ discards right after the REVEAL line) and the board (the civ's tile and
+leader asset). It is refused (`CIV_REVEAL_NOT_UNDOABLE`, and the private log
+offers no undo) for Egypt and once the shared wonders are dealt, because those
+wonders cannot be tied to a reveal. Before, such an undo only moved the civ
+card into the deck and left the civilization set.
+Taking back a reveal also sets `board.undoFloor` to the current history length
+and clears Redo, so board Undo cannot revert anything made before it, such as a
+piece the owner removed by hand, while its card is in the deck.
+A vote that has run cannot be voted on again (`UNDO_ALREADY_DONE`), the starting
+tech goes by the civ's own tech id so a copy the player chose again stays, and
+returned units are no longer flagged in battle.
+`civSetup` is server-side like `item`: opponents get the public log form only.
+Tests: `packages/engine/test/undo-civ-reveal.test.ts`.
+
+Source: `packages/engine/src/actions/arena.ts`, `actions/player.ts`,
+`actions/undo.ts`, `state.ts` and arena tests. The earlier auto-discard and automatic-only barbarian plans
 are superseded.
 
 ## Assisted play

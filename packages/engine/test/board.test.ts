@@ -498,15 +498,17 @@ describe('placePiece', () => {
 
     // A player with another revealed civ is refused
     expect(unwrapErr(placePiece(state, { ...input, playerId: KARANDRAS1 }))).toEqual({
-      kind: 'BOARD_ASSET_RUSSIA_ONLY',
+      kind: 'BOARD_ASSET_CIV_ONLY',
       assetId: 'figures/whitearmy',
+      civilization: 'Russians',
     })
     // And so is a player who has not revealed any civ yet
     const noCiv = game.players.find((p) => p.playerId !== CASH1981 && p.playerId !== KARANDRAS1)
     expect(noCiv).toBeDefined()
     expect(unwrapErr(placePiece(state, { ...input, playerId: noCiv?.playerId ?? '' }))).toEqual({
-      kind: 'BOARD_ASSET_RUSSIA_ONLY',
+      kind: 'BOARD_ASSET_CIV_ONLY',
       assetId: 'figures/whitearmy',
+      civilization: 'Russians',
     })
 
     const placed = unwrap(placePiece(state, { ...input, playerId: CASH1981 }))

@@ -73,6 +73,7 @@ import {
   authenticateOptionallyWith,
   authenticateWith,
   currentPlayer,
+  optionalBoolean,
   optionalNumber,
   optionalString,
   readGame,
@@ -787,12 +788,16 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
     // keeps `optionalNumber`, including the numeric strings older clients sent.
     const rawValue = body['value']
     const isText = stat === 'mvmt' || stat === 'combatHandSize'
+    // Aircraft unlocked is a true/false checkbox.
+    const isFlag = stat === 'aircraft'
     const value =
-      isText
-        ? typeof rawValue === 'number' || typeof rawValue === 'string'
-          ? rawValue
-          : undefined
-        : optionalNumber(body, 'value')
+      isFlag
+        ? optionalBoolean(body, 'value')
+        : isText
+          ? typeof rawValue === 'number' || typeof rawValue === 'string'
+            ? rawValue
+            : undefined
+          : optionalNumber(body, 'value')
     if (value === undefined) {
       return sendError(
         c,
@@ -800,9 +805,11 @@ export function registerPlayRoutes(app: App, context: AppContext): void {
         'BAD_REQUEST',
         stat === 'mvmt'
           ? 'value must be a movement expression'
-          : isText
-            ? 'value must be text'
-            : 'value must be a number',
+          : isFlag
+            ? 'value must be true or false'
+            : isText
+              ? 'value must be text'
+              : 'value must be a number',
       )
     }
     return applyToGame(context, c, gameId, (state) =>

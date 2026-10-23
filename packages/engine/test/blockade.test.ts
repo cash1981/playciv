@@ -263,22 +263,25 @@ describe('isBlockaded', () => {
     expect(isBlockaded(colourless, general)).toBe(false)
   })
 
-  describe('the white army', () => {
-    function russianGame(): GameState {
-      return withCiv(game(), CASH1981, 'Russians')
+  describe.each([
+    ['army', 'Russians', 'figures/whitearmy'],
+    ['scout', 'Spanish', 'figures/whitescout'],
+  ])('the white %s', (_figure, civilization, whiteId) => {
+    function whiteGame(): GameState {
+      return withCiv(game(), CASH1981, civilization)
     }
 
-    it('counts as the Russian player’s colour', () => {
-      let state = russianGame()
+    it('counts as its civ’s player’s colour', () => {
+      let state = whiteGame()
       let ownGeneral: BoardPiece
       let enemyGeneral: BoardPiece
       ;[state, ownGeneral] = put2(state, CASH1981, 'great people/general', 5, 5)
       ;[state, enemyGeneral] = put2(state, KARANDRAS1, 'great people/general', 7, 7)
-      state = put(state, CASH1981, 'figures/whitearmy', 5, 5)
+      state = put(state, CASH1981, whiteId, 5, 5)
       expect(isBlockaded(state, ownGeneral)).toBe(false)
       // The same piece moved onto a Blue general blockades it.
-      const white = state.board.pieces.find((p) => p.assetId === 'figures/whitearmy')
-      if (white === undefined) throw new Error('no white army')
+      const white = state.board.pieces.find((p) => p.assetId === whiteId)
+      if (white === undefined) throw new Error('no white figure')
       state = unwrap(
         movePiece(state, {
           playerId: CASH1981,
@@ -290,23 +293,23 @@ describe('isBlockaded', () => {
       expect(isBlockaded(state, enemyGeneral)).toBe(true)
     })
 
-    it('is an enemy of no one while the Russian player has no colour', () => {
-      let state = withColor(russianGame(), CASH1981, null)
+    it('is an enemy of no one while its civ’s player has no colour', () => {
+      let state = withColor(whiteGame(), CASH1981, null)
       let general: BoardPiece
       ;[state, general] = put2(state, KARANDRAS1, 'great people/general', 5, 5)
-      state = put(state, CASH1981, 'figures/whitearmy', 5, 5)
+      state = put(state, CASH1981, whiteId, 5, 5)
       expect(isBlockaded(state, general)).toBe(false)
-      // A coloured army of another player still blockades, so the answer is the white army's alone.
+      // A coloured army of another player still blockades, so the answer is the white figure's alone.
       expect(isBlockaded(put(state, ITCHI, 'figures/greenarmy', 5, 5), general)).toBe(true)
       // Cash has a colour again: now it is Red's army and blockades Blue's general.
       expect(isBlockaded(withColor(state, CASH1981, 'Red'), general)).toBe(true)
     })
 
-    it('is an enemy of everyone when there is no Russian player', () => {
-      let state = russianGame()
+    it('is an enemy of everyone when nobody plays its civ', () => {
+      let state = whiteGame()
       let general: BoardPiece
       ;[state, general] = put2(state, CASH1981, 'great people/general', 5, 5)
-      state = put(state, CASH1981, 'figures/whitearmy', 5, 5)
+      state = put(state, CASH1981, whiteId, 5, 5)
       expect(isBlockaded(state, general)).toBe(false)
       expect(isBlockaded(withCiv(state, CASH1981, null), general)).toBe(true)
     })
