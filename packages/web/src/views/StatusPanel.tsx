@@ -664,7 +664,7 @@ function CoinCounter({
  * Enter, and only when the value actually changed, so concurrent edits are not
  * clobbered. Invalid input reverts rather than saving.
  */
-function StatCell({
+export function StatCell({
   label,
   value,
   text = false,

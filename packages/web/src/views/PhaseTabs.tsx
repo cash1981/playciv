@@ -27,6 +27,7 @@ import type { Run } from './GameView.js'
 import { goToPanel } from './PhaseSummary.js'
 import { PlayableCardList } from './PlayableCards.js'
 import { StartOfTurnChoices } from './SotPanel.js'
+import { TradeCollected, TradeOffers } from './TradeOffers.js'
 import { YourCities } from './YourCities.js'
 import './PhaseTabs.css'
 
@@ -273,6 +274,12 @@ function PhaseBody({
         readOnly={readOnly}
         run={run}
       />
+      {phase === 'TRADE' && (
+        <>
+          <TradeCollected gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
+          <TradeOffers gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
+        </>
+      )}
       {phase === 'CM' && (
         <YourCities gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} build={build} />
       )}

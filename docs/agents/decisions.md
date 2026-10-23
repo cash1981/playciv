@@ -67,7 +67,7 @@ independently; do not roll back or blindly repeat the committed action.
 Layout: only the timeline is height-capped (the screen minus about 40rem for the
 composer, between 8rem and 32rem); the thread and composer are not. When the
 timeline and composer together are taller than the screen (Order mode adds the
-Turn and Phase row, and the trade offer form is always there), the page grows.
+Turn and Phase row), the page grows.
 A cap on the thread let the composer overflow under the next panel and hide End
 turn and Send. The stylesheet test in `ChatOrdersPanel.test.tsx` guards this;
 retune the 40rem if the composer changes size.
@@ -438,7 +438,8 @@ Source: `web/src/views/AssistedActions.tsx`, `PlayableCards.tsx`, `SotPanel.tsx`
 
 ## Trade offers (#265)
 
-Trade negotiation stays in the game conversation, but an offer is an explicit
+Trade negotiation happens in the Trade tab of Your actions (the offer form and
+the offer list moved there from Chat & orders), but an offer is an explicit
 state record rather than ordinary chat text. Terms are free prose and are never
 parsed or executed: accepting records an agreement only, so players still use
 the existing legal trade-window controls to settle resources. The public view
@@ -448,8 +449,13 @@ recipient may perform each transition, and revision checks plus request ids make
 retries and competing writes deterministic. Pending offers expire when a later
 turn is observed; accepted offers are never expired.
 
+The Trade tab also has a small "Trade around your cities" box. It is the same
+number as Trade in the Status panel (`stats.trade`) and writes it with the same
+call, so Status stays the master and an edit on either side shows on both.
+
 Source: `packages/engine/src/trade-offers.ts`, `state.ts`, the trade-offer routes
-in `packages/server/src/routes/games.ts`, and the chat panel/API tests.
+in `packages/server/src/routes/games.ts`, `packages/web/src/views/TradeOffers.tsx`
+and the API tests.
 
 ## City production
 

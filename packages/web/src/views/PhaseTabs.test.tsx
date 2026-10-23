@@ -54,6 +54,7 @@ function viewIn(
       playerId: 'me',
       username: 'Alice',
       cities: [],
+      stats: { trade: 0 },
       availableActions: actions,
       pendingRewards: [],
       ...extra,
