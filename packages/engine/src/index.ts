@@ -33,6 +33,7 @@ export * from './culture-track.js'
 export * from './log.js'
 export * from './assisted.js'
 export { playableCardsOf } from './assisted-cards.js'
+export { livePendingRewards } from './assisted-culture.js'
 export * from './card-timing.js'
 export { PHASE_REASON, openCityManagementTurn } from './assisted-core.js'
 export type {
