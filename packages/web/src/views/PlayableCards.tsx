@@ -2,9 +2,10 @@
  * Playing a culture event or Great Person card (assisted play, part 13).
  *
  * Two places use the same {@link PlayCardControl}: the phase tabs, which list the
- * cards of the hand that can be played in that phase, and the hand itself, where each
- * card that can ever be played has a Play button. Whether it is enabled is the
- * engine's answer in `view.you.playableCards`; nothing here knows a card's timing.
+ * ready cards of the hand that can be played in that phase, and the hand itself, where
+ * each card that can ever be played has a Play button. Whether it is enabled is the
+ * engine's answer in `view.you.playableCards`; nothing here knows a card's timing. A
+ * listed card's name goes to the same card in the hand.
  *
  * Playing asks first, because it takes the card out of the hand: who the card names
  * (the log says it), the resource a gift is played as, then Confirm. The game only
@@ -21,6 +22,8 @@ import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { pressOnce } from './AssistedActions.js'
 import type { Run } from './GameView.js'
+import { HelpHint } from './HelpHint.js'
+import { goToHandItem } from './PhaseSummary.js'
 import './PlayableCards.css'
 
 const capitalized = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
@@ -57,7 +60,6 @@ export function PlayCardControl({
   const [open, setOpen] = useState(false)
   const [chosen, setChosen] = useState<readonly string[]>([])
   const [resource, setResource] = useState('')
-  const reasonId = useId()
   const formId = useId()
   if (view.you === null) return null
 
@@ -113,17 +115,13 @@ export function PlayCardControl({
           aria-label={`${card.kind === 'greatPerson' && !card.discards ? 'Use' : 'Play'} ${card.name}`}
           aria-expanded={ready ? open : undefined}
           aria-controls={ready && open ? formId : undefined}
-          aria-describedby={ready ? undefined : reasonId}
           disabled={disabled || !ready}
+          title={ready ? undefined : card.reason}
           onClick={() => setOpen((current) => !current)}
         >
           {card.kind === 'greatPerson' && !card.discards ? 'Use' : 'Play'}
         </button>
-        {!ready && (
-          <span id={reasonId} className="muted play-card-reason">
-            {card.reason}
-          </span>
-        )}
+        {!ready && <HelpHint label={card.name}>{card.reason}</HelpHint>}
       </div>
 
       {ready && open && (
@@ -221,34 +219,39 @@ export function PlayableCardList({
   run,
 }: ListProps): React.JSX.Element | null {
   if (view.you === null) return null
-  const cards = (view.you.playableCards ?? [])
-    .filter((card) => card.timings.includes(phase) || card.timings.includes('ANY'))
-    .sort((a, b) => Number(b.status === 'ready') - Number(a.status === 'ready'))
+  const cards = (view.you.playableCards ?? []).filter(
+    (card) =>
+      card.status === 'ready' && (card.timings.includes(phase) || card.timings.includes('ANY')),
+  )
+  if (cards.length === 0) return null
 
   return (
     <section className="phase-group" aria-label="Cards you can play">
       <h3 className="phase-group-title">Cards you can play</h3>
-      {cards.length === 0 ? (
-        <p className="muted">No card in your hand can be played in this phase.</p>
-      ) : (
-        <ul className="playable-cards">
-          {cards.map((card) => (
-            <li key={card.itemId} className="playable-card">
-              <span className="playable-card-name">{card.name}</span>{' '}
-              <span className="tag">{timingLabel(card.timings)}</span>
-              <p className="playable-card-text">{card.description}</p>
-              <PlayCardControl
-                card={card}
-                gameId={gameId}
-                view={view}
-                busy={busy}
-                readOnly={readOnly}
-                run={run}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className="playable-cards">
+        {cards.map((card) => (
+          <li key={card.itemId} className="playable-card">
+            <button
+              type="button"
+              className="link playable-card-name"
+              title={`Show ${card.name} in your hand`}
+              aria-label={`Show ${card.name} in your hand`}
+              onClick={() => goToHandItem(card.itemId)}
+            >
+              {card.name}
+            </button>{' '}
+            <span className="tag">{timingLabel(card.timings)}</span>
+            <PlayCardControl
+              card={card}
+              gameId={gameId}
+              view={view}
+              busy={busy}
+              readOnly={readOnly}
+              run={run}
+            />
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }

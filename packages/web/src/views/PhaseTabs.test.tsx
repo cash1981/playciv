@@ -259,7 +259,13 @@ describe('the phase tabs', () => {
     const startOfTurn = {
       government: { status: 'ready', reason: 'You may change government once in your Start of Turn.', current: 'Despotism', options: [], canEnterAnarchy: true },
       feudalism: null,
-      invest: { status: 'needs-resource', reason: 'You have no coin token to invest.', coins: [], cards: [], totalCoins: 0 },
+      invest: {
+        status: 'ready',
+        reason: 'Invest one coin token this turn.',
+        coins: [{ key: 'sheet', label: 'Sheet', coins: 1 }],
+        cards: [{ key: 'infra', label: 'Infrastructure', ability: 'Your cities produce +1/+2/+3 production.', thresholds: [1, 2, 3], markers: 0 }],
+        totalCoins: 1,
+      },
       cityLimit: { have: 2, max: 2 },
       cities: [],
       scouts: [],

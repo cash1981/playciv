@@ -402,6 +402,33 @@ played card on other players, growing a metropolis, Movement, Trade and Research
 beyond their tabs, and a guard for the owner's board Undo against the board changes a vote
 undo made itself (it can bring back a token that the vote removed; the record stays undone).
 
+### Action panel focus (2026-10-23)
+
+The human wants "Your actions" to hold only what is current, without sentences after
+the buttons. The browser filters `availableActions` to `ready` and `used` for the open
+phase; `not-owned`, `needs-resource`, `wrong-phase` and `unavailable` rows are left
+out. A used row stays visible with its `Used` tag and keeps the confirm-before-repeat
+press, so the rule's optional second use is still reachable. The engine remains the
+only place that decides status; no rule moved to the browser.
+
+- Every action's `reason` is in the button's `title` and behind a shared `?` help
+  dialog (`HelpHint.tsx`), never as a paragraph after the button. The same dialog
+  keeps the campaign and social-policy reference pattern (Escape closes, focus returns).
+- "Cards you can play" lists only ready cards, drops the printed description and hides
+  itself when empty. A card's name links to the same card in the hand; the hand opens if
+  it was collapsed and the card gets focus. Tech-backed action names link to the tech
+  panel instead. Social-policy actions link to that panel and wonders to the map; a Great
+  Person action links to its card in the hand when it is there.
+- A successful "Found a city here" scrolls to the map. Its blocked reasons are in the
+  button title and its `?` help.
+- "Invest a coin" is hidden unless it is ready or was used this turn; when used it is a
+  compact disabled row. Its rules text and the four investment cards (markers, ability,
+  active thresholds) are behind the `?` next to the investment-card picker.
+
+Source: `web/src/views/AssistedActions.tsx`, `PlayableCards.tsx`, `SotPanel.tsx`,
+`HelpHint.tsx`, `PhaseSummary.tsx`, `GameView.tsx`, `ItemCard.tsx` and their tests;
+`engine/src/state.ts` (`AvailableAction.techName`) and `assisted.ts`.
+
 ## Trade offers (#265)
 
 Trade negotiation stays in the game conversation, but an offer is an explicit

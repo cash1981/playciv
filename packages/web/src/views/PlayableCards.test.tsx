@@ -8,6 +8,7 @@ import type { PlayableCard } from '@civ/engine'
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { resetPendingRequestIds } from './AssistedActions.js'
+import { CollapsiblePanel } from './CollapsiblePanel.js'
 import type { Run } from './GameView.js'
 import { PlayCardControl, PlayableCardList, timingLabel } from './PlayableCards.js'
 
@@ -16,6 +17,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  localStorage.removeItem('civ.panel.hand')
   vi.restoreAllMocks()
 })
 
@@ -82,12 +84,14 @@ describe('the Play button', () => {
     expect(playButton().getAttribute('aria-expanded')).toBe('true')
   })
 
-  it('is disabled with the reason as text when the card cannot be played now', () => {
+  it('is disabled with the reason in its title and behind help when it cannot be played now', () => {
     const waiting = card({ status: 'wrong-phase', reason: 'Played in start of turn. You are in trade.' })
     renderControl(viewWith([waiting]), waiting)
     expect(playButton().disabled).toBe(true)
-    const reason = screen.getByText('Played in start of turn. You are in trade.')
-    expect(playButton().getAttribute('aria-describedby')).toBe(reason.id)
+    expect(playButton().getAttribute('title')).toBe('Played in start of turn. You are in trade.')
+    expect(screen.queryByText('Played in start of turn. You are in trade.')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Counterfeiters' }))
+    expect(within(screen.getByRole('dialog')).getByText('Played in start of turn. You are in trade.')).toBeTruthy()
     fireEvent.click(playButton())
     expect(screen.queryByRole('form')).toBeNull()
   })
@@ -320,7 +324,6 @@ describe('the list of cards in a phase tab', () => {
     description: 'City Management: Choose one of your cities. It produces 4 extra hammers this turn.',
     timings: ['CM'],
     targets: { kind: 'none' },
-    status: 'wrong-phase',
     reason: 'Played in city management. You are in start of turn.',
   })
   const list = (phase: 'SOT' | 'TRADE' | 'CM', view = viewWith([cm, sot, anyTime])) =>
@@ -335,9 +338,9 @@ describe('the list of cards in a phase tab', () => {
     expect(screen.queryByText('We Love the Despot Day!')).toBeNull()
   })
 
-  it('shows the card’s own text and where it is played', () => {
+  it('shows where a card is played but not its long text', () => {
     list('SOT')
-    expect(screen.getByText(/^Start of Turn: Choose another player/)).toBeTruthy()
+    expect(screen.queryByText(/^Start of Turn: Choose another player/)).toBeNull()
     expect(screen.getByText('Start of turn')).toBeTruthy()
     expect(screen.getByText('Any time')).toBeTruthy()
   })
@@ -349,22 +352,66 @@ describe('the list of cards in a phase tab', () => {
     cleanup()
     list('CM')
     expect(screen.getByText('We Love the Despot Day!')).toBeTruthy()
-    // It is not ready, so its button is disabled with the reason
-    expect((screen.getByRole('button', { name: 'Play We Love the Despot Day!' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Play We Love the Despot Day!' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('says when no card of the hand can be played in the phase', () => {
-    list('TRADE', viewWith([sot]))
-    expect(screen.getByText('No card in your hand can be played in this phase.')).toBeTruthy()
+  it('leaves out a card that cannot be played now', () => {
+    const blocked = card({
+      itemId: 'c4',
+      name: 'Blocked card',
+      timings: ['SOT'],
+      status: 'unavailable',
+      reason: 'Already used.',
+    })
+    const { container } = list('SOT', viewWith([sot, blocked]))
+    expect(container.textContent).not.toContain('Blocked card')
+    expect(container.textContent).toContain('Counterfeiters')
+  })
+
+  it('renders nothing when no card of the hand can be played in the phase', () => {
+    const { container } = list('TRADE', viewWith([sot]))
+    expect(container.textContent).toBe('')
   })
 
   it('tolerates a view without playableCards, and renders nothing for a spectator', () => {
     const old = { rev: 1, you: { playerId: 'me', username: 'Alice' }, opponents: [] } as unknown as PlayerView
-    list('SOT', old)
-    expect(screen.getByText('No card in your hand can be played in this phase.')).toBeTruthy()
-    cleanup()
-    const { container } = list('SOT', { rev: 1, you: null, opponents: [] } as unknown as PlayerView)
+    const { container } = list('SOT', old)
     expect(container.textContent).toBe('')
+    cleanup()
+    const spectator = list('SOT', { rev: 1, you: null, opponents: [] } as unknown as PlayerView)
+    expect(spectator.container.textContent).toBe('')
+  })
+
+  it('links a card name to the same card in the hand', () => {
+    const scrolled: Element[] = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this)
+    }
+    localStorage.setItem('civ.panel.hand', 'false')
+    render(
+      <>
+        <PlayableCardList gameId="g1" view={viewWith([sot])} phase="SOT" busy={false} readOnly={false} run={run} />
+        <CollapsiblePanel id="hand" title="Your hand (1)" defaultOpen>
+          <p>cards</p>
+          <ul>
+            <li id="hand-item-c1" tabIndex={-1}>
+              Counterfeiters
+            </li>
+          </ul>
+        </CollapsiblePanel>
+      </>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Show Counterfeiters in your hand' }))
+    // The collapsed hand opens; the card gets the focus and the scroll after the render.
+    return waitFor(() => {
+      expect(localStorage.getItem('civ.panel.hand')).toBe('true')
+      expect(scrolled.map((element) => element.id)).toContain('hand-item-c1')
+      expect(document.activeElement?.id).toBe('hand-item-c1')
+    }).finally(() => {
+      Element.prototype.scrollIntoView = original
+      localStorage.removeItem('civ.panel.hand')
+    })
   })
 })
 

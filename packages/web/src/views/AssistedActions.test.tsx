@@ -98,35 +98,29 @@ const renderPanel = (view: PlayerView, props: { busy?: boolean; readOnly?: boole
   )
 
 describe('AssistedActionsPanel', () => {
-  it('shows a ready action with its status and reason, and the button is enabled', () => {
+  it('shows a ready action with its status, and keeps the reason behind its help button', () => {
     renderPanel(viewWith([READY]))
 
     expect(screen.getByRole('heading', { name: /Your actions/ })).toBeTruthy()
     const button = screen.getByRole('button', { name: 'Use Chivalry' }) as HTMLButtonElement
     expect(button.disabled).toBe(false)
+    expect(button.getAttribute('title')).toBe('Ready to use.')
     expect(screen.getByText('Ready')).toBeTruthy()
-    expect(screen.getByText('Ready to use.')).toBeTruthy()
+    expect(screen.queryByText('Ready to use.')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Chivalry' }))
+    expect(within(screen.getByRole('dialog')).getByText('Ready to use.')).toBeTruthy()
   })
 
   it.each([
-    [
-      'needs-resource',
-      'Needs resource',
-      'You need an Incense token: an Incense hut in your hand or an Incense piece in your player area.',
-    ],
-    ['wrong-phase', 'Not now', 'Only available during your open City Management phase.'],
-  ] as const)('shows why a %s action cannot be pressed, as text on the page', (status, tag, reason) => {
+    'needs-resource',
+    'wrong-phase',
+    'unavailable',
+  ] as const)('leaves a %s action out until it can be pressed', (status) => {
     const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
-    renderPanel(viewWith([chivalry(status, reason)]))
+    renderPanel(viewWith([chivalry(status, 'Not now.')]))
 
-    const button = screen.getByRole('button', { name: 'Use Chivalry' }) as HTMLButtonElement
-    expect(button.disabled).toBe(true)
-    expect(screen.getByText(tag)).toBeTruthy()
-    // Visible text that the button points at, not a title attribute.
-    const reasonElement = screen.getByText(reason)
-    expect(button.getAttribute('aria-describedby')).toBe(reasonElement.id)
-    expect(button.getAttribute('title')).toBeNull()
-    fireEvent.click(button)
+    expect(screen.queryByRole('button', { name: 'Use Chivalry' })).toBeNull()
+    expect(screen.queryByText('Not now.')).toBeNull()
     expect(perform).not.toHaveBeenCalled()
   })
 
@@ -420,13 +414,15 @@ describe('a card that was already used this turn', () => {
     'You have already used Chivalry this turn. The rules allow it once per turn. Use it again?'
   const useButton = () => screen.getByRole('button', { name: 'Use Chivalry' }) as HTMLButtonElement
 
-  it('keeps its button pressable, with the Used tag and the reason on the page', () => {
+  it('keeps its button pressable, with the Used tag and the reason behind help', () => {
     renderPanel(viewWith([USED]))
 
     expect(useButton().disabled).toBe(false)
+    expect(useButton().getAttribute('title')).toBe(USED.reason)
     expect(screen.getByText('Used')).toBeTruthy()
-    const reason = screen.getByText(USED.reason)
-    expect(useButton().getAttribute('aria-describedby')).toBe(reason.id)
+    expect(screen.queryByText(USED.reason)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Chivalry' }))
+    expect(within(screen.getByRole('dialog')).getByText(USED.reason)).toBeTruthy()
   })
 
   it('is still disabled while another write runs or the game is read-only', () => {
@@ -587,12 +583,14 @@ describe('the same action from two entry points', () => {
 
     const inDialog = within(dialog).getByRole('button', { name: 'Use Chivalry' }) as HTMLButtonElement
     expect(inDialog.disabled).toBe(true)
-    expect(within(dialog).getByText(reason)).toBeTruthy()
+    expect(inDialog.getAttribute('title')).toBe(reason)
     expect(within(dialog).getByText('Needs resource')).toBeTruthy()
-    // The panel behind the dialog says the same.
-    const buttons = screen.getAllByRole('button', { name: 'Use Chivalry', hidden: true })
-    expect(buttons).toHaveLength(2)
-    expect(screen.getAllByText(reason, { exact: true })).toHaveLength(2)
+    expect(screen.queryByText(reason)).toBeNull()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Help: Chivalry' }))
+    const helps = screen.getAllByRole('dialog')
+    expect(within(helps[helps.length - 1]!).getByText(reason)).toBeTruthy()
+    // The panel behind the dialog hides the action until it can be pressed.
+    expect(screen.getAllByRole('button', { name: 'Use Chivalry', hidden: true })).toHaveLength(1)
   })
 
   it('presses the same action, with the same request id, from either entry point', async () => {
@@ -701,34 +699,27 @@ const viewWithRewards = (
 describe('the Advance culture button', () => {
   const READY_REASON = 'Advance to space 9 (culture II event): 5 culture and 3 trade.'
 
-  it('shows when it is the only action in the panel, with its reason as text', () => {
+  it('shows when it is the only action in the panel, with its reason behind help', () => {
     renderPanel(viewWith([advance('ready', READY_REASON)]))
 
     const button = screen.getByRole('button', { name: 'Advance culture' }) as HTMLButtonElement
     expect(button.disabled).toBe(false)
-    expect(screen.getByText(READY_REASON)).toBeTruthy()
-    expect(button.getAttribute('aria-describedby')).toBe(screen.getByText(READY_REASON).id)
+    expect(button.getAttribute('title')).toBe(READY_REASON)
+    expect(screen.queryByText(READY_REASON)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Culture advance' }))
+    expect(within(screen.getByRole('dialog')).getByText(READY_REASON)).toBeTruthy()
   })
 
   it.each([
-    ['needs-resource', 'Needs resource', 'Advance to space 9 (culture II event): 5 culture and 3 trade. You are missing 2 culture.'],
-    ['wrong-phase', 'Not now', 'Only available during your open City Management phase.'],
-    [
-      'unavailable',
-      'Unavailable',
-      'Advance to space 9 (culture II event): 5 culture and 3 trade. Choose the card to keep from your last advance first.',
-    ],
-    ['unavailable', 'Unavailable', 'Your leader marker is not on the culture track.'],
-    ['unavailable', 'Unavailable', 'Your marker is already on the Culture Victory space.'],
-  ] as const)('a %s advance cannot be pressed and says why: %s', (status, tag, reason) => {
+    'needs-resource',
+    'wrong-phase',
+    'unavailable',
+  ] as const)('leaves a %s advance out until it can be pressed', (status) => {
     const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
-    renderPanel(viewWith([advance(status, reason)]))
+    renderPanel(viewWith([advance(status, 'Not now.')]))
 
-    const button = screen.getByRole('button', { name: 'Advance culture' }) as HTMLButtonElement
-    expect(button.disabled).toBe(true)
-    expect(screen.getByText(tag)).toBeTruthy()
-    expect(screen.getByText(reason)).toBeTruthy()
-    fireEvent.click(button)
+    expect(screen.queryByRole('button', { name: 'Advance culture' })).toBeNull()
+    expect(screen.queryByText('Not now.')).toBeNull()
     expect(perform).not.toHaveBeenCalled()
   })
 
@@ -832,12 +823,12 @@ describe('the pending card choice', () => {
     expect(screen.queryByText('Choose a card to keep')).toBeNull()
   })
 
-  it('shows the choice even when no action is listed, next to the blocked advance reason', () => {
+  it('shows the choice even when no action is listed', () => {
     const reason = 'Advance to space 9 (culture II event): 5 culture and 3 trade. Choose the card to keep from your last advance first.'
     renderPanel(viewWithRewards([reward()], [advance('unavailable', reason)]))
 
-    expect(screen.getByText(reason)).toBeTruthy()
-    expect((screen.getByRole('button', { name: 'Advance culture' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByText(reason)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Advance culture' })).toBeNull()
     expect(screen.getByRole('heading', { name: 'Choose a card to keep' })).toBeTruthy()
   })
 
@@ -1196,7 +1187,7 @@ describe('Your cities in the panel', () => {
 
 describe('The actions of the open phase', () => {
   it('puts the actions under the heading of their group, above Your cities', () => {
-    const view = withYou(viewWith([advance('needs-resource', 'You are missing 3 culture.'), READY]), {
+    const view = withYou(viewWith([advance('ready', 'You are missing 3 culture.'), READY]), {
       cities: [cityOf()],
       buildOptions: [buildOptionsOf()],
     })
@@ -1209,10 +1200,40 @@ describe('The actions of the open phase', () => {
     const culture = within(possible).getByRole('region', { name: 'Culture track' })
     expect(within(culture).getByRole('heading', { level: 4, name: 'Culture track' })).toBeTruthy()
     expect(within(culture).getByRole('button', { name: 'Advance culture' })).toBeTruthy()
-    expect(within(culture).getByText('You are missing 3 culture.')).toBeTruthy()
+    expect(within(culture).queryByText('You are missing 3 culture.')).toBeNull()
     expect(within(possible).getByRole('region', { name: 'Resource abilities' })).toBeTruthy()
     const cities = within(panel).getByRole('region', { name: 'Your cities' })
     expect(possible.compareDocumentPosition(cities) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('links a tech-backed action name to the tech panel', () => {
+    localStorage.setItem('civ.panel.techs', 'true')
+    const scrolled: Element[] = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this)
+    }
+    try {
+      render(
+        <>
+          <AssistedActionsPanel
+            gameId="game-1"
+            view={viewWith([{ ...READY, techName: 'Chivalry' }])}
+            busy={false}
+            readOnly={false}
+            run={run}
+          />
+          <CollapsiblePanel id="techs" title="Tech tree" defaultOpen>
+            <p>The pyramid</p>
+          </CollapsiblePanel>
+        </>,
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Show Chivalry in the tech panel' }))
+      expect(scrolled).toHaveLength(1)
+    } finally {
+      Element.prototype.scrollIntoView = original
+      localStorage.removeItem('civ.panel.techs')
+    }
   })
 
   it('has no group and no box when no action is listed', () => {
@@ -1296,7 +1317,7 @@ describe('after Advance culture', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
     await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
-    fireEvent.click(screen.getByRole('button', { name: /Chivalry/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use Chivalry' }))
     await waitFor(() => expect(perform).toHaveBeenCalledTimes(2))
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(scrolled).toHaveLength(0)

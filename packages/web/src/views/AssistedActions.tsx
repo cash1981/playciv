@@ -4,14 +4,15 @@
  *
  * The state of every button comes from `view.you.availableActions`, which the
  * engine computes once for the viewer. This file adds no rule of its own: it
- * shows `status` and `reason`, and sends one request per press.
+ * lists the ready and used rows, shows the `status` and puts the `reason` behind
+ * a help button, and sends one request per press.
  *
  * Two entry points use the same {@link AssistedActionButton}: the phase tabs
  * (`PhaseTabs.tsx`) and the tech detail dialog. Neither fires anything by rendering;
  * only a press does.
  */
 
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { itemName } from '@civ/engine'
@@ -21,7 +22,9 @@ import { ApiError, api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import type { BuildFlow } from './buildFlow.js'
 import { endTurnState } from './EndTurn.js'
+import { HelpHint } from './HelpHint.js'
 import { ItemCard } from './ItemCard.js'
+import { goToHandItem, goToPanel } from './PhaseSummary.js'
 import type { Run } from './GameView.js'
 import './AssistedActions.css'
 
@@ -143,6 +146,31 @@ const BUTTON_TEXT: Readonly<Partial<Record<AssistedActionKind, string>>> = {
   cultureAdvance: 'Advance culture',
 }
 
+/**
+ * Where an action's name should link: the card or panel that says what it does.
+ * A tech card has its place in the tech tree; the other card groups point at the
+ * panel that holds them. `undefined` leaves the name as plain text.
+ */
+function cardLinkOf(
+  candidate: NonNullable<PlayerView['you']>['availableActions'][number],
+  view: PlayerView,
+): { readonly where: string; readonly go: () => void } | undefined {
+  if (candidate.techName !== undefined) {
+    return { where: 'the tech panel', go: () => goToPanel('techs') }
+  }
+  if (candidate.group === 'Social policies') {
+    return { where: 'the social policy panel', go: () => goToPanel('social-policy') }
+  }
+  if (candidate.group === 'Wonders') {
+    return { where: 'the map', go: () => goToPanel('board') }
+  }
+  if (candidate.group === 'Great Persons') {
+    const card = view.you?.items?.find((item) => itemName(item) === candidate.label)
+    if (card !== undefined) return { where: 'your hand', go: () => goToHandItem(card.id) }
+  }
+  return undefined
+}
+
 interface ButtonProps {
   readonly action: AssistedActionKind
   readonly gameId: string
@@ -150,10 +178,7 @@ interface ButtonProps {
   readonly busy: boolean
   readonly readOnly: boolean
   readonly run: Run
-  /**
-   * `full` shows the status tag and the reason always; `blocked` shows the reason
-   * only while the action cannot be pressed. A tight table cell uses `blocked`.
-   */
+  /** `full` shows the status tag; a tight table cell uses `blocked`. */
   readonly detail?: 'full' | 'blocked'
   readonly className?: string
   /** Replaces the default "Use <label>" text. */
@@ -173,9 +198,9 @@ export const usedAgainQuestion = (label: string): string =>
 /**
  * One button for one assisted action. Renders nothing for a spectator or when
  * the viewer has no state for the action. Disabled unless the status is `ready`
- * or `used`, and then the reason is on the page as text, not only in a tooltip.
- * A `used` card stays pressable: a press asks first and sends `confirmedRepeat`
- * only after a yes.
+ * or `used`; the reason is in the button's title and behind its `?` help, not on
+ * the page. A `used` card stays pressable: a press asks first and sends
+ * `confirmedRepeat` only after a yes.
  */
 export function AssistedActionButton({
   action,
@@ -189,13 +214,11 @@ export function AssistedActionButton({
   children,
   onDone,
 }: ButtonProps): React.JSX.Element | null {
-  const reasonId = useId()
   const state = view.you?.availableActions?.find((candidate) => candidate.action === action)
   if (view.you === null || state === undefined) return null
 
   const ready = state.status === 'ready'
   const used = state.status === 'used'
-  const showReason = detail === 'full' || !ready
   const rev = view.rev
   const playerId = view.you.playerId
 
@@ -226,17 +249,13 @@ export function AssistedActionButton({
         type="button"
         className={className}
         disabled={busy || readOnly || !(ready || used)}
-        aria-describedby={showReason ? reasonId : undefined}
+        title={state.reason}
         onClick={press}
       >
         {children ?? state.buttonText ?? BUTTON_TEXT[action] ?? `Use ${state.label}`}
       </button>
       {detail === 'full' && <span className="tag">{STATUS_TEXT[state.status]}</span>}
-      {showReason && (
-        <span id={reasonId} className="muted assisted-reason">
-          {state.reason}
-        </span>
-      )}
+      <HelpHint label={state.label}>{state.reason}</HelpHint>
       {ready && state.warning !== undefined && (
         <span role="status" className="assisted-warning">
           {state.warning}
@@ -291,7 +310,8 @@ export function AssistedActionGroups({
 }): React.JSX.Element | null {
   const actions = (view.you?.availableActions ?? []).filter(
     (candidate) =>
-      candidate.status !== 'not-owned' && (candidate.phase === phase || candidate.phase === 'ANY'),
+      (candidate.status === 'ready' || candidate.status === 'used') &&
+      (candidate.phase === phase || candidate.phase === 'ANY'),
   )
   if (view.you === null || actions.length === 0) return null
   const groups = [...new Set(actions.map((candidate) => candidate.group))]
@@ -305,23 +325,39 @@ export function AssistedActionGroups({
             <ul className="assisted-actions">
               {actions
                 .filter((candidate) => candidate.group === group)
-                .map((candidate) => (
-                  <li key={candidate.action}>
-                    {/* A button with its own text (Advance culture) names the row itself. */}
-                    {BUTTON_TEXT[candidate.action] === undefined && candidate.buttonText === undefined && (
-                      <span className="assisted-name">{candidate.label}</span>
-                    )}
-                    <AssistedActionButton
-                      action={candidate.action}
-                      gameId={gameId}
-                      view={view}
-                      busy={busy}
-                      readOnly={readOnly}
-                      run={run}
-                      onDone={onDone === undefined ? undefined : () => onDone(candidate.action)}
-                    />
-                  </li>
-                ))}
+                .map((candidate) => {
+                  const link = cardLinkOf(candidate, view)
+                  const title = link === undefined ? undefined : `Show ${candidate.label} in ${link.where}`
+                  return (
+                    <li key={candidate.action}>
+                      {/* A button with its own text (Advance culture) names the row itself. */}
+                      {BUTTON_TEXT[candidate.action] === undefined && candidate.buttonText === undefined && (
+                        link === undefined ? (
+                          <span className="assisted-name">{candidate.label}</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="link assisted-name"
+                            title={title}
+                            aria-label={title}
+                            onClick={link.go}
+                          >
+                            {candidate.label}
+                          </button>
+                        )
+                      )}
+                      <AssistedActionButton
+                        action={candidate.action}
+                        gameId={gameId}
+                        view={view}
+                        busy={busy}
+                        readOnly={readOnly}
+                        run={run}
+                        onDone={onDone === undefined ? undefined : () => onDone(candidate.action)}
+                      />
+                    </li>
+                  )
+                })}
             </ul>
           </section>
         ))}

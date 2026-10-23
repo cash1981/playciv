@@ -39,7 +39,8 @@ scouting rules, card effects.
       in the browser.
 - [ ] Disabled or used buttons have the reason in `title` and in a `?` dialog, not as
       inline text. Used cards keep the existing confirm-before-repeat behavior.
-- [ ] Inactive actions are not listed; used actions stay visible and disabled.
+- [ ] Inactive actions are not listed; used actions stay visible with the Used tag and keep
+      the existing confirm-before-repeat behavior.
 - [ ] Playable card names link to the matching card in the hand; descriptions are gone.
 - [ ] Tech-backed action names link to the tech panel.
 - [ ] Found a city goes to the map after a successful press.

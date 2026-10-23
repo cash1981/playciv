@@ -27,7 +27,7 @@ import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
-import { PageShortcuts, PhaseSummary } from './PhaseSummary.js'
+import { PageShortcuts, PhaseSummary, handItemId } from './PhaseSummary.js'
 import { PhaseActionsPanel } from './PhaseTabs.js'
 import { PlayCardControl } from './PlayableCards.js'
 import { RevealedPanel } from './RevealedPanel.js'
@@ -1041,7 +1041,12 @@ export function HandItem({
   readonly blockaded?: boolean
 }): React.JSX.Element {
   return (
-    <ItemCard item={item} {...(blockaded ? { className: 'card-blockaded' } : {})}>
+    <ItemCard
+      item={item}
+      id={handItemId(item.id)}
+      tabIndex={-1}
+      {...(blockaded ? { className: 'card-blockaded' } : {})}
+    >
       <span className={item.hidden ? 'tag hidden' : 'tag revealed'}>
         {item.hidden ? 'only you' : 'published'}
       </span>

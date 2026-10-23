@@ -757,6 +757,8 @@ export interface AvailableAction {
   readonly group: string
   /** What the button says when "Use <label>" is not it. */
   readonly buttonText?: string
+  /** The tech card this action belongs to, when it is a button. Safe for the viewer. */
+  readonly techName?: string
   readonly status: AssistedStatus
   /** A readable sentence, also when `status` is `ready`. */
   readonly reason: string
