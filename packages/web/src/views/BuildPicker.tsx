@@ -56,20 +56,23 @@ function unitNameOf(unitType: string): string {
 }
 
 /**
- * Back to the picker, which sits in the Cities panel. That panel may have been
- * collapsed since the Build started, and a collapsed panel keeps its content
- * hidden, so it is opened first.
+ * Back to the picker, which sits in the City Management tab of "Your actions". The
+ * panel may have been collapsed and another tab opened since the Build started, and
+ * hidden content is not on the page, so the panel and the tab are opened first.
  */
 function goBackToPicker(): void {
-  const toggle = document.querySelector<HTMLElement>('[aria-controls="cities-content"]')
+  const toggle = document.querySelector<HTMLElement>('[aria-controls="actions-content"]')
   const collapsed = toggle?.getAttribute('aria-expanded') === 'false'
   if (collapsed) toggle?.click()
+  const tab = document.getElementById('phase-tab-CM')
+  const otherTab = tab !== null && tab.getAttribute('aria-selected') !== 'true'
+  if (otherTab) tab?.click()
   const show = (): void => {
     const picker = document.getElementById(BUILD_PICKER_ID)
     if (picker !== null) bringIntoView(picker)
   }
   // Opening is a state change in React; the content is visible once it has flushed.
-  if (collapsed) queueMicrotask(show)
+  if (collapsed || otherTab) queueMicrotask(show)
   else show()
 }
 

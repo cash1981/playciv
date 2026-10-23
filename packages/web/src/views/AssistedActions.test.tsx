@@ -8,8 +8,9 @@ import type { TechItem } from '@civ/engine'
 
 import { ApiError, api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
-import { AssistedActionButton, AssistedActionsPanel, resetPendingRequestIds } from './AssistedActions.js'
+import { AssistedActionButton, resetPendingRequestIds } from './AssistedActions.js'
 import type { Run } from './GameView.js'
+import { PhaseActionsPanel } from './PhaseTabs.js'
 import { TechPanel } from './TechPanel.js'
 
 beforeEach(() => {
@@ -29,6 +30,8 @@ type Action = NonNullable<PlayerView['you']>['availableActions'][number]
 const chivalry = (status: Action['status'], reason: string): Action => ({
   action: 'chivalry',
   label: 'Chivalry',
+  phase: 'CM',
+  group: 'Resource abilities',
   status,
   reason,
 })
@@ -66,6 +69,8 @@ function viewWith(
       pyramidPlacements: [],
       availableActions: actions,
     },
+    // The viewer is in City Management, where every action of these tests belongs
+    activeTurn: { turnNumber: 3, waitingFor: [{ username: 'Alice', phase: 'CM' }] },
     opponents: [],
   } as unknown as PlayerView
 }
@@ -83,7 +88,7 @@ const run: Run = async (action) => {
 
 const renderPanel = (view: PlayerView, props: { busy?: boolean; readOnly?: boolean } = {}) =>
   render(
-    <AssistedActionsPanel
+    <PhaseActionsPanel
       gameId="game-1"
       view={view}
       busy={props.busy ?? false}
@@ -92,7 +97,7 @@ const renderPanel = (view: PlayerView, props: { busy?: boolean; readOnly?: boole
     />,
   )
 
-describe('AssistedActionsPanel', () => {
+describe('PhaseActionsPanel', () => {
   it('shows a ready action with its status and reason, and the button is enabled', () => {
     renderPanel(viewWith([READY]))
 
@@ -125,12 +130,12 @@ describe('AssistedActionsPanel', () => {
     expect(perform).not.toHaveBeenCalled()
   })
 
-  it('leaves out an action for a card the viewer does not hold, and the whole panel when none is left', () => {
-    const { container } = renderPanel(
-      viewWith([chivalry('not-owned', 'You do not have Chivalry.')]),
-    )
+  it('leaves out an action for a card the viewer does not hold, and keeps the tab for the phase', () => {
+    renderPanel(viewWith([chivalry('not-owned', 'You do not have Chivalry.')]))
 
-    expect(container.textContent).toBe('')
+    expect(screen.queryByRole('button', { name: 'Use Chivalry' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Resource abilities' })).toBeNull()
+    expect(screen.getByRole('tab', { name: /^City management/ }).getAttribute('aria-selected')).toBe('true')
   })
 
   it('renders nothing for a spectator', () => {
@@ -139,10 +144,11 @@ describe('AssistedActionsPanel', () => {
     expect(container.textContent).toBe('')
   })
 
-  it('renders nothing when the viewer has no availableActions', () => {
-    const { container } = renderPanel(viewWith([]))
+  it('lists no action when the viewer has no availableActions, and still guides the phase', () => {
+    renderPanel(viewWith([]))
 
-    expect(container.textContent).toBe('')
+    expect(screen.queryByRole('button', { name: /^Use / })).toBeNull()
+    expect(screen.getByText('This is your current phase.')).toBeTruthy()
   })
 
   it('disables the button while another write runs or the game is read-only', () => {
@@ -157,7 +163,7 @@ describe('AssistedActionsPanel', () => {
     const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
     const { rerender } = renderPanel(viewWith([READY]))
     rerender(
-      <AssistedActionsPanel gameId="game-1" view={viewWith([READY], 6)} busy={false} readOnly={false} run={run} />,
+      <PhaseActionsPanel gameId="game-1" view={viewWith([READY], 6)} busy={false} readOnly={false} run={run} />,
     )
 
     expect(perform).not.toHaveBeenCalled()
@@ -285,7 +291,7 @@ describe('AssistedActionButton requests', () => {
       ...viewWith([advance('ready', 'Advance.')], 6),
       assistedActions: [{ id: lostId, kind: 'cultureAdvance' }],
     } as unknown as PlayerView
-    rerender(<AssistedActionsPanel gameId="game-1" view={landed} busy={false} readOnly={false} run={run} />)
+    rerender(<PhaseActionsPanel gameId="game-1" view={landed} busy={false} readOnly={false} run={run} />)
     await waitFor(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
       expect(perform.mock.calls.length).toBeGreaterThan(1)
@@ -307,7 +313,7 @@ describe('AssistedActionButton requests', () => {
       ...viewWith([advance('ready', 'Advance.')], 6),
       assistedActions: [{ id: 'some-other-id', kind: 'cultureAdvance' }],
     } as unknown as PlayerView
-    rerender(<AssistedActionsPanel gameId="game-1" view={other} busy={false} readOnly={false} run={run} />)
+    rerender(<PhaseActionsPanel gameId="game-1" view={other} busy={false} readOnly={false} run={run} />)
     await waitFor(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
       expect(perform.mock.calls.length).toBeGreaterThan(1)
@@ -347,7 +353,7 @@ describe('AssistedActionButton requests', () => {
     await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
     // The first press is unsettled in outcome, so its id is still kept for alice-id.
     rerender(
-      <AssistedActionsPanel
+      <PhaseActionsPanel
         gameId="game-1"
         view={viewWith([READY], 5, [], 'bob-id')}
         busy={false}
@@ -373,7 +379,7 @@ describe('AssistedActionButton requests', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use Chivalry' }))
     await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
     rerender(
-      <AssistedActionsPanel gameId="game-1" view={viewWith([READY], 6)} busy={false} readOnly={false} run={run} />,
+      <PhaseActionsPanel gameId="game-1" view={viewWith([READY], 6)} busy={false} readOnly={false} run={run} />,
     )
     await waitFor(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Use Chivalry' }))
@@ -390,7 +396,14 @@ describe('AssistedActionButton requests', () => {
         action="democracy"
         gameId="game-1"
         view={viewWith([
-          { action: 'democracy', label: 'Democracy', status: 'ready', reason: 'Spend 6 trade to add 1 coin to Democracy.' },
+          {
+            action: 'democracy',
+            label: 'Democracy',
+            phase: 'CM',
+            group: 'Coins',
+            status: 'ready',
+            reason: 'Spend 6 trade to add 1 coin to Democracy.',
+          },
         ])}
         busy={false}
         readOnly={false}
@@ -478,7 +491,7 @@ describe('a card that was already used this turn', () => {
 
     // The first use landed: the next view says used
     rerender(
-      <AssistedActionsPanel gameId="game-1" view={viewWith([USED], 6)} busy={false} readOnly={false} run={run} />,
+      <PhaseActionsPanel gameId="game-1" view={viewWith([USED], 6)} busy={false} readOnly={false} run={run} />,
     )
     await waitFor(() => {
       fireEvent.click(useButton())
@@ -504,7 +517,7 @@ describe('a card that was already used this turn', () => {
 
     // The response was lost; the view now says used (without the record of the kept id here)
     rerender(
-      <AssistedActionsPanel gameId="game-1" view={viewWith([USED], 6)} busy={false} readOnly={false} run={run} />,
+      <PhaseActionsPanel gameId="game-1" view={viewWith([USED], 6)} busy={false} readOnly={false} run={run} />,
     )
     // Wait until the failed press has settled, then cancel the question once
     await waitFor(() => {
@@ -571,7 +584,7 @@ describe('the same action from two entry points', () => {
     const view = viewWith([chivalry('needs-resource', reason)], 5, [tech('Chivalry')])
     render(
       <>
-        <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />
+        <PhaseActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />
         <TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />
       </>,
     )
@@ -599,7 +612,7 @@ describe('the same action from two entry points', () => {
     const view = viewWith([READY], 5, [tech('Chivalry')])
     render(
       <>
-        <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />
+        <PhaseActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={run} />
         <TechPanel gameId="game-1" busy={false} run={run} view={view} reloadCount={0} />
       </>,
     )
@@ -649,6 +662,8 @@ describe('the same action from two entry points', () => {
 const advance = (status: Action['status'], reason: string): Action => ({
   action: 'cultureAdvance',
   label: 'Culture advance',
+  phase: 'CM',
+  group: 'Culture track',
   status,
   reason,
 })
@@ -801,9 +816,9 @@ describe('the pending card choice', () => {
     expect(screen.queryByText('Isaac Newton')).toBeNull()
   })
 
-  it('renders no choice for a view without pending rewards, and the panel stays away when nothing else is listed', () => {
-    const { container } = renderPanel(viewWithRewards([]))
-    expect(container.textContent).toBe('')
+  it('renders no choice for a view without pending rewards', () => {
+    renderPanel(viewWithRewards([]))
+    expect(screen.queryByText('Choose a card to keep')).toBeNull()
     cleanup()
     renderPanel(viewWith([advance('ready', 'Advance.')]))
     expect(screen.queryByText('Choose a card to keep')).toBeNull()
@@ -989,7 +1004,7 @@ describe('the pending card choice', () => {
         await action()
         setView(viewWith([advance('ready', 'Advance.')], 6))
       }
-      return <AssistedActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={reloading} />
+      return <PhaseActionsPanel gameId="game-1" view={view} busy={false} readOnly={false} run={reloading} />
     }
     const { container } = render(<Harness />)
 

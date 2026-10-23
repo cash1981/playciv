@@ -490,6 +490,10 @@ export interface AssistedActionRecord {
 export interface AvailableAction {
   readonly action: AssistedActionKind
   readonly label: string
+  /** The phase tab the button belongs to; `'ANY'` for an action that works in every phase. */
+  readonly phase: TurnPhase | 'ANY'
+  /** The heading it is listed under in its tab. */
+  readonly group: string
   readonly status: AssistedStatus
   /** A readable sentence, also when `status` is `ready`. */
   readonly reason: string

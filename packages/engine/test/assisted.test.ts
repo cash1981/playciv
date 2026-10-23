@@ -55,6 +55,18 @@ describe('the registry', () => {
     expect(isAssistedActionKind(7)).toBe(false)
   })
 
+  it('puts every button in a phase tab and a group, and every button so far is City Management', () => {
+    const actions = availableActionsFor(firstCivGame(), CASH1981)
+    expect(actions.length).toBeGreaterThan(0)
+    for (const action of actions) {
+      expect(action.phase).toBe('CM')
+      expect(action.group.length).toBeGreaterThan(0)
+    }
+    expect(actions.find((action) => action.action === 'chivalry')?.group).toBe('Resource abilities')
+    expect(actions.find((action) => action.action === 'democracy')?.group).toBe('Coins')
+    expect(actions.find((action) => action.action === 'cultureAdvance')?.group).toBe('Culture track')
+  })
+
   it('a new game and an old save both have an empty list of records', () => {
     expect(firstCivGame().assistedActions).toEqual([])
     const old = { ...firstCivGame() } as Record<string, unknown>

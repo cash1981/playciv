@@ -1048,6 +1048,11 @@ describe('the ended-battle banner', () => {
   })
 })
 
+/** The build and city buttons are in the City Management tab; the viewer starts in Start of turn. */
+const openCityManagement = (): void => {
+  fireEvent.click(screen.getByRole('tab', { name: /^City management/ }))
+}
+
 describe('the Build flow in the game page', () => {
   const library = {
     assetId: 'buildings/library',
@@ -1097,6 +1102,7 @@ describe('the Build flow in the game page', () => {
 
   it('puts the board in pick mode after a choice and takes it out on Cancel', async () => {
     await renderOrder(viewWith())
+    openCityManagement()
     expect(screen.getByTestId('board').getAttribute('data-pick-count')).toBe('off')
     fireEvent.click(screen.getByRole('button', { name: 'Build in Capital D5' }))
     fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
@@ -1122,6 +1128,7 @@ describe('the Build flow in the game page', () => {
     await renderOrder(
       viewWith({ you: { playerId: 'p1', username: 'viewer', items: [], pendingRewards: [], cities: [city], buildOptions: withUnit } }),
     )
+    openCityManagement()
     fireEvent.click(screen.getByRole('button', { name: 'Build in Capital D5' }))
     fireEvent.click(screen.getByRole('button', { name: 'Choose Infantry unit' }))
     expect(screen.getByRole('group', { name: 'Build' }).textContent).toContain('Build an infantry unit in Capital D5')
@@ -1132,6 +1139,7 @@ describe('the Build flow in the game page', () => {
 
   it('has no Build button once the game is locked, and none for a spectator', async () => {
     const locked = await renderOrder(viewWith({ active: false }))
+    openCityManagement()
     expect(screen.getByRole('heading', { name: 'Cities (1)' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
     locked.unmount()
@@ -1193,12 +1201,14 @@ describe('the city actions in the game page', () => {
 
   it('shows the Start button and the Upgrades block to a player in a live game', async () => {
     await renderOrder(viewWith())
+    openCityManagement()
     expect(screen.getByRole('button', { name: 'Start Building Program in Capital B3' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (1)' })).toBeTruthy()
   })
 
   it('shows neither once the game is locked, and neither to a spectator', async () => {
     const locked = await renderOrder(viewWith({ active: false }))
+    openCityManagement()
     expect(screen.getByRole('heading', { name: 'Cities (1)' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
     expect(screen.queryByRole('heading', { name: 'Upgrades' })).toBeNull()

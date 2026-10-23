@@ -6,16 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, api } from '../lib/api.js'
 import type { CityActionOptions, CityProduction, PlayerView, UpgradeFamilyOption } from '../lib/api.js'
 import { resetPendingRequestIds } from './AssistedActions.js'
-import { CitiesPanel } from './CitiesPanel.js'
+import { CityOrders } from './CityOrders.js'
 import type { Run } from './GameView.js'
 
 beforeEach(() => {
-  localStorage.setItem('civ.panel.cities', 'true')
   resetPendingRequestIds()
 })
 afterEach(() => {
   cleanup()
-  localStorage.removeItem('civ.panel.cities')
   vi.restoreAllMocks()
 })
 
@@ -111,7 +109,7 @@ const run: Run = async (action) => {
 
 function renderPanel(view: PlayerView, options: { busy?: boolean; readOnly?: boolean } = {}): void {
   render(
-    <CitiesPanel
+    <CityOrders
       gameId="g1"
       view={view}
       busy={options.busy ?? false}
@@ -227,9 +225,10 @@ describe('Start Building Program', () => {
     expect(send).toHaveBeenNthCalledWith(2, 'g1', expect.any(String), 3, 'city-2')
   })
 
-  it('has no button for an opponent’s city', () => {
+  it('lists no city of an opponent and says so when the viewer has none', () => {
     renderPanel(viewOf({ own: [], others: [city({ pieceId: 'theirs', label: 'City H8' })], cityActions: [] }))
-    expect(screen.getByRole('heading', { name: 'City H8' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'City H8' })).toBeNull()
+    expect(screen.getByText('You have no city on the map.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
   })
 
@@ -241,7 +240,7 @@ describe('Start Building Program', () => {
 
     // GameView passes readOnly for a replay and for a locked game.
     renderPanel(viewOf({ cityActions: [READY] }), { readOnly: true })
-    expect(screen.getByRole('heading', { name: 'Capital B3' })).toBeTruthy()
+    expect(screen.getByText('City orders are not available in a replay or a locked game.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Start Building Program/ })).toBeNull()
   })
 
@@ -327,7 +326,7 @@ describe('Upgrades', () => {
     const before = viewOf({ upgradeOptions: [GRANARY], rev: 5 })
     const after = viewOf({ upgradeOptions: [], rev: 6 })
     const element = (view: PlayerView): React.JSX.Element => (
-      <CitiesPanel gameId="g1" view={view} busy={false} readOnly={false} run={reloadingRun} />
+      <CityOrders gameId="g1" view={view} busy={false} readOnly={false} run={reloadingRun} />
     )
     // The reload that follows the press brings a view where a co-player has flipped the pieces.
     const reloadingRun: Run = async (action) => {
@@ -371,7 +370,7 @@ describe('Upgrades', () => {
         signOut()
       }
     }
-    render(<CitiesPanel gameId="g1" view={viewOf({ upgradeOptions: [GRANARY] })} busy={false} readOnly={false} run={signingOutRun} />)
+    render(<CityOrders gameId="g1" view={viewOf({ upgradeOptions: [GRANARY] })} busy={false} readOnly={false} run={signingOutRun} />)
     const button = screen.getByRole('button', { name: 'Upgrade Granary to Aqueduct (3)' }) as HTMLButtonElement
     fireEvent.click(button)
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1))

@@ -14,16 +14,20 @@ import type { PickSquares } from './BoardView.js'
 import { BuildBar, BuildPicker } from './BuildPicker.js'
 import { OPTIONS_CHANGED, SQUARE_GONE, useBuildFlow } from './buildFlow.js'
 import { CitiesPanel } from './CitiesPanel.js'
+import { CityOrders } from './CityOrders.js'
 import type { Run } from './GameView.js'
+import { PhaseActionsPanel } from './PhaseTabs.js'
 
 beforeEach(() => {
   localStorage.setItem('civ.panel.cities', 'true')
+  localStorage.setItem('civ.panel.actions', 'true')
   resetPendingRequestIds()
   vi.spyOn(api, 'boardAssets').mockResolvedValue([])
 })
 afterEach(() => {
   cleanup()
   localStorage.removeItem('civ.panel.cities')
+  localStorage.removeItem('civ.panel.actions')
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
@@ -148,6 +152,7 @@ function viewOf(
           cities: [cityProduction()],
           ...(build === undefined ? {} : { buildOptions: build }),
         },
+    activeTurn: { turnNumber: 3, waitingFor: [{ username: 'Alice', phase: 'CM' }] },
     opponents: [{ playerId: 'them', username: 'Bob', cities: extra.theirs ?? [] }],
   } as unknown as PlayerView
 }
@@ -236,7 +241,7 @@ describe('BuildPicker', () => {
 
 // --- the Build button -------------------------------------------------------
 
-/** The page as GameView wires it: the Cities panel, the bar and the board share one flow. */
+/** The page as GameView wires it: the City Management tab, the bar and the board share one flow. */
 interface Handle {
   setView: (view: PlayerView) => void
 }
@@ -270,7 +275,8 @@ function Harness({
       : { itemLabel: plan.label, cells: plan.squares, selected: plan.target, onPick: flow.pick, onCancel: flow.clear }
   return (
     <>
-      <CitiesPanel gameId="g1" view={view} busy={false} readOnly={readOnly} run={run} build={flow} />
+      <PhaseActionsPanel gameId="g1" view={view} busy={false} readOnly={readOnly} run={run} build={flow} />
+      <CitiesPanel gameId="g1" view={view} busy={false} readOnly={readOnly} run={run} />
       <BuildBar gameId="g1" view={view} flow={flow} busy={false} run={run} />
       <BoardView
         gameId="g1"
@@ -331,7 +337,7 @@ describe('the Build button in the Cities panel', () => {
     expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
     replay.unmount()
 
-    render(<CitiesPanel gameId="g1" view={viewOf([options()])} busy={false} readOnly={false} run={async () => undefined} />)
+    render(<CityOrders gameId="g1" view={viewOf([options()])} busy={false} readOnly={false} run={async () => undefined} />)
     expect(screen.queryByRole('button', { name: /^Build in/ })).toBeNull()
   })
 })
@@ -637,13 +643,13 @@ describe('square picking and Confirm', () => {
 })
 
 describe('Back to the picker', () => {
-  it('opens the Cities panel first when it was collapsed after the Build started', async () => {
+  it('opens the actions panel first when it was collapsed after the Build started', async () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
     fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
-    const toggle = document.querySelector<HTMLElement>('[aria-controls="cities-content"]')
-    if (toggle === null) throw new Error('Cities toggle missing')
+    const toggle = document.querySelector<HTMLElement>('[aria-controls="actions-content"]')
+    if (toggle === null) throw new Error('Actions toggle missing')
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
 
@@ -659,7 +665,23 @@ describe('Back to the picker', () => {
     await waitFor(() => expect(document.activeElement).toBe(picker))
   })
 
-  it('leaves an open Cities panel as it is and goes straight to the picker', () => {
+  it('opens the City Management tab when another tab was opened after the Build started', async () => {
+    const handle: Handle = { setView: () => undefined }
+    render(<Harness initial={viewOf([options()])} handle={handle} />)
+    fireEvent.click(buildButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Library' }))
+    fireEvent.click(screen.getByRole('tab', { name: /^Start of turn/ }))
+    expect(screen.queryByRole('button', { name: 'Build in Capital D5' })).toBeNull()
+
+    act(() => handle.setView(viewOf([options({ choices: [HARBOR] })], { rev: 9 })))
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the picker' }))
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /^City management/ }).getAttribute('aria-selected')).toBe('true'),
+    )
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById('build-picker')))
+  })
+
+  it('leaves an open panel on its tab as it is and goes straight to the picker', () => {
     const handle: Handle = { setView: () => undefined }
     render(<Harness initial={viewOf([options()])} handle={handle} />)
     fireEvent.click(buildButton())
@@ -667,7 +689,7 @@ describe('Back to the picker', () => {
     act(() => handle.setView(viewOf([options({ choices: [HARBOR] })], { rev: 9 })))
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to the picker' }))
-    expect(document.querySelector('[aria-controls="cities-content"]')?.getAttribute('aria-expanded')).toBe('true')
+    expect(document.querySelector('[aria-controls="actions-content"]')?.getAttribute('aria-expanded')).toBe('true')
     expect(document.activeElement).toBe(document.getElementById('build-picker'))
   })
 })

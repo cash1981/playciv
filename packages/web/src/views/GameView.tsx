@@ -16,7 +16,6 @@ import { useActivity } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
 
-import { AssistedActionsPanel } from './AssistedActions.js'
 import { BoardView } from './BoardView.js'
 import type { PickSquares } from './BoardView.js'
 import { BuildBar } from './BuildPicker.js'
@@ -29,6 +28,7 @@ import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
 import { PageShortcuts, PhaseSummary } from './PhaseSummary.js'
+import { PhaseActionsPanel } from './PhaseTabs.js'
 import { RevealedPanel } from './RevealedPanel.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
@@ -582,12 +582,13 @@ export function GameView({
 
       {/* The page runs: header and summary, Your actions, the board, Your cards,
           then the rest. The board has the whole content width at every size. */}
-      <AssistedActionsPanel
+      <PhaseActionsPanel
         gameId={gameId}
         view={displayedView}
         busy={interactionBusy}
         readOnly={displayedView.you === null || replaying || locked}
         run={run}
+        build={buildFlow}
       />
 
       <BuildBar gameId={gameId} view={displayedView} flow={buildFlow} busy={interactionBusy} run={run} />
@@ -641,7 +642,6 @@ export function GameView({
           busy={interactionBusy}
           readOnly={displayedView.you === null || replaying || locked}
           run={run}
-          build={buildFlow}
         />
         <WondersPanel
           gameId={gameId}

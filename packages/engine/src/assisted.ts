@@ -426,6 +426,14 @@ type AssistedActionDefinition = {
    * repeatable: it is never `used`, and each press needs its own `requestId`.
    */
   readonly usageKey: string | null
+  /**
+   * The phase tab the action belongs to, and that must be open to press it. `'ANY'`
+   * is for an action that is not bound to one phase (it works whenever the tech or
+   * card allows); its record then keeps the phase the player is working on.
+   */
+  readonly phase: TurnPhase | 'ANY'
+  /** The heading the action is listed under in its tab. */
+  readonly group: string
   availability(state: GameState, playerId: string): AssistedAvailability
   apply(state: GameState, player: Playerhand, context: ApplyContext): Result<Applied, EngineError>
   reverse(
@@ -490,6 +498,8 @@ function resourceCultureCard(card: ResourceCultureCard): AssistedActionDefinitio
     label: card.techName,
     button: true,
     usageKey,
+    phase: 'CM',
+    group: 'Resource abilities',
 
     availability(state, playerId) {
       const player = playerOf(state, playerId)
@@ -686,6 +696,8 @@ function coinPurchase(source: CoinPurchaseSource): AssistedActionDefinition {
     label: terms.techName,
     button: true,
     usageKey: coinUsageKey(source),
+    phase: 'CM',
+    group: 'Coins',
 
     availability(state, playerId) {
       const player = playerOf(state, playerId)
@@ -1249,6 +1261,8 @@ const cultureAdvance: AssistedActionDefinition = {
   label: 'Culture advance',
   button: true,
   usageKey: null,
+  phase: 'CM',
+  group: 'Culture track',
 
   availability(state, playerId) {
     const player = playerOf(state, playerId)
@@ -1605,6 +1619,8 @@ const build: AssistedActionDefinition = {
   label: 'Build',
   button: false,
   usageKey: null,
+  phase: 'CM',
+  group: 'Cities',
 
   availability(state, playerId) {
     const player = playerOf(state, playerId)
@@ -1860,6 +1876,8 @@ const startBuildingProgram: AssistedActionDefinition = {
   label: 'Start Building Program',
   button: false,
   usageKey: null,
+  phase: 'CM',
+  group: 'Cities',
 
   availability(state, playerId) {
     const player = playerOf(state, playerId)
@@ -1983,6 +2001,8 @@ const upgradeBuildings: AssistedActionDefinition = {
   label: 'Upgrade buildings',
   button: false,
   usageKey: null,
+  phase: 'ANY',
+  group: 'Cities',
 
   availability(state, playerId) {
     const player = playerOf(state, playerId)
@@ -2108,6 +2128,8 @@ const chooseReward: AssistedActionDefinition = {
   label: 'Choose reward',
   button: false,
   usageKey: null,
+  phase: 'ANY',
+  group: 'Culture track',
 
   availability(state, playerId) {
     const player = playerOf(state, playerId)
@@ -2288,6 +2310,8 @@ export function availableActionsFor(state: GameState, playerId: string): readonl
   return ASSISTED_ACTIONS.filter((definition) => definition.button).map((definition) => ({
     action: definition.kind,
     label: definition.label,
+    phase: definition.phase,
+    group: definition.group,
     ...definition.availability(state, playerId),
   }))
 }
@@ -2381,10 +2405,7 @@ export function performAssistedAction(
     playerId: input.playerId,
     turnNumber: status.currentTurn,
     // A reward can be chosen after City Management has closed, and an upgrade is done in whatever phase the tech was learned in; every other action needs it open
-    phase:
-      definition.kind === 'chooseReward' || definition.kind === 'upgradeBuildings'
-        ? openPhaseOf(status, input.playerId)
-        : 'CM',
+    phase: definition.phase === 'ANY' ? openPhaseOf(status, input.playerId) : definition.phase,
     usageKey: definition.usageKey,
     at: input.at ?? null,
     logId: applied.value.logId,
