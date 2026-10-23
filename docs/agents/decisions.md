@@ -330,7 +330,7 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
   1 culture per army on the map, Feudalism puts a harvested resource in the player's
   area. Which resources a city's outskirts hold is read from the tile data
   (`tile-icons.json`, the same list the city's Harvest button uses), so the player picks
-  from what the map shows; a scout's square is not part of the outskirts.
+  from what the map shows around each city and under a scout that gathers for it.
 - **Invest** (F&F p. 13): one coin per turn, only coin tokens (the sheet and the tech
   cards that hold tokens), never printed coins and never the coins on a wonder. The
   Arabs advance one space for free with it, a Public Education threshold gives a free
@@ -390,10 +390,7 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
   a scout placed this turn gathers from next turn is told, not enforced; the English armies
   that gather as scouts are offered to Devote and Harvest by hand only; the same resource
   icon harvested twice in a turn (Feudalism and a city's Harvest, or two cities) is warned
-  about, not tracked; an Arab cannot invest while the free advance is impossible because no card of that level is left;
-  a square a scout sends (by default or by hand) no longer offers its icon to Feudalism, which reads the
-  outskirts only, so Feudalism cannot harvest a resource under a scout; a scout on a city's centre square or a
-  second scout on a square sends nothing.
+  about, not tracked; a scout on a city's centre square or a second scout on a square sends nothing.
 
 Source: `engine/src/assisted.ts`, `assisted-core.ts`, `assisted-sot.ts`,
 `assisted-abilities.ts`, `assisted-city.ts`, `assisted-cards.ts`, `card-timing.ts`,

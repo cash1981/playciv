@@ -570,15 +570,17 @@ const patronage: AssistedActionDefinition = {
 // ---------------------------------------------------------------------------
 
 /**
- * The resources a city's outskirts offer to a harvest: what the tile data holds for the
- * eight squares around it, the same list the city's own Harvest button works from. A
- * scout's square is no part of this: the government says "in the outskirts".
+ * The resources a city can harvest: what the tile data holds for the eight squares around it,
+ * and under a scout that gathers for the city, which is the same list the city's own Harvest
+ * button works from. One entry for each resource: the first square that holds it.
  */
 function outskirtsChoices(state: GameState, player: Playerhand, cityPieceId: string) {
   const options = cityActionsOf(state, player).find((candidate) => candidate.cityPieceId === cityPieceId)
-  return options === undefined
-    ? undefined
-    : { label: options.label, choices: options.harvest.choices.filter((choice) => choice.scoutPieceId === null) }
+  if (options === undefined) return undefined
+  const choices = options.harvest.choices.filter(
+    (choice, index, all) => all.findIndex((other) => other.resource === choice.resource) === index,
+  )
+  return { label: options.label, choices }
 }
 
 const resourceAssetId = (resource: ResourceKind): string => `resources/${resource}`
@@ -606,12 +608,12 @@ const feudalismHarvest: AssistedActionDefinition = {
     if ('blocked' in open) return open.blocked
     if (cityPiecesOf(state, player).length === 0) return blocked('unavailable', 'You have no city on the map.')
     const offered = cityActionsOf(state, player).some((city) =>
-      city.harvest.choices.some((choice) => choice.scoutPieceId === null && choice.available),
+      city.harvest.choices.some((choice) => choice.available),
     )
     if (!offered) {
       return blocked(
         'unavailable',
-        'No city of yours has a resource icon in its outskirts that the market still has a token of.',
+        'No city of yours has a resource icon in its outskirts, or under a scout that gathers for it, that the market still has a token of.',
       )
     }
     return {
@@ -1054,9 +1056,7 @@ export function startOfTurnViewOf(state: GameState, player: Playerhand): StartOf
             cities: cityActionsOf(state, player).map((city) => ({
               pieceId: city.cityPieceId,
               label: city.label,
-              choices: city.harvest.choices
-                .filter((choice) => choice.scoutPieceId === null)
-                .map((choice) => ({
+              choices: (outskirtsChoices(state, player, city.cityPieceId)?.choices ?? []).map((choice) => ({
                   resource: choice.resource,
                   label: choice.label,
                   available: choice.available,

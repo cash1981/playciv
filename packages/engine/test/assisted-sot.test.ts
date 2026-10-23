@@ -489,6 +489,29 @@ describe('Feudalism: harvest a resource', () => {
     expect(reasonOf(harvest(state, cityId, 'Wheat'))).toMatch(/has no Wheat icon in its outskirts\.$/)
   })
 
+  it('harvests a resource under a scout that gathers for the city, which is the capital by default', () => {
+    const { state, cityId } = feudal()
+    // Wheat is printed on D4, outside the outskirts of B2; a scout stands on it
+    const scouted = put(state, CASH1981, 'figures/redscout', 3, 3)
+    const view = toPlayerView(scouted, CASH1981).you?.startOfTurn?.feudalism
+    expect(view?.cities[0]?.choices.map((choice) => choice.resource).sort()).toEqual(['incense', 'iron', 'wheat'])
+    const used = unwrap(harvest(scouted, cityId, 'wheat'))
+    expect(used.board.pieces.some((piece) => piece.assetId === 'resources/wheat')).toBe(true)
+    // Another city does not get the scout's square
+    let two = put(scouted, CASH1981, 'cities/redcity2', 8, 8)
+    const other = two.board.pieces.find((piece) => piece.assetId === 'cities/redcity2')
+    two = { ...two }
+    expect(reasonOf(harvest(two, other?.id ?? '', 'wheat'))).toMatch(/has no Wheat icon/)
+  })
+
+  it('harvests a resource in a city’s outskirts that a scout there sends to the capital, through the capital', () => {
+    let state = withAmerica(sotTurn({ government: 'Feudalism', techs: ['Irrigation'] }))
+    state = put(put(state, CASH1981, 'cities/redcapital2', 1, 1), CASH1981, 'cities/redcity2', 4, 4)
+    state = put(state, CASH1981, 'figures/redscout', 3, 3)
+    const capital = state.board.pieces.find((piece) => piece.assetId === 'cities/redcapital2')
+    expect(unwrap(harvest(state, capital?.id ?? '', 'wheat')).board.pieces.some((piece) => piece.assetId === 'resources/wheat')).toBe(true)
+  })
+
   it('refuses a resource that is not harvestable, a city that is not yours and a second use', () => {
     const { state, cityId } = feudal()
     expect(reasonOf(harvest(state, cityId, 'Uranium'))).toBe('Choose a resource: Wheat, Silk, Incense, Iron.')

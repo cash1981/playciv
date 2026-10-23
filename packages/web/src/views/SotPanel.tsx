@@ -206,7 +206,7 @@ function FeudalismHarvest({
     <section className="phase-group sot-feudalism" aria-label="Feudalism harvest">
       <h3 className="phase-group-title">Feudalism: harvest a resource</h3>
       <p>
-        Take one resource token from the market, from a square with its icon in the outskirts of one of your cities. The
+        Take one resource token from the market, from a square with its icon in the outskirts of one of your cities, or under a scout that gathers for it. The
         list is what the map shows around each city.
       </p>
       <p className="muted">
