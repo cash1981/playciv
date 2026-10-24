@@ -44,3 +44,10 @@
   margin: 0 0 0.4rem;
   font-size: 1rem;
 }
+
+/* Whose turn it is, repeated from the page header under "Your actions". */
+.phase-turn-line {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

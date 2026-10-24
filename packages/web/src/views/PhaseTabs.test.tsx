@@ -305,6 +305,38 @@ describe('the phase tabs', () => {
     expect((screen.getByRole('button', { name: 'Use Chivalry' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it('names whose turn it is under the title', () => {
+    renderPanel(viewIn('CM'))
+    expect(screen.getByText('Turn 3 · Your turn — city management phase')).toBeTruthy()
+    cleanup()
+    const behind = viewIn('CM')
+    ;(behind.activeTurn as { waitingFor: unknown }).waitingFor = [
+      { username: 'Bob', phase: 'SOT' },
+      { username: 'Alice', phase: 'CM' },
+    ]
+    renderPanel(behind)
+    expect(screen.getByText("Turn 3 · Bob's turn — start of turn phase")).toBeTruthy()
+  })
+
+  it('asks before an action out of turn, and a no sends nothing', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const behind = viewIn('CM')
+    ;(behind.activeTurn as { waitingFor: unknown }).waitingFor = [
+      { username: 'Bob', phase: 'SOT' },
+      { username: 'Alice', phase: 'CM' },
+    ]
+    renderPanel(behind)
+    fireEvent.click(screen.getByRole('button', { name: 'Use Chivalry' }))
+    expect(confirm).toHaveBeenCalledWith('It is not your turn. Bob is up. Do it anyway?')
+    expect(fetchSpy).not.toHaveBeenCalled()
+    cleanup()
+    confirm.mockClear()
+    renderPanel(viewIn('CM'))
+    fireEvent.click(screen.getByRole('button', { name: 'Use Chivalry' }))
+    expect(confirm).not.toHaveBeenCalled()
+  })
+
   it('puts focus on the panel when the control that had it goes away', () => {
     const { rerender } = renderPanel(viewIn('CM'))
     const again = (view: PlayerView) =>

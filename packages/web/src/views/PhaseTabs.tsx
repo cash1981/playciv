@@ -24,9 +24,11 @@ import type { BuildFlow } from './buildFlow.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { EndTurn } from './EndTurn.js'
 import type { Run } from './GameView.js'
+import { turnTitle } from './ChatOrdersPanel.js'
 import { goToPanel } from './PhaseSummary.js'
 import { PlayableCardList } from './PlayableCards.js'
 import { StartOfTurnChoices } from './SotPanel.js'
+import { focusPlayer } from './turnFocus.js'
 import { TradeCollected, TradeOffers } from './TradeOffers.js'
 import { YourCities } from './YourCities.js'
 import './PhaseTabs.css'
@@ -64,6 +66,19 @@ export function phaseStatusText(selected: TurnPhase, current: TurnPhase | null):
   if (order(selected) < order(current)) return 'You have finished this phase.'
   return `Not yet: you are in ${TURN_PHASE_LABEL[current]}. This phase opens when you mark the earlier ones done.`
 }
+
+/**
+ * The question to ask before an action out of turn, or `null` when the viewer is the player the game
+ * header names (`turnTitle`, so the two always agree) or nobody is up.
+ */
+export function notYourTurnQuestion(view: PlayerView): string | null {
+  const focus = focusPlayer(view.activeTurn ?? null)
+  if (view.you === null || focus === null || focus.username === view.you.username) return null
+  return `It is not your turn. ${focus.username} is up. Do it anyway?`
+}
+
+/** The buttons that only look around: the `?` hints. Everything else in a tab acts. */
+const isLookingAround = (button: Element): boolean => button.classList.contains('help-button')
 
 interface Props {
   readonly gameId: string
@@ -175,6 +190,8 @@ export function PhaseActionsPanel({
           if (event.relatedTarget !== null) focusInPanel.current = false
         }}
       >
+        <p className="phase-turn-line">{turnTitle(view.activeTurn ?? null, view.you.username)}</p>
+
         <EndTurn gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
 
         <PendingRewardSection
@@ -217,6 +234,17 @@ export function PhaseActionsPanel({
           role="tabpanel"
           aria-labelledby={tabId(selected)}
           className="phase-tab-panel"
+          onClickCapture={(event) => {
+            // End turn sits outside the tab and never asks. An action pressed out of turn asks first;
+            // a no stops the press before its own handler.
+            const button = event.target instanceof Element ? event.target.closest('button') : null
+            if (button === null || isLookingAround(button) || button.disabled) return
+            const question = notYourTurnQuestion(view)
+            if (question !== null && !window.confirm(question)) {
+              event.preventDefault()
+              event.stopPropagation()
+            }
+          }}
         >
           <p className="phase-guide">{PHASE_GUIDE[selected]}</p>
           <p className="phase-status muted">{phaseStatusText(selected, current)}</p>
