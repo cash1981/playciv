@@ -64,7 +64,8 @@ export function currentPhaseOf(view: PlayerView): TurnPhase | null {
 }
 
 /** One sentence under the tabs about the tab that is open. */
-export function phaseStatusText(selected: TurnPhase, current: TurnPhase | null): string {
+export function phaseStatusText(selected: TurnPhase, current: TurnPhase | null, started = true): string {
+  if (!started) return 'The game has not started yet. The phases open when it does.'
   if (current === null) return 'You have finished every phase of this turn.'
   const order = (phase: TurnPhase): number => TURN_PHASES.indexOf(phase)
   if (selected === current) return 'This is your current phase.'
@@ -110,6 +111,7 @@ export function PhaseActionsPanel({
   historical = null,
 }: Props): React.JSX.Element | null {
   const current = currentPhaseOf(view)
+  const started = view.activeTurn != null
   const [selected, setSelected] = useState<TurnPhase>(initialPhase ?? current ?? 'SOT')
   // The tab follows the viewer to their next phase, and stays where it is otherwise.
   const followed = useRef(current)
@@ -222,8 +224,10 @@ export function PhaseActionsPanel({
         <div className="phase-tabs" role="tablist" aria-label="Phases of the turn">
           {TURN_PHASES.map((phase) => {
             const isCurrent = phase === current
+            // Before the game starts nothing is done: the tabs carry no marks
             const done =
-              current === null || TURN_PHASES.indexOf(phase) < TURN_PHASES.indexOf(current)
+              started &&
+              (current === null || TURN_PHASES.indexOf(phase) < TURN_PHASES.indexOf(current))
             return (
               <button
                 key={phase}
@@ -252,7 +256,7 @@ export function PhaseActionsPanel({
           className="phase-tab-panel"
         >
           <p className="phase-guide">{PHASE_GUIDE[selected]}</p>
-          <p className="phase-status muted">{phaseStatusText(selected, current)}</p>
+          <p className="phase-status muted">{phaseStatusText(selected, current, started)}</p>
           <PhaseBody
             phase={selected}
             gameId={gameId}
