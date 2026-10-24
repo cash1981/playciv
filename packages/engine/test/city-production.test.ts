@@ -268,16 +268,32 @@ describe('outskirts', () => {
     expect(only(put(scene(), CASH1981, 'buildings/workshop', 3, 3)).outskirts).toBe(7)
   })
 
-  it('a wonder or a great person in a square gives 0 and is named in the notes', () => {
+  it('a wonder in a square gives 0 and is named in the notes', () => {
     const wonder = put(scene(), CASH1981, 'wonders/pyramids', 2, 2)
     const city = only(wonder)
     expect(city.outskirts).toBe(5)
     expect(squaresOf(city)).toContainEqual(['C3', 'wonder', 0])
     expect(city.notes.some((note) => note.includes('C3') && note.includes('wonder'))).toBe(true)
 
-    const person = only(put(scene(), CASH1981, 'great people/general', 2, 2))
-    expect(person.outskirts).toBe(5)
-    expect(squaresOf(person)).toContainEqual(['C3', 'great person', 0])
+  })
+
+  it('a great person marker gives the production printed on it in place of the terrain under it', () => {
+    // C3 is forest (2). The Builder shows 2, the Scientist and the Humanitarian 1, the General none.
+    const builder = only(put(scene(), CASH1981, 'great people/builder', 2, 2))
+    expect(builder.outskirts).toBe(7)
+    expect(squaresOf(builder)).toContainEqual(['C3', 'Builder (great person)', 2])
+    expect(only(put(scene(), CASH1981, 'great people/scientist', 2, 2)).outskirts).toBe(6)
+    expect(only(put(scene(), CASH1981, 'great people/humanitarian', 2, 2)).outskirts).toBe(6)
+    const general = only(put(scene(), CASH1981, 'great people/general', 2, 2))
+    expect(general.outskirts).toBe(5)
+    expect(squaresOf(general)).toContainEqual(['C3', 'General (great person)', 0])
+    // Nothing about it is unknown, so the notes do not name the square
+    expect(general.notes.some((note) => note.includes('C3 holds'))).toBe(false)
+  })
+
+  it('an enemy figure blockades a great person marker too', () => {
+    const state = put(put(scene(), CASH1981, 'great people/builder', 2, 2), KARANDRAS1, 'figures/bluearmy', 2, 2)
+    expect(only(state).outskirts).toBe(5)
   })
 
   it('a square with no known terrain gives 0 and is named in the notes', () => {
@@ -294,6 +310,114 @@ describe('outskirts', () => {
     const city = only(put(withEngland(game()), CASH1981, 'cities/redcity2', 0, 0))
     expect(city.outskirts).toBe(2)
     expect(city.notes.some((note) => note.includes('unknown'))).toBe(false)
+  })
+})
+
+/**
+ * The England tile prints trade icons on A1, A2 and A3 (column 0, rows 0 to 2), all
+ * water, so a city on B2 has 3 trade around it. The trade squares as [square, source, amount].
+ */
+const tradeSquaresOf = (city: CityProduction) =>
+  [...city.trade.detail].sort((a, b) => a.square.localeCompare(b.square)).map((entry) => [entry.square, entry.source, entry.amount])
+
+describe('trade', () => {
+  it('counts the trade icons printed on the outskirts squares, and the city centre not at all', () => {
+    const city = only(scene())
+    expect(city.trade.outskirts).toBe(3)
+    expect(tradeSquaresOf(city)).toEqual([
+      ['A1', 'map icon', 1],
+      ['A2', 'map icon', 1],
+      ['A3', 'map icon', 1],
+    ])
+  })
+
+  it('does not change the production estimate', () => {
+    expect(only(scene()).estimate).toBe(7)
+  })
+
+  it('does not count squares outside the outskirts or off the map', () => {
+    // A city on A1 has B1, A2 and B2 as outskirts; only A2 prints a trade icon.
+    expect(only(put(withEngland(game()), CASH1981, 'cities/redcity2', 0, 0)).trade.outskirts).toBe(1)
+  })
+
+  it('a building takes the trade of its own row in place of the icon under it', () => {
+    // A Harbor is worth 2 trade and replaces A1's printed 1: 3 - 1 + 2.
+    const harbor = only(put(scene(), CASH1981, 'buildings/harbor', 0, 0))
+    expect(harbor.trade.outskirts).toBe(4)
+    expect(tradeSquaresOf(harbor)).toContainEqual(['A1', 'Harbor', 2])
+
+    // A Temple gives no trade, so the icon under it is lost.
+    const temple = only(put(scene(), CASH1981, 'buildings/temple', 0, 0))
+    expect(temple.trade.outskirts).toBe(2)
+    expect(tradeSquaresOf(temple).some(([square]) => square === 'A1')).toBe(false)
+  })
+
+  it('a building on a square with no icon adds its own trade', () => {
+    // A Library is worth 1 trade on C2, a forest with no trade icon.
+    const library = only(put(scene(), CASH1981, 'buildings/library', 2, 1))
+    expect(library.trade.outskirts).toBe(4)
+    expect(tradeSquaresOf(library)).toContainEqual(['C2', 'Library', 1])
+  })
+
+  it('an enemy figure blockades the square, and the square says so', () => {
+    const city = only(put(scene(), KARANDRAS1, 'figures/bluearmy', 0, 1))
+    expect(city.trade.outskirts).toBe(2)
+    expect(city.trade.detail.find((entry) => entry.square === 'A2')).toEqual({
+      square: 'A2',
+      source: 'map icon',
+      amount: 0,
+      blockaded: true,
+    })
+  })
+
+  it('a great person marker gives the trade printed on it in place of the icon under it', () => {
+    // A1 prints 1 trade. The Scientist shows 2, the Artist 1 and the Builder none.
+    expect(only(put(scene(), CASH1981, 'great people/scientist', 0, 0)).trade.outskirts).toBe(4)
+    expect(tradeSquaresOf(only(put(scene(), CASH1981, 'great people/scientist', 0, 0)))).toContainEqual(['A1', 'Scientist (great person)', 2])
+    expect(only(put(scene(), CASH1981, 'great people/artist', 0, 0)).trade.outskirts).toBe(3)
+    expect(only(put(scene(), CASH1981, 'great people/builder', 0, 0)).trade.outskirts).toBe(2)
+  })
+
+  it('a disaster token replaces the icon of the tile, so a forest token on A1 gives no trade', () => {
+    const forest = only(put(scene(), CASH1981, 'disasters/forest', 0, 0))
+    expect(forest.trade.outskirts).toBe(2)
+    // and A1 becomes forest: 7 production + 2
+    expect(forest.outskirts).toBe(9)
+  })
+
+  it('a drought token gives its own trade icon and turns forest into desert', () => {
+    // C2 is forest with no trade icon; a drought token makes it desert (0 production) with 1 trade.
+    const drought = only(put(scene(), CASH1981, 'disasters/drought', 2, 1))
+    expect(drought.trade.outskirts).toBe(4)
+    expect(tradeSquaresOf(drought)).toContainEqual(['C2', 'disaster token', 1])
+    expect(drought.outskirts).toBe(5)
+  })
+
+  it('a water token gives its own trade icon and turns forest into water', () => {
+    const water = only(put(scene(), CASH1981, 'disasters/water', 2, 1))
+    expect(tradeSquaresOf(water)).toContainEqual(['C2', 'disaster token', 1])
+    expect(water.trade.outskirts).toBe(4)
+    expect(water.outskirts).toBe(5)
+  })
+
+  it('a building on a disaster token gives the building’s own trade', () => {
+    const state = put(put(scene(), CASH1981, 'disasters/water', 0, 0), CASH1981, 'buildings/harbor', 0, 0)
+    expect(tradeSquaresOf(only(state))).toContainEqual(['A1', 'Harbor', 2])
+  })
+
+  it('a wonder square counts for no trade and is named in the notes', () => {
+    const city = only(put(scene(), CASH1981, 'wonders/pyramids', 0, 0))
+    expect(city.trade.outskirts).toBe(2)
+    expect(city.trade.notes.some((note) => note.includes('A1') && note.includes('wonder'))).toBe(true)
+  })
+
+  it('never calls the count complete, and says when two cities share a square', () => {
+    expect(only(scene()).trade.notes[0]).toContain('Not a complete count')
+
+    // B2 and B3 are neighbours, so their outskirts overlap on A2 and A3, among others.
+    const two = citiesOf(put(scene(), CASH1981, 'cities/redcity2', 1, 2))
+    expect(two).toHaveLength(2)
+    expect(two.every((city) => city.trade.notes.some((note) => note.includes('another of your cities')))).toBe(true)
   })
 })
 
@@ -611,7 +735,7 @@ describe('notes', () => {
     const one = put(scene(), CASH1981, 'wonders/pyramids', 2, 2)
     expect(only(one).notes).toContain('C3 holds a wonder or a great person. Their icons are not in the data and count as 0.')
 
-    const two = put(one, CASH1981, 'great people/general', 2, 1)
+    const two = put(one, CASH1981, 'wonders/stonehenge', 2, 1)
     expect(only(two).notes).toContain('C2 and C3 hold a wonder or a great person. Their icons are not in the data and count as 0.')
   })
 

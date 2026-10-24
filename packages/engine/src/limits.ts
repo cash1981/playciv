@@ -10,3 +10,6 @@ export const MAX_PRODUCTION_OVERRIDE = 99
 
 /** The largest culture a player may type in when devoting a city to the arts. */
 export const MAX_DEVOTE_CULTURE = 99
+
+/** The trade track ends at 27. */
+export const TRADE_CEILING = 27

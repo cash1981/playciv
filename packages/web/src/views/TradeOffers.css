@@ -5,6 +5,13 @@
   margin: 0.5rem 0;
 }
 
+.trade-estimate {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
 .trade-collected .stat-input {
   width: 4rem;
 }

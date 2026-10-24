@@ -1094,6 +1094,7 @@ const cityOf = (overrides: Partial<CityProduction> = {}): CityProduction => ({
   override: null,
   effective: 4,
   notes: [],
+  trade: { outskirts: 0, detail: [], notes: [] },
   ...overrides,
 })
 

@@ -13,6 +13,7 @@
  * `card-timing.ts`). The list is own view only, because it names cards in the hand.
  */
 
+import { TRADE_CEILING } from './limits.js'
 import { placeStartMarker } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
 import { drawCandidates, shuffleSheetTwice } from './assisted-culture.js'
@@ -124,9 +125,6 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
 
 const joinNames = (names: readonly string[]): string =>
   names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`
-
-/** The trade track ends at 27. */
-const TRADE_CEILING = 27
 
 type PlayCardEffect = Extract<AssistedEffect, { readonly kind: 'playCard' }>
 
