@@ -1666,7 +1666,7 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
             {mySideInBattle !== null && (
               <button
                 className="small"
-                disabled={busy}
+                disabled={busy || noMutations}
                 onClick={() => runBattleAction(() => api.endBattleTurn(gameId, rev))}
               >
                 End turn
@@ -1675,7 +1675,7 @@ export function BattlePanel({ gameId, busy, run, view, readOnly = false }: Battl
             {mySideInBattle !== null && (
               <button
                 className="small danger"
-                disabled={busy}
+                disabled={busy || noMutations}
                 onClick={() => runBattleAction(() => api.endBattleArena(gameId, rev))}
               >
                 End battle
@@ -1971,7 +1971,7 @@ export function ArenaUnitCard({
         {...(onPointerCancel === undefined ? {} : { onPointerCancel })}
         labelOverride={displayLabel}
         rotation={displayRotation}
-        draggable={canMove}
+        draggable={canMove && !readOnly}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       />
@@ -2025,4 +2025,3 @@ export function ArenaUnitCard({
     </div>
   )
 }
-

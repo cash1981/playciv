@@ -14,6 +14,7 @@ import type { GameMenuActions } from './Navigation.js'
 import { BOARD_PANEL_ID } from './PhaseSummary.js'
 import {
   AUTO_REFRESH_MS,
+  ArenaUnitCard,
   BattlePanel,
   GameView,
   activePlayerOf,
@@ -1498,6 +1499,70 @@ describe('the ended-battle banner', () => {
   it('does not offer Undo while another action is running', () => {
     const { getByText } = renderPanel(endedView('me'), true)
     expect((getByText('Undo') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('disables active-battle actions in a read-only view', () => {
+    const battleView = {
+      ...endedView('me', null),
+      battle: {
+        attacker: { playerId: 'me', kind: 'player' },
+        defender: { playerId: 'other', kind: 'player' },
+        turn: 'attacker',
+        arena: [],
+        departedUnits: [],
+      },
+    } as unknown as PlayerView
+    const { getByText } = render(
+      <BattlePanel gameId="game-1" busy={false} run={run} view={battleView} readOnly />,
+    )
+    fireEvent.click(getByText('Battle'))
+
+    expect((getByText('End turn') as HTMLButtonElement).disabled).toBe(true)
+    expect((getByText('End battle') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('does not make a movable arena card draggable in a read-only view', () => {
+    const unit = {
+      id: 'arena-1',
+      side: 'attacker',
+      position: 0,
+      unit: {
+        kind: 'artillery',
+        sheetName: 'ARTILLERY',
+        id: 'unit-1',
+        itemNumber: 43,
+        description: null,
+        used: false,
+        hidden: false,
+        ownerId: 'me',
+        attack: 1,
+        health: 3,
+        level: 0,
+        killed: false,
+        inBattle: true,
+      },
+      attack: 1,
+      health: 3,
+      placedBy: 'me',
+      rotation: 0,
+      killed: false,
+    } as const
+    const { container } = render(
+      <ArenaUnitCard
+        unit={unit}
+        gameId="game-1"
+        busy={false}
+        readOnly
+        rev={0}
+        run={run}
+        canManage={false}
+        canMove
+        onDragStart={() => undefined}
+        onDragEnd={() => undefined}
+      />,
+    )
+
+    expect(container.querySelector('[draggable="true"]')).toBeNull()
   })
 })
 
