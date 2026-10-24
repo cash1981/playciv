@@ -11,12 +11,10 @@ import { resetPendingRequestIds } from './AssistedActions.js'
 import { TechPanel } from './TechPanel.js'
 
 beforeEach(() => {
-  localStorage.setItem('civ.panel.techs', 'true')
   resetPendingRequestIds()
 })
 afterEach(() => {
   cleanup()
-  localStorage.removeItem('civ.panel.techs')
   vi.restoreAllMocks()
 })
 

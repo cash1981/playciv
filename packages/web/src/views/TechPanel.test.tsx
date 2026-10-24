@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { TechItem } from '@civ/engine'
 
@@ -9,10 +9,8 @@ import { api } from '../lib/api.js'
 import type { GameRevisionView, PlayerView } from '../lib/api.js'
 import { TechPanel } from './TechPanel.js'
 
-beforeEach(() => localStorage.setItem('civ.panel.techs', 'true'))
 afterEach(() => {
   cleanup()
-  localStorage.removeItem('civ.panel.techs')
   vi.restoreAllMocks()
 })
 
@@ -123,6 +121,26 @@ function activePanel(container: HTMLElement): HTMLElement {
   if (panel === null) throw new Error('the tab panel is not rendered')
   return panel
 }
+
+describe('TechPanel framing', () => {
+  it('has no Techs heading in Research, and a plain heading when it stands alone', () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
+    const props = {
+      gameId: 'game-1',
+      busy: false,
+      run,
+      view: view([]),
+      reloadCount: 0,
+    }
+    const { container, rerender } = render(<TechPanel {...props} />)
+    expect(container.querySelector('#techs')).not.toBeNull()
+    expect(within(container).queryByRole('heading', { name: 'Techs' })).toBeNull()
+    expect(container.querySelector('#techs-content')).toBeNull()
+
+    rerender(<TechPanel {...props} standalone />)
+    expect(within(container).getByRole('heading', { name: 'Techs' })).toBeTruthy()
+  })
+})
 
 describe('TechPanel tabs', () => {
   it('opens on the viewer\'s own tab: pyramid in full, list without revealed techs', () => {

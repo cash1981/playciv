@@ -91,8 +91,11 @@ function findPanel(key: string): { readonly section: HTMLElement; readonly focus
     const board = document.getElementById(BOARD_PANEL_ID)
     return board === null ? null : { section: board, focus: board }
   }
-  const section = document.getElementById(`${key}-content`)?.closest('section')
-  if (section === null || section === undefined) return null
+  // A collapsible panel is found by its content; a plain panel (the embedded Tech
+  // content, once the Research tab is open) by its own id.
+  const section =
+    document.getElementById(`${key}-content`)?.closest('section') ?? document.getElementById(key)
+  if (section === null) return null
   const toggle = section.querySelector<HTMLElement>(`[aria-controls="${key}-content"]`)
   return { section, focus: toggle ?? section }
 }
@@ -107,6 +110,11 @@ function findPanel(key: string): { readonly section: HTMLElement; readonly focus
  * behind a button that says it goes there. `open` asks for the same for a card
  * link, so the referenced card is visible. The click on the toggle is a manual
  * one, so the open state is remembered. Every other panel is left as it is.
+ *
+ * The Tech content lives in the Research tab of Your actions, with no panel of its
+ * own to collapse. Going to `techs` opens Your actions if needed and selects the
+ * Research tab before the scroll, because the content is not mounted in any other
+ * tab. It has an id and focus target of its own in place of a toggle.
  */
 function prefersReducedMotion(): boolean {
   return (
@@ -115,17 +123,45 @@ function prefersReducedMotion(): boolean {
   )
 }
 
-export function goToPanel(key: string, open = false): void {
+function scrollToPanel(key: string, open: boolean): void {
   const panel = findPanel(key)
   if (panel === null) return
-  if ((open || key === 'actions') && panel.focus.getAttribute('aria-expanded') === 'false') {
-    panel.focus.click()
-  }
+  if (open && panel.focus.getAttribute('aria-expanded') === 'false') panel.focus.click()
   panel.section.scrollIntoView({
     behavior: prefersReducedMotion() ? 'auto' : 'smooth',
     block: 'start',
   })
   panel.focus.focus({ preventScroll: true })
+}
+
+export function goToPanel(key: string, open = false): void {
+  if (key === 'techs') {
+    // The Tech content can only be shown inside Your actions, so open that first.
+    const actions = findPanel('actions')
+    let deferScroll = false
+    if (actions !== null && actions.focus.getAttribute('aria-expanded') === 'false') {
+      actions.focus.click()
+      deferScroll = true
+    }
+    const research = document.getElementById('phase-tab-RESEARCH')
+    if (research !== null && research.getAttribute('aria-selected') !== 'true') {
+      // A click on the tab goes through the tabs' own state, so there is no second
+      // copy of the selected phase here. The panel mounts on the next render.
+      research.click()
+      deferScroll = true
+    }
+    if (deferScroll) {
+      window.setTimeout(() => scrollToPanel('techs', false), 0)
+      return
+    }
+  }
+  if (key === 'actions') {
+    const actions = findPanel('actions')
+    if (actions !== null && actions.focus.getAttribute('aria-expanded') === 'false') {
+      actions.focus.click()
+    }
+  }
+  scrollToPanel(key, open)
 }
 
 /** The DOM id of one card in the viewer's hand. */

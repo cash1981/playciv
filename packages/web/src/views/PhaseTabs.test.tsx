@@ -1,18 +1,20 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import { resetPendingRequestIds } from './AssistedActions.js'
 import type { Run } from './GameView.js'
-import { CollapsiblePanel } from './CollapsiblePanel.js'
+import { goToPanel } from './PhaseSummary.js'
 import { PHASE_GUIDE, PhaseActionsPanel, currentPhaseOf, phaseStatusText } from './PhaseTabs.js'
 
 const originalScrollIntoView = Element.prototype.scrollIntoView
 
 beforeEach(() => {
   localStorage.setItem('civ.panel.actions', 'true')
+  vi.spyOn(api, 'availableTechs').mockResolvedValue([])
   resetPendingRequestIds()
 })
 afterEach(() => {
@@ -59,6 +61,8 @@ function viewIn(
       stats: { trade: 0 },
       availableActions: actions,
       pendingRewards: [],
+      techsChosen: [],
+      pyramidPlacements: [],
       ...extra,
     },
     activeTurn: {
@@ -86,7 +90,7 @@ const renderPanel = (view: PlayerView, props: { readOnly?: boolean } = {}) =>
 
 const tab = (name: RegExp): HTMLElement => screen.getByRole('tab', { name })
 const selected = (): string =>
-  screen
+  within(screen.getByRole('tablist', { name: 'Phases of the turn' }))
     .getAllByRole('tab')
     .filter((candidate) => candidate.getAttribute('aria-selected') === 'true')
     .map((candidate) => candidate.textContent)
@@ -340,7 +344,7 @@ describe('the phase tabs', () => {
 })
 
 describe('a free tech arriving', () => {
-  // Trade is the open tab, so the Start of Turn choices (which read the whole view) are not rendered
+  // Trade is the open tab, so the Research tab (and its Tech panel) is initially unmounted.
   const withGrants = (count: number): PlayerView =>
     viewIn('TRADE', [], {
       startOfTurn: {
@@ -348,41 +352,110 @@ describe('a free tech arriving', () => {
       },
     })
 
-  function renderWithTechs(view: PlayerView) {
-    const panel = (next: PlayerView) => (
-      <>
-        <PhaseActionsPanel gameId="g1" view={next} busy={false} readOnly={false} run={run} />
-        <CollapsiblePanel id="techs" title="Techs" defaultOpen>
-          <p>The tech tree</p>
-        </CollapsiblePanel>
-      </>
+  const renderGrants = (view: PlayerView) => {
+    const rendered = render(
+      <PhaseActionsPanel gameId="g1" view={view} busy={false} readOnly={false} run={run} />,
     )
-    const rendered = render(panel(view))
-    return { ...rendered, again: (next: PlayerView) => rendered.rerender(panel(next)) }
+    return { ...rendered, again: (next: PlayerView) => rendered.rerender(
+      <PhaseActionsPanel gameId="g1" view={next} busy={false} readOnly={false} run={run} />,
+    ) }
   }
 
-  it('takes the page to the tech tree when a grant arrives, and not for one that was already there', () => {
+  it('opens Research and takes the page to the tech tree when a grant arrives, and not for one that was already there', async () => {
     const scroll = vi.fn()
     Element.prototype.scrollIntoView = scroll
-    const { again } = renderWithTechs(withGrants(1))
+    const { again } = renderGrants(withGrants(1))
+    expect(selected()).toBe('Trade (now)')
     expect(scroll).not.toHaveBeenCalled()
 
     again(withGrants(2))
-    expect(scroll).toHaveBeenCalledTimes(1)
+    expect(selected()).toBe('Research')
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1))
     // The same grants on a refresh do not scroll again, and using one up does not either
     again(withGrants(2))
     again(withGrants(1))
+    await new Promise((resolve) => setTimeout(resolve, 10))
     expect(scroll).toHaveBeenCalledTimes(1)
   })
 
-  it('does not take the page there when the viewer returns from a replayed revision', () => {
+  it('does not take the page there when the viewer returns from a replayed revision', async () => {
     const scroll = vi.fn()
     Element.prototype.scrollIntoView = scroll
     const replay = viewIn('TRADE', [], { startOfTurn: null })
-    const { again } = renderWithTechs(withGrants(1))
+    const { again } = renderGrants(withGrants(1))
     again(replay)
     again(withGrants(1))
+    await new Promise((resolve) => setTimeout(resolve, 10))
     expect(scroll).not.toHaveBeenCalled()
+  })
+})
+
+describe('the Tech panel in Research', () => {
+  it('sits inside the Research tab below the cards that can be played there', () => {
+    const card = {
+      itemId: 'c1',
+      name: 'Counterfeiters',
+      kind: 'culture',
+      description: 'Research: draw a card.',
+      timings: ['RESEARCH'],
+      targets: { kind: 'none' },
+      prompt: '',
+      resources: [],
+      discards: true,
+      status: 'ready',
+      reason: 'Can be played in Research.',
+    }
+    renderPanel(viewIn('RESEARCH', [], { playableCards: [card] }))
+
+    const panel = document.getElementById('phase-panel-RESEARCH') as HTMLElement
+    const cards = within(panel).getByRole('heading', { name: 'Cards you can play' })
+    const techs = document.getElementById('techs') as HTMLElement
+    expect(techs.closest('#phase-panel-RESEARCH')).toBe(panel)
+    expect(cards.compareDocumentPosition(techs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // The tech panel's own content, without a collapsible wrapper or its title.
+    expect(within(techs).getByRole('button', { name: 'Level 1' })).toBeTruthy()
+    expect(within(techs).queryByRole('button', { name: /^Techs/ })).toBeNull()
+    expect(document.getElementById('techs-content')).toBeNull()
+  })
+
+  it('is not on the page while another tab is open', () => {
+    renderPanel(viewIn('SOT'))
+    expect(document.getElementById('techs')).toBeNull()
+    fireEvent.click(tab(/^Research/))
+    expect(document.getElementById('techs')).toBeTruthy()
+    fireEvent.click(tab(/^Start of turn/))
+    expect(document.getElementById('techs')).toBeNull()
+  })
+
+  it('opens Your actions and Research from a tech link when both are closed or on another phase', async () => {
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    localStorage.setItem('civ.panel.actions', 'false')
+    renderPanel(viewIn('SOT'))
+    expect(document.getElementById('actions-content')?.hidden).toBe(true)
+    goToPanel('techs')
+
+    await waitFor(() => expect(document.getElementById('actions-content')?.hidden).toBe(false))
+    expect(selected()).toBe('Research')
+    expect(localStorage.getItem('civ.panel.actions')).toBe('true')
+    await waitFor(() => expect(scroll).toHaveBeenCalled())
+  })
+
+  it('waits for Your actions to open before scrolling when Research is already selected', async () => {
+    const scroll = vi.fn(function (this: Element) {
+      expect(document.getElementById('actions-content')?.hidden).toBe(false)
+      return this
+    })
+    Element.prototype.scrollIntoView = scroll
+    localStorage.setItem('civ.panel.actions', 'false')
+    renderPanel(viewIn('RESEARCH'))
+    expect(document.getElementById('phase-tab-RESEARCH')?.getAttribute('aria-selected')).toBe('true')
+    expect(document.getElementById('actions-content')?.hidden).toBe(true)
+
+    goToPanel('techs')
+
+    expect(scroll).not.toHaveBeenCalled()
+    await waitFor(() => expect(scroll).toHaveBeenCalledOnce())
   })
 })
 
