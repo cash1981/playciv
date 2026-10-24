@@ -636,11 +636,11 @@ export function GameView({
         {/* Your cards sit directly under Your actions; the log and the revealed feed are last. */}
         <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <DrawPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
-        {/* The tech pyramid lives in the Research tab of Your actions. A viewer without
+        {/* The tech content lives in the Research tab of Your actions. A viewer without
             that panel (a spectator, or a player with nothing to act on) still gets the
-            public tech pyramids here. */}
+            public tech pyramids here, as a panel with its own heading. */}
         {!hasActionsPanel(displayedView) && (
-          <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
+          <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} standalone />
         )}
         {/* The chat routes need a signed-in player */}
         {player !== null && (

@@ -47,7 +47,9 @@ vi.mock('./OpponentHandPanel.js', () => ({ OpponentHandPanel: () => <section><h2
 vi.mock('./RevealedPanel.js', () => ({ RevealedPanel: () => <section><h2>Revealed</h2></section> }))
 vi.mock('./SocialPolicyPanel.js', () => ({ SocialPolicyPanel: () => <section><h2>Social policy</h2></section> }))
 vi.mock('./StatusPanel.js', () => ({ StatusPanel: () => <section><h2>Player status</h2></section> }))
-vi.mock('./TechPanel.js', () => ({ TechPanel: () => <section><h2>Techs</h2></section> }))
+vi.mock('./TechPanel.js', () => ({ TechPanel: ({ standalone }: { standalone?: boolean }) => (
+    <section aria-label="Techs">{standalone === true && <h2>Techs</h2>}</section>
+  ) }))
 vi.mock('./WondersPanel.js', () => ({ WondersPanel: () => <section><h2>Wonders</h2></section> }))
 
 afterEach(() => {
@@ -327,14 +329,14 @@ describe('primary game panel order', () => {
       },
     }))
     // Only the Research tab holds it, and that tab is not open by default.
-    expect(screen.queryByRole('heading', { name: 'Techs' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Techs' })).toBeNull()
     fireEvent.click(screen.getByRole('tab', { name: /^Research/ }))
-    expect(screen.getAllByRole('heading', { name: 'Techs' })).toHaveLength(1)
+    expect(screen.getAllByRole('region', { name: 'Techs' })).toHaveLength(1)
 
     cleanup()
     await renderOrder(orderView(), null)
-    // A spectator has no Your actions, so the Tech panel stays in the page.
-    expect(screen.getAllByRole('heading', { name: 'Techs' })).toHaveLength(1)
+    // A spectator has no Your actions, so the Tech content stays in the page with its heading.
+    expect(screen.getByRole('heading', { name: 'Techs' })).toBeTruthy()
   })
 
   it('puts the viewer’s own cities in Your actions and has no panel for the opponents’ cities', async () => {

@@ -14,7 +14,6 @@ const originalScrollIntoView = Element.prototype.scrollIntoView
 
 beforeEach(() => {
   localStorage.setItem('civ.panel.actions', 'true')
-  localStorage.setItem('civ.panel.techs', 'true')
   vi.spyOn(api, 'availableTechs').mockResolvedValue([])
   resetPendingRequestIds()
 })
@@ -22,7 +21,6 @@ afterEach(() => {
   cleanup()
   Element.prototype.scrollIntoView = originalScrollIntoView
   localStorage.removeItem('civ.panel.actions')
-  localStorage.removeItem('civ.panel.techs')
   vi.restoreAllMocks()
 })
 
@@ -411,19 +409,22 @@ describe('the Tech panel in Research', () => {
 
     const panel = document.getElementById('phase-panel-RESEARCH') as HTMLElement
     const cards = within(panel).getByRole('heading', { name: 'Cards you can play' })
-    const techs = within(panel).getByRole('heading', { name: 'Techs' })
+    const techs = document.getElementById('techs') as HTMLElement
+    expect(techs.closest('#phase-panel-RESEARCH')).toBe(panel)
     expect(cards.compareDocumentPosition(techs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // The tech content is the real Tech panel: its level picker is there.
-    expect(within(panel).getByRole('button', { name: 'Level 1' })).toBeTruthy()
+    // The tech panel's own content, without a collapsible wrapper or its title.
+    expect(within(techs).getByRole('button', { name: 'Level 1' })).toBeTruthy()
+    expect(within(techs).queryByRole('button', { name: /^Techs/ })).toBeNull()
+    expect(document.getElementById('techs-content')).toBeNull()
   })
 
   it('is not on the page while another tab is open', () => {
     renderPanel(viewIn('SOT'))
-    expect(screen.queryByRole('heading', { name: 'Techs' })).toBeNull()
+    expect(document.getElementById('techs')).toBeNull()
     fireEvent.click(tab(/^Research/))
-    expect(screen.getByRole('heading', { name: 'Techs' })).toBeTruthy()
+    expect(document.getElementById('techs')).toBeTruthy()
     fireEvent.click(tab(/^Start of turn/))
-    expect(screen.queryByRole('heading', { name: 'Techs' })).toBeNull()
+    expect(document.getElementById('techs')).toBeNull()
   })
 
   it('opens Your actions and Research from a tech link when both are closed or on another phase', async () => {

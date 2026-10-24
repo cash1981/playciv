@@ -456,18 +456,20 @@ actions, below the cards that can be played in Research. Research is where a tec
 is learned, so the pyramid, the available-tech picker and the hidden-tech controls
 sit with that phase instead of in a separate panel lower on the page.
 
-- `PhaseTabs.tsx` renders the existing `TechPanel` in the Research tab after
-  `PlayableCardList`; the panel is not mounted in any other tab. `GameView` passes
-  its `reloadCount` and `historical` down so the picker still reloads after an
-  action and a replay still shows its saved techs.
+- `PhaseTabs.tsx` renders the Tech content in the Research tab after
+  `PlayableCardList`; it is not mounted in any other tab. `GameView` passes its
+  `reloadCount` and `historical` down so the picker still reloads after an action
+  and a replay still shows its saved techs.
+- The content is not a collapsible panel. The human saw the nested collapse in the
+  first version and asked for only the content, so the Research tab shows the level
+  picker and the pyramid directly, with no `Techs` toggle to fold away.
 - A viewer without the actions panel (a spectator, or a player with nothing to act
-  on) still gets the panel on its own below "Your cards": the public tech pyramids
-  are information, not an action. A player with the actions panel has exactly one
-  Tech panel.
+  on) still gets the content on its own below "Your cards", in a plain panel with a
+  `Techs` heading: the public tech pyramids are information, not an action. A
+  player with the actions panel has exactly one copy.
 - The Tech tree shortcut, the free-tech link in Start of Turn and a tech-backed
   action name select the Research tab first (and open Your actions if it was
-  collapsed), then scroll to the Tech panel. A tech-specific link also opens the
-  Tech panel; the shortcut leaves its saved open/closed state alone.
+  collapsed), then scroll to the Tech content. There is no panel left to open.
 
 Source: `web/src/views/PhaseTabs.tsx`, `TechPanel.tsx`, `GameView.tsx`,
 `PhaseSummary.tsx` and their tests.

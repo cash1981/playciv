@@ -7,10 +7,10 @@
 
 ## Goal
 
-The whole Tech panel (the tech pyramid, the available-tech picker and the
+The Tech content (the tech pyramid, the available-tech picker and the
 hidden-tech controls) sits inside the Research tab of "Your actions", below the
 cards that can be played in Research. It is no longer a separate panel lower on
-the game page.
+the game page, and it is not a collapsible panel inside the tab.
 
 ## Why
 
@@ -24,9 +24,9 @@ that phase's actions.
 **In:**
 
 - `packages/web/src/views/PhaseTabs.tsx` and CSS if spacing needs it: render the
-  existing `TechPanel` in the Research tab after `PlayableCardList`.
+  `TechPanel` content in the Research tab after `PlayableCardList`.
 - `packages/web/src/views/GameView.tsx`: stop rendering a second Tech panel for
-  a viewer who has the actions panel; keep it for a viewer without one
+  a viewer who has the actions panel; keep the content for a viewer without one
   (spectator or no actions) so public tech pyramids do not disappear.
 - `packages/web/src/views/PhaseSummary.tsx`: the Tech tree shortcut and
   tech-backed action links select the Research tab before scrolling to the
@@ -51,15 +51,15 @@ focus", plus the page-shortcut paragraph before them. Current code:
 - Pass `reloadCount` and `historical` down from `GameView` to
   `PhaseActionsPanel`; render `TechPanel` in the `RESEARCH` branch of
   `PhaseBody`.
-- Keep the standalone `TechPanel` in the page only when `hasActionsPanel` is
+- Keep the standalone Tech content in the page only when `hasActionsPanel` is
   false, so a spectator still sees the public tech pyramids and an ended/no-action
-  player does too.
+  player does too. Only that standalone copy has a `Techs` heading.
 - In `goToPanel`, when `key === 'techs'` and the Research tab exists but is not
   selected, click that tab and scroll to the Tech panel after the tab has
   mounted. The DOM click reuses the tabs' own selection logic; no duplicated
   phase state.
-- The Tech panel stays a `CollapsiblePanel`, so its saved open state and focus
-  behaviour are unchanged.
+- `TechPanel` no longer wraps its content in a `CollapsiblePanel`; it renders a
+  plain section with `id="techs"` as the shortcut's scroll and focus target.
 
 ## Claimed paths
 
@@ -73,11 +73,12 @@ focus", plus the page-shortcut paragraph before them. Current code:
 
 ## Acceptance criteria
 
-- [ ] The Research tab lists the Tech panel content below the playable cards.
-- [ ] A player with the actions panel has exactly one Tech panel on the page.
-- [ ] A spectator and a viewer without the actions panel still get one Tech panel.
+- [ ] The Research tab lists the Tech content below the playable cards.
+- [ ] The Tech content in Research has no collapse control or `Techs` heading.
+- [ ] A player with the actions panel has exactly one copy on the page.
+- [ ] A spectator and a viewer without the actions panel still get one copy.
 - [ ] The Tech tree shortcut and tech-backed action links bring the Research tab
-      into view and land on the Tech panel.
+      into view and land on the Tech content.
 - [ ] `pnpm -r typecheck && pnpm -r test && pnpm -r build` all pass.
 - [ ] Hidden information: no test data or projection changes; the Tech panel's
       existing hidden-tech behaviour is untouched.
@@ -85,9 +86,9 @@ focus", plus the page-shortcut paragraph before them. Current code:
 
 ## Handover
 
-Validation: `pnpm -r typecheck && pnpm -r test && pnpm -r build` all passed
-(engine 2005, server 843 and web 1073 tests). The web tests cover the Research
-tab order, the tab selection from a tech link, the free-tech grant, and the
-spectator fallback. Browser check not performed: no dev server was running in
-this worktree. After merge, keep the durable rationale in `decisions.md` and
-retire this brief in a later change.
+Validation: `pnpm -r typecheck`, `pnpm -r test` (engine 2005, server 843 and web
+1073 tests) and `pnpm -r build` passed after the follow-up removed the collapsible
+wrapper. The web tests cover the content order, the absence of a collapse control,
+tab selection from a tech link, the free-tech grant and the spectator fallback.
+Browser check not performed. After merge, keep the durable rationale in
+`decisions.md` and retire this brief in a later change.

@@ -91,8 +91,11 @@ function findPanel(key: string): { readonly section: HTMLElement; readonly focus
     const board = document.getElementById(BOARD_PANEL_ID)
     return board === null ? null : { section: board, focus: board }
   }
-  const section = document.getElementById(`${key}-content`)?.closest('section')
-  if (section === null || section === undefined) return null
+  // A collapsible panel is found by its content; a plain panel (the embedded Tech
+  // content, once the Research tab is open) by its own id.
+  const section =
+    document.getElementById(`${key}-content`)?.closest('section') ?? document.getElementById(key)
+  if (section === null) return null
   const toggle = section.querySelector<HTMLElement>(`[aria-controls="${key}-content"]`)
   return { section, focus: toggle ?? section }
 }
@@ -108,10 +111,10 @@ function findPanel(key: string): { readonly section: HTMLElement; readonly focus
  * link, so the referenced card is visible. The click on the toggle is a manual
  * one, so the open state is remembered. Every other panel is left as it is.
  *
- * The Tech panel lives in the Research tab of Your actions. Going to `techs` opens
- * Your actions if needed and selects the Research tab before the scroll, because
- * the panel is not mounted in any other tab. `open` also opens the Tech panel
- * itself, for a link that names a specific tech.
+ * The Tech content lives in the Research tab of Your actions, with no panel of its
+ * own to collapse. Going to `techs` opens Your actions if needed and selects the
+ * Research tab before the scroll, because the content is not mounted in any other
+ * tab. It has an id and focus target of its own in place of a toggle.
  */
 function prefersReducedMotion(): boolean {
   return (
@@ -133,7 +136,7 @@ function scrollToPanel(key: string, open: boolean): void {
 
 export function goToPanel(key: string, open = false): void {
   if (key === 'techs') {
-    // The Tech panel can only be shown inside Your actions, so open that first.
+    // The Tech content can only be shown inside Your actions, so open that first.
     const actions = findPanel('actions')
     let deferScroll = false
     if (actions !== null && actions.focus.getAttribute('aria-expanded') === 'false') {
@@ -148,7 +151,7 @@ export function goToPanel(key: string, open = false): void {
       deferScroll = true
     }
     if (deferScroll) {
-      window.setTimeout(() => scrollToPanel('techs', open), 0)
+      window.setTimeout(() => scrollToPanel('techs', false), 0)
       return
     }
   }

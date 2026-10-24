@@ -18,13 +18,11 @@ import { TechPanel } from './TechPanel.js'
 
 beforeEach(() => {
   localStorage.setItem('civ.panel.actions', 'true')
-  localStorage.setItem('civ.panel.techs', 'true')
   resetPendingRequestIds()
 })
 afterEach(() => {
   cleanup()
   localStorage.removeItem('civ.panel.actions')
-  localStorage.removeItem('civ.panel.techs')
   vi.restoreAllMocks()
 })
 
@@ -1256,9 +1254,8 @@ describe('The actions of the open phase', () => {
     expect(possible.compareDocumentPosition(cities) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('links a tech-backed action name to the Tech panel in Research, opening it when it is collapsed', async () => {
+  it('links a tech-backed action name to the Tech content in Research', async () => {
     vi.spyOn(api, 'availableTechs').mockResolvedValue([])
-    localStorage.setItem('civ.panel.techs', 'false')
     const scrolled: Element[] = []
     const original = Element.prototype.scrollIntoView
     Element.prototype.scrollIntoView = function (this: Element) {
@@ -1269,12 +1266,11 @@ describe('The actions of the open phase', () => {
       expect(screen.getByRole('tab', { name: /^Research/ }).getAttribute('aria-selected')).toBe('false')
       fireEvent.click(screen.getByRole('button', { name: 'Show Chivalry in the tech panel' }))
       expect(screen.getByRole('tab', { name: /^Research/ }).getAttribute('aria-selected')).toBe('true')
-      await waitFor(() => expect(scrolled.length).toBeGreaterThan(0))
-      await waitFor(() => expect(document.getElementById('techs-content')?.hidden).toBe(false))
-      expect(localStorage.getItem('civ.panel.techs')).toBe('true')
+      await waitFor(() => expect(scrolled).toContain(document.getElementById('techs')))
+      // The content is not a collapsible panel, so there is nothing to open.
+      expect(document.getElementById('techs-content')).toBeNull()
     } finally {
       Element.prototype.scrollIntoView = original
-      localStorage.removeItem('civ.panel.techs')
     }
   })
 
