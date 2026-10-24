@@ -94,6 +94,10 @@ interface Props {
   readonly areas: readonly BoardArea[]
   readonly busy: boolean
   readonly readOnly?: boolean
+  /** Draw the replay dashed outline around a read-only board. Off for a spectator, who is not replaying history. */
+  readonly showReadOnlyOutline?: boolean
+  /** Why the palette is read-only, when it is not a replay. */
+  readonly readOnlyReason?: string | undefined
   /** Whose Undo button this is — only enabled when they made the last change. */
   readonly youId?: string | null
   /** The viewer's civ: Russia is offered the white army (issue #204), Spain the white scout. */
@@ -207,6 +211,8 @@ export interface BoardPaletteProps {
   /** Why the pieces cannot be used right now (for example a Build is waiting for its square); they are disabled and this is shown. */
   readonly blockedReason?: string | undefined
   readonly onSelectAsset?: (asset: BoardAsset) => void
+  /** Say why a read-only palette cannot be used, when "Replaying" is not the reason. */
+  readonly readOnlyReason?: string | undefined
 }
 
 /** The palette is separate so its finite-supply UI can be tested without a browser. */
@@ -220,6 +226,7 @@ export function BoardPalette({
   viewerCivilization = null,
   blockedReason,
   onSelectAsset,
+  readOnlyReason,
 }: BoardPaletteProps): React.JSX.Element {
   const available = assets.filter((asset) => {
     if (asset.category !== category) return false
@@ -287,11 +294,12 @@ export function BoardPalette({
       </div>
 
       <p className="muted" style={{ margin: '0 0 0.5rem' }}>
-        {replaying
-          ? 'Replaying — return to now to make changes.'
-          : blocked
-            ? blockedReason
-            : 'Tap a piece, then tap the board, or drag it there. Drop it in a player area to tidy it into a row.'}
+        {readOnlyReason ??
+          (replaying
+            ? 'Replaying — return to now to make changes.'
+            : blocked
+              ? blockedReason
+              : 'Tap a piece, then tap the board, or drag it there. Drop it in a player area to tidy it into a row.')}
       </p>
 
       <div className="palette-grid">
@@ -320,6 +328,8 @@ export function BoardView({
   areas,
   busy,
   readOnly = false,
+  showReadOnlyOutline = true,
+  readOnlyReason,
   youId = null,
   viewerCivilization = null,
   viewerColor = null,
@@ -929,7 +939,7 @@ export function BoardView({
         <div className="board-scroll" ref={scrollRef}>
           <div
             ref={frameRef}
-            className={`board-frame${readOnly ? ' replaying' : ''}`}
+            className={`board-frame${readOnly && showReadOnlyOutline ? ' replaying' : ''}`}
             style={{ width: width * zoom + 28, height: height * zoom + 28 }}
           >
             <ColumnLabels board={board} zoom={zoom} edge="top" offset={mapStart * zoom} />
@@ -1160,6 +1170,7 @@ export function BoardView({
             category={category}
             onCategoryChange={setCategory}
             replaying={readOnly}
+            readOnlyReason={readOnlyReason}
             pieces={pieces}
             numOfPlayers={numOfPlayers}
             viewerCivilization={viewerCivilization}

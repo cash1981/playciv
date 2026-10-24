@@ -27,13 +27,25 @@ import {
 } from './GameView.js'
 
 vi.mock('./BoardView.js', () => ({
-  BoardView: ({ viewerCivilization, pickSquares }: { viewerCivilization?: string | null; pickSquares?: { cells: readonly unknown[] } }) => (
+  BoardView: ({
+    viewerCivilization,
+    pickSquares,
+    readOnly,
+    showReadOnlyOutline,
+  }: {
+    viewerCivilization?: string | null
+    pickSquares?: { cells: readonly unknown[] }
+    readOnly?: boolean
+    showReadOnlyOutline?: boolean
+  }) => (
     <section
       id={BOARD_PANEL_ID}
       tabIndex={-1}
       data-testid="board"
       data-viewer-civilization={String(viewerCivilization)}
       data-pick-count={pickSquares === undefined ? 'off' : String(pickSquares.cells.length)}
+      data-readonly={String(readOnly)}
+      data-show-outline={String(showReadOnlyOutline)}
     />
   ),
 }))
@@ -45,7 +57,9 @@ vi.mock('./ChatOrdersPanel.js', async (importOriginal) => ({
 vi.mock('./LogPanel.js', () => ({ LogPanel: () => <section><h2>Log</h2></section> }))
 vi.mock('./OpponentHandPanel.js', () => ({ OpponentHandPanel: () => <section><h2>Other players' hands</h2></section> }))
 vi.mock('./RevealedPanel.js', () => ({ RevealedPanel: () => <section><h2>Revealed</h2></section> }))
-vi.mock('./SocialPolicyPanel.js', () => ({ SocialPolicyPanel: () => <section><h2>Social policy</h2></section> }))
+vi.mock('./SocialPolicyPanel.js', () => ({ SocialPolicyPanel: ({ readOnly }: { readOnly?: boolean }) => (
+  <section data-readonly={String(readOnly)}><h2>Social policy</h2></section>
+) }))
 vi.mock('./StatusPanel.js', () => ({ StatusPanel: () => <section><h2>Player status</h2></section> }))
 vi.mock('./TechPanel.js', () => ({ TechPanel: ({ standalone }: { standalone?: boolean }) => (
     <section aria-label="Techs">{standalone === true && <h2>Techs</h2>}</section>
@@ -433,6 +447,33 @@ describe('primary game panel order', () => {
     expect(panelStack?.children[0]).toBe(hand)
     expect(screen.queryByRole('heading', { name: 'Your actions' })).toBeNull()
     expect(screen.getAllByRole('heading', { name: 'Techs' })).toHaveLength(1)
+  })
+
+  it('gives a spectator a read-only board, battle and social policy panel, and leaves a player editable', async () => {
+    localStorage.setItem('civ.panel.battle', 'true')
+    try {
+      await renderOrder(orderView(), null)
+      const board = screen.getByTestId('board')
+      expect(board.dataset['readonly']).toBe('true')
+      expect(board.dataset['showOutline']).toBe('false')
+      expect(
+        screen.getByRole('heading', { name: 'Social policy' }).closest('section')?.getAttribute('data-readonly'),
+      ).toBe('true')
+      expect((screen.getByRole('button', { name: 'Draw battlehand' }) as HTMLButtonElement).disabled).toBe(true)
+      expect((screen.getByRole('button', { name: 'Start battle' }) as HTMLButtonElement).disabled).toBe(true)
+
+      cleanup()
+      await renderOrder(orderView({
+        you: { playerId: 'p1', username: 'viewer', items: [], pendingRewards: [] },
+      }))
+      expect(screen.getByTestId('board').dataset['readonly']).toBe('false')
+      expect(
+        screen.getByRole('heading', { name: 'Social policy' }).closest('section')?.getAttribute('data-readonly'),
+      ).toBe('false')
+      expect((screen.getByRole('button', { name: 'Draw battlehand' }) as HTMLButtonElement).disabled).toBe(false)
+    } finally {
+      localStorage.removeItem('civ.panel.battle')
+    }
   })
 
   it('leaves the chat panel out for a spectator without an account, and keeps the shortcuts', async () => {

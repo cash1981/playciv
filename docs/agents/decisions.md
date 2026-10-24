@@ -473,6 +473,34 @@ sit with that phase instead of in a separate panel lower on the page.
 
 Source: `web/src/views/PhaseTabs.tsx`, `TechPanel.tsx`, `GameView.tsx`,
 `PhaseSummary.tsx` and their tests.
+### Spectator read-only controls (2026-10-24)
+
+A viewer without a player seat in the game (signed in or not) could press Battle
+and Social policy controls that write, and the server answered with the missing
+bearer token error. The browser now stops offering those writes; the server keeps
+its own authorization unchanged.
+
+- `BattlePanel` takes an optional `readOnly` prop. It also treats `view.you === null`
+  as read-only, so Draw battlehand, Reveal, Draw barbarians, Discard, Start battle,
+  End battle/Undo, placing units, arena drags, Rotate and the ATK/HP fields are
+  disabled even if a caller forgets the prop. The drag, drop, place, move, select,
+  battle-action and stat-commit paths also guard themselves; the other write
+  buttons rely on the disabled attribute and the server's token check.
+- `SocialPolicyPanel` takes `readOnly`; the policy select, Choose, Reveal and Remove
+  are disabled. A spectator has no own tab, so the picker and Choose are the
+  visible cases.
+- `GameView` passes `readOnly` to the board, Battle and Social policy panels when
+  `view.you === null`, and for replay and locked games, like Status and Wonders
+  already did.
+- `BoardView` already had `readOnly` for palette, drag/drop, nudge, Undo/Redo and
+  piece buttons, including pieces in player areas. A spectator now gets that
+  read-only board. `showReadOnlyOutline` is false for a spectator, so the board
+  does not get the replay dashed outline or the replay wording; the palette says
+  "Viewing — only players can change the board." Replay and locked games keep the
+  outline and replay wording.
+
+Source: `web/src/views/GameView.tsx`, `SocialPolicyPanel.tsx`, `BoardView.tsx` and
+their tests.
 
 ## Reopening a phase (2026-10-23)
 
