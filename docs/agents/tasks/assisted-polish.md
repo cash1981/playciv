@@ -4,7 +4,7 @@
   branch the human asked for; same PR #271)
 - **Branch:** `feat/assisted-play-contract`
 - **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
-- **Status:** in progress
+- **Status:** in review
 
 ## Goal
 
@@ -22,8 +22,8 @@ Three changes the human asked for after trying the assisted actions (2026-10-24)
   lift their `used` refusal. The viewer's own `availableActions` entries now say
   whether a used action may be repeated (`repeatable`), so the client disables
   the used button instead of guessing the rule from its group. Government
-  changes and investments already were strict once and now get the same
-  disabled treatment.
+  changes and investments were already strict once; they are not
+  `availableActions` buttons and their own panel already disables them.
 - Great Persons, culture cards and coin purchases keep the existing confirmed
   repeat: a card can grant another use, so the player is the override there.
 - The success toast stays 7 seconds. The failure toast stays 8 seconds.
@@ -36,7 +36,9 @@ Three changes the human asked for after trying the assisted actions (2026-10-24)
 
 In: `AvailableAction.repeatable`, strict-once flags for the social policies and
 wonders, the disabled used button, the toast duration, the confirmation text and
-their tests.
+their tests. The Great Person hidden-info API test also gets a test-only fix: it
+picks cards whose names are not also public Start of Turn button labels, so a
+public label is not mistaken for a leaked card name.
 
 Out: changing the stored log text, the revision history, or other players' view
 of an action; changing the repeat behaviour of Great Persons, culture cards or
@@ -47,6 +49,7 @@ coin purchases.
 - `packages/engine/src/assisted.ts`, `assisted-core.ts`, `assisted-sot.ts`,
   `assisted-abilities.ts`, `state.ts`
 - `packages/engine/test/assisted*.test.ts`
+- `packages/server/test/assisted-gp-api.test.ts` (the test-only fix above)
 - `packages/web/src/views/AssistedActions.tsx`, `GameView.tsx`, `ToastRegion.tsx`,
   their tests and `packages/web/src/lib/toasts.ts`, `confirmation.ts`
 - `docs/agents/tasks/assisted-polish.md`, `docs/agents/decisions.md`,

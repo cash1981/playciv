@@ -205,9 +205,10 @@ buttons and the culture marker. Assisted actions are added beside them.
   Social policies and wonders are strict once (the human, 2026-10-24): their
   `availableActions` entry says `repeatable: false`, the used button is disabled
   instead of asking, and `confirmedRepeat` cannot lift the refusal. Government
-  changes and investments were already strict once and get the same disabled
-  treatment; the same flag is what the client reads, so it does not have to know
-  the rule by group.
+  changes and investments are also strict once, but they are not
+  `availableActions` entries; their own panel disables their buttons from their
+  status. The flag is what the client reads for a start-of-turn button, so it
+  does not have to know the rule by group.
 - A resource is paid by an unspent hut item of that name first, else a
   `resources/<name>` piece inside the player's own area, which goes back to stock.
   This holds for every resource kind.

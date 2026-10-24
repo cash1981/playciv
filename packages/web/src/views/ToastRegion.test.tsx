@@ -14,22 +14,14 @@ afterEach(() => {
 })
 
 describe('ToastRegion', () => {
-  it('shows a success as a status and closes it by itself', () => {
+  it('shows a success as a status and closes it after seven seconds', () => {
+    expect(TOAST_MS.ok).toBe(7000)
     render(<ToastRegion />)
     act(() => void showToast('ok', 'You drew Pottery'))
     expect(screen.getByRole('status').textContent).toContain('You drew Pottery')
     act(() => vi.advanceTimersByTime(TOAST_MS.ok - 1))
     expect(screen.queryByText('You drew Pottery')).not.toBeNull()
     act(() => vi.advanceTimersByTime(2))
-    expect(screen.queryByText('You drew Pottery')).toBeNull()
-  })
-
-  it('keeps a success for seven seconds', () => {
-    render(<ToastRegion />)
-    act(() => void showToast('ok', 'You drew Pottery'))
-    act(() => vi.advanceTimersByTime(6_999))
-    expect(screen.queryByText('You drew Pottery')).not.toBeNull()
-    act(() => vi.advanceTimersByTime(1))
     expect(screen.queryByText('You drew Pottery')).toBeNull()
   })
 

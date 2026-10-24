@@ -771,9 +771,8 @@ export interface AvailableAction {
   /**
    * Whether a `used` action may be pressed again after the player confirms it.
    * False for a rule that allows the action once per turn and gives no second
-   * use (a government change, the invested coin, a social policy, a wonder): the
-   * button is disabled instead of asking. True for a card that can grant another
-   * use, where the player is the override.
+   * use (a social policy, a wonder): the button is disabled instead of asking.
+   * True for a card that can grant another use, where the player is the override.
    */
   readonly repeatable: boolean
   /** A ready action that the player should think twice about, for example a culture card over the hand size. */

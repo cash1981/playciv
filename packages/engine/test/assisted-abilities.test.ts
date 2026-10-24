@@ -200,6 +200,11 @@ describe("Lorenzo de' Medici and Alan Turing", () => {
     const used = unwrap(act(state, 'sot:lorenzo'))
     expect(me(used).stats.culture).toBe(2)
     expect(me(used).stats.trade).toBe(0)
+    // A Great Person may grant another use, so its used button stays confirmable.
+    expect(toPlayerView(used, CASH1981).you?.availableActions.find((action) => action.action === 'sot:lorenzo')).toMatchObject({
+      status: 'used',
+      repeatable: true,
+    })
     const undone = undoByVote(used, 'req-1')
     expect(me(undone).stats.culture).toBe(0)
   })

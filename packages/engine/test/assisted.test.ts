@@ -10,6 +10,7 @@ import { placePiece } from '../src/actions/board.js'
 import { chooseTech, purchaseCoin, revealTech } from '../src/actions/player.js'
 import { markPhasesDone } from '../src/actions/turn.js'
 import {
+  ASSISTED_ACTIONS,
   ASSISTED_ACTION_KINDS,
   assistedAvailability,
   availableActionsFor,
@@ -369,6 +370,15 @@ describe('the projection', () => {
     const { state: withPiece } = withPieceInArea(chivalryTurn(), 'resources/incense')
     return withHutInHand(withPiece, 'Incense')
   }
+
+  it('makes every social policy and wonder button strict once', () => {
+    const strict = ASSISTED_ACTIONS.filter(
+      (definition) => definition.button && (definition.group === 'Social policies' || definition.group === 'Wonders'),
+    )
+    expect(strict.length).toBeGreaterThan(0)
+    // A new policy or wonder must set the flag; the group is not the rule.
+    expect(strict.filter((definition) => definition.strictOnce !== true)).toEqual([])
+  })
 
   it('gives the viewer their own available actions, with a reason', () => {
     const { state } = readyForChivalry()

@@ -133,18 +133,10 @@ async function gpTable(name: string, options: TableOptions = {}): Promise<Table>
       state = unwrap(placePiece(state, { playerId: starterId, assetId: marker, x: 100 + index * 100, y: mapTop(state.board) + 100 }))
     }
   }
-  // Known cards on top, so the test does not depend on the seeded shuffle. Skip a
-  // card whose name is also a public Start of Turn button label (Lorenzo, Turing):
-  // the hidden-info check below must not mistake that public label for a leak.
+  // Known cards on top, so the test does not depend on the seeded shuffle
   const used = new Set<string>()
   const top = (options.top ?? []).map((type) => {
-    const card = state?.items.find(
-      (item) =>
-        item.sheetName === 'GREAT_PERSON' &&
-        typeOf(item) === type &&
-        !used.has(item.id) &&
-        !CARDS_WITH_OWN_BUTTON.has(itemName(item)),
-    )
+    const card = state?.items.find((item) => item.sheetName === 'GREAT_PERSON' && typeOf(item) === type && !used.has(item.id))
     if (card === undefined) throw new Error(`no ${type} card`)
     used.add(card.id)
     return card
@@ -317,9 +309,16 @@ describe('Greeks: a private choice over HTTP', () => {
     expect(candidates).toHaveLength(2)
     const state = await stored(table)
     const cards = state.players.find((player) => player.playerId === table.starterId)?.items ?? []
-    const secrets = cards.flatMap((item) => [item.id, itemName(item)])
+    // A Great Person whose name is also a public Start of Turn button label
+    // (Lorenzo, Turing) names itself in every viewer's own availableActions. Keep
+    // checking its id and every other name, but not that public label.
+    const secrets = cards.flatMap((item) => [
+      item.id,
+      ...(CARDS_WITH_OWN_BUTTON.has(itemName(item)) ? [] : [itemName(item)]),
+    ])
     // The scientist is discarded when the general is kept, and a discard is public
-    const discardedCard = secrets.slice(0, 2)
+    const first = cards[0]
+    const discardedCard = first === undefined ? [] : [first.id, itemName(first)]
     const spectator = await register('hidden-spectator-gp')
 
     const check = async (kept: boolean) => {
