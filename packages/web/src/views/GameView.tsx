@@ -613,7 +613,9 @@ export function GameView({
         areas={displayedView.boardAreas}
         blockadedPieceIds={displayedView.blockadedPieceIds}
         busy={interactionBusy}
-        readOnly={replaying || locked}
+        readOnly={displayedView.you === null || replaying || locked}
+        showReadOnlyOutline={replaying || locked}
+        readOnlyReason={displayedView.you === null ? 'Viewing — only players can change the board.' : undefined}
         youId={you?.playerId ?? null}
         viewerCivilization={you?.civilization?.name ?? null}
         viewerColor={you?.color ?? null}
@@ -657,8 +659,22 @@ export function GameView({
           />
         )}
         <OpponentHandPanel opponents={displayedView.opponents} />
-        <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
-        <SocialPolicyPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
+        <BattlePanel
+          gameId={gameId}
+          busy={interactionBusy}
+          run={run}
+          view={displayedView}
+          readOnly={displayedView.you === null || replaying || locked}
+        />
+        <SocialPolicyPanel
+          gameId={gameId}
+          busy={interactionBusy}
+          run={run}
+          view={displayedView}
+          reloadCount={reloadCount}
+          historical={historical}
+          readOnly={displayedView.you === null || replaying || locked}
+        />
         <StatusPanel
           gameId={gameId}
           view={displayedView}
@@ -1236,7 +1252,12 @@ export function GiveControl({
   )
 }
 
-export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
+interface BattlePanelProps extends PanelProps {
+  /** A spectator, a replay or a locked game: show the battle but do not mutate it. */
+  readonly readOnly?: boolean
+}
+
+export function BattlePanel({ gameId, busy, run, view, readOnly = false }: BattlePanelProps): React.JSX.Element {
   const [count, setCount] = useState(3)
   const battlehand = view.you?.battlehand ?? []
   const barbarians = view.you?.barbarians ?? []
@@ -1252,6 +1273,8 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
   const hasStandaloneInBattleUnit = (view.you?.items ?? []).some((item) => isUnit(item) && item.inBattle)
   const battle = view.battle
   const battleSummary = view.battleSummary ?? []
+  /** A viewer without a seat has no battle of their own to act on. */
+  const noMutations = readOnly || view.you === null
   // HP typed into a unit's field but not yet confirmed by the server. The
   // summary adds the difference so it follows the keystrokes (issue #216).
   const [healthDrafts, setHealthDrafts] = useState<Readonly<Record<string, number>>>({})
@@ -1304,11 +1327,13 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
   }, [battle, battlehand, barbarians, selectedBattlePiece])
 
   function handleDragStart(unitId: string): void {
+    if (noMutations) return
     setDraggingArenaUnitId(null)
     setDraggingUnitId(unitId)
   }
 
   function handleArenaDragStart(e: React.DragEvent<HTMLLIElement>, arenaUnitId: string): void {
+    if (noMutations) return
     e.dataTransfer.setData('text/plain', arenaUnitId)
     setDraggingUnitId(null)
     setDraggingArenaUnitId(arenaUnitId)
@@ -1324,6 +1349,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
   }
 
   function placeInArena(unitId: string, side: BattleSideId, position: number): void {
+    if (noMutations) return
     const unit = battlehand.find((u) => u.id === unitId) ?? barbarians.find((u) => u.id === unitId)
     if (unit === undefined) return
     setSelectedBattlePiece(null)
@@ -1331,14 +1357,14 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
   }
 
   function selectBattlePiece(kind: 'hand' | 'arena', id: string): void {
-    if (busy || battleActionInFlightRef.current) return
+    if (noMutations || busy || battleActionInFlightRef.current) return
     setDraggingUnitId(null)
     setDraggingArenaUnitId(null)
     setSelectedBattlePiece({ kind, id })
   }
 
   function handleSlotClick(side: BattleSideId, position: number): void {
-    if (busy || battleActionInFlightRef.current || selectedBattlePiece === null) return
+    if (noMutations || busy || battleActionInFlightRef.current || selectedBattlePiece === null) return
     if (selectedBattlePiece.kind === 'hand') {
       if (side !== mySideInBattle && !(side === 'defender' && battle?.defender.kind === 'barbarians' && battle.defender.playerId === myId)) return
       placeInArena(selectedBattlePiece.id, side, position)
@@ -1351,7 +1377,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
   }
 
   function runBattleAction(action: () => Promise<PlayerView | unknown>): Promise<void> {
-    if (busy || battleActionInFlightRef.current) return Promise.resolve()
+    if (noMutations || busy || battleActionInFlightRef.current) return Promise.resolve()
     battleActionInFlightRef.current = true
     return run(async () => {
       try { return await action() } finally { battleActionInFlightRef.current = false }
@@ -1359,7 +1385,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
   }
 
   function handleArenaPointerDown(unitId: string, event: React.PointerEvent<HTMLLIElement>): void {
-    if (event.isPrimary === false || (event.button !== undefined && event.button !== 0) || event.pointerType === 'mouse' || busy || battleActionInFlightRef.current) return
+    if (noMutations || event.isPrimary === false || (event.button !== undefined && event.button !== 0) || event.pointerType === 'mouse' || busy || battleActionInFlightRef.current) return
     if (touchDragRef.current !== null) return
     if (selectedBattlePiece?.kind !== 'arena' || selectedBattlePiece.id !== unitId) return
     if ((event.target as HTMLElement).closest('button, input, select, textarea') !== null) return
@@ -1396,6 +1422,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
   }
 
   function handleDropOnArena(side: BattleSideId, position: number): void {
+    if (noMutations) return
     if (draggingArenaUnitId !== null) {
       const arenaUnitId = draggingArenaUnitId
       setDraggingArenaUnitId(null)
@@ -1459,23 +1486,24 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
           value={count}
           min={1}
           max={20}
+          disabled={noMutations}
           onValueChange={setCount}
           style={{ width: '5rem' }}
         />
         <button
-          disabled={busy}
+          disabled={busy || noMutations}
           onClick={() => void run(() => api.drawBattlehand(gameId, Math.min(20, Math.max(1, count))))}
         >
           Draw battlehand
         </button>
         <button
-          disabled={busy || battlehand.length === 0}
+          disabled={busy || noMutations || battlehand.length === 0}
           onClick={() => void run(() => api.revealBattlehand(gameId))}
         >
           Reveal
         </button>
         {battle === null && hasStandaloneInBattleUnit && (
-          <button disabled={busy} onClick={() => void run(() => api.endBattle(gameId))}>
+          <button disabled={busy || noMutations} onClick={() => void run(() => api.endBattle(gameId))}>
             End battle
           </button>
         )}
@@ -1498,8 +1526,8 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               ? { className: 'battle-piece-selected' }
               : battle !== null && mySideInBattle !== null && !(battle.defender.kind === 'barbarians' && battle.defender.playerId === myId)
                 ? { className: 'battle-piece-selectable' } : {})}
-            draggable={battle !== null}
-            {...(battle !== null && mySideInBattle !== null && !(battle.defender.kind === 'barbarians' && battle.defender.playerId === myId)
+            draggable={battle !== null && !noMutations}
+            {...(battle !== null && !noMutations && mySideInBattle !== null && !(battle.defender.kind === 'barbarians' && battle.defender.playerId === myId)
               ? {
                   onClick: () => selectBattlePiece('hand', unit.id), role: 'button' as const, tabIndex: 0,
                   onKeyDown: (event: React.KeyboardEvent<HTMLLIElement>) => {
@@ -1514,7 +1542,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               !(battle.defender.kind === 'barbarians' && battle.defender.playerId === myId) && (
               <button
                 className="small"
-                disabled={busy}
+                disabled={busy || noMutations}
                 onClick={(event) => { event.stopPropagation(); placeInArena(unit.id, mySideInBattle, myNextPosition) }}
               >
                 Place →
@@ -1528,13 +1556,13 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
       <h3 style={{ marginTop: '0.8rem' }}>Barbarians ({availableBarbarians.length})</h3>
       <div className="row">
         <button
-          disabled={busy || view.you === null || barbarians.length > 0 || battle !== null}
+          disabled={busy || noMutations || barbarians.length > 0 || battle !== null}
           onClick={() => void run(() => api.drawBarbarians(gameId, rev))}
         >
           Draw barbarians
         </button>
         <button
-          disabled={busy || barbarians.length === 0}
+          disabled={busy || noMutations || barbarians.length === 0}
           onClick={() => void run(() => api.discardBarbarians(gameId))}
         >
           Discard
@@ -1549,8 +1577,8 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               ? { className: 'battle-piece-selected' }
               : battle !== null && battle.defender.kind === 'barbarians' && battle.defender.playerId === myId
                 ? { className: 'battle-piece-selectable' } : {})}
-            draggable={battle !== null}
-            {...(battle !== null && battle.defender.kind === 'barbarians' && battle.defender.playerId === myId
+            draggable={battle !== null && !noMutations}
+            {...(battle !== null && !noMutations && battle.defender.kind === 'barbarians' && battle.defender.playerId === myId
               ? {
                   onClick: () => selectBattlePiece('hand', unit.id), role: 'button' as const, tabIndex: 0,
                   onKeyDown: (event: React.KeyboardEvent<HTMLLIElement>) => {
@@ -1564,7 +1592,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
             {battle !== null && battle.defender.kind === 'barbarians' && battle.defender.playerId === myId && (
               <button
                 className="small"
-                disabled={busy}
+                disabled={busy || noMutations}
                 onClick={(event) => { event.stopPropagation(); placeInArena(unit.id, 'defender', myNextPosition) }}
               >
                 Place →
@@ -1582,6 +1610,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
             <select
               value={opponentId}
               onChange={(e) => setOpponentId(e.target.value)}
+              disabled={noMutations}
               style={{ width: 'auto' }}
             >
               <option value="">Opponent …</option>
@@ -1590,7 +1619,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               ))}
             </select>
             <button
-              disabled={busy || opponentId === ''}
+              disabled={busy || noMutations || opponentId === ''}
               onClick={() => void run(() => api.initiateBattle(gameId, opponentId, rev))}
             >
               Start battle
@@ -1613,7 +1642,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
           {myId !== '' && battleUndo.endedBy === myId && (
             <button
               className="small"
-              disabled={busy}
+              disabled={busy || noMutations}
               onClick={() => runBattleAction(() => api.undoEndBattle(gameId, rev))}
             >
               Undo
@@ -1637,7 +1666,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
             {mySideInBattle !== null && (
               <button
                 className="small"
-                disabled={busy}
+                disabled={busy || noMutations}
                 onClick={() => runBattleAction(() => api.endBattleTurn(gameId, rev))}
               >
                 End turn
@@ -1646,7 +1675,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
             {mySideInBattle !== null && (
               <button
                 className="small danger"
-                disabled={busy}
+                disabled={busy || noMutations}
                 onClick={() => runBattleAction(() => api.endBattleArena(gameId, rev))}
               >
                 End battle
@@ -1677,6 +1706,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               onHealthDraft={setHealthDraft}
               gameId={gameId}
               busy={busy}
+              readOnly={noMutations}
               rev={rev}
               run={runBattleAction}
               draggingUnitId={draggingUnitId}
@@ -1701,6 +1731,7 @@ export function BattlePanel({ gameId, busy, run, view }: PanelProps): React.JSX.
               onHealthDraft={setHealthDraft}
               gameId={gameId}
               busy={busy}
+              readOnly={noMutations}
               rev={rev}
               run={runBattleAction}
               draggingUnitId={draggingUnitId}
@@ -1748,6 +1779,8 @@ interface ArenaRowProps {
   readonly onHealthDraft: (unitId: string, value: number | null) => void
   readonly gameId: string
   readonly busy: boolean
+  /** A spectator, a replay or a locked game: do not offer arena edits. */
+  readonly readOnly: boolean
   readonly rev: number
   readonly run: Run
   readonly draggingUnitId: string | null
@@ -1767,7 +1800,7 @@ interface ArenaRowProps {
 }
 
 function ArenaRow({
-  label, side, units, maxPositions, onHealthDraft, gameId, busy, rev, run,
+  label, side, units, maxPositions, onHealthDraft, gameId, busy, readOnly, rev, run,
   draggingUnitId, draggingArenaUnitId, onArenaDragStart, onArenaDragEnd, onDropUnit, onSlotClick,
   onArenaPointerDown, onArenaPointerMove, onArenaPointerUp, selectedBattlePiece, onSelectPiece, canManage, isOwnSide,
 }: ArenaRowProps): React.JSX.Element {
@@ -1809,6 +1842,7 @@ function ArenaRow({
                   unit={unit}
                   gameId={gameId}
                   busy={busy}
+                  readOnly={readOnly}
                   rev={rev}
                   run={run}
                   canManage={canManage}
@@ -1844,6 +1878,8 @@ interface ArenaUnitCardProps {
   readonly unit: ArenaUnit
   readonly gameId: string
   readonly busy: boolean
+  /** A spectator, a replay or a locked game: the card is shown, not edited. */
+  readonly readOnly?: boolean
   readonly rev: number
   readonly run: Run
   readonly canManage: boolean
@@ -1862,7 +1898,7 @@ interface ArenaUnitCardProps {
 }
 
 export function ArenaUnitCard({
-  unit, gameId, busy, rev, run, canManage, canMove, onHealthDraft, selected = false, onSelect,
+  unit, gameId, busy, readOnly = false, rev, run, canManage, canMove, onHealthDraft, selected = false, onSelect,
   onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onDragStart, onDragEnd,
 }: ArenaUnitCardProps): React.JSX.Element {
   const [attack, setAttack] = useState(unit.attack)
@@ -1889,6 +1925,7 @@ export function ArenaUnitCard({
   }, [])
 
   function commitStat(key: 'attack' | 'health', value: number): void {
+    if (readOnly) return
     const timerRef = key === 'attack' ? attackTimerRef : healthTimerRef
     if (timerRef.current !== null) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
@@ -1934,14 +1971,14 @@ export function ArenaUnitCard({
         {...(onPointerCancel === undefined ? {} : { onPointerCancel })}
         labelOverride={displayLabel}
         rotation={displayRotation}
-        draggable={canMove}
+        draggable={canMove && !readOnly}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       />
       {unit.killed && <span className="tag discarded">DEAD</span>}
       <button
         className="small"
-        disabled={busy}
+        disabled={busy || readOnly}
         style={{ width: '100%' }}
         title="Rotate — cycle which unit level reads right-side up"
         onClick={() => void run(() => api.rotateArenaUnit(gameId, unit.id, rev))}
@@ -1952,6 +1989,7 @@ export function ArenaUnitCard({
         ATK
         <DigitInput
           value={attack}
+          disabled={readOnly}
           onValueChange={(v) => { setAttack(v); commitStat('attack', v) }}
         />
       </label>
@@ -1959,13 +1997,14 @@ export function ArenaUnitCard({
         HP
         <DigitInput
           value={health}
+          disabled={readOnly}
           onValueChange={(v) => { setHealth(v); onHealthDraft?.(unit.id, v); commitStat('health', v) }}
         />
       </label>
       {canManage && (
         <button
           className="small danger"
-          disabled={busy}
+          disabled={busy || readOnly}
           style={{ marginTop: '0.2rem', width: '100%' }}
           onClick={() => void run(() => api.killArenaUnit(gameId, unit.id, rev))}
         >
@@ -1975,7 +2014,7 @@ export function ArenaUnitCard({
       {canMove && (
         <button
           className="small"
-          disabled={busy}
+          disabled={busy || readOnly}
           style={{ marginTop: '0.2rem', width: '100%' }}
           title="Return to hand — undoes placing this unit"
           onClick={() => void run(() => api.returnArenaUnitToHand(gameId, unit.id, rev))}
@@ -1986,4 +2025,3 @@ export function ArenaUnitCard({
     </div>
   )
 }
-

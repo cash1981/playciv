@@ -1169,6 +1169,34 @@ describe('BoardView arrow-key nudge (issue #193)', () => {
     cleanup()
   })
 
+  it('does not draw the replay outline on a spectator board, but keeps it for a replay', () => {
+    const renderBoard = (props: { readonly showReadOnlyOutline?: boolean; readonly readOnlyReason?: string } = {}) =>
+      render(
+        <BoardView
+          gameId="game"
+          board={createBoard()}
+          numOfPlayers={2}
+          areas={[]}
+          busy={false}
+          readOnly
+          {...props}
+          run={async action => { await action() }}
+        />,
+      )
+    const spectator = renderBoard({
+      showReadOnlyOutline: false,
+      readOnlyReason: 'Viewing — only players can change the board.',
+    })
+    const frame = spectator.container.querySelector('.board-frame')
+    expect(frame?.classList.contains('replaying')).toBe(false)
+    expect(spectator.getByText('Viewing — only players can change the board.')).toBeTruthy()
+    spectator.unmount()
+
+    const replay = renderBoard()
+    expect(replay.container.querySelector('.board-frame')?.classList.contains('replaying')).toBe(true)
+    expect(replay.getByText('Replaying — return to now to make changes.')).toBeTruthy()
+  })
+
   it('leaves an unrelated focused text input alone instead of nudging the piece', async () => {
     const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
     const boardPiece = piece('buildings/academy', 'academy-focus')

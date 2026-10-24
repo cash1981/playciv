@@ -10,6 +10,10 @@ import { BattlePanel, type Run } from './GameView.js'
 vi.mock('../lib/api.js', () => ({
   api: {
     drawBarbarians: vi.fn(),
+    drawBattlehand: vi.fn(),
+    revealBattlehand: vi.fn(),
+    endBattle: vi.fn(),
+    initiateBattle: vi.fn(),
     placeUnitInArena: vi.fn(),
     moveArenaUnit: vi.fn(),
     setArenaUnitStat: vi.fn(),
@@ -309,5 +313,71 @@ describe('BattlePanel independent barbarian draw', () => {
     expect(button.disabled).toBe(true)
     fireEvent.click(button)
     expect(api.drawBarbarians).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('BattlePanel read-only', () => {
+  afterEach(() => cleanup())
+  beforeEach(() => vi.clearAllMocks())
+
+  const idleView = { ...view, battle: null } as PlayerView
+
+  it('disables the battle controls for a spectator', () => {
+    const { container, getByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={{ ...idleView, you: null } as PlayerView} />,
+    )
+    fireEvent.click(getByText('Battle'))
+
+    expect((getByText('Draw battlehand') as HTMLButtonElement).disabled).toBe(true)
+    expect((getByText('Draw barbarians') as HTMLButtonElement).disabled).toBe(true)
+    expect((getByText('Start battle') as HTMLButtonElement).disabled).toBe(true)
+    expect((container.querySelector('select') as HTMLSelectElement).disabled).toBe(true)
+    expect((container.querySelector('input') as HTMLInputElement).disabled).toBe(true)
+
+    fireEvent.click(getByText('Draw battlehand'))
+    fireEvent.click(getByText('Start battle'))
+    expect(api.drawBattlehand).not.toHaveBeenCalled()
+    expect(api.initiateBattle).not.toHaveBeenCalled()
+  })
+
+  it('disables every mutation for a read-only view of a player', () => {
+    const { container, getByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={idleView} readOnly />,
+    )
+    fireEvent.click(getByText('Battle'))
+
+    for (const name of ['Draw battlehand', 'Reveal', 'Draw barbarians', 'Discard', 'Start battle']) {
+      expect((getByText(name) as HTMLButtonElement).disabled).toBe(true)
+    }
+    expect((container.querySelector('select') as HTMLSelectElement).disabled).toBe(true)
+  })
+
+  it('disables the arena rotate button and the ATK/HP fields in a read-only view', () => {
+    const arenaUnit = {
+      id: 'arena-1',
+      side: 'defender',
+      position: 0,
+      unit: { ...infantry, inBattle: true },
+      attack: 1,
+      health: 3,
+      placedBy: 'other',
+      rotation: 0,
+      killed: false,
+    }
+    const arenaView = {
+      ...view,
+      you: { ...view.you, battlehand: [] },
+      battle: { ...view.battle, arena: [arenaUnit] },
+    } as unknown as PlayerView
+    const { container, getByText } = render(
+      <BattlePanel gameId="game" busy={false} run={run} view={arenaView} readOnly />,
+    )
+    fireEvent.click(getByText('Battle'))
+
+    expect((getByText('⟲ Rotate') as HTMLButtonElement).disabled).toBe(true)
+    const fields = container.querySelectorAll<HTMLInputElement>('.arena-unit-card input')
+    expect(fields).toHaveLength(2)
+    for (const field of fields) expect(field.disabled).toBe(true)
   })
 })

@@ -64,6 +64,9 @@ old test counts and past deployment reports do not establish present health.
   cards and with no collapsible wrapper; a viewer without the actions panel still gets it
   on its own. The Tech tree shortcut opens Research first. See "Tech in the Research tab"
   in decisions.
+- A viewer without a seat (spectator) gets a read-only board, Battle panel and Social
+  policy panel: no draws, no battle start or arena moves, no policy choice, and no
+  board or player-area changes. See "Spectator read-only controls" in decisions.
 
 - The game header names the player furthest behind as the one who is up and lists
   only the earliest open phase under "Waiting for"; the shortcuts are Board, Actions,
