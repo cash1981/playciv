@@ -221,51 +221,58 @@ describe('the Feudalism harvest', () => {
     ],
   }
 
-  it('lists only what the map shows around the chosen city, and sends the city and the resource', async () => {
+  it('lists what the map shows around every city in one list, and sends the city and the resource', async () => {
     const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
     renderChoices(viewOf(sotWith({ feudalism: feudalism as never })))
     const section = screen.getByRole('region', { name: 'Feudalism harvest' })
     const button = within(section).getByRole('button', { name: 'Harvest' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
+    expect(within(section).queryByRole('combobox', { name: 'City' })).toBeNull()
     const resources = within(section).getByRole('combobox', { name: 'Resource' }) as HTMLSelectElement
-    expect(resources.disabled).toBe(true)
-    fireEvent.change(within(section).getByRole('combobox', { name: 'City' }), { target: { value: 'c2' } })
-    expect(button.disabled).toBe(true)
+    expect(resources.disabled).toBe(false)
+    // Iron is near both cities, so the city tells the two apart; the others name their square
     expect(within(resources).getAllByRole('option').map((option) => option.textContent)).toEqual([
       'Choose a resource',
+      'Iron at A1 (Capital B3)',
       'Silk at E5',
       'Wheat at G7 and G6',
-      'Iron at F7 (The market has no iron token left.)',
+      'Iron at F7 (City F6) (The market has no iron token left.)',
     ])
     expect((within(resources).getByRole('option', { name: /Iron at F7/ }) as HTMLOptionElement).disabled).toBe(true)
-    fireEvent.change(resources, { target: { value: 'silk' } })
+    fireEvent.change(resources, { target: { value: 'c2:silk' } })
     expect(button.disabled).toBe(false)
     fireEvent.click(button)
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send).toHaveBeenCalledWith('g1', 'feudalismHarvest', expect.any(String), 6, { cityPieceId: 'c2', resource: 'silk' })
   })
 
-  it('forgets the resource when another city is chosen, which may not hold it', () => {
+  it('harvests with the city that holds the chosen square when two cities share a resource', async () => {
+    const send = vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    const both = {
+      ...feudalism,
+      cities: [
+        { pieceId: 'c1', label: 'Capital B3', choices: [choice('iron', 'Iron at A1')] },
+        { pieceId: 'c2', label: 'City F6', choices: [choice('iron', 'Iron at F7')] },
+      ],
+    }
+    renderChoices(viewOf(sotWith({ feudalism: both as never })))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Resource' }), { target: { value: 'c2:iron' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Harvest' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(send).toHaveBeenCalledWith('g1', 'feudalismHarvest', expect.any(String), 6, { cityPieceId: 'c2', resource: 'iron' })
+  })
+
+  it('does not enable Harvest for a resource that is not available', () => {
     renderChoices(viewOf(sotWith({ feudalism: feudalism as never })))
-    const section = screen.getByRole('region', { name: 'Feudalism harvest' })
-    fireEvent.change(within(section).getByRole('combobox', { name: 'City' }), { target: { value: 'c2' } })
-    fireEvent.change(within(section).getByRole('combobox', { name: 'Resource' }), { target: { value: 'silk' } })
-    fireEvent.change(within(section).getByRole('combobox', { name: 'City' }), { target: { value: 'c1' } })
-    expect((within(section).getByRole('button', { name: 'Harvest' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByRole('combobox', { name: 'Resource' }), { target: { value: 'c2:iron' } })
+    expect((screen.getByRole('button', { name: 'Harvest' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('chooses the only city by itself', () => {
-    const one = { ...feudalism, cities: [{ pieceId: 'c1', label: 'Capital B3', choices: [choice('iron', 'Iron at A1')] }] }
-    renderChoices(viewOf(sotWith({ feudalism: one as never })))
-    fireEvent.change(screen.getByRole('combobox', { name: 'Resource' }), { target: { value: 'iron' } })
-    expect((screen.getByRole('button', { name: 'Harvest' }) as HTMLButtonElement).disabled).toBe(false)
-  })
-
-  it('says so behind help when the map shows no resource around the city', () => {
+  it('says so behind help when the map shows no resource around the cities', () => {
     const none = { ...feudalism, cities: [{ pieceId: 'c1', label: 'Capital B3', choices: [] }] }
     renderChoices(viewOf(sotWith({ feudalism: none as never })))
     fireEvent.click(screen.getByRole('button', { name: 'Help: Feudalism: harvest a resource' }))
-    expect(within(screen.getByRole('dialog')).getByText('The map shows no resource in the outskirts of Capital B3.')).toBeTruthy()
+    expect(within(screen.getByRole('dialog')).getByText('The map shows no resource in the outskirts of your cities.')).toBeTruthy()
   })
 
   it('is disabled and tagged Used when it was used, with the reason behind help', () => {

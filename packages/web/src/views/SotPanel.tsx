@@ -158,18 +158,25 @@ function FeudalismHarvest({
   run,
   feudalism,
 }: ChoiceProps & { readonly feudalism: NonNullable<StartOfTurn['feudalism']> }): React.JSX.Element | null {
-  const [cityPieceId, setCity] = useState('')
-  const [resource, setResource] = useState('')
+  // One list of every resource the map shows around the player's cities; the label already names the square
+  const [picked, setPicked] = useState('')
   const ready = feudalism.status === 'ready'
-  // A single city is chosen for the player; a city picked earlier is dropped when it is gone
-  const known = feudalism.cities.find((candidate) => candidate.pieceId === cityPieceId)
-  const city = known ?? (feudalism.cities.length === 1 ? feudalism.cities[0] : undefined)
-  const choice = city?.choices.find((candidate) => candidate.resource === resource && candidate.available)
-  const valid = city !== undefined && choice !== undefined
+  const options = feudalism.cities.flatMap((city) =>
+    city.choices.map((choice) => ({
+      key: `${city.pieceId}:${choice.resource}`,
+      city,
+      choice,
+      // The square does not tell two cities apart when both have the resource
+      shared: feudalism.cities.filter((other) => other.choices.some((c) => c.resource === choice.resource)).length > 1,
+    })),
+  )
+  const selected = options.find((option) => option.key === picked && option.choice.available)
+  const valid = selected !== undefined
   const playerId = view.you?.playerId ?? ''
 
   const harvest = (): void => {
-    if (city === undefined || choice === undefined) return
+    if (selected === undefined) return
+    const { city, choice } = selected
     const key = `${gameId}:${playerId}:feudalismHarvest:${city.pieceId}:${choice.resource}`
     void pressOnce(
       key,
@@ -181,7 +188,7 @@ function FeudalismHarvest({
         }),
       view,
     ).then((done) => {
-      if (done) setResource('')
+      if (done) setPicked('')
     })
   }
 
@@ -199,31 +206,14 @@ function FeudalismHarvest({
         }}
       >
         <label>
-          City{' '}
-          <select
-            value={city?.pieceId ?? ''}
-            disabled={busy || !ready}
-            onChange={(event) => {
-              setCity(event.target.value)
-              setResource('')
-            }}
-          >
-            <option value="">Choose a city</option>
-            {feudalism.cities.map((candidate) => (
-              <option key={candidate.pieceId} value={candidate.pieceId}>
-                {candidate.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
           Resource{' '}
-          <select value={resource} disabled={busy || !ready || city === undefined} onChange={(event) => setResource(event.target.value)}>
-            <option value="">{city === undefined ? 'Choose a city first' : 'Choose a resource'}</option>
-            {(city?.choices ?? []).map((candidate) => (
-              <option key={candidate.resource} value={candidate.resource} disabled={!candidate.available}>
-                {candidate.label}
-                {candidate.available ? '' : ` (${candidate.unavailableReason ?? 'none left'})`}
+          <select value={picked} disabled={busy || !ready} onChange={(event) => setPicked(event.target.value)}>
+            <option value="">Choose a resource</option>
+            {options.map(({ key, city, choice, shared }) => (
+              <option key={key} value={key} disabled={!choice.available}>
+                {choice.label}
+                {shared ? ` (${city.label})` : ''}
+                {choice.available ? '' : ` (${choice.unavailableReason ?? 'none left'})`}
               </option>
             ))}
           </select>
@@ -243,9 +233,7 @@ function FeudalismHarvest({
               does not track that.
             </p>
             <p>{feudalism.reason}</p>
-            {city !== undefined && city.choices.length === 0 && (
-              <p>The map shows no resource in the outskirts of {city.label}.</p>
-            )}
+            {options.length === 0 && <p>The map shows no resource in the outskirts of your cities.</p>}
           </HelpHint>
         </span>
       </form>
