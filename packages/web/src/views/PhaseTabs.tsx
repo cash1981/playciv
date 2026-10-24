@@ -259,7 +259,7 @@ export function PhaseActionsPanel({
             view={view}
             busy={busy}
             readOnly={readOnly}
-            run={run}
+            run={askOutOfTurn}
             build={build}
             reloadCount={reloadCount}
             historical={historical}
