@@ -439,6 +439,23 @@ describe('the Tech panel in Research', () => {
     expect(localStorage.getItem('civ.panel.actions')).toBe('true')
     await waitFor(() => expect(scroll).toHaveBeenCalled())
   })
+
+  it('waits for Your actions to open before scrolling when Research is already selected', async () => {
+    const scroll = vi.fn(function (this: Element) {
+      expect(document.getElementById('actions-content')?.hidden).toBe(false)
+      return this
+    })
+    Element.prototype.scrollIntoView = scroll
+    localStorage.setItem('civ.panel.actions', 'false')
+    renderPanel(viewIn('RESEARCH'))
+    expect(document.getElementById('phase-tab-RESEARCH')?.getAttribute('aria-selected')).toBe('true')
+    expect(document.getElementById('actions-content')?.hidden).toBe(true)
+
+    goToPanel('techs')
+
+    expect(scroll).not.toHaveBeenCalled()
+    await waitFor(() => expect(scroll).toHaveBeenCalledOnce())
+  })
 })
 
 describe('buttons with their own text', () => {

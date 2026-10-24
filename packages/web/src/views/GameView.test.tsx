@@ -413,7 +413,16 @@ describe('primary game panel order', () => {
   })
 
   it('has Your cards directly under the board, and no Your actions panel when there is nothing to show', async () => {
-    const { container } = await renderOrder(orderView())
+    const { container } = await renderOrder(orderView({
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        items: [],
+        pendingRewards: [],
+        availableActions: [],
+        cities: [],
+      },
+    }))
     const board = screen.getByTestId('board')
     const panelStack = container.querySelector('.panel-stack')
     const hand = screen.getByRole('heading', { name: 'Your hand (0)' }).closest('section')
@@ -421,6 +430,7 @@ describe('primary game panel order', () => {
     expect(board.nextElementSibling).toBe(panelStack)
     expect(panelStack?.children[0]).toBe(hand)
     expect(screen.queryByRole('heading', { name: 'Your actions' })).toBeNull()
+    expect(screen.getAllByRole('heading', { name: 'Techs' })).toHaveLength(1)
   })
 
   it('leaves the chat panel out for a spectator without an account, and keeps the shortcuts', async () => {

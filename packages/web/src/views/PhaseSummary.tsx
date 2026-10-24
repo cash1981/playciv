@@ -135,14 +135,19 @@ export function goToPanel(key: string, open = false): void {
   if (key === 'techs') {
     // The Tech panel can only be shown inside Your actions, so open that first.
     const actions = findPanel('actions')
+    let deferScroll = false
     if (actions !== null && actions.focus.getAttribute('aria-expanded') === 'false') {
       actions.focus.click()
+      deferScroll = true
     }
     const research = document.getElementById('phase-tab-RESEARCH')
     if (research !== null && research.getAttribute('aria-selected') !== 'true') {
       // A click on the tab goes through the tabs' own state, so there is no second
       // copy of the selected phase here. The panel mounts on the next render.
       research.click()
+      deferScroll = true
+    }
+    if (deferScroll) {
       window.setTimeout(() => scrollToPanel('techs', open), 0)
       return
     }
