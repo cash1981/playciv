@@ -236,7 +236,7 @@ describe('the Feudalism harvest', () => {
       'Iron at A1 (Capital B3)',
       'Silk at E5',
       'Wheat at G7 and G6',
-      'Iron at F7 (City F6) (The market has no iron token left.)',
+      'Iron at F7 (City F6): The market has no iron token left.',
     ])
     expect((within(resources).getByRole('option', { name: /Iron at F7/ }) as HTMLOptionElement).disabled).toBe(true)
     fireEvent.change(resources, { target: { value: 'c2:silk' } })
@@ -260,6 +260,48 @@ describe('the Feudalism harvest', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Harvest' }))
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
     expect(send).toHaveBeenCalledWith('g1', 'feudalismHarvest', expect.any(String), 6, { cityPieceId: 'c2', resource: 'iron' })
+  })
+
+  it('names the city when two cities show the same square', () => {
+    const scout = { ...feudalism, cities: [
+      { pieceId: 'c1', label: 'Capital B3', choices: [choice('iron', 'Iron under a scout at D4')] },
+      { pieceId: 'c2', label: 'City F6', choices: [choice('iron', 'Iron under a scout at D4')] },
+    ] }
+    renderChoices(viewOf(sotWith({ feudalism: scout as never })))
+    expect(within(screen.getByRole('combobox', { name: 'Resource' })).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Choose a resource',
+      'Iron under a scout at D4 (Capital B3)',
+      'Iron under a scout at D4 (City F6)',
+    ])
+  })
+
+  it('goes back to the placeholder after a harvest', async () => {
+    vi.spyOn(api, 'actionWithArgs').mockResolvedValue({} as PlayerView)
+    renderChoices(viewOf(sotWith({ feudalism: feudalism as never })))
+    const resources = screen.getByRole('combobox', { name: 'Resource' }) as HTMLSelectElement
+    fireEvent.change(resources, { target: { value: 'c2:silk' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Harvest' }))
+    await waitFor(() => expect(resources.value).toBe(''))
+  })
+
+  it('forgets a choice that disappears, so it is not selected again if it returns', () => {
+    const view = viewOf(sotWith({ feudalism: feudalism as never }))
+    const { rerender } = renderChoices(view)
+    fireEvent.change(screen.getByRole('combobox', { name: 'Resource' }), { target: { value: 'c2:silk' } })
+    const gone = { ...feudalism, cities: [feudalism.cities[0]] }
+    const props = { gameId: 'g1', busy: false, readOnly: false, run }
+    rerender(<StartOfTurnChoices {...props} view={viewOf(sotWith({ feudalism: gone as never }))} />)
+    rerender(<StartOfTurnChoices {...props} view={view} />)
+    expect((screen.getByRole('combobox', { name: 'Resource' }) as HTMLSelectElement).value).toBe('')
+  })
+
+  it('is disabled while the page is busy or read only', () => {
+    const view = viewOf(sotWith({ feudalism: feudalism as never }))
+    for (const props of [{ busy: true }, { readOnly: true }]) {
+      renderChoices(view, props)
+      expect((screen.getByRole('combobox', { name: 'Resource' }) as HTMLSelectElement).disabled).toBe(true)
+      cleanup()
+    }
   })
 
   it('does not enable Harvest for a resource that is not available', () => {

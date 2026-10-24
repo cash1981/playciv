@@ -7,7 +7,7 @@
  * rule: it shows the status and reason the engine gives and sends one request per press.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import type { Government } from '@civ/engine'
 
@@ -166,10 +166,15 @@ function FeudalismHarvest({
       key: `${city.pieceId}:${choice.resource}`,
       city,
       choice,
-      // The square does not tell two cities apart when both have the resource
+      // Named when two cities offer the resource, as an unsent scout's square is the same for both
       shared: feudalism.cities.filter((other) => other.choices.some((c) => c.resource === choice.resource)).length > 1,
     })),
   )
+  // A choice that is gone after a refresh is forgotten, so it is not selected again if it returns
+  const stale = picked !== '' && !options.some((option) => option.key === picked)
+  useEffect(() => {
+    if (stale) setPicked('')
+  }, [stale])
   const selected = options.find((option) => option.key === picked && option.choice.available)
   const valid = selected !== undefined
   const playerId = view.you?.playerId ?? ''
@@ -213,7 +218,7 @@ function FeudalismHarvest({
               <option key={key} value={key} disabled={!choice.available}>
                 {choice.label}
                 {shared ? ` (${city.label})` : ''}
-                {choice.available ? '' : ` (${choice.unavailableReason ?? 'none left'})`}
+                {choice.available ? '' : `: ${choice.unavailableReason ?? 'none left'}`}
               </option>
             ))}
           </select>
