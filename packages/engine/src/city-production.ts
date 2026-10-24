@@ -317,7 +317,9 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
     const detail: OutskirtsSquare[] = []
     const tradeDetail: TradeSquare[] = []
     const addTrade = (square: string, source: string, icons: number, blockaded: boolean): void => {
-      if (icons > 0) tradeDetail.push({ square, source, amount: blockaded ? 0 : icons, blockaded })
+      if (icons > 0 && !assignments.some((assignment) => squareLabel(assignment) === square)) {
+        tradeDetail.push({ square, source, amount: blockaded ? 0 : icons, blockaded })
+      }
     }
     const wonderOrPersonSquares: string[] = []
     // Squares whose trade is not in the data: a wonder, or a great person that is not one of the six markers
