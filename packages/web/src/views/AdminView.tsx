@@ -191,7 +191,8 @@ export function AdminView({
       `Send this email to ${audience}` +
       (limit === undefined ? '' : `, at most ${limit} of them`) +
       (exclude.length === 0 ? '' : `, skipping ${exclude.length} listed addresses`) +
-      '?'
+      '. This sends everything now and skips the queue; Resend\'s free plan allows only ' +
+      '100 mails a day. Use "Send over several days" below for a normal announcement. Send now?'
     if (!window.confirm(question)) return
     setSending(true)
     setError(null)
@@ -362,6 +363,10 @@ export function AdminView({
           source as the plain-text fallback. Every account with an email address gets its own
           copy, greeted with its username and carrying the unsubscribe link.
         </p>
+        <p className="muted">
+          <strong>Send email</strong> sends immediately and skips the queue. For a normal
+          announcement, use <strong>Send over several days</strong> below (50 a day by default).
+        </p>
         {broadcastResult !== null && <BroadcastSummary result={broadcastResult} />}
 
         <label className="inline-label">
@@ -423,7 +428,6 @@ export function AdminView({
 
         <div className="row">
           <button
-            className="primary"
             disabled={
               sending || emailSubject.trim() === '' || emailBody.trim() === '' || limit === 'invalid'
             }
