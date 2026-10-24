@@ -203,9 +203,11 @@ export const usedAgainQuestion = (label: string): string =>
 /**
  * One button for one assisted action. Renders nothing for a spectator or when
  * the viewer has no state for the action. Disabled unless the status is `ready`
- * or `used`; the reason is in the button's title and behind its `?` help, not on
- * the page. A `used` card stays pressable: a press asks first and sends
- * `confirmedRepeat` only after a yes.
+ * or it is `used` and repeatable; the reason is in the button's title and behind
+ * its `?` help, not on the page. A repeatable `used` card stays pressable: a
+ * press asks first and sends `confirmedRepeat` only after a yes. A rule that
+ * allows the action once and gives no second use (a social policy, a wonder, a
+ * government change, an investment) leaves its used button disabled instead.
  */
 export function AssistedActionButton({
   action,
@@ -225,6 +227,10 @@ export function AssistedActionButton({
 
   const ready = state.status === 'ready'
   const used = state.status === 'used'
+  // A used action is pressable only when its rule allows the player to confirm
+  // another use; a strict-once policy or wonder stays disabled. A projection
+  // without the flag predates it and keeps the old repeat behaviour.
+  const pressable = ready || (used && state.repeatable !== false)
   const rev = view.rev
   const playerId = view.you.playerId
 
@@ -254,7 +260,7 @@ export function AssistedActionButton({
       <button
         type="button"
         className={className}
-        disabled={busy || readOnly || !(ready || used)}
+        disabled={busy || readOnly || !pressable}
         title={state.reason}
         onClick={press}
       >

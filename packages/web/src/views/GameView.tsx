@@ -422,7 +422,7 @@ export function GameView({
         if (activeGameIdRef.current !== gameId) return
         // A failed reload has set its own error; do not also say "Done".
         if (reloaded) {
-          const text = await confirmationFor(gameId, revisionBefore, player !== null)
+          const text = await confirmationFor(gameId, revisionBefore, player?.username ?? null)
           // The player may have gone to another game while this was asked
           if (activeGameIdRef.current !== gameId) return
           showToast('ok', text)
@@ -765,13 +765,14 @@ export function GlobalReplayBar({
 // ---------------------------------------------------------------------------
 
 /**
- * The green toast's text: the player's own log line for what they just did. Asking can
- * fail (the connection, a spectator); the action itself went through, so then it is "Done".
+ * The green toast's text: the player's own log line for what they just did, with
+ * their username spoken as "you". Asking can fail (the connection, a spectator);
+ * the action itself went through, so then it is "Done".
  */
-async function confirmationFor(gameId: string, revisionBefore: number, signedIn: boolean): Promise<string> {
-  if (!signedIn || revisionBefore < 0) return confirmationText([])
+async function confirmationFor(gameId: string, revisionBefore: number, viewerName: string | null): Promise<string> {
+  if (viewerName === null || revisionBefore < 0) return confirmationText([])
   try {
-    return confirmationText((await api.confirmation(gameId, revisionBefore)).lines)
+    return confirmationText((await api.confirmation(gameId, revisionBefore)).lines, viewerName)
   } catch {
     return confirmationText([])
   }

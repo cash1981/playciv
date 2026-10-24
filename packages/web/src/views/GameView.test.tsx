@@ -1330,7 +1330,7 @@ describe('the game page (issue #215)', () => {
       vi.spyOn(api, 'draw').mockResolvedValue(view)
       vi.spyOn(window, 'confirm').mockReturnValue(true)
       await renderGame(view, 'user', true, [baseline as unknown as GameRevisionSummary])
-      const confirmation = vi.spyOn(api, 'confirmation').mockResolvedValue({ lines: ['You drew Americans'] })
+      const confirmation = vi.spyOn(api, 'confirmation').mockResolvedValue({ lines: ['Alice drew Americans'] })
 
       fireEvent.click(drawButton('Civ'))
 

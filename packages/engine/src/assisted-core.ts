@@ -308,7 +308,8 @@ export type AssistedActionDefinition = {
   readonly labelOf?: (record: AssistedActionRecord) => string
   /**
    * The rule allows it once and nothing grants another use (a government change, the
-   * invested coin), so a player cannot override `used` by confirming.
+   * invested coin, a social policy, a wonder), so a player cannot override `used` by
+   * confirming and the button is disabled instead.
    */
   readonly strictOnce?: boolean
   availability(state: GameState, playerId: string): AssistedAvailability

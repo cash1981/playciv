@@ -202,6 +202,12 @@ buttons and the culture marker. Assisted actions are added beside them.
 - Each card is used once per turn (`PlayerTurn.usedActions`). A second use asks
   first and, once confirmed (`confirmedRepeat`), is allowed because Great Persons
   and culture cards can grant another use. Only the `used` refusal is lifted.
+  Social policies and wonders are strict once (the human, 2026-10-24): their
+  `availableActions` entry says `repeatable: false`, the used button is disabled
+  instead of asking, and `confirmedRepeat` cannot lift the refusal. Government
+  changes and investments were already strict once and get the same disabled
+  treatment; the same flag is what the client reads, so it does not have to know
+  the rule by group.
 - A resource is paid by an unspent hut item of that name first, else a
   `resources/<name>` piece inside the player's own area, which goes back to stock.
   This holds for every resource kind.
@@ -462,25 +468,28 @@ Source: `web/src/views/AssistedActions.tsx`, `PlayableCards.tsx`, `SotPanel.tsx`
 ## Toasts (2026-10-23)
 
 Every action a player takes on the game page ends in a toast at the top of the
-screen: green when it went through, red when it failed. A success closes after about
-4 seconds and a failure after about 8 or with the close button; hovering holds it.
-The red box that sat in the page is gone (it stays only while the game has not
-loaded), so an error is seen wherever the player has scrolled to.
+screen: green when it went through, red when it failed. A success closes after 7
+seconds (the human found 4 too fast, 2026-10-24) and a failure after about 8 or
+with the close button; hovering holds it. The red box that sat in the page is
+gone (it stays only while the game has not loaded), so an error is seen wherever
+the player has scrolled to.
 
 The green text is the player's own words for what they did, from
 `GET /api/games/:gameId/confirmation?after=<revision>`: for the revisions after the
 one the page held that the player made themself, their private log text, else the
-public line; else "Done". Revisions by others never count, even when they wrote a
-private line for this player (a trade handing them an item), so a toast is never
-another player's action presented as theirs. The route reads by the caller's id and
-needs a sign-in, so another player's private text cannot be in the answer;
-`api.test.ts` pins both. It is a
-separate route on purpose: the history list names things as the public log does,
-even to its owner, and that stays so. Fetching the text can fail without failing the
-action: the toast then says "Done". Toasts are cleared when the player leaves the
-game or signs out, and an error from a poll or a replay is a red toast too. The two
-live regions (status for green, alert for red) stay mounted so screen readers
-announce what arrives in them.
+public line; else "Done". The viewer's own username in that text is shown as
+"you" (and `'s` as "your"), so the toast does not tell players who they are;
+another player's name is left alone. The server route still returns the raw line.
+Revisions by others never count, even when they wrote a private line for this
+player (a trade handing them an item), so a toast is never another player's
+action presented as theirs. The route reads by the caller's id and needs a
+sign-in, so another player's private text cannot be in the answer; `api.test.ts`
+pins both. It is a separate route on purpose: the history list names things as
+the public log does, even to its owner, and that stays so. Fetching the text can
+fail without failing the action: the toast then says "Done". Toasts are cleared
+when the player leaves the game or signs out, and an error from a poll or a
+replay is a red toast too. The two live regions (status for green, alert for red)
+stay mounted so screen readers announce what arrives in them.
 
 Source: `packages/web/src/lib/toasts.ts`, `confirmation.ts`, `views/ToastRegion.tsx`,
 `GameView.tsx` (`run`), `packages/server/src/routes/games.ts`.

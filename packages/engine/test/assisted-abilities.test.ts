@@ -149,7 +149,15 @@ describe.each([
     expect(me(used).stats.trade).toBe(5 + gain.trade)
     expect(used.log.at(-1)?.publicLog).toMatch(new RegExp(`^cash1981 used ${label}: gained `))
     expect(status(used, kind).status).toBe('used')
-    expect(reasonOf(act(used, kind, 'req-2'))).toContain('already been used this turn')
+    expect(toPlayerView(used, CASH1981).you?.availableActions.find((action) => action.action === kind)).toMatchObject({
+      status: 'used',
+      repeatable: false,
+    })
+    expect(reasonOf(act(used, kind, 'req-2'))).toContain('already been done this turn')
+    expect(unwrapErr(act(used, kind, 'req-2', true))).toMatchObject({
+      status: 'used',
+      reason: `${label} has already been done this turn.`,
+    })
   })
 
   it('takes the numbers off again on undo and frees the use', () => {
@@ -287,13 +295,16 @@ describe('Sydney Opera House', () => {
 describe('Panama Canal', () => {
   const owned = () => withWonder(sotTurn(), 'wonders/panamacanal')
 
-  it('adds a coin token to the wonder, counted as a coin', () => {
+  it('adds a coin token to the wonder, counted as a coin, and is once per turn', () => {
     const used = unwrap(act(owned(), 'sot:panamaCanal'))
     expect(wonderPiece(used, 'wonders/panamacanal').coinTokens).toBe(1)
     expect(coinSourcesOf(used, me(used)).panamaCanal).toBe(1)
     expect(used.log.at(-1)?.publicLog).toBe('cash1981 used Panama Canal: added a coin token to it (1 on it)')
-    const twice = unwrap(act(used, 'sot:panamaCanal', 'req-2', true))
-    expect(wonderPiece(twice, 'wonders/panamacanal').coinTokens).toBe(2)
+    expect(unwrapErr(act(used, 'sot:panamaCanal', 'req-2', true))).toMatchObject({
+      status: 'used',
+      reason: 'Panama Canal has already been done this turn.',
+    })
+    expect(wonderPiece(used, 'wonders/panamacanal').coinTokens).toBe(1)
   })
 
   it('takes the coin off on undo, and the board’s own undo leaves it to the vote', () => {

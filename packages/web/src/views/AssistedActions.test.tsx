@@ -37,6 +37,7 @@ const chivalry = (status: Action['status'], reason: string): Action => ({
   group: 'Resource abilities',
   status,
   reason,
+  repeatable: true,
 })
 
 const READY = chivalry('ready', 'Ready to use.')
@@ -390,7 +391,7 @@ describe('AssistedActionButton requests', () => {
         action="democracy"
         gameId="game-1"
         view={viewWith([
-          { action: 'democracy', label: 'Democracy', phase: 'CM', group: 'Coins', status: 'ready', reason: 'Spend 6 trade to add 1 coin to Democracy.' },
+          { action: 'democracy', label: 'Democracy', phase: 'CM', group: 'Coins', status: 'ready', reason: 'Spend 6 trade to add 1 coin to Democracy.', repeatable: true },
         ])}
         busy={false}
         readOnly={false}
@@ -566,6 +567,44 @@ describe('a card that was already used this turn', () => {
   })
 })
 
+describe('an action whose rule allows one use this turn', () => {
+  const strict = (action: 'expansionism' | 'sot:stonehenge', label: string, group: string): Action => ({
+    action,
+    label,
+    phase: 'SOT',
+    group,
+    status: 'used',
+    reason: `${label} has already been done this turn.`,
+    repeatable: false,
+  })
+
+  it.each([
+    ['a social policy', strict('expansionism', 'Expansionism', 'Social policies')],
+    ['a wonder', strict('sot:stonehenge', 'Stonehenge', 'Wonders')],
+  ] as const)('disables its used button for %s instead of asking to use it again', (_what, used) => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm')
+    render(
+      <PhaseActionsPanel
+        gameId="game-1"
+        view={viewWith([used])}
+        busy={false}
+        readOnly={false}
+        run={run}
+        initialPhase="SOT"
+      />,
+    )
+
+    const button = screen.getByRole('button', { name: `Use ${used.label}` }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(button.getAttribute('title')).toBe(used.reason)
+    expect(screen.getByText('Used')).toBeTruthy()
+    fireEvent.click(button)
+    expect(confirm).not.toHaveBeenCalled()
+    expect(perform).not.toHaveBeenCalled()
+  })
+})
+
 describe('the same action from two entry points', () => {
   it('shows the same state in the Your actions panel and in the Chivalry tech dialog', async () => {
     vi.spyOn(api, 'availableTechs').mockResolvedValue([])
@@ -656,6 +695,7 @@ const advance = (status: Action['status'], reason: string): Action => ({
   group: 'Culture track',
   status,
   reason,
+  repeatable: true,
 })
 
 type Reward = NonNullable<PlayerView['you']>['pendingRewards'][number]
@@ -1250,6 +1290,7 @@ describe('The actions of the open phase', () => {
       group: 'Social policies',
       status: 'ready',
       reason: 'Gain 2 trade.',
+      repeatable: false,
     }
     try {
       render(

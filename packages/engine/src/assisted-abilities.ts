@@ -182,7 +182,13 @@ type Opened = { readonly turn: PlayerTurn } | { readonly blocked: BlockedAvailab
 function openGate(state: GameState, player: Playerhand, base: AbilityBase, allowRepeat: boolean): Opened {
   const missing = base.block(state, player)
   if (missing !== undefined) return { blocked: missing }
-  const open = startOfTurnGate(state, player, { usageKey: base.usageKey, label: base.label, allowRepeat })
+  const open = startOfTurnGate(state, player, {
+    usageKey: base.usageKey,
+    label: base.label,
+    // A wonder's Start of Turn ability is once per turn and nothing grants another use.
+    strict: base.strictOnce === true || base.group === WONDERS,
+    allowRepeat,
+  })
   if ('blocked' in open) return { blocked: open.blocked }
   const extra = base.check?.(state, player)
   return extra === undefined ? open : { blocked: extra }
@@ -223,7 +229,8 @@ const shared = (spec: AbilityBase) =>
     phase: 'SOT' as const,
     group: spec.group,
     ...(spec.buttonText === undefined ? {} : { buttonText: spec.buttonText }),
-    ...(spec.strictOnce === true ? { strictOnce: true } : {}),
+    // A wonder's Start of Turn ability is once per turn and nothing grants another use.
+    ...(spec.strictOnce === true || spec.group === WONDERS ? { strictOnce: true } : {}),
   }) satisfies Partial<AssistedActionDefinition>
 
 /** The availability every ability shares; `reason` is what it says when ready, `warning` what to think twice about. */

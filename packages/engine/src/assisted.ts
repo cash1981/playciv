@@ -1737,6 +1737,7 @@ export function availableActionsFor(state: GameState, playerId: string): readonl
     group: definition.group,
     ...(definition.buttonText === undefined ? {} : { buttonText: definition.buttonText }),
     ...(definition.techName === null ? {} : { techName: definition.techName }),
+    repeatable: definition.strictOnce !== true,
     ...definition.availability(state, playerId),
   }))
 }

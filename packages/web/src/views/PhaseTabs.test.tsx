@@ -31,6 +31,7 @@ const chivalry: Action = {
   group: 'Resource abilities',
   status: 'ready',
   reason: 'Ready to use.',
+  repeatable: true,
 }
 const advance: Action = {
   action: 'cultureAdvance',
@@ -39,6 +40,7 @@ const advance: Action = {
   group: 'Culture track',
   status: 'ready',
   reason: 'Advance to space 1.',
+  repeatable: true,
 }
 
 type Phase = 'SOT' | 'TRADE' | 'CM' | 'MOVEMENT' | 'RESEARCH'
@@ -256,6 +258,7 @@ describe('the phase tabs', () => {
       group: 'Social policies',
       status: 'ready',
       reason: 'Gain 2 trade: 1 for each of your 2 cities and 1 for each of your 0 city-states.',
+      repeatable: false,
     }
     const startOfTurn = {
       government: { status: 'ready', reason: 'You may change government once in your Start of Turn.', current: 'Despotism', options: [], canEnterAnarchy: true },
@@ -393,6 +396,7 @@ describe('buttons with their own text', () => {
       group: 'Wonders',
       status: 'ready',
       reason: 'Draw two culture II cards. You keep both.',
+      repeatable: false,
     }
     renderPanel(viewIn('SOT', [cristo]))
     expect(screen.getByRole('button', { name: 'Cristo Redentor: draw two level II events' })).toBeTruthy()

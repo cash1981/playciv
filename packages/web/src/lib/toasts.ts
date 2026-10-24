@@ -19,7 +19,7 @@ export interface Toast {
 }
 
 /** How long a toast stays, when nothing is holding it. */
-export const TOAST_MS: Readonly<Record<ToastKind, number>> = { ok: 4000, error: 8000 }
+export const TOAST_MS: Readonly<Record<ToastKind, number>> = { ok: 7000, error: 8000 }
 
 /** At most this many at once; the oldest goes first, so a burst cannot cover the page. */
 export const MAX_TOASTS = 4

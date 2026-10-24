@@ -24,6 +24,15 @@ describe('ToastRegion', () => {
     expect(screen.queryByText('You drew Pottery')).toBeNull()
   })
 
+  it('keeps a success for seven seconds', () => {
+    render(<ToastRegion />)
+    act(() => void showToast('ok', 'You drew Pottery'))
+    act(() => vi.advanceTimersByTime(6_999))
+    expect(screen.queryByText('You drew Pottery')).not.toBeNull()
+    act(() => vi.advanceTimersByTime(1))
+    expect(screen.queryByText('You drew Pottery')).toBeNull()
+  })
+
   it('shows a failure as an alert that stays longer, and can be closed', () => {
     render(<ToastRegion />)
     act(() => void showToast('error', 'Failed to fetch'))

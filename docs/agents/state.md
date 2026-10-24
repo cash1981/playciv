@@ -38,8 +38,10 @@ old test counts and past deployment reports do not establish present health.
   phase, each with a "Possible actions" box (Advance culture scrolls to Your hand afterwards),
   cards play from the tabs and the hand as log lines, and Start of Turn has buttons for
   policies, governments, investing, founding cities from scouts, scout squares, and wonder,
-  Great Person, tech, hut and relic abilities. Brief `tasks/assisted-sot.md`; see "Phase tabs
-  and Start of Turn" in decisions for what the human settled and what is still a judgement.
+  Great Person, tech, hut and relic abilities. A used policy or wonder is disabled (strict
+  once per turn, no confirmation); a used Great Person or culture card still asks before a
+  confirmed repeat. Briefs `tasks/assisted-sot.md` and `tasks/assisted-polish.md`; see "Phase
+  tabs and Start of Turn" and "Toasts" in decisions.
 
 - The action panel shows only ready or used actions for the open phase; button reasons
   are behind `?`, playable card names link to the card in the hand and tech actions to

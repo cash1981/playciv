@@ -174,14 +174,22 @@ export interface StatGainSpec {
 
 /**
  * An ability that only adds trade and culture. Ready in the player's Start of Turn
- * while its card or government is in play, once per turn (a player may confirm a repeat
- * when a card grants one). Undoing it takes the same numbers off again.
+ * while its card or government is in play, once per turn. A government's gain may be
+ * repeated with the player's confirmation; a social policy or a wonder is strict once
+ * and its used button is disabled. Undoing it takes the same numbers off again.
  */
 export function statGainAction(spec: StatGainSpec): AssistedActionDefinition {
+  // A social policy or a wonder gives its Start of Turn ability once and nothing grants another use.
+  const onceOnly = spec.group === 'Social policies' || spec.group === 'Wonders'
   const gate = (state: GameState, player: Playerhand, allowRepeat: boolean): Gate | BlockedAvailability => {
     const missing = spec.block(state, player)
     if (missing !== undefined) return missing
-    return startOfTurnGate(state, player, { usageKey: spec.usageKey, label: spec.label, allowRepeat })
+    return startOfTurnGate(state, player, {
+      usageKey: spec.usageKey,
+      label: spec.label,
+      strict: onceOnly,
+      allowRepeat,
+    })
   }
   return {
     kind: spec.kind,
@@ -191,6 +199,7 @@ export function statGainAction(spec: StatGainSpec): AssistedActionDefinition {
     usageKey: spec.usageKey,
     phase: 'SOT',
     group: spec.group,
+    ...(onceOnly ? { strictOnce: true } : {}),
 
     availability(state, playerId) {
       const player = playerOf(state, playerId)
@@ -321,7 +330,7 @@ function rationalism(row: RationalismRow): AssistedActionDefinition {
   const gate = (state: GameState, player: Playerhand, allowRepeat: boolean): Gate | BlockedAvailability => {
     const missing = policyBlock(player, ['Rationalism'], 'Rationalism')
     if (missing !== undefined) return missing
-    const open = startOfTurnGate(state, player, { usageKey, label, allowRepeat })
+    const open = startOfTurnGate(state, player, { usageKey, label, strict: true, allowRepeat })
     if ('blocked' in open) return open
     if (player.stats.trade < row.cost) {
       return blocked(
@@ -339,6 +348,7 @@ function rationalism(row: RationalismRow): AssistedActionDefinition {
     usageKey,
     phase: 'SOT',
     group: 'Social policies',
+    strictOnce: true,
 
     availability(state, playerId) {
       const player = playerOf(state, playerId)
@@ -422,7 +432,12 @@ function planPatronage(
 ): { readonly plan: PatronagePlan } | { readonly blocked: BlockedAvailability } {
   const missing = policyBlock(player, ['Patronage'], 'Patronage')
   if (missing !== undefined) return { blocked: missing }
-  const open = startOfTurnGate(state, player, { usageKey: 'policy:Patronage', label: 'Patronage', allowRepeat })
+  const open = startOfTurnGate(state, player, {
+    usageKey: 'policy:Patronage',
+    label: 'Patronage',
+    strict: true,
+    allowRepeat,
+  })
   if ('blocked' in open) return open
   const marker = cultureMarkerOf(state, player)
   if (marker === undefined) return { blocked: blocked('unavailable', 'Your leader marker is not on the culture track.') }
@@ -460,6 +475,7 @@ const patronage: AssistedActionDefinition = {
   usageKey: 'policy:Patronage',
   phase: 'SOT',
   group: 'Social policies',
+  strictOnce: true,
 
   availability(state, playerId) {
     const player = playerOf(state, playerId)

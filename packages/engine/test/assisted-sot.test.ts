@@ -110,12 +110,32 @@ describe('Expansionism', () => {
     expect(status(state, 'expansionism').reason).toContain('Gain 1 trade')
   })
 
-  it('is once per turn, and a confirmed repeat is the player’s override', () => {
+  it('is once per turn, and a confirmed repeat is refused', () => {
     const state = unwrap(act(sotTurn({ policies: ['Expansionsim'] }), 'expansionism', 'req-1'))
     expect(status(state, 'expansionism').status).toBe('used')
-    expect(reasonOf(act(state, 'expansionism', 'req-2'))).toContain('has already been used this turn')
-    const again = unwrap(act(state, 'expansionism', 'req-2', undefined, { confirmedRepeat: true }))
-    expect(again.log.at(-1)?.publicLog).toContain('(used again, confirmed by the player)')
+    expect(toPlayerView(state, CASH1981).you?.availableActions.find((action) => action.action === 'expansionism')).toMatchObject({
+      status: 'used',
+      repeatable: false,
+    })
+    expect(reasonOf(act(state, 'expansionism', 'req-2'))).toContain('has already been done this turn')
+    expect(unwrapErr(act(state, 'expansionism', 'req-2', undefined, { confirmedRepeat: true }))).toMatchObject({
+      status: 'used',
+      reason: 'Expansionism has already been done this turn.',
+    })
+    expect(me(state).playerTurns[0]?.usedActions).toEqual(['policy:Expansionism'])
+  })
+
+  it('a policy with a choice to make is also strict once', () => {
+    const state = unwrap(act(sotTurn({ policies: ['Patronage'], step: 9, culture: 4 }), 'patronage', 'req-1'))
+    expect(status(state, 'patronage').status).toBe('used')
+    expect(toPlayerView(state, CASH1981).you?.availableActions.find((action) => action.action === 'patronage')).toMatchObject({
+      status: 'used',
+      repeatable: false,
+    })
+    expect(unwrapErr(act(state, 'patronage', 'req-2', undefined, { confirmedRepeat: true }))).toMatchObject({
+      status: 'used',
+      reason: 'Patronage has already been done this turn.',
+    })
   })
 
   it('takes the trade off again when undone by the vote, and frees the use', () => {
