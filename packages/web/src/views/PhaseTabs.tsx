@@ -82,9 +82,6 @@ export function notYourTurnQuestion(view: PlayerView): string | null {
   return `It is not your turn. ${focus.username} is up. Do it anyway?`
 }
 
-/** The buttons that only look around: the `?` hints. Everything else in a tab acts. */
-const isLookingAround = (button: Element): boolean => button.classList.contains('help-button')
-
 interface Props {
   readonly gameId: string
   readonly view: PlayerView
@@ -163,6 +160,14 @@ export function PhaseActionsPanel({
     waiting > 0
       ? `Your actions (${waiting} ${waiting === 1 ? 'choice' : 'choices'} waiting)`
       : 'Your actions'
+
+  // Every request a tab sends goes through here, so only a press that changes the game asks; navigation,
+  // Cancel and the `?` hints send nothing. A no sends nothing. End turn sits outside the tabs and never asks.
+  const askOutOfTurn: Run = (action) => {
+    const question = notYourTurnQuestion(view)
+    if (question !== null && !window.confirm(question)) return Promise.resolve()
+    return run(action)
+  }
 
   const select = (phase: TurnPhase, focus: boolean): void => {
     setSelected(phase)
@@ -245,17 +250,6 @@ export function PhaseActionsPanel({
           role="tabpanel"
           aria-labelledby={tabId(selected)}
           className="phase-tab-panel"
-          onClickCapture={(event) => {
-            // End turn sits outside the tab and never asks. An action pressed out of turn asks first;
-            // a no stops the press before its own handler.
-            const button = event.target instanceof Element ? event.target.closest('button') : null
-            if (button === null || isLookingAround(button) || button.disabled) return
-            const question = notYourTurnQuestion(view)
-            if (question !== null && !window.confirm(question)) {
-              event.preventDefault()
-              event.stopPropagation()
-            }
-          }}
         >
           <p className="phase-guide">{PHASE_GUIDE[selected]}</p>
           <p className="phase-status muted">{phaseStatusText(selected, current)}</p>
