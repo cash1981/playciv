@@ -47,7 +47,9 @@ vi.mock('./OpponentHandPanel.js', () => ({ OpponentHandPanel: () => <section><h2
 vi.mock('./RevealedPanel.js', () => ({ RevealedPanel: () => <section><h2>Revealed</h2></section> }))
 vi.mock('./SocialPolicyPanel.js', () => ({ SocialPolicyPanel: () => <section><h2>Social policy</h2></section> }))
 vi.mock('./StatusPanel.js', () => ({ StatusPanel: () => <section><h2>Player status</h2></section> }))
-vi.mock('./TechPanel.js', () => ({ TechPanel: () => <section><h2>Techs</h2></section> }))
+vi.mock('./TechPanel.js', () => ({ TechPanel: ({ standalone }: { standalone?: boolean }) => (
+    <section aria-label="Techs">{standalone === true && <h2>Techs</h2>}</section>
+  ) }))
 vi.mock('./WondersPanel.js', () => ({ WondersPanel: () => <section><h2>Wonders</h2></section> }))
 
 afterEach(() => {
@@ -288,7 +290,7 @@ const pageOrder = (container: HTMLElement): string[] =>
 
 describe('primary game panel order', () => {
   // Changed on purpose (#260): Your actions sat above the board for a while, and now sits right under it, before Your hand.
-  it('runs the board, Your actions, Your cards, Draw, the tech tree, chat, the rest, then the log and the revealed feed', async () => {
+  it('runs the board, Your actions, Your cards, Draw, chat, the rest, then the log and the revealed feed', async () => {
     const view = orderView({
       you: {
         playerId: 'p1',
@@ -305,7 +307,6 @@ describe('primary game panel order', () => {
       'Your actions',
       'Your hand (0)',
       'Draw',
-      'Techs',
       'Chat and orders',
       "Other players' hands",
       'Battle',
@@ -315,6 +316,27 @@ describe('primary game panel order', () => {
       'Log',
       'Revealed',
     ])
+  })
+
+  it('keeps the Tech panel in the Research tab for a player, and on its own for a spectator', async () => {
+    await renderOrder(orderView({
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        items: [],
+        pendingRewards: [],
+        availableActions: [{ action: 'cultureAdvance', label: 'Culture', status: 'ready', reason: 'Ready' }],
+      },
+    }))
+    // Only the Research tab holds it, and that tab is not open by default.
+    expect(screen.queryByRole('region', { name: 'Techs' })).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: /^Research/ }))
+    expect(screen.getAllByRole('region', { name: 'Techs' })).toHaveLength(1)
+
+    cleanup()
+    await renderOrder(orderView(), null)
+    // A spectator has no Your actions, so the Tech content stays in the page with its heading.
+    expect(screen.getByRole('heading', { name: 'Techs' })).toBeTruthy()
   })
 
   it('puts the viewer’s own cities in Your actions and has no panel for the opponents’ cities', async () => {
@@ -335,7 +357,6 @@ describe('primary game panel order', () => {
       'Your actions',
       'Your hand (0)',
       'Draw',
-      'Techs',
       'Chat and orders',
       "Other players' hands",
       'Battle',
@@ -394,7 +415,16 @@ describe('primary game panel order', () => {
   })
 
   it('has Your cards directly under the board, and no Your actions panel when there is nothing to show', async () => {
-    const { container } = await renderOrder(orderView())
+    const { container } = await renderOrder(orderView({
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        items: [],
+        pendingRewards: [],
+        availableActions: [],
+        cities: [],
+      },
+    }))
     const board = screen.getByTestId('board')
     const panelStack = container.querySelector('.panel-stack')
     const hand = screen.getByRole('heading', { name: 'Your hand (0)' }).closest('section')
@@ -402,6 +432,7 @@ describe('primary game panel order', () => {
     expect(board.nextElementSibling).toBe(panelStack)
     expect(panelStack?.children[0]).toBe(hand)
     expect(screen.queryByRole('heading', { name: 'Your actions' })).toBeNull()
+    expect(screen.getAllByRole('heading', { name: 'Techs' })).toHaveLength(1)
   })
 
   it('leaves the chat panel out for a spectator without an account, and keeps the shortcuts', async () => {

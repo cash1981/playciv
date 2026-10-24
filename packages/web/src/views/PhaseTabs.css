@@ -51,3 +51,15 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+
+/* The Tech content has no collapsible panel of its own. Keep the scroll target
+   away from the viewport edge, as the other panels do, and separate it from the
+   cards above in the Research tab. */
+.tech-panel {
+  scroll-margin-top: 0.5rem;
+}
+
+.phase-tab-panel .tech-panel {
+  margin-top: 1rem;
+  min-width: 0;
+}

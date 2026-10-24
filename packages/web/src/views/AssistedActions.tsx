@@ -159,7 +159,7 @@ function cardLinkOf(
   view: PlayerView,
 ): { readonly where: string; readonly go: () => void } | undefined {
   if (candidate.techName !== undefined) {
-    return { where: 'the tech panel', go: () => goToPanel('techs', true) }
+    return { where: 'the tech panel', go: () => goToPanel('techs') }
   }
   if (candidate.group === 'Social policies') {
     return { where: 'the social policy panel', go: () => goToPanel('social-policy', true) }

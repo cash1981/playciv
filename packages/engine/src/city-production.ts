@@ -14,6 +14,7 @@
  */
 
 import { buildingDataOf } from './building-data.js'
+import { greatPersonProductionOf, greatPersonTradeOf } from './great-person-data.js'
 import { cityFootprintsOf, blockadedGreatPersonTypes, isOwnWonderBlockaded, mapCellOf } from './blockade.js'
 import type { Cell } from './blockade.js'
 import { columnLabel, isMapCell, mapTop, squareOf } from './board.js'
@@ -21,7 +22,8 @@ import type { Board, BoardPiece } from './board.js'
 import { coinSourcesOf, totalCoins } from './coins.js'
 import { figuresOnMap, scoutDestinationsOf } from './sot.js'
 import type { GameState, Playerhand } from './state.js'
-import { terrainAt } from './terrain.js'
+import { disasterAt, terrainAt } from './terrain.js'
+import { squareIconsOfCell } from './tile-icons.js'
 import type { Terrain } from './terrain.js'
 
 /** One square of a city's outskirts that gives something, is unknown, or explains a replaced icon. */
@@ -48,6 +50,28 @@ export interface CityModifier {
   readonly note: string | null
 }
 
+/** One square of a city's outskirts that gives trade. */
+export interface TradeSquare {
+  readonly square: string
+  /** A building's label, or "map icon" for the trade icon printed on the square. */
+  readonly source: string
+  /** Trade counted for the square. 0 when it is blockaded. */
+  readonly amount: number
+  readonly blockaded: boolean
+}
+
+/**
+ * The trade around one city: the trade icons in its outskirts, with a building
+ * replacing the icons of its square. What the Trade phase collects is this summed
+ * over the cities; it is an estimate, and `notes` names what it leaves out.
+ */
+export interface CityTrade {
+  readonly outskirts: number
+  readonly detail: readonly TradeSquare[]
+  /** What the estimate does not count, in plain sentences. Never empty. */
+  readonly notes: readonly string[]
+}
+
 export interface CityProduction {
   readonly pieceId: string
   /** For example "Capital D5" or "Metropolis F8". */
@@ -71,6 +95,8 @@ export interface CityProduction {
   readonly effective: number
   /** What the estimate does not count, in plain sentences. Never empty. */
   readonly notes: readonly string[]
+  /** The trade in the city's outskirts, counted the same way as the production. */
+  readonly trade: CityTrade
 }
 
 const TERRAIN_PRODUCTION: Readonly<Record<Terrain, number>> = {
@@ -86,6 +112,19 @@ export const BUILDING_PROGRAM_ASSET_ID = 'markers/Building Program'
 const CHICHEN_ITZA_ASSET_ID = 'wonders/chichenitza'
 const GREAT_LIGHTHOUSE_ASSET_ID = 'wonders/greatlighthouse'
 
+/**
+ * The trade printed on each disaster token, read by eye from the token images. A token turns
+ * its square into its own terrain and covers what the tile printed there, so the square
+ * gives this and not the tile's icon: the Drought (desert) and Water tokens show one trade
+ * icon, the Forest and Grassland tokens none.
+ */
+const DISASTER_TRADE: Readonly<Record<string, number>> = {
+  'disasters/drought': 1,
+  'disasters/forest': 0,
+  'disasters/grassland': 0,
+  'disasters/water': 1,
+}
+
 const MAX_INFRASTRUCTURE = 3
 const DESPOTISM_BONUS = 1
 const CHICHEN_ITZA_BONUS = 3
@@ -95,9 +134,23 @@ const COINS_PER_MILITARY_SCIENCE_POINT = 3
 const sameCell = (a: Cell, b: Cell): boolean => a.column === b.column && a.row === b.row
 
 /**
+ * The Great Person marker that stands for a square, when everything on it is a marker whose icons are
+ * in the data (the one with most production, should old data hold two). `undefined` with a wonder on it,
+ * a marker that is not one of the six, or nothing.
+ */
+function knownGreatPerson(here: readonly BoardPiece[]): BoardPiece | undefined {
+  const persons = here.filter((other) => other.category === 'greatperson')
+  if (persons.length === 0 || persons.length !== here.length) return undefined
+  if (persons.some((person) => greatPersonProductionOf(person.assetId) === undefined)) return undefined
+  return persons.reduce((top, candidate) =>
+    (greatPersonProductionOf(candidate.assetId) ?? 0) > (greatPersonProductionOf(top.assetId) ?? 0) ? candidate : top,
+  )
+}
+
+/**
  * What a square gives a city that a scout sends it: the production of the building that
- * stands there (a building replaces every icon of its square), nothing for a wonder or a
- * great person (their icons are not in the data), otherwise the terrain's. The same rules
+ * stands there (a building replaces every icon of its square), that of a Great Person marker,
+ * nothing for a wonder (its icons are not in the data), otherwise the terrain's. The same rules
  * as an outskirts square, without the blockade: a scout may gather a blockaded square.
  */
 function scoutSquareProduction(board: Board, cell: Cell): { readonly source: string; readonly amount: number } {
@@ -113,9 +166,20 @@ function scoutSquareProduction(board: Board, cell: Cell): { readonly source: str
     )
     return { source: best.label, amount: buildingDataOf(best.assetId)?.production ?? 0 }
   }
+  const marker = knownGreatPerson(here)
+  if (marker !== undefined) return { source: `${marker.label} (great person)`, amount: greatPersonProductionOf(marker.assetId) ?? 0 }
   if (here.length > 0) return { source: here.some((other) => other.category === 'wonder') ? 'wonder' : 'great person', amount: 0 }
   const terrain = terrainOfCell(board, cell)
   return terrain === null ? { source: 'unknown terrain', amount: 0 } : { source: terrain, amount: TERRAIN_PRODUCTION[terrain] }
+}
+
+/** What the map gives a square with nothing standing on it: a disaster token's trade, else the tile's printed icon. */
+function bareSquareTrade(board: Board, cell: Cell): { readonly source: string; readonly amount: number } {
+  const x = (cell.column + 0.5) * board.squareSize
+  const y = mapTop(board) + (cell.row + 0.5) * board.squareSize
+  const disaster = disasterAt(board, x, y)
+  if (disaster !== undefined) return { source: 'disaster token', amount: DISASTER_TRADE[disaster.assetId] ?? 0 }
+  return { source: 'map icon', amount: squareIconsOfCell(board, cell)?.trade ?? 0 }
 }
 
 const squareLabel = (cell: Cell): string => `${columnLabel(cell.column)}${cell.row + 1}`
@@ -251,7 +315,13 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
   return footprints.map((footprint): CityProduction => {
     const { piece, centers, outskirts } = footprint
     const detail: OutskirtsSquare[] = []
+    const tradeDetail: TradeSquare[] = []
+    const addTrade = (square: string, source: string, icons: number, blockaded: boolean): void => {
+      if (icons > 0) tradeDetail.push({ square, source, amount: blockaded ? 0 : icons, blockaded })
+    }
     const wonderOrPersonSquares: string[] = []
+    // Squares whose trade is not in the data: a wonder, or a great person that is not one of the six markers
+    const tradeUnknownSquares: string[] = []
     const unknownSquares: string[] = []
     const doubleBuildingSquares: string[] = []
     const sharedSquares: string[] = []
@@ -306,16 +376,29 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
           amount: blockaded ? 0 : (data?.production ?? 0),
           blockaded,
         })
+        // The building's trade, not the printed icon's: the most productive one stands for the square
+        addTrade(square, best.label, data?.trade ?? 0, blockaded)
         continue
       }
 
       if (hasWonderOrPerson) {
         // Only here: a square with a building was counted from the building's table row.
+        const marker = knownGreatPerson(here)
+        if (marker !== undefined) {
+          // Like a building, the marker gives the icons printed on it
+          const source = `${marker.label} (great person)`
+          detail.push({ square, source, amount: blockaded ? 0 : (greatPersonProductionOf(marker.assetId) ?? 0), blockaded })
+          addTrade(square, source, greatPersonTradeOf(marker.assetId) ?? 0, blockaded)
+          continue
+        }
         wonderOrPersonSquares.push(square)
-        const wonder = here.some((other) => other.category === 'wonder')
-        detail.push({ square, source: wonder ? 'wonder' : 'great person', amount: 0, blockaded })
+        tradeUnknownSquares.push(square)
+        detail.push({ square, source: here.some((other) => other.category === 'wonder') ? 'wonder' : 'great person', amount: 0, blockaded })
         continue
       }
+
+      const bare = bareSquareTrade(board, cell)
+      addTrade(square, bare.source, bare.amount, blockaded)
 
       const terrain = terrainOfCell(board, cell)
       if (terrain === null) {
@@ -372,6 +455,32 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
     }
     notes.push(...playerNotes)
 
+    const tradeNotes = [
+      'Not a complete count: only the trade icons printed on the map and in the building table. Trade from governments, techs, social policies, wonders, the abilities of Great Person cards and event cards is not counted, and neither is any limit on how much trade is collected.',
+    ]
+    if (tradeUnknownSquares.length > 0) {
+      tradeNotes.push(
+        `${listSquares(tradeUnknownSquares)} hold${tradeUnknownSquares.length === 1 ? 's' : ''} a wonder, whose trade is not in the data and counts as 0.`,
+      )
+    }
+    if (unknownBuilding) tradeNotes.push('A building in the outskirts is not in the building table and counts as 0.')
+    if (doubleBuildingSquares.length > 0) {
+      tradeNotes.push(
+        `${listSquares(doubleBuildingSquares)} ${doubleBuildingSquares.length === 1 ? 'holds' : 'hold'} more than one building. Only the one with most production counts.`,
+      )
+    }
+    if (sharedSquares.length > 0) {
+      tradeNotes.push(
+        sharedSquares.length === 1
+          ? `${listSquares(sharedSquares)} also belongs to another of your cities. It counts for each city.`
+          : `${listSquares(sharedSquares)} also belong to another of your cities. They count for each city.`,
+      )
+    }
+    if (assignments.length > 0) {
+      tradeNotes.push('A square a scout sends counts for no trade, here or in the city it is sent to.')
+    }
+    const tradeOutskirts = tradeDetail.reduce((total, entry) => total + entry.amount, 0)
+
     return {
       pieceId: piece.id,
       label: cityLabels.get(piece.id) ?? `${kindOf(piece)} ${squareOf(board, piece) ?? ''}`.trim(),
@@ -384,6 +493,7 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
       override,
       effective: override ?? estimate,
       notes,
+      trade: { outskirts: tradeOutskirts, detail: tradeDetail, notes: tradeNotes },
     }
   })
 }

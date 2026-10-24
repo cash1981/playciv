@@ -263,9 +263,9 @@ describe('PageShortcuts', () => {
       <CollapsiblePanel id="hand" title="Hand" defaultOpen>
         <p>cards</p>
       </CollapsiblePanel>
-      <CollapsiblePanel id="techs" title="Tech panel" defaultOpen>
+      <section id="techs" tabIndex={-1} aria-label="Techs">
         <p>techs</p>
-      </CollapsiblePanel>
+      </section>
     </>
   )
 
@@ -292,7 +292,6 @@ describe('PageShortcuts', () => {
   it.each([
     ['Actions', 'Your actions'],
     ['Your cards', 'Hand'],
-    ['Tech tree', 'Tech panel'],
   ])('%s scrolls its panel into view and focuses the panel heading button', (label, title) => {
     render(page())
     fireEvent.click(screen.getByRole('button', { name: label }))
@@ -309,9 +308,16 @@ describe('PageShortcuts', () => {
     expect(document.activeElement).toBe(board)
   })
 
+  it('Tech tree scrolls the Tech content into view and focuses it', () => {
+    render(page())
+    fireEvent.click(screen.getByRole('button', { name: 'Tech tree' }))
+    const techs = document.getElementById('techs')
+    expect(scrolled.map((entry) => entry.element)).toEqual([techs])
+    expect(document.activeElement).toBe(techs)
+  })
+
   it.each([
     ['Your cards', 'Hand', 'hand'],
-    ['Tech tree', 'Tech panel', 'techs'],
   ])('%s still lands on the heading of a collapsed panel, without opening it', (label, title, id) => {
     localStorage.setItem(`civ.panel.${id}`, 'false')
     render(page())

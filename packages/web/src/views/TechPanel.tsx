@@ -31,7 +31,6 @@ import type { GameRevisionView, PlayerView } from '../lib/api.js'
 import { AssistedActionButton } from './AssistedActions.js'
 import { TechTree } from './TechTree.js'
 import type { TechTreePlacement, TechTreeTech } from './TechTree.js'
-import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { ItemCard, itemImageUrl } from './ItemCard.js'
 import { PlayerTabs } from './PlayerTabs.js'
 import type { PlayerTab } from './PlayerTabs.js'
@@ -53,6 +52,8 @@ interface Props {
   /** Bumped by GameView after each action, so the lists are fetched again. */
   readonly reloadCount: number
   readonly historical?: GameRevisionView | null
+  /** Render the panel's own heading and page-level styling. The Research tab embeds only its content. */
+  readonly standalone?: boolean
 }
 
 /** One player's tab: their public pyramid, and the hidden techs on the owner's. */
@@ -82,6 +83,7 @@ export function TechPanel({
   view,
   reloadCount,
   historical = null,
+  standalone = false,
 }: Props): React.JSX.Element {
   const [available, setAvailable] = useState<readonly TechItem[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -169,7 +171,13 @@ export function TechPanel({
   const assistedAction = detailTech === null ? undefined : ASSISTED_TECH_ACTIONS.get(detailTech.name)
 
   return (
-    <CollapsiblePanel id="techs" title="Techs">
+    <section
+      id="techs"
+      className={standalone ? 'panel tech-panel' : 'tech-panel'}
+      aria-label={standalone ? undefined : 'Techs'}
+      tabIndex={-1}
+    >
+      {standalone && <h2>Techs</h2>}
       {loadError !== null && <div className="error">{loadError}</div>}
 
       <Tabs
@@ -371,6 +379,6 @@ export function TechPanel({
           )}
         </div>
       )}
-    </CollapsiblePanel>
+    </section>
   )
 }

@@ -578,6 +578,20 @@ describe('the squares', () => {
     expect(buildSquareRefusal(state, cash, id, market, { column: 3, row: 3 })).toBe('D4 is not in the outskirts of that city.')
     expect(buildSquareRefusal(state, cash, 'nope', market, { column: 1, row: 0 })).toBeUndefined()
   })
+
+  it('a disaster token decides the terrain of its square, not the tile under it', () => {
+    const market = { kind: 'building', assetId: MARKET } as const
+    const harbor = { kind: 'building', assetId: HARBOR } as const
+    const plain = ready(['Currency'], 99)
+    // C1 is water, C2 grassland: a drought token makes C1 desert, a water token makes C2 water
+    const state = put(put(plain, KARANDRAS1, 'disasters/drought', 2, 0), KARANDRAS1, 'disasters/water', 2, 1)
+    const cash = me(state)
+    const id = cityOf(state).id
+    expect(buildSquareRefusal(plain, me(plain), cityOf(plain).id, market, { column: 2, row: 0 })).toBe('C1 is water, and a Market needs any terrain except water.')
+    expect(buildSquareRefusal(state, cash, id, market, { column: 2, row: 0 })).toBeUndefined()
+    expect(buildSquareRefusal(state, cash, id, harbor, { column: 2, row: 1 })).toBeUndefined()
+    expect(buildSquareRefusal(state, cash, id, market, { column: 2, row: 1 })).toBe('C2 is water, and a Market needs any terrain except water.')
+  })
 })
 
 describe('both metropolis orientations and a walled city', () => {

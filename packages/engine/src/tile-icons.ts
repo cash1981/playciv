@@ -1,11 +1,11 @@
 /**
- * The resource and culture icons printed on the map squares.
+ * The resource, trade and culture icons printed on the map squares.
  *
  * Like the terrain, they live only in the tile images, so `data/tile-icons.json`
- * records them by hand: the four resources (wheat, silk, incense, iron) and the
- * culture icon of a natural wonder (base rules p. 7). Trade, production and coin
- * icons are not here: production comes from the terrain and the building table, and
- * the others are not read by anything yet.
+ * records them by hand: the four resources (wheat, silk, incense, iron), the trade
+ * icons and the culture icon of a natural wonder (base rules p. 7). Production and
+ * coin icons are not here: production comes from the terrain and the building table,
+ * and the coin icons are not read by anything yet.
  *
  * The squares are in the printed orientation and the lookup undoes the rotation, the
  * same as `terrain.ts`. A tile with no entry has not been read, so its squares are
@@ -27,6 +27,7 @@ interface IconEntry {
   readonly column: number
   readonly resource?: ResourceKind
   readonly culture?: number
+  readonly trade?: number
 }
 
 const TILE_ICONS = (tileIcons as unknown as { readonly tiles: Readonly<Record<string, readonly IconEntry[]>> }).tiles
@@ -37,6 +38,8 @@ export interface SquareIcons {
   readonly resource: ResourceKind | undefined
   /** Culture icons: 1 on a natural wonder, 0 elsewhere. */
   readonly culture: number
+  /** Trade icons printed on the square: 1 or 0 in the data read so far. */
+  readonly trade: number
 }
 
 /** The title-case name of a resource: "Wheat", as the log and the buttons say it. */
@@ -55,6 +58,7 @@ export function squareIconsAt(board: Board, x: number, y: number): SquareIcons |
   return {
     resource: here.find((entry) => entry.resource !== undefined)?.resource,
     culture: here.reduce((total, entry) => total + (entry.culture ?? 0), 0),
+    trade: here.reduce((total, entry) => total + (entry.trade ?? 0), 0),
   }
 }
 

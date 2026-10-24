@@ -72,6 +72,46 @@ const turned = (grid: Grid, rotation: Rotation): Grid => {
   return result
 }
 
+describe('a disaster token', () => {
+  const tileId = 'tiles/England'
+  const disaster = (assetId: string, x: number, y: number): BoardPiece => ({
+    ...tilePiece(assetId, x, y, 0, 'disaster'),
+    width: 83,
+    height: 81,
+  })
+
+  it('turns the square it lies on into its own terrain, whatever the tile printed', () => {
+    const [tileX, tileY] = originOfFirstSlot(createBoard())
+    const tile = tilePiece(tileId, tileX, tileY, 0, 'civtile')
+    const [x, y] = centreOf(tileX, tileY, 0, 0)
+    // England's top left is water; the token's centre is on that square
+    const place = (assetId: string): Board =>
+      boardWith(tile, disaster(assetId, x - 41, y - 40))
+    expect(terrainAt(boardWith(tile), x, y)).toBe('water')
+    expect(terrainAt(place('disasters/drought'), x, y)).toBe('desert')
+    expect(terrainAt(place('disasters/forest'), x, y)).toBe('forest')
+    expect(terrainAt(place('disasters/grassland'), x, y)).toBe('grassland')
+    expect(terrainAt(place('disasters/water'), x, y)).toBe('water')
+  })
+
+  it('leaves a square with no known tile terrain unknown', () => {
+    const [tileX, tileY] = originOfFirstSlot(createBoard())
+    const [x, y] = centreOf(tileX, tileY, 0, 0)
+    expect(terrainAt(boardWith(disaster('disasters/drought', x - 41, y - 40)), x, y)).toBeNull()
+    expect(terrainAt(boardWith(tilePiece('tiles/tileback', tileX, tileY, 0, 'civtile'), disaster('disasters/drought', x - 41, y - 40)), x, y)).toBeNull()
+  })
+
+  it('leaves the squares next to it alone, and the newest token on a square wins', () => {
+    const [tileX, tileY] = originOfFirstSlot(createBoard())
+    const tile = tilePiece(tileId, tileX, tileY, 0, 'civtile')
+    const [x, y] = centreOf(tileX, tileY, 0, 0)
+    const [nextX, nextY] = centreOf(tileX, tileY, 0, 1)
+    const both = boardWith(tile, disaster('disasters/drought', x - 41, y - 40), disaster('disasters/forest', x - 41, y - 40))
+    expect(terrainAt(both, x, y)).toBe('forest')
+    expect(terrainAt(both, nextX, nextY)).toBe('mountain')
+  })
+})
+
 describe('terrainAt', () => {
   // England has no symmetry under any quarter turn, so a wrong mapping shows up.
   const tileId = 'tiles/England'

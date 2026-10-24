@@ -12,6 +12,24 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### tech-in-research-tab
+
+- **Owner:** opencode (orchestrator/coder)
+- **Branch:** `feat/tech-in-research-tab`
+- **Brief:** `docs/agents/tasks/tech-in-research-tab.md`
+- **Status:** in review
+- **Claimed paths:**
+  - `packages/web/src/views/PhaseTabs.tsx`, `PhaseTabs.css`
+  - `packages/web/src/views/GameView.tsx`
+  - `packages/web/src/views/PhaseSummary.tsx`
+  - `packages/web/src/views/TechPanel.tsx` (only if a wrapper prop is needed)
+  - `packages/web/src/views/PhaseTabs.test.tsx`, `GameView.test.tsx`, `PhaseSummary.test.tsx`
+  - `docs/agents/tasks/tech-in-research-tab.md`, `docs/agents/decisions.md`, `docs/agents/state.md`
+- **Notes:** based on `origin/main`. The `assisted-play-contract` and
+  `action-panel-focus` claims above predate their merges into `main` (PR #271);
+  their branches have no commits ahead of `origin/main`, so this work does not
+  overlap a live writer.
+
 ### issue-265-trade-offers
 
 - **Owner:** Codex (GPT-5)
