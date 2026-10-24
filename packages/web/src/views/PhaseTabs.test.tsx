@@ -309,6 +309,13 @@ describe('the phase tabs', () => {
     expect((screen.getByRole('button', { name: 'Use Chivalry' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it('marks no phase done before the game has started', () => {
+    renderPanel({ ...viewIn('SOT'), activeTurn: null } as unknown as PlayerView)
+    expect(screen.getByText('Waiting for players')).toBeTruthy()
+    expect(screen.queryByText('(done)', { exact: false })).toBeNull()
+    expect(screen.getByText('The game has not started yet. The phases open when it does.')).toBeTruthy()
+  })
+
   it('names whose turn it is under the title', () => {
     renderPanel(viewIn('CM'))
     expect(screen.getByText('Turn 3 · Your turn — city management phase')).toBeTruthy()

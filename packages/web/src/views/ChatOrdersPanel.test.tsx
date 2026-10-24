@@ -1021,7 +1021,7 @@ describe('header helpers', () => {
   it('says so when everyone is done, and when nobody is up', () => {
     const finished = { playerId: 'p', username: 'Alice', turnNumber: 5, phase: 'SOT', startPlayer: 'Cy', waitingFor: [] }
     expect(turnTitle(makeView({ activeTurn: finished }).activeTurn)).toBe('Turn 5 · everyone is done')
-    expect(turnTitle(null)).toBe('Nobody is up')
+    expect(turnTitle(null)).toBe('Waiting for players')
   })
 
   it('lists every player with a colour dot and their phase, or Done', () => {
