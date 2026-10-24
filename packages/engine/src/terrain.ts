@@ -97,7 +97,32 @@ export function tileSquareAt(board: Board, x: number, y: number): TileSquare | n
 }
 
 /**
- * The terrain of the map square under board point (x, y). `null` when there is
+ * The terrain a disaster token turns the square it lies on into. The token carries the
+ * art of that terrain, so it is the terrain from then on, whatever the tile printed.
+ */
+export const DISASTER_TERRAIN: Readonly<Record<string, Terrain>> = {
+  'disasters/drought': 'desert',
+  'disasters/forest': 'forest',
+  'disasters/grassland': 'grassland',
+  'disasters/water': 'water',
+}
+
+/** The disaster token that covers the map square under board point (x, y), the topmost when there are several. */
+export function disasterAt(board: Board, x: number, y: number): BoardPiece | undefined {
+  const column = Math.floor(x / board.squareSize)
+  const row = Math.floor((y - mapTop(board)) / board.squareSize)
+  if (!isMapCell(board, column, row)) return undefined
+  return [...board.pieces].reverse().find(
+    (piece) =>
+      piece.category === 'disaster' &&
+      Math.floor((piece.x + piece.width / 2) / board.squareSize) === column &&
+      Math.floor((piece.y + piece.height / 2 - mapTop(board)) / board.squareSize) === row,
+  )
+}
+
+/**
+ * The terrain of the map square under board point (x, y). A disaster token on the
+ * square wins over the tile's own terrain. `null` when there is
  * no tile under it, the tile has no data (the tile back), or the point is not
  * on the map: like `squareOf`, a point in the hole or outside a stepped board,
  * where no slot covers it, has no terrain. When tiles overlap, the topmost one wins.
@@ -105,7 +130,11 @@ export function tileSquareAt(board: Board, x: number, y: number): TileSquare | n
 export function terrainAt(board: Board, x: number, y: number): Terrain | null {
   const square = tileSquareAt(board, x, y)
   if (square === null) return null
-  return TILE_TERRAIN[square.assetId]?.[square.row]?.[square.column] ?? null
+  const printed = TILE_TERRAIN[square.assetId]?.[square.row]?.[square.column]
+  // A token on a square whose tile has no data (a facedown tile) leaves it unknown, as a facedown tile is
+  if (printed === undefined) return null
+  const disaster = disasterAt(board, x, y)
+  return (disaster === undefined ? undefined : DISASTER_TERRAIN[disaster.assetId]) ?? printed
 }
 
 const NOT_WATER: readonly Terrain[] = ['grassland', 'forest', 'mountain', 'desert']

@@ -10,11 +10,13 @@
 
 import { useRef, useState } from 'react'
 
+import { tradeCeilingOf } from '@civ/engine'
 import type { TurnPhase } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import type { Run } from './GameView.js'
+import { HelpHint } from './HelpHint.js'
 import { StatCell } from './StatusPanel.js'
 import './TradeOffers.css'
 
@@ -42,20 +44,69 @@ interface Props {
   readonly run: Run
 }
 
-/** A small box for the trade around the viewer's cities; it is the Status panel's Trade number. */
+/**
+ * A small box for the trade around the viewer's cities; it is the Status panel's Trade number.
+ * Under it, the trade the cities should give this phase, as an estimate the player may add.
+ */
 export function TradeCollected({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element | null {
   const you = view.you
   if (you === null) return null
+  const estimate = you.cities.reduce((total, city) => total + city.trade.outskirts, 0)
+  const current = you.stats.trade
+  // The trade track ends at the ceiling, so the sum stops there. A balance already above it
+  // (typed in before the ceiling was enforced) is never lowered.
+  const ceiling = tradeCeilingOf(you.civilization?.name)
+  const after = Math.max(current, Math.min(ceiling, current + estimate))
+  const addLabel = `Add ${estimate} to your trade (${current} becomes ${after})`
+  const notes = [...new Set(you.cities.flatMap((city) => city.trade.notes))]
   return (
-    <label className="trade-collected">
-      <span>Trade around your cities</span>
-      <StatCell
-        label="Trade around your cities"
-        value={you.stats.trade}
-        disabled={busy || readOnly}
-        onCommit={(value) => void run(() => api.setPlayerStat(gameId, you.playerId, 'trade', value))}
-      />
-    </label>
+    <div className="trade-box">
+      <label className="trade-collected">
+        <span>Trade around your cities</span>
+        <StatCell
+          label="Trade around your cities"
+          value={current}
+          max={ceiling}
+          disabled={busy || readOnly}
+          onCommit={(value) => void run(() => api.setPlayerStat(gameId, you.playerId, 'trade', value))}
+        />
+      </label>
+      <div className="trade-estimate">
+        <span>
+          Estimate for this phase: <strong>{estimate}</strong>
+        </span>
+        <HelpHint label="Trade estimate">
+          {you.cities.length === 0 ? (
+            <p>You have no cities on the map, so there is nothing to count.</p>
+          ) : (
+            <ul aria-label="Trade per city">
+              {you.cities.map((city) => (
+                <li key={city.pieceId}>
+                  {`${city.label}: ${city.trade.outskirts}`}
+                  {city.trade.detail.length > 0 &&
+                    ` (${city.trade.detail.map((entry) => `${entry.square} ${entry.amount}${entry.blockaded ? ', blockaded' : ''}`).join(', ')})`}
+                </li>
+              ))}
+            </ul>
+          )}
+          <ul aria-label="Trade estimate notes">
+            {notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </HelpHint>
+        <button
+          type="button"
+          className="small"
+          disabled={busy || readOnly || estimate === 0 || after === current}
+          aria-label={addLabel}
+          title={addLabel}
+          onClick={() => void run(() => api.setPlayerStat(gameId, you.playerId, 'trade', after))}
+        >
+          Add {estimate}
+        </button>
+      </div>
+    </div>
   )
 }
 

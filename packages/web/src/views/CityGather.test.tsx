@@ -31,6 +31,7 @@ const city: CityProduction = {
   override: null,
   effective: 4,
   notes: [],
+  trade: { outskirts: 0, detail: [], notes: [] },
 }
 
 const DEVOTE: CityActionOptions['devoteToTheArts'] = {

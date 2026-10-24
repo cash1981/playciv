@@ -35,6 +35,7 @@ function city(overrides: Partial<CityProduction> = {}): CityProduction {
     override: null,
     effective: 9,
     notes: ['Not a complete count: the map data does not hold every icon.', 'E6 is unknown and counts as 0.'],
+    trade: { outskirts: 0, detail: [], notes: [] },
     ...overrides,
   }
 }

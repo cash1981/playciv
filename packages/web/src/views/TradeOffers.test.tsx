@@ -55,7 +55,7 @@ interface ViewOptions {
 function makeView(options: ViewOptions = {}): PlayerView {
   return {
     rev: 17,
-    you: options.you === undefined ? seat('Alice', 1) : options.you,
+    you: options.you === undefined ? seat('Alice', 1, { cities: [] }) : options.you,
     opponents: options.opponents ?? [seat('Bob', 2, { color: 'Blue' })],
     tradeOffers: options.tradeOffers ?? [],
   } as unknown as PlayerView
@@ -138,6 +138,96 @@ describe('trade around your cities', () => {
   it('is read-only while replaying', () => {
     renderBox(makeView(), true)
     expect((screen.getByLabelText('Trade around your cities') as HTMLInputElement).disabled).toBe(true)
+  })
+
+  describe('the estimate', () => {
+    const city = (pieceId: string, label: string, outskirts: number, squares: readonly [string, number][] = []) => ({
+      pieceId,
+      label,
+      trade: {
+        outskirts,
+        detail: squares.map(([square, amount]) => ({ square, source: 'map icon', amount, blockaded: false })),
+        notes: ['Not a complete count: only the printed icons.'],
+      },
+    })
+    const withCities = () =>
+      makeView({
+        you: seat('Alice', 1, { cities: [city('a', 'Capital B2', 3, [['A1', 1], ['A2', 1], ['A3', 1]]), city('b', 'City F6', 2)] }),
+      })
+
+    it('sums the trade around every city', () => {
+      renderBox(withCities())
+      expect(screen.getByText('Estimate for this phase:').textContent).toContain('5')
+    })
+
+    it('adds the estimate to the trade the player has, with the sum as its title', () => {
+      renderBox(withCities())
+      const add = screen.getByRole('button', { name: 'Add 5 to your trade (5 becomes 10)' })
+      expect(add.getAttribute('title')).toBe('Add 5 to your trade (5 becomes 10)')
+      fireEvent.click(add)
+      expect(setPlayerStat).toHaveBeenCalledWith('game', 'id-Alice', 'trade', 10)
+    })
+
+    it('has nothing to add without a city, and explains it behind the ?', () => {
+      renderBox(makeView())
+      expect((screen.getByRole('button', { name: /^Add 0 to your trade/ }) as HTMLButtonElement).disabled).toBe(true)
+      fireEvent.click(screen.getByRole('button', { name: 'Help: Trade estimate' }))
+      expect(screen.getByText(/no cities on the map/)).toBeTruthy()
+    })
+
+    it('lists each city and its squares, and the notes once, behind the ?', () => {
+      renderBox(withCities())
+      fireEvent.click(screen.getByRole('button', { name: 'Help: Trade estimate' }))
+      expect(screen.getByText('Capital B2: 3 (A1 1, A2 1, A3 1)')).toBeTruthy()
+      expect(screen.getByText('City F6: 2')).toBeTruthy()
+      expect(screen.getAllByText('Not a complete count: only the printed icons.')).toHaveLength(1)
+    })
+
+    it('stops at the end of the trade track', () => {
+      renderBox(makeView({ you: seat('Alice', 1, { stats: { trade: 25 }, cities: [city('a', 'Capital B2', 5)] }) }))
+      const add = screen.getByRole('button', { name: 'Add 5 to your trade (25 becomes 27)' })
+      fireEvent.click(add)
+      expect(setPlayerStat).toHaveBeenCalledWith('game', 'id-Alice', 'trade', 27)
+    })
+
+    it('never lowers a balance that is already above the end of the track', () => {
+      renderBox(makeView({ you: seat('Alice', 1, { stats: { trade: 30 }, cities: [city('a', 'Capital B2', 5)] }) }))
+      const add = screen.getByRole('button', { name: 'Add 5 to your trade (30 becomes 30)' }) as HTMLButtonElement
+      expect(add.disabled).toBe(true)
+      fireEvent.click(add)
+      expect(setPlayerStat).not.toHaveBeenCalled()
+    })
+
+    it('does not take a trade number above 27 typed into the box', () => {
+      renderBox(withCities())
+      const box = screen.getByLabelText('Trade around your cities') as HTMLInputElement
+      fireEvent.change(box, { target: { value: '28' } })
+      fireEvent.blur(box)
+      expect(setPlayerStat).not.toHaveBeenCalled()
+      expect(box.value).toBe('5')
+      fireEvent.change(box, { target: { value: '27' } })
+      fireEvent.blur(box)
+      expect(setPlayerStat).toHaveBeenCalledWith('game', 'id-Alice', 'trade', 27)
+    })
+
+    it('stops at 25 for the Japanese', () => {
+      renderBox(
+        makeView({
+          you: seat('Alice', 1, { civilization: { name: 'Japanese' }, stats: { trade: 22 }, cities: [city('a', 'Capital B2', 5)] }),
+        }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Add 5 to your trade (22 becomes 25)' }))
+      expect(setPlayerStat).toHaveBeenCalledWith('game', 'id-Alice', 'trade', 25)
+      const box = screen.getByLabelText('Trade around your cities') as HTMLInputElement
+      fireEvent.change(box, { target: { value: '26' } })
+      fireEvent.blur(box)
+      expect(setPlayerStat).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not add while replaying', () => {
+      renderBox(withCities(), true)
+      expect((screen.getByRole('button', { name: /^Add 5 to your trade/ }) as HTMLButtonElement).disabled).toBe(true)
+    })
   })
 })
 

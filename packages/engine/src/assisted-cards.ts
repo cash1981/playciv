@@ -13,6 +13,7 @@
  * `card-timing.ts`). The list is own view only, because it names cards in the hand.
  */
 
+import { tradeCeilingOf } from './limits.js'
 import { placeStartMarker } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
 import { drawCandidates, shuffleSheetTwice } from './assisted-culture.js'
@@ -125,9 +126,6 @@ export function playableCardsOf(state: GameState, player: Playerhand): readonly 
 const joinNames = (names: readonly string[]): string =>
   names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`
 
-/** The trade track ends at 27. */
-const TRADE_CEILING = 27
-
 type PlayCardEffect = Extract<AssistedEffect, { readonly kind: 'playCard' }>
 
 interface Automated {
@@ -155,7 +153,7 @@ function automate(state: GameState, player: Playerhand, name: string, at: string
     })
   switch (name) {
     case 'Marco Polo': {
-      const trade = Math.max(0, Math.min(TRADE_CEILING, player.stats.trade + 27) - player.stats.trade)
+      const trade = Math.max(0, Math.min(tradeCeilingOf(player.civilization?.name), player.stats.trade + 27) - player.stats.trade)
       return gained(trade, 0, `, gaining ${trade} trade`)
     }
     case 'St. Francis of Assisi': {

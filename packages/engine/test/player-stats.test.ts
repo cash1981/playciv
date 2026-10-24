@@ -14,6 +14,7 @@ import { placePiece } from '../src/actions/board.js'
 import { draw } from '../src/actions/draw.js'
 import { chooseTech, revealItem, revealTech, setCoinSource, setPlayerStat } from '../src/actions/player.js'
 import { EMPTY_COIN_SOURCES } from '../src/coins.js'
+import { tradeCeilingOf } from '../src/limits.js'
 import { createGame } from '../src/create-game.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
@@ -208,6 +209,39 @@ describe('setPlayerStat', () => {
       expect(error).toEqual({ kind: 'INVALID_STAT_VALUE', value })
     },
   )
+
+  describe('the trade ceiling', () => {
+    const setTrade = (value: number) =>
+      setPlayerStat(firstCivGame(), { editorPlayerId: CASH1981, targetPlayerId: CASH1981, stat: 'trade', value })
+
+    it('takes 27, the end of the trade track, and refuses anything above it', () => {
+      expect(unwrap(setTrade(27)).players.find((p) => p.playerId === CASH1981)?.stats.trade).toBe(27)
+      expect(unwrapErr(setTrade(28))).toEqual({ kind: 'TRADE_ABOVE_CEILING', value: 28, ceiling: 27 })
+    })
+
+    it('ends at 25 for the Japanese, the one exception', () => {
+      const japanese = {
+        ...firstCivGame(),
+        players: firstCivGame().players.map((p) =>
+          p.playerId === CASH1981 ? { ...p, civilization: { kind: 'civ', name: 'Japanese' } as never } : p,
+        ),
+      }
+      const set = (value: number) =>
+        setPlayerStat(japanese, { editorPlayerId: CASH1981, targetPlayerId: CASH1981, stat: 'trade', value })
+      expect(unwrap(set(25)).players.find((p) => p.playerId === CASH1981)?.stats.trade).toBe(25)
+      expect(unwrapErr(set(26))).toEqual({ kind: 'TRADE_ABOVE_CEILING', value: 26, ceiling: 25 })
+      // the editor's own civilization does not matter, only the player whose trade it is
+      expect(tradeCeilingOf('Greeks')).toBe(27)
+      expect(tradeCeilingOf(null)).toBe(27)
+    })
+
+    it('leaves the other stats without a ceiling', () => {
+      const state = unwrap(
+        setPlayerStat(firstCivGame(), { editorPlayerId: CASH1981, targetPlayerId: CASH1981, stat: 'culture', value: 40 }),
+      )
+      expect(state.players.find((p) => p.playerId === CASH1981)?.stats.culture).toBe(40)
+    })
+  })
 
   it('accepts zero, the lowest valid value', () => {
     const state = unwrap(

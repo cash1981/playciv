@@ -513,7 +513,41 @@ The Trade tab also has a small "Trade around your cities" box. It is the same
 number as Trade in the Status panel (`stats.trade`) and writes it with the same
 call, so Status stays the master and an edit on either side shows on both.
 
-Source: `packages/engine/src/trade-offers.ts`, `state.ts`, the trade-offer routes
+Under it the box shows "Estimate for this phase", the trade icons around all the
+viewer's cities, with an "Add N" button that adds the estimate to the number
+(it does not replace it, and stops at the end of the trade track, 27) and a `?` that lists each city's squares and the notes.
+The estimate comes from the same outskirts walk as the production (`CityProduction.trade`):
+the printed trade icons of each square (`data/tile-icons.json`, read by eye from the
+tile images and not checked against a printed list), a building's trade in place of
+the icons under it, a Great Person marker's trade (below), nothing for a blockaded square, a wonder
+square, or a square a scout sends. A square shared by two of the player's cities counts
+for each, as with production. It is never a complete count: governments, techs, social
+policies, wonders, the abilities of Great Person cards, event cards and any limit on collected trade are not
+counted, and the notes say so. No server change: the projection already carries `cities`.
+
+A Great Person marker gives the trade printed on it in place of the icon under it, like a
+building (Artist 1, Humanitarian 1, Scientist 2, the others none; read by eye from the marker
+images, `great-person-data.ts`, where the production is too). A wonder's trade is not in the data and counts as 0. A scout
+on a trade icon adds nothing (the earlier ruling stands that a square a scout sends gives its
+culture and resource icons to Devote and Harvest, not its trade or coin icons), and nothing is
+counted twice: a scout assigned to the city whose outskirts hold the square leaves the square's
+trade counted once, as its production is, and a scout assigned to another city takes the square
+from the owning city, which gets no trade from it. An enemy figure still blockades the square.
+
+The trade track ends at 27, and at 25 for the Japanese (the human; `tradeCeilingOf` in `limits.ts`, also used by Marco Polo): `setPlayerStat` refuses a larger trade
+(`TRADE_ABOVE_CEILING`), the number boxes revert one, and "Add N" stops at 27 and never lowers a
+balance that is already above it. Gains from other actions (Start of Turn, cards) are not trimmed
+to the ceiling yet.
+
+A disaster token decides the terrain of its square (human's ruling, after a Shipyard was offered
+on a square a Drought token had made desert): Drought is desert, Forest forest, Grassland
+grassland, Water water, for building terrain, production, the city founding check, where a figure may
+stand and the manual placement warning (`terrainAt` in `terrain.ts`; a token on a facedown tile leaves it unknown). The newest token on a square wins. The token also covers what the tile printed, so
+its square gives the trade on the token (Drought and Water one, Forest and Grassland none, read
+by eye from the token images) and not the tile's trade icon. A building or Great Person on the token
+gives its own.
+
+Source: `packages/engine/src/trade-offers.ts`, `city-production.ts`, `tile-icons.ts`, `state.ts`, the trade-offer routes
 in `packages/server/src/routes/games.ts`, `packages/web/src/views/TradeOffers.tsx`
 and the API tests.
 
@@ -530,8 +564,10 @@ typed by hand (`BoardPiece.productionOverride`, any player in the game may set i
   2 is also the base rules p. 26 example). A building replaces every icon on its
   square (base rules p. 16) and gives the production in `building-data.ts`, the
   human's table (also trade, culture, coin, cost and combat bonus, for the Build
-  part). Enemy figures blockade a square. A wonder or great person square counts 0
-  and is named in the notes, because their icons are not in the data.
+  part). Enemy figures blockade a square. A Great Person marker gives the production printed
+  on it in place of the terrain, like a building (Builder 2, Humanitarian 1, Scientist 1, the others
+  none; read by eye from the marker images, `great-person-data.ts`, and also for a square a scout
+  sends). A wonder square counts 0 and is named in the notes, because its icons are not in the data.
 - Added to every city: Infrastructure (`stats.infra`, at most 3), Despotism +1,
   Chichen Itza +3 (owned, not blockaded), Susan B. Anthony +2 (revealed, her type
   not fully blockaded), Military Science +1 per 3 coins (revealed). A Building
