@@ -960,15 +960,28 @@ export const api = {
     ),
   sendChat: (gameId: string, message: string) =>
     post<ChatMessageDto>(`/api/games/${gameId}/chat`, { message }),
-  sendTradeOffer: (gameId: string, recipientId: string, terms: string, requestId: string, rev: number) =>
-    post<PlayerView>(`/api/games/${gameId}/trade-offers`, { recipientId, terms, requestId, rev }),
+  /** To the players in `recipientIds`, or to everybody else with `open: true`. */
+  sendTradeOffer: (
+    gameId: string,
+    target: { readonly recipientIds: readonly string[] } | { readonly open: true },
+    terms: string,
+    requestId: string,
+    rev: number,
+  ) => post<PlayerView>(`/api/games/${gameId}/trade-offers`, { ...target, terms, requestId, rev }),
+  /** `choose` is the sender picking one of the players who accepted an offer that went to several. */
   transitionTradeOffer: (
     gameId: string,
     offerId: string,
-    action: 'accept' | 'decline' | 'withdraw',
+    action: 'accept' | 'decline' | 'withdraw' | 'choose',
     requestId: string,
     rev: number,
-  ) => post<PlayerView>(`/api/games/${gameId}/trade-offers/${offerId}/${action}`, { requestId, rev }),
+    chosenId?: string,
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/trade-offers/${offerId}/${action}`, {
+      requestId,
+      rev,
+      ...(chosenId === undefined ? {} : { chosenId }),
+    }),
   counterTradeOffer: (gameId: string, offerId: string, terms: string, requestId: string, rev: number) =>
     post<PlayerView>(`/api/games/${gameId}/trade-offers/${offerId}/counter`, { terms, requestId, rev }),
 }

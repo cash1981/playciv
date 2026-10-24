@@ -58,6 +58,9 @@ export interface PlayerTurn {
   readonly usedActions: readonly string[]
 }
 
+/** The once-per-turn marker `setPlayerStat` writes when the player's trade is set, from any panel. */
+export const TRADE_SET_KEY = 'trade:set'
+
 const emptyOrders = (): Record<TurnPhase, string> => ({
   SOT: '',
   TRADE: '',

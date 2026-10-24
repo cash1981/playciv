@@ -11,7 +11,7 @@ import type { Board, BoardHistoryEntry, BoardPiece } from './board.js'
 import { createBoard, createBoardForPlayers } from './board.js'
 import { EMPTY_COIN_SOURCES } from './coins.js'
 import type { SocialPolicyItem } from './item.js'
-import type { GameState, Playerhand, PlayerStats } from './state.js'
+import type { GameState, Playerhand, PlayerStats, TradeOffer } from './state.js'
 import { DEFAULT_PLAYER_STATS } from './state.js'
 import { DEFAULT_GOVERNMENT } from './government.js'
 import type { PlayerTurn } from './turn.js'
@@ -305,8 +305,13 @@ export function migrateGameState(state: GameState): GameState {
     // rng stream is published through log and item ids.
     logSecret: older.logSecret ?? '',
     assistedActions: older.assistedActions ?? [],
-    tradeOffers: (older.tradeOffers ?? []).map((offer) => ({
+    // An offer saved before deals could go to several players has one `recipientId`
+    tradeOffers: (older.tradeOffers ?? []).map(({ recipientId, ...offer }: TradeOffer & { readonly recipientId?: string }) => ({
       ...offer,
+      recipientIds: offer.recipientIds ?? (recipientId === undefined ? [] : [recipientId]),
+      open: offer.open ?? false,
+      responses: offer.responses ?? [],
+      chosenId: offer.chosenId ?? (offer.status === 'accepted' && recipientId !== undefined ? recipientId : null),
       transitionRequests: offer.transitionRequests ?? [],
     })),
     log: older.log.map((entry) => ({ ...entry, createdAt: entry.createdAt ?? null })),

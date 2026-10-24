@@ -528,27 +528,51 @@ the offer list moved there from Chat & orders), but an offer is an explicit
 state record rather than ordinary chat text. Terms are free prose and are never
 parsed or executed: accepting records an agreement only, so players still use
 the existing legal trade-window controls to settle resources. The public view
-shows the two participants, terms, turn/phase context and lifecycle status; it
+shows the participants, terms, turn/phase context and lifecycle status; it
 does not expose request ids or any effect data. Only the intended sender or
-recipient may perform each transition, and revision checks plus request ids make
+recipients may perform each transition, and revision checks plus request ids make
 retries and competing writes deterministic. Pending offers expire when a later
 turn is observed; accepted offers are never expired.
 
-The Trade tab also has a small "Trade around your cities" box. It is the same
-number as Trade in the Status panel (`stats.trade`) and writes it with the same
-call, so Status stays the master and an edit on either side shows on both.
-
-Under it the box shows "Estimate for this phase", the trade icons around all the
-viewer's cities, with an "Add N" button that adds the estimate to the number
-(it does not replace it, and stops at the end of the trade track, 27) and a `?` that lists each city's squares and the notes.
-The estimate comes from the same outskirts walk as the production (`CityProduction.trade`):
-the printed trade icons of each square (`data/tile-icons.json`, read by eye from the
-tile images and not checked against a printed list), a building's trade in place of
+The Trade tab has one Trade number, the same as Trade in the Status panel (`stats.trade`), written with
+the same call, so Status stays the master and an edit on either side shows on both. It starts from a
+guess (`tradeEstimateOf` in `trade-estimate.ts`, projected on `you.tradeEstimate` to the player it is
+about and nobody else): the trade around the player's cities, plus the trade their Start of Turn
+abilities gave this turn (applied `statGain` records of the current turn, not undone), plus the coins
+they hold, because trade kept in the Research phase is kept as coins (the human's formula), held to
+the trade track. The box shows the guess, with "Not saved yet", until the player's trade has been
+set this turn, from this box or from the Status panel, on any device: `setPlayerStat` for `trade` writes
+the once-per-turn marker `trade:set` on the player's turn (`TRADE_SET_KEY`, projected as
+`tradeEstimate.set`). Leaving the field saves what it shows; a plain focus and leave over a number the
+game already holds and has marked as set sends nothing. A guess nobody touches is never saved: the
+box says "Not saved yet" and that is the only cue (open question for the human). Escape puts the guess back without saving. "This turn" is the game's current turn, as for every assisted action, so a player who is a turn ahead of the others loses the mark when the turn rolls over for everybody. A `?`
+lists the parts, each city and the notes. There is no "Add" button and no separate estimate line.
+The trade around the cities comes from the same outskirts walk as the production
+(`CityProduction.trade`): the printed trade icons of each square (`data/tile-icons.json`, read by eye
+from the tile images and not checked against a printed list), a building's trade in place of
 the icons under it, a Great Person marker's trade (below), nothing for a blockaded square, a wonder
 square, or a square a scout sends. A square shared by two of the player's cities counts
 for each, as with production. It is never a complete count: governments, techs, social
 policies, wonders, the abilities of Great Person cards, event cards and any limit on collected trade are not
-counted, and the notes say so. No server change: the projection already carries `cities`.
+counted, and the notes say so.
+
+**Deals.** An offer goes to one player, to a few of them, or to everybody else (an open deal); the
+sender picks the players with checkboxes. With one recipient it is a plain offer: accept, decline or
+counter. An open deal in a game of two has one recipient and is a plain offer. With several, each recipient answers for themselves: an acceptance only says "I would", the
+offer stays pending, and the sender chooses one of the players who accepted (`choose`, then the deal
+is made with that player, `chosenId`); it is declined when every recipient has declined, and a
+counteroffer from one recipient leaves it open for the others. A counteroffer is a new offer back to
+the sender and links to the one it answers (`parentOfferId`), so a back and forth is one thread. An
+offer belongs to the turn and phase it was made in and, as before, expires when the turn ends. Offers
+saved with one `recipientId` are read as a list of one (`migrateGameState`). Deals are public: every
+viewer, spectators included, gets all of them in `tradeOffers`. The Trade tab folds its "Trade offers"
+panel away (open by itself when the turn has a deal) and shows only the current turn's deals, with
+the buttons; the Trade deals tab in the chat (`TradeDealsPanel`) shows every deal read only, grouped into
+threads, with a ◀ ▶ pager over the turns. Writing and answering stay in the Trade tab.
+
+Source: `packages/engine/src/trade-offers.ts`, `trade-estimate.ts`, `city-production.ts`, `tile-icons.ts`, `state.ts`, the trade-offer routes
+in `packages/server/src/routes/games.ts`, `packages/web/src/views/TradeOffers.tsx`, `TradeDealsPanel.tsx`,
+`TradeDealThread.tsx`, `tradeDeals.ts` and the API tests.
 
 A Great Person marker gives the trade printed on it in place of the icon under it, like a
 building (Artist 1, Humanitarian 1, Scientist 2, the others none; read by eye from the marker

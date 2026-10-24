@@ -1,23 +1,26 @@
 /**
- * The Trade tab's own controls: the trade the viewer's cities collect, and trade offers.
+ * The Trade tab's own controls: the Trade box, and trade offers.
  *
- * The collected trade is the viewer's `stats.trade` from the Status panel, which stays the master:
- * the box reads it and writes it with the same call, so an edit on either side shows on both.
+ * The Trade box is the viewer's `stats.trade` from the Status panel, which stays the master: it is
+ * read and written with the same call, so an edit on either side shows on both. It starts from a
+ * guess at the trade the viewer should have (their cities, their Start of Turn and their coins), and
+ * keeps what the viewer types once they have set it for the turn.
  *
- * An offer is a note in plain language. Accepting one records that both players agreed; it moves
- * nothing, so the players settle it with the existing controls.
+ * An offer is a note in plain language, to one player, a few of them or everybody (an open deal).
+ * Accepting records that the players agreed; it moves nothing, so they settle it with the existing
+ * controls. The tab shows the deals of the current turn; the Trade deals panel in the chat has them all.
  */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-import { tradeCeilingOf } from '@civ/engine'
-import type { TurnPhase } from '@civ/engine'
+import type { PublicTradeOffer } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
 import type { Run } from './GameView.js'
 import { HelpHint } from './HelpHint.js'
-import { StatCell } from './StatusPanel.js'
+import { TradeDealThread } from './TradeDealThread.js'
+import { offersOfTurn, threadsOf, wentToSeveral } from './tradeDeals.js'
 import './TradeOffers.css'
 
 function newRequestId(): string {
@@ -25,15 +28,6 @@ function newRequestId(): string {
   return typeof random === 'function'
     ? random.call(globalThis.crypto)
     : `offer-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-}
-
-/** Short phase names for the tag on an offer. */
-const PHASE_SHORT: Readonly<Record<TurnPhase, string>> = {
-  SOT: 'SOT',
-  TRADE: 'Trade',
-  CM: 'CM',
-  MOVEMENT: 'Movement',
-  RESEARCH: 'Research',
 }
 
 interface Props {
@@ -45,40 +39,89 @@ interface Props {
 }
 
 /**
- * A small box for the trade around the viewer's cities; it is the Status panel's Trade number.
- * Under it, the trade the cities should give this phase, as an estimate the player may add.
+ * The Trade box: one number, the viewer's trade. Until the viewer's trade has been set this turn (from
+ * this box or from the Status panel, on any device: the game remembers it) it shows the guess, and says
+ * so. Leaving the field saves what it shows, as the Status panel's Trade does.
  */
 export function TradeCollected({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element | null {
   const you = view.you
+  const stored = you?.stats.trade ?? 0
+  const suggested = you?.tradeEstimate.total ?? 0
+  const set = you?.tradeEstimate.set ?? true
+  const shown = String(set ? stored : suggested)
+  const [draft, setDraft] = useState(shown)
+  const editing = useRef(false)
+  // Escape cancels: the blur that follows it must not save what the field goes back to
+  const cancelled = useRef(false)
+
+  // The number follows the game, except while the viewer is typing in it
+  useEffect(() => {
+    if (!editing.current) setDraft(shown)
+  }, [shown])
+
   if (you === null) return null
-  const estimate = you.cities.reduce((total, city) => total + city.trade.outskirts, 0)
-  const current = you.stats.trade
-  // The trade track ends at the ceiling, so the sum stops there. A balance already above it
-  // (typed in before the ceiling was enforced) is never lowered.
-  const ceiling = tradeCeilingOf(you.civilization?.name)
-  const after = Math.max(current, Math.min(ceiling, current + estimate))
-  const addLabel = `Add ${estimate} to your trade (${current} becomes ${after})`
-  const notes = [...new Set(you.cities.flatMap((city) => city.trade.notes))]
+  const estimate = you.tradeEstimate
+
+  const commit = (): void => {
+    editing.current = false
+    if (cancelled.current) {
+      cancelled.current = false
+      setDraft(shown)
+      return
+    }
+    const text = draft.trim()
+    const parsed = Number(text)
+    if (text === '' || !Number.isInteger(parsed) || parsed < 0 || parsed > estimate.ceiling) {
+      setDraft(shown)
+      return
+    }
+    // A number the game already holds still counts as setting it for the turn, so it is sent
+    if (parsed !== stored || !set) void run(() => api.setPlayerStat(gameId, you.playerId, 'trade', parsed))
+    else setDraft(String(parsed))
+  }
+
+  const unsaved = !set || draft.trim() !== String(stored)
   return (
     <div className="trade-box">
-      <label className="trade-collected">
-        <span>Trade around your cities</span>
-        <StatCell
-          label="Trade around your cities"
-          value={current}
-          max={ceiling}
+      <div className="trade-collected">
+        <label htmlFor="trade-input">Trade</label>
+        <input
+          id="trade-input"
+          className="stat-input"
+          type="text"
+          inputMode="numeric"
+          aria-label="Trade"
+          title="Your trade. It starts from a guess; leave the field to save the number."
+          value={draft}
           disabled={busy || readOnly}
-          onCommit={(value) => void run(() => api.setPlayerStat(gameId, you.playerId, 'trade', value))}
+          onChange={(event) => {
+            editing.current = true
+            setDraft(event.target.value)
+          }}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur()
+            if (event.key === 'Escape') {
+              editing.current = false
+              cancelled.current = true
+              setDraft(shown)
+              event.currentTarget.blur()
+            }
+          }}
         />
-      </label>
-      <div className="trade-estimate">
-        <span>
-          Estimate for this phase: <strong>{estimate}</strong>
-        </span>
-        <HelpHint label="Trade estimate">
-          {you.cities.length === 0 ? (
-            <p>You have no cities on the map, so there is nothing to count.</p>
-          ) : (
+        {unsaved && <span className="trade-unsaved muted">Not saved yet</span>}
+        <HelpHint label="How the trade is guessed">
+          <p>
+            The number is a guess, and you set the real one: it is saved when you leave the field. It is the same
+            number as Trade in the Status panel.
+          </p>
+          <ul aria-label="Trade guess">
+            <li>{`Trade around your cities: ${estimate.cities}`}</li>
+            <li>{`From your Start of Turn this turn: ${estimate.startOfTurn}`}</li>
+            <li>{`Coins you hold: ${estimate.coins} (trade kept in the Research phase is kept as coins)`}</li>
+            <li>{`Guess: ${estimate.total}, at most ${estimate.ceiling}`}</li>
+          </ul>
+          {you.cities.length > 0 && (
             <ul aria-label="Trade per city">
               {you.cities.map((city) => (
                 <li key={city.pieceId}>
@@ -89,22 +132,12 @@ export function TradeCollected({ gameId, view, busy, readOnly, run }: Props): Re
               ))}
             </ul>
           )}
-          <ul aria-label="Trade estimate notes">
-            {notes.map((note) => (
+          <ul aria-label="Trade guess notes">
+            {[...new Set(you.cities.flatMap((city) => city.trade.notes))].map((note) => (
               <li key={note}>{note}</li>
             ))}
           </ul>
         </HelpHint>
-        <button
-          type="button"
-          className="small"
-          disabled={busy || readOnly || estimate === 0 || after === current}
-          aria-label={addLabel}
-          title={addLabel}
-          onClick={() => void run(() => api.setPlayerStat(gameId, you.playerId, 'trade', after))}
-        >
-          Add {estimate}
-        </button>
       </div>
     </div>
   )
@@ -112,7 +145,8 @@ export function TradeCollected({ gameId, view, busy, readOnly, run }: Props): Re
 
 export function TradeOffers({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element {
   const [offerTerms, setOfferTerms] = useState('')
-  const [offerRecipientId, setOfferRecipientId] = useState(view.opponents[0]?.playerId ?? '')
+  const [targets, setTargets] = useState<readonly string[]>([])
+  const [openDeal, setOpenDeal] = useState(false)
   const [counterOfferId, setCounterOfferId] = useState<string | null>(null)
   const [counterTerms, setCounterTerms] = useState('')
   // A lost response leaves the player not knowing whether the offer went through.
@@ -120,6 +154,24 @@ export function TradeOffers({ gameId, view, busy, readOnly, run }: Props): React
   // the first outcome instead of making a second offer. An id is dropped on success.
   const requestIds = useRef(new Map<string, string>())
   const canWrite = view.you !== null && !readOnly
+
+  // The tab shows the deals of this turn. It is folded away until there is one.
+  const turn = view.activeTurn?.turnNumber ?? 1
+  const thisTurn = offersOfTurn(view.tradeOffers ?? [], turn)
+  const threads = threadsOf(thisTurn)
+  const [expanded, setExpanded] = useState(thisTurn.length > 0)
+  const lastTurn = useRef(turn)
+  const hadDeals = useRef(thisTurn.length > 0)
+  useEffect(() => {
+    if (lastTurn.current !== turn) {
+      // A new turn starts folded again, until it has a deal
+      lastTurn.current = turn
+      setExpanded(thisTurn.length > 0)
+    } else if (thisTurn.length > 0 && !hadDeals.current) {
+      setExpanded(true)
+    }
+    hadDeals.current = thisTurn.length > 0
+  }, [turn, thisTurn.length])
 
   /** The request id for one exact request: the same key gives the same id until it succeeds. */
   const requestIdFor = (key: string): string => {
@@ -130,25 +182,31 @@ export function TradeOffers({ gameId, view, busy, readOnly, run }: Props): React
     return fresh
   }
 
+  const toggleTarget = (playerId: string): void =>
+    setTargets((current) => (current.includes(playerId) ? current.filter((id) => id !== playerId) : [...current, playerId]))
+
+  const hasRecipient = openDeal || targets.length > 0
+
   // The offer controls are only drawn for a viewer who may write; the handlers check
   // too, as a fallback.
   const sendOffer = (): void => {
     const terms = offerTerms.trim()
-    if (!canWrite || busy || terms === '' || offerRecipientId === '') return
-    const key = `offer\n${offerRecipientId}\n${terms}`
+    if (!canWrite || busy || terms === '' || !hasRecipient) return
+    const who = openDeal ? 'open' : [...targets].sort().join(',')
+    const key = `offer\n${who}\n${terms}`
     void run(async () => {
-      await api.sendTradeOffer(gameId, offerRecipientId, terms, requestIdFor(key), view.rev)
+      await api.sendTradeOffer(gameId, openDeal ? { open: true } : { recipientIds: targets }, terms, requestIdFor(key), view.rev)
       requestIds.current.delete(key)
       // What was typed while the request was out is a new draft and stays
       setOfferTerms((current) => (current.trim() === terms ? '' : current))
     })
   }
 
-  const transitionOffer = (offerId: string, action: 'accept' | 'decline' | 'withdraw'): void => {
+  const transitionOffer = (offerId: string, action: 'accept' | 'decline' | 'withdraw' | 'choose', chosenId?: string): void => {
     if (!canWrite || busy) return
-    const key = `${action}\n${offerId}`
+    const key = `${action}\n${offerId}\n${chosenId ?? ''}`
     void run(async () => {
-      await api.transitionTradeOffer(gameId, offerId, action, requestIdFor(key), view.rev)
+      await api.transitionTradeOffer(gameId, offerId, action, requestIdFor(key), view.rev, chosenId)
       requestIds.current.delete(key)
     })
   }
@@ -166,72 +224,123 @@ export function TradeOffers({ gameId, view, busy, readOnly, run }: Props): React
     })
   }
 
+  /** The buttons under one offer, for the viewer's part in it. */
+  const actionsFor = (offer: PublicTradeOffer): React.ReactNode => {
+    const you = view.you
+    if (you === null || !canWrite || offer.status !== 'pending') return null
+    const recipient = offer.recipientIds.includes(you.playerId)
+    const sender = you.playerId === offer.senderId
+    if (!recipient && !sender) return null
+    const several = wentToSeveral(offer)
+    const mine = offer.responses.find((response) => response.playerId === you.playerId)?.action
+    // A player who has left cannot be chosen
+    const inGame = new Set([...view.opponents.map((player) => player.playerId), you.playerId])
+    const accepters = offer.responses.filter((response) => response.action === 'accept' && inGame.has(response.playerId))
+    return (
+      <>
+        <div className="trade-offer-actions">
+          {recipient && (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                title={several ? 'Say you would. The sender chooses who the deal is made with.' : 'Agree to the terms'}
+                onClick={() => transitionOffer(offer.id, 'accept')}
+              >
+                Accept
+              </button>
+              <button type="button" disabled={busy} onClick={() => transitionOffer(offer.id, 'decline')}>Decline</button>
+              <button type="button" disabled={busy} onClick={() => setCounterOfferId(counterOfferId === offer.id ? null : offer.id)}>Counter</button>
+              {several && mine !== undefined && <span className="muted">{`You ${mine === 'accept' ? 'accepted' : 'declined'}`}</span>}
+            </>
+          )}
+          {sender && (
+            <>
+              {several && accepters.map((response) => (
+                <button
+                  key={response.playerId}
+                  type="button"
+                  disabled={busy}
+                  title={`Make the deal with ${response.username}`}
+                  onClick={() => transitionOffer(offer.id, 'choose', response.playerId)}
+                >
+                  {`Choose ${response.username}`}
+                </button>
+              ))}
+              <button type="button" disabled={busy} onClick={() => transitionOffer(offer.id, 'withdraw')}>Withdraw</button>
+            </>
+          )}
+        </div>
+        {counterOfferId === offer.id && (
+          <form className="trade-offer-counter" onSubmit={(event) => { event.preventDefault(); sendCounter(offer.id) }}>
+            <input
+              value={counterTerms}
+              onChange={(event) => setCounterTerms(event.target.value)}
+              aria-label="Counteroffer terms"
+              placeholder="Counteroffer terms"
+              maxLength={2000}
+            />
+            <button type="submit" disabled={busy || counterTerms.trim() === ''}>Send counteroffer</button>
+          </form>
+        )}
+      </>
+    )
+  }
+
   return (
     <div className="trade-offers">
-      {canWrite && (
-        <div className="trade-offer-composer">
-          <strong>Trade offer</strong>
-          <p className="trade-offer-note">
-            Accepting records that you agreed to the terms. It does not transfer resources; settle through the existing controls during the legal trade window.
-          </p>
-          <label htmlFor="trade-offer-recipient">Recipient</label>
-          <select
-            id="trade-offer-recipient"
-            value={offerRecipientId}
-            onChange={(event) => setOfferRecipientId(event.target.value)}
-          >
-            <option value="">Choose a player</option>
-            {view.opponents.map((player) => <option key={player.playerId} value={player.playerId}>{player.username}</option>)}
-          </select>
-          <label htmlFor="trade-offer-terms">Terms</label>
-          <textarea
-            id="trade-offer-terms"
-            value={offerTerms}
-            onChange={(event) => setOfferTerms(event.target.value)}
-            maxLength={2000}
-            placeholder="Write the terms in plain language"
-          />
-          <button type="button" disabled={busy || offerRecipientId === '' || offerTerms.trim() === ''} onClick={sendOffer}>Send offer</button>
-        </div>
-      )}
-      <ul className="trade-offer-list">
-        {(view.tradeOffers ?? []).map((offer) => {
-          const recipient = view.you?.playerId === offer.recipientId
-          const sender = view.you?.playerId === offer.senderId
-          return (
-            <li key={offer.id} className="trade-offer">
-              <div className="trade-offer-meta">
-                <strong>{`Offer · ${offer.senderUsername} → ${offer.recipientUsername}`}</strong>
-                <span className="tag turn">{`T${offer.turnNumber} · ${PHASE_SHORT[offer.phase]}`}</span>
-                <span className="tag">{offer.status}</span>
-              </div>
-              <div className="trade-offer-body">{offer.terms}</div>
-              {canWrite && offer.status === 'pending' && (recipient || sender) && (
-                <div className="trade-offer-actions">
-                  {recipient && <>
-                    <button type="button" disabled={busy} onClick={() => transitionOffer(offer.id, 'accept')}>Accept</button>
-                    <button type="button" disabled={busy} onClick={() => transitionOffer(offer.id, 'decline')}>Decline</button>
-                    <button type="button" disabled={busy} onClick={() => setCounterOfferId(counterOfferId === offer.id ? null : offer.id)}>Counter</button>
-                  </>}
-                  {sender && <button type="button" disabled={busy} onClick={() => transitionOffer(offer.id, 'withdraw')}>Withdraw</button>}
-                </div>
-              )}
-              {canWrite && counterOfferId === offer.id && (
-                <form className="trade-offer-counter" onSubmit={(event) => { event.preventDefault(); sendCounter(offer.id) }}>
+      <button
+        type="button"
+        className="trade-offers-toggle"
+        aria-expanded={expanded}
+        aria-controls="trade-offers-body"
+        onClick={() => setExpanded((current) => !current)}
+      >
+        {`${expanded ? '▾' : '▸'} Trade offers`}
+        <span className="muted">{` · Turn ${turn} · ${threads.length === 0 ? 'no deals' : `${threads.length} ${threads.length === 1 ? 'deal' : 'deals'}`}`}</span>
+      </button>
+      <div id="trade-offers-body" hidden={!expanded}>
+        {canWrite && (
+          <div className="trade-offer-composer">
+            <p className="trade-offer-note">
+              Accepting records that you agreed to the terms. It does not transfer resources; settle through the existing controls during the legal trade window.
+              Every deal is public and stays with the turn it was made in.
+            </p>
+            <fieldset className="trade-offer-recipients">
+              <legend>Send to</legend>
+              <label>
+                <input type="checkbox" checked={openDeal} onChange={(event) => setOpenDeal(event.target.checked)} />
+                Everyone (an open deal)
+              </label>
+              {view.opponents.map((player) => (
+                <label key={player.playerId}>
                   <input
-                    value={counterTerms}
-                    onChange={(event) => setCounterTerms(event.target.value)}
-                    aria-label="Counteroffer terms"
-                    placeholder="Counteroffer terms"
-                    maxLength={2000}
+                    type="checkbox"
+                    checked={openDeal || targets.includes(player.playerId)}
+                    disabled={openDeal}
+                    onChange={() => toggleTarget(player.playerId)}
                   />
-                  <button type="submit" disabled={busy || counterTerms.trim() === ''}>Send counteroffer</button>
-                </form>
-              )}
-            </li>
-          )
-        })}
-      </ul>
+                  {player.username}
+                </label>
+              ))}
+            </fieldset>
+            <label htmlFor="trade-offer-terms">Terms</label>
+            <textarea
+              id="trade-offer-terms"
+              value={offerTerms}
+              onChange={(event) => setOfferTerms(event.target.value)}
+              maxLength={2000}
+              placeholder="Write the terms in plain language"
+            />
+            <button type="button" disabled={busy || !hasRecipient || offerTerms.trim() === ''} onClick={sendOffer}>Send offer</button>
+          </div>
+        )}
+        {threads.length === 0 ? (
+          <p className="muted">No trade deals this turn. Earlier turns are in the Trade deals panel in the chat.</p>
+        ) : (
+          threads.map((thread) => <TradeDealThread key={thread.root.id} thread={thread} actions={actionsFor} />)
+        )}
+      </div>
     </div>
   )
 }
