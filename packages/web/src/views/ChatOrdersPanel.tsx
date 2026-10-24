@@ -176,7 +176,7 @@ export function firstOpenPhase(view: PlayerView, turnNumber: number): TurnPhase 
  * below the title.
  */
 export function turnTitle(activeTurn: ActiveTurnStatus | null, viewerUsername?: string): string {
-  if (activeTurn === null) return 'Nobody is up'
+  if (activeTurn === null) return 'Waiting for players'
   const turn = `Turn ${activeTurn.turnNumber}`
   const focus = focusPlayer(activeTurn)
   if (focus === null) return `${turn} · everyone is done`

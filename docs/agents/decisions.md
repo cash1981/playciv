@@ -415,6 +415,17 @@ played card on other players, growing a metropolis, Movement, Trade and Research
 beyond their tabs, and a guard for the owner's board Undo against the board changes a vote
 undo made itself (it can bring back a token that the vote removed; the record stays undone).
 
+### Turn warning in Your actions (2026-10-24)
+
+- "Your actions" repeats the header's turn line (`turnTitle`) under its title. A request sent from a phase
+  tab (a button, Invest, Send, Found a city, a build or trade confirm) asks "It is not your turn. X is up.
+  Do it anyway?" when the player the header names is not the viewer; a no sends nothing. The name comes from
+  `focusPlayer` (the player furthest behind), not the engine's turn holder, so the line and the warning agree.
+- The guard wraps the `run` the tabs receive, so only presses that send a request ask. Navigation, Cancel, the
+  `?` hints and End turn never ask (End turn ends the viewer's own phase, which a player ahead of the others
+  does legitimately). Each scout in Scouts and cities is its own card with its Send and Found a city controls.
+  Tests: `PhaseTabs.test.tsx`.
+
 ### Action panel focus (2026-10-23)
 
 The human wants "Your actions" to hold only what is current, without sentences after

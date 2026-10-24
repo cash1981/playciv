@@ -28,9 +28,11 @@ import type { BuildFlow } from './buildFlow.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { EndTurn } from './EndTurn.js'
 import type { Run } from './GameView.js'
+import { turnTitle } from './ChatOrdersPanel.js'
 import { goToPanel } from './PhaseSummary.js'
 import { PlayableCardList } from './PlayableCards.js'
 import { StartOfTurnChoices } from './SotPanel.js'
+import { focusPlayer } from './turnFocus.js'
 import { TechPanel } from './TechPanel.js'
 import { TradeCollected, TradeOffers } from './TradeOffers.js'
 import { YourCities } from './YourCities.js'
@@ -62,12 +64,23 @@ export function currentPhaseOf(view: PlayerView): TurnPhase | null {
 }
 
 /** One sentence under the tabs about the tab that is open. */
-export function phaseStatusText(selected: TurnPhase, current: TurnPhase | null): string {
+export function phaseStatusText(selected: TurnPhase, current: TurnPhase | null, started = true): string {
+  if (!started) return 'The game has not started yet. The phases open when it does.'
   if (current === null) return 'You have finished every phase of this turn.'
   const order = (phase: TurnPhase): number => TURN_PHASES.indexOf(phase)
   if (selected === current) return 'This is your current phase.'
   if (order(selected) < order(current)) return 'You have finished this phase.'
   return `Not yet: you are in ${TURN_PHASE_LABEL[current]}. This phase opens when you mark the earlier ones done.`
+}
+
+/**
+ * The question to ask before an action out of turn, or `null` when the viewer is the player the game
+ * header names (`turnTitle`, so the two always agree) or nobody is up.
+ */
+export function notYourTurnQuestion(view: PlayerView): string | null {
+  const focus = focusPlayer(view.activeTurn ?? null)
+  if (view.you === null || focus === null || focus.username === view.you.username) return null
+  return `It is not your turn. ${focus.username} is up. Do it anyway?`
 }
 
 interface Props {
@@ -98,6 +111,7 @@ export function PhaseActionsPanel({
   historical = null,
 }: Props): React.JSX.Element | null {
   const current = currentPhaseOf(view)
+  const started = view.activeTurn != null
   const [selected, setSelected] = useState<TurnPhase>(initialPhase ?? current ?? 'SOT')
   // The tab follows the viewer to their next phase, and stays where it is otherwise.
   const followed = useRef(current)
@@ -149,6 +163,14 @@ export function PhaseActionsPanel({
       ? `Your actions (${waiting} ${waiting === 1 ? 'choice' : 'choices'} waiting)`
       : 'Your actions'
 
+  // Every request a tab sends goes through here, so only a press that changes the game asks; navigation,
+  // Cancel and the `?` hints send nothing. A no sends nothing. End turn sits outside the tabs and never asks.
+  const askOutOfTurn: Run = (action) => {
+    const question = notYourTurnQuestion(view)
+    if (question !== null && !window.confirm(question)) return Promise.resolve()
+    return run(action)
+  }
+
   const select = (phase: TurnPhase, focus: boolean): void => {
     setSelected(phase)
     if (focus) document.getElementById(tabId(phase))?.focus()
@@ -186,6 +208,8 @@ export function PhaseActionsPanel({
           if (event.relatedTarget !== null) focusInPanel.current = false
         }}
       >
+        <p className="phase-turn-line">{turnTitle(view.activeTurn ?? null, view.you.username)}</p>
+
         <EndTurn gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />
 
         <PendingRewardSection
@@ -200,8 +224,10 @@ export function PhaseActionsPanel({
         <div className="phase-tabs" role="tablist" aria-label="Phases of the turn">
           {TURN_PHASES.map((phase) => {
             const isCurrent = phase === current
+            // Before the game starts nothing is done: the tabs carry no marks
             const done =
-              current === null || TURN_PHASES.indexOf(phase) < TURN_PHASES.indexOf(current)
+              started &&
+              (current === null || TURN_PHASES.indexOf(phase) < TURN_PHASES.indexOf(current))
             return (
               <button
                 key={phase}
@@ -230,14 +256,14 @@ export function PhaseActionsPanel({
           className="phase-tab-panel"
         >
           <p className="phase-guide">{PHASE_GUIDE[selected]}</p>
-          <p className="phase-status muted">{phaseStatusText(selected, current)}</p>
+          <p className="phase-status muted">{phaseStatusText(selected, current, started)}</p>
           <PhaseBody
             phase={selected}
             gameId={gameId}
             view={view}
             busy={busy}
             readOnly={readOnly}
-            run={run}
+            run={askOutOfTurn}
             build={build}
             reloadCount={reloadCount}
             historical={historical}
