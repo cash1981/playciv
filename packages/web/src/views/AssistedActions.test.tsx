@@ -1256,7 +1256,8 @@ describe('The actions of the open phase', () => {
     expect(possible.compareDocumentPosition(cities) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('links a tech-backed action name to the tech panel, opening it when it is collapsed', async () => {
+  it('links a tech-backed action name to the Tech panel in Research, opening it when it is collapsed', async () => {
+    vi.spyOn(api, 'availableTechs').mockResolvedValue([])
     localStorage.setItem('civ.panel.techs', 'false')
     const scrolled: Element[] = []
     const original = Element.prototype.scrollIntoView
@@ -1264,23 +1265,11 @@ describe('The actions of the open phase', () => {
       scrolled.push(this)
     }
     try {
-      render(
-        <>
-          <AssistedActionsPanel
-            gameId="game-1"
-            view={viewWith([{ ...READY, techName: 'Chivalry' }])}
-            busy={false}
-            readOnly={false}
-            run={run}
-          />
-          <CollapsiblePanel id="techs" title="Tech tree">
-            <p>The pyramid</p>
-          </CollapsiblePanel>
-        </>,
-      )
-      expect(document.getElementById('techs-content')?.hidden).toBe(true)
+      renderPanel(viewWith([{ ...READY, techName: 'Chivalry' }]))
+      expect(screen.getByRole('tab', { name: /^Research/ }).getAttribute('aria-selected')).toBe('false')
       fireEvent.click(screen.getByRole('button', { name: 'Show Chivalry in the tech panel' }))
-      expect(scrolled).toHaveLength(1)
+      expect(screen.getByRole('tab', { name: /^Research/ }).getAttribute('aria-selected')).toBe('true')
+      await waitFor(() => expect(scrolled.length).toBeGreaterThan(0))
       await waitFor(() => expect(document.getElementById('techs-content')?.hidden).toBe(false))
       expect(localStorage.getItem('civ.panel.techs')).toBe('true')
     } finally {

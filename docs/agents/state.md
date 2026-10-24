@@ -60,6 +60,10 @@ old test counts and past deployment reports do not establish present health.
   `tasks/assisted-build.md`, `tasks/assisted-units.md`, `tasks/assisted-city-actions.md` and `tasks/assisted-gather.md`;
   see "Assisted build" in decisions.
 
+- The Tech panel is in the Research tab of "Your actions", below that phase's playable
+  cards; a viewer without the actions panel still gets it on its own. The Tech tree
+  shortcut opens Research first. See "Tech in the Research tab" in decisions.
+
 - The game header names the player furthest behind as the one who is up and lists
   only the earliest open phase under "Waiting for"; the shortcuts are Board, Actions,
   Your cards and Tech tree; a city's arithmetic opens in a popup. Brief

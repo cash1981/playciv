@@ -288,7 +288,7 @@ const pageOrder = (container: HTMLElement): string[] =>
 
 describe('primary game panel order', () => {
   // Changed on purpose (#260): Your actions sat above the board for a while, and now sits right under it, before Your hand.
-  it('runs the board, Your actions, Your cards, Draw, the tech tree, chat, the rest, then the log and the revealed feed', async () => {
+  it('runs the board, Your actions, Your cards, Draw, chat, the rest, then the log and the revealed feed', async () => {
     const view = orderView({
       you: {
         playerId: 'p1',
@@ -305,7 +305,6 @@ describe('primary game panel order', () => {
       'Your actions',
       'Your hand (0)',
       'Draw',
-      'Techs',
       'Chat and orders',
       "Other players' hands",
       'Battle',
@@ -315,6 +314,27 @@ describe('primary game panel order', () => {
       'Log',
       'Revealed',
     ])
+  })
+
+  it('keeps the Tech panel in the Research tab for a player, and on its own for a spectator', async () => {
+    await renderOrder(orderView({
+      you: {
+        playerId: 'p1',
+        username: 'viewer',
+        items: [],
+        pendingRewards: [],
+        availableActions: [{ action: 'cultureAdvance', label: 'Culture', status: 'ready', reason: 'Ready' }],
+      },
+    }))
+    // Only the Research tab holds it, and that tab is not open by default.
+    expect(screen.queryByRole('heading', { name: 'Techs' })).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: /^Research/ }))
+    expect(screen.getAllByRole('heading', { name: 'Techs' })).toHaveLength(1)
+
+    cleanup()
+    await renderOrder(orderView(), null)
+    // A spectator has no Your actions, so the Tech panel stays in the page.
+    expect(screen.getAllByRole('heading', { name: 'Techs' })).toHaveLength(1)
   })
 
   it('puts the viewer’s own cities in Your actions and has no panel for the opponents’ cities', async () => {
@@ -335,7 +355,6 @@ describe('primary game panel order', () => {
       'Your actions',
       'Your hand (0)',
       'Draw',
-      'Techs',
       'Chat and orders',
       "Other players' hands",
       'Battle',

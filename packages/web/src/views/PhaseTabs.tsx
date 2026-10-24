@@ -10,6 +10,10 @@
  *
  * A choice that is waiting (the card to keep after a culture advance) is shown above
  * the tabs, so it cannot hide behind the tab that is not open.
+ *
+ * The Research tab also holds the Tech panel, below the cards that can be played in
+ * Research: that is where a tech is learned. A viewer without the actions panel
+ * (a spectator) gets the Tech panel on its own from `GameView`.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -18,7 +22,7 @@ import type { KeyboardEvent } from 'react'
 import { TURN_PHASES, TURN_PHASE_LABEL } from '@civ/engine'
 import type { TurnPhase } from '@civ/engine'
 
-import type { PlayerView } from '../lib/api.js'
+import type { GameRevisionView, PlayerView } from '../lib/api.js'
 import { AssistedActionGroups, PendingRewardSection, hasActionsPanel } from './AssistedActions.js'
 import type { BuildFlow } from './buildFlow.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
@@ -27,6 +31,7 @@ import type { Run } from './GameView.js'
 import { goToPanel } from './PhaseSummary.js'
 import { PlayableCardList } from './PlayableCards.js'
 import { StartOfTurnChoices } from './SotPanel.js'
+import { TechPanel } from './TechPanel.js'
 import { TradeCollected, TradeOffers } from './TradeOffers.js'
 import { YourCities } from './YourCities.js'
 import './PhaseTabs.css'
@@ -75,6 +80,10 @@ interface Props {
   readonly build?: BuildFlow | undefined
   /** The tab to open first, instead of the viewer's current phase. The tab then follows the viewer as usual. */
   readonly initialPhase?: TurnPhase | undefined
+  /** Bumped by GameView after each action, so the Research tab fetches the available techs again. */
+  readonly reloadCount?: number | undefined
+  /** A replayed revision: the Research tab shows its saved techs and no live fetch. */
+  readonly historical?: GameRevisionView | null | undefined
 }
 
 export function PhaseActionsPanel({
@@ -85,6 +94,8 @@ export function PhaseActionsPanel({
   run,
   build,
   initialPhase,
+  reloadCount = 0,
+  historical = null,
 }: Props): React.JSX.Element | null {
   const current = currentPhaseOf(view)
   const [selected, setSelected] = useState<TurnPhase>(initialPhase ?? current ?? 'SOT')
@@ -228,6 +239,8 @@ export function PhaseActionsPanel({
             readOnly={readOnly}
             run={run}
             build={build}
+            reloadCount={reloadCount}
+            historical={historical}
             onAdvanced={() => setToHand(true)}
           />
         </div>
@@ -239,7 +252,7 @@ export function PhaseActionsPanel({
 const tabId = (phase: TurnPhase): string => `phase-tab-${phase}`
 const panelId = (phase: TurnPhase): string => `phase-panel-${phase}`
 
-/** What one tab holds. Every phase lists its assisted actions; City Management also holds the city orders. */
+/** What one tab holds. Every phase lists its assisted actions; Research also holds the Tech panel and City Management the city orders. */
 function PhaseBody({
   phase,
   gameId,
@@ -248,6 +261,8 @@ function PhaseBody({
   readOnly,
   run,
   build,
+  reloadCount = 0,
+  historical = null,
   onAdvanced,
 }: Props & { readonly phase: TurnPhase; readonly onAdvanced: () => void }): React.JSX.Element {
   return (
@@ -274,6 +289,16 @@ function PhaseBody({
         readOnly={readOnly}
         run={run}
       />
+      {phase === 'RESEARCH' && (
+        <TechPanel
+          gameId={gameId}
+          busy={busy}
+          run={run}
+          view={view}
+          reloadCount={reloadCount}
+          historical={historical}
+        />
+      )}
       {phase === 'TRADE' && (
         <>
           <TradeCollected gameId={gameId} view={view} busy={busy} readOnly={readOnly} run={run} />

@@ -449,6 +449,29 @@ Source: `web/src/views/AssistedActions.tsx`, `PlayableCards.tsx`, `SotPanel.tsx`
 `HelpHint.tsx`, `PhaseSummary.tsx`, `GameView.tsx`, `ItemCard.tsx` and their tests;
 `engine/src/state.ts` (`AvailableAction.techName`) and `assisted.ts`.
 
+### Tech in the Research tab (2026-10-24)
+
+The human asked to move "hele innholdet i tech" into the Research tab of Your
+actions, below the cards that can be played in Research. Research is where a tech
+is learned, so the pyramid, the available-tech picker and the hidden-tech controls
+sit with that phase instead of in a separate panel lower on the page.
+
+- `PhaseTabs.tsx` renders the existing `TechPanel` in the Research tab after
+  `PlayableCardList`; the panel is not mounted in any other tab. `GameView` passes
+  its `reloadCount` and `historical` down so the picker still reloads after an
+  action and a replay still shows its saved techs.
+- A viewer without the actions panel (a spectator, or a player with nothing to act
+  on) still gets the panel on its own below "Your cards": the public tech pyramids
+  are information, not an action. A player with the actions panel has exactly one
+  Tech panel.
+- The Tech tree shortcut, the free-tech link in Start of Turn and a tech-backed
+  action name select the Research tab first (and open Your actions if it was
+  collapsed), then scroll to the Tech panel. A tech-specific link also opens the
+  Tech panel; the shortcut leaves its saved open/closed state alone.
+
+Source: `web/src/views/PhaseTabs.tsx`, `TechPanel.tsx`, `GameView.tsx`,
+`PhaseSummary.tsx` and their tests.
+
 ## Reopening a phase (2026-10-23)
 
 - Your actions has **Reopen**: it marks the viewer's latest ended phase of the

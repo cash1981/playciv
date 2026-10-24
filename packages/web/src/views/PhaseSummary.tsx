@@ -107,6 +107,11 @@ function findPanel(key: string): { readonly section: HTMLElement; readonly focus
  * behind a button that says it goes there. `open` asks for the same for a card
  * link, so the referenced card is visible. The click on the toggle is a manual
  * one, so the open state is remembered. Every other panel is left as it is.
+ *
+ * The Tech panel lives in the Research tab of Your actions. Going to `techs` opens
+ * Your actions if needed and selects the Research tab before the scroll, because
+ * the panel is not mounted in any other tab. `open` also opens the Tech panel
+ * itself, for a link that names a specific tech.
  */
 function prefersReducedMotion(): boolean {
   return (
@@ -115,17 +120,40 @@ function prefersReducedMotion(): boolean {
   )
 }
 
-export function goToPanel(key: string, open = false): void {
+function scrollToPanel(key: string, open: boolean): void {
   const panel = findPanel(key)
   if (panel === null) return
-  if ((open || key === 'actions') && panel.focus.getAttribute('aria-expanded') === 'false') {
-    panel.focus.click()
-  }
+  if (open && panel.focus.getAttribute('aria-expanded') === 'false') panel.focus.click()
   panel.section.scrollIntoView({
     behavior: prefersReducedMotion() ? 'auto' : 'smooth',
     block: 'start',
   })
   panel.focus.focus({ preventScroll: true })
+}
+
+export function goToPanel(key: string, open = false): void {
+  if (key === 'techs') {
+    // The Tech panel can only be shown inside Your actions, so open that first.
+    const actions = findPanel('actions')
+    if (actions !== null && actions.focus.getAttribute('aria-expanded') === 'false') {
+      actions.focus.click()
+    }
+    const research = document.getElementById('phase-tab-RESEARCH')
+    if (research !== null && research.getAttribute('aria-selected') !== 'true') {
+      // A click on the tab goes through the tabs' own state, so there is no second
+      // copy of the selected phase here. The panel mounts on the next render.
+      research.click()
+      window.setTimeout(() => scrollToPanel('techs', open), 0)
+      return
+    }
+  }
+  if (key === 'actions') {
+    const actions = findPanel('actions')
+    if (actions !== null && actions.focus.getAttribute('aria-expanded') === 'false') {
+      actions.focus.click()
+    }
+  }
+  scrollToPanel(key, open)
 }
 
 /** The DOM id of one card in the viewer's hand. */
