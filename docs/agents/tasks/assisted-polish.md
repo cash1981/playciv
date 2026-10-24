@@ -4,7 +4,15 @@
   branch the human asked for; same PR #271)
 - **Branch:** `feat/assisted-play-contract`
 - **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
-- **Status:** in review
+- **Status:** done
+
+## Review
+
+Independent read-only review approved on 2026-10-24. Accepted nits, not blockers:
+arena verbs (`places`, `kills`, `undoes`, `ends`) are not in the you-form map; a
+target whose username begins with the viewer's name plus a space (`Alice` vs
+`Alice Smith`) can be shortened by the `from`/`to` rewrite; and the New turn line
+`Turn N: <name> starts` is not rewritten (the toast is only shown to the actor).
 
 ## Goal
 
