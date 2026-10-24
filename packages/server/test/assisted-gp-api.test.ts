@@ -9,6 +9,7 @@ import type { App } from '../src/app.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
+  CARDS_WITH_OWN_BUTTON,
   GREAT_PERSON_CARD_TYPES,
   areaAt,
   cultureCellCenter,
@@ -132,10 +133,18 @@ async function gpTable(name: string, options: TableOptions = {}): Promise<Table>
       state = unwrap(placePiece(state, { playerId: starterId, assetId: marker, x: 100 + index * 100, y: mapTop(state.board) + 100 }))
     }
   }
-  // Known cards on top, so the test does not depend on the seeded shuffle
+  // Known cards on top, so the test does not depend on the seeded shuffle. Skip a
+  // card whose name is also a public Start of Turn button label (Lorenzo, Turing):
+  // the hidden-info check below must not mistake that public label for a leak.
   const used = new Set<string>()
   const top = (options.top ?? []).map((type) => {
-    const card = state?.items.find((item) => item.sheetName === 'GREAT_PERSON' && typeOf(item) === type && !used.has(item.id))
+    const card = state?.items.find(
+      (item) =>
+        item.sheetName === 'GREAT_PERSON' &&
+        typeOf(item) === type &&
+        !used.has(item.id) &&
+        !CARDS_WITH_OWN_BUTTON.has(itemName(item)),
+    )
     if (card === undefined) throw new Error(`no ${type} card`)
     used.add(card.id)
     return card
