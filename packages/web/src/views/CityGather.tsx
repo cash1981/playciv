@@ -68,6 +68,8 @@ function GatherButton({ status, reason, open, busy, label, ariaLabel, onToggle }
           type="button"
           className="small"
           aria-label={ariaLabel}
+          // The reason on hover, as for the other disabled buttons; ready, what the press does
+          title={ready ? ariaLabel : reason}
           aria-expanded={ready ? open : undefined}
           aria-describedby={ready ? undefined : reasonId}
           disabled={busy || !ready}

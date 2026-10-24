@@ -141,6 +141,9 @@ export function pressOnce(
   }).then(settle, settle)
 }
 
+/** A status that leaves the button on the page, disabled: it is waiting for something the player can do. */
+const isBlockedHere = (status: Status): boolean => status === 'needs-resource' || status === 'unavailable'
+
 /** Actions whose button does not read "Use <label>". */
 const BUTTON_TEXT: Readonly<Partial<Record<AssistedActionKind, string>>> = {
   cultureAdvance: 'Advance culture',
@@ -326,7 +329,11 @@ export function AssistedActionGroups({
 }): React.JSX.Element | null {
   const actions = (view.you?.availableActions ?? []).filter(
     (candidate) =>
-      (candidate.status === 'ready' || candidate.status === 'used') &&
+      (candidate.status === 'ready' ||
+        candidate.status === 'used' ||
+        // The culture advance stays on the list when it is blocked, so the player sees
+        // it and the reason behind its `?` instead of wondering where the button went.
+        (candidate.action === 'cultureAdvance' && isBlockedHere(candidate.status))) &&
       (candidate.phase === phase || candidate.phase === 'ANY'),
   )
   if (view.you === null || actions.length === 0) return null

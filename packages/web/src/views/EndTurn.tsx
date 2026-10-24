@@ -122,6 +122,7 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
         disabled={busy || readOnly}
         // Starts with the visible text (WCAG 2.5.3, Label in Name)
         aria-label={`Reopen ${TURN_PHASE_LABEL[reopen]}: mark as not done`}
+        title={`Reopen ${TURN_PHASE_LABEL[reopen]}: mark as not done`}
         onClick={() => {
           reopened.current = true
           void run(() => api.unmarkDone(gameId, reopen, state.turnNumber, view.rev))
@@ -157,6 +158,7 @@ export function EndTurn({ gameId, view, busy, readOnly, run }: Props): React.JSX
         disabled={busy || readOnly}
         // Starts with the visible text (WCAG 2.5.3, Label in Name)
         aria-label={`End turn: mark ${capitalized(label)} as done`}
+        title={`End turn: mark ${capitalized(label)} as done`}
         onClick={() => void run(() => api.markDone(gameId, state.phase, state.turnNumber))}
       >
         End turn

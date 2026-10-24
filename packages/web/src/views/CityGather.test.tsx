@@ -213,6 +213,7 @@ describe('Harvest', () => {
     const none = options({ harvest: { status: 'unavailable', reason: 'No resource icon in the outskirts of Capital B3, and none under a scout of yours.', choices: [], notes: [] } })
     renderPanel(viewOf([none]))
     expect(harvestButton().disabled).toBe(true)
+    expect(harvestButton().getAttribute('title')).toBe(none.harvest.reason)
     expect(screen.getByText('No resource icon in the outskirts of Capital B3, and none under a scout of yours.')).toBeTruthy()
   })
 

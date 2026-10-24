@@ -103,12 +103,13 @@ export function CityCard({
     <button
       ref={countLinkRef}
       type="button"
-      className="city-count-link"
+      className="help-button"
       aria-haspopup="dialog"
       aria-label={`${countLinkText}: ${city.label}`}
+      title={`${countLinkText}: ${city.label}`}
       onClick={() => setCountOpen(true)}
     >
-      {countLinkText}
+      ?
     </button>
   )
   return (

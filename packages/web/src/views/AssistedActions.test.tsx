@@ -754,12 +754,19 @@ describe('the Advance culture button', () => {
     'needs-resource',
     'wrong-phase',
     'unavailable',
-  ] as const)('leaves a %s advance out until it can be pressed', (status) => {
+  ] as const)('%s advance: shown disabled with its reason only when it is waiting for the player', (status) => {
     const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
     renderPanel(viewWith([advance(status, 'Not now.')]))
 
-    expect(screen.queryByRole('button', { name: 'Advance culture' })).toBeNull()
-    expect(screen.queryByText('Not now.')).toBeNull()
+    const button = screen.queryByRole('button', { name: 'Advance culture' })
+    if (status === 'needs-resource' || status === 'unavailable') {
+      // Left on the list so the player can see why it cannot be pressed
+      expect((button as HTMLButtonElement).disabled).toBe(true)
+      expect(button?.getAttribute('title')).toBe('Not now.')
+      expect(screen.getByRole('button', { name: /^Help: / })).toBeTruthy()
+    } else {
+      expect(button).toBeNull()
+    }
     expect(perform).not.toHaveBeenCalled()
   })
 
@@ -868,7 +875,10 @@ describe('the pending card choice', () => {
     renderPanel(viewWithRewards([reward()], [advance('unavailable', reason)]))
 
     expect(screen.queryByText(reason)).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Advance culture' })).toBeNull()
+    // Disabled, with the reason on hover and behind its `?`
+    const button = screen.getByRole('button', { name: 'Advance culture' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(button.getAttribute('title')).toBe(reason)
     expect(screen.getByRole('heading', { name: 'Choose a card to keep' })).toBeTruthy()
   })
 
