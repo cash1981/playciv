@@ -528,9 +528,16 @@ counted, and the notes say so. No server change: the projection already carries 
 A Great Person marker gives the trade printed on it in place of the icon under it, like a
 building (Artist 1, Humanitarian 1, Scientist 2, the others none; read by eye from the marker
 images, `great-person-data.ts`, where the production is too). A wonder's trade is not in the data and counts as 0. A scout
-on a trade icon is not counted: the earlier ruling stands that a square a scout sends gives its
-culture and resource icons to Devote and Harvest, not its trade or coin icons. An enemy figure
-still blockades the square.
+on a trade icon adds nothing (the earlier ruling stands that a square a scout sends gives its
+culture and resource icons to Devote and Harvest, not its trade or coin icons), and nothing is
+counted twice: a scout assigned to the city whose outskirts hold the square leaves the square's
+trade counted once, as its production is, and a scout assigned to another city takes the square
+from the owning city, which gets no trade from it. An enemy figure still blockades the square.
+
+The trade track ends at 27 (the human): `setPlayerStat` refuses a larger trade
+(`TRADE_ABOVE_CEILING`), the number boxes revert one, and "Add N" stops at 27 and never lowers a
+balance that is already above it. Gains from other actions (Start of Turn, cards) are not trimmed
+to the ceiling yet.
 
 A disaster token decides the terrain of its square (human's ruling, after a Shipyard was offered
 on a square a Drought token had made desert): Drought is desert, Forest forest, Grassland

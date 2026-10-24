@@ -405,6 +405,27 @@ describe('trade', () => {
     expect(tradeSquaresOf(only(state))).toContainEqual(['A1', 'Harbor', 2])
   })
 
+  describe('a scout standing on a trade icon', () => {
+    // A2 prints a trade icon and lies in the outskirts of a city on B2. A scout that was not sent goes to the capital.
+    const scoutOnA2 = (state: GameState): GameState => put(state, CASH1981, 'figures/redscout', 0, 1)
+
+    it('counts the square once when the scout goes to the city that owns it', () => {
+      const capital = put(withEngland(game()), CASH1981, 'cities/redcapital2', 1, 1)
+      expect(only(capital).trade.outskirts).toBe(3)
+      const city = only(scoutOnA2(capital))
+      expect(city.trade.outskirts).toBe(3)
+      expect(tradeSquaresOf(city).filter(([square]) => square === 'A2')).toEqual([['A2', 'map icon', 1]])
+    })
+
+    it('gives the owning city nothing when the scout goes to another city', () => {
+      // The capital is on a square with no known tile, so the scout goes there and not to B2.
+      const state = scoutOnA2(put(scene(), CASH1981, 'cities/redcapital2', 8, 8))
+      const owner = citiesOf(state).find((candidate) => candidate.label.startsWith('City'))
+      expect(owner?.trade.outskirts).toBe(2)
+      expect(owner?.trade.detail.some((entry) => entry.square === 'A2')).toBe(false)
+    })
+  })
+
   it('a wonder square counts for no trade and is named in the notes', () => {
     const city = only(put(scene(), CASH1981, 'wonders/pyramids', 0, 0))
     expect(city.trade.outskirts).toBe(2)

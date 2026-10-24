@@ -53,8 +53,9 @@ export function TradeCollected({ gameId, view, busy, readOnly, run }: Props): Re
   if (you === null) return null
   const estimate = you.cities.reduce((total, city) => total + city.trade.outskirts, 0)
   const current = you.stats.trade
-  // The trade track ends at the ceiling, so the sum stops there
-  const after = Math.min(TRADE_CEILING, current + estimate)
+  // The trade track ends at the ceiling, so the sum stops there. A balance already above it
+  // (typed in before the ceiling was enforced) is never lowered.
+  const after = Math.max(current, Math.min(TRADE_CEILING, current + estimate))
   const addLabel = `Add ${estimate} to your trade (${current} becomes ${after})`
   const notes = [...new Set(you.cities.flatMap((city) => city.trade.notes))]
   return (
@@ -64,6 +65,7 @@ export function TradeCollected({ gameId, view, busy, readOnly, run }: Props): Re
         <StatCell
           label="Trade around your cities"
           value={current}
+          max={TRADE_CEILING}
           disabled={busy || readOnly}
           onCommit={(value) => void run(() => api.setPlayerStat(gameId, you.playerId, 'trade', value))}
         />

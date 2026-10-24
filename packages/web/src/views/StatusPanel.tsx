@@ -25,6 +25,7 @@ import {
   MAX_COMBAT_HAND_SIZE_LENGTH,
   socialPolicyCoinSource,
   techCoinSource,
+  TRADE_CEILING,
   totalCoins,
 } from '@civ/engine'
 import type { CoinSourceKey, Government, PlayerStatKey } from '@civ/engine'
@@ -370,6 +371,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
                               value={row.stats[key]}
                               text={column.text === true}
                               freeText={column.freeText === true}
+                              max={key === 'trade' ? TRADE_CEILING : undefined}
                               disabled={busy || readOnly}
                               onCommit={(value) =>
                                 void run(() => api.setPlayerStat(gameId, row.playerId, key, value))
@@ -670,10 +672,13 @@ export function StatCell({
   text = false,
   freeText = false,
   disabled,
+  max,
   onCommit,
 }: {
   readonly label: string
   readonly value: number | string
+  /** The largest whole number the cell takes; a bigger one reverts, like a typo. */
+  readonly max?: number | undefined
   readonly text?: boolean
   readonly freeText?: boolean
   readonly disabled: boolean
@@ -709,7 +714,7 @@ export function StatCell({
     }
     const parsed = Number(trimmed)
     // Empty or partial input (e.g. "" or "-") must revert, not save 0.
-    if (trimmed === '' || !Number.isInteger(parsed) || parsed < 0) {
+    if (trimmed === '' || !Number.isInteger(parsed) || parsed < 0 || (max !== undefined && parsed > max)) {
       setDraft(displayValue)
       return
     }

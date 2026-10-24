@@ -190,6 +190,26 @@ describe('trade around your cities', () => {
       expect(setPlayerStat).toHaveBeenCalledWith('game', 'id-Alice', 'trade', 27)
     })
 
+    it('never lowers a balance that is already above the end of the track', () => {
+      renderBox(makeView({ you: seat('Alice', 1, { stats: { trade: 30 }, cities: [city('a', 'Capital B2', 5)] }) }))
+      const add = screen.getByRole('button', { name: 'Add 5 to your trade (30 becomes 30)' }) as HTMLButtonElement
+      expect(add.disabled).toBe(true)
+      fireEvent.click(add)
+      expect(setPlayerStat).not.toHaveBeenCalled()
+    })
+
+    it('does not take a trade number above 27 typed into the box', () => {
+      renderBox(withCities())
+      const box = screen.getByLabelText('Trade around your cities') as HTMLInputElement
+      fireEvent.change(box, { target: { value: '28' } })
+      fireEvent.blur(box)
+      expect(setPlayerStat).not.toHaveBeenCalled()
+      expect(box.value).toBe('5')
+      fireEvent.change(box, { target: { value: '27' } })
+      fireEvent.blur(box)
+      expect(setPlayerStat).toHaveBeenCalledWith('game', 'id-Alice', 'trade', 27)
+    })
+
     it('does not add while replaying', () => {
       renderBox(withCities(), true)
       expect((screen.getByRole('button', { name: /^Add 5 to your trade/ }) as HTMLButtonElement).disabled).toBe(true)

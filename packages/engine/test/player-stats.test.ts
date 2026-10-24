@@ -209,6 +209,23 @@ describe('setPlayerStat', () => {
     },
   )
 
+  describe('the trade ceiling', () => {
+    const setTrade = (value: number) =>
+      setPlayerStat(firstCivGame(), { editorPlayerId: CASH1981, targetPlayerId: CASH1981, stat: 'trade', value })
+
+    it('takes 27, the end of the trade track, and refuses anything above it', () => {
+      expect(unwrap(setTrade(27)).players.find((p) => p.playerId === CASH1981)?.stats.trade).toBe(27)
+      expect(unwrapErr(setTrade(28))).toEqual({ kind: 'TRADE_ABOVE_CEILING', value: 28, ceiling: 27 })
+    })
+
+    it('leaves the other stats without a ceiling', () => {
+      const state = unwrap(
+        setPlayerStat(firstCivGame(), { editorPlayerId: CASH1981, targetPlayerId: CASH1981, stat: 'culture', value: 40 }),
+      )
+      expect(state.players.find((p) => p.playerId === CASH1981)?.stats.culture).toBe(40)
+    })
+  })
+
   it('accepts zero, the lowest valid value', () => {
     const state = unwrap(
       setPlayerStat(firstCivGame(), {
