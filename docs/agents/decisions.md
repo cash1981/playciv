@@ -534,7 +534,7 @@ counted twice: a scout assigned to the city whose outskirts hold the square leav
 trade counted once, as its production is, and a scout assigned to another city takes the square
 from the owning city, which gets no trade from it. An enemy figure still blockades the square.
 
-The trade track ends at 27 (the human): `setPlayerStat` refuses a larger trade
+The trade track ends at 27, and at 25 for the Japanese (the human; `tradeCeilingOf` in `limits.ts`, also used by Marco Polo): `setPlayerStat` refuses a larger trade
 (`TRADE_ABOVE_CEILING`), the number boxes revert one, and "Add N" stops at 27 and never lowers a
 balance that is already above it. Gains from other actions (Start of Turn, cards) are not trimmed
 to the ceiling yet.

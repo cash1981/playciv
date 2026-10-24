@@ -25,7 +25,7 @@ import {
   MAX_COMBAT_HAND_SIZE_LENGTH,
   socialPolicyCoinSource,
   techCoinSource,
-  TRADE_CEILING,
+  tradeCeilingOf,
   totalCoins,
 } from '@civ/engine'
 import type { CoinSourceKey, Government, PlayerStatKey } from '@civ/engine'
@@ -371,7 +371,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
                               value={row.stats[key]}
                               text={column.text === true}
                               freeText={column.freeText === true}
-                              max={key === 'trade' ? TRADE_CEILING : undefined}
+                              max={key === 'trade' ? tradeCeilingOf(row.civilizationName) : undefined}
                               disabled={busy || readOnly}
                               onCommit={(value) =>
                                 void run(() => api.setPlayerStat(gameId, row.playerId, key, value))

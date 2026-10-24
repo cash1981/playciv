@@ -29,7 +29,7 @@ import {
 } from '../coins.js'
 import { cultureCardsHeld, cultureHandSizeOf, isCultureHandOver } from '../culture-hand.js'
 import { applyCoinPurchase } from '../assisted.js'
-import { TRADE_CEILING } from '../limits.js'
+import { tradeCeilingOf } from '../limits.js'
 import { grantsAfterTechRemoved, openPhaseOf, statsAfterGovernmentChange } from '../sot.js'
 import { turnStatus } from '../turn.js'
 import { blockadedPieceIds } from '../blockade.js'
@@ -1197,9 +1197,10 @@ export function setPlayerStat<K extends PlayerStatKey>(
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
       return err({ kind: 'INVALID_STAT_VALUE', value })
     }
-    // The trade track ends at 27 (the human): a bigger number is refused, not trimmed
-    if (input.stat === 'trade' && value > TRADE_CEILING) {
-      return err({ kind: 'TRADE_ABOVE_CEILING', value, ceiling: TRADE_CEILING })
+    // The trade track ends at 27, or 25 for the Japanese (the human): a bigger number is refused, not trimmed
+    const ceiling = tradeCeilingOf(target.civilization?.name)
+    if (input.stat === 'trade' && value > ceiling) {
+      return err({ kind: 'TRADE_ABOVE_CEILING', value, ceiling })
     }
     storedValue = value
   }

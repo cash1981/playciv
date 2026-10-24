@@ -210,6 +210,20 @@ describe('trade around your cities', () => {
       expect(setPlayerStat).toHaveBeenCalledWith('game', 'id-Alice', 'trade', 27)
     })
 
+    it('stops at 25 for the Japanese', () => {
+      renderBox(
+        makeView({
+          you: seat('Alice', 1, { civilization: { name: 'Japanese' }, stats: { trade: 22 }, cities: [city('a', 'Capital B2', 5)] }),
+        }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Add 5 to your trade (22 becomes 25)' }))
+      expect(setPlayerStat).toHaveBeenCalledWith('game', 'id-Alice', 'trade', 25)
+      const box = screen.getByLabelText('Trade around your cities') as HTMLInputElement
+      fireEvent.change(box, { target: { value: '26' } })
+      fireEvent.blur(box)
+      expect(setPlayerStat).toHaveBeenCalledTimes(1)
+    })
+
     it('does not add while replaying', () => {
       renderBox(withCities(), true)
       expect((screen.getByRole('button', { name: /^Add 5 to your trade/ }) as HTMLButtonElement).disabled).toBe(true)

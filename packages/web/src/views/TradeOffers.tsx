@@ -10,7 +10,7 @@
 
 import { useRef, useState } from 'react'
 
-import { TRADE_CEILING } from '@civ/engine'
+import { tradeCeilingOf } from '@civ/engine'
 import type { TurnPhase } from '@civ/engine'
 
 import { api } from '../lib/api.js'
@@ -55,7 +55,8 @@ export function TradeCollected({ gameId, view, busy, readOnly, run }: Props): Re
   const current = you.stats.trade
   // The trade track ends at the ceiling, so the sum stops there. A balance already above it
   // (typed in before the ceiling was enforced) is never lowered.
-  const after = Math.max(current, Math.min(TRADE_CEILING, current + estimate))
+  const ceiling = tradeCeilingOf(you.civilization?.name)
+  const after = Math.max(current, Math.min(ceiling, current + estimate))
   const addLabel = `Add ${estimate} to your trade (${current} becomes ${after})`
   const notes = [...new Set(you.cities.flatMap((city) => city.trade.notes))]
   return (
@@ -65,7 +66,7 @@ export function TradeCollected({ gameId, view, busy, readOnly, run }: Props): Re
         <StatCell
           label="Trade around your cities"
           value={current}
-          max={TRADE_CEILING}
+          max={ceiling}
           disabled={busy || readOnly}
           onCommit={(value) => void run(() => api.setPlayerStat(gameId, you.playerId, 'trade', value))}
         />

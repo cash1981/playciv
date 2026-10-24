@@ -13,7 +13,7 @@
  * `card-timing.ts`). The list is own view only, because it names cards in the hand.
  */
 
-import { TRADE_CEILING } from './limits.js'
+import { tradeCeilingOf } from './limits.js'
 import { placeStartMarker } from './actions/board.js'
 import { unbuiltArmies } from './assisted-abilities.js'
 import { drawCandidates, shuffleSheetTwice } from './assisted-culture.js'
@@ -153,7 +153,7 @@ function automate(state: GameState, player: Playerhand, name: string, at: string
     })
   switch (name) {
     case 'Marco Polo': {
-      const trade = Math.max(0, Math.min(TRADE_CEILING, player.stats.trade + 27) - player.stats.trade)
+      const trade = Math.max(0, Math.min(tradeCeilingOf(player.civilization?.name), player.stats.trade + 27) - player.stats.trade)
       return gained(trade, 0, `, gaining ${trade} trade`)
     }
     case 'St. Francis of Assisi': {
