@@ -69,6 +69,8 @@ export function statusFor(error: EngineError): number {
       return 409
     case 'INVALID_TRADE_OFFER_TERMS':
     case 'TRADE_OFFER_SELF':
+    case 'TRADE_OFFER_NO_RECIPIENT':
+    case 'TRADE_OFFER_CHOICE_INVALID':
       return 400
     case 'TRADE_OFFER_RECIPIENT_NOT_FOUND':
     case 'TRADE_OFFER_NOT_FOUND':

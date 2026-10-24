@@ -68,6 +68,7 @@ export type {
   UpgradeBuildingsPayload,
 } from './assisted-core.js'
 export * from './trade-offers.js'
+export * from './trade-estimate.js'
 export * from './gamedata.js'
 export * from './create-game.js'
 export * from './battle.js'
