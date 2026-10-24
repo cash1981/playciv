@@ -655,22 +655,29 @@ export class D1Repository implements Repository {
       .prepare(
         `SELECT g.id AS id,
                 json_extract(g.state, '$.name') AS name,
-                COUNT(r.revision) AS revisions,
-                COALESCE(SUM(CASE WHEN r.revision < m.newest THEN 1 ELSE 0 END), 0) AS removable_revisions,
-                COALESCE(SUM(CASE WHEN r.revision < m.newest THEN LENGTH(CAST(r.state AS BLOB)) ELSE 0 END), 0)
-                  AS removable_bytes,
-                (SELECT kind FROM game_revision n WHERE n.game_id = g.id AND n.revision = m.newest) AS newest_kind,
+                COALESCE(u.revisions, 0) AS revisions,
+                COALESCE(u.removable_revisions, 0) AS removable_revisions,
+                COALESCE(u.removable_bytes, 0) AS removable_bytes,
+                (SELECT kind FROM game_revision n WHERE n.game_id = g.id AND n.revision = u.newest) AS newest_kind,
                 (SELECT LENGTH(CAST(n.state AS BLOB)) FROM game_revision n
-                  WHERE n.game_id = g.id AND n.revision = m.newest) AS newest_bytes,
+                  WHERE n.game_id = g.id AND n.revision = u.newest) AS newest_bytes,
                 (SELECT LENGTH(CAST(k.state AS BLOB)) FROM game_revision n
                   JOIN game_revision k ON k.game_id = n.game_id AND k.revision = COALESCE(n.base_revision, n.revision)
-                  WHERE n.game_id = g.id AND n.revision = m.newest) AS keyframe_bytes
+                  WHERE n.game_id = g.id AND n.revision = u.newest) AS keyframe_bytes
          FROM game g
-         LEFT JOIN (SELECT game_id, MAX(revision) AS newest FROM game_revision GROUP BY game_id) m
-           ON m.game_id = g.id
-         LEFT JOIN game_revision r ON r.game_id = g.id
+         LEFT JOIN (
+           SELECT r.game_id AS game_id,
+                  m.newest AS newest,
+                  COUNT(*) AS revisions,
+                  SUM(CASE WHEN r.revision < m.newest THEN 1 ELSE 0 END) AS removable_revisions,
+                  SUM(CASE WHEN r.revision < m.newest THEN LENGTH(CAST(r.state AS BLOB)) ELSE 0 END)
+                    AS removable_bytes
+           FROM game_revision r
+           JOIN (SELECT game_id, MAX(revision) AS newest FROM game_revision GROUP BY game_id) m
+             ON m.game_id = r.game_id
+           GROUP BY r.game_id, m.newest
+         ) u ON u.game_id = g.id
          WHERE g.active = 0 AND (? IS NULL OR g.id = ?)
-         GROUP BY g.id, m.newest
          ORDER BY removable_bytes DESC, g.id ASC`,
       )
       .bind(gameId ?? null, gameId ?? null)
