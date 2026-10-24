@@ -1,0 +1,591 @@
+{
+ "_note": "Resource and natural wonder culture icons of each map tile, read by eye from the images in packages/web/public/board/tiles against the key on p. 7 of the base rulebook (wheat, silk, incense, iron, culture). Row and column are in the printed (unrotated) orientation, top row first, like tile-terrain.json. A tile listed with no squares was looked at and has none; a tile that is missing has not been read. Trade, production and coin icons and huts and villages are not recorded. Not checked against a printed list.",
+ "tiles": {
+  "tiles/tile01": [
+   {
+    "row": 1,
+    "column": 2,
+    "resource": "wheat"
+   },
+   {
+    "row": 3,
+    "column": 1,
+    "culture": 1
+   }
+  ],
+  "tiles/tile02": [
+   {
+    "row": 1,
+    "column": 1,
+    "resource": "incense"
+   }
+  ],
+  "tiles/tile03": [
+   {
+    "row": 0,
+    "column": 0,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/tile04": [
+   {
+    "row": 1,
+    "column": 3,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/tile05": [
+   {
+    "row": 0,
+    "column": 2,
+    "resource": "silk"
+   }
+  ],
+  "tiles/tile06": [
+   {
+    "row": 0,
+    "column": 0,
+    "resource": "silk"
+   }
+  ],
+  "tiles/tile07": [
+   {
+    "row": 0,
+    "column": 0,
+    "resource": "incense"
+   }
+  ],
+  "tiles/tile08": [
+   {
+    "row": 0,
+    "column": 3,
+    "resource": "iron"
+   }
+  ],
+  "tiles/tile09": [
+   {
+    "row": 0,
+    "column": 1,
+    "culture": 1
+   },
+   {
+    "row": 0,
+    "column": 2,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/tile10": [
+   {
+    "row": 2,
+    "column": 0,
+    "resource": "incense"
+   }
+  ],
+  "tiles/tile11": [
+   {
+    "row": 0,
+    "column": 0,
+    "resource": "iron"
+   },
+   {
+    "row": 2,
+    "column": 3,
+    "culture": 1
+   }
+  ],
+  "tiles/tile12": [
+   {
+    "row": 1,
+    "column": 2,
+    "culture": 1
+   },
+   {
+    "row": 2,
+    "column": 0,
+    "resource": "incense"
+   }
+  ],
+  "tiles/tile13": [
+   {
+    "row": 1,
+    "column": 0,
+    "resource": "iron"
+   },
+   {
+    "row": 3,
+    "column": 3,
+    "resource": "silk"
+   }
+  ],
+  "tiles/tile14": [
+   {
+    "row": 2,
+    "column": 0,
+    "culture": 1
+   },
+   {
+    "row": 2,
+    "column": 2,
+    "resource": "silk"
+   }
+  ],
+  "tiles/tile15a": [
+   {
+    "row": 0,
+    "column": 0,
+    "resource": "silk"
+   },
+   {
+    "row": 3,
+    "column": 0,
+    "resource": "iron"
+   }
+  ],
+  "tiles/tile16a": [
+   {
+    "row": 0,
+    "column": 3,
+    "resource": "incense"
+   },
+   {
+    "row": 2,
+    "column": 1,
+    "culture": 1
+   }
+  ],
+  "tiles/tile17a": [
+   {
+    "row": 3,
+    "column": 1,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/tile18a": [
+   {
+    "row": 0,
+    "column": 0,
+    "resource": "wheat"
+   },
+   {
+    "row": 0,
+    "column": 3,
+    "resource": "silk"
+   }
+  ],
+  "tiles/tile19a": [
+   {
+    "row": 1,
+    "column": 3,
+    "resource": "iron"
+   },
+   {
+    "row": 2,
+    "column": 2,
+    "resource": "silk"
+   },
+   {
+    "row": 3,
+    "column": 2,
+    "resource": "wheat"
+   },
+   {
+    "row": 3,
+    "column": 3,
+    "resource": "incense"
+   }
+  ],
+  "tiles/tile20a": [
+   {
+    "row": 0,
+    "column": 2,
+    "resource": "incense"
+   },
+   {
+    "row": 1,
+    "column": 1,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/tile21a": [
+   {
+    "row": 2,
+    "column": 0,
+    "resource": "wheat"
+   },
+   {
+    "row": 1,
+    "column": 2,
+    "resource": "iron"
+   }
+  ],
+  "tiles/tile22b": [
+   {
+    "row": 0,
+    "column": 3,
+    "resource": "wheat"
+   },
+   {
+    "row": 1,
+    "column": 1,
+    "resource": "iron"
+   }
+  ],
+  "tiles/tile23b": [
+   {
+    "row": 0,
+    "column": 0,
+    "resource": "silk"
+   }
+  ],
+  "tiles/tile24b": [
+   {
+    "row": 0,
+    "column": 2,
+    "resource": "iron"
+   }
+  ],
+  "tiles/tile25b": [
+   {
+    "row": 0,
+    "column": 2,
+    "resource": "silk"
+   },
+   {
+    "row": 1,
+    "column": 0,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/Tile26b": [
+   {
+    "row": 3,
+    "column": 0,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/Tile27b": [
+   {
+    "row": 1,
+    "column": 3,
+    "resource": "incense"
+   }
+  ],
+  "tiles/rome": [
+   {
+    "row": 0,
+    "column": 1,
+    "resource": "incense"
+   },
+   {
+    "row": 0,
+    "column": 3,
+    "resource": "silk"
+   },
+   {
+    "row": 1,
+    "column": 3,
+    "resource": "iron"
+   },
+   {
+    "row": 3,
+    "column": 0,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/Aztec": [
+   {
+    "row": 1,
+    "column": 2,
+    "resource": "wheat"
+   },
+   {
+    "row": 3,
+    "column": 3,
+    "resource": "incense"
+   }
+  ],
+  "tiles/England": [
+   {
+    "row": 0,
+    "column": 1,
+    "resource": "iron"
+   },
+   {
+    "row": 0,
+    "column": 3,
+    "resource": "silk"
+   },
+   {
+    "row": 2,
+    "column": 0,
+    "resource": "silk"
+   },
+   {
+    "row": 2,
+    "column": 1,
+    "resource": "wheat"
+   },
+   {
+    "row": 2,
+    "column": 3,
+    "culture": 1
+   },
+   {
+    "row": 3,
+    "column": 3,
+    "resource": "silk"
+   }
+  ],
+  "tiles/France": [
+   {
+    "row": 0,
+    "column": 1,
+    "resource": "silk"
+   },
+   {
+    "row": 1,
+    "column": 0,
+    "resource": "wheat"
+   },
+   {
+    "row": 2,
+    "column": 2,
+    "resource": "iron"
+   },
+   {
+    "row": 2,
+    "column": 3,
+    "resource": "incense"
+   }
+  ],
+  "tiles/Zulu": [
+   {
+    "row": 0,
+    "column": 0,
+    "resource": "incense"
+   },
+   {
+    "row": 0,
+    "column": 2,
+    "resource": "silk"
+   },
+   {
+    "row": 3,
+    "column": 0,
+    "resource": "silk"
+   },
+   {
+    "row": 3,
+    "column": 1,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/america": [
+   {
+    "row": 0,
+    "column": 0,
+    "resource": "iron"
+   },
+   {
+    "row": 1,
+    "column": 1,
+    "resource": "silk"
+   },
+   {
+    "row": 2,
+    "column": 2,
+    "resource": "incense"
+   },
+   {
+    "row": 3,
+    "column": 3,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/arabia": [
+   {
+    "row": 0,
+    "column": 0,
+    "culture": 1
+   },
+   {
+    "row": 1,
+    "column": 0,
+    "resource": "wheat"
+   },
+   {
+    "row": 2,
+    "column": 3,
+    "resource": "silk"
+   },
+   {
+    "row": 3,
+    "column": 1,
+    "resource": "incense"
+   }
+  ],
+  "tiles/china": [
+   {
+    "row": 0,
+    "column": 3,
+    "resource": "wheat"
+   },
+   {
+    "row": 1,
+    "column": 0,
+    "resource": "iron"
+   },
+   {
+    "row": 3,
+    "column": 0,
+    "culture": 1
+   },
+   {
+    "row": 3,
+    "column": 3,
+    "resource": "silk"
+   }
+  ],
+  "tiles/egypt": [
+   {
+    "row": 0,
+    "column": 3,
+    "resource": "incense"
+   },
+   {
+    "row": 1,
+    "column": 0,
+    "resource": "wheat"
+   },
+   {
+    "row": 3,
+    "column": 2,
+    "resource": "silk"
+   }
+  ],
+  "tiles/germany": [
+   {
+    "row": 0,
+    "column": 0,
+    "resource": "silk"
+   },
+   {
+    "row": 2,
+    "column": 2,
+    "resource": "iron"
+   },
+   {
+    "row": 3,
+    "column": 3,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/greece": [
+   {
+    "row": 1,
+    "column": 3,
+    "resource": "silk"
+   },
+   {
+    "row": 2,
+    "column": 3,
+    "resource": "incense"
+   },
+   {
+    "row": 3,
+    "column": 1,
+    "resource": "wheat"
+   },
+   {
+    "row": 3,
+    "column": 3,
+    "culture": 1
+   }
+  ],
+  "tiles/india": [
+   {
+    "row": 2,
+    "column": 1,
+    "resource": "incense"
+   }
+  ],
+  "tiles/japan": [
+   {
+    "row": 0,
+    "column": 0,
+    "resource": "wheat"
+   },
+   {
+    "row": 1,
+    "column": 0,
+    "resource": "silk"
+   },
+   {
+    "row": 1,
+    "column": 2,
+    "resource": "iron"
+   },
+   {
+    "row": 2,
+    "column": 3,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/mongolia": [
+   {
+    "row": 0,
+    "column": 1,
+    "culture": 1
+   },
+   {
+    "row": 2,
+    "column": 1,
+    "resource": "silk"
+   },
+   {
+    "row": 3,
+    "column": 0,
+    "resource": "silk"
+   },
+   {
+    "row": 3,
+    "column": 2,
+    "resource": "incense"
+   }
+  ],
+  "tiles/russia": [
+   {
+    "row": 0,
+    "column": 3,
+    "resource": "iron"
+   },
+   {
+    "row": 3,
+    "column": 3,
+    "resource": "wheat"
+   }
+  ],
+  "tiles/spain": [
+   {
+    "row": 0,
+    "column": 2,
+    "resource": "iron"
+   },
+   {
+    "row": 2,
+    "column": 0,
+    "resource": "silk"
+   },
+   {
+    "row": 2,
+    "column": 1,
+    "resource": "wheat"
+   },
+   {
+    "row": 2,
+    "column": 3,
+    "resource": "incense"
+   }
+  ]
+ }
+}

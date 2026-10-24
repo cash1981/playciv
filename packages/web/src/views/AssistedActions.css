@@ -1,0 +1,133 @@
+/* Assisted actions (#260): one button component, used in "Your actions" and in
+   the tech dialog. Wraps so it never forces a horizontal scroll at 320 px. */
+.assisted-actions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.assisted-actions > li {
+  display: block;
+  min-width: 0;
+}
+
+.assisted-name {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.assisted-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.assisted-reason {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* In a table cell the controls sit under each other instead of beside each other. */
+td .assisted-action {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* "Possible actions": a heading and a box that look like "Your cities" and a city card,
+   so the two sections read the same. */
+.assisted-possible {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.assisted-possible-title {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.assisted-possible-box > .phase-group:first-child {
+  margin-top: 0;
+}
+
+.assisted-possible-box {
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* The card choice after a culture advance. The cards reuse .card-grid.small,
+   which reflows to one or two columns at 320 px. */
+.assisted-reward {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.assisted-reward-title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.assisted-reward > p {
+  margin: 0 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.assisted-reward-cards {
+  min-width: 0;
+}
+
+.assisted-reward-cards .card {
+  min-width: 0;
+}
+
+.assisted-reward-cards .card-actions button {
+  max-width: 100%;
+}
+
+/* End turn (EndTurn.tsx): the button, then a line saying what it does. Wraps so it
+   never forces a horizontal scroll at 320 px. */
+.assisted-endturn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.assisted-endturn-text {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* "Your cities" (YourCities.tsx, styled in CityCard.css) is the first thing in the
+   panel only without End turn (a game that has not started or has ended) and with
+   no action and no choice waiting: no gap above it then. */
+.assisted-panel-body > .cities-group:first-child {
+  margin-top: 0;
+}
+
+/* Focus lands here after a card choice is kept, because the choice itself is gone.
+   The container is not interactive, so it gets no ring. */
+.assisted-panel-body:focus {
+  outline: none;
+}
+
+.assisted-warning {
+  flex: 1 1 100%;
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  border-left: 3px solid var(--warning, #b7791f);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}

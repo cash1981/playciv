@@ -514,6 +514,56 @@ villages), but the cards flow in one grid instead of one section per kind, so
 short groups do not leave empty space. `useritems.html` rendered a heading per
 kind. See [historical interface decisions](docs/history/README.md).
 
+**Cards can be used with a button.** A player with Chivalry, Democracy or
+Printing Press, or with a city on the map, sees a "Your actions" panel, and the same button in the card's
+detail dialog, that does the bookkeeping for the card: Chivalry spends an
+incense (a hut in hand first, otherwise the piece in the player's own area,
+back to the stock) and adds 5 culture; the two coin cards pay and add a coin.
+Every card is once per turn. The press is recorded, shown in the log, and can be
+taken back with the same everyone-votes undo the game already has. Currency (3) and Metal Casting (7) work the same way. An **Advance culture** button
+pays the cost of the next space, moves the player's marker one space and delivers
+the reward of that space: a culture event card (two to choose from with Mysticism)
+or a Great Person card (more to choose from with Organized Religion and the
+Greeks). The cards to choose between are private and a refresh shows the same
+ones. Your cities are in the same "Your actions" panel, each with an estimate of its
+production (not a complete count; you can type a number by hand). The panel sits under
+the board, before your hand, and starts with **End turn**, which ends your open phase.
+A **Build** button on
+each of your cities lists what that city can build now, in groups: buildings, wonders from
+the market, army and scout figures, and
+military units, with the trade to pay for a rush; the reasons for the rest are behind a link.
+A figure is placed by tapping a highlighted square, a building or a wonder by tapping one and
+confirming (a wonder's cost is shown but not checked, and building one draws the next wonder into the market), and a unit is a private card that is
+drawn into your hand with no square, and only its type is public. The piece or
+card, the trade and the log line are one step the vote undo can take back, and so does removing
+the piece yourself before you press End turn (a new line says so). A **Start
+Building Program** button on each of your cities puts the Building Program marker on
+the city centre, and an **Upgrades** block in the same panel flips your basic
+buildings to the upgraded form once you have revealed its tech; both are one step
+the vote undo can take back. Typing the
+same thing in chat or editing the counters by hand still works. See
+`docs/agents/decisions.md`, 2026-10-09.
+
+**Your actions follows the turn.** The panel has a tab for each phase of the turn (Start of
+Turn, Trade, City Management, Movement, Research); the one you are in is open first. The
+open tab lists ready and used actions; other actions and non-ready cards are left out.
+Reasons for blocked or used buttons are behind a `?` help dialog, not inline. Playable card
+and action names link to their relevant location in your hand, the tech or social policy
+panel, or the map. A culture card or a Great Person card that can be played in a phase has a
+Play button in that tab and in your
+hand: you choose which players it names, the card is discarded (a Great Person that is not
+discarded turns faceup) and the log says who played what. Nothing is done to the other
+players, because they can cancel the card. Start of Turn
+has buttons for your social policies and government (Expansionism, Pacifism, Patronage,
+Rationalism, Democracy, Fundamentalism, Feudalism), changing government once a turn,
+investing one coin, founding a city from a scout, sending a scout's square to a city (to your
+capital when you do not), and the
+Start of Turn abilities of wonders, Great Persons, Plastics, Ecology, the Teacher hut and the
+Atlantis and Seven Cities of Gold relics. Where the effect is a choice on the map (a free
+building, a resource from the market) the game logs it and you place it by hand. Every one
+can be taken back with the vote undo. See [phase tabs and Start of Turn decisions](docs/agents/decisions.md#phase-tabs-and-start-of-turn-part-13-2026-10-23)
+and the [action panel focus decision](docs/agents/decisions.md#action-panel-focus-2026-10-23).
+
 **Opponents' public hands show face-down cards.** Issue #142 adds one generic
 card back for each culture card, hut, village, great person and unit in another
 player's hand, grouped by player and category. Spectators see the same counts.
@@ -869,7 +919,7 @@ message is chat or an order tagged with a turn and a phase, orders are public th
 moment they are sent, and a player ends a turn from the Order tab, which marks the
 chosen phase done (and can take it back). There is no baton to pass: anyone can
 write at any time, and Draw only asks for a confirmation when it is not your turn.
-The title says whose turn it is and which phase they are on, and a strip under it
+The title names the player furthest behind (the turn holder among a tie) and the phase they are on, and a strip under it
 shows what each player is missing; a finished game is titled with its winner
 instead, and its replay bar shows only who won. The start player is derived from
 the Start player marker on the board (the player whose area holds it), and the

@@ -4,7 +4,7 @@
  */
 
 import type { EngineError, GameState, PlayerView, Playerhand } from '@civ/engine'
-import { toPlayerView } from '@civ/engine'
+import { expireTradeOffers, toPlayerView } from '@civ/engine'
 import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
 
@@ -223,6 +223,15 @@ export interface ApplyToGameOptions {
    */
   readonly publicDescription?: (info: ApplyToGameInfo) => string | undefined
   readonly after?: (info: ApplyToGameInfo) => Promise<void> | void
+  /**
+   * When the action answers with the very state it was given, nothing changed:
+   * skip the save, keep `rev` and the history as they are, and answer with the
+   * current projection. For a retry that the engine recognises as already done.
+   * Off by default, so no other route changes.
+   */
+  readonly skipSaveWhenUnchanged?: boolean
+  /** Allows an already-committed request ID to return its result on a stale revision. */
+  readonly allowIdempotentRetry?: boolean
 }
 
 /** An ended game is read-only for everyone except the admin role. */
@@ -250,6 +259,13 @@ export async function applyToGame(
   if (isLockedForViewer(game, currentPlayer(c))) return gameEndedResponse(c)
 
   if (clientRev !== undefined && clientRev !== game.rev) {
+    if (options.allowIdempotentRetry === true) {
+      const retryState = game.logSecret === '' ? { ...game, logSecret: newId() } : game
+      const retry = action(retryState)
+      if (retry.ok && retry.value === retryState) {
+        return c.json(toPlayerView(game, currentPlayer(c).id))
+      }
+    }
     return sendError(
       c,
       409,
@@ -260,14 +276,22 @@ export async function applyToGame(
 
   // A game saved before public item numbers were keyed has an empty key. Give
   // it a random one before anything is logged, or the numbers stay guessable.
-  const result = action(game.logSecret === '' ? { ...game, logSecret: newId() } : game)
+  // The object the action gets, so "unchanged" can be told by identity below
+  const given = game.logSecret === '' ? { ...game, logSecret: newId() } : game
+  const result = action(given)
   if (!result.ok) return sendEngineError(c, result.error)
+
+  const now = new Date().toISOString()
+  const reconciled = expireTradeOffers(result.value, now)
+
+  if (options.skipSaveWhenUnchanged === true && reconciled === given) {
+    return c.json(toPlayerView(game, currentPlayer(c).id))
+  }
 
   // Private notes do not create replay checkpoints, but they still advance the
   // optimistic-concurrency token. Otherwise a note and a shared transition
   // could both commit from the same base revision and one would be lost.
-  const now = new Date().toISOString()
-  const stamped = stampLog({ ...result.value, rev: game.rev + 1 }, now)
+  const stamped = stampLog({ ...reconciled, rev: game.rev + 1 }, now)
 
   if (options.record === false) {
     // A note leaves the chain of revisions alone; anything else this path saves

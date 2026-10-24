@@ -46,6 +46,8 @@ export function statusFor(error: EngineError): number {
     case 'UNKNOWN_COIN_SOURCE':
     case 'COIN_SOURCE_NOT_EDITABLE':
     case 'INVALID_COIN_VALUE':
+    case 'PIECE_NOT_A_CITY':
+    case 'INVALID_PRODUCTION_OVERRIDE':
     case 'UNKNOWN_GOVERNMENT':
     case 'INVALID_ARENA_STAT_VALUE':
     case 'CANNOT_BATTLE_YOURSELF':
@@ -54,12 +56,31 @@ export function statusFor(error: EngineError): number {
       return 400
     case 'BOARD_ASSET_LIMIT_REACHED':
     case 'BATTLE_ALREADY_ACTIVE':
+    case 'CULTURE_HAND_OVER':
     case 'UNIT_ALREADY_IN_BATTLE':
     case 'ARENA_POSITION_OCCUPIED':
     case 'PLAYER_COLOR_TAKEN':
       return 409
     case 'COIN_PURCHASE_REJECTED':
       return error.reason === 'ALREADY_USED' ? 409 : 400
+    case 'TRADE_OFFER_REQUEST_REUSED':
+    case 'TRADE_OFFER_NOT_PENDING':
+      return 409
+    case 'INVALID_TRADE_OFFER_TERMS':
+    case 'TRADE_OFFER_SELF':
+      return 400
+    case 'TRADE_OFFER_RECIPIENT_NOT_FOUND':
+    case 'TRADE_OFFER_NOT_FOUND':
+      return 404
+    case 'TRADE_OFFER_NOT_ALLOWED':
+      return 403
+    // Out of uses is a conflict, like a coin purchase; everything else is a bad request
+    case 'ASSISTED_ACTION_REJECTED':
+      return error.status === 'used' ? 409 : 400
+    case 'ASSISTED_ACTION_ALREADY_UNDONE':
+    case 'ASSISTED_UNDO_BLOCKED':
+    case 'BOARD_UNDO_ASSISTED':
+      return 409
     case 'NO_BATTLE_ACTIVE':
     case 'ARENA_UNIT_NOT_FOUND':
       return 404

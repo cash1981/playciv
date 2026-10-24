@@ -11,8 +11,13 @@
  *
  * Interaction:
  *   palette to board   tap/select/place on touch, plus HTML5 drag and drop
+ *                      (the palette sits below the board at every width)
  *   piece on board     tap to select and arm (map tiles are selected only), then tap
  *                      the board to move; or drag; or the Move button, then tap
+ *   pick a square      while a Build is waiting for its square (`pickSquares`), the
+ *                      legal squares are buttons on the board and everything else
+ *                      on it is left alone until the pick is made or cancelled: taps,
+ *                      drops, and arming a piece from the palette are all ignored
  *
  * Global replay is owned by GameView; this component only renders the supplied
  * live or historical board. Live board undo and redo remain available.
@@ -36,10 +41,12 @@ import {
   compareWonderNames,
   cultureCellCenter,
   cultureTrackHeight,
+  findBoardAsset,
   locationOf,
   mapHeight,
   mapTop,
   nearestSlotOrigin,
+  piecesReplacedByGreatPerson,
   remainingBoardAssetCount,
   slotOrigin,
   terrainAt,
@@ -51,6 +58,34 @@ import type { Board, BoardArea, BoardAsset, BoardPiece } from '@civ/engine'
 import { errorMessage } from '../App.js'
 import { api } from '../lib/api.js'
 import type { PlayerView } from '../lib/api.js'
+import { BOARD_PANEL_ID } from './PhaseSummary.js'
+
+/** A map square the player may pick, as the engine lists it for a Build. */
+export interface PickableSquare {
+  readonly column: number
+  readonly row: number
+  /** For example "D5". */
+  readonly label: string
+  /** Something to know before picking it: an army on a square where an enemy figure stands (any battle or loot is settled by hand), or the building, wonder or Great Person of the player's that the item replaces. */
+  readonly note?: string
+  /** The building, wonder or Great Person of the player's own that the item takes the place of; set with `note`. */
+  readonly replaces?: { readonly assetId: string; readonly label: string; readonly kind: 'building' | 'wonder' | 'greatperson' }
+}
+
+/**
+ * Square picking mode (assisted Build): one button per candidate square, laid
+ * over the map. The caller owns the selection, so the board forgets nothing it
+ * should not and a refresh cannot lose the player's choice.
+ */
+export interface PickSquares {
+  /** What is being placed, for the buttons' names: "Place Library on D5", "Place Army figure on D5". */
+  readonly itemLabel: string
+  readonly cells: readonly PickableSquare[]
+  readonly selected: { readonly column: number; readonly row: number } | null
+  readonly onPick: (cell: PickableSquare) => void
+  /** Escape. The board never leaves pick mode by itself. */
+  readonly onCancel: () => void
+}
 
 interface Props {
   readonly gameId: string
@@ -63,8 +98,12 @@ interface Props {
   readonly youId?: string | null
   /** The viewer's civ: Russia is offered the white army (issue #204), Spain the white scout. */
   readonly viewerCivilization?: string | null
+  /** The viewer's colour, which decides whose cities a Great Person placed in their outskirts replaces what stands there. */
+  readonly viewerColor?: string | null
   /** Buildings and Great Persons an enemy figure stands on (issue #241); drawn greyed and struck through. */
   readonly blockadedPieceIds?: readonly string[]
+  /** Set while a Build waits for the player to pick a square. */
+  readonly pickSquares?: PickSquares
   readonly run: (action: () => Promise<PlayerView | unknown>) => Promise<void>
 }
 
@@ -165,6 +204,8 @@ export interface BoardPaletteProps {
   readonly numOfPlayers: number
   /** Hides a white figure from everyone but its civ; the engine enforces it too. */
   readonly viewerCivilization?: string | null
+  /** Why the pieces cannot be used right now (for example a Build is waiting for its square); they are disabled and this is shown. */
+  readonly blockedReason?: string | undefined
   readonly onSelectAsset?: (asset: BoardAsset) => void
 }
 
@@ -177,6 +218,7 @@ export function BoardPalette({
   pieces,
   numOfPlayers,
   viewerCivilization = null,
+  blockedReason,
   onSelectAsset,
 }: BoardPaletteProps): React.JSX.Element {
   const available = assets.filter((asset) => {
@@ -189,6 +231,7 @@ export function BoardPalette({
       ? [...available].sort((a, b) => compareWonderNames(a.label, b.label))
       : available
   const draggedAssetRef = useRef(false)
+  const blocked = blockedReason !== undefined
 
   const renderAsset = (asset: BoardAsset): React.JSX.Element => {
     const remaining = remainingBoardAssetCount(asset, pieces, numOfPlayers)
@@ -198,9 +241,9 @@ export function BoardPalette({
         type="button"
         key={asset.id}
         className={`palette-item${exhausted ? ' unavailable' : ''}`}
-        disabled={replaying || exhausted}
+        disabled={replaying || exhausted || blocked}
         title={exhausted ? `${asset.label} (none available)` : asset.label}
-        draggable={!replaying && !exhausted}
+        draggable={!replaying && !exhausted && !blocked}
         onDragStart={(event) => {
           if (exhausted) return
           draggedAssetRef.current = true
@@ -215,7 +258,7 @@ export function BoardPalette({
             draggedAssetRef.current = false
             return
           }
-          if (!exhausted && !replaying) onSelectAsset?.(asset)
+          if (!exhausted && !replaying && !blocked) onSelectAsset?.(asset)
         }}
       >
         <img src={assetUrl(asset.path)} alt={asset.label} draggable={false} />
@@ -246,7 +289,9 @@ export function BoardPalette({
       <p className="muted" style={{ margin: '0 0 0.5rem' }}>
         {replaying
           ? 'Replaying — return to now to make changes.'
-          : 'Tap a piece, then tap the board, or drag it there. Drop it in a player area to tidy it into a row.'}
+          : blocked
+            ? blockedReason
+            : 'Tap a piece, then tap the board, or drag it there. Drop it in a player area to tidy it into a row.'}
       </p>
 
       <div className="palette-grid">
@@ -277,7 +322,9 @@ export function BoardView({
   readOnly = false,
   youId = null,
   viewerCivilization = null,
+  viewerColor = null,
   blockadedPieceIds = [],
+  pickSquares,
   run,
 }: Props): React.JSX.Element {
   const [assets, setAssets] = useState<readonly BoardAsset[]>([])
@@ -296,6 +343,7 @@ export function BoardView({
 
   const surfaceRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
   /**
    * The piece being dragged: the grab offset inside it, and its latest position.
@@ -337,6 +385,39 @@ export function BoardView({
       .catch((caught: unknown) => setLoadError(errorMessage(caught)))
   }, [])
 
+  // A unit is a private card with no square: its plan arrives with no cells, and
+  // there is nothing to pick, so the board stays as it is (no scroll, no lock).
+  // Escape still cancels it through `onCancel` below.
+  const picking = pickSquares !== undefined && pickSquares.cells.length > 0
+  const onCancelPick = pickSquares?.onCancel
+  const pickFirstCell = pickSquares?.cells[0]
+
+  useEffect(() => {
+    if (!picking) return
+    // A piece that was selected or armed would answer the arrow keys and the next tap.
+    setSelectedId(null)
+    setMoveModeId(null)
+    setPendingAssetId(null)
+  }, [picking])
+
+  useEffect(() => {
+    if (onCancelPick === undefined) return
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      const focused = document.activeElement
+      // Escape in a text field belongs to the field.
+      if (
+        focused instanceof HTMLInputElement ||
+        focused instanceof HTMLTextAreaElement ||
+        focused instanceof HTMLSelectElement ||
+        (focused instanceof HTMLElement && focused.isContentEditable)
+      ) return
+      onCancelPick()
+    }
+    document.addEventListener('keydown', cancelOnEscape)
+    return () => document.removeEventListener('keydown', cancelOnEscape)
+  }, [onCancelPick])
+
   useEffect(() => {
     if (selectedId === null && moveModeId === null) return
     const clearSelectionOutsideBoard = (event: PointerEvent) => {
@@ -362,19 +443,96 @@ export function BoardView({
   const terrainAllows = useCallback(
     (assetId: string, centreX: number, centreY: number, from?: BoardPiece, quiet = false): boolean => {
       const warning = terrainWarning(board, assetId, centreX, centreY)
-      if (warning === null) return true
-      if (from !== undefined && terrainAt(board, from.x + from.width / 2, from.y + from.height / 2) === warning.terrain) {
-        return true
+      if (warning !== null && !(from !== undefined && terrainAt(board, from.x + from.width / 2, from.y + from.height / 2) === warning.terrain)) {
+        // `quiet` is a held key repeating: the first press already asked, so say no without asking again.
+        if (quiet) return false
+        if (!window.confirm(`${warning.message} Place it anyway?`)) return false
       }
-      // `quiet` is a held key repeating: the first press already asked, so say no without asking again.
+
+      // A Great Person placed on a wonder of its owner destroys it for good (base rules p. 18, as on p. 17):
+      // the engine does it on the drop, so the player is asked first. Buildings and Great People are replaced
+      // without a question, and a marker that stays on its square replaces nothing. The manifest is read
+      // directly, not the palette list, which is fetched later and may have failed.
+      const asset = findBoardAsset(assetId)
+      if (asset === undefined || asset.category !== 'greatperson' || youId === null || viewerColor === null) return true
+      const width = from?.width ?? asset.width
+      const height = from?.height ?? asset.height
+      // Where the server will put it: clamped to the board and rounded, so a drag past the edge is judged on the square it lands in
+      const [x, y] = clampToBoard(board, centreX - width / 2, centreY - height / 2, width, height)
+      const marker: BoardPiece = {
+        id: from?.id ?? '',
+        assetId,
+        path: asset.path,
+        label: asset.label,
+        category: asset.category,
+        x,
+        y,
+        width,
+        height,
+        rotation: 0,
+        placedBy: youId,
+      }
+      const cell = (piece: BoardPiece) => ({
+        column: Math.floor((piece.x + piece.width / 2) / board.squareSize),
+        row: Math.floor((piece.y + piece.height / 2 - mapTop(board)) / board.squareSize),
+      })
+      if (from !== undefined) {
+        const before = cell(from)
+        const after = cell(marker)
+        if (before.column === after.column && before.row === after.row) return true
+      }
+      const wonders = piecesReplacedByGreatPerson(
+        { board, players: [] },
+        { playerId: youId, colour: viewerColor.toLowerCase() },
+        marker,
+      ).filter((piece) => piece.category === 'wonder')
+      if (wonders.length === 0) return true
       if (quiet) return false
-      return window.confirm(`${warning.message} Place it anyway?`)
+      const names = wonders.map((piece) => piece.label).join(' and ')
+      return window.confirm(
+        `Placing ${asset.label} here destroys ${names}, which cannot be built again for the rest of the game. Place it anyway?`,
+      )
     },
-    [board],
+    [board, youId, viewerColor],
   )
 
   const width = boardWidth(board)
   const zoom = zoomChoice === 'auto' ? autoZoom : zoomChoice
+
+  // The board scrolls inside its own box, so entering pick mode brings the
+  // candidate squares into that box. Only on entering, never on a refresh.
+  useEffect(() => {
+    const scroll = scrollRef.current
+    if (!picking || scroll === null || typeof scroll.scrollTo !== 'function') return
+    const firstRow = pickFirstCell?.row ?? 0
+    const firstColumn = pickFirstCell?.column ?? 0
+    const reduced =
+      typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    scroll.scrollTo({
+      top: Math.max(0, (mapTop(board) + firstRow * board.squareSize) * zoom - scroll.clientHeight / 3),
+      left: Math.max(0, firstColumn * board.squareSize * zoom - scroll.clientWidth / 3),
+      behavior: reduced ? 'auto' : 'smooth',
+    })
+    // Zoom and the board are read at entry; the squares themselves may change later.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picking])
+
+  // The Build picker sits in Your actions, under the board. Entering pick mode
+  // closes it and brings the board panel into the page, under the sticky confirm bar.
+  // Only on entering: a refresh that keeps the plan, or leaving, does not scroll.
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!picking || panel === null || typeof panel.scrollIntoView !== 'function') return
+    const reduced =
+      typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // The bar wraps onto several lines on a phone, so its real height is the margin
+    // when it can be measured; the stylesheet has a fallback. The scroll position is
+    // worked out inside the call, so the inline value is removed straight after.
+    const barHeight = document.querySelector('.build-bar')?.getBoundingClientRect().height ?? 0
+    if (barHeight > 0) panel.style.scrollMarginTop = `${Math.ceil(barHeight) + 12}px`
+    panel.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' })
+    panel.style.removeProperty('scroll-margin-top')
+  }, [picking])
 
   useEffect(() => {
     if (selectedId === null) return
@@ -494,7 +652,8 @@ export function BoardView({
 
   function onDrop(event: React.DragEvent): void {
     event.preventDefault()
-    if (busy || readOnly) return
+    // A Build waiting for its square owns the board: nothing is dropped onto it.
+    if (busy || readOnly || picking) return
 
     const assetId = event.dataTransfer.getData('text/civ-asset')
     if (assetId === '') return
@@ -541,6 +700,9 @@ export function BoardView({
       gesture === null || gesture.pointerId !== event.pointerId || gesture.moved ||
       !event.isPrimary || event.button !== 0 || busy || readOnly
     ) return
+    // Picking a square is the only thing a tap on the board means now, and the
+    // candidate squares are buttons of their own.
+    if (picking) return
 
     const [x, y] = toBoard(event.clientX, event.clientY)
     if (pendingAsset !== null) {
@@ -605,7 +767,7 @@ export function BoardView({
   function onPiecePointerDown(event: React.PointerEvent, piece: BoardPiece): void {
     // While a palette asset is armed, the board surface owns the tap—even if
     // the user taps an existing piece such as a starting tile.
-    if (pendingAsset !== null || surfaceOwnsTap(piece, event.pointerType)) return
+    if (pendingAsset !== null || picking || surfaceOwnsTap(piece, event.pointerType)) return
     if (busy || readOnly) return
     if (!event.isPrimary) {
       // A second finger may land on a piece, whose pointerdown does not bubble
@@ -718,9 +880,15 @@ export function BoardView({
   }
 
   return (
-    <section className="panel board-panel">
+    <section
+      ref={panelRef}
+      id={BOARD_PANEL_ID}
+      className={`panel board-panel${picking ? ' build-picking' : ''}`}
+      tabIndex={-1}
+      aria-labelledby={`${BOARD_PANEL_ID}-heading`}
+    >
       <div className="row">
-        <h2 style={{ margin: 0 }}>Civilization Boardgame</h2>
+        <h2 id={`${BOARD_PANEL_ID}-heading`} style={{ margin: 0 }}>Civilization Boardgame</h2>
         <span style={{ flex: 1 }} />
         <label style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <span className="muted">Zoom</span>
@@ -771,7 +939,7 @@ export function BoardView({
 
             <div
               ref={surfaceRef}
-              className="board-surface"
+              className={`board-surface${picking ? ' picking' : ''}`}
               style={{ width: width * zoom, height: height * zoom }}
               onDragOver={(event) => event.preventDefault()}
               onDrop={onDrop}
@@ -915,7 +1083,7 @@ export function BoardView({
                         ...(readOnly ? { cursor: 'default' } : {}),
                       }}
                       onPointerDown={(event) => {
-                        if (pendingAsset === null && !surfaceOwnsTap(piece, event.pointerType)) {
+                        if (pendingAsset === null && !picking && !surfaceOwnsTap(piece, event.pointerType)) {
                           event.stopPropagation()
                         }
                         onPiecePointerDown(event, piece)
@@ -941,6 +1109,41 @@ export function BoardView({
                   </Fragment>
                 )
               })}
+
+              {pickSquares?.cells.map((cell) => {
+                const chosen = pickSquares.selected?.column === cell.column && pickSquares.selected.row === cell.row
+                return (
+                  <button
+                    key={`pick-${cell.column}-${cell.row}`}
+                    type="button"
+                    className={`board-pick-cell${chosen ? ' chosen' : ''}${cell.note === undefined ? '' : cell.replaces === undefined ? ' noted' : ' replacing'}`}
+                    // A square note is the enemy figure on a square an army is placed on, or what the item replaces; the bar spells it out once the square is picked.
+                    aria-label={`Place ${pickSquares.itemLabel} on ${cell.label}${
+                      cell.note === undefined
+                        ? ''
+                        : cell.replaces === undefined
+                          ? ', enemy figure there, resolve by hand'
+                          : `, replaces ${cell.replaces.label}`
+                    }`}
+                    aria-pressed={chosen}
+                    disabled={busy || readOnly}
+                    style={{
+                      left: cell.column * board.squareSize * zoom,
+                      top: (mapStart + cell.row * board.squareSize) * zoom,
+                      width: board.squareSize * zoom,
+                      height: board.squareSize * zoom,
+                    }}
+                    onClick={() => pickSquares.onPick(cell)}
+                  >
+                    <span aria-hidden="true">{cell.label}</span>
+                    {cell.note !== undefined && (
+                      <span className="board-pick-flag" aria-hidden="true">
+                        {cell.replaces === undefined ? 'Enemy' : 'Replace'}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
             <span className="board-band-label" style={{ top: 1 }}>
               Culture track
@@ -960,7 +1163,9 @@ export function BoardView({
             pieces={pieces}
             numOfPlayers={numOfPlayers}
             viewerCivilization={viewerCivilization}
+            blockedReason={picking ? 'Finish or cancel the build first.' : undefined}
             onSelectAsset={(asset) => {
+              if (picking) return
               setPendingAssetId(asset.id)
               setMoveModeId(null)
               setSelectedId(null)

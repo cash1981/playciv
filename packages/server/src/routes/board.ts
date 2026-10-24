@@ -16,7 +16,9 @@ import {
   redoLastBoardChange,
   removePiece,
   rotatePiece,
+  setCityProductionOverride,
   setWonderOwner,
+  takeBackOpenBuild,
   sendToBack,
   undoLastBoardChange,
 } from '@civ/engine'
@@ -108,6 +110,30 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
     )
   })
 
+  /**
+   * The production the players typed in for a city. Body: `{ production, rev? }`,
+   * where `production` is a whole number or `null` to go back to the estimate.
+   */
+  app.post('/api/games/:gameId/board/pieces/:pieceId/production', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    const pieceId = c.req.param('pieceId')
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const production = body['production']
+    if (production !== null && (typeof production !== 'number' || !Number.isFinite(production))) {
+      return sendError(c, 400, 'BAD_REQUEST', 'production must be a number or null')
+    }
+    const clientRev = optionalNumber(body, 'rev')
+    return applyToGame(
+      context,
+      c,
+      gameId,
+      (state) =>
+        setCityProductionOverride(state, { playerId: currentPlayer(c).id, pieceId, value: production, at: now() }),
+      clientRev,
+      { skipSaveWhenUnchanged: true },
+    )
+  })
+
   app.post('/api/games/:gameId/board/pieces/:pieceId/front', auth, async (c) => {
     const gameId = c.req.param('gameId')
     const pieceId = c.req.param('pieceId')
@@ -147,9 +173,14 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
   app.post('/api/games/:gameId/board/pieces/:pieceId/remove', auth, async (c) => {
     const gameId = c.req.param('gameId')
     const pieceId = c.req.param('pieceId')
-    return applyToGame(context, c, gameId, (state) =>
-      removePiece(state, { playerId: currentPlayer(c).id, pieceId, at: now() }),
-    )
+    // A piece the player's own build put on the board, removed before they press End turn
+    // for City Management, takes the whole build back (trade, marker, a System line). Any
+    // other removal, and every one after End turn, is a plain removal.
+    return applyToGame(context, c, gameId, (state) => {
+      const playerId = currentPlayer(c).id
+      const at = now()
+      return takeBackOpenBuild(state, { playerId, pieceId, at }) ?? removePiece(state, { playerId, pieceId, at })
+    })
   })
 
   /** Takes back the current player's own last board change. */

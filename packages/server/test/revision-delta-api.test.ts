@@ -146,7 +146,8 @@ describe.each(backends)('revision history of a played game: %s', (_name, create)
     const gameId = (await created.json<{ id: string }>()).id
     expect((await post(bob.token, `/api/games/${gameId}/join`)).status).toBe(200)
 
-    const sheets = ['CULTURE_1', 'INFANTRY', 'CULTURE_2', 'ARTILLERY', 'MOUNTED', 'CULTURE_3']
+    // Not culture cards: a hand over its culture hand size is refused another one
+    const sheets = ['INFANTRY', 'ARTILLERY', 'MOUNTED', 'AIRCRAFT', 'HUTS', 'VILLAGES']
     for (let round = 0; round < 14; round++) {
       const live = (await harness.repo.findGame(gameId)) as GameState
       const account = activeTurnStatus(live)?.username === 'delta-alice' ? alice : bob

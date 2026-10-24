@@ -6,13 +6,14 @@
  * in the printed orientation. A tile on the board may be turned, so the lookup
  * undoes the rotation first.
  *
- * Only a warning is derived from this. Nothing here refuses a placement; the
- * rulebook table is a soft rule (issue #255).
+ * The rulebook table is advisory for manual placement: it only yields a warning
+ * and refuses nothing (issue #255). For assisted Build it is binding:
+ * `build-options.ts` leaves out every square with the wrong terrain.
  */
 
 import tileTerrain from '../data/tile-terrain.json' with { type: 'json' }
 
-import { TILE_SQUARES, findBoardAsset, mapTop } from './board.js'
+import { TILE_SQUARES, findBoardAsset, isMapCell, mapTop } from './board.js'
 import type { Board, BoardAssetCategory, BoardPiece } from './board.js'
 
 export const TERRAINS = ['water', 'grassland', 'forest', 'mountain', 'desert'] as const
@@ -56,23 +57,23 @@ function printedSquare(
   }
 }
 
+/** A square of a tile asset, by the row and column it has in the printed orientation. */
+export interface TileSquare {
+  readonly assetId: string
+  readonly row: number
+  readonly column: number
+}
+
 /**
- * The terrain of the map square under board point (x, y). `null` when there is
- * no tile under it, the tile has no data (the tile back), or the point is not
- * on the map: like `squareOf`, a point in the hole or outside a stepped board,
- * where no slot covers it, has no terrain. When tiles overlap, the topmost one wins.
+ * The printed square of the tile under board point (x, y), with the tile's rotation
+ * undone. `null` when the point is not on the map or no tile lies under it. When
+ * tiles overlap, the topmost one wins. The terrain and the icons of a square are both
+ * looked up with this.
  */
-export function terrainAt(board: Board, x: number, y: number): Terrain | null {
+export function tileSquareAt(board: Board, x: number, y: number): TileSquare | null {
   const column = Math.floor(x / board.squareSize)
   const row = Math.floor((y - mapTop(board)) / board.squareSize)
-  const onSlot = board.slots.some(
-    (slot) =>
-      column >= slot.x &&
-      column < slot.x + TILE_SQUARES &&
-      row >= slot.y &&
-      row < slot.y + TILE_SQUARES,
-  )
-  if (!onSlot) return null
+  if (!isMapCell(board, column, row)) return null
 
   // The list is the stacking order, so the last match is on top (no findLast in ES2022).
   const tile = [...board.pieces]
@@ -87,15 +88,24 @@ export function terrainAt(board: Board, x: number, y: number): Terrain | null {
     )
   if (tile === undefined) return null
 
-  const grid = TILE_TERRAIN[tile.assetId]
-  if (grid === undefined) return null
-
   const [printedRow, printedColumn] = printedSquare(
     Math.floor((y - tile.y) / board.squareSize),
     Math.floor((x - tile.x) / board.squareSize),
     tile.rotation,
   )
-  return grid[printedRow]?.[printedColumn] ?? null
+  return { assetId: tile.assetId, row: printedRow, column: printedColumn }
+}
+
+/**
+ * The terrain of the map square under board point (x, y). `null` when there is
+ * no tile under it, the tile has no data (the tile back), or the point is not
+ * on the map: like `squareOf`, a point in the hole or outside a stepped board,
+ * where no slot covers it, has no terrain. When tiles overlap, the topmost one wins.
+ */
+export function terrainAt(board: Board, x: number, y: number): Terrain | null {
+  const square = tileSquareAt(board, x, y)
+  if (square === null) return null
+  return TILE_TERRAIN[square.assetId]?.[square.row]?.[square.column] ?? null
 }
 
 const NOT_WATER: readonly Terrain[] = ['grassland', 'forest', 'mountain', 'desert']
@@ -143,7 +153,7 @@ export interface TerrainWarning {
   readonly message: string
 }
 
-const describeAllowed = (allowed: readonly Terrain[]): string => {
+export const describeAllowed = (allowed: readonly Terrain[]): string => {
   if (allowed.length === NOT_WATER.length && !allowed.includes('water')) return 'any terrain except water'
   return allowed.join(' or ')
 }

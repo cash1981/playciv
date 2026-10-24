@@ -9,25 +9,35 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { isTradable, isUnit, itemName, itemType } from '@civ/engine'
-import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, SheetName } from '@civ/engine'
+import type { ArenaUnit, BattleSideId, BattleSideSummary, Item, PlayableCard, SheetName } from '@civ/engine'
 
 import { errorMessage, isUnauthorized } from '../App.js'
+import { confirmationText } from '../lib/confirmation.js'
+import { clearToasts, showToast } from '../lib/toasts.js'
 import { useActivity } from '../lib/activity.js'
 import { ApiError, api } from '../lib/api.js'
 import type { GameRevisionSummary, GameRevisionView, LootCategory, PlayerDto, PlayerView } from '../lib/api.js'
 
+import { hasActionsPanel } from './AssistedActions.js'
 import { BoardView } from './BoardView.js'
+import type { PickSquares } from './BoardView.js'
+import { BuildBar } from './BuildPicker.js'
+import { useBuildFlow } from './buildFlow.js'
 import { ChatOrdersPanel, turnTitle, outOfTurnQuestion, TurnStatusStrip } from './ChatOrdersPanel.js'
 import type { ChatAuthor } from './ChatOrdersPanel.js'
 import { ItemCard } from './ItemCard.js'
 import { LogPanel } from './LogPanel.js'
 import type { GameMenuActions } from './Navigation.js'
 import { OpponentHandPanel } from './OpponentHandPanel.js'
+import { PageShortcuts, PhaseSummary, handItemId } from './PhaseSummary.js'
+import { PhaseActionsPanel } from './PhaseTabs.js'
+import { PlayCardControl } from './PlayableCards.js'
 import { RevealedPanel } from './RevealedPanel.js'
 import { SocialPolicyPanel } from './SocialPolicyPanel.js'
 import { StatusPanel } from './StatusPanel.js'
 import { WondersPanel } from './WondersPanel.js'
 import { TechPanel } from './TechPanel.js'
+import { focusPlayer } from './turnFocus.js'
 import { AutoRefreshSwitch } from './AutoRefresh.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import { DigitInput } from './DigitInput.js'
@@ -37,14 +47,15 @@ import './BattleMobile.css'
 type Seat = NonNullable<PlayerView['you']> | PlayerView['opponents'][number]
 
 /**
- * The player whose turn it is, from `you` and the opponents: the holder of the
- * active turn. `undefined` when nobody is on turn.
+ * The player the header puts in focus, from `you` and the opponents: the one
+ * furthest behind (see `focusPlayer`), found by username. `undefined` when
+ * nobody is waited for, or the player has left.
  */
 export function activePlayerOf(view: PlayerView): Seat | undefined {
   const seats: readonly Seat[] = view.you === null ? view.opponents : [view.you, ...view.opponents]
-  const holder = view.activeTurn
-  if (holder === null) return undefined
-  return seats.find((seat) => seat.playerId === holder.playerId)
+  const focus = focusPlayer(view.activeTurn)
+  if (focus === null) return undefined
+  return seats.find((seat) => seat.username === focus.username)
 }
 
 /**
@@ -275,6 +286,11 @@ export function GameView({
   const [historical, setHistorical] = useState<GameRevisionView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // An error is a red toast over the page, wherever the player has scrolled to. The
+  // box in the loading state below stays, because a page that has not loaded has no toast host in view.
+  useEffect(() => {
+    if (error !== null) showToast('error', error)
+  }, [error])
   // Covers a write plus the reload after it, which `request()` alone would not.
   useActivity(busy)
   const [reloadCount, setReloadCount] = useState(0)
@@ -389,16 +405,28 @@ export function GameView({
     void reload()
   }, [reload])
 
+  // What a toast says belongs to this game and this player: leaving, or signing out,
+  // takes it away so the next page or the next person on the device does not see it.
+  useEffect(() => clearToasts, [gameId])
+
   /** Runs an action, then reloads a consistent live game/history pair. */
   const run = useCallback(
     async (action: () => Promise<PlayerView | unknown>) => {
       setBusy(true)
       setError(null)
+      const revisionBefore = latestStoredRevisionRef.current
       try {
         await action()
         if (activeGameIdRef.current !== gameId) return
-        await reload()
+        const reloaded = await reload()
         if (activeGameIdRef.current !== gameId) return
+        // A failed reload has set its own error; do not also say "Done".
+        if (reloaded) {
+          const text = await confirmationFor(gameId, revisionBefore, player?.username ?? null)
+          // The player may have gone to another game while this was asked
+          if (activeGameIdRef.current !== gameId) return
+          showToast('ok', text)
+        }
       } catch (caught) {
         if (activeGameIdRef.current !== gameId) return
         if (isUnauthorized(caught) && player !== null) return onUnauthorized()
@@ -479,6 +507,13 @@ export function GameView({
     return () => onGameActions(null)
   }, [onGameActions, view, historical, selectedRevision, busy, gameId, player, onWithdrawn, onDeleted, onEnded, onUnauthorized, reload, run])
 
+  // Building is for a player in the live game: nothing of it survives a replay,
+  // a locked game or a spectator, and it is cleared the moment one of them applies.
+  // Before the loading guard, because hooks run unconditionally.
+  const buildAllowed =
+    view !== null && !(selectedRevision !== null && historical !== null) && (view.active || player?.role === 'admin')
+  const buildFlow = useBuildFlow(buildAllowed ? (view.you?.buildOptions ?? null) : null)
+
   if (view === null) {
     return (
       <>
@@ -498,6 +533,17 @@ export function GameView({
   const you = displayedView.you
   const activePlayer = activePlayerOf(displayedView)
   const chatAuthors = chatAuthorsOf(displayedView)
+  const buildPlan = buildFlow.plan
+  const pickSquares: PickSquares | undefined =
+    buildPlan === null
+      ? undefined
+      : {
+          itemLabel: buildPlan.label,
+          cells: buildPlan.squares,
+          selected: buildPlan.target,
+          onPick: buildFlow.pick,
+          onCancel: buildFlow.clear,
+        }
 
   // An ended game has nobody on turn: the title names the winner, and the
   // turn chips and the progress strip, which describe whose move it is, go.
@@ -507,13 +553,14 @@ export function GameView({
     <>
       <div className="panel">
         <div className="row" style={{ alignItems: 'baseline' }}>
-          {/* Civ, then colour, then the name in the title: whose turn it is,
-              not who is looking. They wrap above the title on a phone. */}
+          {/* Civ, then colour, then the name in the title: who is up (the
+              player furthest behind, the turn holder in a tie), not who is
+              looking. They wrap above the title on a phone. */}
           {!ended && activePlayer !== undefined && <PlayerChips player={activePlayer} />}
           <h1 style={{ margin: 0 }}>
             {ended
               ? gameEndedTitle(displayedView.winner)
-              : turnTitle(displayedView.activeTurn, you?.playerId)}
+              : turnTitle(displayedView.activeTurn, you?.username)}
           </h1>
           <span className="muted" style={{ fontSize: '0.9rem' }}>{displayedView.name}</span>
           {ended && displayedView.winner !== null && <span className="tag">ended</span>}
@@ -525,6 +572,7 @@ export function GameView({
           />
         </div>
 
+        {!ended && <PhaseSummary view={displayedView} />}
         {!ended && <TurnStatusStrip view={displayedView} />}
 
         {you === null && (
@@ -532,6 +580,8 @@ export function GameView({
             <span className="muted">Watching (not a player)</span>
           </div>
         )}
+
+        <PageShortcuts actions={hasActionsPanel(displayedView)} />
       </div>
 
       <GlobalReplayBar
@@ -551,9 +601,11 @@ export function GameView({
         }}
       />
 
-      {error !== null && <div className="error">{error}</div>}
+      {/* The page runs: header and summary, the board, Your actions (End turn, the card
+          buttons, a waiting choice and the viewer's own cities), Your cards, then the
+          rest. The board has the whole content width at every size. */}
+      <BuildBar gameId={gameId} view={displayedView} flow={buildFlow} busy={interactionBusy} run={run} />
 
-      {/* The board sits above everything else */}
       <BoardView
         gameId={gameId}
         board={displayedView.board}
@@ -564,12 +616,25 @@ export function GameView({
         readOnly={replaying || locked}
         youId={you?.playerId ?? null}
         viewerCivilization={you?.civilization?.name ?? null}
+        viewerColor={you?.color ?? null}
+        {...(pickSquares === undefined ? {} : { pickSquares })}
         run={run}
       />
 
+      <PhaseActionsPanel
+        gameId={gameId}
+        view={displayedView}
+        busy={interactionBusy}
+        readOnly={displayedView.you === null || replaying || locked}
+        run={run}
+        build={buildFlow}
+      />
+
       <div className="panel-stack">
-        {/* Draw is the first panel after the board, then the chat and orders timeline and the log. */}
+        {/* Your cards sit directly under Your actions; the log and the revealed feed are last. */}
+        <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <DrawPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
+        <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         {/* The chat routes need a signed-in player */}
         {player !== null && (
           <ChatOrdersPanel
@@ -584,18 +649,8 @@ export function GameView({
             authors={chatAuthors}
           />
         )}
-        <LogPanel
-          gameId={gameId}
-          busy={busy || locked}
-          readOnly={replaying || locked}
-          run={run}
-          reloadCount={reloadCount}
-          historical={historical}
-        />
-        <HandPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
         <OpponentHandPanel opponents={displayedView.opponents} />
         <BattlePanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} />
-        <TechPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         <SocialPolicyPanel gameId={gameId} busy={interactionBusy} run={run} view={displayedView} reloadCount={reloadCount} historical={historical} />
         <StatusPanel
           gameId={gameId}
@@ -610,6 +665,14 @@ export function GameView({
           busy={interactionBusy}
           readOnly={displayedView.you === null || replaying || locked}
           run={run}
+        />
+        <LogPanel
+          gameId={gameId}
+          busy={busy || locked}
+          readOnly={replaying || locked}
+          run={run}
+          reloadCount={reloadCount}
+          historical={historical}
         />
         <RevealedPanel gameId={gameId} reloadCount={reloadCount} historical={historical} />
       </div>
@@ -701,6 +764,20 @@ export function GlobalReplayBar({
 
 // ---------------------------------------------------------------------------
 
+/**
+ * The green toast's text: the player's own log line for what they just did, with
+ * their username spoken as "you". Asking can fail (the connection, a spectator);
+ * the action itself went through, so then it is "Done".
+ */
+async function confirmationFor(gameId: string, revisionBefore: number, viewerName: string | null): Promise<string> {
+  if (viewerName === null || revisionBefore < 0) return confirmationText([])
+  try {
+    return confirmationText((await api.confirmation(gameId, revisionBefore)).lines, viewerName)
+  } catch {
+    return confirmationText([])
+  }
+}
+
 export type Run = (action: () => Promise<PlayerView | unknown>) => Promise<void>
 
 interface PanelProps {
@@ -710,16 +787,63 @@ interface PanelProps {
   readonly view: PlayerView
 }
 
+const CULTURE_SHEETS: ReadonlySet<SheetName> = new Set<SheetName>(['CULTURE_1', 'CULTURE_2', 'CULTURE_3'])
+
+/** 1, 2 or 3 for a culture deck, `null` for any other. */
+function cultureLevelOf(sheet: SheetName): 1 | 2 | 3 | null {
+  return sheet === 'CULTURE_1' ? 1 : sheet === 'CULTURE_2' ? 2 : sheet === 'CULTURE_3' ? 3 : null
+}
+
+/** The culture level of the space the viewer's leader marker stands on (Start counts as 1), or `null` with no marker. */
+function cultureMarkerSheetLevel(view: PlayerView): 1 | 2 | 3 | null {
+  const step = view.you?.cultureMarkerLevel
+  if (step === null || step === undefined) return null
+  return step <= 7 ? 1 : step <= 14 ? 2 : 3
+}
+
+export const cultureLevelQuestion = (drawn: number, marker: number): string =>
+  `Your leader marker is on culture level ${marker}, but you are drawing a culture ${'I'.repeat(drawn)} card. Are you sure?`
+
+function cultureHandQuestion(view: PlayerView): string {
+  const size = view.you?.stats?.cultureHandSize ?? 0
+  return `Your culture hand is over its size of ${size}. You should discard down or increase your culture hand size before you receive another culture card. Draw anyway?`
+}
+
+/** The viewer holds more culture cards than the culture hand size. */
+function cultureHandIsOver(view: PlayerView): boolean {
+  const size = view.you?.stats?.cultureHandSize
+  if (size === undefined) return false
+  const held = (view.you?.items ?? []).filter((item) => CULTURE_SHEETS.has(item.sheetName)).length
+  return held > size
+}
+
 function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   // There is no baton, so the panel is never disabled for turn reasons. Out of
   // turn the player is asked first, and the server hears `confirmedOutOfTurn`
   // only after a yes. It still refuses without it.
   const question = outOfTurnQuestion(view)
   const canDraw = view.you !== null
+  const handOver = cultureHandIsOver(view)
   const draw = (sheet: SheetName): void => {
-    if (question === null) {
+    // Each warning is its own question; a no to any of them draws nothing.
+    if (question !== null && !window.confirm(question)) return
+    const level = cultureLevelOf(sheet)
+    const markerLevel = cultureMarkerSheetLevel(view)
+    if (level !== null && handOver && !window.confirm(cultureHandQuestion(view))) return
+    if (
+      level !== null &&
+      markerLevel !== null &&
+      level !== markerLevel &&
+      !window.confirm(cultureLevelQuestion(level, markerLevel))
+    ) {
+      return
+    }
+    const confirmedOverLimit = level !== null && handOver
+    if (confirmedOverLimit) {
+      void run(() => api.draw(gameId, sheet, question !== null, true))
+    } else if (question === null) {
       void run(() => api.draw(gameId, sheet))
-    } else if (window.confirm(question)) {
+    } else {
       void run(() => api.draw(gameId, sheet, true))
     }
   }
@@ -732,6 +856,11 @@ function DrawPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
             ? 'It is your turn.'
             : 'It is not your turn. You will be asked before you draw.'}
       </p>
+      {handOver && (
+        <p role="status" className="assisted-warning">
+          Your culture hand is over its size. Drawing a culture card asks first.
+        </p>
+      )}
       <div className="row">
         {DRAWABLE.map(({ sheet, label }) => (
           <button
@@ -760,9 +889,20 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
   const items = view.you?.items ?? []
   const opponents = view.opponents
   const blockadedTypes = view.you?.blockadedGreatPersonTypes ?? []
+  const cultureHeld = items.filter(
+    (item) => item.kind === 'cultureI' || item.kind === 'cultureII' || item.kind === 'cultureIII',
+  ).length
+  const cultureSize = view.you?.stats?.cultureHandSize
 
   return (
     <CollapsiblePanel id="hand" title={`Your hand (${items.length})`} defaultOpen>
+      {cultureSize !== undefined && cultureHeld > cultureSize && (
+        <p role="status" className="assisted-warning culture-hand-warning">
+          Culture hand limit: you hold {cultureHeld} culture cards, over your culture hand size
+          of {cultureSize}. Discard down to {cultureSize} or increase your culture hand size
+          before you can advance, draw or receive another culture card.
+        </p>
+      )}
       <LootControls
         items={items}
         opponents={opponents}
@@ -792,6 +932,8 @@ function HandPanel({ gameId, busy, run, view }: PanelProps): React.JSX.Element {
                 item.type !== null &&
                 blockadedTypes.includes(item.type)
               }
+              view={view}
+              playable={view.you?.playableCards?.find((card) => card.itemId === item.id)}
             />
           )),
         )}
@@ -910,12 +1052,18 @@ export function HandItem({
   run,
   opponents,
   blockaded = false,
+  view,
+  playable,
 }: {
   readonly item: Item
   readonly gameId: string
   readonly busy: boolean
   readonly run: Run
   readonly opponents: PlayerView['opponents']
+  /** The viewer's view, for the revision of a card play. Without it the card has no Play button. */
+  readonly view?: PlayerView | undefined
+  /** The engine's answer for this card when it can be played at some time. */
+  readonly playable?: PlayableCard | undefined
   /**
    * Every token of this Great Person type that you have on the map is
    * blockaded (issue #241). A marker only: the card stays usable here, since
@@ -924,7 +1072,12 @@ export function HandItem({
   readonly blockaded?: boolean
 }): React.JSX.Element {
   return (
-    <ItemCard item={item} {...(blockaded ? { className: 'card-blockaded' } : {})}>
+    <ItemCard
+      item={item}
+      id={handItemId(item.id)}
+      tabIndex={-1}
+      {...(blockaded ? { className: 'card-blockaded' } : {})}
+    >
       <span className={item.hidden ? 'tag hidden' : 'tag revealed'}>
         {item.hidden ? 'only you' : 'published'}
       </span>
@@ -970,6 +1123,9 @@ export function HandItem({
       />
       {item.kind === 'greatperson' && item.name === 'Sir Isaac Newton' && (
         <PlaceGreatPersonControl item={item} gameId={gameId} busy={busy} run={run} />
+      )}
+      {playable !== undefined && view !== undefined && (
+        <PlayCardControl card={playable} gameId={gameId} view={view} busy={busy} run={run} />
       )}
     </ItemCard>
   )

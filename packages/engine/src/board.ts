@@ -313,11 +313,38 @@ export interface BoardPiece {
   readonly ownerId?: string | null
   /** Coin tokens physically on the Panama Canal wonder; absent on other pieces. */
   readonly coinTokens?: number
+  /**
+   * A city's production as the players typed it, which wins over the estimate
+   * (`cityProductionsOf`). Only ever set on a city piece; absent means no override.
+   */
+  readonly productionOverride?: number
 }
 
 // ---------------------------------------------------------------------------
 // History
 // ---------------------------------------------------------------------------
+
+/** What changes when a piece is turned over: which asset it shows and the box it fills. */
+export interface PieceFace {
+  readonly assetId: string
+  readonly path: string
+  readonly label: string
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
+/** The face a piece shows now. */
+export const faceOf = (piece: BoardPiece): PieceFace => ({
+  assetId: piece.assetId,
+  path: piece.path,
+  label: piece.label,
+  x: piece.x,
+  y: piece.y,
+  width: piece.width,
+  height: piece.height,
+})
 
 /**
  * One change to the pieces on the board.
@@ -347,6 +374,20 @@ export type BoardChange =
     }
   | { readonly kind: 'owner'; readonly pieceId: string; readonly from: string | null; readonly to: string | null }
   | { readonly kind: 'wonderCoins'; readonly pieceId: string; readonly from: number; readonly to: number }
+  /** `null` is "no override"; applying or reverting it removes the field rather than storing `null`. */
+  | {
+      readonly kind: 'productionOverride'
+      readonly pieceId: string
+      readonly from: number | null
+      readonly to: number | null
+    }
+  /** A piece turned over to its other face (the city marker to its walled side): the same piece, with another asset and size. */
+  | {
+      readonly kind: 'flip'
+      readonly pieceId: string
+      readonly from: PieceFace
+      readonly to: PieceFace
+    }
   | {
       readonly kind: 'reorder'
       readonly pieceId: string
@@ -928,6 +969,20 @@ export function clampToBoard(
 }
 
 /**
+ * Whether map square (column, row) lies on a playable slot. False for the hole
+ * and the outside of a stepped board, where no slot covers the square.
+ */
+export function isMapCell(board: Board, column: number, row: number): boolean {
+  return board.slots.some(
+    (slot) =>
+      column >= slot.x &&
+      column < slot.x + TILE_SQUARES &&
+      row >= slot.y &&
+      row < slot.y + TILE_SQUARES,
+  )
+}
+
+/**
  * The square a piece sits in, by its centre. `null` when off the map — which
  * includes the hole and the outside of a stepped board, where no slot covers
  * the square.
@@ -935,14 +990,7 @@ export function clampToBoard(
 export function squareOf(board: Board, piece: BoardPiece): string | null {
   const column = Math.floor((piece.x + piece.width / 2) / board.squareSize)
   const row = Math.floor((piece.y + piece.height / 2 - mapTop(board)) / board.squareSize)
-  const onSlot = board.slots.some(
-    (slot) =>
-      column >= slot.x &&
-      column < slot.x + TILE_SQUARES &&
-      row >= slot.y &&
-      row < slot.y + TILE_SQUARES,
-  )
-  if (!onSlot) return null
+  if (!isMapCell(board, column, row)) return null
   return `${columnLabel(column)}${row + 1}`
 }
 
@@ -1188,6 +1236,13 @@ const insertAt = (
   return next
 }
 
+/** The piece with its production override set, or without the field when `value` is null. */
+const withProductionOverride = (piece: BoardPiece, value: number | null): BoardPiece => {
+  if (value !== null) return { ...piece, productionOverride: value }
+  const { productionOverride: _cleared, ...rest } = piece
+  return rest
+}
+
 /** Applies one change, moving the board forwards in time. */
 export function applyChange(
   pieces: readonly BoardPiece[],
@@ -1215,6 +1270,10 @@ export function applyChange(
       return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ownerId: change.to } : piece)
     case 'wonderCoins':
       return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, coinTokens: change.to } : piece)
+    case 'productionOverride':
+      return pieces.map((piece) => piece.id === change.pieceId ? withProductionOverride(piece, change.to) : piece)
+    case 'flip':
+      return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ...change.to } : piece)
     case 'reorder': {
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces
@@ -1259,6 +1318,10 @@ export function revertChange(
       return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ownerId: change.from } : piece)
     case 'wonderCoins':
       return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, coinTokens: change.from } : piece)
+    case 'productionOverride':
+      return pieces.map((piece) => piece.id === change.pieceId ? withProductionOverride(piece, change.from) : piece)
+    case 'flip':
+      return pieces.map((piece) => piece.id === change.pieceId ? { ...piece, ...change.from } : piece)
     case 'reorder': {
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces

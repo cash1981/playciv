@@ -6,6 +6,7 @@ import './styles.css'
 import { applyTheme, storedTheme } from './theme.js'
 import { GlobalSpinner } from './views/GlobalSpinner.js'
 import { SiteBackdrop } from './views/SiteBackdrop.js'
+import { ToastRegion } from './views/ToastRegion.js'
 
 // Set the saved palette before React mounts, avoiding a dark-theme flash.
 applyTheme(storedTheme())
@@ -18,5 +19,6 @@ createRoot(container).render(
     <SiteBackdrop />
     <App />
     <GlobalSpinner />
+    <ToastRegion />
   </StrictMode>,
 )

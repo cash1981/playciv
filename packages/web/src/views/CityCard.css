@@ -1,0 +1,209 @@
+/* City cards and the Upgrades block: "Your cities" in Your actions and the
+   Cities panel (tasks city-production, cities-in-actions). Everything wraps, so
+   it never forces a horizontal scroll at 320 px, and nothing has a fixed width. */
+.cities-group {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.cities-owner {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.cities-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.city-card {
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.city-label {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.city-figure {
+  margin: 0.25rem 0;
+  overflow-wrap: anywhere;
+}
+
+.city-number {
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.city-program {
+  margin: 0.25rem 0;
+  color: var(--accent);
+}
+
+/* A narrow phone: the title wraps, Close keeps its width and its word. */
+.city-count-dialog .reference-heading h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.city-count-dialog .reference-heading button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.reference.city-count-dialog {
+  width: min(92vw, 28rem);
+  max-height: 85vh;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.city-arithmetic {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.city-arithmetic ul {
+  margin: 0.2rem 0 0.4rem;
+  padding-left: 1.2rem;
+}
+
+.city-caption {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
+}
+
+.city-flag {
+  color: var(--warn);
+}
+
+.city-build {
+  margin-top: 0.4rem;
+  min-width: 0;
+}
+
+.city-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 0.6rem;
+}
+
+.city-build-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  overflow-wrap: anywhere;
+}
+
+.city-edit {
+  margin-top: 0.4rem;
+}
+
+.city-edit-label {
+  margin-bottom: 0.2rem;
+}
+
+/* The field and its two buttons share a line when there is room and wrap when there is not. */
+.city-edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.city-input {
+  flex: 0 1 5rem;
+  width: 5rem;
+  min-width: 0;
+}
+
+.city-error {
+  margin: 0.3rem 0 0;
+  color: var(--bad);
+}
+
+.city-upgrades {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.city-upgrade-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.city-upgrade {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.city-upgrade-line {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .city-upgrades button,
+  .city-input,
+  .city-build-row button,
+  .city-edit-row button {
+    min-height: 2.75rem;
+  }
+}
+
+/* Devote to the Arts and Harvest: the panel under the card's buttons. */
+.gather-parts,
+.gather-notes {
+  margin: 0.3rem 0;
+  padding-left: 1.2rem;
+}
+
+.gather-notes {
+  font-size: 0.85rem;
+}
+
+.gather-scouts {
+  margin: 0.4rem 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.gather-scout {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.2rem 0;
+}
+
+/* The global input rule makes a field full width; a checkbox keeps its own size. */
+.gather-scout input {
+  flex: none;
+  width: auto;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .gather-panel button {
+    min-height: 2.75rem;
+  }
+}

@@ -22,12 +22,15 @@ import {
 import {
   activeWonderOwnerIds,
   coinOnReveal,
-  coinSourcesOf,
   findCoinSource,
   socialPolicyCoinSource,
   techCoinSource,
   withCoinSource,
 } from '../coins.js'
+import { cultureCardsHeld, cultureHandSizeOf, isCultureHandOver } from '../culture-hand.js'
+import { applyCoinPurchase } from '../assisted.js'
+import { grantsAfterTechRemoved, openPhaseOf, statsAfterGovernmentChange } from '../sot.js'
+import { turnStatus } from '../turn.js'
 import { blockadedPieceIds } from '../blockade.js'
 import type { EngineError } from '../errors.js'
 import type { Government } from '../government.js'
@@ -54,7 +57,6 @@ import {
   isMovementValue,
   withPlayer,
 } from '../state.js'
-import { publicTurn, publicTurnKey, sameTurn, turnStatus } from '../turn.js'
 
 import { placeUnchecked, setWonderCoinTokens } from './board.js'
 import { draw, drawWonderToBoard } from './draw.js'
@@ -133,6 +135,7 @@ export function removeTech(state: GameState, input: ChooseTechInput): ActionResu
   const source = techCoinSource(tech.name)
   const next = withPlayer(state, {
     ...player,
+    techGrants: grantsAfterTechRemoved(player.techGrants, tech.name),
     techsChosen: player.techsChosen.filter((candidate) => candidate.name !== tech.name),
     stats:
       source === undefined
@@ -163,8 +166,27 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
   // counts, so revealing twice does not undo a counter the player has lowered,
   // and a hidden tech gives nothing because the counters are public.
   const source = tech.hidden ? techCoinSource(tech.name) : undefined
+  // The first reveal also records the turn (a government is unlocked for a direct
+  // change during the next Start of Turn) and spends a free tech the player was
+  // owed in this Start of Turn (Rationalism, a hut, an investment).
+  const turnNumber = turnStatus(state).currentTurn
+  const grant =
+    tech.hidden && openPhaseOf(state, player.playerId) === 'SOT'
+      ? player.techGrants.find(
+          (candidate) =>
+            candidate.usedFor === undefined &&
+            candidate.turnNumber === turnNumber &&
+            (candidate.level === null || candidate.level === tech.level),
+        )
+      : undefined
   const next = withPlayer(state, {
     ...player,
+    ...(tech.hidden
+      ? { techRevealTurns: { ...player.techRevealTurns, [tech.name]: turnNumber } }
+      : {}),
+    ...(grant === undefined
+      ? {}
+      : { techGrants: player.techGrants.map((candidate) => (candidate === grant ? { ...candidate, usedFor: tech.name } : candidate)) }),
     techsChosen: player.techsChosen.map((candidate) =>
       candidate.name === tech.name ? revealed : candidate,
     ),
@@ -180,7 +202,16 @@ export function revealTech(state: GameState, input: ChooseTechInput): ActionResu
     },
   })
 
-  return ok(appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed))
+  const logged = appendItemLog(next, 'REVEAL', player.username, player.playerId, revealed)
+  if (grant === undefined) return ok(logged)
+  return ok(
+    appendLog(logged, {
+      username: player.username,
+      playerId: player.playerId,
+      publicLog: `${player.username} learned ${tech.name} with ${grant.source}`,
+      privateLog: '',
+    }),
+  )
 }
 
 export interface SetTechSlotInput {
@@ -877,6 +908,19 @@ export function tradeToPlayer(state: GameState, input: TradeInput): ActionResult
 
   if (found === undefined) return err({ kind: 'ITEM_NOT_FOUND', sheetName: input.sheetName })
 
+  // A culture card cannot be given to a hand that already holds more than its size
+  if (
+    (found.kind === 'cultureI' || found.kind === 'cultureII' || found.kind === 'cultureIII') &&
+    isCultureHandOver(state, toPlayer)
+  ) {
+    return err({
+      kind: 'CULTURE_HAND_OVER',
+      playerId: toPlayer.playerId,
+      held: cultureCardsHeld(toPlayer),
+      size: cultureHandSizeOf(state, toPlayer),
+    })
+  }
+
   const traded: Item = { ...found, ownerId: toPlayer.playerId }
 
   let next = withPlayer(state, {
@@ -1213,37 +1257,7 @@ export function setPlayerGovernment(
     return err({ kind: 'UNKNOWN_GOVERNMENT', government: String(input.government) })
   }
 
-  // Issue #158: the government card holds its coin, so leaving Democracy clears
-  // the source instead of leaving a hidden value behind. Moving to Democracy
-  // starts it at 1; setting Democracy again leaves a lowered counter alone.
-  let coinSources = target.stats.coinSources
-  if (input.government !== 'Democracy') {
-    coinSources = withCoinSource(coinSources, 'democracyGovernment', 0)
-  } else if (target.government !== 'Democracy') {
-    coinSources = withCoinSource(
-      coinSources,
-      'democracyGovernment',
-      coinOnReveal('democracyGovernment'),
-    )
-  }
-  // Anarchy switches every social policy off, so the Organized Religion coin
-  // goes to 0 there. Leaving Anarchy brings it back, but only for a policy the
-  // player has revealed: a hidden policy must not show up in a public counter.
-  if (input.government === 'Anarchy') {
-    coinSources = withCoinSource(coinSources, 'organizedReligion', 0)
-  } else if (target.government === 'Anarchy') {
-    const hasPolicy = target.socialPolicies.some(
-      (policy) => !policy.hidden && socialPolicyCoinSource(policy.name) === 'organizedReligion',
-    )
-    if (hasPolicy) {
-      coinSources = withCoinSource(
-        coinSources,
-        'organizedReligion',
-        coinOnReveal('organizedReligion'),
-      )
-    }
-  }
-  const stats = { ...target.stats, coinSources }
+  const stats = statsAfterGovernmentChange(target, input.government)
 
   const next = withPlayer(state, { ...target, government: input.government, stats })
   const message =
@@ -1289,72 +1303,12 @@ export interface PurchaseCoinInput {
 export function purchaseCoin(state: GameState, input: PurchaseCoinInput): ActionResult {
   const access = requireAccess(state, input.playerId)
   if (!access.ok) return access
-  const player = access.value
-  const source = input.source
-  const techName = source === 'democracy' ? 'Democracy' : 'Printing Press'
-  const resource = source === 'democracy' ? 'trade' : 'culture'
-  const cost = source === 'democracy' ? 6 : 5
-  const usageKey = `coin-purchase:${source}`
-  const reject = (reason: Extract<EngineError, { kind: 'COIN_PURCHASE_REJECTED' }>['reason']): ActionResult =>
-    err({ kind: 'COIN_PURCHASE_REJECTED', source, reason })
-
-  if (!player.techsChosen.some((tech) => tech.name === techName && !tech.hidden)) {
-    return reject('TECH_NOT_REVEALED')
-  }
-
-  const turnNumber = turnStatus(state).currentTurn
-  const existingTurn = player.playerTurns.find((turn) => turn.turnNumber === turnNumber)
-  if (
-    existingTurn === undefined ||
-    !existingTurn.done.SOT ||
-    !existingTurn.done.TRADE ||
-    existingTurn.done.CM ||
-    existingTurn.done.MOVEMENT ||
-    existingTurn.done.RESEARCH
-  ) {
-    return reject('PHASE_CLOSED')
-  }
-  if (existingTurn.usedActions.includes(usageKey)) return reject('ALREADY_USED')
-
-  if (player.stats[resource] < cost) return reject('INSUFFICIENT_RESOURCES')
-
-  const sourceKey = source
-  const current = coinSourcesOf(state, player)[sourceKey]
-  const coinSource = findCoinSource(sourceKey)
-  if (coinSource === undefined) return reject('AT_CAPACITY')
-  const blockadedIds = blockadedPieceIds(state)
-  const internetOwners = activeWonderOwnerIds(state.board.pieces, 'wonders/internet', blockadedIds)
-  const max = coinSource.max === null
-    ? null
-    : coinSource.max + (internetOwners.has(player.playerId) ? 2 : 0)
-  if (max !== null && current >= max) return reject('AT_CAPACITY')
-
-  const updatedTurn = {
-    ...existingTurn,
-    usedActions: [...existingTurn.usedActions, usageKey],
-  }
-  const playerTurns = player.playerTurns.map((turn) => sameTurn(turn, updatedTurn) ? updatedTurn : turn)
-  const key = publicTurnKey(updatedTurn)
-  const next: GameState = {
-    ...withPlayer(state, {
-      ...player,
-      playerTurns,
-      stats: {
-        ...player.stats,
-        [resource]: player.stats[resource] - cost,
-        coinSources: withCoinSource(player.stats.coinSources, sourceKey, current + 1),
-      },
-    }),
-    publicTurns: { ...state.publicTurns, [key]: publicTurn(updatedTurn) },
-  }
-  const paidFor = source === 'democracy' ? '6 trade' : '5 culture'
-  return ok(appendLog(next, {
-    username: player.username,
-    playerId: player.playerId,
-    publicLog: `${player.username} spent ${paidFor} to add 1 coin to ${techName}`,
-    privateLog: '',
-    createdAt: input.at ?? null,
-  }))
+  // The check, the payment and the log line live in `assisted.ts`, where the
+  // registry's Democracy and Printing Press entries use the same code.
+  const applied = applyCoinPurchase(state, access.value, input.source, {
+    ...(input.at === undefined ? {} : { at: input.at }),
+  })
+  return applied.ok ? ok(applied.value.state) : applied
 }
 
 /**

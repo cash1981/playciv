@@ -1,0 +1,46 @@
+/* The phase tabs of "Your actions". Five pills that wrap at 320 px instead of
+   forcing a horizontal scroll. */
+.phase-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.phase-tab {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.phase-tab.active {
+  font-weight: 700;
+}
+
+.phase-tab-mark {
+  font-weight: 400;
+  font-size: 0.85em;
+}
+
+.phase-tab-panel {
+  min-width: 0;
+}
+
+.phase-guide {
+  margin: 0 0 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.phase-status {
+  margin: 0 0 0.75rem;
+}
+
+.phase-group {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.phase-group-title {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
