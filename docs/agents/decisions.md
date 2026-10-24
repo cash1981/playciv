@@ -543,9 +543,10 @@ typed by hand (`BoardPiece.productionOverride`, any player in the game may set i
 - A city piece off the map is not listed, so the status board's city count can
   be higher than the list of cities (Your cities).
 - The per city arithmetic (outskirts squares, modifiers, notes) is no longer an
-  always present details block on each card. The figure line carries a link,
-  "Not a complete count" ("How the estimate is counted" when the figure is set by
-  hand), that opens the same content in a small dialog.
+  always present details block on each card. The figure line carries a round
+  `?` button, named "Not a complete count" ("How the estimate is counted" when the
+  figure is set by hand) for the hover title and screen readers, that opens the
+  same content in a small dialog.
 
 Source: `engine/src/city-production.ts`, `building-data.ts`, `blockade.ts`
 (`cityFootprintsOf`), `actions/board.ts` (`setCityProductionOverride`),
@@ -607,7 +608,10 @@ private card, nothing placed).
   styled like a city card. With the phase tabs (part 13) each tab has the box for its own
   phase that has an action the player holds (Trade, Movement and Research often have none), its groups as sub-headings, and "Your cities" follows it in City Management; in Start of Turn the government, invest, scout and card sections sit outside the box. After a successful Advance culture the page scrolls to Your hand
   (it waits for a card choice that is open, which is above the hand, and goes when it has
-  been kept). The city name is the larger text on a city card and the production figure the
+  been kept). A blocked Advance culture stays in its
+  phase's box, disabled, with the reason as its hover title and behind its `?` (the human,
+  after a player could not find it with a full culture hand); other blocked actions stay out.
+  Disabled Harvest and Devote to the Arts carry their reason as a title too. The city name is the larger text on a city card and the production figure the
   smaller; Build and Start Building Program share a row when there is room.
 - The city card says "Production override" for the hand-set figure, and the picker "Production
   override: N" (it said "set by hand").

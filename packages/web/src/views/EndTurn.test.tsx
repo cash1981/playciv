@@ -128,7 +128,10 @@ describe('End turn in Your actions', () => {
     const unmarkDone = vi.spyOn(api, 'unmarkDone').mockResolvedValue({} as PlayerView)
     renderPanel(viewIn(activeTurn(4, [alice('CM'), bob('CM')])))
 
-    fireEvent.click(screen.getByRole('button', { name: 'End turn: mark City management as done' }))
+    const button = screen.getByRole('button', { name: 'End turn: mark City management as done' })
+    // What the press does, on hover
+    expect(button.getAttribute('title')).toBe('End turn: mark City management as done')
+    fireEvent.click(button)
 
     await waitFor(() => expect(markDone).toHaveBeenCalledExactlyOnceWith('game-1', 'CM', 4))
     expect(unmarkDone).not.toHaveBeenCalled()

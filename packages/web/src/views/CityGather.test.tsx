@@ -90,6 +90,7 @@ describe('Devote to the Arts', () => {
     renderPanel(viewOf([options()]))
     expect(devoteButton().textContent).toBe('Devote to the Arts')
     expect(devoteButton().disabled).toBe(false)
+    expect(devoteButton().getAttribute('title')).toBe('Devote to the Arts in Capital B3')
     expect(screen.queryByRole('group', { name: 'Devote Capital B3 to the arts' })).toBeNull()
   })
 

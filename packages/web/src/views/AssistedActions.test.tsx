@@ -870,7 +870,7 @@ describe('the pending card choice', () => {
     expect(screen.queryByText('Choose a card to keep')).toBeNull()
   })
 
-  it('shows the choice even when no action is listed', () => {
+  it('shows the choice, and the advance it blocks as disabled', () => {
     const reason = 'Advance to space 9 (culture II event): 5 culture and 3 trade. Choose the card to keep from your last advance first.'
     renderPanel(viewWithRewards([reward()], [advance('unavailable', reason)]))
 

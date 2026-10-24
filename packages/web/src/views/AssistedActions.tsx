@@ -141,7 +141,7 @@ export function pressOnce(
   }).then(settle, settle)
 }
 
-/** A status that leaves the button on the page, disabled: it is waiting for something the player can do. */
+/** A status that leaves the culture advance on the page, disabled, with its reason behind the `?`. */
 const isBlockedHere = (status: Status): boolean => status === 'needs-resource' || status === 'unavailable'
 
 /** Actions whose button does not read "Use <label>". */
@@ -311,7 +311,8 @@ export function hasActionsPanel(view: PlayerView): boolean {
 
 /**
  * The buttons of one phase, grouped under the heading each action names. Actions for
- * a card the player does not hold are left out, so the list stays short. `'ANY'`
+ * a card the player does not hold are left out, so the list stays short; so are blocked
+ * ones, except the culture advance, which stays disabled with its reason. `'ANY'`
  * actions are listed in every phase. `onDone` runs after a press that went through, with
  * the action that was pressed.
  */
