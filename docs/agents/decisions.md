@@ -479,7 +479,8 @@ The green text is the player's own words for what they did, from
 `GET /api/games/:gameId/confirmation?after=<revision>`: for the revisions after the
 one the page held that the player made themself, their private log text, else the
 public line; else "Done". The viewer's own username in that text is shown as
-"you" (and `'s` as "your"), so the toast does not tell players who they are;
+"you" (and `'s` as "your"), with the log's third-person verb put into the you
+form ("you have", "you are"), so the toast does not tell players who they are;
 another player's name is left alone. The server route still returns the raw line.
 Revisions by others never count, even when they wrote a private line for this
 player (a trade handing them an item), so a toast is never another player's

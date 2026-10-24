@@ -35,7 +35,33 @@ describe('confirmationText', () => {
       ),
     ).toBe('You played Khalid, becoming the start player (next turn passes clockwise from you)')
     expect(confirmationText(["System: Alice's Stonehenge was undone"], 'Alice')).toBe(
-      "System: your Stonehenge was undone",
+      "System: Your Stonehenge was undone",
+    )
+  })
+
+  it('fixes the third-person verb of the log lines it rewrites', () => {
+    expect(confirmationText(['Alice has updated city management phase'], 'Alice')).toBe(
+      'You have updated city management phase',
+    )
+    expect(confirmationText(['Turn 1 - Alice has updated city management phase'], 'Alice')).toBe(
+      'Turn 1 - You have updated city management phase',
+    )
+    expect(confirmationText(['Alice is now the start player'], 'Alice')).toBe('You are now the start player')
+    expect(confirmationText(['Alice has discarded Foo'], 'Alice')).toBe('You have discarded Foo')
+    expect(confirmationText(['Alice plays Foo'], 'Alice')).toBe('You play Foo')
+    expect(confirmationText(['Alice reveals Foo'], 'Alice')).toBe('You reveal Foo')
+    expect(confirmationText(['Alice moves a unit to D5'], 'Alice')).toBe('You move a unit to D5')
+  })
+
+  it('rewrites the actor again in an undo line', () => {
+    expect(
+      confirmationText(
+        ['System: Alice has removed Foo from Alice and put back in the deck. Deck is reshuffled'],
+        'Alice',
+      ),
+    ).toBe('System: You have removed Foo from you and put back in the deck. Deck is reshuffled')
+    expect(confirmationText(['System: Alice has added back Foo to Alice'], 'Alice')).toBe(
+      'System: You have added back Foo to you',
     )
   })
 
@@ -48,6 +74,12 @@ describe('confirmationText', () => {
 
   it('does not change a card or another player whose name contains the viewer name', () => {
     expect(confirmationText(['Alice offered Alice-Bob a trade'], 'Alice')).toBe('You offered Alice-Bob a trade')
+    expect(confirmationText(['Alice offered a trade to Alice-Bob'], 'Alice')).toBe(
+      'You offered a trade to Alice-Bob',
+    )
+    expect(confirmationText(["Alice moved a piece from Alice's area"], 'Alice')).toBe(
+      "You moved a piece from Alice's area",
+    )
     expect(confirmationText(["Lorenzo used Lorenzo de' Medici: gained 1 culture"], 'Lorenzo')).toBe(
       "You used Lorenzo de' Medici: gained 1 culture",
     )

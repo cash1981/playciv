@@ -37,8 +37,9 @@ Three changes the human asked for after trying the assisted actions (2026-10-24)
 In: `AvailableAction.repeatable`, strict-once flags for the social policies and
 wonders, the disabled used button, the toast duration, the confirmation text and
 their tests. The Great Person hidden-info API test also gets a test-only fix: it
-picks cards whose names are not also public Start of Turn button labels, so a
-public label is not mistaken for a leaked card name.
+keeps the drawn cards but leaves a card name that is also a public Start of Turn
+button label out of the name checks (the id is still checked), so a public label
+is not mistaken for a leaked card name.
 
 Out: changing the stored log text, the revision history, or other players' view
 of an action; changing the repeat behaviour of Great Persons, culture cards or
