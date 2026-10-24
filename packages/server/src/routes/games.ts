@@ -15,6 +15,9 @@ import {
   revealedTechsForAllPlayers,
   toPlayerView,
   turnStatus,
+  counterTradeOffer,
+  createTradeOffer,
+  transitionTradeOffer,
   withdrawFromGame,
 } from '@civ/engine'
 
@@ -209,12 +212,18 @@ function revisionSummary(revision: GameRevisionMetadata) {
   }
 }
 
+/**
+ * A past state as the viewer may read it. Their private note is blanked, and so
+ * are their button states: they were computed against a state that is gone, and
+ * a ready button in a replay would be a press on the wrong game. The same goes for
+ * a card choice that was waiting then, the city actions and the upgrade options: none can be made from the past.
+ */
 function projectedRevision(revision: GameRevision, viewerId: string) {
   const state = revision.state
   const projected = toPlayerView(state, viewerId)
   const view = projected.you === null
     ? projected
-    : { ...projected, you: { ...projected.you, gamenote: '' } }
+    : { ...projected, you: { ...projected.you, gamenote: '', availableActions: [], buildOptions: [], cityActions: [], upgradeOptions: [], pendingRewards: [], playableCards: [], startOfTurn: null } }
   return {
     ...revisionSummary(revision),
     view,
@@ -385,6 +394,34 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     return c.json(revisions.map((revision) => revisionSummary(revision)))
   })
 
+  /**
+   * What the viewer's own actions after revision `after` did, in their own words, for the
+   * green confirmation on the page. Only revisions the viewer made count: it is their
+   * private log text where there is any, else the public line. A revision by someone
+   * else, such as a trade that hands the viewer an item, is not what the viewer just
+   * did, so it never becomes their confirmation. It is kept out of the history list,
+   * which names things the way the public log does, even to the player themself.
+   */
+  app.get('/api/games/:gameId/confirmation', auth, async (c) => {
+    const gameId = c.req.param('gameId')
+    if (await context.repo.findGameRevisionCounter(gameId) === undefined) {
+      return sendError(c, 404, 'GAME_NOT_FOUND', `No game with id ${gameId}`)
+    }
+    const after = Number.parseInt(c.req.query('after') ?? '', 10)
+    if (!Number.isInteger(after) || after < 0) {
+      return sendError(c, 400, 'BAD_REQUEST', 'after must be a whole number of 0 or more')
+    }
+    const viewerId = currentPlayer(c).id
+    const lines = (await context.repo.listGameRevisionSummaries(gameId))
+      .filter((revision) => revision.revision > after && revision.actor.playerId === viewerId)
+      .map((revision) => {
+        const own = revision.privateDescriptions[viewerId]
+        return own !== undefined && own !== '' ? own : revision.publicDescription
+      })
+      .filter((line) => line !== '')
+    return c.json({ lines })
+  })
+
   app.get('/api/games/:gameId/revisions/:revision', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
     const game = await context.repo.findGame(gameId)
@@ -522,20 +559,41 @@ export function registerGameRoutes(app: App, context: AppContext): void {
   /** Java: `/{pbfId}/publiclog`. */
   app.get('/api/games/:gameId/log/public', optionalAuth, async (c) => {
     const gameId = c.req.param('gameId')
-    return readGame(context, c, gameId, (state) =>
-      newestFirst(
+    return readGame(context, c, gameId, (state, viewerId) => {
+      const assistedActionsById = new Map(
+        state.assistedActions.map((record) => [record.id, record] as const),
+      )
+      return newestFirst(
         state.log
           .filter((entry) => entry.publicLog !== '')
-          .map((entry) => ({
-            id: entry.id,
-            username: entry.username,
-            logType: entry.logType,
-            message: entry.publicLog,
-            createdAt: entry.createdAt,
-            hasUndo: entry.undo !== null,
-          })),
-      ),
-    )
+          .map((entry) => {
+            const assisted =
+              entry.assistedActionId === undefined
+                ? undefined
+                : assistedActionsById.get(entry.assistedActionId)
+            return {
+              id: entry.id,
+              username: entry.username,
+              logType: entry.logType,
+              message: entry.publicLog,
+              createdAt: entry.createdAt,
+              hasUndo: entry.undo !== null,
+              // Any player in the game may ask to take it back, which starts the vote;
+              // a spectator or an anonymous viewer may not. The line stays after an undo.
+              ...(entry.assistedActionId === undefined
+                ? {}
+                : {
+                    assistedActionId: entry.assistedActionId,
+                    canUndo:
+                      assisted !== undefined &&
+                      assisted.status === 'applied' &&
+                      state.players.some((player) => player.playerId === viewerId) &&
+                      entry.undo === null,
+                  }),
+            }
+          }),
+      )
+    })
   })
 
   /** Java: `/{pbfId}/privatelog` — the player's own entries only. */
@@ -583,6 +641,63 @@ export function registerGameRoutes(app: App, context: AppContext): void {
       return sendError(c, 400, 'BAD_REQUEST', 'before is not a message in this game')
     }
     return c.json(page)
+  })
+
+  // -------------------------------------------------------------------------
+  // Trade offers (issue #265). Terms stay opaque text: accepting records an
+  // agreement only and never changes inventory.
+  // -------------------------------------------------------------------------
+
+  app.post('/api/games/:gameId/trade-offers', auth, async (c) => {
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const recipientId = requireString(body, 'recipientId')
+    const terms = requireString(body, 'terms')
+    const requestId = requireString(body, 'requestId')
+    const rev = body['rev']
+    if (recipientId === undefined || terms === undefined || requestId === undefined || typeof rev !== 'number' || !Number.isInteger(rev) || rev < 0) {
+      return sendError(c, 400, 'BAD_REQUEST', 'recipientId, terms, requestId and a non-negative integer rev are required')
+    }
+    return applyToGame(context, c, c.req.param('gameId'), (state) => createTradeOffer(state, {
+      senderId: currentPlayer(c).id,
+      recipientId,
+      terms,
+      requestId,
+      at: new Date().toISOString(),
+    }), rev, { skipSaveWhenUnchanged: true, allowIdempotentRetry: true })
+  })
+
+  app.post('/api/games/:gameId/trade-offers/:offerId/counter', auth, async (c) => {
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const terms = requireString(body, 'terms')
+    const requestId = requireString(body, 'requestId')
+    const rev = body['rev']
+    if (terms === undefined || requestId === undefined || typeof rev !== 'number' || !Number.isInteger(rev) || rev < 0) {
+      return sendError(c, 400, 'BAD_REQUEST', 'terms, requestId and a non-negative integer rev are required')
+    }
+    return applyToGame(context, c, c.req.param('gameId'), (state) => counterTradeOffer(state, {
+      actorId: currentPlayer(c).id,
+      offerId: c.req.param('offerId'),
+      terms,
+      requestId,
+      at: new Date().toISOString(),
+    }), rev, { skipSaveWhenUnchanged: true, allowIdempotentRetry: true })
+  })
+
+  app.post('/api/games/:gameId/trade-offers/:offerId/:action', auth, async (c) => {
+    const body = asRecord(await c.req.json().catch(() => ({})))
+    const requestId = requireString(body, 'requestId')
+    const rev = body['rev']
+    const action = c.req.param('action')
+    if (requestId === undefined || typeof rev !== 'number' || !Number.isInteger(rev) || rev < 0 || (action !== 'accept' && action !== 'decline' && action !== 'withdraw')) {
+      return sendError(c, 400, 'BAD_REQUEST', 'requestId, a valid action and a non-negative integer rev are required')
+    }
+    return applyToGame(context, c, c.req.param('gameId'), (state) => transitionTradeOffer(state, {
+      actorId: currentPlayer(c).id,
+      offerId: c.req.param('offerId'),
+      action,
+      requestId,
+      at: new Date().toISOString(),
+    }), rev, { skipSaveWhenUnchanged: true, allowIdempotentRetry: true })
   })
 
   app.post('/api/games/:gameId/chat', auth, async (c) => {

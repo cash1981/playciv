@@ -31,12 +31,14 @@ import type { CoinSourceKey, Government, PlayerStatKey } from '@civ/engine'
 
 import { api } from '../lib/api.js'
 import type { PlayerStats, PlayerView } from '../lib/api.js'
+import { AssistedActionButton } from './AssistedActions.js'
 import { CollapsiblePanel } from './CollapsiblePanel.js'
 import type { Run } from './GameView.js'
 import { PlayerTabs } from './PlayerTabs.js'
 import './PlayerTabs.css'
 import { ReferenceCard } from './ReferenceCard.js'
 import { ReferenceDialog } from './ReferenceDialog.js'
+import { focusPlayer } from './turnFocus.js'
 
 interface Props {
   readonly gameId: string
@@ -156,20 +158,35 @@ const COLUMN_COUNT = 3 + ACCOUNTING_COLUMNS.length + UNIT_COLUMNS.length + MODIF
 /** Keys of the first column in each group — used to draw vertical section dividers. */
 const GROUP_START_KEYS = new Set(STATUS_GROUPS.map((g) => g.columns[0]!.key))
 
+/** The window event that opens the government card reference from outside this panel. */
+const OPEN_GOVERNMENT_REFERENCE = 'civ:open-government-reference'
+
+/** Opens the same government card reference the `?` next to the status dropdown opens. */
+export function openGovernmentReference(): void {
+  window.dispatchEvent(new Event(OPEN_GOVERNMENT_REFERENCE))
+}
+
 export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element {
   const [showGovernmentReference, setShowGovernmentReference] = useState(false)
   const [section, setSection] = useState<Section>('status')
   const governmentHelpRef = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    const open = (): void => setShowGovernmentReference(true)
+    window.addEventListener(OPEN_GOVERNMENT_REFERENCE, open)
+    return () => window.removeEventListener(OPEN_GOVERNMENT_REFERENCE, open)
+  }, [])
   const rows: Row[] = []
-  // There is no baton: the tag follows whoever holds the active turn.
-  const onTurn = (playerId: string): boolean => view.activeTurn?.playerId === playerId
+  // There is no baton: the tag follows the player in focus, the same one the
+  // game title names (`focusPlayer`), by username.
+  const focus = focusPlayer(view.activeTurn)
+  const onTurn = (username: string): boolean => focus?.username === username
 
   if (view.you !== null) {
     rows.push({
       playerId: view.you.playerId,
       username: view.you.username,
       color: view.you.color,
-      onTurn: onTurn(view.you.playerId),
+      onTurn: onTurn(view.you.username),
       civilizationName: view.you.civilization?.name ?? null,
       government: view.you.government,
       stats: view.you.stats,
@@ -187,7 +204,7 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
       playerId: opponent.playerId,
       username: opponent.username,
       color: opponent.color,
-      onTurn: onTurn(opponent.playerId),
+      onTurn: onTurn(opponent.username),
       civilizationName: opponent.civilization?.name ?? null,
       government: opponent.government,
       stats: opponent.stats,
@@ -218,9 +235,8 @@ export function StatusPanel({ gameId, view, busy, readOnly, run }: Props): React
           <CoinSection
             gameId={gameId}
             rows={rows}
+            view={view}
             currentPlayerId={view.you?.playerId ?? null}
-            currentTurnNumber={view.activeTurn?.turnNumber ?? null}
-            currentPlayerTurns={view.you?.playerTurns ?? []}
             internetOwners={wonderOwners(view, 'wonders/internet')}
             panamaOwners={wonderOwners(view, 'wonders/panamacanal')}
             panamaBlockaded={blockadedWonderOwners(view, 'wonders/panamacanal')}
@@ -444,9 +460,8 @@ function availableCoinSources(
 function CoinSection({
   gameId,
   rows,
+  view,
   currentPlayerId,
-  currentTurnNumber,
-  currentPlayerTurns,
   internetOwners,
   panamaOwners,
   panamaBlockaded,
@@ -456,9 +471,9 @@ function CoinSection({
 }: {
   readonly gameId: string
   readonly rows: readonly Row[]
+  /** The viewer's `availableActions` decide the purchase buttons (#260). */
+  readonly view: PlayerView
   readonly currentPlayerId: string | null
-  readonly currentTurnNumber: number | null
-  readonly currentPlayerTurns: NonNullable<PlayerView['you']>['playerTurns']
   readonly internetOwners: ReadonlySet<string>
   readonly panamaOwners: ReadonlySet<string>
   /** Owners whose Panama Canal is blockaded: the engine shows its coins as 0 until it is released. */
@@ -475,25 +490,6 @@ function CoinSection({
     available.get(row.playerId)?.has(key) === true ||
     row.stats.coinSources[key] > 0 ||
     (key === 'panamaCanal' && panamaBlockaded.has(row.playerId))
-  const activePlayerTurn = currentPlayerTurns.find((turn) => turn.turnNumber === currentTurnNumber)
-  const canPurchase = (row: Row, source: 'democracy' | 'printingPress'): boolean => {
-    const techName = source === 'democracy' ? 'Democracy' : 'Printing Press'
-    const resource = source === 'democracy' ? 'trade' : 'culture'
-    const cost = source === 'democracy' ? 6 : 5
-    const key = `coin-purchase:${source}`
-    const limit = source === 'democracy' ? 4 : 4
-    return row.playerId === currentPlayerId &&
-      row.revealedTechNames.includes(techName) &&
-      activePlayerTurn !== undefined &&
-      activePlayerTurn.done.SOT &&
-      activePlayerTurn.done.TRADE &&
-      !activePlayerTurn.done.CM &&
-      !activePlayerTurn.done.MOVEMENT &&
-      !activePlayerTurn.done.RESEARCH &&
-      !activePlayerTurn.usedActions.includes(key) &&
-      row.stats[resource] >= cost &&
-      row.stats.coinSources[source] < limit + (internetOwners.has(row.playerId) ? 2 : 0)
-  }
   const sources = COIN_SOURCES.filter((source) => rows.some((row) => renders(row, source.key)))
   return (
     <div className="scroll-x">
@@ -572,15 +568,18 @@ function CoinSection({
                       row.playerId === currentPlayerId && row.revealedTechNames.includes(
                         source.key === 'democracy' ? 'Democracy' : 'Printing Press',
                       ) && (
-                        <button
-                          type="button"
+                        <AssistedActionButton
+                          action={source.key}
+                          gameId={gameId}
+                          view={view}
+                          busy={busy}
+                          readOnly={readOnly}
+                          run={run}
+                          detail="blocked"
                           className="button secondary"
-                          disabled={disabled || !canPurchase(row, source.key)}
-                          title={canPurchase(row, source.key) ? undefined : 'Available once during your open City Management phase'}
-                          onClick={() => void run(() => api.purchaseCoin(gameId, source.key))}
                         >
                           {source.key === 'democracy' ? 'Spend 6 trade' : 'Spend 5 culture'}
-                        </button>
+                        </AssistedActionButton>
                       )}
                     </>
                   )}
@@ -665,7 +664,7 @@ function CoinCounter({
  * Enter, and only when the value actually changed, so concurrent edits are not
  * clobbered. Invalid input reverts rather than saving.
  */
-function StatCell({
+export function StatCell({
   label,
   value,
   text = false,

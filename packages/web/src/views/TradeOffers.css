@@ -1,0 +1,72 @@
+.trade-collected {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.trade-collected .stat-input {
+  width: 4rem;
+}
+
+.trade-offer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.45rem;
+}
+
+.trade-offer-body {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.trade-offer {
+  margin-bottom: 0.6rem;
+  padding: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  background: var(--panel-2);
+}
+
+.trade-offer-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trade-offer-actions,
+.trade-offer-counter,
+.trade-offer-composer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.trade-offer-counter input,
+.trade-offer-composer textarea,
+.trade-offer-composer select {
+  min-width: min(100%, 18rem);
+  min-height: 44px;
+  padding: 0.45rem;
+}
+
+.trade-offer-composer {
+  margin-bottom: 0.6rem;
+  padding: 0.6rem;
+  border: 1px dashed var(--line);
+}
+
+.trade-offer-composer textarea {
+  flex-basis: 100%;
+  min-height: 4rem;
+}
+
+.trade-offer-note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}

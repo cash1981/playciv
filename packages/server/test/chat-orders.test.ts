@@ -582,6 +582,22 @@ describe('out-of-turn draws through the API', () => {
   })
 })
 
+describe('culture draws over the culture hand size through the API', () => {
+  it('refuses a culture card to a hand over its size unless confirmedOverLimit is true', async () => {
+    const game = await startedGame('culture-over')
+    const url = `/api/games/${game.gameId}/draw/CULTURE_1`
+    // The base hand size is 2, and a hand at its size may still take one more
+    for (let draws = 0; draws < 3; draws += 1) expect((await post(game.seat1, url)).status).toBe(200)
+
+    const refused = await post(game.seat1, url)
+    expect(refused.status).toBe(409)
+    expect(JSON.parse(refused.body)).toMatchObject({ error: 'CULTURE_HAND_OVER' })
+    expect((await post(game.seat1, url, { confirmedOverLimit: 'true' })).status).toBe(409)
+    expect((await post(game.seat1, `/api/games/${game.gameId}/draw/INFANTRY`)).status).toBe(200)
+    expect((await post(game.seat1, url, { confirmedOverLimit: true })).status).toBe(200)
+  })
+})
+
 describe('hidden information', () => {
   it('an opponent sees flags and published orders but not the private log, note or an unpublished draft', async () => {
     const game = await startedGame('leak')
@@ -613,5 +629,93 @@ describe('hidden information', () => {
     expect(JSON.stringify(page)).not.toContain('NOTE-SECRET')
     expect(JSON.stringify(page)).not.toContain('DRAFT-SECRET')
     expect(JSON.stringify(page)).not.toContain(privateLog)
+  })
+})
+
+describe('trade offers', () => {
+  it('returns exact committed requests on stale revisions without accepting changed retries', async () => {
+    const game = await startedGame('offer-retries')
+    const before = await loadGame(game.gameId)
+    const recipient = before.players.find((player) => player.username === game.name2)
+    if (recipient === undefined) throw new Error('recipient missing')
+    const path = `/api/games/${game.gameId}/trade-offers`
+    const request = { recipientId: recipient.playerId, terms: 'two trade', requestId: 'retry-create', rev: before.rev }
+    expect((await post(game.seat1, path, request)).status).toBe(200)
+    expect((await post(game.seat1, path, request)).status).toBe(200)
+    expect((await loadGame(game.gameId)).tradeOffers).toHaveLength(1)
+
+    const changedRetry = await post(game.seat1, path, { ...request, terms: 'changed terms' })
+    expect(changedRetry.status).toBe(409)
+
+    const pending = await loadGame(game.gameId)
+    const offer = pending.tradeOffers[0]
+    if (offer === undefined) throw new Error('offer missing')
+    const acceptPath = `/api/games/${game.gameId}/trade-offers/${offer.id}/accept`
+    const acceptRequest = { requestId: 'retry-accept', rev: pending.rev }
+    expect((await post(game.seat2, acceptPath, acceptRequest)).status).toBe(200)
+    expect((await post(game.seat2, acceptPath, acceptRequest)).status).toBe(200)
+    const accepted = await loadGame(game.gameId)
+    expect(accepted.tradeOffers[0]?.status).toBe('accepted')
+    expect(accepted.log.filter((entry) => entry.publicLog?.includes('accepted trade offer'))).toHaveLength(1)
+  })
+
+  it('creates and accepts an offer without changing inventory or stats', async () => {
+    const game = await startedGame('offers')
+    const before = await loadGame(game.gameId)
+    const recipient = before.players.find((player) => player.username === game.name2)
+    if (recipient === undefined) throw new Error('recipient missing')
+    const created = await post(game.seat1, `/api/games/${game.gameId}/trade-offers`, {
+      recipientId: recipient.playerId, terms: 'two trade for one wheat', requestId: 'offer-1', rev: before.rev,
+    })
+    expect(created.status).toBe(200)
+    const offer = (await created.json() as PlayerView).tradeOffers[0]
+    if (offer === undefined) throw new Error('offer missing')
+    expect(offer).toMatchObject({ status: 'pending', terms: 'two trade for one wheat' })
+
+    const accepted = await post(game.seat2, `/api/games/${game.gameId}/trade-offers/${offer.id}/accept`, {
+      requestId: 'accept-1', rev: (await loadGame(game.gameId)).rev,
+    })
+    expect(accepted.status).toBe(200)
+    expect((await accepted.json() as PlayerView).tradeOffers[0]?.status).toBe('accepted')
+    const after = await loadGame(game.gameId)
+    expect(after.players.map((player) => player.stats)).toEqual(before.players.map((player) => player.stats))
+    expect(after.players.map((player) => player.items.length)).toEqual(before.players.map((player) => player.items.length))
+  })
+
+  it('rejects stale writes and responses from the wrong player', async () => {
+    const game = await startedGame('offer-guards')
+    const before = await loadGame(game.gameId)
+    const recipient = before.players.find((player) => player.username === game.name2)
+    if (recipient === undefined) throw new Error('recipient missing')
+    const created = await post(game.seat1, `/api/games/${game.gameId}/trade-offers`, {
+      recipientId: recipient.playerId, terms: 'a map tile', requestId: 'offer-guard-1', rev: before.rev,
+    })
+    const offer = (await created.json() as PlayerView).tradeOffers[0]
+    if (offer === undefined) throw new Error('offer missing')
+    const stale = await post(game.seat1, `/api/games/${game.gameId}/trade-offers/${offer.id}/withdraw`, {
+      requestId: 'withdraw-stale', rev: before.rev,
+    })
+    expect(stale.status).toBe(409)
+    const wrongActor = await post(game.seat1, `/api/games/${game.gameId}/trade-offers/${offer.id}/accept`, {
+      requestId: 'accept-wrong', rev: (await loadGame(game.gameId)).rev,
+    })
+    expect(wrongActor.status).toBe(403)
+  })
+
+  it('logs and persists expiry when the last player ends the round', async () => {
+    const game = await startedGame('offer-expiry')
+    let before = await loadGame(game.gameId)
+    const recipient = before.players.find((player) => player.username === game.name2)
+    if (recipient === undefined) throw new Error('recipient missing')
+    const created = await post(game.seat1, `/api/games/${game.gameId}/trade-offers`, {
+      recipientId: recipient.playerId, terms: 'two trade', requestId: 'offer-expiry-1', rev: before.rev,
+    })
+    expect(created.status).toBe(200)
+
+    expect((await post(game.seat1, `/api/games/${game.gameId}/turns/done`, { phase: 'RESEARCH' })).status).toBe(200)
+    expect((await post(game.seat2, `/api/games/${game.gameId}/turns/done`, { phase: 'RESEARCH' })).status).toBe(200)
+    before = await loadGame(game.gameId)
+    expect(before.tradeOffers[0]?.status).toBe('expired')
+    expect(before.log.at(-1)?.publicLog).toContain('expired because Turn 1 ended')
   })
 })

@@ -1,0 +1,80 @@
+/*
+ * The toasts sit on top of the page, at the top centre of the screen, above the
+ * spinner's backdrop. The list itself takes no clicks, so it never blocks the page
+ * under the gaps; the toasts do, so they can be closed.
+ */
+.toast-region {
+  position: fixed;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(34rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+/* The live regions are plain blocks (display: contents drops their role in older
+   browsers) that stack their toasts the same way the region does. */
+.toast-live {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.toast-live:empty {
+  display: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--good);
+  border-radius: var(--radius);
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  animation: toast-in 0.18s ease-out;
+}
+
+.toast-error {
+  border-color: var(--bad);
+  background: var(--error-bg);
+  color: var(--error-text);
+}
+
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast-close {
+  flex: none;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0 0.3rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}

@@ -33,6 +33,9 @@ vi.mock('../lib/api.js', async (importOriginal) => ({
     markDone: vi.fn(),
     unmarkDone: vi.fn(),
     saveNote: vi.fn(),
+    sendTradeOffer: vi.fn(),
+    transitionTradeOffer: vi.fn(),
+    counterTradeOffer: vi.fn(),
   },
 }))
 
@@ -42,6 +45,9 @@ const postOrder = vi.mocked(api.postOrder)
 const markDone = vi.mocked(api.markDone)
 const unmarkDone = vi.mocked(api.unmarkDone)
 const saveNote = vi.mocked(api.saveNote)
+const sendTradeOffer = vi.mocked(api.sendTradeOffer)
+const transitionTradeOffer = vi.mocked(api.transitionTradeOffer)
+const counterTradeOffer = vi.mocked(api.counterTradeOffer)
 
 /** A controlled textarea standing in for the Milkdown editor. */
 const FakeEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
@@ -90,6 +96,7 @@ interface ViewOptions {
   readonly you?: Record<string, unknown> | null
   readonly opponents?: readonly Record<string, unknown>[]
   readonly activeTurn?: Record<string, unknown> | null
+  readonly tradeOffers?: readonly Record<string, unknown>[]
 }
 
 /**
@@ -108,6 +115,7 @@ function makeView(options: ViewOptions = {}): PlayerView {
         })
       : options.you
   return {
+    rev: 17,
     you,
     opponents: options.opponents ?? [seat('Bob', 2, { color: 'Blue' })],
     activeTurn:
@@ -121,9 +129,10 @@ function makeView(options: ViewOptions = {}): PlayerView {
             waitingFor: [
               { username: 'Alice', phase: 'CM' },
               { username: 'Bob', phase: 'SOT' },
-            ],
-          }
-        : options.activeTurn,
+          ],
+        }
+      : options.activeTurn,
+    tradeOffers: options.tradeOffers ?? [],
   } as unknown as PlayerView
 }
 
@@ -142,7 +151,7 @@ const page = (messages: readonly TimelineMessageDto[], hasMore = false): ChatPag
 
 async function renderPanel(
   view: PlayerView,
-  props: { readOnly?: boolean; autoRefresh?: boolean; reloadCount?: number } = {},
+  props: { readOnly?: boolean; autoRefresh?: boolean; reloadCount?: number; run?: typeof run } = {},
 ): Promise<ReturnType<typeof render>> {
   let result: ReturnType<typeof render> | undefined
   await act(async () => {
@@ -152,7 +161,7 @@ async function renderPanel(
         view={view}
         busy={false}
         readOnly={props.readOnly ?? false}
-        run={run}
+        run={props.run ?? run}
         reloadCount={props.reloadCount ?? 0}
         autoRefresh={props.autoRefresh ?? false}
         editorComponent={FakeEditor}
@@ -193,6 +202,9 @@ beforeEach(() => {
   markDone.mockResolvedValue(makeView())
   unmarkDone.mockResolvedValue(makeView())
   saveNote.mockResolvedValue(makeView())
+  sendTradeOffer.mockResolvedValue(makeView())
+  transitionTradeOffer.mockResolvedValue(makeView())
+  counterTradeOffer.mockResolvedValue(makeView())
 })
 
 afterEach(() => {
@@ -755,6 +767,26 @@ describe('the selected chip', () => {
   })
 })
 
+describe('the thread layout', () => {
+  // The declaration blocks of every rule whose selector mentions `name`, wherever
+  // they sit (inside a media query, in a selector list, in a later block).
+  const bodies = (css: string, name: string): readonly string[] =>
+    [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]*)\{([^{}]*)\}/g)]
+      .filter((match) => (match[1] ?? '').includes(name))
+      .map((match) => match[2] ?? '')
+
+  // jsdom has no layout, so the stylesheet is the contract. A height cap on the
+  // thread let the composer overflow it (Order mode, the trade offer form) and slide
+  // under the next panel, hiding End turn and Send.
+  it('caps the timeline only, so a tall composer lengthens the page instead of overflowing', () => {
+    const css = readFileSync('src/views/ChatOrdersPanel.css', 'utf8').replaceAll('\r\n', '\n')
+    const thread = [...bodies(css, 'chat-orders-thread'), ...bodies(css, 'chat-orders-timeline-panel')]
+    expect(thread.length).toBeGreaterThan(0)
+    for (const body of thread) expect(body).not.toMatch(/(^|[\s;])(max-)?(height|block-size):/)
+    expect(bodies(css, 'chat-orders-scroll').join('\n')).toMatch(/max-height:/)
+  })
+})
+
 describe('the Markdown renderer', () => {
   it('is loaded on demand, not imported by the panel, so the page does not carry it up front', () => {
     const source = readFileSync('src/views/ChatOrdersPanel.tsx', 'utf8')
@@ -938,20 +970,52 @@ describe('safe markdown in the timeline', () => {
 
 describe('header helpers', () => {
   it('names whose turn it is and which phase they are on, not everyone', () => {
+    // Alice is on City management, Bob on Start of turn: Bob is furthest behind.
     const view = makeView()
-    expect(turnTitle(view.activeTurn)).toBe(
-      `Turn 4 · ${view.activeTurn?.username}'s turn — ${TURN_PHASE_LABEL[view.activeTurn?.phase ?? 'SOT']} phase`,
-    )
+    expect(turnTitle(view.activeTurn)).toBe(`Turn 4 · Bob's turn — ${TURN_PHASE_LABEL.SOT} phase`)
     expect(turnTitle(view.activeTurn)).not.toContain('waiting for')
     expect(turnTitle(view.activeTurn)).not.toContain('started')
   })
 
-  it('says Your turn when the viewer is the one up', () => {
+  it('says Your turn when the viewer is the player in focus', () => {
     const view = makeView({
       activeTurn: { playerId: 'p1', username: 'Alice', turnNumber: 2, phase: 'CM', startPlayer: 'Bob', waitingFor: [{ username: 'Alice', phase: 'CM' }] },
     })
-    expect(turnTitle(view.activeTurn, 'p1')).toBe('Turn 2 · Your turn — city management phase')
+    expect(turnTitle(view.activeTurn, 'Alice')).toBe('Turn 2 · Your turn — city management phase')
     expect(turnTitle(view.activeTurn, 'someone-else')).toBe("Turn 2 · Alice's turn — city management phase")
+  })
+
+  it('names the player furthest behind, with that player\'s phase, not the holder', () => {
+    const active = {
+      playerId: 'id-admin',
+      username: 'admin',
+      turnNumber: 1,
+      phase: 'MOVEMENT' as const,
+      startPlayer: 'admin',
+      waitingFor: [
+        { username: 'admin', phase: 'MOVEMENT' as const },
+        { username: 'cash1981', phase: 'CM' as const },
+      ],
+    }
+    expect(turnTitle(active, 'cash1981')).toBe('Turn 1 · Your turn — city management phase')
+    expect(turnTitle(active, 'admin')).toBe("Turn 1 · cash1981's turn — city management phase")
+    expect(turnTitle(active)).toBe("Turn 1 · cash1981's turn — city management phase")
+  })
+
+  it('names the turn holder in a tie, for the viewer too', () => {
+    const active = {
+      playerId: 'id-admin',
+      username: 'admin',
+      turnNumber: 1,
+      phase: 'SOT' as const,
+      startPlayer: 'admin',
+      waitingFor: [
+        { username: 'cash1981', phase: 'SOT' as const },
+        { username: 'admin', phase: 'SOT' as const },
+      ],
+    }
+    expect(turnTitle(active, 'cash1981')).toBe("Turn 1 · admin's turn — start of turn phase")
+    expect(turnTitle(active, 'admin')).toBe('Turn 1 · Your turn — start of turn phase')
   })
 
   it('says so when everyone is done, and when nobody is up', () => {

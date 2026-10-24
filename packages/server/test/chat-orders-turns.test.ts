@@ -221,6 +221,26 @@ describe('the row that starts a turn', () => {
     expect(rows.filter((row) => row.message.includes('not done'))).toHaveLength(1)
   })
 
+  it('does not pull a turn back when an unmark carries a stale revision', async () => {
+    const table = await threePlayerGame('turn-stale-unmark')
+    await finishTurn(table, 1)
+    const last = table.seats[2]
+    if (last === undefined) throw new Error('no seat 3')
+    const before = await rowsOf(table.gameId)
+
+    const stale = await post(last.token, `/api/games/${table.gameId}/turns/undone`, { phase: 'RESEARCH', turnNumber: 1, rev: 0 })
+
+    expect(stale.status).toBe(409)
+    expect(await rowsOf(table.gameId)).toEqual(before)
+    const bad = await post(last.token, `/api/games/${table.gameId}/turns/undone`, { phase: 'RESEARCH', turnNumber: 1, rev: -1 })
+    expect(bad.status).toBe(400)
+
+    const rev = (await repo.findGame(table.gameId))?.rev
+    if (rev === undefined) throw new Error('no game')
+    const current = await post(last.token, `/api/games/${table.gameId}/turns/undone`, { phase: 'RESEARCH', turnNumber: 1, rev })
+    expect(current.status).toBe(200)
+  })
+
   it('is not written for a done that leaves the turn open', async () => {
     const table = await threePlayerGame('turn-open')
     expect((await done(table, 0, 'RESEARCH', 1)).status).toBe(200)

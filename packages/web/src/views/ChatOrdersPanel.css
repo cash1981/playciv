@@ -1,7 +1,7 @@
 /*
  * The chat and orders timeline (issue #215). Mobile first: everything fits a 375 px
  * screen with no sideways scroll, controls are at least 44 px high, and the
- * composer stays inside the screen under the timeline.
+ * composer sits under the timeline in the page flow, never over another panel.
  * Colours come from the theme variables, so the dark and light themes both work.
  */
 
@@ -50,20 +50,28 @@
   font-weight: 600;
 }
 
-/* The timeline and the composer share one box that never outgrows the screen,
-   so the composer is always reachable and never lies over the newest message.
-   The timeline takes what the composer leaves; it scrolls inside. (A sticky
-   composer did the first but covered the last messages on a phone.) */
+/* The timeline and the composer sit in one column. Only the timeline is capped,
+   and it scrolls inside. The thread itself has no height cap: the composer is
+   taller in Order mode and with the trade offer form, and a cap on the thread let
+   it spill out under the next panel, hiding End turn and Send. Now a taller
+   composer only lengthens the page.
+   The timeline gets the screen minus room for the composer (about 40rem in Chat
+   mode with the trade offer form, measured; retune it if the composer changes),
+   between 8rem and 32rem, so where the screen allows, timeline and composer fit in
+   one screen. Order mode adds the Turn and Phase row and runs a little past one
+   screen (935 px at 900 px); the page just scrolls.
+   (A sticky composer kept it in reach but covered the last messages on a phone.) */
 .chat-orders-thread {
   display: flex;
   flex-direction: column;
-  max-height: calc(100dvh - 4rem);
 }
 
 .chat-orders-scroll {
   flex: 1 1 auto;
   min-height: 8rem;
+  /* The plain cap stays for a browser without dvh, which drops the clamp below */
   max-height: 32rem;
+  max-height: clamp(8rem, calc(100dvh - 40rem), 32rem);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;

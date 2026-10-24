@@ -112,6 +112,9 @@ export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
       gamenote: null,
       stats: DEFAULT_PLAYER_STATS,
       government: DEFAULT_GOVERNMENT,
+      pendingRewards: [],
+      techGrants: [],
+      techRevealTurns: {},
     }
     next = state
   }

@@ -1,0 +1,74 @@
+/* The Start of Turn choices (assisted play, part 13). Wraps at 320 px. */
+.sot-options,
+.sot-grant-list,
+.sot-cards {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sot-options > li,
+.sot-cards > li,
+.sot-grant-list > li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sot-option-reason,
+.sot-reason {
+  overflow-wrap: anywhere;
+}
+
+.sot-reason {
+  margin: 0 0 0.5rem;
+}
+
+.sot-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.sot-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.sot-form select {
+  max-width: 100%;
+}
+
+/* The investment-card picker and its `?` reference sit on one row. */
+.sot-invest-card {
+  align-items: flex-end;
+}
+
+.sot-scout-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sot-scout {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sot-found {
+  margin-top: 0.5rem;
+}
+
+.sot-reasons {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+}

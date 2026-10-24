@@ -8,23 +8,44 @@
 
 import type {
   ActiveTurnStatus,
+  AssistedActionKind,
   Board,
   BoardArea,
   BoardAsset,
   BoardHistoryEntry,
   BoardPiece,
+  BuildChoice,
+  BuildItem,
+  BuildPayload,
+  BuildSquare,
+  BuildTarget,
+  BuildUnavailable,
+  CityActionOptions,
+  CityBuildOptions,
+  CityModifier,
+  CityProduction,
   CoinSourceKey,
+  CultureShare,
+  DevoteToTheArtsOption,
+  HarvestChoiceView,
+  HarvestOption,
   HighscoreResult,
   Government,
   Item,
+  OutskirtsSquare,
   PlayerStatKey,
   PlayerStats,
   PlayerView,
   RevealedEntry,
+  ResourceKind,
+  ScoutSquare,
   SheetName,
   SocialPolicyItem,
+  StartBuildingProgramOption,
   TechItem,
   TurnPhase,
+  UnitType,
+  UpgradeFamilyOption,
   WaitingFor,
   WinnerEntry,
 } from '@civ/engine'
@@ -33,23 +54,44 @@ import { beginActivity } from './activity.js'
 
 export type {
   ActiveTurnStatus,
+  AssistedActionKind,
   Board,
   BoardArea,
   BoardAsset,
   BoardHistoryEntry,
   BoardPiece,
+  BuildChoice,
+  BuildItem,
+  BuildPayload,
+  BuildSquare,
+  BuildTarget,
+  BuildUnavailable,
+  CityActionOptions,
+  CityBuildOptions,
+  CityModifier,
+  CityProduction,
   CoinSourceKey,
+  CultureShare,
+  DevoteToTheArtsOption,
+  HarvestChoiceView,
+  HarvestOption,
   HighscoreResult,
   Government,
   Item,
+  OutskirtsSquare,
   PlayerStatKey,
   PlayerStats,
   PlayerView,
   RevealedEntry,
+  ResourceKind,
+  ScoutSquare,
   SheetName,
   SocialPolicyItem,
+  StartBuildingProgramOption,
   TechItem,
   TurnPhase,
+  UnitType,
+  UpgradeFamilyOption,
   WaitingFor,
   WinnerEntry,
 }
@@ -256,6 +298,8 @@ export interface LogEntryDto {
   readonly createdAt?: string | null
   readonly hasUndo: boolean
   readonly canUndo?: boolean
+  /** Set on a line an assisted action wrote; the undo vote can target it (#260). */
+  readonly assistedActionId?: string
 }
 
 export interface ChatMessageDto {
@@ -568,6 +612,9 @@ export const api = {
     post<GameSummary>('/api/games', { name, numOfPlayers, ...(color === undefined ? {} : { color }) }),
   game: (gameId: string) => get<PlayerView>(`/api/games/${gameId}`),
   revisions: (gameId: string) => get<GameRevisionSummary[]>(`/api/games/${gameId}/revisions`),
+  /** The viewer's own words for what they did after revision `after`: only theirs, see the server route. */
+  confirmation: (gameId: string, after: number) =>
+    get<{ lines: string[] }>(`/api/games/${gameId}/confirmation?after=${after}`),
   gameRev: (gameId: string) => get<{ readonly rev: number }>(`/api/games/${gameId}/rev`),
   revision: (gameId: string, revision: number) =>
     get<GameRevisionView>(`/api/games/${gameId}/revisions/${revision}`),
@@ -585,11 +632,22 @@ export const api = {
 
   // `confirmedOutOfTurn` is sent only after the player answered yes to the
   // out-of-turn warning (issue #215); wonders go through this route as well.
-  draw: (gameId: string, sheetName: SheetName, confirmedOutOfTurn?: boolean) =>
-    post<PlayerView>(
+  // `confirmedOverLimit` likewise follows a yes to the culture hand limit warning.
+  draw: (
+    gameId: string,
+    sheetName: SheetName,
+    confirmedOutOfTurn?: boolean,
+    confirmedOverLimit?: boolean,
+  ) => {
+    const confirmed = {
+      ...(confirmedOutOfTurn === true ? { confirmedOutOfTurn: true } : {}),
+      ...(confirmedOverLimit === true ? { confirmedOverLimit: true } : {}),
+    }
+    return post<PlayerView>(
       `/api/games/${gameId}/draw/${sheetName}`,
-      confirmedOutOfTurn === true ? { confirmedOutOfTurn: true } : undefined,
-    ),
+      Object.keys(confirmed).length === 0 ? undefined : confirmed,
+    )
+  },
   loot: (gameId: string, category: LootCategory, targetPlayerId: string) =>
     post<PlayerView>(`/api/games/${gameId}/loot/${category}/${targetPlayerId}`),
   discardGreatPerson: (gameId: string, type: string) =>
@@ -703,10 +761,11 @@ export const api = {
       phase,
       ...(turnNumber === undefined ? {} : { turnNumber }),
     }),
-  unmarkDone: (gameId: string, phase: TurnPhase, turnNumber?: number) =>
+  unmarkDone: (gameId: string, phase: TurnPhase, turnNumber?: number, rev?: number) =>
     post<PlayerView>(`/api/games/${gameId}/turns/undone`, {
       phase,
       ...(turnNumber === undefined ? {} : { turnNumber }),
+      ...(rev === undefined ? {} : { rev }),
     }),
   saveNote: (gameId: string, note: string) => post<PlayerView>(`/api/games/${gameId}/note`, { note }),
   // Shared bookkeeping: any member may set any player's stat (issue #43).
@@ -727,8 +786,130 @@ export const api = {
     value: number,
   ) =>
     post<PlayerView>(`/api/games/${gameId}/players/${targetPlayerId}/coin`, { source, value }),
-  purchaseCoin: (gameId: string, source: 'democracy' | 'printingPress') =>
-    post<PlayerView>(`/api/games/${gameId}/coin-purchase`, { source }),
+  /**
+   * One assisted action (#260). `requestId` is chosen by the caller and kept until
+   * the request settles, so a retry cannot do the action twice; `rev` is the
+   * revision the caller saw, so a stale tab gets the usual 409.
+   * `confirmedRepeat` is sent only after the player answered yes to "use it
+   * again?" for a card already used this turn; the server refuses a second use
+   * without it, as `draw` does without `confirmedOutOfTurn`.
+   */
+  performAction: (
+    gameId: string,
+    action: AssistedActionKind,
+    requestId: string,
+    rev: number,
+    confirmedRepeat?: boolean,
+  ) =>
+    post<PlayerView>(
+      `/api/games/${gameId}/actions`,
+      confirmedRepeat === true
+        ? { action, requestId, rev, confirmedRepeat: true }
+        : { action, requestId, rev },
+    ),
+  /**
+   * An assisted action that carries its payload in `args` (a card played, and the
+   * Start of Turn actions): the same route and request id rules as `performAction`.
+   * The server checks the shape of `args` for each action and the engine checks the
+   * rest against the fresh state.
+   */
+  actionWithArgs: (
+    gameId: string,
+    action: AssistedActionKind,
+    requestId: string,
+    rev: number,
+    args: Record<string, unknown>,
+  ) => post<PlayerView>(`/api/games/${gameId}/actions`, { action, requestId, rev, args }),
+  /**
+   * The card choice after a culture advance: the same route as `performAction`,
+   * with the reward and the card to keep. The request id is kept like any other.
+   */
+  chooseReward: (gameId: string, rewardId: string, itemId: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'chooseReward',
+      requestId,
+      rev,
+      rewardId,
+      itemId,
+    }),
+  /**
+   * The assisted Build (#264): the same route and request id rules as the other
+   * actions. The payload is what the engine's `build` action takes; the server
+   * checks everything again against the fresh state. A building or a figure
+   * sends its `target` square; a unit is a private card and sends none (the
+   * server refuses a target on one).
+   */
+  build: (gameId: string, requestId: string, rev: number, payload: BuildPayload, confirmedRepeat?: boolean) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'build',
+      requestId,
+      rev,
+      ...(confirmedRepeat === true ? { confirmedRepeat: true } : {}),
+      cityPieceId: payload.cityPieceId,
+      item: payload.item,
+      ...(payload.target === undefined ? {} : { target: payload.target }),
+      ...(payload.rush === undefined ? {} : { rush: payload.rush }),
+    }),
+  /** Put the Building Program marker on one of the viewer's cities (assisted city action). */
+  startBuildingProgram: (gameId: string, requestId: string, rev: number, cityPieceId: string, confirmedRepeat?: boolean) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'startBuildingProgram',
+      requestId,
+      rev,
+      cityPieceId,
+      ...(confirmedRepeat === true ? { confirmedRepeat: true } : {}),
+    }),
+  /**
+   * Devote one of the viewer's cities to the arts (assisted city action). `scoutPieceIds` are the
+   * scouts whose squares are sent to the city; `culture` is a number typed by hand instead of the
+   * estimate. Both are left out when not given.
+   */
+  devoteToTheArts: (
+    gameId: string,
+    requestId: string,
+    rev: number,
+    cityPieceId: string,
+    extra: { readonly scoutPieceIds?: readonly string[]; readonly culture?: number; readonly confirmedRepeat?: boolean } = {},
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'devoteToTheArts',
+      requestId,
+      rev,
+      cityPieceId,
+      ...(extra.confirmedRepeat === true ? { confirmedRepeat: true } : {}),
+      ...(extra.scoutPieceIds === undefined || extra.scoutPieceIds.length === 0 ? {} : { scoutPieceIds: extra.scoutPieceIds }),
+      ...(extra.culture === undefined ? {} : { culture: extra.culture }),
+    }),
+  /** Harvest one resource token with one of the viewer's cities; `scoutPieceId` when it is under a scout. */
+  harvest: (
+    gameId: string,
+    requestId: string,
+    rev: number,
+    cityPieceId: string,
+    resource: ResourceKind,
+    scoutPieceId?: string,
+    confirmedRepeat?: boolean,
+  ) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'harvest',
+      requestId,
+      rev,
+      cityPieceId,
+      resource,
+      ...(scoutPieceId === undefined ? {} : { scoutPieceId }),
+      ...(confirmedRepeat === true ? { confirmedRepeat: true } : {}),
+    }),
+  /**
+   * Flip the viewer's basic buildings to their upgraded form. `family` is the
+   * basic asset id of one family; without it every family that can be flipped is.
+   */
+  upgradeBuildings: (gameId: string, requestId: string, rev: number, family?: string) =>
+    post<PlayerView>(`/api/games/${gameId}/actions`, {
+      action: 'upgradeBuildings',
+      requestId,
+      rev,
+      ...(family === undefined ? {} : { family }),
+    }),
   setPlayerGovernment: (
     gameId: string,
     targetPlayerId: string,
@@ -755,6 +936,9 @@ export const api = {
     }),
   setWonderOwner: (gameId: string, pieceId: string, ownerId: string | null) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/owner`, { ownerId }),
+  /** The production typed in for a city; `null` goes back to the estimate. */
+  setCityProduction: (gameId: string, pieceId: string, production: number | null) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/production`, { production }),
   rotatePiece: (gameId: string, pieceId: string, rotation?: number) =>
     post<PlayerView>(
       `/api/games/${gameId}/board/pieces/${pieceId}/rotate`,
@@ -776,4 +960,15 @@ export const api = {
     ),
   sendChat: (gameId: string, message: string) =>
     post<ChatMessageDto>(`/api/games/${gameId}/chat`, { message }),
+  sendTradeOffer: (gameId: string, recipientId: string, terms: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/trade-offers`, { recipientId, terms, requestId, rev }),
+  transitionTradeOffer: (
+    gameId: string,
+    offerId: string,
+    action: 'accept' | 'decline' | 'withdraw',
+    requestId: string,
+    rev: number,
+  ) => post<PlayerView>(`/api/games/${gameId}/trade-offers/${offerId}/${action}`, { requestId, rev }),
+  counterTradeOffer: (gameId: string, offerId: string, terms: string, requestId: string, rev: number) =>
+    post<PlayerView>(`/api/games/${gameId}/trade-offers/${offerId}/counter`, { terms, requestId, rev }),
 }

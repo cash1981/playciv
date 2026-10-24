@@ -1105,6 +1105,88 @@ describe('hidden information over HTTP', () => {
   })
 })
 
+describe('the confirmation of an action', () => {
+  const confirmation = (gameId: string, token: string | undefined, after: number) =>
+    inject(app, {
+      url: `/api/games/${gameId}/confirmation?after=${after}`,
+      ...(token === undefined ? {} : { headers: bearer(token) }),
+    })
+
+  it('gives the player their own private words and never lets another player read them', async () => {
+    const { gameId, starter, waiting } = await startedGame('Bekreft')
+    const before = (await repo.findGame(gameId))?.rev ?? 0
+    const draw = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/draw/CULTURE_1`,
+      headers: bearer(starter),
+      payload: {},
+    })
+    expect(draw.status).toBe(200)
+    const card = (await repo.findGame(gameId))?.players.find((player) => player.yourTurn)?.items[0]
+    expect(card).toBeDefined()
+    const cardName = (card as { name: string }).name
+
+    const own = await confirmation(gameId, starter, before)
+    expect(own.status).toBe(200)
+    expect(own.body).toContain(cardName)
+
+    // The opponent's confirmation names nothing of it, and neither does an outsider's
+    const outsider = await register('bekreft-outsider')
+    for (const token of [waiting, outsider]) {
+      const other = await confirmation(gameId, token, before)
+      expect(other.status).toBe(200)
+      expect(other.body).not.toContain(cardName)
+      expect(await other.json<{ lines: string[] }>()).toEqual({ lines: [] })
+    }
+    expect((await confirmation(gameId, undefined, before)).status).toBe(401)
+    // Only what came after the revision the page already had
+    const later = (await repo.findGame(gameId))?.rev ?? 0
+    expect(await (await confirmation(gameId, starter, later)).json()).toEqual({ lines: [] })
+    expect((await confirmation(gameId, starter, -1)).status).toBe(400)
+    expect((await confirmation('missing', starter, 0)).status).toBe(404)
+  })
+
+  it('does not turn what another player did to you into your confirmation', async () => {
+    const { gameId, starter, waiting } = await startedGame('Bekreft-gave')
+    const draw = await inject(app, {
+      method: 'POST', url: `/api/games/${gameId}/draw/CULTURE_1`, headers: bearer(starter), payload: {},
+    })
+    expect(draw.status).toBe(200)
+    const state = await repo.findGame(gameId)
+    const giver = state?.players.find((player) => player.yourTurn)
+    const receiver = state?.players.find((player) => !player.yourTurn)
+    const item = giver?.items[0]
+    if (giver === undefined || receiver === undefined || item === undefined) throw new Error('no setup')
+    const before = state?.rev ?? 0
+
+    const trade = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/items/trade`,
+      headers: bearer(starter),
+      payload: {
+        sheetName: item.sheetName,
+        itemNumber: item.itemNumber,
+        name: (item as { name: string }).name,
+        targetPlayerId: receiver.playerId,
+      },
+    })
+    expect(trade.status).toBe(200)
+
+    // The receiver did nothing since `before`: their confirmation is empty
+    expect(await (await confirmation(gameId, waiting, before)).json()).toEqual({ lines: [] })
+    // The giver's own is not
+    expect((await (await confirmation(gameId, starter, before)).json<{ lines: string[] }>()).lines).not.toEqual([])
+  })
+
+  it('keeps private words out of the history list', async () => {
+    const { gameId, starter } = await startedGame('Bekreftliste')
+    await inject(app, { method: 'POST', url: `/api/games/${gameId}/draw/CULTURE_1`, headers: bearer(starter), payload: {} })
+    const card = (await repo.findGame(gameId))?.players.find((player) => player.yourTurn)?.items[0] as { name: string }
+    const list = await inject(app, { url: `/api/games/${gameId}/revisions`, headers: bearer(starter) })
+    expect(list.body).not.toContain(card.name)
+  })
+})
+
 describe('the revision of an ended game', () => {
   const endedWith = async (name: string, payload: Record<string, unknown>) => {
     const creator = await register(`${name}-a`)

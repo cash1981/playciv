@@ -88,8 +88,8 @@ are in.
 
 ## Language
 
-English everywhere in the repository: code, comments, test names, UI strings,
-commit messages, these documents. The conversation with the human is Norwegian.
+Use English everywhere in the repository and in conversation with the human:
+code, comments, test names, UI strings, commit messages and documents.
 
 ## Commits
 

@@ -13,6 +13,7 @@ import {
   createBoard,
   createBoardForPlayers,
   findBoardAsset,
+  mapTop,
   slotOrigin,
   tileTerrainGrid,
   wondersArea,
@@ -1895,5 +1896,459 @@ describe('BoardView terrain warning (issue #255)', () => {
     await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledOnce())
     expect(mocks.confirm).not.toHaveBeenCalled()
     finish(mocks)
+  })
+})
+
+describe('BoardView square picking for a Build', () => {
+  const cells = [
+    { column: 3, row: 4, label: 'D5' },
+    { column: 4, row: 4, label: 'E5' },
+  ]
+  const picking = (overrides: Partial<NonNullable<React.ComponentProps<typeof BoardView>['pickSquares']>> = {}) => ({
+    itemLabel: 'Library',
+    cells,
+    selected: null,
+    onPick: vi.fn(),
+    onCancel: vi.fn(),
+    ...overrides,
+  })
+  const squares = (): HTMLElement[] => screen.queryAllByRole('button', { name: /^Place Library on / })
+  const pointerTap = (target: HTMLElement, pointerId: number) => {
+    for (const type of ['pointerdown', 'pointerup'] as const) {
+      const event = new Event(type, { bubbles: true })
+      for (const [name, value] of Object.entries({ pointerId, pointerType: 'touch', isPrimary: true, button: 0, clientX: 20, clientY: 20 })) {
+        Object.defineProperty(event, name, { value })
+      }
+      target.dispatchEvent(event)
+    }
+  }
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('draws no square buttons outside pick mode', () => {
+    render(<BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} />)
+    expect(squares()).toHaveLength(0)
+  })
+
+  it('draws one named button per candidate square inside the board surface, placed on its cell', () => {
+    const board = createBoard()
+    const { container } = render(
+      <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking()} />,
+    )
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    const surface = container.querySelector('.board-surface')
+    if (!(surface instanceof HTMLElement)) throw new Error('surface missing')
+    expect(surface.classList.contains('picking')).toBe(true)
+    const buttons = squares()
+    expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual(['Place Library on D5', 'Place Library on E5'])
+    for (const [index, button] of buttons.entries()) {
+      const cell = cells[index]
+      if (cell === undefined) throw new Error('cell missing')
+      expect(surface.contains(button)).toBe(true)
+      expect(button.tagName).toBe('BUTTON')
+      expect(button.style.left).toBe(`${cell.column * board.squareSize}px`)
+      expect(button.style.top).toBe(`${mapTop(board) + cell.row * board.squareSize}px`)
+      expect(button.style.width).toBe(`${board.squareSize}px`)
+      expect(button.style.height).toBe(`${board.squareSize}px`)
+    }
+
+    // The same cells at another zoom step: every length is scaled, the origin included.
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '0.5' } })
+    const zoom = 0.5
+    const scaled = squares()
+    expect(scaled).toHaveLength(cells.length)
+    for (const [index, button] of scaled.entries()) {
+      const cell = cells[index]
+      if (cell === undefined) throw new Error('cell missing')
+      expect(button.style.left).toBe(`${cell.column * board.squareSize * zoom}px`)
+      expect(button.style.top).toBe(`${(mapTop(board) + cell.row * board.squareSize) * zoom}px`)
+      expect(button.style.width).toBe(`${board.squareSize * zoom}px`)
+      expect(button.style.height).toBe(`${board.squareSize * zoom}px`)
+    }
+  })
+
+  it('selects on click and on the keyboard, and marks the chosen square', () => {
+    const onPick = vi.fn()
+    const { rerender } = render(
+      <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking({ onPick })} />,
+    )
+    const [d5, e5] = squares()
+    if (d5 === undefined || e5 === undefined) throw new Error('squares missing')
+    fireEvent.click(d5)
+    expect(onPick).toHaveBeenCalledWith(cells[0])
+
+    // A native button answers Enter and Space with a click; it only has to be focusable and not hidden.
+    e5.focus()
+    expect(document.activeElement).toBe(e5)
+    expect(e5.tabIndex).toBe(0)
+    fireEvent.click(e5)
+    expect(onPick).toHaveBeenLastCalledWith(cells[1])
+
+    rerender(
+      <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking({ onPick, selected: { column: 4, row: 4 } })} />,
+    )
+    expect(squares().map((button) => button.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
+  })
+
+  it('cancels on Escape, except in a field that owns the key', () => {
+    const onCancel = vi.fn()
+    render(
+      <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking({ onCancel })} />,
+    )
+    const zoom = screen.getByLabelText('Zoom')
+    zoom.focus()
+    fireEvent.keyDown(zoom, { key: 'Escape' })
+    expect(onCancel).not.toHaveBeenCalled()
+    ;(zoom as HTMLElement).blur()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onCancel).toHaveBeenCalledOnce()
+  })
+
+  it('does not listen for Escape when it is not in pick mode', () => {
+    const onCancel = vi.fn()
+    const { rerender } = render(
+      <BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} pickSquares={picking({ onCancel })} />,
+    )
+    rerender(<BoardView gameId="game" board={createBoard()} numOfPlayers={2} areas={[]} busy={false} run={async () => undefined} />)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it('leaves pieces alone while picking: a tap neither selects nor moves them', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const board = { ...createBoard(), pieces: [piece('buildings/academy', 'academy-1')] }
+    const { container } = render(
+      <BoardView gameId="game" board={board} numOfPlayers={2} areas={[]} busy={false} run={async (action) => { await action() }} pickSquares={picking()} />,
+    )
+    const tile = container.querySelector('.board-piece')
+    const surface = container.querySelector('.board-surface')
+    if (!(tile instanceof HTMLElement) || !(surface instanceof HTMLElement)) throw new Error('board elements missing')
+
+    pointerTap(tile, 1)
+    expect(tile.classList.contains('selected')).toBe(false)
+    expect(screen.queryByRole('status')).toBeNull()
+    pointerTap(surface, 2)
+    expect(movePiece).not.toHaveBeenCalled()
+  })
+
+  it('drops a piece selection and armed move when pick mode starts, and tap then tap works again after', async () => {
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const board = { ...createBoard(), pieces: [piece('buildings/academy', 'academy-1')] }
+    const props = { gameId: 'game', board, numOfPlayers: 2, areas: [], busy: false, run: async (action: () => Promise<unknown>) => { await action() } }
+    const { container, rerender } = render(<BoardView {...props} />)
+    const tile = container.querySelector('.board-piece')
+    const surface = container.querySelector('.board-surface')
+    if (!(tile instanceof HTMLElement) || !(surface instanceof HTMLElement)) throw new Error('board elements missing')
+
+    pointerTap(tile, 1)
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Academy'))
+
+    rerender(<BoardView {...props} pickSquares={picking()} />)
+    expect(screen.queryByRole('status')).toBeNull()
+
+    rerender(<BoardView {...props} />)
+    pointerTap(tile, 3)
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Moving Academy'))
+    pointerTap(surface, 4)
+    await waitFor(() => expect(movePiece).toHaveBeenCalledOnce())
+  })
+
+  describe('the palette while a Build waits for its square', () => {
+    const pyramids = findBoardAsset('wonders/pyramids')
+    if (pyramids === undefined) throw new Error('wonders/pyramids missing from manifest')
+    const props = { gameId: 'game', board: createBoard(), numOfPlayers: 2, areas: [], busy: false, run: async (action: () => Promise<unknown>) => { await action() } }
+    const wonderButton = async (): Promise<HTMLButtonElement> => {
+      fireEvent.click(screen.getByRole('button', { name: 'Wonders' }))
+      return (await screen.findByRole('button', { name: /Pyramids/ })) as HTMLButtonElement
+    }
+    const dropOnWondersArea = (surface: HTMLElement) => {
+      const area = wondersArea(props.board)
+      const event = new Event('drop', { bubbles: true, cancelable: true })
+      const dataTransfer = { getData: (type: string) => (type === 'text/civ-asset' ? pyramids.id : '') }
+      for (const [name, value] of Object.entries({ clientX: area.x + area.width / 2, clientY: area.y + area.height / 2, dataTransfer })) {
+        Object.defineProperty(event, name, { value })
+      }
+      fireEvent(surface, event)
+    }
+
+    it('ignores a piece dropped on the board while picking, and places it again after', async () => {
+      vi.spyOn(api, 'boardAssets').mockResolvedValue([pyramids])
+      const placePiece = vi.spyOn(api, 'placePiece').mockResolvedValue({} as PlayerView)
+      const { container, rerender } = render(<BoardView {...props} pickSquares={picking()} />)
+      const surface = container.querySelector('.board-surface')
+      if (!(surface instanceof HTMLElement)) throw new Error('surface missing')
+      await wonderButton()
+
+      dropOnWondersArea(surface)
+      expect(placePiece).not.toHaveBeenCalled()
+
+      rerender(<BoardView {...props} />)
+      dropOnWondersArea(surface)
+      await waitFor(() => expect(placePiece).toHaveBeenCalledOnce())
+    })
+
+    it('does not let the palette arm a piece while picking, and says why', async () => {
+      vi.spyOn(api, 'boardAssets').mockResolvedValue([pyramids])
+      const { rerender } = render(<BoardView {...props} pickSquares={picking()} />)
+      const button = await wonderButton()
+      expect(button.disabled).toBe(true)
+      expect(button.draggable).toBe(false)
+      expect(screen.getByText('Finish or cancel the build first.')).toBeTruthy()
+      fireEvent.click(button)
+      expect(screen.queryByText(/^Placing /)).toBeNull()
+      expect(screen.queryByRole('status')).toBeNull()
+
+      // Outside pick mode the same button arms the piece as before.
+      rerender(<BoardView {...props} />)
+      expect(screen.queryByText('Finish or cancel the build first.')).toBeNull()
+      const free = screen.getByRole('button', { name: /Pyramids/ }) as HTMLButtonElement
+      expect(free.disabled).toBe(false)
+      fireEvent.click(free)
+      expect(screen.getByRole('status').textContent).toContain('Placing The Pyramids')
+    })
+  })
+
+  it('brings the squares into view on entering, smoothly unless reduced motion is asked for, and not again on a refresh', () => {
+    const board = createBoard()
+    const props = { gameId: 'game', board, numOfPlayers: 2, areas: [], busy: false, run: async () => undefined }
+    const scrollTo = vi.fn()
+    vi.stubGlobal('matchMedia', () => ({ matches: false }))
+    const first = render(<BoardView {...props} />)
+    const scroll = first.container.querySelector('.board-scroll')
+    if (!(scroll instanceof HTMLElement)) throw new Error('scroll box missing')
+    ;(scroll as { scrollTo: unknown }).scrollTo = scrollTo
+
+    first.rerender(<BoardView {...props} pickSquares={picking()} />)
+    expect(scrollTo).toHaveBeenCalledOnce()
+    expect(scrollTo.mock.calls[0]?.[0]).toMatchObject({ behavior: 'smooth' })
+
+    first.rerender(<BoardView {...props} pickSquares={picking({ selected: { column: 3, row: 4 } })} />)
+    expect(scrollTo).toHaveBeenCalledOnce()
+    first.unmount()
+
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' }))
+    const second = render(<BoardView {...props} />)
+    const box = second.container.querySelector('.board-scroll')
+    if (!(box instanceof HTMLElement)) throw new Error('scroll box missing')
+    const reducedScroll = vi.fn()
+    ;(box as { scrollTo: unknown }).scrollTo = reducedScroll
+    second.rerender(<BoardView {...props} pickSquares={picking()} />)
+    expect(reducedScroll.mock.calls[0]?.[0]).toMatchObject({ behavior: 'auto' })
+  })
+})
+
+describe('BoardView Great Person on a wonder (base rules p. 18)', () => {
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  // Aztec has every terrain; the city, the wonder and the squares are found by search so a corrected
+  // tile file does not break the tests. Zoom is 100 % and jsdom reports a zero-size surface, so a client
+  // coordinate is a board coordinate.
+  const tileId = 'tiles/Aztec'
+  const grid = tileTerrainGrid(tileId) as readonly (readonly Terrain[])[]
+  const board0 = createBoard()
+  const [tileX, tileY] = slotOrigin(board0, board0.slots[0] as { x: number; y: number })
+  const centreOf = (row: number, column: number): readonly [number, number] => [
+    tileX + column * SQUARE_SIZE + SQUARE_SIZE / 2,
+    tileY + row * SQUARE_SIZE + SQUARE_SIZE / 2,
+  ]
+  const land = (row: number, column: number): boolean => grid[row]?.[column] !== undefined && grid[row]?.[column] !== 'water'
+
+  /** A city on (cityRow, cityColumn) with a land square east of it (in its outskirts) and a land square outside them. */
+  const layout = (() => {
+    for (const cityRow of [1, 2]) {
+      for (const cityColumn of [1, 2]) {
+        const outside = [[0, 0], [0, 3], [3, 0], [3, 3]].find(
+          ([row, column]) => land(row as number, column as number) && Math.max(Math.abs((row as number) - cityRow), Math.abs((column as number) - cityColumn)) > 1,
+        )
+        if (land(cityRow, cityColumn + 1) && outside !== undefined) {
+          return { city: [cityRow, cityColumn] as const, inside: [cityRow, cityColumn + 1] as const, outside: [outside[0] as number, outside[1] as number] as const }
+        }
+      }
+    }
+    throw new Error('no usable layout on the Aztec tile')
+  })()
+
+  const mapTile = {
+    ...piece(tileId, 'aztec'),
+    category: 'tile' as const,
+    label: 'Aztec',
+    path: 'tiles/Aztec.png',
+    x: tileX,
+    y: tileY,
+    width: TILE_SQUARES * SQUARE_SIZE,
+    height: TILE_SQUARES * SQUARE_SIZE,
+  }
+  const asset = (id: string): BoardAsset => {
+    const found = findBoardAsset(id)
+    if (found === undefined) throw new Error(`${id} missing from manifest`)
+    return found
+  }
+  /** A piece of the real size whose centre is at the given board point. */
+  const at = (id: string, pieceId: string, [cx, cy]: readonly [number, number], extra: Partial<BoardPiece> = {}): BoardPiece => {
+    const { width, height, label, path, category } = asset(id)
+    return { ...piece(id, pieceId), label, path, category, width, height, x: cx - width / 2, y: cy - height / 2, ...extra }
+  }
+
+  const pointer = (target: HTMLElement, type: string, clientX: number, clientY: number) => {
+    const event = new Event(type, { bubbles: true })
+    for (const [name, value] of Object.entries({ pointerId: 7, pointerType: 'touch', isPrimary: true, button: 0, clientX, clientY })) {
+      Object.defineProperty(event, name, { value })
+    }
+    target.dispatchEvent(event)
+  }
+  const tap = (target: HTMLElement, [x, y]: readonly [number, number]) => {
+    pointer(target, 'pointerdown', x, y)
+    pointer(target, 'pointerup', x, y)
+  }
+
+  const setup = (extra: readonly BoardPiece[]) => {
+    vi.spyOn(api, 'boardAssets').mockResolvedValue([asset('great people/artist')])
+    const placePiece = vi.spyOn(api, 'placePiece').mockResolvedValue({} as PlayerView)
+    const movePiece = vi.spyOn(api, 'movePiece').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const all = [mapTile, at('cities/redcity2', 'city', centreOf(...layout.city)), ...extra]
+    const utils = render(
+      <BoardView
+        gameId="game"
+        board={{ ...board0, pieces: all }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        youId="p1"
+        viewerColor="Red"
+        run={async action => { await action() }}
+      />,
+    )
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    const surface = utils.container.querySelector('.board-surface') as HTMLElement
+    return { placePiece, movePiece, confirm, surface, container: utils.container, all }
+  }
+  const armArtist = async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Great People' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Artist/ }))
+  }
+
+  it('asks before a tapped Great Person destroys a wonder in the outskirts of the viewer\'s city, and places it on OK', async () => {
+    const mocks = setup([at('wonders/stonehenge', 'henge', centreOf(...layout.inside))])
+    const artist = asset('great people/artist')
+    const [x, y] = centreOf(...layout.inside)
+    await armArtist()
+    tap(mocks.surface, [x, y])
+
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledWith('game', artist.id, x - artist.width / 2, y - artist.height / 2))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      `Placing ${artist.label} here destroys ${asset('wonders/stonehenge').label}, which cannot be built again for the rest of the game. Place it anyway?`,
+    )
+  })
+
+  it('places nothing when the question is cancelled, and keeps the marker armed', async () => {
+    const mocks = setup([at('wonders/stonehenge', 'henge', centreOf(...layout.inside))])
+    mocks.confirm.mockReturnValue(false)
+    await armArtist()
+    tap(mocks.surface, centreOf(...layout.inside))
+    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce())
+    expect(mocks.placePiece).not.toHaveBeenCalled()
+    // Armed still: another square can be tapped without the palette again
+    tap(mocks.surface, centreOf(...layout.outside))
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledOnce())
+  })
+
+  it('does not ask for a building, which is replaced without a question', async () => {
+    const mocks = setup([at('buildings/temple', 'temple', centreOf(...layout.inside))])
+    await armArtist()
+    tap(mocks.surface, centreOf(...layout.inside))
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).not.toHaveBeenCalled()
+  })
+
+  it('does not ask outside the outskirts of the viewer\'s cities, or for another player\'s wonder', async () => {
+    const mocks = setup([
+      at('wonders/stonehenge', 'far', centreOf(...layout.outside)),
+      at('wonders/pyramids', 'theirs', centreOf(...layout.inside), { ownerId: 'p2' }),
+    ])
+    await armArtist()
+    tap(mocks.surface, centreOf(...layout.outside))
+    await waitFor(() => expect(mocks.placePiece).toHaveBeenCalledOnce())
+    expect(mocks.confirm).not.toHaveBeenCalled()
+  })
+
+  it('asks when an existing marker is tapped to move from outside the outskirts onto the wonder, and moves it on OK', async () => {
+    const [wx, wy] = centreOf(...layout.inside)
+    const [ox, oy] = centreOf(...layout.outside)
+    const mocks = setup([at('wonders/stonehenge', 'henge', [wx, wy]), at('great people/artist', 'artist', [ox, oy])])
+    const marker = mocks.container.querySelectorAll<HTMLElement>('.board-piece')[mocks.all.length - 1] as HTMLElement
+    // A tap selects and arms the marker, and a tap on the board then moves it there
+    tap(marker, [ox, oy])
+    await waitFor(() => expect(marker.classList.contains('selected')).toBe(true))
+    tap(mocks.surface, [wx, wy])
+    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce())
+    expect(mocks.confirm.mock.calls[0]?.[0]).toContain('destroys')
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledOnce())
+  })
+
+  it('moves nothing when the question about the wonder is cancelled, for a tapped move', async () => {
+    const [wx, wy] = centreOf(...layout.inside)
+    const [ox, oy] = centreOf(...layout.outside)
+    const mocks = setup([at('wonders/stonehenge', 'henge', [wx, wy]), at('great people/artist', 'artist', [ox, oy])])
+    mocks.confirm.mockReturnValue(false)
+    const marker = mocks.container.querySelectorAll<HTMLElement>('.board-piece')[mocks.all.length - 1] as HTMLElement
+    tap(marker, [ox, oy])
+    await waitFor(() => expect(marker.classList.contains('selected')).toBe(true))
+    tap(mocks.surface, [wx, wy])
+    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce())
+    expect(mocks.movePiece).not.toHaveBeenCalled()
+  })
+
+  it('judges a drop past the left edge of the board on the square the server clamps it into', async () => {
+    // A wonder on column A of the board and a city next to it; the drop centre is left of the board
+    const column = 0
+    const row = 1
+    const board = { ...board0 }
+    const wonderCentre: readonly [number, number] = [column * SQUARE_SIZE + SQUARE_SIZE / 2, mapTop(board) + row * SQUARE_SIZE + SQUARE_SIZE / 2]
+    const cityCentre: readonly [number, number] = [wonderCentre[0] + SQUARE_SIZE, wonderCentre[1]]
+    vi.spyOn(api, 'boardAssets').mockResolvedValue([asset('great people/artist')])
+    vi.spyOn(api, 'placePiece').mockResolvedValue({} as PlayerView)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { container } = render(
+      <BoardView
+        gameId="game"
+        board={{ ...board, pieces: [at('cities/redcity2', 'city', cityCentre), at('wonders/stonehenge', 'henge', wonderCentre)] }}
+        numOfPlayers={2}
+        areas={[]}
+        busy={false}
+        youId="p1"
+        viewerColor="Red"
+        run={async action => { await action() }}
+      />,
+    )
+    fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Great People' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Artist/ }))
+    // The raw centre is a few pixels left of the board, which the server clamps to column A
+    tap(container.querySelector('.board-surface') as HTMLElement, [-6, wonderCentre[1]])
+    await waitFor(() => expect(confirm).toHaveBeenCalledOnce())
+    expect(confirm.mock.calls[0]?.[0]).toContain('destroys')
+  })
+
+  it('does not ask when a marker that already stands on the wonder\'s square is nudged within it', async () => {
+    const [x, y] = centreOf(...layout.inside)
+    const mocks = setup([
+      at('wonders/stonehenge', 'henge', [x, y]),
+      at('great people/artist', 'artist', [x, y]),
+    ])
+    const marker = mocks.container.querySelectorAll<HTMLElement>('.board-piece')[mocks.all.length - 1] as HTMLElement
+    tap(marker, [x, y])
+    await waitFor(() => expect(marker.classList.contains('selected')).toBe(true))
+    fireEvent.keyDown(document, { key: 'ArrowRight' })
+    await waitFor(() => expect(mocks.movePiece).toHaveBeenCalledTimes(1))
+    expect(mocks.confirm).not.toHaveBeenCalled()
   })
 })

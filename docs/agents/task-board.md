@@ -12,6 +12,54 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### issue-265-trade-offers
+
+- **Owner:** Codex (GPT-5)
+- **Branch:** `feat/issue-265-trade-offers`
+- **Brief:** `docs/agents/tasks/issue-265-trade-offers.md`
+- **Status:** in review
+- **Claimed paths:**
+  - `packages/engine/src/state.ts`, `migrate.ts`, `create-game.ts`, `errors.ts`, `log.ts`, `trade-offers.ts`, `index.ts`
+  - `packages/engine/test/trade-offers*.test.ts`
+  - `packages/engine/test/chat-orders-turns.test.ts`
+  - `packages/server/src/routes/games.ts`, `context.ts`, `errors.ts`, `packages/server/test/trade-offers*.test.ts`
+  - `packages/server/test/chat-orders.test.ts`
+  - `packages/web/src/lib/api.ts`, `packages/web/src/views/ChatOrdersPanel.tsx`, `ChatOrdersPanel.css` and tests
+  - `docs/agents/tasks/issue-265-trade-offers.md`, `docs/agents/decisions.md`
+  - `AGENTS.md`, `docs/agents/conventions.md`
+- **Notes:** Child slice based on `feat/assisted-play-contract`; the parent branch claim is a base dependency, not a concurrent edit. Issue #264 is owned by another agent and is out of scope.
+
+### assisted-play-contract
+
+- **Owner:** Claude (Sonnet 5.5)
+- **Branch:** `feat/assisted-play-contract` (one PR, #271, by the human's choice; later parts are committed here)
+- **Brief:** `docs/agents/tasks/assisted-play-contract.md`
+- **Status:** in progress
+- **Claimed paths:**
+  - `packages/engine/src/assisted.ts`, `state.ts`, `errors.ts`, `index.ts`, `actions/turn.ts`, `actions/board.ts`, `build-item.ts`, `build-options.ts`, `wonder-data.ts`, `terrain.ts`
+  - `packages/engine/test/assisted*.test.ts`, `wonder-data.test.ts`
+  - `packages/server/src/routes/play.ts`, `routes/board.ts`, `packages/server/test/assisted*.test.ts`
+  - `packages/web/src/views/AssistedActions.tsx`, `AssistedActions.css`, `EndTurn.tsx`, `TechPanel.tsx`, `GameView.tsx`, `PhaseSummary.tsx`, `BoardView.tsx`, `BuildPicker.tsx`, `BuildPicker.css`, `buildFlow.ts`, `CityCard.tsx`, `styles.css`, `FaqView.tsx` and tests (`CitiesPanel.tsx` is removed)
+  - `packages/web/src/views/ChatOrdersPanel.css`, its tests in `ChatOrdersPanel.test.tsx`, and the trade offer handlers and a comment in `ChatOrdersPanel.tsx` (composer overflow fix and the fixes for Copilot's review; the trade offers from #274 are already merged here)
+  - `docs/agents/decisions.md`, `state.md`, `README.md`, `docs/agents/tasks/end-turn-actions.md`, `docs/agents/tasks/build-polish-wonders.md`, `docs/agents/tasks/assisted-gather.md`
+  - Replacing, Great People and City Walls (part 12): `packages/engine/src/board.ts` (`flip` change), `actions/board.ts` (`replaceUnderGreatPerson`), `packages/engine/test/great-person-replace.test.ts`, `packages/server/test/assisted-walls-api.test.ts`
+  - Devote to the Arts and Harvest (part 11): `packages/engine/data/tile-icons.json`, `src/tile-icons.ts`, `great-person-data.ts`, `city-gather.ts`, `city-actions.ts`, `limits.ts`, `terrain.ts`, `actions/board.ts`, `packages/web/src/views/CityGather.tsx`, `CityGather.test.tsx`, `hidden-info.test.ts`, `great-person-data.test.ts` and the tests of those
+  - Part 13 (`docs/agents/tasks/assisted-sot.md`): `packages/engine/src/assisted-core.ts`, `assisted-sot.ts`, `assisted-abilities.ts`, `assisted-resources.ts`, `assisted-cards.ts`, `assisted-culture.ts`, `assisted-city.ts`, `card-timing.ts`, `city-founding.ts`, `sot.ts`, `city-production.ts`, `city-gather.ts` (scouts sent in Start of Turn only), `migrate.ts`, `actions/player.ts`, `actions/board.ts` (the assisted check of the board Undo only); `packages/server/src/routes/assisted-args.ts`, `routes/games.ts` (the replay blanking of the new view fields only); `packages/web/src/lib/api.ts`, `views/PhaseTabs.tsx`, `PhaseTabs.css`, `SotPanel.tsx`, `SotPanel.css`, `PlayableCards.tsx`, `PlayableCards.css`, `panelForTests.tsx`, `CityActions.tsx` (the phase tabs replace the panel body of `AssistedActions.tsx`; `YourCities.tsx` moves into the City Management tab)
+  - Polish (`docs/agents/tasks/assisted-polish.md`): `packages/web/src/lib/toasts.ts`, `confirmation.ts`, `views/ToastRegion.tsx`, and their tests
+- **Notes:** parts 1 to 13 are on this branch (contract and cards, culture advance, Great Person markers, phase summary and layout, city production, Build for buildings, figures and units, Start Building Program and Upgrade buildings, End turn in Your actions, build polish and wonders, Devote to the Arts and Harvest, replacing, Great People and City Walls, and the phase tabs with Start of Turn). The claim stays until PR #271 is merged; the sub-branch claims were released when they were merged here. The polish slice disables used social policies and wonders instead of confirming a repeat, keeps the success toast for 7 seconds and removes the viewer's username from its text; review approved it on 2026-10-24, with the accepted nits recorded in `assisted-polish.md`.
+
+### action-panel-focus
+
+- **Owner:** Claude (orchestrator), coder and reviewer roles per `roles.md`
+- **Branch:** `feat/action-panel-focus` (from `feat/assisted-play-contract`)
+- **Brief:** `docs/agents/tasks/action-panel-focus.md`
+- **Status:** in review
+- **Claimed paths:**
+  - `packages/engine/src/state.ts` (`AvailableAction.techName` only), `assisted.ts` (`availableActionsFor` only), `packages/engine/test/assisted.test.ts`
+  - `packages/web/src/views/AssistedActions.tsx`, `AssistedActions.css`, `PlayableCards.tsx`, `PlayableCards.css`, `SotPanel.tsx`, `SotPanel.css`, `PhaseSummary.tsx`, `GameView.tsx` (`HandItem` anchor only), `ItemCard.tsx` (optional DOM id only), `HelpHint.tsx` and their tests
+  - `docs/agents/tasks/action-panel-focus.md`, `docs/agents/decisions.md`
+- **Notes:** Child slice based on `feat/assisted-play-contract`; the parent branch claim is a base dependency, not a concurrent edit.
+
 ### aircraft-unlocked
 
 - **Owner:** Claude
