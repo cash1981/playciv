@@ -7,7 +7,7 @@
  * rule: it shows the status and reason the engine gives and sends one request per press.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 
 import type { Government } from '@civ/engine'
 
@@ -269,6 +269,7 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
   const { invest } = sot
   const [source, setSource] = useState('')
   const [card, setCard] = useState('')
+  const cardId = useId()
   const ready = invest.status === 'ready'
   const chosenSource = source === '' && invest.coins.length === 1 ? (invest.coins[0]?.key ?? '') : source
   const valid = chosenSource !== '' && card !== ''
@@ -315,15 +316,10 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
               ))}
             </select>
           </label>
-          <span className="card-control sot-invest-card">
-            <label>
-              Marker on{' '}
-              <select
-                aria-label="Marker on"
-                value={card}
-                disabled={busy}
-                onChange={(event) => setCard(event.target.value)}
-              >
+          <div className="sot-field">
+            <label htmlFor={cardId}>Marker on</label>
+            <span className="card-control">
+              <select id={cardId} value={card} disabled={busy} onChange={(event) => setCard(event.target.value)}>
                 <option value="">Choose a card</option>
                 {invest.cards.map((entry) => (
                   <option key={entry.key} value={entry.key}>
@@ -331,11 +327,11 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
                   </option>
                 ))}
               </select>
-            </label>
-            <HelpHint label="Investment cards">
-              <InvestmentHelp cards={invest.cards} />
-            </HelpHint>
-          </span>
+              <HelpHint label="Investment cards">
+                <InvestmentHelp cards={invest.cards} />
+              </HelpHint>
+            </span>
+          </div>
           <button type="submit" className="small" disabled={busy || !valid}>
             Invest
           </button>
