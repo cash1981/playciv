@@ -7,7 +7,7 @@
  * rule: it shows the status and reason the engine gives and sends one request per press.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 
 import type { Government } from '@civ/engine'
 
@@ -269,6 +269,7 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
   const { invest } = sot
   const [source, setSource] = useState('')
   const [card, setCard] = useState('')
+  const cardId = useId()
   const ready = invest.status === 'ready'
   const chosenSource = source === '' && invest.coins.length === 1 ? (invest.coins[0]?.key ?? '') : source
   const valid = chosenSource !== '' && card !== ''
@@ -315,15 +316,10 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
               ))}
             </select>
           </label>
-          <span className="card-control sot-invest-card">
-            <label>
-              Marker on{' '}
-              <select
-                aria-label="Marker on"
-                value={card}
-                disabled={busy}
-                onChange={(event) => setCard(event.target.value)}
-              >
+          <div className="sot-field">
+            <label htmlFor={cardId}>Marker on</label>
+            <span className="card-control">
+              <select id={cardId} value={card} disabled={busy} onChange={(event) => setCard(event.target.value)}>
                 <option value="">Choose a card</option>
                 {invest.cards.map((entry) => (
                   <option key={entry.key} value={entry.key}>
@@ -331,11 +327,11 @@ function Invest({ gameId, view, busy, run, sot }: ChoiceProps): React.JSX.Elemen
                   </option>
                 ))}
               </select>
-            </label>
-            <HelpHint label="Investment cards">
-              <InvestmentHelp cards={invest.cards} />
-            </HelpHint>
-          </span>
+              <HelpHint label="Investment cards">
+                <InvestmentHelp cards={invest.cards} />
+              </HelpHint>
+            </span>
+          </div>
           <button type="submit" className="small" disabled={busy || !valid}>
             Invest
           </button>
@@ -464,6 +460,7 @@ function SendSquare({
 }): React.JSX.Element {
   // The choice made in the list lasts until the engine's answer changes (an undo, another device)
   const [chosen, setChosen] = useState<{ readonly for: string | null; readonly city: string } | null>(null)
+  const selectId = useId()
   const value = chosen !== null && chosen.for === assignedTo ? chosen.city : (assignedTo ?? '')
   const changed = value !== (assignedTo ?? '')
   return (
@@ -477,21 +474,28 @@ function SendSquare({
         setChosen(null)
       }}
     >
-      <label>
-        Send the square of {square} to{' '}
-        <select value={value} disabled={busy || cities.length === 0} onChange={(event) => setChosen({ for: assignedTo, city: event.target.value })}>
-          {!byDefault && <option value="">{assignedTo === null ? 'No city' : 'Back to the default'}</option>}
-          {cities.map((city) => (
-            <option key={city.pieceId} value={city.pieceId}>
-              {city.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button type="submit" className="small" disabled={busy || !changed}>
-        Send
-      </button>
-      {byDefault && <span className="muted">Capital</span>}
+      <div className="sot-field">
+        <label htmlFor={selectId}>Send the square of {square} to</label>
+        <div className="sot-row">
+          <select
+            id={selectId}
+            value={value}
+            disabled={busy || cities.length === 0}
+            onChange={(event) => setChosen({ for: assignedTo, city: event.target.value })}
+          >
+            {!byDefault && <option value="">{assignedTo === null ? 'No city' : 'Back to the default'}</option>}
+            {cities.map((city) => (
+              <option key={city.pieceId} value={city.pieceId}>
+                {city.label}
+              </option>
+            ))}
+          </select>
+          <button type="submit" className="small" disabled={busy || !changed}>
+            Send
+          </button>
+          {byDefault && <span className="muted">Capital</span>}
+        </div>
+      </div>
     </form>
   )
 }

@@ -38,6 +38,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  margin-bottom: 0;
   min-width: 0;
 }
 
@@ -45,9 +46,66 @@
   max-width: 100%;
 }
 
-/* The investment-card picker and its `?` reference sit on one row. */
+/* The select sits under its label text, so the controls beside it share its height to line up. */
+.sot-form select,
+.sot-form button,
+.sot-form .help-button {
+  box-sizing: border-box;
+  height: 2.2rem;
+}
+
+.sot-form button.small {
+  padding-block: 0;
+  font-size: 1rem;
+}
+
+.sot-form .help-button {
+  width: 2.2rem;
+}
+
+.sot-form > .muted {
+  display: flex;
+  align-items: center;
+  height: 2.2rem;
+}
+
+/* The Feudalism harvest button and its `?` sit on one row. */
 .sot-invest-card {
   align-items: flex-end;
+}
+
+/* A label over a control; the control's `?` sits beside the select and centres on it, not on the label. */
+.sot-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+/* A control with the buttons and notes that belong to it, centred on one line. */
+.sot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+/* The global select is full width; here it takes its content's width so the buttons stay beside it. */
+.sot-row select {
+  width: auto;
+}
+
+/* The `?` in a section title sits on the title's line, not on its baseline. */
+.sot-scouts .phase-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* The scout's details are the size of the other labels; only its title is larger. */
+.sot-scout .muted,
+.sot-scout .sot-send .muted {
+  font-size: 0.85rem;
 }
 
 .sot-scout-list {
