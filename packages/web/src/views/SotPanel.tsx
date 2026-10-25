@@ -460,6 +460,7 @@ function SendSquare({
 }): React.JSX.Element {
   // The choice made in the list lasts until the engine's answer changes (an undo, another device)
   const [chosen, setChosen] = useState<{ readonly for: string | null; readonly city: string } | null>(null)
+  const selectId = useId()
   const value = chosen !== null && chosen.for === assignedTo ? chosen.city : (assignedTo ?? '')
   const changed = value !== (assignedTo ?? '')
   return (
@@ -473,21 +474,28 @@ function SendSquare({
         setChosen(null)
       }}
     >
-      <label>
-        Send the square of {square} to{' '}
-        <select value={value} disabled={busy || cities.length === 0} onChange={(event) => setChosen({ for: assignedTo, city: event.target.value })}>
-          {!byDefault && <option value="">{assignedTo === null ? 'No city' : 'Back to the default'}</option>}
-          {cities.map((city) => (
-            <option key={city.pieceId} value={city.pieceId}>
-              {city.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button type="submit" className="small" disabled={busy || !changed}>
-        Send
-      </button>
-      {byDefault && <span className="muted">Capital</span>}
+      <div className="sot-field">
+        <label htmlFor={selectId}>Send the square of {square} to</label>
+        <div className="sot-row">
+          <select
+            id={selectId}
+            value={value}
+            disabled={busy || cities.length === 0}
+            onChange={(event) => setChosen({ for: assignedTo, city: event.target.value })}
+          >
+            {!byDefault && <option value="">{assignedTo === null ? 'No city' : 'Back to the default'}</option>}
+            {cities.map((city) => (
+              <option key={city.pieceId} value={city.pieceId}>
+                {city.label}
+              </option>
+            ))}
+          </select>
+          <button type="submit" className="small" disabled={busy || !changed}>
+            Send
+          </button>
+          {byDefault && <span className="muted">Capital</span>}
+        </div>
+      </div>
     </form>
   )
 }
