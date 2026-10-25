@@ -1016,7 +1016,7 @@ export class D1Repository implements Repository {
          ON CONFLICT(game_id, player_id) DO UPDATE SET emailed_at = excluded.emailed_at
          WHERE game_mail.emailed_at IS NULL
             OR game_mail.opened_at > game_mail.emailed_at
-            OR (game_mail.opened_at IS NULL AND game_mail.emailed_at < ?)`,
+            OR game_mail.emailed_at < ?`,
       )
       .bind(gameId, playerId, at, cutoff)
       .run()

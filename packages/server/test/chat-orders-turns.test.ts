@@ -248,6 +248,15 @@ describe('the row that starts a turn', () => {
   })
 })
 
+/** Stands in for every player loading the game, which re-arms their mail. */
+async function everyoneOpens(gameId: string): Promise<void> {
+  now = new Date(now.getTime() + 1000)
+  for (const player of (await loadGame(gameId)).players) {
+    await repo.recordGameOpened(gameId, player.playerId, now)
+  }
+  now = new Date(now.getTime() + 1000)
+}
+
 describe('the mail to a new turn holder', () => {
   const mailsTo = (username: string): OutgoingEmail[] =>
     mailer.sent.filter((mail) => mail.to === `${username}@example.com`)
@@ -256,8 +265,8 @@ describe('the mail to a new turn holder', () => {
     const table = await threePlayerGame('holder-mail')
     const [one, two, three] = table.seats
     if (one === undefined || two === undefined || three === undefined) throw new Error('no seats')
-    // Joining mailed the other players; let the 30 minute wait that stands in for a visit pass
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    // Joining mailed the other players; they open the game
+    await everyoneOpens(table.gameId)
     mailer.sent.length = 0
 
     // Seat 1 holds the turn; finishing Start of turn hands it to seat 2
@@ -268,9 +277,9 @@ describe('the mail to a new turn holder', () => {
     expect(mailsTo(two.username)[0]?.text).toContain(`https://playciv.app/game/${table.gameId}`)
     expect(mailer.sent).toHaveLength(1)
 
-    // Seat 3 finishing it too leaves seat 2 the holder: no mail. The hold has
-    // run out by now, so only the "same holder" rule keeps this one quiet.
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    // Seat 3 finishing it too leaves seat 2 the holder: no mail. They have
+    // opened the game by now, so only the "same holder" rule keeps this quiet.
+    await everyoneOpens(table.gameId)
     await done(table, 2, 'SOT')
     expect(mailer.sent).toHaveLength(1)
 
@@ -287,8 +296,8 @@ describe('the mail to a new turn holder', () => {
     if (two === undefined) throw new Error('no seat 2')
     await done(table, 0, 'RESEARCH', 1)
     await done(table, 1, 'RESEARCH', 1)
-    // Seat 2 was mailed when seat 1 finished; let the 30 minute limit pass
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    // Seat 2 was mailed when seat 1 finished; they open the game
+    await everyoneOpens(table.gameId)
     mailer.sent.length = 0
 
     await done(table, 2, 'RESEARCH', 1)
@@ -298,22 +307,30 @@ describe('the mail to a new turn holder', () => {
     expect(mailsTo(two.username)[0]?.text).toContain('It is your turn: start of turn, turn 2')
   })
 
-  it('is held like the other in-game mail: once, until the player opens the game or 30 minutes pass', async () => {
+  it('is held like the other in-game mail: once, until the player opens the game or 24 hours pass', async () => {
     const table = await threePlayerGame('holder-throttle')
     const before = await loadGame(table.gameId)
     const after = unwrap(markPhasesDone(before, { playerId: table.seats[0]?.id ?? '', turnNumber: 1, upToPhase: 'SOT' }))
     const notifications = createNotifications({ repo, mailer, appOrigin: 'https://playciv.app', now: () => now })
-    // Joining mailed the other players; let the 30 minute wait that stands in for a visit pass
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    // Joining mailed the other players; they open the game
+    await everyoneOpens(table.gameId)
     mailer.sent.length = 0
 
     await notifications.turnHolderChanged(before, after)
     await notifications.turnHolderChanged(before, after)
     expect(mailer.sent).toHaveLength(1)
 
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS - 60_000)
+    await notifications.turnHolderChanged(before, after)
+    expect(mailer.sent).toHaveLength(1)
+
+    now = new Date(now.getTime() + 120_000)
     await notifications.turnHolderChanged(before, after)
     expect(mailer.sent).toHaveLength(2)
+
+    await everyoneOpens(table.gameId)
+    await notifications.turnHolderChanged(before, after)
+    expect(mailer.sent).toHaveLength(3)
   })
 
   it('is sent again once the new holder has opened the game', async () => {
@@ -323,7 +340,7 @@ describe('the mail to a new turn holder', () => {
     const holder = table.seats[1]
     if (holder === undefined) throw new Error('no seat 2')
     const notifications = createNotifications({ repo, mailer, appOrigin: 'https://playciv.app', now: () => now })
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    await everyoneOpens(table.gameId)
     mailer.sent.length = 0
 
     await notifications.turnHolderChanged(before, after)
@@ -345,8 +362,7 @@ describe('the mail to a new turn holder', () => {
     const notifications = createNotifications({ repo, mailer, appOrigin: 'https://playciv.app', now: () => now })
     const on = await loadGame(table.gameId)
     expect(turnHolder(on)?.playerId).toBe(table.seats[0]?.id)
-    // Past the hold, so a mail to the holder would not be swallowed by it
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    await everyoneOpens(table.gameId)
     mailer.sent.length = 0
 
     await notifications.turnHolderChanged(on, on)
@@ -370,8 +386,8 @@ describe('the mail for an order', () => {
     const table = await threePlayerGame('order-mail')
     const [one, two, three] = table.seats
     if (one === undefined || two === undefined || three === undefined) throw new Error('no seats')
-    // Joining mailed the other players; let the 30 minute wait that stands in for a visit pass
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    // Joining mailed the other players; they open the game
+    await everyoneOpens(table.gameId)
     mailer.sent.length = 0
 
     expect((await order(table, 0, 'Settle on the river')).status).toBe(200)
@@ -386,7 +402,7 @@ describe('the mail for an order', () => {
 
   it('is held like the chat mail: a second order mails nobody until the game is opened', async () => {
     const table = await threePlayerGame('order-held')
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    await everyoneOpens(table.gameId)
     mailer.sent.length = 0
 
     await order(table, 0, 'first')
@@ -400,7 +416,7 @@ describe('the mail for an order', () => {
     const table = await threePlayerGame('row-fails')
     const two = table.seats[1]
     if (two === undefined) throw new Error('no seat 2')
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+    await everyoneOpens(table.gameId)
     mailer.sent.length = 0
     vi.spyOn(repo, 'appendChat').mockRejectedValue(new Error('timeline is down'))
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined)

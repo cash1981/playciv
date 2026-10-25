@@ -710,8 +710,7 @@ Several old behaviours were corrected on purpose:
 - **One game email per player until they open the game** (issue #217). After a
   chat, order, battle-turn, it-is-your-turn or someone-joined mail, that player gets
   no further such mail about the same game until they load the game while signed
-  in. A player who has never opened the game falls back to Java's 30-minute
-  wait. It is per player and per game. The game-ended and game-deleted mails are
+  in. If they have not opened the game within 24 hours, one more goes out. It is per player and per game. The game-ended and game-deleted mails are
   final and always go out, and spectators or
   admins opening a game do not count. D1 needs migration `0004_game_mail.sql`.
 

@@ -126,9 +126,10 @@ async function startedGame(
   const waitingPlayer = waitingPlayerState.playerId === creator.id ? creator : other
   const holder = waitingPlayer === creator ? other : creator
 
-  // Joining mailed the creator. Neither player has opened the game, so the 30
-  // minute wait would hold back the next mail to them; let it pass.
-  now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 1)
+  // Joining mailed the creator, which holds further mail until they open the game.
+  now = new Date(now.getTime() + 1000)
+  await repo.recordGameOpened(gameId, creator.id, now)
+  now = new Date(now.getTime() + 1000)
 
   return { gameId, starter: creator, holder, waiting: waitingPlayerState.username, waitingPlayer }
 }
@@ -233,7 +234,7 @@ describe('join, end and delete', () => {
 })
 
 describe('chat', () => {
-  it('emails the other players, at most once per 30 minutes for the same game', async () => {
+  it('emails the other players, once until the player opens the game or 24 hours pass', async () => {
     const creator = await register('chat-a')
     const gameId = await createGame(creator.token, 'chat mail', 3)
     const other = await register('chat-b')
@@ -253,13 +254,20 @@ describe('chat', () => {
     expect(mailer.subjects('New Chat')[0]?.to).toBe('chat-b@example.com')
     expect(mailer.subjects('New Chat')[0]?.text).toContain('first message')
 
-    // Still inside the window: Java's `shouldSendEmailInGame` suppresses it.
+    // Held for 24 hours, then one more goes out even if the game stays closed.
     await post('second message')
-    expect(mailer.subjects('New Chat')).toHaveLength(1)
-
-    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS + 60_000)
+    now = new Date(now.getTime() + IN_GAME_COOLDOWN_MS - 60_000)
     await post('third message')
+    expect(mailer.subjects('New Chat')).toHaveLength(1)
+    now = new Date(now.getTime() + 120_000)
+    await post('third and a half')
     expect(mailer.subjects('New Chat')).toHaveLength(2)
+
+    now = new Date(now.getTime() + 1000)
+    await repo.recordGameOpened(gameId, other.id, now)
+    now = new Date(now.getTime() + 1000)
+    await post('fourth message')
+    expect(mailer.subjects('New Chat')).toHaveLength(3)
   })
 
   it('excludes the author by player id even when the game keeps an old username', async () => {
@@ -378,11 +386,14 @@ describe('email cooldown', () => {
     expect([first, second].filter(Boolean)).toHaveLength(1)
   })
 
-  it('holds on a stamp in the future in the JSON store too, like D1', async () => {
+  it('holds until the player opens the game or 24 hours pass', async () => {
     const at = new Date('2026-09-19T12:00:00.000Z')
-    expect(await repo.claimGameEmail('g', 'p', 1000, at)).toBe(true)
-    expect(await repo.claimGameEmail('g', 'p', 1000, new Date(at.getTime() - 5000))).toBe(false)
-    expect(await repo.claimGameEmail('g', 'p', 1000, new Date(at.getTime() + 1001))).toBe(true)
+    const wait = IN_GAME_COOLDOWN_MS
+    expect(await repo.claimGameEmail('g', 'p', wait, at)).toBe(true)
+    expect(await repo.claimGameEmail('g', 'p', wait, new Date(at.getTime() + wait - 1))).toBe(false)
+    expect(await repo.claimGameEmail('g', 'p', wait, new Date(at.getTime() + wait + 1))).toBe(true)
+    await repo.recordGameOpened('g', 'p', new Date(at.getTime() + wait + 2000))
+    expect(await repo.claimGameEmail('g', 'p', wait, new Date(at.getTime() + wait + 3000))).toBe(true)
   })
 
   it('sends a single mail when two chat messages race for the same slot', async () => {
@@ -447,6 +458,20 @@ describe('held until the game is opened (issue #217)', () => {
       await chat(writer.token, gameId, `message ${index}`)
     }
     expect(mailer.subjects('New Chat')).toHaveLength(1)
+  })
+
+  it('does not count an auto-refresh poll as opening the game', async () => {
+    const { writer, reader, gameId } = await openedGame('poll')
+    await chat(writer.token, gameId, 'one')
+    expect(mailer.subjects('New Chat')).toHaveLength(1)
+
+    await open(reader.token, gameId, '?background=1')
+    await chat(writer.token, gameId, 'two')
+    expect(mailer.subjects('New Chat')).toHaveLength(1)
+
+    await open(reader.token, gameId)
+    await chat(writer.token, gameId, 'three')
+    expect(mailer.subjects('New Chat')).toHaveLength(2)
   })
 
   it('sends one new email after the reader opens the game', async () => {

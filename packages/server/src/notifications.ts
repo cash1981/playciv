@@ -26,11 +26,10 @@ import type {
 export const DEFAULT_APP_ORIGIN = 'https://playciv.app'
 
 /**
- * Java `CivUtil.shouldSendEmailInGame`: 30 minutes, per player per game. Since
- * issue #217 it only applies to a player who has never opened the game; after
- * that, a game email waits for the next visit instead of a clock.
+ * How long a game email stays held for a player who has not opened the game.
+ * After that, one more may go out; otherwise it waits for the next visit.
  */
-export const IN_GAME_COOLDOWN_MS = 30 * 60 * 1000
+export const IN_GAME_COOLDOWN_MS = 24 * 60 * 60 * 1000
 
 type Player = GameState['players'][number]
 
@@ -183,7 +182,7 @@ export interface Notifications {
    * Java `PlayerAction.endTurn` → `sendYourTurn`, now without a baton (issue
    * #215): the new turn holder, when marking a phase done changed who it is.
    * Nothing when the holder is the same. Throttled like the other in-game mail
-   * (30 minutes per player per game).
+   * (held until the player opens the game or 24 hours pass).
    */
   turnHolderChanged(before: GameState, after: GameState): Promise<void>
   /**

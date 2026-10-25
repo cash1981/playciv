@@ -665,10 +665,9 @@ export class JsonFileRepository implements Repository {
       const seenSince =
         stamps.openedAt !== undefined && stamps.openedAt > stamps.emailedAt
       if (!seenSince) {
-        // Held until the game is opened. Without a single visit on record the
-        // 30 minute wait stands in. Only a stamp strictly older than the wait
-        // lets a mail through, so a stamp in the future suppresses, as in D1.
-        if (stamps.openedAt !== undefined) return false
+        // Held until the game is opened, or until the wait has run out. Only a
+        // stamp strictly older than the wait lets a mail through, so a stamp in
+        // the future suppresses, as in D1.
         const lastMs = Date.parse(stamps.emailedAt)
         if (!Number.isNaN(lastMs) && !(lastMs < now.getTime() - fallbackWaitMs)) return false
       }
