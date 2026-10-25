@@ -45,6 +45,29 @@
   max-width: 100%;
 }
 
+/* The select sits under its label text, so the controls beside it share its height to line up. */
+.sot-form select,
+.sot-form button,
+.sot-form .help-button {
+  box-sizing: border-box;
+  height: 2.2rem;
+}
+
+.sot-form button.small {
+  padding-block: 0;
+  font-size: 1rem;
+}
+
+.sot-form .help-button {
+  width: 2.2rem;
+}
+
+.sot-form > .muted {
+  display: flex;
+  align-items: center;
+  height: 2.2rem;
+}
+
 /* The investment-card picker and its `?` reference sit on one row. */
 .sot-invest-card {
   align-items: flex-end;
