@@ -205,10 +205,9 @@ describe('reveal item', () => {
 /**
  * Java: the civilization sequence in `revealItem`.
  *
- * Note that `drawStartingItems` goes through `DrawAction.draw`, which requires
- * that it is the turn of the player. In Java that means only the player whose
- * turn it is can reveal a civilization and get starting units. See the last
- * test below.
+ * Java drew the starting units through `DrawAction.draw`, which requires the
+ * turn, so only the turn holder could reveal. Here the reveal draws them with
+ * `confirmedOutOfTurn`, so any seat can reveal. See the non-holder test below.
  */
 describe('reveal civilization', () => {
   const revealCivFor = (state: GameState, playerId: string) => {
@@ -318,7 +317,7 @@ describe('reveal civilization', () => {
 
   // Reveal a civilization for every player, in player-number order. Each player
   // marks the start of turn done afterwards, which hands the turn to the next seat
-  // (drawing and revealing both require it).
+  // (drawing requires it; revealing does not).
   const revealEveryCiv = (start: GameState): GameState => {
     let state = start
     const order = [...state.players]

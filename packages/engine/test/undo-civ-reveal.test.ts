@@ -125,6 +125,20 @@ describe('undo of a civilization reveal', () => {
     )
   })
 
+  it('lets the former owner reveal again out of turn after the undo', () => {
+    let state = revealHidden(giveCiv(firstCivGame(), CASH1981, 'Germans'), CASH1981)
+    state = unwrap(markPhasesDone(state, { playerId: CASH1981, turnNumber: 1, upToPhase: 'SOT' }))
+    expect(turnHolder(state)?.playerId).not.toBe(CASH1981)
+
+    const undone = undoByVote(state, CASH1981)
+    expect(handOf(undone, CASH1981).some(isUnit)).toBe(false)
+    expect(turnHolder(undone)?.playerId).not.toBe(CASH1981)
+
+    const again = revealHidden(undone, CASH1981)
+    expect(findPlayer(again, CASH1981)?.civilization).not.toBeNull()
+    expect(handOf(again, CASH1981).filter(isUnit)).toHaveLength(5)
+  })
+
   it.each([
     ['Spanish', 'figures/whitescout'],
     ['Russians', 'figures/whitearmy'],
