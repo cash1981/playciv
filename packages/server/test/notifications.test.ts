@@ -621,6 +621,11 @@ describe('battle turn', () => {
     await post(starter.token, `/api/games/${gameId}/draw/INFANTRY`)
     const drawn = await post(starter.token, `/api/games/${gameId}/battle/draw`, { numberOfUnits: 1 })
     const unit = drawn.you.battlehand[0]!
+    // Joining mailed both players and used their one held game mail; opening the game re-arms it.
+    now = new Date(now.getTime() + 1000)
+    for (const who of [creator, joiner]) {
+      await inject(app, { method: 'GET', url: `/api/games/${gameId}/state`, headers: bearer(who.token) })
+    }
     mailer.sent.length = 0
     const initiated = await post(starter.token, `/api/games/${gameId}/battle/arena/initiate`, {
       opponentId: opponent === 'barbarians' ? 'barbarians' : waitingPlayer.id,
@@ -650,14 +655,22 @@ describe('battle turn', () => {
     expect(mail?.text).not.toContain('battlehand')
   })
 
-  it('has no cooldown: three end-turns within 30 minutes all send', async () => {
-    const { starter, waitingPlayer, mailOf, rev, base } = await battle('bt-two', 'player')
+  it('holds battle mail: one per player until they open the game', async () => {
+    const { gameId, starter, waitingPlayer, mailOf, rev, base } = await battle('bt-two', 'player')
     const first = await post(waitingPlayer.token, `${base}/turn/end`, { rev })
     const second = await post(starter.token, `${base}/turn/end`, { rev: first.rev })
-    await post(waitingPlayer.token, `${base}/turn/end`, { rev: second.rev })
+    const third = await post(waitingPlayer.token, `${base}/turn/end`, { rev: second.rev })
 
-    // The clock is frozen, so the starter's second mail lands inside the window.
-    expect(battleMails()).toHaveLength(3)
+    // The starter's second mail is held; it was never opened.
+    expect(battleMails().map((mail) => mail.to)).toEqual([mailOf(starter), mailOf(waitingPlayer)])
+
+    now = new Date(now.getTime() + 1000)
+    await inject(app, {
+      method: 'GET', url: `/api/games/${gameId}/state`,
+      headers: bearer(starter.token),
+    })
+    const fourth = await post(starter.token, `${base}/turn/end`, { rev: third.rev })
+    await post(waitingPlayer.token, `${base}/turn/end`, { rev: fourth.rev })
     expect(battleMails().map((mail) => mail.to)).toEqual([
       mailOf(starter),
       mailOf(waitingPlayer),

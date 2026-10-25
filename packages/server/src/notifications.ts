@@ -504,12 +504,13 @@ export function createNotifications(config: NotificationsConfig): Notifications 
       if (battle === null) return
       const recipientId = battle[battle.turn].playerId
       if (recipientId === endedByPlayerId) return
-      // Battle mail is outside the hold: every end-turn mails.
+      // Held like the other game mail: one per player until they open the game.
       await notify(
         recipientId,
         'Your battle turn',
         `It is your turn to play a unit in the battle arena in ${after.name}!\n\n` +
           `Go to ${gameLink(after.id)} to play your unit`,
+        after.id,
       )
     },
 

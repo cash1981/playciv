@@ -708,11 +708,11 @@ the old Turn orders panel; a posted order is mailed like a chat message.
 Several old behaviours were corrected on purpose:
 
 - **One game email per player until they open the game** (issue #217). After a
-  chat, order, it-is-your-turn or someone-joined mail, that player gets
+  chat, order, battle-turn, it-is-your-turn or someone-joined mail, that player gets
   no further such mail about the same game until they load the game while signed
   in. A player who has never opened the game falls back to Java's 30-minute
   wait. It is per player and per game. The game-ended and game-deleted mails are
-  final and always go out, battle turn mails are not held, and spectators or
+  final and always go out, and spectators or
   admins opening a game do not count. D1 needs migration `0004_game_mail.sql`.
 
 - **Daily idle-turn reminders.** A separate daily Worker cron at 16:00 UTC
@@ -746,7 +746,7 @@ Several old behaviours were corrected on purpose:
   cannot both slip a mail past the hold.
 - **New: a battle turn mail.** Ending a battle turn in the arena mails whoever
   now holds the battle turn ("It is your turn to play a unit in the battle
-  arena"), straight away. There is no cooldown, unsubscribe is respected, and
+  arena"). It is held like the other game mail, unsubscribe is respected, and
   the player who pressed the button is never mailed. `old-civ-rest` has no
   arena, so there is no Java counterpart.
 
