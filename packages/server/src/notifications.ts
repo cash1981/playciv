@@ -187,8 +187,9 @@ export interface Notifications {
   turnHolderChanged(before: GameState, after: GameState): Promise<void>
   /**
    * New mechanic (no Java counterpart) — the player who now holds the battle
-   * turn, straight after someone ends it. Never held back. Skipped when there is
-   * no battle or the new turn holder is the one who pressed the button.
+   * turn, straight after someone ends it. Held like other game mail until the
+   * player opens the game or 24 hours pass. Skipped when there is no battle or
+   * the new turn holder is the one who pressed the button.
    */
   battleTurnChanged(after: GameState, endedByPlayerId: string): Promise<void>
   /** Java `GameAction.endGame` — every player. */

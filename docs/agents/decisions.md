@@ -981,10 +981,12 @@ uses a separate derived signing key and expiring token; unknown-email responses
 must not enumerate accounts. Registration's fixed Writing answer is a spam
 speed bump, not a security boundary.
 
-Game creation sends no email. Ordinary notifications wait for the previous
-notification to be acknowledged by opening the game; battle/final messages have
-specific exceptions. Idle-turn reminders target a holder waiting over 72 hours,
-once per unchanged activity version; opening the game does not reset activity.
+Game creation sends no email. Ordinary game notifications, including battle-turn
+mail, are held per player and game until the player opens the game; if they have
+not opened it, one more may be sent after 24 hours. Opening the game re-arms the
+next message. Final messages remain exceptions. Idle-turn reminders target a
+holder waiting over 72 hours, once per unchanged activity version; opening the
+game does not reset activity.
 Queued broadcasts keep indeterminate sends claimed until explicit resolution,
 with a release cooldown, to avoid duplicate deliveries. Respect opt-outs and
 current addresses at send time.
