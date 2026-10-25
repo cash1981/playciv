@@ -642,7 +642,8 @@ function drawStartingItems(
       if (!drawn.ok) return drawn
       next = drawn.value
     } else {
-      const drawn = draw(next, { playerId, sheetName })
+      // The reveal is not a turn action: any seat may reveal its civ in any order.
+      const drawn = draw(next, { playerId, sheetName, confirmedOutOfTurn: true })
       if (!drawn.ok) return drawn
       next = drawn.value
     }

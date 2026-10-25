@@ -291,12 +291,7 @@ describe('reveal civilization', () => {
     expect(error).toEqual({ kind: 'CIVILIZATION_ALREADY_CHOSEN', playerId: CASH1981 })
   })
 
-  /**
-   * This records a real limitation inherited from Java rather than desired
-   * behaviour: the starting units are drawn through DrawAction.draw, which
-   * requires the turn.
-   */
-  it('a player whose turn it is not cannot reveal a civilization', () => {
+  it('a player whose turn it is not can still reveal a civilization', () => {
     let state = firstCivGame()
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CIV' }))
 
@@ -313,10 +308,12 @@ describe('reveal civilization', () => {
       ),
     }
 
-    const error = unwrapErr(
+    const next = unwrap(
       revealItem(state, { playerId: KARANDRAS1, sheetName: 'CIV', itemNumber: civ.itemNumber }),
     )
-    expect(error).toEqual({ kind: 'NOT_YOUR_TURN', playerId: KARANDRAS1 })
+    const karandras = next.players.find((player) => player.playerId === KARANDRAS1)
+    expect(karandras?.civilization).not.toBeNull()
+    expect(karandras?.items.some((item) => item.kind === 'infantry')).toBe(true)
   })
 
   // Reveal a civilization for every player, in player-number order. Each player

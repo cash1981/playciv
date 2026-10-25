@@ -99,6 +99,11 @@ only "start with 2 scouts"; one extra scout follows the owner's request and the
 issue #204 precedent for Russia, not a rulebook reading. Tests: `white-figures.test.ts`,
 `undo-civ-reveal.test.ts`.
 
+Revealing a civilization does not need the turn (2026-10-25, owner's request). The
+starting units are drawn with `confirmedOutOfTurn`, so any seat can reveal in any
+order, and again after an undone reveal. Test: the non-holder reveal test in
+`player-action.test.ts`.
+
 Terrain checks are advisory client warnings, not server placement restrictions.
 Player status has an Aircraft checkbox under Units (`stats.aircraft`, default
 false) meaning the player has unlocked Aircraft units. Revealing the Flight tech
