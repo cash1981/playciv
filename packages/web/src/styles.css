@@ -448,6 +448,17 @@ label > textarea {
   text-transform: uppercase;
 }
 
+/* Sits beside the brand link, not inside it; keeps the username's own casing. */
+.topbar .brand-user {
+  margin-left: 0.6rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
 .topbar .spacer {
   flex: 1;
 }

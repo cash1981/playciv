@@ -155,6 +155,7 @@ export function Navigation({
         <strong>Civilization</strong>
         <span className="muted">playciv</span>
       </a>
+      {player !== null && <span className="muted brand-user">Logged in as {player.username}</span>}
       <span className="brand-spacer" />
       <div className="main-menu" ref={menuRef}>
         <button
