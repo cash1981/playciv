@@ -947,15 +947,6 @@ blocks its authenticated requests. Java used unsalted SHA-1
 and HTTP Basic, so this is an improvement, but it has not been reviewed for
 production.
 
-### Known setup limitation
-
-Revealing a civilization can fail with `NOT_YOUR_TURN` when its starting units
-are drawn for a player who is not the turn holder. `revealItem` calls the
-turn-gated `draw` action without an out-of-turn override. This current
-limitation is covered by the test "a player whose turn it is not cannot reveal
-a civilization" in `packages/engine/test/player-action.test.ts`; it is not a
-rule to preserve. See [known limitations](docs/agents/limitations.md).
-
 Reference material — rulebooks, maps in ODP/PPTX, card artwork and a copy of the
 Mongo database — lives in `Civilization/`, which is outside git.
 

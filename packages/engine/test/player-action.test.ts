@@ -205,10 +205,9 @@ describe('reveal item', () => {
 /**
  * Java: the civilization sequence in `revealItem`.
  *
- * Note that `drawStartingItems` goes through `DrawAction.draw`, which requires
- * that it is the turn of the player. In Java that means only the player whose
- * turn it is can reveal a civilization and get starting units. See the last
- * test below.
+ * Java drew the starting units through `DrawAction.draw`, which requires the
+ * turn, so only the turn holder could reveal. Here the reveal draws them with
+ * `confirmedOutOfTurn`, so any seat can reveal. See the non-holder test below.
  */
 describe('reveal civilization', () => {
   const revealCivFor = (state: GameState, playerId: string) => {
@@ -291,12 +290,7 @@ describe('reveal civilization', () => {
     expect(error).toEqual({ kind: 'CIVILIZATION_ALREADY_CHOSEN', playerId: CASH1981 })
   })
 
-  /**
-   * This records a real limitation inherited from Java rather than desired
-   * behaviour: the starting units are drawn through DrawAction.draw, which
-   * requires the turn.
-   */
-  it('a player whose turn it is not cannot reveal a civilization', () => {
+  it('a player whose turn it is not can still reveal a civilization', () => {
     let state = firstCivGame()
     state = unwrap(draw(state, { playerId: CASH1981, sheetName: 'CIV' }))
 
@@ -313,15 +307,17 @@ describe('reveal civilization', () => {
       ),
     }
 
-    const error = unwrapErr(
+    const next = unwrap(
       revealItem(state, { playerId: KARANDRAS1, sheetName: 'CIV', itemNumber: civ.itemNumber }),
     )
-    expect(error).toEqual({ kind: 'NOT_YOUR_TURN', playerId: KARANDRAS1 })
+    const karandras = next.players.find((player) => player.playerId === KARANDRAS1)
+    expect(karandras?.civilization).not.toBeNull()
+    expect(karandras?.items.some((item) => item.kind === 'infantry')).toBe(true)
   })
 
   // Reveal a civilization for every player, in player-number order. Each player
   // marks the start of turn done afterwards, which hands the turn to the next seat
-  // (drawing and revealing both require it).
+  // (drawing requires it; revealing does not).
   const revealEveryCiv = (start: GameState): GameState => {
     let state = start
     const order = [...state.players]
