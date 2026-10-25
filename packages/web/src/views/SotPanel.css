@@ -82,6 +82,26 @@
   min-width: 0;
 }
 
+/* A control with the buttons and notes that belong to it, centred on one line. */
+.sot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+/* The global select is full width; here it takes its content's width so the buttons stay beside it. */
+.sot-row select {
+  width: auto;
+}
+
+/* The `?` in a section title sits on the title's line, not on its baseline. */
+.sot-scouts .phase-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 /* The scout's details are the size of the other labels; only its title is larger. */
 .sot-scout .muted,
 .sot-scout .sot-send .muted {
