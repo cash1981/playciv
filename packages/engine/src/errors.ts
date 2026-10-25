@@ -168,6 +168,8 @@ export type EngineError =
   | { readonly kind: 'TRADE_OFFER_NOT_FOUND'; readonly offerId: string }
   | { readonly kind: 'TRADE_OFFER_NOT_PENDING'; readonly offerId: string }
   | { readonly kind: 'TRADE_OFFER_NOT_ALLOWED'; readonly offerId: string }
+  | { readonly kind: 'TRADE_OFFER_NO_RECIPIENT' }
+  | { readonly kind: 'TRADE_OFFER_CHOICE_INVALID'; readonly offerId: string; readonly playerId: string }
   /** A culture card cannot come in while the hand holds more culture cards than its size. */
   | { readonly kind: 'CULTURE_HAND_OVER'; readonly playerId: string; readonly held: number; readonly size: number }
 
@@ -323,5 +325,9 @@ export function describeError(error: EngineError): string {
       return 'This trade offer is no longer pending'
     case 'TRADE_OFFER_NOT_ALLOWED':
       return 'You are not allowed to perform that action on this trade offer'
+    case 'TRADE_OFFER_NO_RECIPIENT':
+      return 'Choose at least one player to send the offer to, or make it an open deal'
+    case 'TRADE_OFFER_CHOICE_INVALID':
+      return 'You can only choose a player who has accepted this offer'
   }
 }

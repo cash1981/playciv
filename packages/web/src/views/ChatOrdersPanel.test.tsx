@@ -711,6 +711,44 @@ describe('a game change and unmounting', () => {
   })
 })
 
+describe('the Trade deals tab', () => {
+  const deal = {
+    id: 'o1',
+    senderId: 'id-Alice',
+    senderUsername: 'Alice',
+    recipientIds: ['id-Bob'],
+    recipientUsernames: ['Bob'],
+    open: false,
+    responses: [],
+    chosenId: null,
+    chosenUsername: null,
+    terms: 'two trade for a wheat',
+    turnNumber: 4,
+    phase: 'TRADE',
+    status: 'pending',
+    parentOfferId: null,
+    createdAt: null,
+    resolvedAt: null,
+    logId: 'l1',
+  }
+
+  it('shows the deals of the turn, with a pager, in place of the timeline', async () => {
+    await renderPanel(makeView({ tradeOffers: [deal] }))
+    await click(filterChip('Trade deals'))
+    expect(screen.getByText('Turn 4')).toBeTruthy()
+    expect(screen.getByText('two trade for a wheat')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Previous turn' })).toBeTruthy()
+    expect(screen.queryByRole('log', { name: 'Timeline' })).toBeNull()
+    expect(filterChip('Trade deals').getAttribute('aria-controls')).toBe(screen.getByRole('tabpanel').id)
+  })
+
+  it('is there for a viewer who is not a player, since deals are public', async () => {
+    await renderPanel(makeView({ you: null, tradeOffers: [deal] }))
+    await click(filterChip('Trade deals'))
+    expect(screen.getByText('two trade for a wheat')).toBeTruthy()
+  })
+})
+
 describe('the filter tabs by keyboard', () => {
   const press = async (element: HTMLElement, key: string): Promise<void> => {
     await act(async () => { fireEvent.keyDown(element, { key }) })
@@ -724,14 +762,14 @@ describe('the filter tabs by keyboard', () => {
     await renderPanel(makeView())
 
     const tabs = within(screen.getByRole('tablist', { name: 'Show' })).getAllByRole('tab')
-    expect(tabs.map((tab) => tab.tabIndex)).toEqual([0, -1, -1, -1])
+    expect(tabs.map((tab) => tab.tabIndex)).toEqual([0, -1, -1, -1, -1])
     const panel = screen.getByRole('tabpanel')
     expect(filterChip('All').getAttribute('aria-controls')).toBe(panel.id)
     expect(filterChip('Chat').getAttribute('aria-controls')).toBe(panel.id)
     // The Private tab controls the other panel, which exists once it is selected
     await click(filterChip('Private'))
     expect(filterChip('Private').getAttribute('aria-controls')).toBe(screen.getByRole('tabpanel').id)
-    expect(within(screen.getByRole('tablist', { name: 'Show' })).getAllByRole('tab').map((tab) => tab.tabIndex)).toEqual([-1, -1, -1, 0])
+    expect(within(screen.getByRole('tablist', { name: 'Show' })).getAllByRole('tab').map((tab) => tab.tabIndex)).toEqual([-1, -1, -1, -1, 0])
   })
 
   it('moves with the arrow keys, wrapping at both ends, and with Home and End', async () => {

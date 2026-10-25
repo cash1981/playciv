@@ -106,6 +106,7 @@ interface PanelOptions {
   readonly policiesChosen?: readonly SocialPolicyItem[]
   readonly opponents?: readonly unknown[]
   readonly spectator?: boolean
+  readonly readOnly?: boolean
 }
 
 function renderPanel({
@@ -113,6 +114,7 @@ function renderPanel({
   policiesChosen = [],
   opponents = [],
   spectator = false,
+  readOnly = false,
 }: PanelOptions = {}): HTMLElement {
   vi.spyOn(api, 'socialPolicies').mockResolvedValue([...catalogue])
   const { container } = render(
@@ -122,6 +124,7 @@ function renderPanel({
       run={run}
       view={spectator ? spectatorView(opponents) : view(policiesChosen, opponents)}
       reloadCount={0}
+      readOnly={readOnly}
     />,
   )
   return container
@@ -222,6 +225,8 @@ describe('SocialPolicyPanel tabs', () => {
 
     expect(tabNames()).toEqual(['Egil', 'Kari'])
     await screen.findByRole('option', { name: 'Rationalism' })
+    expect((screen.getByLabelText('Choose a social policy') as HTMLSelectElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Choose' }) as HTMLButtonElement).disabled).toBe(true)
 
     fireEvent.click(screen.getByRole('button', { name: 'Show social policy card reference' }))
 
@@ -327,5 +332,18 @@ describe('SocialPolicyPanel availability', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose' }))
 
     await waitFor(() => expect(choose).toHaveBeenCalledWith('game-1', 'Rationalism'))
+  })
+})
+
+
+describe('SocialPolicyPanel read-only', () => {
+  it('disables the picker and the own-card controls for a player in a read-only view', async () => {
+    renderPanel({ catalogue: CATALOGUE, policiesChosen: [policy('Rationalism', 'Patronage', true)], readOnly: true })
+    await screen.findByRole('option', { name: 'Natural Religion' })
+
+    expect((screen.getByLabelText('Choose a social policy') as HTMLSelectElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Choose' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Reveal' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Remove' }) as HTMLButtonElement).disabled).toBe(true)
   })
 })

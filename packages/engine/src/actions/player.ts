@@ -31,7 +31,8 @@ import { cultureCardsHeld, cultureHandSizeOf, isCultureHandOver } from '../cultu
 import { applyCoinPurchase } from '../assisted.js'
 import { tradeCeilingOf } from '../limits.js'
 import { grantsAfterTechRemoved, openPhaseOf, statsAfterGovernmentChange } from '../sot.js'
-import { turnStatus } from '../turn.js'
+import { TRADE_SET_KEY, createPlayerTurn, turnStatus } from '../turn.js'
+import { useTurnAction } from '../assisted-core.js'
 import { blockadedPieceIds } from '../blockade.js'
 import type { EngineError } from '../errors.js'
 import type { Government } from '../government.js'
@@ -1205,10 +1206,16 @@ export function setPlayerStat<K extends PlayerStatKey>(
     storedValue = value
   }
 
-  const next = withPlayer(state, {
-    ...target,
-    stats: { ...target.stats, [input.stat]: storedValue } as PlayerStats,
-  })
+  const stats = { ...target.stats, [input.stat]: storedValue } as PlayerStats
+  let next: GameState
+  if (input.stat === 'trade') {
+    // Setting the trade, from any panel, marks it as set for this turn, so the Trade tab stops guessing
+    const turnNumber = turnStatus(state).currentTurn
+    const turn = target.playerTurns.find((candidate) => candidate.turnNumber === turnNumber) ?? createPlayerTurn(target.username, turnNumber)
+    next = useTurnAction(state, target, turn, TRADE_SET_KEY, stats)
+  } else {
+    next = withPlayer(state, { ...target, stats })
+  }
 
   // Combat hand size is the one stat that can be cleared; say so rather than end on "to ".
   return ok(logStatChange(next, editor, target, input, storedValue === '' ? 'empty' : storedValue))

@@ -45,6 +45,7 @@ import {
 import type { BoardPiece, Rotation } from '../src/board.js'
 import { BUILDING_DATA, buildingDataOf } from '../src/building-data.js'
 import { cityProductionsOf } from '../src/city-production.js'
+import { tradeEstimateOf } from '../src/trade-estimate.js'
 import type { CityProduction } from '../src/city-production.js'
 import { describeError } from '../src/errors.js'
 import type { GreatPersonItem } from '../src/item.js'
@@ -439,6 +440,87 @@ describe('trade', () => {
     const two = citiesOf(put(scene(), CASH1981, 'cities/redcity2', 1, 2))
     expect(two).toHaveLength(2)
     expect(two.every((city) => city.trade.notes.some((note) => note.includes('another of your cities')))).toBe(true)
+  })
+})
+
+describe('the trade estimate for the Trade phase', () => {
+  const estimate = (state: GameState) => tradeEstimateOf(state, cash(state))
+  /** An applied Start of Turn ability that gave `trade`, in the given turn. */
+  const withSotGain = (state: GameState, trade: number, overrides: Record<string, unknown> = {}): GameState => ({
+    ...state,
+    assistedActions: [
+      ...state.assistedActions,
+      {
+        id: `a${state.assistedActions.length}`,
+        kind: 'expansionism',
+        playerId: CASH1981,
+        turnNumber: 1,
+        phase: 'SOT',
+        usageKey: null,
+        at: null,
+        logId: 'l',
+        status: 'applied',
+        effect: { kind: 'statGain', trade, culture: 0, subject: 'Expansionism' },
+        ...overrides,
+      } as never,
+    ],
+  })
+
+  it('is the trade around the cities, the Start of Turn trade and the coins, added up', () => {
+    const state = withCoins(withSotGain(scene(), 2), 4)
+    expect(estimate(state)).toEqual({ cities: 3, startOfTurn: 2, coins: 4, ceiling: 27, total: 9, set: false })
+  })
+
+  it('counts nothing for a city-less player, no gain and no coins', () => {
+    expect(estimate(game())).toMatchObject({ cities: 0, startOfTurn: 0, coins: 0, total: 0 })
+  })
+
+  it('leaves out a Start of Turn gain that was undone, was another turn or was another phase or player', () => {
+    let state = scene()
+    state = withSotGain(state, 5, { status: 'undone' })
+    state = withSotGain(state, 5, { turnNumber: 2 })
+    state = withSotGain(state, 5, { phase: 'TRADE' })
+    state = withSotGain(state, 5, { playerId: KARANDRAS1 })
+    expect(estimate(state).startOfTurn).toBe(0)
+  })
+
+  it('is held to the trade track, 27, or 25 for the Japanese', () => {
+    expect(estimate(withCoins(scene(), 40))).toMatchObject({ total: 27, ceiling: 27 })
+    const japanese: GameState = {
+      ...withCoins(scene(), 40),
+      players: withCoins(scene(), 40).players.map((p) =>
+        p.playerId === CASH1981 ? { ...p, civilization: { kind: 'civ', name: 'Japanese' } as never } : p,
+      ),
+    }
+    expect(estimate(japanese)).toMatchObject({ total: 25, ceiling: 25 })
+  })
+
+  it('is set once the trade is set, from any panel, and only for that turn and that player', () => {
+    const setTrade = (state: GameState, playerId: string, value: number) =>
+      unwrap(setPlayerStat(state, { editorPlayerId: playerId, targetPlayerId: playerId, stat: 'trade', value }))
+    const before = scene()
+    expect(estimate(before).set).toBe(false)
+    const after = setTrade(before, CASH1981, 7)
+    expect(estimate(after).set).toBe(true)
+    expect(cash(after).stats.trade).toBe(7)
+    // another player setting theirs does not set mine, and setting another stat does not either
+    expect(estimate(setTrade(before, KARANDRAS1, 7)).set).toBe(false)
+    expect(estimate(unwrap(setPlayerStat(before, { editorPlayerId: CASH1981, targetPlayerId: CASH1981, stat: 'culture', value: 3 }))).set).toBe(false)
+    // an editor setting someone else's trade marks that player's turn
+    const byOther = unwrap(setPlayerStat(before, { editorPlayerId: KARANDRAS1, targetPlayerId: CASH1981, stat: 'trade', value: 4 }))
+    expect(estimate(byOther).set).toBe(true)
+    // setting it again keeps one marker
+    expect(cash(setTrade(after, CASH1981, 8)).playerTurns.flatMap((turn) => turn.usedActions).filter((key) => key === 'trade:set')).toHaveLength(1)
+    // it is the guess again the next turn
+    const nextTurn = { ...after, chatOrdersStartTurn: 2 }
+    expect(estimate(nextTurn).set).toBe(false)
+  })
+
+  it('reaches only the player it is about', () => {
+    const state = withCoins(scene(), 4)
+    expect(toPlayerView(state, CASH1981).you?.tradeEstimate).toMatchObject({ coins: 4, cities: 3 })
+    expect(JSON.stringify(toPlayerView(state, KARANDRAS1).opponents)).not.toContain('tradeEstimate')
+    expect(toPlayerView(state, KARANDRAS1).you?.tradeEstimate.coins).toBe(0)
   })
 })
 

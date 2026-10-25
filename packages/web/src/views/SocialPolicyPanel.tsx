@@ -32,6 +32,8 @@ interface Props {
   /** Bumped by GameView after each action, so the lists are fetched again. */
   readonly reloadCount: number
   readonly historical?: GameRevisionView | null
+  /** A spectator, a replay or a locked game: show the policies but do not change them. */
+  readonly readOnly?: boolean
 }
 
 /** One player's tab: the policies that player may show, and whose they are. */
@@ -56,6 +58,7 @@ export function SocialPolicyPanel({
   view,
   reloadCount,
   historical = null,
+  readOnly = false,
 }: Props): React.JSX.Element {
   const [policies, setPolicies] = useState<readonly SocialPolicyItem[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -108,6 +111,7 @@ export function SocialPolicyPanel({
     }
     return null
   }
+  const noMutations = readOnly || view.you === null
   const unavailablePolicies = policies.filter((policy) => policyUnavailableReason(policy) !== null)
   const chosenPolicyBlocked =
     chosenPolicy !== '' &&
@@ -151,6 +155,7 @@ export function SocialPolicyPanel({
             aria-label="Choose a social policy"
             value={chosenPolicy}
             onChange={(event) => setChosenPolicy(event.target.value)}
+            disabled={noMutations}
             style={{ flex: 1 }}
           >
             <option value="">choose a card …</option>
@@ -175,7 +180,7 @@ export function SocialPolicyPanel({
           </button>
         </span>
         <button
-          disabled={busy || chosenPolicy === '' || chosenPolicyBlocked}
+          disabled={busy || noMutations || chosenPolicy === '' || chosenPolicyBlocked}
           onClick={() =>
             void run(async () => {
               const result = await api.chooseSocialPolicy(gameId, chosenPolicy)
@@ -232,7 +237,7 @@ export function SocialPolicyPanel({
                 {active.own && policy.hidden && (
                   <button
                     className="small"
-                    disabled={busy}
+                    disabled={busy || noMutations}
                     onClick={() => void run(() => api.revealSocialPolicy(gameId, policy.name))}
                   >
                     Reveal
@@ -241,7 +246,7 @@ export function SocialPolicyPanel({
                 {active.own && (
                   <button
                     className="small"
-                    disabled={busy}
+                    disabled={busy || noMutations}
                     onClick={() => void run(() => api.removeSocialPolicy(gameId, policy.name))}
                   >
                     Remove

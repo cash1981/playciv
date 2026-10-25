@@ -702,6 +702,47 @@ describe('trade offers', () => {
     expect(wrongActor.status).toBe(403)
   })
 
+  it('sends an open deal, which in a game of two is a plain offer the other player accepts', async () => {
+    const game = await startedGame('offer-open')
+    const before = await loadGame(game.gameId)
+    const recipient = before.players.find((player) => player.username === game.name2)
+    if (recipient === undefined) throw new Error('recipient missing')
+    const path = `/api/games/${game.gameId}/trade-offers`
+    const created = await post(game.seat1, path, { open: true, terms: 'a wheat for anything', requestId: 'open-1', rev: before.rev })
+    expect(created.status).toBe(200)
+    const offer = (await created.json() as PlayerView).tradeOffers[0]
+    if (offer === undefined) throw new Error('offer missing')
+    expect(offer).toMatchObject({ open: true, status: 'pending', recipientIds: [recipient.playerId] })
+
+    // only the sender may choose, and only a player who accepted
+    const byRecipient = await post(game.seat2, `${path}/${offer.id}/choose`, {
+      requestId: 'open-choose-bad', rev: (await loadGame(game.gameId)).rev, chosenId: recipient.playerId,
+    })
+    expect(byRecipient.status).toBe(403)
+    const noChoice = await post(game.seat1, `${path}/${offer.id}/choose`, { requestId: 'open-choose-none', rev: (await loadGame(game.gameId)).rev })
+    expect(noChoice.status).toBe(400)
+    const notAccepted = await post(game.seat1, `${path}/${offer.id}/choose`, {
+      requestId: 'open-choose-early', rev: (await loadGame(game.gameId)).rev, chosenId: recipient.playerId,
+    })
+    expect(notAccepted.status).toBe(400)
+
+    // the one recipient accepts, which makes the deal with them
+    const accepted = await post(game.seat2, `${path}/${offer.id}/accept`, { requestId: 'open-accept', rev: (await loadGame(game.gameId)).rev })
+    expect(accepted.status).toBe(200)
+    expect((await accepted.json() as PlayerView).tradeOffers[0]).toMatchObject({ status: 'accepted', chosenId: recipient.playerId })
+  })
+
+  it('refuses a deal with nobody to send it to, and one to yourself', async () => {
+    const game = await startedGame('offer-nobody')
+    const before = await loadGame(game.gameId)
+    const me = before.players.find((player) => player.username === game.name1)
+    if (me === undefined) throw new Error('sender missing')
+    const path = `/api/games/${game.gameId}/trade-offers`
+    expect((await post(game.seat1, path, { recipientIds: [], terms: 'x', requestId: 'nobody-1', rev: before.rev })).status).toBe(400)
+    expect((await post(game.seat1, path, { recipientIds: [me.playerId], terms: 'x', requestId: 'nobody-2', rev: before.rev })).status).toBe(400)
+    expect((await post(game.seat1, path, { terms: 'x', requestId: 'nobody-3', rev: before.rev })).status).toBe(400)
+  })
+
   it('logs and persists expiry when the last player ends the round', async () => {
     const game = await startedGame('offer-expiry')
     let before = await loadGame(game.gameId)

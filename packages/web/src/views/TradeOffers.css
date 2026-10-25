@@ -77,3 +77,72 @@
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+.trade-box {
+  margin: 0.5rem 0;
+}
+
+.trade-unsaved {
+  font-size: 0.85rem;
+}
+
+.trade-offers-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  width: 100%;
+  margin: 0.5rem 0;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+}
+
+.trade-offer-recipients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+}
+
+.trade-offer-recipients label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.trade-thread {
+  margin-bottom: 0.9rem;
+  padding-left: 0.6rem;
+  border-left: 3px solid var(--line);
+}
+
+.trade-thread-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.trade-thread-offers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trade-offer-reply {
+  margin-left: 0.9rem;
+}
+
+.trade-offer-responses {
+  margin-top: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.trade-deals-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin: 0.4rem 0 0.8rem;
+}

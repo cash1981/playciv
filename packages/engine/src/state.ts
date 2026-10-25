@@ -16,6 +16,8 @@ import { blockadedGreatPersonTypes, blockadedPieceIds, pieceColorOf } from './bl
 import { combatBonusOf } from './combat-bonus.js'
 import type { CityProduction } from './city-production.js'
 import { cityProductionsOf } from './city-production.js'
+import { tradeEstimateOf } from './trade-estimate.js'
+import type { TradeEstimate } from './trade-estimate.js'
 import type { PlacedBuildItem, UnitBuildItem, WallsBuildItem } from './build-item.js'
 import type { CityBuildOptions } from './build-options.js'
 import { buildOptionsOf } from './build-options.js'
@@ -306,7 +308,7 @@ export interface GameLogEntry {
 }
 
 export type TradeOfferStatus = 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'countered' | 'expired'
-export type TradeOfferAction = 'accept' | 'decline' | 'withdraw'
+export type TradeOfferAction = 'accept' | 'decline' | 'withdraw' | 'choose'
 export interface TradeOfferTransitionRequest {
   readonly requestId: string
   readonly actorId: string
@@ -314,12 +316,28 @@ export interface TradeOfferTransitionRequest {
   readonly terms: string | null
 }
 
+/**
+ * One recipient's answer to an offer that went to several players. Accepting here only says "I
+ * would": the offer stays pending until the sender chooses one of the players who accepted.
+ */
+export interface TradeOfferResponse {
+  readonly playerId: string
+  readonly action: 'accept' | 'decline'
+}
+
 /** An explicit negotiation record. Terms are deliberately opaque prose. */
 export interface TradeOffer {
   readonly id: string
   readonly requestId: string
   readonly senderId: string
-  readonly recipientId: string
+  /** Who the offer went to: one player, a few of them, or everybody else when `open`. */
+  readonly recipientIds: readonly string[]
+  /** An open deal: sent to every other player in the game, not to chosen ones. */
+  readonly open: boolean
+  /** Answers from the recipients of an offer that went to several; empty for a single recipient. */
+  readonly responses: readonly TradeOfferResponse[]
+  /** The player the deal was made with, once it is accepted. */
+  readonly chosenId: string | null
   readonly terms: string
   readonly turnNumber: number
   readonly phase: TurnPhase
@@ -336,8 +354,12 @@ export interface PublicTradeOffer {
   readonly id: string
   readonly senderId: string
   readonly senderUsername: string
-  readonly recipientId: string
-  readonly recipientUsername: string
+  readonly recipientIds: readonly string[]
+  readonly recipientUsernames: readonly string[]
+  readonly open: boolean
+  readonly responses: readonly { readonly playerId: string; readonly username: string; readonly action: 'accept' | 'decline' }[]
+  readonly chosenId: string | null
+  readonly chosenUsername: string | null
   readonly terms: string
   readonly turnNumber: number
   readonly phase: TurnPhase
@@ -1216,15 +1238,23 @@ export function publicTradeOffers(state: GameState): readonly PublicTradeOffer[]
     id: offer.id,
     senderId: offer.senderId,
     senderUsername: findPlayer(state, offer.senderId)?.username ?? offer.senderId,
-    recipientId: offer.recipientId,
-    recipientUsername: findPlayer(state, offer.recipientId)?.username ?? offer.recipientId,
+    recipientIds: offer.recipientIds,
+    recipientUsernames: offer.recipientIds.map((id) => findPlayer(state, id)?.username ?? id),
+    open: offer.open,
+    responses: offer.responses.map((response) => ({
+      playerId: response.playerId,
+      username: findPlayer(state, response.playerId)?.username ?? response.playerId,
+      action: response.action,
+    })),
+    chosenId: offer.chosenId,
+    chosenUsername: offer.chosenId === null ? null : (findPlayer(state, offer.chosenId)?.username ?? offer.chosenId),
     terms: offer.terms,
     turnNumber: offer.turnNumber,
     phase: offer.phase,
     status: offer.status === 'pending' && (
       offer.turnNumber < currentTurn ||
       findPlayer(state, offer.senderId) === undefined ||
-      findPlayer(state, offer.recipientId) === undefined
+      offer.recipientIds.every((id) => findPlayer(state, id) === undefined)
     ) ? 'expired' : offer.status,
     parentOfferId: offer.parentOfferId,
     createdAt: offer.createdAt,
@@ -1334,6 +1364,8 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
   readonly buildingCount: number
   /** The viewer's cities, as `OpaquePlayerhand.cities` gives them for everybody. */
   readonly cities: readonly CityProduction[]
+  /** A guess at the trade the viewer should have in the Trade phase, from their cities, Start of Turn and coins. */
+  readonly tradeEstimate: TradeEstimate
   /**
    * The Great Person card types the viewer cannot use for now (issue #241): they
    * have tokens of the type on the map and every one is blockaded. Derived from
@@ -1489,6 +1521,7 @@ export function toPlayerView(state: GameState, viewerId: string): PlayerView {
           cityCount: cityCountOf(state, viewerId),
           buildingCount: buildingCountOf(state, viewerId),
           cities: cityProductionsOf(state, player),
+          tradeEstimate: tradeEstimateOf(state, player),
           blockadedGreatPersonTypes: blockadedGreatPersonTypes(state, player),
           availableActions: availableActionsFor(state, viewerId),
           playableCards: playableCardsOf(state, player),

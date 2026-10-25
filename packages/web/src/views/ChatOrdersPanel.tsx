@@ -26,6 +26,7 @@ import { colorClass } from './playerColor.js'
 import { PrivateLogWorkspace } from './PrivateLogWorkspace.js'
 import type { SaveStatus } from './PrivateLogWorkspace.js'
 import { handleTabKeyDown } from './tabKeys.js'
+import { TradeDealsPanel } from './TradeDealsPanel.js'
 import { focusPlayer } from './turnFocus.js'
 import './ChatOrdersPanel.css'
 
@@ -71,12 +72,13 @@ const PHASE_OPTION: Readonly<Record<TurnPhase, string>> = {
   RESEARCH: 'Research',
 }
 
-type Filter = 'all' | 'orders' | 'chat' | 'private'
+type Filter = 'all' | 'orders' | 'chat' | 'deals' | 'private'
 
 const FILTERS: readonly { readonly filter: Filter; readonly label: string }[] = [
   { filter: 'all', label: 'All' },
   { filter: 'orders', label: 'Orders' },
   { filter: 'chat', label: 'Chat' },
+  { filter: 'deals', label: 'Trade deals' },
   { filter: 'private', label: 'Private' },
 ]
 
@@ -503,7 +505,7 @@ export function ChatOrdersPanel({
               id={`chat-orders-filter-${name}`}
               className="chat-orders-chip"
               aria-selected={filter === name}
-              aria-controls={name === 'private' ? 'chat-orders-private-panel' : 'chat-orders-timeline-panel'}
+              aria-controls={name === 'private' ? 'chat-orders-private-panel' : name === 'deals' ? 'chat-orders-deals-panel' : 'chat-orders-timeline-panel'}
               tabIndex={filter === name ? 0 : -1}
               onKeyDown={handleTabKeyDown}
               onClick={() => {
@@ -555,6 +557,8 @@ export function ChatOrdersPanel({
             Save private log
           </button>
         </>
+      ) : filter === 'deals' ? (
+        <TradeDealsPanel view={view} tabPanelId="chat-orders-deals-panel" labelledBy="chat-orders-filter-deals" />
       ) : (
         <div
           role="tabpanel"
