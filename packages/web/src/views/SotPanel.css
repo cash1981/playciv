@@ -69,9 +69,23 @@
   height: 2.2rem;
 }
 
-/* The investment-card picker and its `?` reference sit on one row. */
+/* The Feudalism harvest button and its `?` sit on one row. */
 .sot-invest-card {
   align-items: flex-end;
+}
+
+/* A label over a control; the control's `?` sits beside the select and centres on it, not on the label. */
+.sot-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+/* The scout's details are the size of the other labels; only its title is larger. */
+.sot-scout .muted,
+.sot-scout .sot-send .muted {
+  font-size: 0.85rem;
 }
 
 .sot-scout-list {
