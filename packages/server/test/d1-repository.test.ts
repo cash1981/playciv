@@ -239,20 +239,21 @@ describe('D1Repository', () => {
     expect((await repo.chatFor('game-1')).map((entry) => entry.id)).toEqual(['g1', 'g2'])
   })
 
-  it('holds game email until the player opens the game, with a clock only before any visit', async () => {
+  it('holds game email until the player opens the game, with a clock as the fallback', async () => {
     const t = (ms: number): Date => new Date(Date.parse('2020-01-01T00:00:00.000Z') + ms)
     const claim = (game: string, player: string, at: Date): Promise<boolean> =>
       repo.claimGameEmail(game, player, 1000, at)
 
-    // Never opened: Java's wait applies.
+    // Never opened: the wait applies.
     expect(await claim('g1', 'p1', t(0))).toBe(true)
     expect(await claim('g1', 'p1', t(500))).toBe(false)
     expect(await claim('g1', 'p1', t(1001))).toBe(true)
 
-    // Opened once, then emailed: held however long it takes.
+    // Opened once, then emailed: held until the wait has run out.
     await repo.recordGameOpened('g1', 'p1', t(2000))
     expect(await claim('g1', 'p1', t(3000))).toBe(true)
-    expect(await claim('g1', 'p1', t(900_000))).toBe(false)
+    expect(await claim('g1', 'p1', t(3500))).toBe(false)
+    expect(await claim('g1', 'p1', t(4001))).toBe(true)
 
     // A visit re-arms exactly one more email. A visit made while the player was
     // already armed is not stored, so it cannot re-arm after the next email.

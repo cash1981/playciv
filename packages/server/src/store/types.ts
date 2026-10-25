@@ -359,8 +359,7 @@ export interface Repository {
    *
    * - no email has been recorded for this player and game, or
    * - the player has opened the game since the last email, or
-   * - the player has never opened the game and the last email is more than
-   *   `fallbackWaitMs` old (Java's 30 minute `shouldSendEmailInGame`).
+   * - the last email is more than `fallbackWaitMs` old, opened or not.
    *
    * Otherwise returns false and records nothing. A last-email stamp in the
    * future suppresses.

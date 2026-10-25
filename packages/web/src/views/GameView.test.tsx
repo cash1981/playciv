@@ -165,6 +165,39 @@ describe('game auto-refresh', () => {
     expect(AUTO_REFRESH_MS).toBe(10_000)
   })
 
+  it('loads the game as a background request when auto-refresh finds a change', async () => {
+    localStorage.setItem('civ.autoRefresh', 'true')
+    let poll: (() => void) | undefined
+    vi.spyOn(globalThis, 'setInterval').mockImplementation((handler, delay) => {
+      if (delay === AUTO_REFRESH_MS) poll = handler as () => void
+      return 1 as unknown as ReturnType<typeof setInterval>
+    })
+    const loadGame = vi.spyOn(api, 'game').mockImplementation(async (_gameId, background = false) =>
+      orderView({ rev: background ? 2 : 1 }),
+    )
+    vi.spyOn(api, 'revisions').mockResolvedValue([])
+    vi.spyOn(api, 'gameRev').mockResolvedValue({ rev: 2 })
+
+    render(
+      <GameView
+        gameId="game-1"
+        player={{ username: 'viewer' } as unknown as PlayerDto}
+        onUnauthorized={vi.fn()}
+        onDeleted={vi.fn()}
+        onWithdrawn={vi.fn()}
+        onEnded={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Draw' })).toBeTruthy())
+    expect(loadGame).toHaveBeenCalledWith('game-1', false)
+
+    await act(async () => {
+      poll?.()
+    })
+    await waitFor(() => expect(loadGame).toHaveBeenCalledWith('game-1', true))
+    localStorage.setItem('civ.autoRefresh', 'false')
+  })
+
   it('checks only the marker and skips a full reload when unchanged', async () => {
     const readRevision = vi.fn(async () => 7)
     const reload = vi.fn(async () => true)

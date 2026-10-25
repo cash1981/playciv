@@ -317,11 +317,11 @@ export function GameView({
     setRevisions(nextRevisions)
   }, [])
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (background = false) => {
     try {
       const { view: nextView, revisions: nextRevisions } = await loadAfterKnownRevision(
         () => api.revisions(gameId),
-        () => api.game(gameId),
+        () => api.game(gameId, background),
         liveRevisionRef.current,
       )
       if (activeGameIdRef.current !== gameId) return false
@@ -386,7 +386,7 @@ export function GameView({
         await reloadIfRevisionChanged(
           async () => (await api.gameRev(gameId)).rev,
           () => activeGameIdRef.current === gameId ? liveRevisionRef.current : -1,
-          async () => activeGameIdRef.current === gameId ? reload() : false,
+          async () => activeGameIdRef.current === gameId ? reload(true) : false,
         )
       } catch (caught) {
         if (activeGameIdRef.current === gameId) {

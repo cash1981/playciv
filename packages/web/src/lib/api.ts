@@ -610,7 +610,12 @@ export const api = {
   games: () => get<GameSummary[]>('/api/games'),
   createGame: (name: string, numOfPlayers: number, color?: string) =>
     post<GameSummary>('/api/games', { name, numOfPlayers, ...(color === undefined ? {} : { color }) }),
-  game: (gameId: string) => get<PlayerView>(`/api/games/${gameId}`),
+  /**
+   * `background` marks an auto-refresh poll: the server must not count it as the
+   * player opening the game, or an open tab would re-arm their game mail.
+   */
+  game: (gameId: string, background = false) =>
+    get<PlayerView>(`/api/games/${gameId}${background ? '?background=1' : ''}`),
   revisions: (gameId: string) => get<GameRevisionSummary[]>(`/api/games/${gameId}/revisions`),
   /** The viewer's own words for what they did after revision `after`: only theirs, see the server route. */
   confirmation: (gameId: string, after: number) =>

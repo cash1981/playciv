@@ -355,7 +355,10 @@ export function registerGameRoutes(app: App, context: AppContext): void {
     }
     // Issue #217: loading the game view is the visit that re-arms game emails.
     const viewer = c.get('player')
-    if (viewer !== undefined) await context.notifications.gameOpened(game, viewer.id)
+    // An auto-refresh poll is not a visit: an open tab must not re-arm the mail.
+    if (viewer !== undefined && c.req.query('background') !== '1') {
+      await context.notifications.gameOpened(game, viewer.id)
+    }
     return c.json(toPlayerView(game, viewer?.id ?? ''))
   })
 
