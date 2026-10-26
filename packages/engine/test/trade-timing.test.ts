@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { placePiece } from '../src/actions/board.js'
 import { chooseTech, removeTech, setPlayerStat } from '../src/actions/player.js'
 import { markPhasesDone, unmarkPhaseDone } from '../src/actions/turn.js'
+import { initiateUndo, vote } from '../src/actions/undo.js'
 import { SQUARE_SIZE, findBoardAsset, mapTop, slotOrigin } from '../src/board.js'
 import { cityProductionsOf } from '../src/city-production.js'
 import { unwrap } from '../src/result.js'
@@ -86,6 +87,14 @@ function cityScene(): GameState {
 const mark = (state: GameState, playerId: string, turnNumber: number, upToPhase: 'SOT' | 'TRADE' | 'MOVEMENT' | 'RESEARCH'): GameState =>
   unwrap(markPhasesDone(state, { playerId, turnNumber, upToPhase, at: AT }))
 
+const undoByVote = (state: GameState, logId: string): GameState => {
+  let next = unwrap(initiateUndo(state, { logId, playerId: CASH1981 }))
+  for (const playerId of [KARANDRAS1, 'player-itchi', 'player-chul']) {
+    next = unwrap(vote(next, { logId, playerId, vote: true }))
+  }
+  return next
+}
+
 const tradeTurn = (state: GameState): PlayerTurn => {
   const turn = playerOf(state).playerTurns.find((candidate) => candidate.turnNumber === 1)
   if (turn === undefined) throw new Error('no turn')
@@ -144,6 +153,22 @@ describe('keeping trade as coins at the start of the next turn', () => {
 
     const early = unwrap(chooseTech(cityScene(), { playerId: CASH1981, techName: 'Pottery' }))
     expect(playerOf(early).researchTurns).toEqual({})
+  })
+
+  it('does not reset trade after an accepted undo removes the Research tech', () => {
+    let state = withCoins(withTrade(cityScene(), 4), 1)
+    state = mark(state, CASH1981, 1, 'MOVEMENT')
+    state = unwrap(chooseTech(state, { playerId: CASH1981, techName: 'Pottery' }))
+    const logId = state.log.at(-1)?.id
+    if (logId === undefined) throw new Error('no tech log entry')
+    state = undoByVote(state, logId)
+    expect(playerOf(state).researchTurns).toEqual({})
+
+    for (const playerId of [CASH1981, KARANDRAS1, 'player-itchi', 'player-chul']) {
+      state = mark(state, playerId, 1, 'RESEARCH')
+    }
+
+    expect(playerOf(state).stats.trade).toBe(7)
   })
 
   it('keeps the city trade collected when the player did not research', () => {
@@ -308,6 +333,23 @@ describe('collecting the cities when Trade starts', () => {
 
     state = unwrap(unmarkPhaseDone(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT' }))
     expect(playerOf(state, CASH1981).stats.trade).toBe(5)
+  })
+
+  it('does not reverse an old collection after reopening Research and Start of Turn', () => {
+    let state = withCoins(withTrade(cityScene(), 4), 5)
+    state = withResearch(state)
+    state = mark(state, CASH1981, 1, 'SOT')
+    for (const playerId of [CASH1981, KARANDRAS1, 'player-itchi', 'player-chul']) {
+      state = mark(state, playerId, 1, 'RESEARCH')
+    }
+    expect(turnStatus(state).currentTurn).toBe(2)
+    expect(playerOf(state).stats.trade).toBe(5)
+
+    state = unwrap(unmarkPhaseDone(state, { playerId: CASH1981, turnNumber: 1, phase: 'RESEARCH' }))
+    state = unwrap(unmarkPhaseDone(state, { playerId: CASH1981, turnNumber: 1, phase: 'SOT' }))
+
+    expect(playerOf(state).stats.trade).toBe(5)
+    expect(tradeTurn(state).tradeCollected).toBe(3)
   })
 
   it('uses the trade around the cities on the board', () => {

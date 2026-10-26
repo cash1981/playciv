@@ -154,7 +154,9 @@ export function unmarkPhaseDone(state: GameState, input: UnmarkPhaseDoneInput): 
 
   const updated: PlayerTurn = { ...turn, done: { ...turn.done, [input.phase]: false } }
   const reverted =
-    input.phase === 'SOT' && input.turnNumber === turnStatus(state).currentTurn
+    input.phase === 'SOT' &&
+    input.turnNumber === turnStatus(state).currentTurn &&
+    !Object.keys(state.turnStarters).some((turnNumber) => Number(turnNumber) > input.turnNumber)
       ? undoTradeCollection(player, updated)
       : { player, turn: updated }
   const message = `Turn ${input.turnNumber} - ${player.username} marked ${TURN_PHASE_LABEL[input.phase]} phase not done`
