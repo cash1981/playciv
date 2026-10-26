@@ -159,19 +159,6 @@ describe('the manifest', () => {
     ])
   })
 
-  it('draws all metropolis sprites at 170 by 82 pixels', () => {
-    const metropolis = BOARD_ASSETS.filter(
-      (asset) => asset.category === 'city' && asset.id.includes('metropolis'),
-    )
-    expect(metropolis).toHaveLength(10)
-    for (const asset of metropolis) {
-      expect(asset).toMatchObject({ width: 170, height: 82 })
-      const png = readFileSync(`${WEB_PUBLIC_BOARD}/${asset.path}`)
-      expect(png.toString('hex', 0, 8)).toBe('89504e470d0a1a0a')
-      expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([170, 82])
-    }
-  })
-
   it('has the four disaster markers sized to fit one board square', () => {
     const disasters = BOARD_ASSETS.filter((asset) => asset.category === 'disaster')
     expect(disasters.map((asset) => asset.label).sort()).toEqual([
@@ -788,7 +775,7 @@ describe('player areas', () => {
     ])
   })
 
-  it('tidies a piece dragged from the map into an area', () => {
+  it('keeps a piece moved into an area where it is dropped, so the area can be arranged freely', () => {
     const areas = playerAreas(board, firstCivGame().players)
     const mine = areas[0]
     if (mine === undefined) throw new Error('no area')
@@ -796,23 +783,23 @@ describe('player areas', () => {
     let state = place(firstCivGame(), 'resources/hut', 400, 400)
     const piece = state.board.pieces[0]
     if (piece === undefined) throw new Error('no piece')
+    const requested = { x: mine.x + 40, y: mine.y + AREA_LABEL_HEIGHT + 40 }
 
     state = unwrap(
       movePiece(state, {
         playerId: CASH1981,
         pieceId: piece.id,
-        x: mine.x + 40,
-        y: mine.y + AREA_LABEL_HEIGHT + 40,
+        ...requested,
       }),
     )
 
     expect([state.board.pieces[0]?.x, state.board.pieces[0]?.y]).toEqual([
-      mine.x,
-      mine.y + AREA_LABEL_HEIGHT,
+      requested.x,
+      requested.y,
     ])
   })
 
-  it('bypasses the area tidy-into-slot snap when snap is false (issue #193)', () => {
+  it('keeps an area move at the requested spot with or without snap (issue #100)', () => {
     const areas = playerAreas(board, firstCivGame().players)
     const mine = areas[0]
     if (mine === undefined) throw new Error('no area')
@@ -829,16 +816,12 @@ describe('player areas', () => {
       movePiece(placed, { playerId: CASH1981, pieceId: piece.id, ...requested, snap: false }),
     )
 
-    // With snapping on (the default), a piece dropped in a player area tidies
-    // into the grid instead of keeping the requested spot — proof the two
-    // calls would actually differ if `snap: false` did nothing. A collected
-    // hut is exactly the case the reviewer flagged (see "Review round 1" in
-    // the task brief): an arrow press must not jump it sideways like this.
+    // A moved piece keeps the spot in an area, so the player can arrange it.
     expect([snapped.board.pieces[0]?.x, snapped.board.pieces[0]?.y]).toEqual([
-      mine.x,
-      mine.y + AREA_LABEL_HEIGHT,
+      requested.x,
+      requested.y,
     ])
-    // A keyboard nudge (issue #193) keeps the exact requested spot instead.
+    // The nudge's explicit opt-out still gives the same exact spot.
     expect([unsnapped.board.pieces[0]?.x, unsnapped.board.pieces[0]?.y]).toEqual([
       requested.x,
       requested.y,

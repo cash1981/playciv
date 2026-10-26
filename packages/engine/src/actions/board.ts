@@ -60,9 +60,9 @@ function requireAccess(state: GameState, playerId: string): EngineError | undefi
 
 /**
  * The areas for this game: one per player plus the shared Wonders area, derived
- * from the current player list. A piece dropped in any of them tidies into its
- * grid, so wonders collect in the Wonders area the same way huts collect in a
- * player's area.
+ * from the current player list. A new piece placed in any of them tidies into
+ * its grid, so wonders collect in the Wonders area the same way huts collect in
+ * a player's area. A piece moved there keeps its spot (issue #100).
  */
 export function areasFor(state: GameState): readonly BoardArea[] {
   return boardAreas(state.board, state.players)
@@ -271,14 +271,13 @@ export interface MovePieceInput {
   readonly x: number
   readonly y: number
   /**
-   * Set to `false` to move the piece to exactly `x`/`y`, bypassing both the
-   * player-area "tidy into next free slot" snap and the map-tile "snap to
-   * nearest slot" snap below. Left out (or set to anything else) keeps
-   * today's snapping behaviour, so every existing caller is unaffected.
+   * Set to `false` to move the piece to exactly `x`/`y`, bypassing the map-tile
+   * "snap to nearest slot" snap below. Left out (or set to anything else) keeps
+   * today's map-tile snapping, so every existing caller is unaffected.
    *
-   * Used by the keyboard arrow-key nudge (issue #193): a nudge should move
-   * the piece by exactly the requested step, not be re-tidied into a grid
-   * slot the way a mouse drop into an area or onto the map is.
+   * Used by the keyboard arrow-key nudge (issue #193): a nudge should move the
+   * piece by exactly the requested step, not be re-snapped to the nearest map
+   * tile the way a mouse drop is.
    */
   readonly snap?: boolean
   readonly at?: string
@@ -319,7 +318,6 @@ export function movePieceUnchecked(
 
   const areas = areasFor(state)
   const others = state.board.pieces.filter((other) => other.id !== piece.id)
-  const area = areaAt(areas, input.x + piece.width / 2, input.y + piece.height / 2)
   const wanted = (() => {
     // Culture-track markers are placed freely, not snapped to a space: they fall
     // through to the raw-drop case below, so the player decides the exact spot
@@ -327,22 +325,15 @@ export function movePieceUnchecked(
     // for the log by `cultureStepOf`.
 
     // The keyboard nudge (issue #193) opts out of snapping: it wants the piece
-    // to move by exactly the requested amount, not be re-tidied into a grid
-    // slot or re-snapped to the nearest map tile the way a mouse drop is.
+    // to move by exactly the requested amount, not be re-snapped to the nearest
+    // map tile the way a mouse drop is.
     if (input.snap === false) return { x: input.x, y: input.y }
 
-    // Dropped in a player area: tidy into the next free slot
-    if (area !== undefined) {
-      const [slotX, slotY] = nextFreeSlot(state.board, area, others, {
-        x: input.x,
-        y: input.y,
-      })
-      return { x: slotX, y: slotY }
-    }
     // Dropped on the map: a 4 x 4 tile snaps to the nearest playable slot, the
     // same as placement does. The hole and the outside of a stepped board have
     // no slot, so a tile dropped there keeps its raw coordinates. Ordinary
-    // pieces keep their raw drop coordinates too.
+    // pieces keep their raw drop coordinates too, in a player area as on the map,
+    // so the player can arrange the area freely (issue #100).
     if (piece.category === 'tile' || piece.category === 'civtile') {
       const mapOrigin = nearestSlotOrigin(state.board, input.x, input.y)
       if (mapOrigin !== undefined) {
@@ -412,11 +403,15 @@ function replaceUnderGreatPerson(
     if (old.category === 'greatperson') {
       // Held in reserve: back in the player's own area, tidied into the next free slot
       if (area === undefined) continue
+      const [slotX, slotY] = nextFreeSlot(next.board, area, next.board.pieces, {
+        x: area.x + 20,
+        y: area.y + AREA_LABEL_HEIGHT + 10,
+      })
       const reserved = movePieceUnchecked(next, {
         playerId: input.playerId,
         pieceId: old.id,
-        x: area.x + 20,
-        y: area.y + AREA_LABEL_HEIGHT + 10,
+        x: slotX,
+        y: slotY,
         ...(input.at === undefined ? {} : { at: input.at }),
       })
       if (reserved !== undefined) next = reserved
@@ -510,10 +505,22 @@ export function placeStartMarker(
   if (area === undefined || asset === undefined) return state
 
   // Dropped by its centre, so it lands in this area whatever the area's width
-  const x = area.x + (area.width - asset.width) / 2
-  const y = area.y + (area.height - asset.height) / 2
+  const centre = {
+    x: area.x + (area.width - asset.width) / 2,
+    y: area.y + (area.height - asset.height) / 2,
+  }
   const stamp = at === undefined ? {} : { at }
   const marker = startMarkerOf(state)?.piece
+  // A marker already on the board is moved through the unchecked move, which no
+  // longer tidies a player area, so pick its free slot here as a new one would be.
+  const [x, y] = marker === undefined
+    ? [centre.x, centre.y]
+    : nextFreeSlot(
+        state.board,
+        area,
+        state.board.pieces.filter((candidate) => candidate.id !== marker.id),
+        centre,
+      )
   const placed =
     marker === undefined
       ? placeUnchecked(state, { playerId: actorId, assetId: START_PLAYER_ID, x, y, ...stamp })

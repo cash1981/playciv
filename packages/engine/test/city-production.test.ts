@@ -418,12 +418,35 @@ describe('trade', () => {
       expect(tradeSquaresOf(city).filter(([square]) => square === 'A2')).toEqual([['A2', 'map icon', 1]])
     })
 
-    it('gives the owning city nothing when the scout goes to another city', () => {
+    it('gives the owning city nothing when the scout goes to another city, and gives that city the trade', () => {
       // The capital is on a square with no known tile, so the scout goes there and not to B2.
       const state = scoutOnA2(put(scene(), CASH1981, 'cities/redcapital2', 8, 8))
       const owner = citiesOf(state).find((candidate) => candidate.label.startsWith('City'))
       expect(owner?.trade.outskirts).toBe(2)
       expect(owner?.trade.detail.some((entry) => entry.square === 'A2')).toBe(false)
+      const capital = citiesOf(state).find((candidate) => candidate.label.startsWith('Capital'))
+      if (capital === undefined) throw new Error('no capital')
+      expect(capital.trade.outskirts).toBe(1)
+      expect(tradeSquaresOf(capital)).toContainEqual(['A2', 'map icon, sent by your scout', 1])
+    })
+
+    it('adds an unsent scout square to the capital and to the trade estimate (issue #292)', () => {
+      // A1 prints a trade icon and is outside the outskirts of a capital on G2,
+      // which has no tile around it, so the scout's default is the only trade.
+      const capital = put(withEngland(game()), CASH1981, 'cities/redcapital2', 6, 1)
+      const state = put(capital, CASH1981, 'figures/redscout', 0, 0)
+      const city = only(state)
+      expect(city.label).toBe('Capital G2')
+      expect(city.trade.outskirts).toBe(1)
+      expect(tradeSquaresOf(city)).toContainEqual(['A1', 'map icon, sent by your scout', 1])
+      expect(tradeEstimateOf(state, cash(state)).cities).toBe(1)
+    })
+
+    it('a building on the square a scout sends gives the building trade', () => {
+      const capital = put(withEngland(game()), CASH1981, 'cities/redcapital2', 2, 3)
+      const withScout = put(capital, CASH1981, 'figures/redscout', 0, 0)
+      const state = put(withScout, CASH1981, 'buildings/harbor', 0, 0)
+      expect(tradeSquaresOf(only(state))).toContainEqual(['A1', 'Harbor, sent by your scout', 2])
     })
   })
 

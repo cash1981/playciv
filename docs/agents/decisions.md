@@ -85,6 +85,11 @@ see [legacy layout limitations](limitations.md#game-behavior). The culture track
 markers. Board undo targets the caller's latest consecutive actions; a new
 board action clears redo. Undoing board edits does not undo game actions.
 
+A piece moved on the board keeps the pixel position where it is dropped,
+including inside a player area, so a player can arrange their own area freely.
+A new piece placed from the palette in a player area still tidies into the next
+free slot, which keeps a pile of collected huts as a row (issue #100).
+
 Each colour has six armies and two scouts. Russia gets one extra white army and
 Spain one extra white scout (`whiteFigureFor` in `board.ts`), a supply of one
 each. Revealing the civ puts that figure in the player's own area, so the
@@ -365,9 +370,9 @@ the card sheets; the full list is in `tasks/assisted-sot.md`.
   it; a city-state on the square is destroyed for 3 culture, a city-state next to it
   forbids it. The Romans advance one space for free. A scout sends its square to one
   city for the turn, and **to the capital when it is not sent** (the human, 2026-10-23):
-  the square counts for that city's production, and its culture and resource icons are
-  offered to that city's Devote to the Arts and Harvest only; the trade and coin icons stay
-  manual. The square leaves the city it lies in when the scout goes to another one, in the
+  the square counts for that city's production and trade, and its culture and resource icons
+  are offered to that city's Devote to the Arts and Harvest only; the coin icons stay manual.
+  The square leaves the city it lies in when the scout goes to another one, in the
   production and in the gathering alike, also by the default (a scout in a non-capital
   city's outskirts goes to the capital unless it is sent to that city). A capital that grew
   into a metropolis has no capital marker: a scout that was not sent then goes nowhere and is
@@ -599,11 +604,11 @@ lists the parts, each city and the notes. There is no "Add" button and no separa
 The trade around the cities comes from the same outskirts walk as the production
 (`CityProduction.trade`): the printed trade icons of each square (`data/tile-icons.json`, read by eye
 from the tile images and not checked against a printed list), a building's trade in place of
-the icons under it, a Great Person marker's trade (below), nothing for a blockaded square, a wonder
-square, or a square a scout sends. A square shared by two of the player's cities counts
-for each, as with production. It is never a complete count: governments, techs, social
-policies, wonders, the abilities of Great Person cards, event cards and any limit on collected trade are not
-counted, and the notes say so.
+the icons under it, a Great Person marker's trade (below), nothing for a blockaded square or a
+wonder square, and the trade of a square a scout sends to the city it is sent to (below). A square
+shared by two of the player's cities counts for each, as with production. It is never a complete
+count: governments, techs, social policies, wonders, the abilities of Great Person cards, event
+cards and any limit on collected trade are not counted, and the notes say so.
 
 **Deals.** An offer goes to one player, to a few of them, or to everybody else (an open deal); the
 sender picks the players with checkboxes. With one recipient it is a plain offer: accept, decline or
@@ -625,12 +630,15 @@ in `packages/server/src/routes/games.ts`, `packages/web/src/views/TradeOffers.ts
 
 A Great Person marker gives the trade printed on it in place of the icon under it, like a
 building (Artist 1, Humanitarian 1, Scientist 2, the others none; read by eye from the marker
-images, `great-person-data.ts`, where the production is too). A wonder's trade is not in the data and counts as 0. A scout
-on a trade icon adds nothing (the earlier ruling stands that a square a scout sends gives its
-culture and resource icons to Devote and Harvest, not its trade or coin icons), and nothing is
-counted twice: a scout assigned to the city whose outskirts hold the square leaves the square's
-trade counted once, as its production is, and a scout assigned to another city takes the square
-from the owning city, which gets no trade from it. An enemy figure still blockades the square.
+images, `great-person-data.ts`, where the production is too). A wonder's trade is not in the data and counts as 0. A square a
+scout sends counts its trade for the city the scout is sent to, your capital when you did not
+choose a city (issue #292; this supersedes the earlier ruling that only its culture and resource
+icons counted). The square is read like an outskirts square: a building's trade, a Great Person
+marker's trade, a map icon or a disaster token, and nothing for a wonder; a scout may gather a
+blockaded square, so no blockade. Nothing is counted twice: a square inside the receiving city's
+own outskirts is already counted once by its walk, and a scout assigned to another city takes the
+square from the owning city, which gets no trade from it. An enemy figure still blockades the
+square for the owning city. Its coin icons stay manual.
 
 The trade track ends at 27, and at 25 for the Japanese (the human; `tradeCeilingOf` in `limits.ts`, also used by Marco Polo): `setPlayerStat` refuses a larger trade
 (`TRADE_ABOVE_CEILING`), the number boxes revert one, and "Add N" stops at 27 and never lowers a

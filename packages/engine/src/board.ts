@@ -18,9 +18,10 @@
  * the list of playable 4 x 4 slots it is made of rather than only its width
  * and height. See `createBoardForPlayers`.
  *
- * Below the map is a band of player areas, one per player. Dropping a piece
- * there tidies it into the next free slot, so a pile of collected huts reads as
- * a row rather than a heap.
+ * Below the map is a band of player areas, one per player. A new piece dropped
+ * there tidies into the next free slot, so a pile of collected huts reads as a
+ * row rather than a heap. Moving an existing piece keeps the spot it is dropped
+ * on, so a player can arrange the area freely.
  */
 
 import boardAssets from '../data/board-assets.json' with { type: 'json' }

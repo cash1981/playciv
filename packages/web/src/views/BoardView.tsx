@@ -299,7 +299,7 @@ export function BoardPalette({
             ? 'Replaying — return to now to make changes.'
             : blocked
               ? blockedReason
-              : 'Tap a piece, then tap the board, or drag it there. Drop it in a player area to tidy it into a row.')}
+              : 'Tap a piece, then tap the board, or drag it there. New pieces tidy into a row in a player area, and moved pieces stay where you drop them.')}
       </p>
 
       <div className="palette-grid">
@@ -586,9 +586,10 @@ export function BoardView({
       // A nudge already at the board's edge should not fire a request, the
       // same as the drag path's own no-op-click guard (`onPiecePointerUp`).
       if (x === piece.x && y === piece.y) return
-      // `snap: false` bypasses the player-area and map-tile snaps in
-      // `movePiece`: a nudge always moves the piece by exactly the requested
-      // step, not into the nearest grid slot the way a mouse drop is (issue #193).
+      // `snap: false` bypasses the map-tile snap in `movePiece`: a nudge always
+      // moves the piece by exactly the requested step, not to the nearest map
+      // tile the way a mouse drop is (issue #193). A player-area move already
+      // keeps the exact spot (issue #100).
       if (!terrainAllows(piece.assetId, x + piece.width / 2, y + piece.height / 2, piece, event.repeat)) return
       void run(() => api.movePiece(gameId, piece.id, x, y, false))
     }
