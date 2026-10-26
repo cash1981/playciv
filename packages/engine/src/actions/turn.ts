@@ -12,6 +12,7 @@ import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, LogType, Playerhand } from '../state.js'
 import { findPlayer, hasUserAccess, withPlayer } from '../state.js'
+import { collectTradeForTurn, undoTradeCollection } from '../trade-collection.js'
 import type { PlayerTurn, TurnPhase } from '../turn.js'
 import {
   TURN_PHASES,
@@ -20,6 +21,7 @@ import {
   publicTurnKey,
   publicTurn,
   sameTurn,
+  turnStatus,
   TURN_PHASE_LABEL,
 } from '../turn.js'
 import { startMissingTurns } from './new-turn.js'
@@ -66,6 +68,22 @@ const findOrCreateTurn = (player: Playerhand, turnNumber: number): PlayerTurn =>
   return { ...(existing ?? createPlayerTurn(player.username, turnNumber)), username: player.username }
 }
 
+/**
+ * Adds the city trade to the player's stored trade once, when Start of Turn is
+ * marked done (or, for a turn saved before this rule, when Trade is first marked
+ * done). Marking Trade done after that changes nothing.
+ */
+function collectTradeAtTradeStart(
+  state: GameState,
+  player: Playerhand,
+  turn: PlayerTurn,
+  newlyDone: readonly TurnPhase[],
+): { readonly player: Playerhand; readonly turn: PlayerTurn } {
+  if (!newlyDone.includes('SOT') && !newlyDone.includes('TRADE')) return { player, turn }
+  if (turn.turnNumber !== turnStatus(state).currentTurn) return { player, turn }
+  return collectTradeForTurn(state, player, turn)
+}
+
 export interface MarkPhasesDoneInput {
   readonly playerId: string
   readonly turnNumber: number
@@ -102,8 +120,9 @@ export function markPhasesDone(state: GameState, input: MarkPhasesDoneInput): Ac
     newlyDone.length === 1
       ? `${TURN_PHASE_LABEL[input.upToPhase]} phase`
       : `all phases up to ${TURN_PHASE_LABEL[input.upToPhase]}`
+  const collected = collectTradeAtTradeStart(state, player, updated, newlyDone)
   const message = `Turn ${input.turnNumber} - ${player.username} marked ${what} done`
-  const marked = appendLog(withPlayerTurn(state, player, updated), {
+  const marked = appendLog(withPlayerTurn(state, collected.player, collected.turn), {
     username: player.username,
     playerId: player.playerId,
     logType: PHASE_LOG_TYPE[input.upToPhase],
@@ -134,9 +153,15 @@ export function unmarkPhaseDone(state: GameState, input: UnmarkPhaseDoneInput): 
   if (turn.done[input.phase] !== true) return ok(state)
 
   const updated: PlayerTurn = { ...turn, done: { ...turn.done, [input.phase]: false } }
+  const reverted =
+    input.phase === 'SOT' &&
+    input.turnNumber === turnStatus(state).currentTurn &&
+    !Object.keys(state.turnStarters).some((turnNumber) => Number(turnNumber) > input.turnNumber)
+      ? undoTradeCollection(player, updated)
+      : { player, turn: updated }
   const message = `Turn ${input.turnNumber} - ${player.username} marked ${TURN_PHASE_LABEL[input.phase]} phase not done`
   return ok(
-    appendLog(withPlayerTurn(state, player, updated), {
+    appendLog(withPlayerTurn(state, reverted.player, reverted.turn), {
       username: player.username,
       playerId: player.playerId,
       logType: PHASE_LOG_TYPE[input.phase],

@@ -69,12 +69,12 @@ type MaybeOlder = Omit<
  *  pyramid placements, or its own `socialPolicies` array existed. */
 type MaybeOlderPlayerhand = Omit<
   Playerhand,
-  'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards' | 'techGrants' | 'techRevealTurns'
+  'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards' | 'techGrants' | 'techRevealTurns' | 'researchTurns'
 > &
   Partial<
     Pick<
       Playerhand,
-      'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards' | 'techGrants' | 'techRevealTurns'
+      'stats' | 'government' | 'pyramidPlacements' | 'socialPolicies' | 'pendingRewards' | 'techGrants' | 'techRevealTurns' | 'researchTurns'
     >
   >
 
@@ -126,6 +126,7 @@ const withPlayerDefaults = (player: MaybeOlderPlayerhand): Playerhand => ({
   pendingRewards: player.pendingRewards ?? [],
   techGrants: player.techGrants ?? [],
   techRevealTurns: player.techRevealTurns ?? {},
+  researchTurns: player.researchTurns ?? {},
 })
 
 /** A board from before the player areas, history, redo stack or shapes existed. */

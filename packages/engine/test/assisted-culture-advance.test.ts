@@ -150,7 +150,7 @@ describe('advancing', () => {
     const done = advance(ready, 'req-1')
 
     expect(me(done).stats.culture).toBe(7)
-    expect(me(done).stats.trade).toBe(100)
+    expect(me(done).stats.trade).toBe(25)
     expect(cultureMarkerLevelOf(done, CASH1981)).toBe(1)
     expect(handItem(done, card?.id ?? '')).toMatchObject({ hidden: true, ownerId: CASH1981 })
     expect(done.items.some((item) => item.id === card?.id)).toBe(false)
@@ -484,7 +484,7 @@ describe('step 21, the Culture Victory space', () => {
     expect(cultureMarkerLevelOf(done, CASH1981)).toBe(21)
     expect(handItem(done, card?.id ?? '')).toBeDefined()
     expect(me(done).stats.culture).toBe(93)
-    expect(me(done).stats.trade).toBe(94)
+    expect(me(done).stats.trade).toBe(19)
     const lines = done.log.slice(ready.log.length).filter((entry) => entry.publicLog !== '')
     expect(lines.map((entry) => entry.publicLog)).toEqual([
       'cash1981 advanced on the culture track to space 21 and drew 1 culture III card',

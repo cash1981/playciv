@@ -516,50 +516,33 @@ describe('trade', () => {
 
 describe('the trade estimate for the Trade phase', () => {
   const estimate = (state: GameState) => tradeEstimateOf(state, cash(state))
-  /** An applied Start of Turn ability that gave `trade`, in the given turn. */
-  const withSotGain = (state: GameState, trade: number, overrides: Record<string, unknown> = {}): GameState => ({
+  const withTrade = (state: GameState, trade: number): GameState => ({
     ...state,
-    assistedActions: [
-      ...state.assistedActions,
-      {
-        id: `a${state.assistedActions.length}`,
-        kind: 'expansionism',
-        playerId: CASH1981,
-        turnNumber: 1,
-        phase: 'SOT',
-        usageKey: null,
-        at: null,
-        logId: 'l',
-        status: 'applied',
-        effect: { kind: 'statGain', trade, culture: 0, subject: 'Expansionism' },
-        ...overrides,
-      } as never,
-    ],
+    players: state.players.map((p) =>
+      p.playerId === CASH1981 ? { ...p, stats: { ...p.stats, trade } } : p,
+    ),
   })
 
-  it('is the trade around the cities, the Start of Turn trade and the coins, added up', () => {
-    const state = withCoins(withSotGain(scene(), 2), 4)
-    expect(estimate(state)).toEqual({ cities: 3, startOfTurn: 2, coins: 4, ceiling: 27, total: 9, set: false })
+  it('is the stored trade plus the trade around the cities, before collection', () => {
+    expect(estimate(withTrade(scene(), 5))).toEqual({
+      current: 5,
+      cities: 3,
+      collected: false,
+      ceiling: 27,
+      total: 8,
+      set: false,
+    })
   })
 
-  it('counts nothing for a city-less player, no gain and no coins', () => {
-    expect(estimate(game())).toMatchObject({ cities: 0, startOfTurn: 0, coins: 0, total: 0 })
-  })
-
-  it('leaves out a Start of Turn gain that was undone, was another turn or was another phase or player', () => {
-    let state = scene()
-    state = withSotGain(state, 5, { status: 'undone' })
-    state = withSotGain(state, 5, { turnNumber: 2 })
-    state = withSotGain(state, 5, { phase: 'TRADE' })
-    state = withSotGain(state, 5, { playerId: KARANDRAS1 })
-    expect(estimate(state).startOfTurn).toBe(0)
+  it('counts nothing for a city-less player with no trade', () => {
+    expect(estimate(game())).toMatchObject({ current: 0, cities: 0, total: 0, set: false })
   })
 
   it('is held to the trade track, 27, or 25 for the Japanese', () => {
-    expect(estimate(withCoins(scene(), 40))).toMatchObject({ total: 27, ceiling: 27 })
+    expect(estimate(withTrade(scene(), 40))).toMatchObject({ total: 27, ceiling: 27 })
     const japanese: GameState = {
-      ...withCoins(scene(), 40),
-      players: withCoins(scene(), 40).players.map((p) =>
+      ...withTrade(scene(), 40),
+      players: withTrade(scene(), 40).players.map((p) =>
         p.playerId === CASH1981 ? { ...p, civilization: { kind: 'civ', name: 'Japanese' } as never } : p,
       ),
     }
@@ -588,10 +571,10 @@ describe('the trade estimate for the Trade phase', () => {
   })
 
   it('reaches only the player it is about', () => {
-    const state = withCoins(scene(), 4)
-    expect(toPlayerView(state, CASH1981).you?.tradeEstimate).toMatchObject({ coins: 4, cities: 3 })
+    const state = withTrade(withCoins(scene(), 4), 2)
+    expect(toPlayerView(state, CASH1981).you?.tradeEstimate).toMatchObject({ current: 2, cities: 3 })
     expect(JSON.stringify(toPlayerView(state, KARANDRAS1).opponents)).not.toContain('tradeEstimate')
-    expect(toPlayerView(state, KARANDRAS1).you?.tradeEstimate.coins).toBe(0)
+    expect(toPlayerView(state, KARANDRAS1).you?.tradeEstimate.current).toBe(0)
   })
 })
 

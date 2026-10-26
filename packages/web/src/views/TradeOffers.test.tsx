@@ -35,7 +35,7 @@ const quietRun = async (action: () => Promise<unknown>): Promise<void> => {
   }
 }
 
-const noEstimate = { cities: 0, startOfTurn: 0, coins: 0, ceiling: 27, total: 0, set: true }
+const noEstimate = { current: 0, cities: 0, collected: false, ceiling: 27, total: 0, set: true }
 
 const seat = (username: string, playernumber: number, overrides: Record<string, unknown> = {}) => ({
   playerId: `id-${username}`,
@@ -143,9 +143,9 @@ describe('the Trade box', () => {
     },
   })
   const estimateOf = (overrides: Record<string, unknown> = {}) => ({
-    cities: 5, startOfTurn: 3, coins: 1, ceiling: 27, total: 9, set: false, ...overrides,
+    current: 5, cities: 5, collected: false, ceiling: 27, total: 10, set: false, ...overrides,
   })
-  /** Trade 5 in the status panel and not set this turn, with a guess of 9 from the cities, the Start of Turn and the coins. */
+  /** Trade 5 in the status panel and not set this turn, with a guess of 10 from the current trade and the cities. */
   const guessing = (extra: Record<string, unknown> = {}, estimate: Record<string, unknown> = {}) =>
     makeView({
       you: seat('Alice', 1, {
@@ -165,7 +165,7 @@ describe('the Trade box', () => {
 
   it('starts from the guess while the trade is not set this turn, and says it is not saved yet', () => {
     renderBox(guessing())
-    expect(box().value).toBe('9')
+    expect(box().value).toBe('10')
     expect(screen.getByText('Not saved yet')).toBeTruthy()
     expect(setPlayerStat).not.toHaveBeenCalled()
   })
@@ -173,23 +173,23 @@ describe('the Trade box', () => {
   it('saves the guess when the field is left, then shows the saved number', async () => {
     const { rerender } = renderBox(guessing())
     fireEvent.blur(box())
-    expect(setPlayerStat).toHaveBeenCalledWith('game', 'id-Alice', 'trade', 9)
-    // the game now holds 9 and knows it was set
+    expect(setPlayerStat).toHaveBeenCalledWith('game', 'id-Alice', 'trade', 10)
+    // the game now holds 10 and knows it was set
     await act(async () => {
-      rerender(<TradeCollected gameId="game" view={guessing({ stats: { trade: 9 } }, { set: true })} busy={false} readOnly={false} run={run} />)
+      rerender(<TradeCollected gameId="game" view={guessing({ stats: { trade: 10 } }, { set: true })} busy={false} readOnly={false} run={run} />)
     })
-    expect(box().value).toBe('9')
+    expect(box().value).toBe('10')
     expect(screen.queryByText('Not saved yet')).toBeNull()
   })
 
   it('sends a number the game already holds when it was not set this turn, so it counts as set', () => {
-    renderBox(guessing({ stats: { trade: 9 } }))
+    renderBox(guessing({ stats: { trade: 10 } }))
     fireEvent.blur(box())
-    expect(setPlayerStat).toHaveBeenCalledWith('game', 'id-Alice', 'trade', 9)
+    expect(setPlayerStat).toHaveBeenCalledWith('game', 'id-Alice', 'trade', 10)
   })
 
   it('says it is not saved yet when the guess equals the number but the trade has not been set', () => {
-    renderBox(guessing({ stats: { trade: 9 } }))
+    renderBox(guessing({ stats: { trade: 10 } }))
     expect(screen.getByText('Not saved yet')).toBeTruthy()
   })
 
@@ -197,7 +197,7 @@ describe('the Trade box', () => {
     renderBox(guessing())
     fireEvent.change(box(), { target: { value: '12' } })
     fireEvent.keyDown(box(), { key: 'Escape' })
-    expect(box().value).toBe('9')
+    expect(box().value).toBe('10')
     expect(setPlayerStat).not.toHaveBeenCalled()
   })
 
@@ -241,7 +241,7 @@ describe('the Trade box', () => {
       fireEvent.blur(box())
     }
     expect(setPlayerStat).not.toHaveBeenCalled()
-    expect(box().value).toBe('9')
+    expect(box().value).toBe('10')
   })
 
   it('stops at 25 for the Japanese', () => {
@@ -262,13 +262,23 @@ describe('the Trade box', () => {
   it('explains the guess behind a ?, with each part, each city and the notes once', () => {
     renderBox(guessing())
     fireEvent.click(screen.getByRole('button', { name: 'Help: How the trade is guessed' }))
+    expect(screen.getByText('Trade so far: 5')).toBeTruthy()
     expect(screen.getByText('Trade around your cities: 5')).toBeTruthy()
-    expect(screen.getByText('From your Start of Turn this turn: 3')).toBeTruthy()
-    expect(screen.getByText(/Coins you hold: 1/)).toBeTruthy()
-    expect(screen.getByText('Guess: 9, at most 27')).toBeTruthy()
+    expect(screen.getByText('Guess: 10, at most 27')).toBeTruthy()
     expect(screen.getByText('Capital B2: 3 (A1 1, A2 1, A3 1)')).toBeTruthy()
     expect(screen.getByText('City F6: 2')).toBeTruthy()
     expect(screen.getAllByText('Not a complete count: only the printed icons.')).toHaveLength(1)
+  })
+
+  it('shows the collected trade and says the cities are not counted again', () => {
+    renderBox(guessing({ stats: { trade: 9 } }, { current: 4, collected: true, total: 9, set: true }))
+    expect(box().value).toBe('9')
+    expect(screen.queryByText('Not saved yet')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Help: How the trade was counted' }))
+    expect(screen.getByText('Trade so far: 4')).toBeTruthy()
+    expect(screen.getByText('Trade around your cities: 5')).toBeTruthy()
+    expect(screen.getByText('Collected: 9, at most 27')).toBeTruthy()
+    expect(screen.getByText(/does not count it again/)).toBeTruthy()
   })
 
   it('draws nothing for a viewer who is not a player', () => {

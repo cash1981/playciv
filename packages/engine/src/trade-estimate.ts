@@ -1,50 +1,54 @@
 /**
- * A guess at the trade a player should have in the Trade phase, for the Trade box to start from.
+ * The trade the Trade tab starts from.
  *
- * It is the trade around their cities (`city-production.ts`), plus the trade their Start of Turn
- * abilities gave this turn, plus the coins they hold: trade kept in the Research phase of an
- * earlier turn is kept as coins. The human gave the sum. It is never a complete count (see the
- * notes on each city), it cannot go above the trade track (`tradeCeilingOf`), and a player always
- * types the number that counts. Read from the player's own records, so it is only ever projected
- * to the player it is about.
+ * The engine resets trade to the coins a player keeps when the next turn's
+ * Start of Turn begins, then Start of Turn abilities add to it. When the player
+ * marks Start of Turn done and Trade opens, the trade around their cities is
+ * added once and stored; the tab then shows that stored number and never counts
+ * the cities again. This module still guesses for a turn where the collection
+ * has not happened yet (an old save already in Trade): the trade the player has
+ * plus the trade around their cities, held to the trade track.
+ *
+ * The city count is never complete (see the notes on each city), and a player
+ * always types the number that counts. Read from the player's own records, so it
+ * is only ever projected to the player it is about.
  */
 
-import { cityProductionsOf } from './city-production.js'
-import { coinSourcesOf, totalCoins } from './coins.js'
 import { tradeCeilingOf } from './limits.js'
+import { tradeAroundCitiesOf } from './trade-collection.js'
 import type { GameState, Playerhand } from './state.js'
 import { TRADE_SET_KEY, turnStatus } from './turn.js'
 
 export interface TradeEstimate {
+  /** The trade the player has before the city trade is added, as far as the stored number shows. */
+  readonly current: number
   /** The trade icons and buildings around the player's cities. */
   readonly cities: number
-  /** The trade the player's Start of Turn abilities gave this turn (the ones not undone). */
-  readonly startOfTurn: number
-  /** Every coin the player holds. */
-  readonly coins: number
+  /** Whether the city trade has already been added to the player's stored trade this turn. */
+  readonly collected: boolean
   /** The most trade the player may hold. */
   readonly ceiling: number
-  /** The three added up, held to the ceiling. */
+  /** The stored trade once it is set (by the collection or by hand), or the guess before that. */
   readonly total: number
-  /** Whether the player's trade has been set this turn, from any panel, so the guess is no longer the number to show. */
+  /** Whether the trade has been set this turn, by the collection or from a panel, so there is no guess to show. */
   readonly set: boolean
 }
 
 export function tradeEstimateOf(state: GameState, player: Playerhand): TradeEstimate {
-  const turn = turnStatus(state).currentTurn
-  const cities = cityProductionsOf(state, player).reduce((sum, city) => sum + city.trade.outskirts, 0)
-  const startOfTurn = state.assistedActions
-    .filter(
-      (record) =>
-        record.playerId === player.playerId &&
-        record.turnNumber === turn &&
-        record.phase === 'SOT' &&
-        record.status === 'applied' &&
-        record.effect.kind === 'statGain',
-    )
-    .reduce((sum, record) => sum + (record.effect.kind === 'statGain' ? record.effect.trade : 0), 0)
-  const coins = Math.max(totalCoins(coinSourcesOf(state, player)), 0)
+  const turnNumber = turnStatus(state).currentTurn
+  const turn = player.playerTurns.find((candidate) => candidate.turnNumber === turnNumber)
+  const collectedAmount = turn?.tradeCollected
+  const collected = collectedAmount !== undefined
+  const cities = tradeAroundCitiesOf(state, player)
   const ceiling = tradeCeilingOf(player.civilization?.name)
-  const set = player.playerTurns.some((candidate) => candidate.turnNumber === turn && candidate.usedActions.includes(TRADE_SET_KEY))
-  return { cities, startOfTurn, coins, ceiling, total: Math.min(ceiling, cities + startOfTurn + coins), set }
+  const set = collected || (turn?.usedActions.includes(TRADE_SET_KEY) ?? false)
+  const current = collected ? Math.max(0, player.stats.trade - collectedAmount) : player.stats.trade
+  return {
+    current,
+    cities,
+    collected,
+    ceiling,
+    total: set ? player.stats.trade : Math.min(ceiling, current + cities),
+    set,
+  }
 }

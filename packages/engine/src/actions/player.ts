@@ -31,6 +31,7 @@ import { cultureCardsHeld, cultureHandSizeOf, isCultureHandOver } from '../cultu
 import { applyCoinPurchase } from '../assisted.js'
 import { tradeCeilingOf } from '../limits.js'
 import { grantsAfterTechRemoved, openPhaseOf, statsAfterGovernmentChange } from '../sot.js'
+import type { PlayerTurn } from '../turn.js'
 import { TRADE_SET_KEY, createPlayerTurn, turnStatus } from '../turn.js'
 import { useTurnAction } from '../assisted-core.js'
 import { blockadedPieceIds } from '../blockade.js'
@@ -85,6 +86,41 @@ export interface ChooseTechInput {
   readonly techName: string
 }
 
+/** Drops one tech's Research choice when the tech leaves the hand. */
+function withoutResearchTurn(
+  turns: Readonly<Record<string, number>>,
+  techName: string,
+): Readonly<Record<string, number>> {
+  const { [techName]: removed, ...rest } = turns
+  void removed
+  return rest
+}
+
+/**
+ * The turn whose Research phase the player is in, or `null`. Normally that is
+ * the current turn. A player who has finished it early and marked the next
+ * turn up to Movement is working on that turn's Research instead, so the choice
+ * is recorded for the turn it belongs to.
+ */
+function openResearchTurnOf(state: GameState, player: Playerhand): number | null {
+  const currentTurn = turnStatus(state).currentTurn
+  const open = openPhaseOf(state, player.playerId)
+  if (open === 'RESEARCH') return currentTurn
+  if (open !== null) return null
+  const ahead = [...player.playerTurns]
+    .filter((turn) => turn.turnNumber > currentTurn)
+    .sort((a, b) => a.turnNumber - b.turnNumber)
+    .find(
+      (turn) =>
+        !turn.done.RESEARCH &&
+        turn.done.SOT &&
+        turn.done.TRADE &&
+        turn.done.CM &&
+        turn.done.MOVEMENT,
+    )
+  return ahead?.turnNumber ?? null
+}
+
 /**
  * Java: `PlayerAction.chooseTech`.
  *
@@ -107,9 +143,15 @@ export function chooseTech(state: GameState, input: ChooseTechInput): ActionResu
   }
 
   const chosen: TechItem = { ...tech, hidden: true, ownerId: input.playerId }
+  // Choosing during the Research phase is what makes the trade at the end of
+  // this turn count as researched; a free tech learned in Start of Turn is not.
+  const researchTurn = openResearchTurnOf(state, player)
   const next = withPlayer(state, {
     ...player,
     techsChosen: [...player.techsChosen, chosen],
+    ...(researchTurn === null
+      ? {}
+      : { researchTurns: { ...player.researchTurns, [tech.name]: researchTurn } }),
   })
 
   return ok(appendItemLog(next, 'TECH', player.username, player.playerId, chosen))
@@ -139,6 +181,7 @@ export function removeTech(state: GameState, input: ChooseTechInput): ActionResu
     ...player,
     techGrants: grantsAfterTechRemoved(player.techGrants, tech.name),
     techsChosen: player.techsChosen.filter((candidate) => candidate.name !== tech.name),
+    researchTurns: withoutResearchTurn(player.researchTurns, tech.name),
     stats:
       source === undefined
         ? player.stats
@@ -1131,6 +1174,14 @@ export type SetPlayerStatInput<K extends PlayerStatKey = PlayerStatKey> = {
   readonly at?: string
 }
 
+/** Drops the automatic collection record when a manual trade edit replaces it. */
+function withoutTradeCollection(turn: PlayerTurn): PlayerTurn {
+  if (turn.tradeCollected === undefined) return turn
+  const { tradeCollected, ...rest } = turn
+  void tradeCollected
+  return rest
+}
+
 /**
  * Sets one entry on a player's status board. Any current player may edit any
  * other current player's numbers — the board is shared bookkeeping, not a
@@ -1210,10 +1261,12 @@ export function setPlayerStat<K extends PlayerStatKey>(
   const stats = { ...target.stats, [input.stat]: storedValue } as PlayerStats
   let next: GameState
   if (input.stat === 'trade') {
-    // Setting the trade, from any panel, marks it as set for this turn, so the Trade tab stops guessing
+    // Setting the trade, from any panel, marks it as set for this turn, so the Trade tab stops guessing.
+    // It also replaces the automatic city collection: reopening Start of Turn must not subtract the
+    // old collection from the number the player typed.
     const turnNumber = turnStatus(state).currentTurn
     const turn = target.playerTurns.find((candidate) => candidate.turnNumber === turnNumber) ?? createPlayerTurn(target.username, turnNumber)
-    next = useTurnAction(state, target, turn, TRADE_SET_KEY, stats)
+    next = useTurnAction(state, target, withoutTradeCollection(turn), TRADE_SET_KEY, stats)
   } else {
     next = withPlayer(state, { ...target, stats })
   }

@@ -127,6 +127,7 @@ export function emptyPlayerhand(player: NewPlayer, playernumber: number): Player
     pendingRewards: [],
     techGrants: [],
     techRevealTurns: {},
+    researchTurns: {},
   }
 }
 

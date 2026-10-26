@@ -528,6 +528,9 @@ function putTechBack(
       ...player,
       techGrants: grantsAfterTechRemoved(player.techGrants, tech.name),
       techsChosen: player.techsChosen.filter((candidate) => candidate.name !== tech.name),
+      researchTurns: Object.fromEntries(
+        Object.entries(player.researchTurns).filter(([name]) => name !== tech.name),
+      ),
       stats:
         source === undefined
           ? player.stats

@@ -2,9 +2,10 @@
  * The Trade tab's own controls: the Trade box, and trade offers.
  *
  * The Trade box is the viewer's `stats.trade` from the Status panel, which stays the master: it is
- * read and written with the same call, so an edit on either side shows on both. It starts from a
- * guess at the trade the viewer should have (their cities, their Start of Turn and their coins), and
- * keeps what the viewer types once they have set it for the turn.
+ * read and written with the same call, so an edit on either side shows on both. The engine resets
+ * trade to the coins kept at the start of the turn and adds the trade around the viewer's cities
+ * once, when Trade starts; the box shows that stored number. A turn saved before this rule still
+ * gets a guess (the trade so far plus the cities), and the box keeps what the viewer types.
  *
  * An offer is a note in plain language, to one player, a few of them or everybody (an open deal).
  * Accepting records that the players agreed; it moves nothing, so they settle it with the existing
@@ -39,9 +40,10 @@ interface Props {
 }
 
 /**
- * The Trade box: one number, the viewer's trade. Until the viewer's trade has been set this turn (from
- * this box or from the Status panel, on any device: the game remembers it) it shows the guess, and says
- * so. Leaving the field saves what it shows, as the Status panel's Trade does.
+ * The Trade box: one number, the viewer's trade. Once the engine has collected the city trade (or the
+ * viewer has set it from this box or the Status panel, on any device: the game remembers it) it shows
+ * the stored number. Only a turn with no collection yet shows the guess, and says it is not saved.
+ * Leaving the field saves what it shows, as the Status panel's Trade does.
  */
 export function TradeCollected({ gameId, view, busy, readOnly, run }: Props): React.JSX.Element | null {
   const you = view.you
@@ -91,7 +93,11 @@ export function TradeCollected({ gameId, view, busy, readOnly, run }: Props): Re
           type="text"
           inputMode="numeric"
           aria-label="Trade"
-          title="Your trade. It starts from a guess; leave the field to save the number."
+          title={estimate.collected
+            ? 'Your trade: the coins you kept plus the trade around your cities. Edit it and leave the field to save.'
+            : estimate.set
+              ? 'Your trade, set by hand for this turn. Edit it and leave the field to save.'
+              : 'Your trade. It starts from a guess; leave the field to save the number.'}
           value={draft}
           disabled={busy || readOnly}
           onChange={(event) => {
@@ -110,16 +116,26 @@ export function TradeCollected({ gameId, view, busy, readOnly, run }: Props): Re
           }}
         />
         {unsaved && <span className="trade-unsaved muted">Not saved yet</span>}
-        <HelpHint label="How the trade is guessed">
+        <HelpHint label={estimate.collected
+          ? 'How the trade was counted'
+          : estimate.set
+            ? 'How the trade is set'
+            : 'How the trade is guessed'}>
           <p>
-            The number is a guess, and you set the real one: it is saved when you leave the field. It is the same
-            number as Trade in the Status panel.
+            {estimate.collected
+              ? 'The trade around your cities was added once when Trade started. It is the same number as Trade in the Status panel, and opening this tab does not count it again.'
+              : estimate.set
+                ? 'The number is set by hand for this turn. It is the same number as Trade in the Status panel, and the city trade is not added on top.'
+                : 'The number is a guess, and you set the real one: it is saved when you leave the field. It is the same number as Trade in the Status panel.'}
           </p>
-          <ul aria-label="Trade guess">
+          <ul aria-label={estimate.collected ? 'Trade count' : estimate.set ? 'Trade set' : 'Trade guess'}>
+            {(!estimate.set || estimate.collected) && <li>{`Trade so far: ${estimate.current}`}</li>}
             <li>{`Trade around your cities: ${estimate.cities}`}</li>
-            <li>{`From your Start of Turn this turn: ${estimate.startOfTurn}`}</li>
-            <li>{`Coins you hold: ${estimate.coins} (trade kept in the Research phase is kept as coins)`}</li>
-            <li>{`Guess: ${estimate.total}, at most ${estimate.ceiling}`}</li>
+            <li>{estimate.collected
+              ? `Collected: ${estimate.total}, at most ${estimate.ceiling}`
+              : estimate.set
+                ? `Set by hand: ${estimate.total}, at most ${estimate.ceiling}`
+                : `Guess: ${estimate.total}, at most ${estimate.ceiling}`}</li>
           </ul>
           {you.cities.length > 0 && (
             <ul aria-label="Trade per city">
@@ -132,7 +148,7 @@ export function TradeCollected({ gameId, view, busy, readOnly, run }: Props): Re
               ))}
             </ul>
           )}
-          <ul aria-label="Trade guess notes">
+          <ul aria-label={estimate.collected ? 'Trade count notes' : 'Trade guess notes'}>
             {[...new Set(you.cities.flatMap((city) => city.trade.notes))].map((note) => (
               <li key={note}>{note}</li>
             ))}

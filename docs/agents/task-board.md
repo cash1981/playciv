@@ -12,6 +12,22 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 
 ## Live claims
 
+### trade-collection-timing
+
+- **Owner:** opencode (orchestrator/coder)
+- **Branch:** `fix/trade-collection-timing`
+- **Brief:** `docs/agents/tasks/trade-collection-timing.md`
+- **Status:** in review
+- **Claimed paths:**
+  - `packages/engine/src/turn.ts`, `actions/new-turn.ts`, `actions/turn.ts`, `actions/player.ts`
+  - `packages/engine/src/trade-collection.ts`, `trade-estimate.ts`
+  - `packages/engine/test/trade-timing.test.ts`, `city-production.test.ts`, `assisted-culture-advance.test.ts`, `culture-advance-fixture.ts`
+  - `packages/web/src/views/TradeOffers.tsx`, `TradeOffers.test.tsx`, `PhaseTabs.test.tsx`
+  - `docs/agents/tasks/trade-collection-timing.md`, `docs/agents/decisions.md`
+- **Notes:** based on `origin/main`. The `assisted-play-contract` and
+  `action-panel-focus` claims are stale after their merges; their branches have no
+  commits ahead of `origin/main`.
+
 ### spectator-readonly
 
 - **Owner:** opencode (orchestrator/coder)

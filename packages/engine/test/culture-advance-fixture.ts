@@ -74,7 +74,7 @@ export function advanceTurn(options: AdvanceOptions = {}): GameState {
     state = unwrap(chooseSocialPolicy(state, { playerId: CASH1981, name }))
     state = unwrap(revealSocialPolicy(state, { playerId: CASH1981, name }))
   }
-  state = withStats(state, { culture: options.culture ?? 100, trade: options.trade ?? 100 })
+  state = withStats(state, { culture: options.culture ?? 100, trade: options.trade ?? 25 })
   state = withMarkerAt(state, options.step ?? 0, options.civ ?? 'Japanese')
   return openCityManagement(state)
 }
