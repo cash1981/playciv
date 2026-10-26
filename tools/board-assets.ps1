@@ -209,13 +209,34 @@ foreach ($folder in $categories.Keys) {
             "$folder/$($_.BaseName)" -notin $exclude
         }
     foreach ($file in $files) {
-        Copy-Item $file.FullName (Join-Path $to $file.Name) -Force
-
         $image = [System.Drawing.Image]::FromFile($file.FullName)
         try {
             $thisCategory = $category
             $width = $image.Width
             $height = $image.Height
+
+            if ($category -eq 'city' -and $file.BaseName -match 'metropolis') {
+                # Metropolis sprites span two routes on the map.
+                $width = 170
+                $height = 82
+                $resized = New-Object System.Drawing.Bitmap $width, $height, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+                $graphics = [System.Drawing.Graphics]::FromImage($resized)
+                try {
+                    $graphics.Clear([System.Drawing.Color]::Transparent)
+                    $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                    $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+                    $graphics.DrawImage($image, 0, 0, $width, $height)
+                    $resized.Save(
+                        (Join-Path $to $file.Name),
+                        [System.Drawing.Imaging.ImageFormat]::Png
+                    )
+                } finally {
+                    $graphics.Dispose()
+                    $resized.Dispose()
+                }
+            } else {
+                Copy-Item $file.FullName (Join-Path $to $file.Name) -Force
+            }
 
             if ($category -eq 'tile') {
                 if ($civTiles -contains $file.BaseName) { $thisCategory = 'civtile' }

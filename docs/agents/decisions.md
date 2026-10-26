@@ -110,6 +110,11 @@ false) meaning the player has unlocked Aircraft units. Revealing the Flight tech
 for the first time ticks it; anyone can still tick or untick it by hand, and it
 is neither cleared when Flight is removed nor enforced when drawing Aircraft.
 
+Metropolis sprites are 170×82 pixels so they cover their two map routes; keep
+both the generated image size and board manifest dimensions aligned. The
+`tools/board-assets.ps1` generator normalizes them, and `board.test.ts` pins the
+image and manifest dimensions.
+
 Government selection and tech-pyramid placement remain permissive bookkeeping
 unless a specific effect is explicitly automated. Generated data should be
 changed through its generator/source process, not patched to encode a rule.
