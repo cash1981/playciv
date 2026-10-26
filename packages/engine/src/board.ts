@@ -18,9 +18,10 @@
  * the list of playable 4 x 4 slots it is made of rather than only its width
  * and height. See `createBoardForPlayers`.
  *
- * Below the map is a band of player areas, one per player. Dropping a piece
- * there tidies it into the next free slot, so a pile of collected huts reads as
- * a row rather than a heap.
+ * Below the map is a band of player areas, one per player. A new piece dropped
+ * there tidies into the next free slot, so a pile of collected huts reads as a
+ * row rather than a heap. Moving an existing piece keeps the spot it is dropped
+ * on, so a player can arrange the area freely.
  */
 
 import boardAssets from '../data/board-assets.json' with { type: 'json' }
@@ -906,8 +907,8 @@ export function areaAt(
  * The next free slot in a player area, read row by row.
  *
  * Pieces dropped in an area tidy themselves into a grid, so five collected huts
- * line up instead of piling on top of each other. Falls back to the drop point
- * when the area is full.
+ * line up instead of piling on top of each other. Freely moved pieces occupy
+ * every slot they overlap. Falls back to the drop point when the area is full.
  */
 export function nextFreeSlot(
   board: Board,
@@ -920,21 +921,24 @@ export function nextFreeSlot(
   const columns = Math.max(1, Math.floor(region.width / slot))
   const rows = Math.max(1, Math.floor(region.height / slot))
 
-  const taken = new Set(
-    pieces
-      .filter(
-        (piece) =>
-          piece.x >= region.x &&
-          piece.x < region.x + region.width &&
-          piece.y >= region.y &&
-          piece.y < region.y + region.height,
-      )
-      .map((piece) => {
-        const column = Math.round((piece.x - region.x) / slot)
-        const row = Math.round((piece.y - region.y) / slot)
-        return `${column},${row}`
-      }),
-  )
+  const taken = new Set<string>()
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      const x = region.x + column * slot
+      const y = region.y + row * slot
+      if (
+        pieces.some(
+          (piece) =>
+            piece.x < x + slot &&
+            piece.x + piece.width > x &&
+            piece.y < y + slot &&
+            piece.y + piece.height > y,
+        )
+      ) {
+        taken.add(`${column},${row}`)
+      }
+    }
+  }
 
   for (let row = 0; row < rows; row++) {
     for (let column = 0; column < columns; column++) {

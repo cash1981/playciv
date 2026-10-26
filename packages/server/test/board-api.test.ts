@@ -234,8 +234,8 @@ describe('history over HTTP', () => {
     expect(history[1]?.description).toMatch(/moved Red army from .+ to .+/)
   })
 
-  it('passes snap: false through to the engine, bypassing the area tidy-into-slot snap', async () => {
-    const { gameId, starter } = await startedGame('SnapFalse')
+  it('keeps a piece moved in a player area at the requested spot (issue #100)', async () => {
+    const { gameId, starter } = await startedGame('AreaMove')
     const view = await inject(app, {
       method: 'GET',
       url: `/api/games/${gameId}`,
@@ -252,13 +252,33 @@ describe('history over HTTP', () => {
       method: 'POST',
       url: `/api/games/${gameId}/board/pieces/${piece.id}/move`,
       headers: bearer(starter),
-      payload: { x: area.x + 46, y: area.y + 55, snap: false },
+      payload: { x: area.x + 46, y: area.y + 55 },
     })
 
     const pieces = (await moved.json() as { board: { pieces: { x: number; y: number }[] } }).board.pieces
-    // Without `snap: false` this would tidy into the area's grid; the route
-    // must forward the field rather than always snapping (issue #193).
+    // A move keeps the exact spot; only a new placement from the palette tidies into the area grid.
     expect(pieces[0]).toEqual(expect.objectContaining({ x: area.x + 46, y: area.y + 55 }))
+  })
+
+  it('passes snap: false through to the engine, so a map tile keeps the requested spot (issue #193)', async () => {
+    const { gameId, starter } = await startedGame('SnapFalse')
+    const placed = await place(gameId, starter, 'tiles/England', 300, 300)
+    const piece = (await placed.json() as { board: { pieces: { id: string }[] } }).board.pieces[0]
+    if (piece === undefined) throw new Error('no piece')
+
+    const moved = await inject(app, {
+      method: 'POST',
+      url: `/api/games/${gameId}/board/pieces/${piece.id}/move`,
+      headers: bearer(starter),
+      payload: { x: 10, y: 10, snap: false },
+    })
+
+    const pieces = (await moved.json() as { board: { pieces: { id: string; x: number; y: number }[] } }).board.pieces
+    // Without `snap: false` a map tile would snap to the nearest slot origin; the
+    // route must forward the field rather than always snapping.
+    expect(pieces.find((candidate) => candidate.id === piece.id)).toEqual(
+      expect.objectContaining({ x: 10, y: 10 }),
+    )
   })
 })
 

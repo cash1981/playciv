@@ -34,7 +34,7 @@ import {
   revealTech,
   setPlayerStat,
 } from '../src/actions/player.js'
-import { cityFootprintsOf } from '../src/blockade.js'
+import { cityFootprintsOf, mapCellOf } from '../src/blockade.js'
 import {
   SQUARE_SIZE,
   findBoardAsset,
@@ -52,8 +52,9 @@ import type { GreatPersonItem } from '../src/item.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
-import type { GameState } from '../src/state.js'
+import type { AssistedActionRecord, GameState } from '../src/state.js'
 import { tileTerrainGrid } from '../src/terrain.js'
+import { turnStatus } from '../src/turn.js'
 
 import { CASH1981, ITCHI, KARANDRAS1, CHUL, firstCivGame } from './fixture.js'
 
@@ -418,12 +419,82 @@ describe('trade', () => {
       expect(tradeSquaresOf(city).filter(([square]) => square === 'A2')).toEqual([['A2', 'map icon', 1]])
     })
 
-    it('gives the owning city nothing when the scout goes to another city', () => {
+    it('gives the owning city nothing when the scout goes to another city, and gives that city the trade', () => {
       // The capital is on a square with no known tile, so the scout goes there and not to B2.
       const state = scoutOnA2(put(scene(), CASH1981, 'cities/redcapital2', 8, 8))
       const owner = citiesOf(state).find((candidate) => candidate.label.startsWith('City'))
       expect(owner?.trade.outskirts).toBe(2)
       expect(owner?.trade.detail.some((entry) => entry.square === 'A2')).toBe(false)
+      const capital = citiesOf(state).find((candidate) => candidate.label.startsWith('Capital'))
+      if (capital === undefined) throw new Error('no capital')
+      expect(capital.trade.outskirts).toBe(1)
+      expect(tradeSquaresOf(capital)).toContainEqual(['A2', 'map icon, sent by your scout', 1])
+    })
+
+    it('counts trade once when two scouts on one square are sent to the same city', () => {
+      const capital = put(withEngland(game()), CASH1981, 'cities/redcapital2', 8, 8)
+      const together = put(
+        put(capital, CASH1981, 'figures/redscout', 0, 1),
+        CASH1981,
+        'figures/redscout',
+        0,
+        1,
+      )
+      const target = together.board.pieces.find((piece) => piece.assetId === 'cities/redcapital2')
+      if (target === undefined) throw new Error('no target city')
+      const scouts = together.board.pieces.filter((piece) => {
+        const cell = mapCellOf(together.board, piece)
+        return piece.assetId === 'figures/redscout' && cell?.column === 0 && cell.row === 1
+      })
+      expect(scouts).toHaveLength(2)
+      const turnNumber = turnStatus(together).currentTurn
+      const assignments: AssistedActionRecord[] = scouts.map((scout, index) => ({
+        id: `assigned-${index}`,
+        kind: 'assignScout',
+        playerId: CASH1981,
+        turnNumber,
+        phase: 'SOT',
+        usageKey: null,
+        at: AT,
+        logId: `assigned-log-${index}`,
+        status: 'applied',
+        effect: {
+          kind: 'assignScout',
+          scoutPieceId: scout.id,
+          cityPieceId: target.id,
+          column: 0,
+          row: 1,
+          square: 'A2',
+          cityLabel: target.label,
+        },
+      }))
+      const state = { ...together, assistedActions: assignments }
+      const city = citiesOf(state).find((candidate) => candidate.pieceId === target.id)
+      if (city === undefined) throw new Error('no city production')
+
+      expect(city.trade.outskirts).toBe(1)
+      expect(tradeSquaresOf(city).filter(([square]) => square === 'A2')).toEqual([
+        ['A2', 'map icon, sent by your scout', 1],
+      ])
+    })
+
+    it('adds an unsent scout square to the capital and to the trade estimate (issue #292)', () => {
+      // A1 prints a trade icon and is outside the outskirts of a capital on G2,
+      // which has no tile around it, so the scout's default is the only trade.
+      const capital = put(withEngland(game()), CASH1981, 'cities/redcapital2', 6, 1)
+      const state = put(capital, CASH1981, 'figures/redscout', 0, 0)
+      const city = only(state)
+      expect(city.label).toBe('Capital G2')
+      expect(city.trade.outskirts).toBe(1)
+      expect(tradeSquaresOf(city)).toContainEqual(['A1', 'map icon, sent by your scout', 1])
+      expect(tradeEstimateOf(state, cash(state)).cities).toBe(1)
+    })
+
+    it('a building on the square a scout sends gives the building trade', () => {
+      const capital = put(withEngland(game()), CASH1981, 'cities/redcapital2', 2, 3)
+      const withScout = put(capital, CASH1981, 'figures/redscout', 0, 0)
+      const state = put(withScout, CASH1981, 'buildings/harbor', 0, 0)
+      expect(tradeSquaresOf(only(state))).toContainEqual(['A1', 'Harbor, sent by your scout', 2])
     })
   })
 

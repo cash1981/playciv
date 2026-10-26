@@ -16,7 +16,15 @@ import {
 } from '../src/actions/board.js'
 import { withdrawFromGame } from '../src/actions/game.js'
 import { markPhasesDone, unmarkPhaseDone } from '../src/actions/turn.js'
-import { START_PLAYER_ID, areaAt, findBoardAsset, mapTop, playerAreas } from '../src/board.js'
+import {
+  AREA_LABEL_HEIGHT,
+  SQUARE_SIZE,
+  START_PLAYER_ID,
+  areaAt,
+  findBoardAsset,
+  mapTop,
+  playerAreas,
+} from '../src/board.js'
 import type { BoardPiece } from '../src/board.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap } from '../src/result.js'
@@ -100,6 +108,33 @@ describe('starting the next turn', () => {
     expect(entry?.change.kind).toBe('move')
     expect(entry?.playerId).toBe(CHUL)
     expect(entry?.at).toBe('end')
+  })
+
+  it('tidies the moved marker into the next free slot in the new area', () => {
+    const base = markedGame()
+    const target = playerAreas(base.board, base.players).find((area) => area.username === 'Karandras1')
+    if (target === undefined) throw new Error('no Karandras1 area')
+    const withHut = unwrap(
+      placePiece(base, {
+        playerId: CASH1981,
+        assetId: 'resources/hut',
+        x: target.x + 20,
+        y: target.y + AREA_LABEL_HEIGHT + 10,
+      }),
+    )
+    const hut = withHut.board.pieces.find((piece) => piece.assetId === 'resources/hut')
+    if (hut === undefined) throw new Error('no hut')
+
+    const state = finishTurn(withHut, 1)
+    const moved = marker(state)
+    if (moved === undefined) throw new Error('no marker')
+    expect(markerArea(state)).toBe('Karandras1')
+    // The hut took the first free slot, so the marker lines up beside it.
+    expect([moved.x, moved.y]).toEqual([
+      target.x + SQUARE_SIZE,
+      target.y + AREA_LABEL_HEIGHT,
+    ])
+    expect([moved.x, moved.y]).not.toEqual([hut.x, hut.y])
   })
 
   it('goes round the table and wraps from the last seat to the first', () => {

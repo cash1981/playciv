@@ -62,10 +62,12 @@ export interface TradeSquare {
 
 /**
  * The trade around one city: the trade icons in its outskirts, with a building
- * replacing the icons of its square. What the Trade phase collects is this summed
- * over the cities; it is an estimate, and `notes` names what it leaves out.
+ * replacing the icons of its square, plus the trade of squares a scout sends to
+ * the city from outside its outskirts. What the Trade phase collects is this
+ * summed over the cities; it is an estimate, and `notes` names what it leaves out.
  */
 export interface CityTrade {
+  /** The trade around the city: its outskirts plus the squares its scouts send from outside them. */
   readonly outskirts: number
   readonly detail: readonly TradeSquare[]
   /** What the estimate does not count, in plain sentences. Never empty. */
@@ -95,7 +97,7 @@ export interface CityProduction {
   readonly effective: number
   /** What the estimate does not count, in plain sentences. Never empty. */
   readonly notes: readonly string[]
-  /** The trade in the city's outskirts, counted the same way as the production. */
+  /** The trade around the city, counted the same way as the production, with the squares scouts send included. */
   readonly trade: CityTrade
 }
 
@@ -147,6 +149,22 @@ function knownGreatPerson(here: readonly BoardPiece[]): BoardPiece | undefined {
   )
 }
 
+/** The pieces on a square whose icons replace the tile's: a building, a wonder or a Great Person marker. */
+function iconPiecesOn(board: Board, cell: Cell): readonly BoardPiece[] {
+  return board.pieces.filter((other) => {
+    if (other.category !== 'building' && other.category !== 'wonder' && other.category !== 'greatperson') return false
+    const at = mapCellOf(board, other)
+    return at !== null && sameCell(at, cell)
+  })
+}
+
+/** The building that stands for a square when old data holds more than one: the most productive. */
+function bestBuilding(buildings: readonly BoardPiece[]): BoardPiece {
+  return buildings.reduce((top, candidate) =>
+    (buildingDataOf(candidate.assetId)?.production ?? 0) > (buildingDataOf(top.assetId)?.production ?? 0) ? candidate : top,
+  )
+}
+
 /**
  * What a square gives a city that a scout sends it: the production of the building that
  * stands there (a building replaces every icon of its square), that of a Great Person marker,
@@ -154,16 +172,10 @@ function knownGreatPerson(here: readonly BoardPiece[]): BoardPiece | undefined {
  * as an outskirts square, without the blockade: a scout may gather a blockaded square.
  */
 function scoutSquareProduction(board: Board, cell: Cell): { readonly source: string; readonly amount: number } {
-  const here = board.pieces.filter((other) => {
-    if (other.category !== 'building' && other.category !== 'wonder' && other.category !== 'greatperson') return false
-    const at = mapCellOf(board, other)
-    return at !== null && sameCell(at, cell)
-  })
+  const here = iconPiecesOn(board, cell)
   const buildings = here.filter((other) => other.category === 'building')
   if (buildings.length > 0) {
-    const best = buildings.reduce((top, candidate) =>
-      (buildingDataOf(candidate.assetId)?.production ?? 0) > (buildingDataOf(top.assetId)?.production ?? 0) ? candidate : top,
-    )
+    const best = bestBuilding(buildings)
     return { source: best.label, amount: buildingDataOf(best.assetId)?.production ?? 0 }
   }
   const marker = knownGreatPerson(here)
@@ -180,6 +192,25 @@ function bareSquareTrade(board: Board, cell: Cell): { readonly source: string; r
   const disaster = disasterAt(board, x, y)
   if (disaster !== undefined) return { source: 'disaster token', amount: DISASTER_TRADE[disaster.assetId] ?? 0 }
   return { source: 'map icon', amount: squareIconsOfCell(board, cell)?.trade ?? 0 }
+}
+
+/**
+ * What a square a scout sends gives in trade: the building's trade in place of the icon under
+ * it, a Great Person marker's trade, nothing for a wonder (its icons are not in the data),
+ * otherwise the map icon or disaster token. The same rules as an outskirts square, with no
+ * blockade: a scout may gather a blockaded square.
+ */
+function scoutSquareTrade(board: Board, cell: Cell): { readonly source: string; readonly amount: number } {
+  const here = iconPiecesOn(board, cell)
+  const buildings = here.filter((other) => other.category === 'building')
+  if (buildings.length > 0) {
+    const best = bestBuilding(buildings)
+    return { source: best.label, amount: buildingDataOf(best.assetId)?.trade ?? 0 }
+  }
+  const marker = knownGreatPerson(here)
+  if (marker !== undefined) return { source: `${marker.label} (great person)`, amount: greatPersonTradeOf(marker.assetId) ?? 0 }
+  if (here.length > 0) return { source: here.some((other) => other.category === 'wonder') ? 'wonder' : 'great person', amount: 0 }
+  return bareSquareTrade(board, cell)
 }
 
 const squareLabel = (cell: Cell): string => `${columnLabel(cell.column)}${cell.row + 1}`
@@ -304,7 +335,7 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
   if (assignments.length > 0) {
     const toCapital = assignments.some((assignment) => !assignment.chosen)
     playerNotes.push(
-      `A square a scout sends is counted for production here${toCapital ? '; a scout you did not send counts for your capital' : ''}. Its culture and resource icons are offered to Devote to the Arts and Harvest of that city; its trade and coin icons are not counted.`,
+      `A square a scout sends is counted for production here${toCapital ? '; a scout you did not send counts for your capital' : ''}. Its culture and resource icons are offered to Devote to the Arts and Harvest of that city, its trade is counted for that city too, and its coin icons are not counted.`,
     )
   } else if (figuresOnMap(state, player, 'scout').length > 0) {
     playerNotes.push(
@@ -352,22 +383,14 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
         sharedSquares.push(square)
       }
 
-      const here = board.pieces.filter((other) => {
-        if (other.category !== 'building' && other.category !== 'wonder' && other.category !== 'greatperson') return false
-        const at = mapCellOf(board, other)
-        return at !== null && sameCell(at, cell)
-      })
+      const here = iconPiecesOn(board, cell)
       const buildings = here.filter((other) => other.category === 'building')
       const hasWonderOrPerson = here.some((other) => other.category !== 'building')
 
       if (buildings.length > 0) {
         // A building replaces every icon the square had (base rules p. 16).
         if (buildings.length > 1) doubleBuildingSquares.push(square)
-        const best = buildings.reduce((top, candidate) =>
-          (buildingDataOf(candidate.assetId)?.production ?? 0) > (buildingDataOf(top.assetId)?.production ?? 0)
-            ? candidate
-            : top,
-        )
+        const best = bestBuilding(buildings)
         const data = buildingDataOf(best.assetId)
         if (data === undefined) unknownBuilding = true
         detail.push({
@@ -411,6 +434,7 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
     }
 
     // The squares scouts send to this city from outside its outskirts
+    const scoutTradeSquares = new Set<string>()
     for (const assignment of assignments) {
       if (assignment.cityPieceId !== piece.id || [...centers, ...outskirts].some((cell) => sameCell(cell, assignment))) continue
       const gathered = scoutSquareProduction(board, assignment)
@@ -421,6 +445,20 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
         blockaded: false,
         scout: true,
       })
+      // The same square's trade, counted for the city the scout sends it to
+      const scoutSquare = `${assignment.column}:${assignment.row}`
+      if (!scoutTradeSquares.has(scoutSquare)) {
+        scoutTradeSquares.add(scoutSquare)
+        const trade = scoutSquareTrade(board, assignment)
+        if (trade.amount > 0) {
+          tradeDetail.push({
+            square: squareLabel(assignment),
+            source: `${trade.source}, sent by your scout`,
+            amount: trade.amount,
+            blockaded: false,
+          })
+        }
+      }
     }
 
     const outskirtsTotal = detail.reduce((total, entry) => total + entry.amount, 0)
@@ -477,7 +515,9 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
       )
     }
     if (assignments.length > 0) {
-      tradeNotes.push('A square a scout sends counts for no trade, here or in the city it is sent to.')
+      tradeNotes.push(
+        'A square a scout sends counts its trade for the city it is sent to, your capital when you did not choose a city.',
+      )
     }
     const tradeOutskirts = tradeDetail.reduce((total, entry) => total + entry.amount, 0)
 

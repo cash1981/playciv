@@ -490,7 +490,7 @@ describe('sending a scout’s square to a city', () => {
     state = put(state, CASH1981, 'buildings/workshop', 3, 2)
     const sent = unwrap(assign(state, scoutOf(state).id, near(state)?.pieceId ?? ''))
     expect(near(sent)?.outskirtsDetail.find((entry) => entry.square === 'D3')?.amount).toBe(3)
-    expect(near(sent)?.notes.join(' ')).toContain('its trade and coin icons are not counted')
+    expect(near(sent)?.notes.join(' ')).toContain('its trade is counted for that city too, and its coin icons are not counted')
   })
 
   describe('and what it gathers in Devote to the Arts and Harvest', () => {

@@ -74,7 +74,9 @@ import {
   boardAreas,
   findBoardAsset,
   isInWondersArea,
+  nextFreeSlot,
   playerAreas,
+  wondersArea,
 } from './board.js'
 import type { Board, BoardPiece, PieceFace } from './board.js'
 import { sameBuildItem } from './build-item.js'
@@ -683,11 +685,15 @@ function removeReplaced(
   if (old.category === 'greatperson') {
     const area = ownAreaOf(state, player.playerId)
     if (area === undefined) return err('You have no player area on the board to hold the Great Person in.')
+    const [slotX, slotY] = nextFreeSlot(state.board, area, state.board.pieces, {
+      x: area.x + 20,
+      y: area.y + AREA_LABEL_HEIGHT + 10,
+    })
     const held = movePieceUnchecked(state, {
       playerId: player.playerId,
       pieceId: old.id,
-      x: area.x + 20,
-      y: area.y + AREA_LABEL_HEIGHT + 10,
+      x: slotX,
+      y: slotY,
       ...at,
     })
     const entry = held?.board.history.at(-1)
@@ -1115,14 +1121,22 @@ const build: AssistedActionDefinition = {
         ownerId: null,
         ...stamp,
       })
+      // Where it stood, unless another wonder has been drawn into that spot since: then the next free one
+      const spot = marketSpotTaken(base.board, effect.pieceId, effect.wonder.from)
+        ? nextFreeSlot(
+            base.board,
+            wondersArea(base.board),
+            base.board.pieces.filter((candidate) => candidate.id !== effect.pieceId),
+            effect.wonder.from,
+          )
+        : [effect.wonder.from.x, effect.wonder.from.y] as const
       const returned = unowned.ok
         ? movePieceUnchecked(unowned.value, {
             playerId: record.playerId,
             pieceId: effect.pieceId,
-            x: effect.wonder.from.x,
-            y: effect.wonder.from.y,
-            // Where it stood, unless another wonder has been drawn into that spot since: then the next free one
-            snap: marketSpotTaken(base.board, effect.pieceId, effect.wonder.from),
+            x: spot[0],
+            y: spot[1],
+            snap: false,
             ...stamp,
           })
         : undefined
