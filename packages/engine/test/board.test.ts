@@ -5,6 +5,9 @@
  * pinned against `4v4 Map Template.pptx`.
  */
 
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -55,6 +58,8 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 
 import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
+
+const WEB_PUBLIC_BOARD = fileURLToPath(new URL('../../web/public/board/', import.meta.url))
 
 const place = (state: GameState, assetId: string, x: number, y: number): GameState =>
   unwrap(placePiece(state, { playerId: CASH1981, assetId, x, y }))
@@ -152,6 +157,19 @@ describe('the manifest', () => {
       'tile',
       'wonder',
     ])
+  })
+
+  it('draws all metropolis sprites at 170 by 82 pixels', () => {
+    const metropolis = BOARD_ASSETS.filter(
+      (asset) => asset.category === 'city' && asset.id.includes('metropolis'),
+    )
+    expect(metropolis).toHaveLength(10)
+    for (const asset of metropolis) {
+      expect(asset).toMatchObject({ width: 170, height: 82 })
+      const png = readFileSync(`${WEB_PUBLIC_BOARD}/${asset.path}`)
+      expect(png.toString('hex', 0, 8)).toBe('89504e470d0a1a0a')
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([170, 82])
+    }
   })
 
   it('has the four disaster markers sized to fit one board square', () => {
