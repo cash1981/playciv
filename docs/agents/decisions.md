@@ -117,8 +117,7 @@ is neither cleared when Flight is removed nor enforced when drawing Aircraft.
 
 Metropolis sprites are 170×82 pixels so they cover their two map routes; keep
 both the generated image size and board manifest dimensions aligned. The
-`tools/board-assets.ps1` generator normalizes them, and `board.test.ts` pins the
-image and manifest dimensions.
+`tools/board-assets.ps1` generator normalizes them.
 
 Government selection and tech-pyramid placement remain permissive bookkeeping
 unless a specific effect is explicitly automated. Generated data should be

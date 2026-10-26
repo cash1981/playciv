@@ -5,9 +5,6 @@
  * pinned against `4v4 Map Template.pptx`.
  */
 
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -58,8 +55,6 @@ import { unwrap, unwrapErr } from '../src/result.js'
 import type { GameState } from '../src/state.js'
 
 import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
-
-const WEB_PUBLIC_BOARD = fileURLToPath(new URL('../../web/public/board/', import.meta.url))
 
 const place = (state: GameState, assetId: string, x: number, y: number): GameState =>
   unwrap(placePiece(state, { playerId: CASH1981, assetId, x, y }))
@@ -773,6 +768,28 @@ describe('player areas', () => {
       [mine.x + SQUARE_SIZE, mine.y + AREA_LABEL_HEIGHT],
       [mine.x + SQUARE_SIZE * 2, mine.y + AREA_LABEL_HEIGHT],
     ])
+  })
+
+  it('uses another slot after a freely moved piece overlaps the first slot', () => {
+    const areas = playerAreas(board, firstCivGame().players)
+    const mine = areas[0]
+    if (mine === undefined) throw new Error('no area')
+
+    let state = place(firstCivGame(), 'resources/hut', mine.x + 30, mine.y + AREA_LABEL_HEIGHT + 20)
+    const piece = state.board.pieces[0]
+    if (piece === undefined) throw new Error('no piece')
+    state = unwrap(
+      movePiece(state, {
+        playerId: CASH1981,
+        pieceId: piece.id,
+        x: mine.x,
+        y: mine.y + AREA_LABEL_HEIGHT - 1,
+      }),
+    )
+
+    state = place(state, 'resources/hut', mine.x + 30, mine.y + AREA_LABEL_HEIGHT + 20)
+    const added = state.board.pieces.at(-1)
+    expect([added?.x, added?.y]).toEqual([mine.x + SQUARE_SIZE, mine.y + AREA_LABEL_HEIGHT])
   })
 
   it('keeps a piece moved into an area where it is dropped, so the area can be arranged freely', () => {

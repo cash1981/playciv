@@ -434,6 +434,7 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
     }
 
     // The squares scouts send to this city from outside its outskirts
+    const scoutTradeSquares = new Set<string>()
     for (const assignment of assignments) {
       if (assignment.cityPieceId !== piece.id || [...centers, ...outskirts].some((cell) => sameCell(cell, assignment))) continue
       const gathered = scoutSquareProduction(board, assignment)
@@ -445,14 +446,18 @@ export function cityProductionsOf(state: GameState, player: Playerhand): readonl
         scout: true,
       })
       // The same square's trade, counted for the city the scout sends it to
-      const trade = scoutSquareTrade(board, assignment)
-      if (trade.amount > 0) {
-        tradeDetail.push({
-          square: squareLabel(assignment),
-          source: `${trade.source}, sent by your scout`,
-          amount: trade.amount,
-          blockaded: false,
-        })
+      const scoutSquare = `${assignment.column}:${assignment.row}`
+      if (!scoutTradeSquares.has(scoutSquare)) {
+        scoutTradeSquares.add(scoutSquare)
+        const trade = scoutSquareTrade(board, assignment)
+        if (trade.amount > 0) {
+          tradeDetail.push({
+            square: squareLabel(assignment),
+            source: `${trade.source}, sent by your scout`,
+            amount: trade.amount,
+            blockaded: false,
+          })
+        }
       }
     }
 

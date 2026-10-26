@@ -34,7 +34,7 @@ import {
   revealTech,
   setPlayerStat,
 } from '../src/actions/player.js'
-import { cityFootprintsOf } from '../src/blockade.js'
+import { cityFootprintsOf, mapCellOf } from '../src/blockade.js'
 import {
   SQUARE_SIZE,
   findBoardAsset,
@@ -52,8 +52,9 @@ import type { GreatPersonItem } from '../src/item.js'
 import { migrateGameState } from '../src/migrate.js'
 import { unwrap, unwrapErr } from '../src/result.js'
 import { findPlayer, toPlayerView } from '../src/state.js'
-import type { GameState } from '../src/state.js'
+import type { AssistedActionRecord, GameState } from '../src/state.js'
 import { tileTerrainGrid } from '../src/terrain.js'
+import { turnStatus } from '../src/turn.js'
 
 import { CASH1981, ITCHI, KARANDRAS1, CHUL, firstCivGame } from './fixture.js'
 
@@ -428,6 +429,53 @@ describe('trade', () => {
       if (capital === undefined) throw new Error('no capital')
       expect(capital.trade.outskirts).toBe(1)
       expect(tradeSquaresOf(capital)).toContainEqual(['A2', 'map icon, sent by your scout', 1])
+    })
+
+    it('counts trade once when two scouts on one square are sent to the same city', () => {
+      const capital = put(withEngland(game()), CASH1981, 'cities/redcapital2', 8, 8)
+      const together = put(
+        put(capital, CASH1981, 'figures/redscout', 0, 1),
+        CASH1981,
+        'figures/redscout',
+        0,
+        1,
+      )
+      const target = together.board.pieces.find((piece) => piece.assetId === 'cities/redcapital2')
+      if (target === undefined) throw new Error('no target city')
+      const scouts = together.board.pieces.filter((piece) => {
+        const cell = mapCellOf(together.board, piece)
+        return piece.assetId === 'figures/redscout' && cell?.column === 0 && cell.row === 1
+      })
+      expect(scouts).toHaveLength(2)
+      const turnNumber = turnStatus(together).currentTurn
+      const assignments: AssistedActionRecord[] = scouts.map((scout, index) => ({
+        id: `assigned-${index}`,
+        kind: 'assignScout',
+        playerId: CASH1981,
+        turnNumber,
+        phase: 'SOT',
+        usageKey: null,
+        at: AT,
+        logId: `assigned-log-${index}`,
+        status: 'applied',
+        effect: {
+          kind: 'assignScout',
+          scoutPieceId: scout.id,
+          cityPieceId: target.id,
+          column: 0,
+          row: 1,
+          square: 'A2',
+          cityLabel: target.label,
+        },
+      }))
+      const state = { ...together, assistedActions: assignments }
+      const city = citiesOf(state).find((candidate) => candidate.pieceId === target.id)
+      if (city === undefined) throw new Error('no city production')
+
+      expect(city.trade.outskirts).toBe(1)
+      expect(tradeSquaresOf(city).filter(([square]) => square === 'A2')).toEqual([
+        ['A2', 'map icon, sent by your scout', 1],
+      ])
     })
 
     it('adds an unsent scout square to the capital and to the trade estimate (issue #292)', () => {
