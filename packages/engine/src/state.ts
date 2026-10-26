@@ -1364,7 +1364,7 @@ export interface PlayerViewSelf extends Omit<Playerhand, 'pendingRewards'> {
   readonly buildingCount: number
   /** The viewer's cities, as `OpaquePlayerhand.cities` gives them for everybody. */
   readonly cities: readonly CityProduction[]
-  /** A guess at the trade the viewer should have in the Trade phase, from their cities, Start of Turn and coins. */
+  /** The stored trade after the city collection, or the guess (trade so far plus city trade) before it. */
   readonly tradeEstimate: TradeEstimate
   /**
    * The Great Person card types the viewer cannot use for now (issue #241): they

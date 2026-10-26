@@ -58,7 +58,7 @@ function viewIn(
       playerId: 'me',
       username: 'Alice',
       cities: [],
-      tradeEstimate: { cities: 0, startOfTurn: 0, coins: 0, ceiling: 27, total: 0 },
+      tradeEstimate: { current: 0, cities: 0, collected: false, ceiling: 27, total: 0, set: true },
       stats: { trade: 0 },
       availableActions: actions,
       pendingRewards: [],

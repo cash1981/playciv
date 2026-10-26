@@ -56,6 +56,12 @@ export interface PlayerTurn {
   readonly history: Readonly<Record<TurnPhase, readonly TurnOrderVersion[]>>
   /** Explicit once-per-turn action markers (issue #253; reusable by #247). */
   readonly usedActions: readonly string[]
+  /**
+   * The trade the engine added from around the player's cities when Trade
+   * started this turn, so undoing Start of Turn can take exactly that back.
+   * Absent until the collection happens, and on turns saved before it existed.
+   */
+  readonly tradeCollected?: number
 }
 
 /** The once-per-turn marker `setPlayerStat` writes when the player's trade is set, from any panel. */

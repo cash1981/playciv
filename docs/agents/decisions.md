@@ -588,18 +588,32 @@ retries and competing writes deterministic. Pending offers expire when a later
 turn is observed; accepted offers are never expired.
 
 The Trade tab has one Trade number, the same as Trade in the Status panel (`stats.trade`), written with
-the same call, so Status stays the master and an edit on either side shows on both. It starts from a
-guess (`tradeEstimateOf` in `trade-estimate.ts`, projected on `you.tradeEstimate` to the player it is
-about and nobody else): the trade around the player's cities, plus the trade their Start of Turn
-abilities gave this turn (applied `statGain` records of the current turn, not undone), plus the coins
-they hold, because trade kept in the Research phase is kept as coins (the human's formula), held to
-the trade track. The box shows the guess, with "Not saved yet", until the player's trade has been
-set this turn, from this box or from the Status panel, on any device: `setPlayerStat` for `trade` writes
-the once-per-turn marker `trade:set` on the player's turn (`TRADE_SET_KEY`, projected as
-`tradeEstimate.set`). Leaving the field saves what it shows; a plain focus and leave over a number the
-game already holds and has marked as set sends nothing. A guess nobody touches is never saved: the
-box says "Not saved yet" and that is the only cue (open question for the human). Escape puts the guess back without saving. "This turn" is the game's current turn, as for every assisted action, so a player who is a turn ahead of the others loses the mark when the turn rolls over for everybody. A `?`
-lists the parts, each city and the notes. There is no "Add" button and no separate estimate line.
+the same call, so Status stays the master and an edit on either side shows on both. The engine sets it
+at the rules' moments rather than leaving a live guess: when the next turn starts (the last player
+marks Research done), every active player's trade goes down to their coin total, capped at the trade
+track, because trade kept in Research is kept as coins. Start of Turn abilities, cards and manual edits
+then change the stored trade. When a player marks Start of Turn done and their Trade phase starts
+(including a call that marks both phases at once), the trade around their cities is added to the stored
+trade once, capped at the track. The amount actually added is recorded on the player's turn
+(`PlayerTurn.tradeCollected`), so undoing Start of Turn subtracts exactly that and clears the record; re-ending it counts once more against the board as it
+stands then. The recorded amount is never negative: trade already above the track is left alone rather
+than pulled down and later pushed back up. A trade number set by hand is the player's override: set
+before the collection, it skips the addition; set after it, it clears the record, so reopening Start
+of Turn leaves the typed number. A player who marked the new turn's phases before that turn started
+is caught up when it starts, after the reset. Marking Trade done or reopening the tab never counts it
+again. The Trade tab shows the stored number. Only a turn saved before this rule whose collection has not happened still gets a guess
+(`tradeEstimateOf` in `trade-estimate.ts`): the stored trade plus the trade around the cities, held to
+the track. The old separate `coins` and `startOfTurn` terms are gone because both are already in
+`stats.trade` after the reset and the Start of Turn actions.
+
+`setPlayerStat` for `trade` still writes the once-per-turn marker `trade:set` on the player's turn
+(`TRADE_SET_KEY`). `tradeEstimate.set` is true for either the automatic collection or a manual set, so
+the box has no guess to show after either. Leaving the field saves an edit; a plain focus and leave over
+a number the game already holds and has marked as set sends nothing. Escape puts the shown number back
+without saving. "This turn" is the game's current turn, as for every assisted action, so a player who is
+a turn ahead of the others loses the marks when the turn rolls over for everybody. A `?` lists the parts,
+each city and the notes. There is no "Add" button and no separate estimate line.
+
 The trade around the cities comes from the same outskirts walk as the production
 (`CityProduction.trade`): the printed trade icons of each square (`data/tile-icons.json`, read by eye
 from the tile images and not checked against a printed list), a building's trade in place of
@@ -623,7 +637,7 @@ panel away (open by itself when the turn has a deal) and shows only the current 
 the buttons; the Trade deals tab in the chat (`TradeDealsPanel`) shows every deal read only, grouped into
 threads, with a ◀ ▶ pager over the turns. Writing and answering stay in the Trade tab.
 
-Source: `packages/engine/src/trade-offers.ts`, `trade-estimate.ts`, `city-production.ts`, `tile-icons.ts`, `state.ts`, the trade-offer routes
+Source: `packages/engine/src/trade-offers.ts`, `trade-estimate.ts`, `trade-collection.ts`, `city-production.ts`, `tile-icons.ts`, `actions/turn.ts`, `actions/new-turn.ts`, `actions/player.ts`, `turn.ts`, `state.ts`, the trade-offer routes
 in `packages/server/src/routes/games.ts`, `packages/web/src/views/TradeOffers.tsx`, `TradeDealsPanel.tsx`,
 `TradeDealThread.tsx`, `tradeDeals.ts` and the API tests.
 
