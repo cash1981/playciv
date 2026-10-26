@@ -86,6 +86,41 @@ export interface ChooseTechInput {
   readonly techName: string
 }
 
+/** Drops one tech's Research choice when the tech leaves the hand. */
+function withoutResearchTurn(
+  turns: Readonly<Record<string, number>>,
+  techName: string,
+): Readonly<Record<string, number>> {
+  const { [techName]: removed, ...rest } = turns
+  void removed
+  return rest
+}
+
+/**
+ * The turn whose Research phase the player is in, or `null`. Normally that is
+ * the current turn. A player who has finished it early and marked the next
+ * turn up to Movement is working on that turn's Research instead, so the choice
+ * is recorded for the turn it belongs to.
+ */
+function openResearchTurnOf(state: GameState, player: Playerhand): number | null {
+  const currentTurn = turnStatus(state).currentTurn
+  const open = openPhaseOf(state, player.playerId)
+  if (open === 'RESEARCH') return currentTurn
+  if (open !== null) return null
+  const ahead = [...player.playerTurns]
+    .filter((turn) => turn.turnNumber > currentTurn)
+    .sort((a, b) => a.turnNumber - b.turnNumber)
+    .find(
+      (turn) =>
+        !turn.done.RESEARCH &&
+        turn.done.SOT &&
+        turn.done.TRADE &&
+        turn.done.CM &&
+        turn.done.MOVEMENT,
+    )
+  return ahead?.turnNumber ?? null
+}
+
 /**
  * Java: `PlayerAction.chooseTech`.
  *
@@ -108,9 +143,15 @@ export function chooseTech(state: GameState, input: ChooseTechInput): ActionResu
   }
 
   const chosen: TechItem = { ...tech, hidden: true, ownerId: input.playerId }
+  // Choosing during the Research phase is what makes the trade at the end of
+  // this turn count as researched; a free tech learned in Start of Turn is not.
+  const researchTurn = openResearchTurnOf(state, player)
   const next = withPlayer(state, {
     ...player,
     techsChosen: [...player.techsChosen, chosen],
+    ...(researchTurn === null
+      ? {}
+      : { researchTurns: { ...player.researchTurns, [tech.name]: researchTurn } }),
   })
 
   return ok(appendItemLog(next, 'TECH', player.username, player.playerId, chosen))
@@ -140,6 +181,7 @@ export function removeTech(state: GameState, input: ChooseTechInput): ActionResu
     ...player,
     techGrants: grantsAfterTechRemoved(player.techGrants, tech.name),
     techsChosen: player.techsChosen.filter((candidate) => candidate.name !== tech.name),
+    researchTurns: withoutResearchTurn(player.researchTurns, tech.name),
     stats:
       source === undefined
         ? player.stats

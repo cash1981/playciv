@@ -49,12 +49,16 @@ export function startMissingTurns(
 }
 
 /**
- * Trade kept from the previous turn is kept as coins: when the next turn's
- * Start of Turn begins, every active player's trade goes down to their coin
- * total (and never above the trade track). Start of Turn can then add to it.
+ * A player who chose a tech during the ending turn's Research phase used their
+ * trade: when the next turn's Start of Turn begins, their trade goes down to
+ * their coin total (and never above the trade track). A player who only ended
+ * Research without choosing a tech keeps the trade they had. Start of Turn can
+ * then add to it.
  */
-function resetTradeToCoins(state: GameState): GameState {
+function resetTradeToCoins(state: GameState, endingTurn: number): GameState {
   const players = state.players.map((player) => {
+    const researched = Object.values(player.researchTurns).includes(endingTurn)
+    if (!researched) return player
     const ceiling = tradeCeilingOf(player.civilization?.name)
     const coins = Math.max(totalCoins(coinSourcesOf(state, player)), 0)
     const trade = Math.min(ceiling, coins)
@@ -112,7 +116,7 @@ function startTurn(
 ): GameState {
   if (state.turnStarters[turnNumber] !== undefined) return state
 
-  const reset = collectAheadTrade(resetTradeToCoins(state), turnNumber)
+  const reset = collectAheadTrade(resetTradeToCoins(state, turnNumber - 1), turnNumber)
   const current = startPlayerOf(reset)
   const starter =
     current === undefined ? undefined : seatAfter(bySeat(reset.players), current.playernumber)

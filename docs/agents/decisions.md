@@ -590,9 +590,14 @@ turn is observed; accepted offers are never expired.
 The Trade tab has one Trade number, the same as Trade in the Status panel (`stats.trade`), written with
 the same call, so Status stays the master and an edit on either side shows on both. The engine sets it
 at the rules' moments rather than leaving a live guess: when the next turn starts (the last player
-marks Research done), every active player's trade goes down to their coin total, capped at the trade
-track, because trade kept in Research is kept as coins. Start of Turn abilities, cards and manual edits
-then change the stored trade. When a player marks Start of Turn done and their Trade phase starts
+marks Research done), each player who chose a tech during the ending turn's Research phase has their
+trade go down to their coin total, capped at the trade track, because trade kept in Research is kept
+as coins. Revealing the tech is not required. A player who only ended Research without choosing a tech
+keeps the trade they had. A free tech learned in Start of Turn is not research and does not trigger the
+reset; removing a tech clears its Research marker. The engine records the choice turn in the private
+`Playerhand.researchTurns` (tech name to turn), including a turn a player has marked ahead, and not in
+the public turn copy. Start of Turn abilities,
+cards and manual edits then change the stored trade. When a player marks Start of Turn done and their Trade phase starts
 (including a call that marks both phases at once), the trade around their cities is added to the stored
 trade once, capped at the track. The amount actually added is recorded on the player's turn
 (`PlayerTurn.tradeCollected`), so undoing Start of Turn subtracts exactly that and clears the record; re-ending it counts once more against the board as it

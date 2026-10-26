@@ -196,6 +196,13 @@ export interface Playerhand {
    * Techs revealed before this was recorded have no entry.
    */
   readonly techRevealTurns: Readonly<Record<string, number>>
+  /**
+   * The turn each tech was chosen during the player's Research phase, by tech name.
+   * A player who researched has their trade kept as coins when the next turn starts;
+   * one who only ended Research keeps it. Hidden like the rest of the hand, and a
+   * removed tech is taken back out.
+   */
+  readonly researchTurns: Readonly<Record<string, number>>
 }
 
 /** A free tech to learn, with the level it must have (`null` for any level). */

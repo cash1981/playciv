@@ -115,6 +115,7 @@ export function joinGame(state: GameState, input: JoinGameInput): ActionResult {
       pendingRewards: [],
       techGrants: [],
       techRevealTurns: {},
+      researchTurns: {},
     }
     next = state
   }

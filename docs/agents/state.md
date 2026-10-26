@@ -32,8 +32,9 @@ old test counts and past deployment reports do not establish present health.
 - Assisted play (#260) is on PR #271: card buttons, culture advance, Great Person
   markers, phase summary, confirm before reuse. See the "Assisted play" section
   of decisions and `tasks/assisted-*.md`. Free-text trade offers (#265, #274) are
-  built too, and trade resets to coins at turn start and collects the city trade once
-  when Trade starts; see "Trade offers (#265)" in decisions.
+  built too, and a player who researched resets trade to coins at turn start while one
+  who only ended Research keeps it; the city trade is collected once when Trade starts.
+  See "Trade offers (#265)" in decisions.
 
 - Phase tabs and Start of Turn (part 13) are on PR #271: the Your actions panel has a tab per
   phase, each with a "Possible actions" box (Advance culture scrolls to Your hand afterwards),

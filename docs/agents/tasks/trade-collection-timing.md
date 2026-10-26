@@ -10,8 +10,10 @@
 Move trade from a live estimate to the rules' actual moments:
 
 1. When the last player ends Research and the next turn's Start of Turn starts,
-   each active player's trade goes down to their coins, capped by the trade
-   track. This is the "trade kept as coins" reset.
+   each player who chose a tech during that Research phase has their trade go
+   down to their coins, capped by the trade track. This is the "trade kept as
+   coins" reset. A player who only ended Research without choosing a tech keeps
+   the trade they had. Revealing the tech is not required.
 2. Trade can then grow during Start of Turn (abilities, cards, manual edits).
 3. When a player's Start of Turn is marked done and the Trade phase opens, the
    trade around their cities is added to their trade **once**. Reopening the
@@ -21,7 +23,9 @@ Move trade from a live estimate to the rules' actual moments:
 
 ## Requirements
 
-- The reset happens from marked phase completion, not from revealing a tech.
+- The reset happens from marked phase completion plus a tech chosen in the
+  Research phase, not from revealing a tech. A free tech learned in Start of
+  Turn is not research; removing a chosen tech clears the marker.
 - The Trade tab shows the stored trade after collection. It only shows a guess
   (current trade plus city trade) when collection has not happened, for example
   in an old save already in the Trade phase.
@@ -37,12 +41,15 @@ Move trade from a live estimate to the rules' actual moments:
 
 ## Assumptions recorded for the human
 
-- Reset applies to every active player when the global next turn starts, which
-  is how the chat-orders model represents Start of Turn starting.
+- Reset applies per active player when the global next turn starts, which is how
+  the chat-orders model represents Start of Turn starting; only players who
+  researched in the ending turn reset.
 - The automatic collection is capped by the trade track and records the actual
   amount added.
 - A player who skips Start of Turn and marks Trade done in the same call still
   collects once, because Trade was entered before it ended.
+- Research is a tech chosen in the Research phase. A free tech learned in Start of
+  Turn is not research, and a turn marked ahead is recorded for that turn.
 - A trade number set by hand before the collection is the player's override; the
   cities are not added to it, which also prevents an early guess from being
   counted twice. A manual set after the collection clears the record so an undo
@@ -75,10 +82,11 @@ second addition, if a browser is available.
 
 Ready for the human to test on `fix/trade-collection-timing`.
 
-- Review: independent reviewer approved in round 2; the only remaining notes are
-  cosmetic and were fixed (set-by-hand help wording, shared city sum, blank line).
+- Review: approved in round 4 after the human's correction. The reset now needs
+  a tech chosen in the Research phase (`Playerhand.researchTurns`); a player who
+  only ended Research keeps their trade, including collected city trade.
 - Validation: `pnpm -r typecheck && pnpm -r test && pnpm -r build` passed
-  (engine 2072, server 847, web 1134 tests).
+  (engine 2077, server 847, web 1134 tests).
 - Browser interaction was not checked because the browser extension was not
   connected; test the Trade tab after ending Start of Turn and reopening it.
 - Committed on the branch; not merged.
