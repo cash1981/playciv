@@ -136,7 +136,9 @@ Source: `packages/engine/src/board.ts`, `packages/engine/src/actions/board.ts`,
 
 Wonder ownership/bonuses do not depend on the piece staying in the shared
 Wonders area. Disabling a wonder clears its ownership while leaving its board
-piece. Panama's coins belong to the physical wonder and count for its active,
+piece, and marks it `disabled` (#306): the board draws it greyed with the same
+cross as a blockaded piece, the log says "disabled <wonder>", and assigning an owner
+switches it back on. Its culture token is unaffected. Panama's coins belong to the physical wonder and count for its active,
 unblockaded owner. Bank/Great Person/Adam Smith effects derive from board
 ownership and revealed cards; `placedBy` is not city ownership. Metropolis
 outskirts include ten squares around two centers, excluding both centers.

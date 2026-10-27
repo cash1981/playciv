@@ -106,7 +106,7 @@ export function registerBoardRoutes(app: App, context: AppContext): void {
     const ownerId = body['ownerId'] === null ? null : requireString(body, 'ownerId')
     if (ownerId === undefined) return sendError(c, 400, 'BAD_REQUEST', 'ownerId is required')
     return applyToGame(context, c, gameId, (state) =>
-      setWonderOwner(state, { playerId: currentPlayer(c).id, pieceId, ownerId, at: now() }),
+      setWonderOwner(state, { playerId: currentPlayer(c).id, pieceId, ownerId, ...(body['disable'] === true ? { disable: true } : {}), at: now() }),
     )
   })
 

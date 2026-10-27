@@ -608,7 +608,7 @@ export function rotatePiece(state: GameState, input: RotatePieceInput): ActionRe
 /** Assigns or clears ownership of a wonder. Ownership changes are replayable and undoable. */
 export function setWonderOwner(
   state: GameState,
-  input: PieceInput & { readonly ownerId: string | null },
+  input: PieceInput & { readonly ownerId: string | null; readonly disable?: boolean },
 ): ActionResult {
   const denied = requireAccess(state, input.playerId)
   if (denied !== undefined) return err(denied)
@@ -620,14 +620,25 @@ export function setWonderOwner(
     return err({ kind: 'UNKNOWN_WONDER_OWNER', playerId: input.ownerId })
   }
   const from = piece.ownerId ?? null
+  const wasDisabled = piece.disabled === true
+  // Disabling clears the owner and marks the wonder; assigning an owner switches it back on.
+  const nowDisabled = input.disable === true ? true : input.ownerId !== null ? false : wasDisabled
   const pieces = state.board.pieces.map((other) =>
-    other.id === piece.id ? { ...other, ownerId: input.ownerId } : other,
+    other.id === piece.id ? { ...other, ownerId: input.ownerId, ...(nowDisabled || wasDisabled ? { disabled: nowDisabled } : {}) } : other,
   )
   return ok(record(input, {
     state,
     pieces,
-    change: { kind: 'owner', pieceId: piece.id, from, to: input.ownerId },
-    description: input.ownerId === null
+    change: {
+      kind: 'owner',
+      pieceId: piece.id,
+      from,
+      to: input.ownerId,
+      ...(wasDisabled === nowDisabled ? {} : { disabled: { from: wasDisabled, to: nowDisabled } }),
+    },
+    description: input.disable === true
+      ? `disabled ${piece.label}`
+      : input.ownerId === null
       ? `cleared the owner of ${piece.label}`
       : `assigned ${piece.label} to ${owner?.username ?? input.ownerId}`,
   }))

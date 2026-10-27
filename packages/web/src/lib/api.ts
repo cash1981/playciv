@@ -939,8 +939,8 @@ export const api = {
       y,
       ...(snap === undefined ? {} : { snap }),
     }),
-  setWonderOwner: (gameId: string, pieceId: string, ownerId: string | null) =>
-    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/owner`, { ownerId }),
+  setWonderOwner: (gameId: string, pieceId: string, ownerId: string | null, disable = false) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/owner`, disable ? { ownerId, disable } : { ownerId }),
   /** The production typed in for a city; `null` goes back to the estimate. */
   setCityProduction: (gameId: string, pieceId: string, production: number | null) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/production`, { production }),
