@@ -126,10 +126,10 @@ Status is one of: `claimed` · `in progress` · `in review` · `blocked` · `don
 - **Owner:** opencode (orchestrator/coder)
 - **Branch:** `feat/issue-302-figure-movement`
 - **Brief:** `docs/agents/tasks/issue-302-figure-movement.md`
-- **Status:** in progress
+- **Status:** in review
 - **Claimed paths:**
   - `packages/engine/src/movement.ts` (new), `board.ts`, `actions/board.ts`, `errors.ts`, `index.ts`, `state.ts`, `assisted-cards.ts`, `card-timing.ts`
-  - `packages/engine/test/movement.test.ts` (new), `board-history.test.ts`, `assisted-cards.test.ts`, `assisted-play-card.test.ts`
+  - `packages/engine/test/movement.test.ts` (new), `assisted-play-card.test.ts`
   - `packages/server/src/routes/board.ts`, `errors.ts`, `packages/server/test/board-api.test.ts`
   - `packages/web/src/lib/api.ts`, `packages/web/src/views/BoardView.tsx`, `BoardView.test.tsx`, `GameView.tsx`, `styles.css`
   - `docs/agents/tasks/issue-302-figure-movement.md`, `decisions.md`, `state.md`, `task-board.md`

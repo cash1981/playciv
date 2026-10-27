@@ -3,7 +3,7 @@
 - **Slug:** `issue-302-figure-movement`
 - **Branch:** `feat/issue-302-figure-movement`
 - **Owner:** opencode (orchestrator/coder)
-- **Status:** in progress
+- **Status:** in review
 - **Issue:** [#302](https://github.com/cash1981/playciv/issues/302)
 
 ## Goal
@@ -90,8 +90,7 @@ foundation the issue's card, tech and Great Person movement effects need.
 
 - `packages/engine/src/movement.ts` (new), `board.ts`, `actions/board.ts`,
   `errors.ts`, `index.ts`, `state.ts`, `assisted-cards.ts`, `card-timing.ts`
-- `packages/engine/test/movement.test.ts` (new), `board-history.test.ts`,
-  `assisted-cards.test.ts`, `assisted-play-card.test.ts`
+- `packages/engine/test/movement.test.ts` (new), `assisted-play-card.test.ts`
 - `packages/server/src/routes/board.ts`, `errors.ts`,
   `packages/server/test/board-api.test.ts`
 - `packages/web/src/lib/api.ts`, `packages/web/src/views/BoardView.tsx`,
@@ -124,6 +123,20 @@ None blocking this slice. The map-picking card/tech flows are explicitly out.
 
 ## Handover
 
-The core movement rule is the foundation for the remaining #302 effects. Record
-the movement/enforcement decision in `decisions.md` and leave the remaining
-effects as a queue item rather than silently broadening this brief.
+Implemented on `feat/issue-302-figure-movement`: the engine movement helper,
+`travelFigure` and its route, the board highlight/pick UI, the movement state on
+the board history, and the Natural Religion/Ford/Cook speed rules. The engine,
+server and board tests cover the speed, water, lock, undo and interaction cases.
+
+Validation on 2026-10-27:
+
+- `pnpm -r typecheck` passed.
+- `pnpm -r test` passed: engine 68 files / 2118 tests, web 63 files / 1143 tests,
+  server 40 files / 849 tests.
+- `pnpm -r build` passed.
+- Independent read-only review approved after three rounds; no finding above a
+  nit remained.
+- Browser check was not run. The human will test manually.
+
+Remaining #302 work is the explicit "Out" list above; the core rule is the
+foundation for those map-picking card/tech flows.

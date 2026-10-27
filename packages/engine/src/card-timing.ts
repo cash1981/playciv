@@ -209,6 +209,7 @@ export const AUTOMATIC_EFFECTS: ReadonlyMap<string, string> = new Map([
   ['Thomas Edison', 'grants a free research of a tech another player has revealed'],
   ['Mother Teresa', 'gives one coin token to another player and advances one space for free'],
   ['Marie Curie', 'arms a substitution for your next Uranium spend'],
+  ['Captain James Cook', 'doubles your travel speed until the end of the turn'],
 ])
 
 /**
@@ -222,6 +223,7 @@ export const PASSIVE_GREAT_PERSONS: ReadonlyMap<string, string> = new Map([
   ['Susan B. Anthony', 'all of your cities produce 2 more hammers while Susan B. Anthony is faceup'],
   ['Louis Pasteur', 'your stacking limit is increased by 1 while Louis Pasteur is faceup'],
   ['Archimedes', 'pays 3 culture after Research for each tech no other player has revealed'],
+  ['Henry Ford', 'your travel speed is increased by 1 while Henry Ford is faceup'],
 ])
 
 const DEFAULT_RULE: CardPlayRule = optional('Who is targeted? (optional)')

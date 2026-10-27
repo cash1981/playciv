@@ -619,6 +619,8 @@ export function GameView({
         youId={you?.playerId ?? null}
         viewerCivilization={you?.civilization?.name ?? null}
         viewerColor={you?.color ?? null}
+        movementPlayer={you ?? null}
+        movementTurn={displayedView.activeTurn?.turnNumber ?? null}
         {...(pickSquares === undefined ? {} : { pickSquares })}
         run={run}
       />

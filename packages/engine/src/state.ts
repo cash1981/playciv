@@ -648,6 +648,8 @@ export type AssistedEffect =
       readonly advance?: CultureAdvanceEffect
       /** The Uranium substitution the card armed (Marie Curie), or `null` when it was not armed. */
       readonly curieSubstitute?: string
+      /** A once-per-turn marker the card wrote (Captain James Cook), so an undo frees it. */
+      readonly usedAction?: { readonly key: string; readonly turnNumber: number }
     }
   | {
       readonly kind: 'coinPurchase'

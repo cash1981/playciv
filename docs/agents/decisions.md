@@ -500,14 +500,57 @@ get no such button.
   card is found, with one reshuffle of the Great Person discards. With no marker
   of any type left nothing is drawn. Test: `assisted-gp.test.ts`, "the Draw button
   discards an exhausted type …".
-- **Deferred:** Captain James Cook and Henry Ford change travel speed, which is
-  still a manual `mvmt` text field and is not used in a calculation. They wait
-  until movement is enforced.
+- **Movement cards:** Captain James Cook and Henry Ford now feed the travel
+  speed instead of a manual calculation; see "Figure movement (#302, first
+  slice)".
 
 Source: `packages/engine/src/great-person-effects.ts`,
 `actions/player.ts` (`chooseTech`, `removeTech`, `revealTech`),
 `assisted-cards.ts`, `assisted-culture.ts`, `assisted-resources.ts`,
 `build-options.ts`, `assisted.ts` and `great-person-automation.test.ts`.
+
+### Figure movement (#302, first slice)
+
+The first slice of issue #302 makes normal army and scout movement part of the
+game. The board still stores free pixel positions, but a player's own figure on
+the map is selected and given highlighted destination squares; a destination
+comes from a cardinal breadth-first walk whose length is the travel speed. The
+server has a separate `travelFigure` reducer and `/travel` route; it checks the
+path, the water rule and the figure's ownership and writes the position and the
+spent movement in one board history entry. That makes the existing board Undo
+restore both, and the stored turn number makes the allowance fresh on the next
+turn without a reset action.
+
+- **Speed:** the total of the manual `mvmt` expression. A revealed Natural
+  Religion adds 1 for an army outside Anarchy (group movement is out of scope, so
+  every army move is individual), except when the expression already has a `+`
+  term (the older way players recorded the bonus, `3+1`); Henry Ford adds 1 while
+  faceup; Captain James Cook doubles it
+  for the turn through a `card:Captain James Cook` usage marker, and undoing the
+  play frees it. Spain's civilization bonus and the tech-listed speed steps stay
+  what the player typed.
+- **Water:** Sailing, Steam Power and Flight allow crossing and ending in water;
+  England crosses but cannot end there. An unknown/facedown tile is not water
+  for this check and can be entered. A square holding any figure is neither a
+  destination nor walked through, so stacking and battle outcomes remain the
+  players' manual work rather than being skipped by a path around them.
+- **Lock and undo:** after any travel the figure is locked for the turn; pressing
+  board Undo restores the square and the lock in one step, exactly the issue's
+  requested redo. A freeform drag of the viewer's own map figure is disabled in
+  the board UI; the general `movePiece` route remains the manual board tool for
+  setups and pieces off the map, so it is not a rules-enforced second path. The
+  `/travel` route also has no phase or turn-holder gate, matching the shared
+  board's "everyone may move everything" behaviour.
+- **Out of this slice:** the culture cards that move figures (Migrants,
+  Colonists, Immigrants, Disoriented, Lost, Out of Position), Hannibal, the
+  Communism square lock, and map-tile discovery. They need map-picking
+  assisted-card/resource flows rather than another hidden movement switch.
+
+Source: `engine/src/movement.ts`, `board.ts` (`PieceMovement`, the `move` change),
+`actions/board.ts` (`travelFigure`), `assisted-cards.ts`, `card-timing.ts`,
+`server/src/routes/board.ts`, `web/src/views/BoardView.tsx`, and tests
+`movement.test.ts`, `board-api.test.ts`, `BoardView.test.tsx`,
+`assisted-play-card.test.ts`.
 
 ### Turn warning in Your actions (2026-10-24)
 

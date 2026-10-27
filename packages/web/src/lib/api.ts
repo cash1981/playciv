@@ -939,6 +939,9 @@ export const api = {
       y,
       ...(snap === undefined ? {} : { snap }),
     }),
+  /** Moves a figure by the Movement rules (issue #302) to a map square. */
+  travelFigure: (gameId: string, pieceId: string, column: number, row: number) =>
+    post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/travel`, { column, row }),
   setWonderOwner: (gameId: string, pieceId: string, ownerId: string | null, disable = false) =>
     post<PlayerView>(`/api/games/${gameId}/board/pieces/${pieceId}/owner`, disable ? { ownerId, disable } : { ownerId }),
   /** The production typed in for a city; `null` goes back to the estimate. */

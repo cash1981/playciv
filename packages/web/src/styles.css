@@ -971,6 +971,35 @@ ul.list > li:last-child {
   cursor: default;
 }
 
+.board-move-cell {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  min-height: 0;
+  border: 1px solid rgba(255, 221, 0, 0.8);
+  border-radius: 0;
+  /* Opaque enough to read as a legal destination, transparent enough to keep
+     the terrain and any piece underneath visible. */
+  background: rgba(255, 221, 0, 0.34);
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1.2;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.board-move-cell:hover {
+  background: rgba(255, 221, 0, 0.52);
+}
+
+.board-move-cell:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .board-pick-cell {
   position: absolute;
   box-sizing: border-box;

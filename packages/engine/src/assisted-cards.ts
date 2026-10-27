@@ -188,7 +188,15 @@ interface Automated {
   readonly state: GameState
   readonly extra: Pick<
     PlayCardEffect,
-    'gain' | 'drew' | 'starter' | 'grantId' | 'wonderDiscount' | 'coin' | 'advance' | 'curieSubstitute'
+    | 'gain'
+    | 'drew'
+    | 'starter'
+    | 'grantId'
+    | 'wonderDiscount'
+    | 'coin'
+    | 'advance'
+    | 'curieSubstitute'
+    | 'usedAction'
   >
   /** The end of the public line: what the game did for the card. */
   readonly said: string
@@ -334,6 +342,18 @@ function automate(
           advance: advanced.value.effect,
         },
         said: `, gave their ${known.label} coin to ${target.username} and advanced one space for free`,
+      })
+    }
+    case 'Captain James Cook': {
+      const key = 'card:Captain James Cook'
+      const turn = turnFor(state, player)
+      if (turn.usedActions.includes(key)) {
+        return err('Captain James Cook can double travel speed only once each turn.')
+      }
+      return ok({
+        state: useTurnAction(state, player, turn, key, player.stats),
+        extra: { usedAction: { key, turnNumber: turn.turnNumber } },
+        said: ', doubling their travel speed until the end of the turn',
       })
     }
     case 'Marie Curie': {
@@ -582,19 +602,29 @@ export const playCard: AssistedActionDefinition = {
       }
     }
 
-    const freeMotherTeresa = (state: GameState): GameState => {
-      if (effect.coin === undefined) return state
-      const holder = playerOf(state, player.playerId) ?? hand
-      return freeTurnAction(state, holder, record.turnNumber, 'card:Mother Teresa')
+    const freeTurnUse = (state: GameState): GameState => {
+      let freed = state
+      if (effect.coin !== undefined) {
+        freed = freeTurnAction(freed, playerOf(freed, player.playerId) ?? hand, record.turnNumber, 'card:Mother Teresa')
+      }
+      if (effect.usedAction !== undefined) {
+        freed = freeTurnAction(
+          freed,
+          playerOf(freed, player.playerId) ?? hand,
+          effect.usedAction.turnNumber,
+          effect.usedAction.key,
+        )
+      }
+      return freed
     }
     if (effect.discarded) {
-      const back: GameState = freeMotherTeresa({
+      const back: GameState = freeTurnUse({
         ...withPlayerHand(current, { ...hand, items: [...hand.items, effect.item] }),
         discardedItems: current.discardedItems.filter((candidate) => candidate.id !== effect.item.id),
       })
       return ok({ state: back, text: `${player.username}'s ${effect.name} was undone: the card is back in their hand` })
     }
-    const back = freeMotherTeresa(
+    const back = freeTurnUse(
       withPlayerHand(current, {
         ...hand,
         items: hand.items.map((candidate) =>

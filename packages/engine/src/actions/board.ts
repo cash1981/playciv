@@ -15,7 +15,15 @@
  * log would drown.
  */
 
-import type { Board, BoardArea, BoardChange, BoardHistoryEntry, BoardPiece, Rotation } from '../board.js'
+import type {
+  Board,
+  BoardArea,
+  BoardChange,
+  BoardHistoryEntry,
+  BoardPiece,
+  PieceMovement,
+  Rotation,
+} from '../board.js'
 import {
   applyChange,
   areaAt,
@@ -28,6 +36,7 @@ import {
   findBoardAsset,
   findPiece,
   locationOf,
+  mapTop,
   nearestSlotOrigin,
   nextFreeSlot,
   nextRotation,
@@ -46,7 +55,13 @@ import type { Result } from '../result.js'
 import { err, ok } from '../result.js'
 import type { GameState, Playerhand } from '../state.js'
 import { findPlayer, hasUserAccess } from '../state.js'
-import { startMarkerOf, startPlayerOf } from '../turn.js'
+import {
+  destinationTo,
+  figureBelongsTo,
+  figureMovementOptions,
+  movementOf,
+} from '../movement.js'
+import { startMarkerOf, startPlayerOf, turnStatus } from '../turn.js'
 
 type ActionResult = Result<GameState, EngineError>
 
@@ -369,6 +384,97 @@ export function movePieceUnchecked(
         ? `nudged ${piece.label} in ${to}`
         : `moved ${piece.label} from ${from} to ${to}`,
   })
+}
+
+// ---------------------------------------------------------------------------
+// With travel speed (issue #302)
+// ---------------------------------------------------------------------------
+
+export interface TravelFigureInput {
+  readonly playerId: string
+  readonly pieceId: string
+  /** The destination map square, zero based from the map's top-left corner. */
+  readonly column: number
+  readonly row: number
+  readonly at?: string
+}
+
+/**
+ * Moves one of the player's own figures on the map by the Movement rules: a
+ * cardinal path within its travel speed, no illegal water, and only while the
+ * figure has not moved this turn. The board history entry holds the position and
+ * the spent allowance together, so one Undo gives both back.
+ */
+export function travelFigure(state: GameState, input: TravelFigureInput): ActionResult {
+  const denied = requireAccess(state, input.playerId)
+  if (denied !== undefined) return err(denied)
+  const player = findPlayer(state, input.playerId)
+  const piece = findPiece(state.board, input.pieceId)
+  if (player === undefined) return err({ kind: 'PLAYER_NOT_FOUND', playerId: input.playerId })
+  if (piece === undefined) return err({ kind: 'BOARD_PIECE_NOT_FOUND', pieceId: input.pieceId })
+
+  const turnNumber = turnStatus(state).currentTurn
+  if (!figureBelongsTo(player, piece)) {
+    return err({
+      kind: 'FIGURE_MOVE_ILLEGAL',
+      reason: `${piece.label} is not one of your figures on the map.`,
+    })
+  }
+  const saved = movementOf(piece, turnNumber)
+  if (saved?.locked === true) {
+    return err({
+      kind: 'FIGURE_MOVE_ILLEGAL',
+      reason: `${piece.label} has already moved this turn. Undo the move on the board to move it again.`,
+    })
+  }
+  const options = figureMovementOptions(state.board, player, piece, turnNumber)
+  if (options === null) {
+    return err({
+      kind: 'FIGURE_MOVE_ILLEGAL',
+      reason: `${piece.label} is not on the map.`,
+    })
+  }
+  const destination = destinationTo(options, { column: input.column, row: input.row })
+  if (destination === undefined) {
+    return err({
+      kind: 'FIGURE_MOVE_ILLEGAL',
+      reason: `That square is not a legal destination for ${piece.label} this turn.`,
+    })
+  }
+
+  const fromIndex = state.board.pieces.findIndex((candidate) => candidate.id === piece.id)
+  const x = Math.round(
+    input.column * state.board.squareSize + (state.board.squareSize - piece.width) / 2,
+  )
+  const y = Math.round(
+    mapTop(state.board) +
+      input.row * state.board.squareSize +
+      (state.board.squareSize - piece.height) / 2,
+  )
+  const used = (saved?.used ?? 0) + destination.distance
+  const movement: PieceMovement = { turn: turnNumber, used, locked: true }
+  const moved: BoardPiece = { ...piece, x, y, movement }
+  const others = state.board.pieces.filter((candidate) => candidate.id !== piece.id)
+  const pieces = [...others, moved]
+  const areas = areasFor(state)
+
+  return ok(
+    record(input, {
+      state,
+      pieces,
+      change: {
+        kind: 'move',
+        pieceId: piece.id,
+        from: { x: piece.x, y: piece.y },
+        to: { x, y },
+        fromIndex,
+        movement: { from: piece.movement ?? null, to: movement },
+      },
+      description:
+        `moved ${piece.label} from ${locationOf(state.board, areas, piece)} to ${destination.label}` +
+        ` (${destination.distance} ${destination.distance === 1 ? 'square' : 'squares'})`,
+    }),
+  )
 }
 
 /**

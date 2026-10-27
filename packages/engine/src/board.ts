@@ -290,6 +290,16 @@ export function remainingBoardAssetCount(
   return Math.max(0, limit - used)
 }
 
+/** How far one figure has moved this turn (issue #302). Saved on the piece. */
+export interface PieceMovement {
+  /** The turn this value belongs to. A value from an older turn is ignored, not cleared. */
+  readonly turn: number
+  /** Squares used this turn. */
+  readonly used: number
+  /** True once the figure has moved this turn (or a card locked it). */
+  readonly locked: boolean
+}
+
 /** A piece lying on the board. */
 export interface BoardPiece {
   readonly id: string
@@ -321,6 +331,11 @@ export interface BoardPiece {
    * (`cityProductionsOf`). Only ever set on a city piece; absent means no override.
    */
   readonly productionOverride?: number
+  /**
+   * How much of this turn's travel a figure has used (issue #302). Absent on
+   * everything else. The turn number makes last turn's value stale without a reset.
+   */
+  readonly movement?: PieceMovement
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +383,11 @@ export type BoardChange =
       readonly to: { readonly x: number; readonly y: number }
       /** Where it sat in the stack before; moving also brings it to the top. */
       readonly fromIndex: number
+      /** The figure's travel bookkeeping before and after (issue #302), for an enforced move. */
+      readonly movement?: {
+        readonly from: PieceMovement | null
+        readonly to: PieceMovement | null
+      }
     }
   | {
       readonly kind: 'rotate'
@@ -1256,6 +1276,13 @@ const withProductionOverride = (piece: BoardPiece, value: number | null): BoardP
   return rest
 }
 
+/** The piece with its travel bookkeeping set, or without the field when `value` is null. */
+const withMovement = (piece: BoardPiece, value: PieceMovement | null): BoardPiece => {
+  if (value !== null) return { ...piece, movement: value }
+  const { movement: _cleared, ...rest } = piece
+  return rest
+}
+
 /** Applies one change, moving the board forwards in time. */
 export function applyChange(
   pieces: readonly BoardPiece[],
@@ -1270,10 +1297,13 @@ export function applyChange(
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces
       const rest = withoutPiece(pieces, piece.id)
-      const moved = { ...piece, x: change.to.x, y: change.to.y }
+      const placed =
+        change.movement === undefined
+          ? { ...piece, x: change.to.x, y: change.to.y }
+          : withMovement({ ...piece, x: change.to.x, y: change.to.y }, change.movement.to)
       return piece.category === 'tile' || piece.category === 'civtile'
-        ? [moved, ...rest]
-        : [...rest, moved]
+        ? [placed, ...rest]
+        : [...rest, placed]
     }
     case 'rotate':
       return pieces.map((piece) =>
@@ -1317,11 +1347,14 @@ export function revertChange(
     case 'move': {
       const piece = pieces.find((candidate) => candidate.id === change.pieceId)
       if (piece === undefined) return pieces
-      return insertAt(withoutPiece(pieces, piece.id), change.fromIndex, {
-        ...piece,
-        x: change.from.x,
-        y: change.from.y,
-      })
+      const restored = { ...piece, x: change.from.x, y: change.from.y }
+      return insertAt(
+        withoutPiece(pieces, piece.id),
+        change.fromIndex,
+        change.movement === undefined
+          ? restored
+          : withMovement(restored, change.movement.from),
+      )
     }
     case 'rotate':
       return pieces.map((piece) =>
