@@ -449,10 +449,12 @@ get no such button.
   cannot reveal it. The gain is recorded per tech and taken back by `removeTech`
   and by undoing the tech's reveal. A hidden or fully blockaded Archimedes gives
   nothing.
-- **William Shakespeare:** a second City Management action, `cultureAdvanceSkip`,
-  passes every consecutive space another player's marker stands on. The landing
-  space is paid and rewarded normally. Revealed and unblockaded Shakespeare is
-  required; the undo is the normal culture-advance vote.
+- **William Shakespeare:** pressing Advance culture asks whether to use his
+  ability when the next space is occupied by another player's marker. A yes sends
+  `cultureAdvanceSkip`, which passes every consecutive occupied space; a no is the
+  normal one-space advance. The landing space is paid and rewarded normally.
+  Revealed and unblockaded Shakespeare is required; the undo is the normal
+  culture-advance vote. The skip has no separate button.
 - **Louis Pasteur:** a revealed, unblockaded Pasteur raises the stacking limit by
   1 for Build's figure checks. The manual `stacking` status value stays
   bookkeeping and is not rewritten.

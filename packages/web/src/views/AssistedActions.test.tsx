@@ -796,6 +796,49 @@ describe('the Advance culture button', () => {
   })
 })
 
+describe('Shakespeare asks during the advance', () => {
+  const READY_REASON = 'Advance to space 2 (culture I event): 3 culture.'
+  const skip = (status: Action['status'], reason: string): Action => ({
+    action: 'cultureAdvanceSkip',
+    label: 'Skip occupied culture spaces',
+    phase: 'CM',
+    group: 'Culture track',
+    status,
+    reason,
+    repeatable: true,
+  })
+
+  it('asks before the normal advance and sends the skip action when the player agrees', async () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderPanel(viewWith([
+      advance('ready', READY_REASON),
+      skip('ready', 'Skip to space 3 (Great Person): 3 culture.'),
+    ]))
+
+    expect(screen.queryByRole('button', { name: 'Skip occupied culture spaces' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
+    expect(ask).toHaveBeenCalledWith(
+      'William Shakespeare can skip the occupied culture space(s). Skip to space 3 (Great Person): 3 culture. Skip them?',
+    )
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    expect(perform.mock.calls[0]!.slice(0, 2)).toEqual(['game-1', 'cultureAdvanceSkip'])
+  })
+
+  it('advances normally when the player declines the skip', async () => {
+    const perform = vi.spyOn(api, 'performAction').mockResolvedValue({} as PlayerView)
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderPanel(viewWith([
+      advance('ready', READY_REASON),
+      skip('ready', 'Skip to space 3 (Great Person): 3 culture.'),
+    ]))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Advance culture' }))
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(1))
+    expect(perform.mock.calls[0]!.slice(0, 2)).toEqual(['game-1', 'cultureAdvance'])
+  })
+})
+
 describe('the culture hand limit warning', () => {
   const READY_REASON = 'Advance to space 9 (culture II event): 5 culture and 3 trade.'
   const WARNING = 'Culture hand limit: this card brings your hand to 3 culture cards, over your culture hand size of 2.'

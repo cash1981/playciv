@@ -147,7 +147,6 @@ const isBlockedHere = (status: Status): boolean => status === 'needs-resource' |
 /** Actions whose button does not read "Use <label>". */
 const BUTTON_TEXT: Readonly<Partial<Record<AssistedActionKind, string>>> = {
   cultureAdvance: 'Advance culture',
-  cultureAdvanceSkip: 'Skip occupied culture spaces',
 }
 
 /**
@@ -237,9 +236,21 @@ export function AssistedActionButton({
   const pressable = ready || (used && state.repeatable !== false)
   const rev = view.rev
   const playerId = view.you.playerId
+  // Shakespeare's skip is a choice during the normal advance, not a second button.
+  const skip =
+    action === 'cultureAdvance'
+      ? view.you.availableActions?.find(
+          (candidate) => candidate.action === 'cultureAdvanceSkip' && candidate.status === 'ready',
+        )
+      : undefined
 
   const press = (): void => {
-    const key = `${gameId}:${playerId}:${action}`
+    let chosen = action
+    if (skip !== undefined && !used) {
+      const question = `William Shakespeare can skip the occupied culture space(s). ${skip.reason} Skip them?`
+      if (window.confirm(question)) chosen = 'cultureAdvanceSkip'
+    }
+    const key = `${gameId}:${playerId}:${chosen}`
     if (used) {
       // A press already on its way is the same press: do not ask a second time.
       if (inFlight.has(key)) return
@@ -251,8 +262,8 @@ export function AssistedActionButton({
       run,
       (requestId) =>
         used
-          ? api.performAction(gameId, action, requestId, rev, true)
-          : api.performAction(gameId, action, requestId, rev),
+          ? api.performAction(gameId, chosen, requestId, rev, true)
+          : api.performAction(gameId, chosen, requestId, rev),
       view,
     ).then((done) => {
       if (done) onDone?.()
@@ -331,6 +342,7 @@ export function AssistedActionGroups({
 }): React.JSX.Element | null {
   const actions = (view.you?.availableActions ?? []).filter(
     (candidate) =>
+      candidate.action !== 'cultureAdvanceSkip' &&
       (candidate.status === 'ready' ||
         candidate.status === 'used' ||
         // The culture advance stays on the list when it is blocked, so the player sees
