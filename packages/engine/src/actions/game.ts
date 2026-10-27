@@ -388,16 +388,22 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     return undefined
   }
 
-  const rememberDiscard = (item: Item, record: (typeof state.assistedActions)[number]): void => {
+  const rememberDiscard = (
+    item: Item,
+    record: (typeof state.assistedActions)[number],
+    revealed: boolean,
+  ): void => {
     const existing = rows.get(item.itemNumber)
     if (existing !== undefined) {
       existing.discarded = true
       return
     }
+    // The card may have been reshuffled and drawn hidden since. Its identity is
+    // public from the discard line, but its current holder and visibility are not.
     rows.set(item.itemNumber, {
-      item,
+      item: { ...item, ownerId: record.playerId, hidden: true },
       playerId: record.playerId,
-      revealed: !item.hidden,
+      revealed,
       discarded: true,
       createdAt: record.at,
       logOrder: state.log.findIndex((entry) => entry.id === record.logId),
@@ -408,7 +414,7 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     if (record.status !== 'applied') continue
     const effect = record.effect
     if (effect.kind === 'playCard' && effect.discarded) {
-      rememberDiscard(effect.item, record)
+      rememberDiscard(effect.item, record, !effect.item.hidden)
       continue
     }
     if (effect.kind !== 'chooseReward' || effect.itemId === null) continue
@@ -423,7 +429,7 @@ export function revealedFeed(state: GameState): readonly RevealedEntry[] {
     for (const id of advance.drawn) {
       if (id === effect.itemId) continue
       const item = itemById(id)
-      if (item !== undefined) rememberDiscard(item, record)
+      if (item !== undefined) rememberDiscard(item, record, false)
     }
   }
 

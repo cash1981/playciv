@@ -21,7 +21,7 @@ import { findPlayer } from '../src/state.js'
 
 import { chivalryTurn, withCardInHand, withHutInHand } from './assisted-fixture.js'
 import { advanceTurn, AT } from './culture-advance-fixture.js'
-import { CASH1981, firstCivGame } from './fixture.js'
+import { CASH1981, KARANDRAS1, firstCivGame } from './fixture.js'
 
 function handItem(state: GameState, sheetName: string) {
   const item = findPlayer(state, CASH1981)?.items.find((it) => it.sheetName === sheetName)
@@ -239,11 +239,28 @@ describe('revealedFeed', () => {
 
     const reshuffled = unwrap(reshuffleItems(chosen, 'CULTURE_1'))
     expect(reshuffled.discardedItems.some((item) => item.id === discardedId)).toBe(false)
-    expect(
-      revealedFeed(reshuffled).some(
-        (entry) => entry.item.itemNumber === discarded.itemNumber && entry.discarded,
+    const stillDiscarded = revealedFeed(reshuffled).find(
+      (entry) => entry.item.itemNumber === discarded.itemNumber && entry.discarded,
+    )
+    expect(stillDiscarded).toBeDefined()
+
+    // Draw it hidden into the other player's hand. The public history keeps the
+    // card face and discarder, but not the new holder or its hidden state.
+    const card = reshuffled.items.find((item) => item.id === discardedId)
+    if (card === undefined) throw new Error('discarded card missing from the reshuffled deck')
+    const hidden = {
+      ...reshuffled,
+      items: reshuffled.items.filter((item) => item.id !== discardedId),
+      players: reshuffled.players.map((player) =>
+        player.playerId === KARANDRAS1
+          ? { ...player, items: [...player.items, { ...card, hidden: true, ownerId: KARANDRAS1 }] }
+          : player,
       ),
-    ).toBe(true)
+    }
+    const row = revealedFeed(hidden).find((entry) => entry.item.itemNumber === discarded.itemNumber)
+    expect(row?.discarded).toBe(true)
+    expect(row?.item.ownerId).not.toBe(KARANDRAS1)
+    expect(JSON.stringify(row)).not.toContain(KARANDRAS1)
   })
 
   it('shows a resource hut spent by an assisted ability in the discard feed', () => {
